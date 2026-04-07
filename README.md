@@ -82,9 +82,6 @@ Puedes usar:
 ---
 
 ## 🤝 Cómo contribuir
-
-¡Las contribuciones son bienvenidas!
-
 ### Pasos:
 
 1. Haz un fork del repositorio

@@ -1,32 +1,31 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
 import java.time.LocalDateTime;
 
 public class ReasignacionCaptacion {
 
-    private long id;
-    private LocalDateTime fechaReasignacion;
+    private long idReasignacion;
+    private LocalDateTime fechaCambio;
     private String motivo;
-    private String observacion;
     private Captacion captacion;
     private AgenteInmobiliario agenteAnterior;
     private AgenteInmobiliario agenteNuevo;
     private Broker brokerAutorizador;
 
-    public long getId() {
-        return id;
+    public long getIdReasignacion() {
+        return idReasignacion;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdReasignacion(long idReasignacion) {
+        this.idReasignacion = idReasignacion;
     }
 
-    public LocalDateTime getFechaReasignacion() {
-        return fechaReasignacion;
+    public LocalDateTime getFechaCambio() {
+        return fechaCambio;
     }
 
-    public void setFechaReasignacion(LocalDateTime fechaReasignacion) {
-        this.fechaReasignacion = fechaReasignacion;
+    public void setFechaCambio(LocalDateTime fechaCambio) {
+        this.fechaCambio = fechaCambio;
     }
 
     public String getMotivo() {
@@ -35,14 +34,6 @@ public class ReasignacionCaptacion {
 
     public void setMotivo(String motivo) {
         this.motivo = motivo;
-    }
-
-    public String getObservacion() {
-        return observacion;
-    }
-
-    public void setObservacion(String observacion) {
-        this.observacion = observacion;
     }
 
     public Captacion getCaptacion() {
@@ -76,5 +67,11 @@ public class ReasignacionCaptacion {
     public void setBrokerAutorizador(Broker brokerAutorizador) {
         this.brokerAutorizador = brokerAutorizador;
     }
-}
 
+    public void registrarCambio() {
+    }
+
+    public String obtenerResumen() {
+        return "";
+    }
+}

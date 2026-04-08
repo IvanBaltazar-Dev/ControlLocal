@@ -1,4 +1,4 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -6,12 +6,13 @@ import java.util.List;
 
 public class Captacion {
 
-    private long id;
-    private String codigoCaptacion;
+    private long idCaptacion;
     private LocalDateTime fechaCaptacion;
-    private LocalDateTime fechaCierre;
-    private String estado;
+    private LocalDateTime fechaInicioVigencia;
+    private LocalDateTime fechaFinVigencia;
+    private double comisionPactada;
     private String observaciones;
+    private String estado;
     private LocalComercial localComercial;
     private AgenteInmobiliario agenteResponsable;
     private Broker brokerSupervisor;
@@ -20,20 +21,12 @@ public class Captacion {
     private List<SolicitudAlquiler> solicitudesAlquiler = new ArrayList<>();
     private List<ReasignacionCaptacion> reasignaciones = new ArrayList<>();
 
-    public long getId() {
-        return id;
+    public long getIdCaptacion() {
+        return idCaptacion;
     }
 
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    public String getCodigoCaptacion() {
-        return codigoCaptacion;
-    }
-
-    public void setCodigoCaptacion(String codigoCaptacion) {
-        this.codigoCaptacion = codigoCaptacion;
+    public void setIdCaptacion(long idCaptacion) {
+        this.idCaptacion = idCaptacion;
     }
 
     public LocalDateTime getFechaCaptacion() {
@@ -44,20 +37,28 @@ public class Captacion {
         this.fechaCaptacion = fechaCaptacion;
     }
 
-    public LocalDateTime getFechaCierre() {
-        return fechaCierre;
+    public LocalDateTime getFechaInicioVigencia() {
+        return fechaInicioVigencia;
     }
 
-    public void setFechaCierre(LocalDateTime fechaCierre) {
-        this.fechaCierre = fechaCierre;
+    public void setFechaInicioVigencia(LocalDateTime fechaInicioVigencia) {
+        this.fechaInicioVigencia = fechaInicioVigencia;
     }
 
-    public String getEstado() {
-        return estado;
+    public LocalDateTime getFechaFinVigencia() {
+        return fechaFinVigencia;
     }
 
-    public void setEstado(String estado) {
-        this.estado = estado;
+    public void setFechaFinVigencia(LocalDateTime fechaFinVigencia) {
+        this.fechaFinVigencia = fechaFinVigencia;
+    }
+
+    public double getComisionPactada() {
+        return comisionPactada;
+    }
+
+    public void setComisionPactada(double comisionPactada) {
+        this.comisionPactada = comisionPactada;
     }
 
     public String getObservaciones() {
@@ -66,6 +67,14 @@ public class Captacion {
 
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public LocalComercial getLocalComercial() {
@@ -123,5 +132,16 @@ public class Captacion {
     public void setReasignaciones(List<ReasignacionCaptacion> reasignaciones) {
         this.reasignaciones = reasignaciones;
     }
-}
 
+    public void activar() {
+    }
+
+    public void cerrar() {
+    }
+
+    public void reasignarAgente(AgenteInmobiliario agenteInmobiliario) {
+    }
+
+    public void actualizarEstado(String estado) {
+    }
+}

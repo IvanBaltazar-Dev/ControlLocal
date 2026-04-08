@@ -1,25 +1,22 @@
-﻿package com.commercialbrokerage.model;
-
-import java.time.LocalDateTime;
+package com.commercialbrokerage.model;
 
 public abstract class UsuarioInterno {
 
-    private long id;
+    private long idUsuarioInterno;
     private String nombres;
     private String apellidos;
     private String correo;
-    private String telefono;
-    private String username;
-    private String password;
-    private boolean activo;
-    private LocalDateTime fechaRegistro;
+    private String nombreUsuario;
+    private String contrasena;
+    private String estado;
+    private String rol;
 
-    public long getId() {
-        return id;
+    public long getIdUsuarioInterno() {
+        return idUsuarioInterno;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdUsuarioInterno(long idUsuarioInterno) {
+        this.idUsuarioInterno = idUsuarioInterno;
     }
 
     public String getNombres() {
@@ -46,44 +43,48 @@ public abstract class UsuarioInterno {
         this.correo = correo;
     }
 
-    public String getTelefono() {
-        return telefono;
+    public String getNombreUsuario() {
+        return nombreUsuario;
     }
 
-    public void setTelefono(String telefono) {
-        this.telefono = telefono;
+    public void setNombreUsuario(String nombreUsuario) {
+        this.nombreUsuario = nombreUsuario;
     }
 
-    public String getUsername() {
-        return username;
+    public String getContrasena() {
+        return contrasena;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
+    public void setContrasena(String contrasena) {
+        this.contrasena = contrasena;
     }
 
-    public String getPassword() {
-        return password;
+    public String getEstado() {
+        return estado;
     }
 
-    public void setPassword(String password) {
-        this.password = password;
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
-    public boolean isActivo() {
-        return activo;
+    public String getRol() {
+        return rol;
     }
 
-    public void setActivo(boolean activo) {
-        this.activo = activo;
+    public void setRol(String rol) {
+        this.rol = rol;
     }
 
-    public LocalDateTime getFechaRegistro() {
-        return fechaRegistro;
+    public boolean autenticar() {
+        return false;
     }
 
-    public void setFechaRegistro(LocalDateTime fechaRegistro) {
-        this.fechaRegistro = fechaRegistro;
+    public void cerrarSesion() {
+    }
+
+    public void activar() {
+    }
+
+    public void desactivar() {
     }
 }
-

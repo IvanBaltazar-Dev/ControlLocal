@@ -1,30 +1,28 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 public class LocalComercial {
 
-    private long id;
+    private long idLocal;
     private String codigoLocal;
     private String direccion;
     private String distrito;
-    private String referencia;
-    private double areaMetrosCuadrados;
-    private double precioReferencialMensual;
-    private String estadoConservacion;
-    private boolean disponible;
-    private LocalDateTime fechaRegistro;
+    private double metraje;
+    private double precioReferencial;
+    private String rubroPermitido;
+    private String descripcion;
+    private String estado;
     private Propietario propietario;
     private List<Captacion> captaciones = new ArrayList<>();
 
-    public long getId() {
-        return id;
+    public long getIdLocal() {
+        return idLocal;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdLocal(long idLocal) {
+        this.idLocal = idLocal;
     }
 
     public String getCodigoLocal() {
@@ -51,52 +49,44 @@ public class LocalComercial {
         this.distrito = distrito;
     }
 
-    public String getReferencia() {
-        return referencia;
+    public double getMetraje() {
+        return metraje;
     }
 
-    public void setReferencia(String referencia) {
-        this.referencia = referencia;
+    public void setMetraje(double metraje) {
+        this.metraje = metraje;
     }
 
-    public double getAreaMetrosCuadrados() {
-        return areaMetrosCuadrados;
+    public double getPrecioReferencial() {
+        return precioReferencial;
     }
 
-    public void setAreaMetrosCuadrados(double areaMetrosCuadrados) {
-        this.areaMetrosCuadrados = areaMetrosCuadrados;
+    public void setPrecioReferencial(double precioReferencial) {
+        this.precioReferencial = precioReferencial;
     }
 
-    public double getPrecioReferencialMensual() {
-        return precioReferencialMensual;
+    public String getRubroPermitido() {
+        return rubroPermitido;
     }
 
-    public void setPrecioReferencialMensual(double precioReferencialMensual) {
-        this.precioReferencialMensual = precioReferencialMensual;
+    public void setRubroPermitido(String rubroPermitido) {
+        this.rubroPermitido = rubroPermitido;
     }
 
-    public String getEstadoConservacion() {
-        return estadoConservacion;
+    public String getDescripcion() {
+        return descripcion;
     }
 
-    public void setEstadoConservacion(String estadoConservacion) {
-        this.estadoConservacion = estadoConservacion;
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
     }
 
-    public boolean isDisponible() {
-        return disponible;
+    public String getEstado() {
+        return estado;
     }
 
-    public void setDisponible(boolean disponible) {
-        this.disponible = disponible;
-    }
-
-    public LocalDateTime getFechaRegistro() {
-        return fechaRegistro;
-    }
-
-    public void setFechaRegistro(LocalDateTime fechaRegistro) {
-        this.fechaRegistro = fechaRegistro;
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public Propietario getPropietario() {
@@ -114,5 +104,14 @@ public class LocalComercial {
     public void setCaptaciones(List<Captacion> captaciones) {
         this.captaciones = captaciones;
     }
-}
 
+    public void actualizarDatos() {
+    }
+
+    public void cambiarEstado(String estado) {
+    }
+
+    public String obtenerResumen() {
+        return "";
+    }
+}

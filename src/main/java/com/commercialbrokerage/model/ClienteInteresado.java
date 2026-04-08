@@ -1,62 +1,52 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ClienteInteresado {
 
-    private long id;
-    private String nombres;
-    private String apellidos;
-    private String documentoIdentidad;
-    private String correo;
+    private long idCliente;
+    private String tipoDocumento;
+    private String numeroDocumento;
+    private String nombresORazonSocial;
     private String telefono;
-    private String rubroNegocio;
-    private String requerimientoLocal;
-    private LocalDateTime fechaRegistro;
+    private String correo;
+    private String rubroComercial;
+    private String estado;
     private List<ConsultaInteres> consultasInteres = new ArrayList<>();
     private List<Visita> visitas = new ArrayList<>();
     private List<SolicitudAlquiler> solicitudesAlquiler = new ArrayList<>();
 
-    public long getId() {
-        return id;
+    public long getIdCliente() {
+        return idCliente;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdCliente(long idCliente) {
+        this.idCliente = idCliente;
     }
 
-    public String getNombres() {
-        return nombres;
+    public String getTipoDocumento() {
+        return tipoDocumento;
     }
 
-    public void setNombres(String nombres) {
-        this.nombres = nombres;
+    public void setTipoDocumento(String tipoDocumento) {
+        this.tipoDocumento = tipoDocumento;
     }
 
-    public String getApellidos() {
-        return apellidos;
+    public String getNumeroDocumento() {
+        return numeroDocumento;
     }
 
-    public void setApellidos(String apellidos) {
-        this.apellidos = apellidos;
+    public void setNumeroDocumento(String numeroDocumento) {
+        this.numeroDocumento = numeroDocumento;
     }
 
-    public String getDocumentoIdentidad() {
-        return documentoIdentidad;
+    public String getNombresORazonSocial() {
+        return nombresORazonSocial;
     }
 
-    public void setDocumentoIdentidad(String documentoIdentidad) {
-        this.documentoIdentidad = documentoIdentidad;
-    }
-
-    public String getCorreo() {
-        return correo;
-    }
-
-    public void setCorreo(String correo) {
-        this.correo = correo;
+    public void setNombresORazonSocial(String nombresORazonSocial) {
+        this.nombresORazonSocial = nombresORazonSocial;
     }
 
     public String getTelefono() {
@@ -67,28 +57,28 @@ public class ClienteInteresado {
         this.telefono = telefono;
     }
 
-    public String getRubroNegocio() {
-        return rubroNegocio;
+    public String getCorreo() {
+        return correo;
     }
 
-    public void setRubroNegocio(String rubroNegocio) {
-        this.rubroNegocio = rubroNegocio;
+    public void setCorreo(String correo) {
+        this.correo = correo;
     }
 
-    public String getRequerimientoLocal() {
-        return requerimientoLocal;
+    public String getRubroComercial() {
+        return rubroComercial;
     }
 
-    public void setRequerimientoLocal(String requerimientoLocal) {
-        this.requerimientoLocal = requerimientoLocal;
+    public void setRubroComercial(String rubroComercial) {
+        this.rubroComercial = rubroComercial;
     }
 
-    public LocalDateTime getFechaRegistro() {
-        return fechaRegistro;
+    public String getEstado() {
+        return estado;
     }
 
-    public void setFechaRegistro(LocalDateTime fechaRegistro) {
-        this.fechaRegistro = fechaRegistro;
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public List<ConsultaInteres> getConsultasInteres() {
@@ -114,5 +104,13 @@ public class ClienteInteresado {
     public void setSolicitudesAlquiler(List<SolicitudAlquiler> solicitudesAlquiler) {
         this.solicitudesAlquiler = solicitudesAlquiler;
     }
-}
 
+    public void actualizarDatos() {
+    }
+
+    public void activar() {
+    }
+
+    public void desactivar() {
+    }
+}

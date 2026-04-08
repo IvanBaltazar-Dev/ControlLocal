@@ -1,30 +1,24 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
 import java.time.LocalDateTime;
 
 public class DocumentoSolicitud {
 
-    private long id;
-    private String nombreDocumento;
+    private long idDocumento;
     private String tipoDocumento;
-    private String rutaArchivo;
-    private LocalDateTime fechaRegistro;
+    private String nombreArchivo;
+    private LocalDateTime fechaEntrega;
+    private String resultadoRevision;
+    private String observaciones;
+    private String estado;
     private SolicitudAlquiler solicitudAlquiler;
 
-    public long getId() {
-        return id;
+    public long getIdDocumento() {
+        return idDocumento;
     }
 
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    public String getNombreDocumento() {
-        return nombreDocumento;
-    }
-
-    public void setNombreDocumento(String nombreDocumento) {
-        this.nombreDocumento = nombreDocumento;
+    public void setIdDocumento(long idDocumento) {
+        this.idDocumento = idDocumento;
     }
 
     public String getTipoDocumento() {
@@ -35,20 +29,44 @@ public class DocumentoSolicitud {
         this.tipoDocumento = tipoDocumento;
     }
 
-    public String getRutaArchivo() {
-        return rutaArchivo;
+    public String getNombreArchivo() {
+        return nombreArchivo;
     }
 
-    public void setRutaArchivo(String rutaArchivo) {
-        this.rutaArchivo = rutaArchivo;
+    public void setNombreArchivo(String nombreArchivo) {
+        this.nombreArchivo = nombreArchivo;
     }
 
-    public LocalDateTime getFechaRegistro() {
-        return fechaRegistro;
+    public LocalDateTime getFechaEntrega() {
+        return fechaEntrega;
     }
 
-    public void setFechaRegistro(LocalDateTime fechaRegistro) {
-        this.fechaRegistro = fechaRegistro;
+    public void setFechaEntrega(LocalDateTime fechaEntrega) {
+        this.fechaEntrega = fechaEntrega;
+    }
+
+    public String getResultadoRevision() {
+        return resultadoRevision;
+    }
+
+    public void setResultadoRevision(String resultadoRevision) {
+        this.resultadoRevision = resultadoRevision;
+    }
+
+    public String getObservaciones() {
+        return observaciones;
+    }
+
+    public void setObservaciones(String observaciones) {
+        this.observaciones = observaciones;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public SolicitudAlquiler getSolicitudAlquiler() {
@@ -58,5 +76,13 @@ public class DocumentoSolicitud {
     public void setSolicitudAlquiler(SolicitudAlquiler solicitudAlquiler) {
         this.solicitudAlquiler = solicitudAlquiler;
     }
-}
 
+    public void registrarEntrega() {
+    }
+
+    public void actualizarRevision(String resultadoRevision) {
+    }
+
+    public void cambiarEstado(String estado) {
+    }
+}

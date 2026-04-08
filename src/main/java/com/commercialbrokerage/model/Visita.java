@@ -1,39 +1,40 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
 import java.time.LocalDateTime;
 
 public class Visita {
 
-    private long id;
-    private LocalDateTime fechaHoraProgramada;
-    private String estado;
+    private long idVisita;
+    private LocalDateTime fechaVisita;
+    private LocalDateTime horaVisita;
     private String observaciones;
+    private String estado;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
     private AgenteInmobiliario agenteInmobiliario;
 
-    public long getId() {
-        return id;
+    public long getIdVisita() {
+        return idVisita;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdVisita(long idVisita) {
+        this.idVisita = idVisita;
     }
 
-    public LocalDateTime getFechaHoraProgramada() {
-        return fechaHoraProgramada;
+    public LocalDateTime getFechaVisita() {
+        return fechaVisita;
     }
 
-    public void setFechaHoraProgramada(LocalDateTime fechaHoraProgramada) {
-        this.fechaHoraProgramada = fechaHoraProgramada;
+    public void setFechaVisita(LocalDateTime fechaVisita) {
+        this.fechaVisita = fechaVisita;
     }
 
-    public String getEstado() {
-        return estado;
+    public LocalDateTime getHoraVisita() {
+        return horaVisita;
     }
 
-    public void setEstado(String estado) {
-        this.estado = estado;
+    public void setHoraVisita(LocalDateTime horaVisita) {
+        this.horaVisita = horaVisita;
     }
 
     public String getObservaciones() {
@@ -42,6 +43,14 @@ public class Visita {
 
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public ClienteInteresado getClienteInteresado() {
@@ -67,5 +76,16 @@ public class Visita {
     public void setAgenteInmobiliario(AgenteInmobiliario agenteInmobiliario) {
         this.agenteInmobiliario = agenteInmobiliario;
     }
-}
 
+    public void programar() {
+    }
+
+    public void reprogramar(LocalDateTime fechaVisita, LocalDateTime horaVisita) {
+    }
+
+    public void cancelar() {
+    }
+
+    public void registrarResultado(String observacion) {
+    }
+}

@@ -1,22 +1,22 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
 import java.time.LocalDateTime;
 
 public class EvaluacionSolicitud {
 
-    private long id;
+    private long idEvaluacion;
     private LocalDateTime fechaEvaluacion;
     private String resultado;
-    private String comentario;
+    private String observaciones;
     private SolicitudAlquiler solicitudAlquiler;
     private UsuarioInterno responsableEvaluacion;
 
-    public long getId() {
-        return id;
+    public long getIdEvaluacion() {
+        return idEvaluacion;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdEvaluacion(long idEvaluacion) {
+        this.idEvaluacion = idEvaluacion;
     }
 
     public LocalDateTime getFechaEvaluacion() {
@@ -35,12 +35,12 @@ public class EvaluacionSolicitud {
         this.resultado = resultado;
     }
 
-    public String getComentario() {
-        return comentario;
+    public String getObservaciones() {
+        return observaciones;
     }
 
-    public void setComentario(String comentario) {
-        this.comentario = comentario;
+    public void setObservaciones(String observaciones) {
+        this.observaciones = observaciones;
     }
 
     public SolicitudAlquiler getSolicitudAlquiler() {
@@ -58,5 +58,13 @@ public class EvaluacionSolicitud {
     public void setResponsableEvaluacion(UsuarioInterno responsableEvaluacion) {
         this.responsableEvaluacion = responsableEvaluacion;
     }
-}
 
+    public void emitirResultado(String resultado) {
+    }
+
+    public void actualizarResultado(String resultado) {
+    }
+
+    public void registrarObservacion(String observacion) {
+    }
+}

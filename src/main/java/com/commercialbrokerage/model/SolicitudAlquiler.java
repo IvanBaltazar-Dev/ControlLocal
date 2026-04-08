@@ -1,4 +1,4 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -6,47 +6,48 @@ import java.util.List;
 
 public class SolicitudAlquiler {
 
-    private long id;
-    private LocalDateTime fechaSolicitud;
-    private String estado;
-    private String plazoDeseado;
+    private long idSolicitud;
+    private LocalDateTime fechaRegistro;
+    private double montoPropuesto;
+    private String plazoTentativo;
     private String observaciones;
+    private String estado;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
     private AgenteInmobiliario agenteInmobiliario;
     private List<DocumentoSolicitud> documentosSolicitud = new ArrayList<>();
     private List<EvaluacionSolicitud> evaluacionesSolicitud = new ArrayList<>();
 
-    public long getId() {
-        return id;
+    public long getIdSolicitud() {
+        return idSolicitud;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdSolicitud(long idSolicitud) {
+        this.idSolicitud = idSolicitud;
     }
 
-    public LocalDateTime getFechaSolicitud() {
-        return fechaSolicitud;
+    public LocalDateTime getFechaRegistro() {
+        return fechaRegistro;
     }
 
-    public void setFechaSolicitud(LocalDateTime fechaSolicitud) {
-        this.fechaSolicitud = fechaSolicitud;
+    public void setFechaRegistro(LocalDateTime fechaRegistro) {
+        this.fechaRegistro = fechaRegistro;
     }
 
-    public String getEstado() {
-        return estado;
+    public double getMontoPropuesto() {
+        return montoPropuesto;
     }
 
-    public void setEstado(String estado) {
-        this.estado = estado;
+    public void setMontoPropuesto(double montoPropuesto) {
+        this.montoPropuesto = montoPropuesto;
     }
 
-    public String getPlazoDeseado() {
-        return plazoDeseado;
+    public String getPlazoTentativo() {
+        return plazoTentativo;
     }
 
-    public void setPlazoDeseado(String plazoDeseado) {
-        this.plazoDeseado = plazoDeseado;
+    public void setPlazoTentativo(String plazoTentativo) {
+        this.plazoTentativo = plazoTentativo;
     }
 
     public String getObservaciones() {
@@ -55,6 +56,14 @@ public class SolicitudAlquiler {
 
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public ClienteInteresado getClienteInteresado() {
@@ -96,5 +105,16 @@ public class SolicitudAlquiler {
     public void setEvaluacionesSolicitud(List<EvaluacionSolicitud> evaluacionesSolicitud) {
         this.evaluacionesSolicitud = evaluacionesSolicitud;
     }
-}
 
+    public void aprobar() {
+    }
+
+    public void rechazar() {
+    }
+
+    public void observar(String observacion) {
+    }
+
+    public void desistir() {
+    }
+}

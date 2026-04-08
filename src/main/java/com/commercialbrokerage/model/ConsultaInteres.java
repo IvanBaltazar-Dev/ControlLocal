@@ -1,31 +1,31 @@
-﻿package com.commercialbrokerage.model;
+package com.commercialbrokerage.model;
 
 import java.time.LocalDateTime;
 
 public class ConsultaInteres {
 
-    private long id;
-    private LocalDateTime fechaConsulta;
+    private long idConsulta;
+    private LocalDateTime fechaContacto;
     private String canalContacto;
-    private String mensaje;
+    private String observaciones;
     private String estado;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
 
-    public long getId() {
-        return id;
+    public long getIdConsulta() {
+        return idConsulta;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public void setIdConsulta(long idConsulta) {
+        this.idConsulta = idConsulta;
     }
 
-    public LocalDateTime getFechaConsulta() {
-        return fechaConsulta;
+    public LocalDateTime getFechaContacto() {
+        return fechaContacto;
     }
 
-    public void setFechaConsulta(LocalDateTime fechaConsulta) {
-        this.fechaConsulta = fechaConsulta;
+    public void setFechaContacto(LocalDateTime fechaContacto) {
+        this.fechaContacto = fechaContacto;
     }
 
     public String getCanalContacto() {
@@ -36,12 +36,12 @@ public class ConsultaInteres {
         this.canalContacto = canalContacto;
     }
 
-    public String getMensaje() {
-        return mensaje;
+    public String getObservaciones() {
+        return observaciones;
     }
 
-    public void setMensaje(String mensaje) {
-        this.mensaje = mensaje;
+    public void setObservaciones(String observaciones) {
+        this.observaciones = observaciones;
     }
 
     public String getEstado() {
@@ -67,5 +67,10 @@ public class ConsultaInteres {
     public void setCaptacion(Captacion captacion) {
         this.captacion = captacion;
     }
-}
 
+    public void actualizarEstado(String estado) {
+    }
+
+    public void registrarObservacion(String observacion) {
+    }
+}

@@ -112,6 +112,9 @@ ControlLocal/
 
 ```bash
 git clone https://github.com/IvanBaltazar-Dev/ControlLocal.git
+```
+#### Ingresar al directorio
+```bash
 cd ControlLocal
 ```
 

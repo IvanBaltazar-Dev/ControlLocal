@@ -1,64 +1,118 @@
-# Sistema de Gestión de Alquiler de Locales Comerciales
+# 🏢 ControlLocal
 
-Sistema backend para gestionar el proceso de alquiler de propiedades comerciales.
-
-Este proyecto modela el flujo de trabajo de una inmobiliaria enfocada en alquileres comerciales, incluyendo la gestión de propiedades, interacción con clientes y solicitudes de alquiler.
+Sistema backend para la **gestión, trazabilidad y control del proceso comercial de alquiler de locales comerciales** en una corredora inmobiliaria.
 
 ---
 
-## 🚀 Tecnologías
+## 📌 Descripción
 
-* Java
-* Maven
-* (Planeado) Spring Boot
-* Programación Orientada a Objetos
+**ControlLocal** centraliza la información del proceso de corretaje, permitiendo registrar, consultar y dar seguimiento a captaciones, interesados, visitas, solicitudes y evaluaciones.
 
----
+El sistema resuelve problemas como:
 
-## 📦 Funcionalidades
+- Información dispersa (Excel, llamadas, mensajes)
+- Falta de trazabilidad de decisiones
+- Dificultad de supervisión del proceso comercial
 
-* Modelo de dominio para una inmobiliaria comercial
-* Entidades como:
-
-  * Broker
-  * Agente Inmobiliario
-  * Local Comercial
-  * Propietario
-  * Solicitud de Alquiler
-  * Cliente Interesado
-* Modelado de procesos de negocio:
-
-  * Captación de propiedades
-  * Visitas
-  * Evaluación de solicitudes
-  * Gestión de documentos
+👉 Enfoque principal: **control + trazabilidad operativa**
 
 ---
 
-## 📁 Estructura del Proyecto
+## 🎯 Objetivo
 
-```
-commercial-rental-brokerage-system/
+Gestionar de forma estructurada el proceso comercial de alquiler, desde la captación del local hasta la evaluación de la solicitud.
+
+---
+
+## 🧩 Alcance
+
+Incluye la gestión de:
+
+- Usuarios internos (Broker / Agente)
+- Propietarios
+- Locales comerciales
+- Captaciones
+- Clientes interesados
+- Interacciones
+- Visitas
+- Solicitudes de alquiler
+- Documentos
+- Evaluaciones
+- Reportes
+
+---
+
+## 🔄 Flujo del sistema
+
+1. Registro de locales y propietarios  
+2. Captación de propiedades  
+3. Asignación de agente  
+4. Registro de interesados  
+5. Interacciones comerciales  
+6. Visitas  
+7. Solicitudes  
+8. Evaluación final  
+
+---
+
+## 👥 Roles
+
+- **Broker:** administración, supervisión y control  
+- **Agente:** ejecución operativa del proceso comercial  
+
+---
+
+## 🧠 Modelo de dominio
+
+Principales entidades:
+
+- UsuarioInterno
+- Broker
+- AgenteInmobiliario
+- Propietario
+- LocalComercial
+- Captacion (eje del sistema)
+- ClienteInteresado
+- ConsultaInteres
+- Visita
+- SolicitudAlquiler
+- DocumentoSolicitud
+- EvaluacionSolicitud
+- ReasignacionCaptacion
+
+---
+
+## ⚙️ Tecnologías
+
+- Java  
+- Maven  
+- Programación Orientada a Objetos  
+- JDBC (próximo)  
+- Spring Boot (planeado)  
+
+---
+
+## 📁 Estructura
+
+```text
+ControlLocal/
 │
 ├── src/main/java/com/commercialbrokerage/model
 │   └── Entidades del dominio
 │
-├── docs/diagrams
-│   └── Diagramas del sistema (si existen)
+├── docs/
+│   └── Diagramas
 │
 ├── pom.xml
-└── .gitignore
-```
-
----
+└── README.md
 
 ## 🛠️ Cómo empezar
 
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/IvanBaltazar-Dev/commercial-rental-brokerage-system.git
-cd commercial-rental-brokerage-system
+git clone https://github.com/IvanBaltazar-Dev/ControlLocal.git
+cd ControlLocal
 ```
 
 ---
@@ -69,33 +123,38 @@ cd commercial-rental-brokerage-system
 mvn clean install
 ```
 
+> Maven gestionará automáticamente las dependencias y generará los artefactos del proyecto en la carpeta `target/`.
+
 ---
 
 ### 3. Abrir en un IDE
 
-Puedes usar:
+Se recomienda utilizar un IDE con soporte para proyectos Maven:
 
-* IntelliJ IDEA
-* NetBeans
-* Eclipse
+- IntelliJ IDEA (recomendado)
+- NetBeans
+- Eclipse
+
+> Al abrir el proyecto, el IDE detectará automáticamente el `pom.xml` y configurará las dependencias.
 
 ---
 
 ## 🤝 Cómo contribuir
-### Pasos:
 
-1. Haz un fork del repositorio
+### Flujo de trabajo
+
+1. Realiza un fork del repositorio  
 2. Crea una nueva rama:
 
 ```bash
 git checkout -b feature/nombre-de-tu-feature
 ```
 
-3. Realiza tus cambios
-4. Haz commit usando convenciones:
+3. Implementa tus cambios  
+4. Realiza commits siguiendo la convención:
 
 ```bash
-git commit -m "feat: agregar nueva funcionalidad"
+git commit -m "feat: descripción clara de la funcionalidad"
 ```
 
 5. Sube tu rama:
@@ -104,29 +163,26 @@ git commit -m "feat: agregar nueva funcionalidad"
 git push origin feature/nombre-de-tu-feature
 ```
 
-6. Abre un Pull Request
+6. Abre un Pull Request hacia la rama principal  
 
 ---
 
 ## 🧠 Convención de Commits
 
-Este proyecto usa **Conventional Commits**:
+Este proyecto utiliza **Conventional Commits**:
 
-* `feat:` Nueva funcionalidad
-* `fix:` Corrección de errores
-* `refactor:` Mejora de código
-* `chore:` Configuración/mantenimiento
-* `docs:` Documentación
+- `feat:` nueva funcionalidad  
+- `fix:` corrección de errores  
+- `refactor:` mejora interna del código  
+- `docs:` documentación  
+- `chore:` mantenimiento o configuración  
 
 ---
 
 ## 🔐 Seguridad
 
-* NO subir datos sensibles (contraseñas, API keys, etc.)
-* Usar variables de entorno o archivos de ejemplo
+- No subir credenciales, contraseñas ni información sensible  
+- Usar variables de entorno para configuraciones críticas  
+- Mantener archivos sensibles fuera del control de versiones  
 
 ---
-
-## ⭐ Apoyo
-
-Si te gusta este proyecto, dale una ⭐ en GitHub

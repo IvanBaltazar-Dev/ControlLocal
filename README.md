@@ -105,7 +105,7 @@ ControlLocal/
 │
 ├── pom.xml
 └── README.md
-
+```
 ## 🛠️ Cómo empezar
 
 ### 1. Clonar el repositorio

@@ -1,31 +1,33 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
-public class ConsultaInteres {
+import com.controllocal.model.persona.ClienteInteresado;
 
-    private long idConsulta;
-    private LocalDateTime fechaContacto;
+public class InteraccionComercial {
+
+    private long idInteraccion;
+    private LocalDateTime fechaInteraccion;
     private String canalContacto;
     private String observaciones;
     private String estado;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
 
-    public long getIdConsulta() {
-        return idConsulta;
+    public long getIdInteraccion() {
+        return idInteraccion;
     }
 
-    public void setIdConsulta(long idConsulta) {
-        this.idConsulta = idConsulta;
+    public void setIdInteraccion(long idInteraccion) {
+        this.idInteraccion = idInteraccion;
     }
 
-    public LocalDateTime getFechaContacto() {
-        return fechaContacto;
+    public LocalDateTime getFechaInteraccion() {
+        return fechaInteraccion;
     }
 
-    public void setFechaContacto(LocalDateTime fechaContacto) {
-        this.fechaContacto = fechaContacto;
+    public void setFechaInteraccion(LocalDateTime fechaInteraccion) {
+        this.fechaInteraccion = fechaInteraccion;
     }
 
     public String getCanalContacto() {

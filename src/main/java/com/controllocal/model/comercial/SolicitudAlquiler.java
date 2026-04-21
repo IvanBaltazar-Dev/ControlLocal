@@ -1,8 +1,11 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.controllocal.model.persona.ClienteInteresado;
+import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class SolicitudAlquiler {
 

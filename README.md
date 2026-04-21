@@ -73,7 +73,7 @@ Principales entidades:
 - LocalComercial
 - Captacion (eje del sistema)
 - ClienteInteresado
-- ConsultaInteres
+- InteraccionComercial
 - Visita
 - SolicitudAlquiler
 - DocumentoSolicitud

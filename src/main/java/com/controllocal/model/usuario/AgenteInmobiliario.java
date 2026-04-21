@@ -1,7 +1,13 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.usuario;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.ReasignacionCaptacion;
+import com.controllocal.model.comercial.SolicitudAlquiler;
+import com.controllocal.model.comercial.Visita;
+import com.controllocal.model.persona.ClienteInteresado;
 
 public class AgenteInmobiliario extends UsuarioInterno {
 

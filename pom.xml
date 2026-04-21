@@ -4,13 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.commercialbrokerage</groupId>
-    <artifactId>commercial-rental-brokerage-system</artifactId>
+    <groupId>com.controllocal</groupId>
+    <artifactId>controllocal</artifactId>
     <version>1.0-SNAPSHOT</version>
+    <name>ControlLocal</name>
+    <description>Sistema de gestion de corretaje para alquiler de locales comerciales.</description>
 
     <properties>
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 

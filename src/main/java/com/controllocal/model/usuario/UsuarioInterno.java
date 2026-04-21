@@ -1,4 +1,4 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.usuario;
 
 public abstract class UsuarioInterno {
 

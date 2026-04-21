@@ -1,6 +1,8 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
+
+import com.controllocal.model.usuario.UsuarioInterno;
 
 public class EvaluacionSolicitud {
 

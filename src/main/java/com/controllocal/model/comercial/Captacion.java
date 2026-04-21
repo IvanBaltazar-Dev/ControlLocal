@@ -1,8 +1,12 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.usuario.AgenteInmobiliario;
+import com.controllocal.model.usuario.Broker;
 
 public class Captacion {
 
@@ -16,7 +20,7 @@ public class Captacion {
     private LocalComercial localComercial;
     private AgenteInmobiliario agenteResponsable;
     private Broker brokerSupervisor;
-    private List<ConsultaInteres> consultasInteres = new ArrayList<>();
+    private List<InteraccionComercial> interaccionesComerciales = new ArrayList<>();
     private List<Visita> visitas = new ArrayList<>();
     private List<SolicitudAlquiler> solicitudesAlquiler = new ArrayList<>();
     private List<ReasignacionCaptacion> reasignaciones = new ArrayList<>();
@@ -101,12 +105,12 @@ public class Captacion {
         this.brokerSupervisor = brokerSupervisor;
     }
 
-    public List<ConsultaInteres> getConsultasInteres() {
-        return consultasInteres;
+    public List<InteraccionComercial> getInteraccionesComerciales() {
+        return interaccionesComerciales;
     }
 
-    public void setConsultasInteres(List<ConsultaInteres> consultasInteres) {
-        this.consultasInteres = consultasInteres;
+    public void setInteraccionesComerciales(List<InteraccionComercial> interaccionesComerciales) {
+        this.interaccionesComerciales = interaccionesComerciales;
     }
 
     public List<Visita> getVisitas() {

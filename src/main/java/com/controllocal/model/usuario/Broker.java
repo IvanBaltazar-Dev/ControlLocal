@@ -1,7 +1,10 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.usuario;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.ReasignacionCaptacion;
 
 public class Broker extends UsuarioInterno {
 

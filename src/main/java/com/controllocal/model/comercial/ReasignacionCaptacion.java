@@ -1,6 +1,9 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
+
+import com.controllocal.model.usuario.AgenteInmobiliario;
+import com.controllocal.model.usuario.Broker;
 
 public class ReasignacionCaptacion {
 

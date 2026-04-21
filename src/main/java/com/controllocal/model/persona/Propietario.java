@@ -1,28 +1,27 @@
-package com.commercialbrokerage.model;
+package com.controllocal.model.persona;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClienteInteresado {
+import com.controllocal.model.inmueble.LocalComercial;
 
-    private long idCliente;
+public class Propietario {
+
+    private long idPropietario;
     private String tipoDocumento;
     private String numeroDocumento;
     private String nombresORazonSocial;
     private String telefono;
     private String correo;
-    private String rubroComercial;
     private String estado;
-    private List<ConsultaInteres> consultasInteres = new ArrayList<>();
-    private List<Visita> visitas = new ArrayList<>();
-    private List<SolicitudAlquiler> solicitudesAlquiler = new ArrayList<>();
+    private List<LocalComercial> localesComerciales = new ArrayList<>();
 
-    public long getIdCliente() {
-        return idCliente;
+    public long getIdPropietario() {
+        return idPropietario;
     }
 
-    public void setIdCliente(long idCliente) {
-        this.idCliente = idCliente;
+    public void setIdPropietario(long idPropietario) {
+        this.idPropietario = idPropietario;
     }
 
     public String getTipoDocumento() {
@@ -65,14 +64,6 @@ public class ClienteInteresado {
         this.correo = correo;
     }
 
-    public String getRubroComercial() {
-        return rubroComercial;
-    }
-
-    public void setRubroComercial(String rubroComercial) {
-        this.rubroComercial = rubroComercial;
-    }
-
     public String getEstado() {
         return estado;
     }
@@ -81,28 +72,12 @@ public class ClienteInteresado {
         this.estado = estado;
     }
 
-    public List<ConsultaInteres> getConsultasInteres() {
-        return consultasInteres;
+    public List<LocalComercial> getLocalesComerciales() {
+        return localesComerciales;
     }
 
-    public void setConsultasInteres(List<ConsultaInteres> consultasInteres) {
-        this.consultasInteres = consultasInteres;
-    }
-
-    public List<Visita> getVisitas() {
-        return visitas;
-    }
-
-    public void setVisitas(List<Visita> visitas) {
-        this.visitas = visitas;
-    }
-
-    public List<SolicitudAlquiler> getSolicitudesAlquiler() {
-        return solicitudesAlquiler;
-    }
-
-    public void setSolicitudesAlquiler(List<SolicitudAlquiler> solicitudesAlquiler) {
-        this.solicitudesAlquiler = solicitudesAlquiler;
+    public void setLocalesComerciales(List<LocalComercial> localesComerciales) {
+        this.localesComerciales = localesComerciales;
     }
 
     public void actualizarDatos() {

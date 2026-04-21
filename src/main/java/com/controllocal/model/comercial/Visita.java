@@ -1,20 +1,26 @@
 package com.controllocal.model.comercial;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
+import com.controllocal.model.enums.EstadoVisita;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class Visita {
 
     private long idVisita;
-    private LocalDateTime fechaVisita;
-    private LocalDateTime horaVisita;
+    private LocalDate fechaVisita;
+    private LocalTime horaVisita;
     private String observaciones;
-    private String estado;
+    private EstadoVisita estado;
+    private String resultado;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
-    private AgenteInmobiliario agenteInmobiliario;
+    private AgenteInmobiliario agenteResponsable;
+    private LocalDateTime fechaCreacion;
+    private LocalDateTime fechaActualizacion;
 
     public long getIdVisita() {
         return idVisita;
@@ -24,19 +30,19 @@ public class Visita {
         this.idVisita = idVisita;
     }
 
-    public LocalDateTime getFechaVisita() {
+    public LocalDate getFechaVisita() {
         return fechaVisita;
     }
 
-    public void setFechaVisita(LocalDateTime fechaVisita) {
+    public void setFechaVisita(LocalDate fechaVisita) {
         this.fechaVisita = fechaVisita;
     }
 
-    public LocalDateTime getHoraVisita() {
+    public LocalTime getHoraVisita() {
         return horaVisita;
     }
 
-    public void setHoraVisita(LocalDateTime horaVisita) {
+    public void setHoraVisita(LocalTime horaVisita) {
         this.horaVisita = horaVisita;
     }
 
@@ -48,12 +54,20 @@ public class Visita {
         this.observaciones = observaciones;
     }
 
-    public String getEstado() {
+    public EstadoVisita getEstado() {
         return estado;
     }
 
-    public void setEstado(String estado) {
+    public void setEstado(EstadoVisita estado) {
         this.estado = estado;
+    }
+
+    public String getResultado() {
+        return resultado;
+    }
+
+    public void setResultado(String resultado) {
+        this.resultado = resultado;
     }
 
     public ClienteInteresado getClienteInteresado() {
@@ -72,23 +86,39 @@ public class Visita {
         this.captacion = captacion;
     }
 
-    public AgenteInmobiliario getAgenteInmobiliario() {
-        return agenteInmobiliario;
+    public AgenteInmobiliario getAgenteResponsable() {
+        return agenteResponsable;
     }
 
-    public void setAgenteInmobiliario(AgenteInmobiliario agenteInmobiliario) {
-        this.agenteInmobiliario = agenteInmobiliario;
+    public void setAgenteResponsable(AgenteInmobiliario agenteResponsable) {
+        this.agenteResponsable = agenteResponsable;
+    }
+
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
+
+    public LocalDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 
     public void programar() {
     }
 
-    public void reprogramar(LocalDateTime fechaVisita, LocalDateTime horaVisita) {
+    public void reprogramar(LocalDate fechaVisita, LocalTime horaVisita) {
     }
 
     public void cancelar() {
     }
 
-    public void registrarResultado(String observacion) {
+    public void registrarResultado(String resultado) {
     }
 }

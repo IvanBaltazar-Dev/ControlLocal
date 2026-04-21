@@ -13,7 +13,7 @@ public class ReasignacionCaptacion {
     private Captacion captacion;
     private AgenteInmobiliario agenteAnterior;
     private AgenteInmobiliario agenteNuevo;
-    private Broker brokerAutorizador;
+    private Broker brokerResponsable;
 
     public long getIdReasignacion() {
         return idReasignacion;
@@ -63,12 +63,12 @@ public class ReasignacionCaptacion {
         this.agenteNuevo = agenteNuevo;
     }
 
-    public Broker getBrokerAutorizador() {
-        return brokerAutorizador;
+    public Broker getBrokerResponsable() {
+        return brokerResponsable;
     }
 
-    public void setBrokerAutorizador(Broker brokerAutorizador) {
-        this.brokerAutorizador = brokerAutorizador;
+    public void setBrokerResponsable(Broker brokerResponsable) {
+        this.brokerResponsable = brokerResponsable;
     }
 
     public void registrarCambio() {

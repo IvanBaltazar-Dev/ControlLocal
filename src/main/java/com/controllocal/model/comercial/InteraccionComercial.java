@@ -2,17 +2,22 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.enums.CanalContacto;
+import com.controllocal.model.enums.ResultadoInteraccionComercial;
 import com.controllocal.model.persona.ClienteInteresado;
+import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class InteraccionComercial {
 
     private long idInteraccion;
-    private LocalDateTime fechaInteraccion;
-    private String canalContacto;
+    private LocalDateTime fechaHora;
+    private CanalContacto canalContacto;
     private String observaciones;
-    private String estado;
+    private ResultadoInteraccionComercial resultado;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
+    private AgenteInmobiliario agenteResponsable;
+    private LocalDateTime fechaCreacion;
 
     public long getIdInteraccion() {
         return idInteraccion;
@@ -22,19 +27,19 @@ public class InteraccionComercial {
         this.idInteraccion = idInteraccion;
     }
 
-    public LocalDateTime getFechaInteraccion() {
-        return fechaInteraccion;
+    public LocalDateTime getFechaHora() {
+        return fechaHora;
     }
 
-    public void setFechaInteraccion(LocalDateTime fechaInteraccion) {
-        this.fechaInteraccion = fechaInteraccion;
+    public void setFechaHora(LocalDateTime fechaHora) {
+        this.fechaHora = fechaHora;
     }
 
-    public String getCanalContacto() {
+    public CanalContacto getCanalContacto() {
         return canalContacto;
     }
 
-    public void setCanalContacto(String canalContacto) {
+    public void setCanalContacto(CanalContacto canalContacto) {
         this.canalContacto = canalContacto;
     }
 
@@ -46,12 +51,12 @@ public class InteraccionComercial {
         this.observaciones = observaciones;
     }
 
-    public String getEstado() {
-        return estado;
+    public ResultadoInteraccionComercial getResultado() {
+        return resultado;
     }
 
-    public void setEstado(String estado) {
-        this.estado = estado;
+    public void setResultado(ResultadoInteraccionComercial resultado) {
+        this.resultado = resultado;
     }
 
     public ClienteInteresado getClienteInteresado() {
@@ -70,7 +75,26 @@ public class InteraccionComercial {
         this.captacion = captacion;
     }
 
-    public void actualizarEstado(String estado) {
+    public AgenteInmobiliario getAgenteResponsable() {
+        return agenteResponsable;
+    }
+
+    public void setAgenteResponsable(AgenteInmobiliario agenteResponsable) {
+        this.agenteResponsable = agenteResponsable;
+    }
+
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
+
+    public void registrar() {
+    }
+
+    public void actualizarResultado(ResultadoInteraccionComercial resultado) {
     }
 
     public void registrarObservacion(String observacion) {

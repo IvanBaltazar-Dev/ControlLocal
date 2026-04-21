@@ -2,16 +2,19 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
-import com.controllocal.model.usuario.UsuarioInterno;
+import com.controllocal.model.enums.ResultadoEvaluacionSolicitud;
+import com.controllocal.model.enums.TipoEvaluacionSolicitud;
+import com.controllocal.model.usuario.Broker;
 
 public class EvaluacionSolicitud {
 
     private long idEvaluacion;
     private LocalDateTime fechaEvaluacion;
-    private String resultado;
+    private ResultadoEvaluacionSolicitud resultado;
     private String observaciones;
+    private TipoEvaluacionSolicitud tipoEvaluacion;
     private SolicitudAlquiler solicitudAlquiler;
-    private UsuarioInterno responsableEvaluacion;
+    private Broker responsableEvaluacion;
 
     public long getIdEvaluacion() {
         return idEvaluacion;
@@ -29,11 +32,11 @@ public class EvaluacionSolicitud {
         this.fechaEvaluacion = fechaEvaluacion;
     }
 
-    public String getResultado() {
+    public ResultadoEvaluacionSolicitud getResultado() {
         return resultado;
     }
 
-    public void setResultado(String resultado) {
+    public void setResultado(ResultadoEvaluacionSolicitud resultado) {
         this.resultado = resultado;
     }
 
@@ -45,6 +48,14 @@ public class EvaluacionSolicitud {
         this.observaciones = observaciones;
     }
 
+    public TipoEvaluacionSolicitud getTipoEvaluacion() {
+        return tipoEvaluacion;
+    }
+
+    public void setTipoEvaluacion(TipoEvaluacionSolicitud tipoEvaluacion) {
+        this.tipoEvaluacion = tipoEvaluacion;
+    }
+
     public SolicitudAlquiler getSolicitudAlquiler() {
         return solicitudAlquiler;
     }
@@ -53,18 +64,18 @@ public class EvaluacionSolicitud {
         this.solicitudAlquiler = solicitudAlquiler;
     }
 
-    public UsuarioInterno getResponsableEvaluacion() {
+    public Broker getResponsableEvaluacion() {
         return responsableEvaluacion;
     }
 
-    public void setResponsableEvaluacion(UsuarioInterno responsableEvaluacion) {
+    public void setResponsableEvaluacion(Broker responsableEvaluacion) {
         this.responsableEvaluacion = responsableEvaluacion;
     }
 
-    public void emitirResultado(String resultado) {
+    public void emitirResultado(ResultadoEvaluacionSolicitud resultado) {
     }
 
-    public void actualizarResultado(String resultado) {
+    public void actualizarResultado(ResultadoEvaluacionSolicitud resultado) {
     }
 
     public void registrarObservacion(String observacion) {

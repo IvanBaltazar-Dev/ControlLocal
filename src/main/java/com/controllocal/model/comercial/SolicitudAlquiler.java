@@ -1,23 +1,29 @@
 package com.controllocal.model.comercial;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.controllocal.model.enums.EstadoSolicitudAlquiler;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class SolicitudAlquiler {
 
     private long idSolicitud;
-    private LocalDateTime fechaRegistro;
+    private String codigoSolicitud;
+    private LocalDate fechaRegistro;
     private double montoPropuesto;
     private String plazoTentativo;
     private String observaciones;
-    private String estado;
+    private EstadoSolicitudAlquiler estado;
+    private LocalDateTime fechaActualizacionEstado;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
-    private AgenteInmobiliario agenteInmobiliario;
+    private AgenteInmobiliario agenteResponsable;
+    private LocalDateTime fechaCreacion;
+    private LocalDateTime fechaActualizacion;
     private List<DocumentoSolicitud> documentosSolicitud = new ArrayList<>();
     private List<EvaluacionSolicitud> evaluacionesSolicitud = new ArrayList<>();
 
@@ -29,11 +35,19 @@ public class SolicitudAlquiler {
         this.idSolicitud = idSolicitud;
     }
 
-    public LocalDateTime getFechaRegistro() {
+    public String getCodigoSolicitud() {
+        return codigoSolicitud;
+    }
+
+    public void setCodigoSolicitud(String codigoSolicitud) {
+        this.codigoSolicitud = codigoSolicitud;
+    }
+
+    public LocalDate getFechaRegistro() {
         return fechaRegistro;
     }
 
-    public void setFechaRegistro(LocalDateTime fechaRegistro) {
+    public void setFechaRegistro(LocalDate fechaRegistro) {
         this.fechaRegistro = fechaRegistro;
     }
 
@@ -61,12 +75,20 @@ public class SolicitudAlquiler {
         this.observaciones = observaciones;
     }
 
-    public String getEstado() {
+    public EstadoSolicitudAlquiler getEstado() {
         return estado;
     }
 
-    public void setEstado(String estado) {
+    public void setEstado(EstadoSolicitudAlquiler estado) {
         this.estado = estado;
+    }
+
+    public LocalDateTime getFechaActualizacionEstado() {
+        return fechaActualizacionEstado;
+    }
+
+    public void setFechaActualizacionEstado(LocalDateTime fechaActualizacionEstado) {
+        this.fechaActualizacionEstado = fechaActualizacionEstado;
     }
 
     public ClienteInteresado getClienteInteresado() {
@@ -85,12 +107,28 @@ public class SolicitudAlquiler {
         this.captacion = captacion;
     }
 
-    public AgenteInmobiliario getAgenteInmobiliario() {
-        return agenteInmobiliario;
+    public AgenteInmobiliario getAgenteResponsable() {
+        return agenteResponsable;
     }
 
-    public void setAgenteInmobiliario(AgenteInmobiliario agenteInmobiliario) {
-        this.agenteInmobiliario = agenteInmobiliario;
+    public void setAgenteResponsable(AgenteInmobiliario agenteResponsable) {
+        this.agenteResponsable = agenteResponsable;
+    }
+
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
+
+    public LocalDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 
     public List<DocumentoSolicitud> getDocumentosSolicitud() {
@@ -109,13 +147,16 @@ public class SolicitudAlquiler {
         this.evaluacionesSolicitud = evaluacionesSolicitud;
     }
 
+    public void registrar() {
+    }
+
     public void aprobar() {
     }
 
     public void rechazar() {
     }
 
-    public void observar(String observacion) {
+    public void solicitarAjustes() {
     }
 
     public void desistir() {

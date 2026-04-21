@@ -1,22 +1,28 @@
 package com.controllocal.model.persona;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.comercial.InteraccionComercial;
 import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.comercial.Visita;
+import com.controllocal.model.enums.EstadoActivoInactivo;
+import com.controllocal.model.enums.TipoPersona;
 
 public class ClienteInteresado {
 
     private long idCliente;
+    private TipoPersona tipoPersona;
     private String tipoDocumento;
     private String numeroDocumento;
     private String nombresORazonSocial;
     private String telefono;
     private String correo;
     private String rubroComercial;
-    private String estado;
+    private EstadoActivoInactivo estado;
+    private LocalDateTime fechaCreacion;
+    private LocalDateTime fechaActualizacion;
     private List<InteraccionComercial> interaccionesComerciales = new ArrayList<>();
     private List<Visita> visitas = new ArrayList<>();
     private List<SolicitudAlquiler> solicitudesAlquiler = new ArrayList<>();
@@ -27,6 +33,14 @@ public class ClienteInteresado {
 
     public void setIdCliente(long idCliente) {
         this.idCliente = idCliente;
+    }
+
+    public TipoPersona getTipoPersona() {
+        return tipoPersona;
+    }
+
+    public void setTipoPersona(TipoPersona tipoPersona) {
+        this.tipoPersona = tipoPersona;
     }
 
     public String getTipoDocumento() {
@@ -77,12 +91,28 @@ public class ClienteInteresado {
         this.rubroComercial = rubroComercial;
     }
 
-    public String getEstado() {
+    public EstadoActivoInactivo getEstado() {
         return estado;
     }
 
-    public void setEstado(String estado) {
+    public void setEstado(EstadoActivoInactivo estado) {
         this.estado = estado;
+    }
+
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
+
+    public LocalDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 
     public List<InteraccionComercial> getInteraccionesComerciales() {

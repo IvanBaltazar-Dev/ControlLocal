@@ -2,15 +2,19 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.enums.EstadoDocumentoSolicitud;
+import com.controllocal.model.enums.ResultadoRevisionDocumento;
+
 public class DocumentoSolicitud {
 
     private long idDocumento;
     private String tipoDocumento;
     private String nombreArchivo;
+    private String rutaArchivo;
     private LocalDateTime fechaEntrega;
-    private String resultadoRevision;
+    private ResultadoRevisionDocumento resultadoRevision;
     private String observaciones;
-    private String estado;
+    private EstadoDocumentoSolicitud estado;
     private SolicitudAlquiler solicitudAlquiler;
 
     public long getIdDocumento() {
@@ -37,6 +41,14 @@ public class DocumentoSolicitud {
         this.nombreArchivo = nombreArchivo;
     }
 
+    public String getRutaArchivo() {
+        return rutaArchivo;
+    }
+
+    public void setRutaArchivo(String rutaArchivo) {
+        this.rutaArchivo = rutaArchivo;
+    }
+
     public LocalDateTime getFechaEntrega() {
         return fechaEntrega;
     }
@@ -45,11 +57,11 @@ public class DocumentoSolicitud {
         this.fechaEntrega = fechaEntrega;
     }
 
-    public String getResultadoRevision() {
+    public ResultadoRevisionDocumento getResultadoRevision() {
         return resultadoRevision;
     }
 
-    public void setResultadoRevision(String resultadoRevision) {
+    public void setResultadoRevision(ResultadoRevisionDocumento resultadoRevision) {
         this.resultadoRevision = resultadoRevision;
     }
 
@@ -61,11 +73,11 @@ public class DocumentoSolicitud {
         this.observaciones = observaciones;
     }
 
-    public String getEstado() {
+    public EstadoDocumentoSolicitud getEstado() {
         return estado;
     }
 
-    public void setEstado(String estado) {
+    public void setEstado(EstadoDocumentoSolicitud estado) {
         this.estado = estado;
     }
 
@@ -80,9 +92,9 @@ public class DocumentoSolicitud {
     public void registrarEntrega() {
     }
 
-    public void actualizarRevision(String resultadoRevision) {
+    public void actualizarRevision(ResultadoRevisionDocumento resultadoRevision) {
     }
 
-    public void cambiarEstado(String estado) {
+    public void cambiarEstado(EstadoDocumentoSolicitud estado) {
     }
 }

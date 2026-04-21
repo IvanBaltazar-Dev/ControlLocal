@@ -1,9 +1,11 @@
 package com.controllocal.model.comercial;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.controllocal.model.enums.EstadoCaptacion;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
@@ -11,15 +13,20 @@ import com.controllocal.model.usuario.Broker;
 public class Captacion {
 
     private long idCaptacion;
-    private LocalDateTime fechaCaptacion;
-    private LocalDateTime fechaInicioVigencia;
-    private LocalDateTime fechaFinVigencia;
+    private String codigoCaptacion;
+    private LocalDate fechaCaptacion;
+    private LocalDate fechaInicioVigencia;
+    private LocalDate fechaFinVigencia;
     private double comisionPactada;
     private String observaciones;
-    private String estado;
+    private EstadoCaptacion estado;
+    private LocalDateTime fechaRevision;
+    private String observacionRevision;
     private LocalComercial localComercial;
     private AgenteInmobiliario agenteResponsable;
-    private Broker brokerSupervisor;
+    private Broker brokerRevisor;
+    private LocalDateTime fechaCreacion;
+    private LocalDateTime fechaActualizacion;
     private List<InteraccionComercial> interaccionesComerciales = new ArrayList<>();
     private List<Visita> visitas = new ArrayList<>();
     private List<SolicitudAlquiler> solicitudesAlquiler = new ArrayList<>();
@@ -33,27 +40,35 @@ public class Captacion {
         this.idCaptacion = idCaptacion;
     }
 
-    public LocalDateTime getFechaCaptacion() {
+    public String getCodigoCaptacion() {
+        return codigoCaptacion;
+    }
+
+    public void setCodigoCaptacion(String codigoCaptacion) {
+        this.codigoCaptacion = codigoCaptacion;
+    }
+
+    public LocalDate getFechaCaptacion() {
         return fechaCaptacion;
     }
 
-    public void setFechaCaptacion(LocalDateTime fechaCaptacion) {
+    public void setFechaCaptacion(LocalDate fechaCaptacion) {
         this.fechaCaptacion = fechaCaptacion;
     }
 
-    public LocalDateTime getFechaInicioVigencia() {
+    public LocalDate getFechaInicioVigencia() {
         return fechaInicioVigencia;
     }
 
-    public void setFechaInicioVigencia(LocalDateTime fechaInicioVigencia) {
+    public void setFechaInicioVigencia(LocalDate fechaInicioVigencia) {
         this.fechaInicioVigencia = fechaInicioVigencia;
     }
 
-    public LocalDateTime getFechaFinVigencia() {
+    public LocalDate getFechaFinVigencia() {
         return fechaFinVigencia;
     }
 
-    public void setFechaFinVigencia(LocalDateTime fechaFinVigencia) {
+    public void setFechaFinVigencia(LocalDate fechaFinVigencia) {
         this.fechaFinVigencia = fechaFinVigencia;
     }
 
@@ -73,12 +88,28 @@ public class Captacion {
         this.observaciones = observaciones;
     }
 
-    public String getEstado() {
+    public EstadoCaptacion getEstado() {
         return estado;
     }
 
-    public void setEstado(String estado) {
+    public void setEstado(EstadoCaptacion estado) {
         this.estado = estado;
+    }
+
+    public LocalDateTime getFechaRevision() {
+        return fechaRevision;
+    }
+
+    public void setFechaRevision(LocalDateTime fechaRevision) {
+        this.fechaRevision = fechaRevision;
+    }
+
+    public String getObservacionRevision() {
+        return observacionRevision;
+    }
+
+    public void setObservacionRevision(String observacionRevision) {
+        this.observacionRevision = observacionRevision;
     }
 
     public LocalComercial getLocalComercial() {
@@ -97,12 +128,28 @@ public class Captacion {
         this.agenteResponsable = agenteResponsable;
     }
 
-    public Broker getBrokerSupervisor() {
-        return brokerSupervisor;
+    public Broker getBrokerRevisor() {
+        return brokerRevisor;
     }
 
-    public void setBrokerSupervisor(Broker brokerSupervisor) {
-        this.brokerSupervisor = brokerSupervisor;
+    public void setBrokerRevisor(Broker brokerRevisor) {
+        this.brokerRevisor = brokerRevisor;
+    }
+
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
+
+    public LocalDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 
     public List<InteraccionComercial> getInteraccionesComerciales() {
@@ -137,6 +184,18 @@ public class Captacion {
         this.reasignaciones = reasignaciones;
     }
 
+    public void registrar() {
+    }
+
+    public void aprobarIncorporacion() {
+    }
+
+    public void solicitarAjustes() {
+    }
+
+    public void rechazarIncorporacion() {
+    }
+
     public void activar() {
     }
 
@@ -146,6 +205,6 @@ public class Captacion {
     public void reasignarAgente(AgenteInmobiliario agenteInmobiliario) {
     }
 
-    public void actualizarEstado(String estado) {
+    public void actualizarEstado(EstadoCaptacion estado) {
     }
 }

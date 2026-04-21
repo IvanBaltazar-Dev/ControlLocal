@@ -1,19 +1,25 @@
 package com.controllocal.model.persona;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.controllocal.model.enums.EstadoActivoInactivo;
+import com.controllocal.model.enums.TipoPersona;
 import com.controllocal.model.inmueble.LocalComercial;
 
 public class Propietario {
 
     private long idPropietario;
+    private TipoPersona tipoPersona;
     private String tipoDocumento;
     private String numeroDocumento;
     private String nombresORazonSocial;
     private String telefono;
     private String correo;
-    private String estado;
+    private EstadoActivoInactivo estado;
+    private LocalDateTime fechaCreacion;
+    private LocalDateTime fechaActualizacion;
     private List<LocalComercial> localesComerciales = new ArrayList<>();
 
     public long getIdPropietario() {
@@ -22,6 +28,14 @@ public class Propietario {
 
     public void setIdPropietario(long idPropietario) {
         this.idPropietario = idPropietario;
+    }
+
+    public TipoPersona getTipoPersona() {
+        return tipoPersona;
+    }
+
+    public void setTipoPersona(TipoPersona tipoPersona) {
+        this.tipoPersona = tipoPersona;
     }
 
     public String getTipoDocumento() {
@@ -64,12 +78,28 @@ public class Propietario {
         this.correo = correo;
     }
 
-    public String getEstado() {
+    public EstadoActivoInactivo getEstado() {
         return estado;
     }
 
-    public void setEstado(String estado) {
+    public void setEstado(EstadoActivoInactivo estado) {
         this.estado = estado;
+    }
+
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
+
+    public LocalDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 
     public List<LocalComercial> getLocalesComerciales() {

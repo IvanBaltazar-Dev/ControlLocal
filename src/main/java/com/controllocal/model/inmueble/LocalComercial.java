@@ -1,9 +1,11 @@
 package com.controllocal.model.inmueble;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.enums.EstadoLocalComercial;
 import com.controllocal.model.persona.Propietario;
 
 public class LocalComercial {
@@ -16,8 +18,10 @@ public class LocalComercial {
     private double precioReferencial;
     private String rubroPermitido;
     private String descripcion;
-    private String estado;
+    private EstadoLocalComercial estado;
     private Propietario propietario;
+    private LocalDateTime fechaRegistro;
+    private LocalDateTime fechaActualizacion;
     private List<Captacion> captaciones = new ArrayList<>();
 
     public long getIdLocal() {
@@ -84,11 +88,11 @@ public class LocalComercial {
         this.descripcion = descripcion;
     }
 
-    public String getEstado() {
+    public EstadoLocalComercial getEstado() {
         return estado;
     }
 
-    public void setEstado(String estado) {
+    public void setEstado(EstadoLocalComercial estado) {
         this.estado = estado;
     }
 
@@ -98,6 +102,22 @@ public class LocalComercial {
 
     public void setPropietario(Propietario propietario) {
         this.propietario = propietario;
+    }
+
+    public LocalDateTime getFechaRegistro() {
+        return fechaRegistro;
+    }
+
+    public void setFechaRegistro(LocalDateTime fechaRegistro) {
+        this.fechaRegistro = fechaRegistro;
+    }
+
+    public LocalDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 
     public List<Captacion> getCaptaciones() {
@@ -111,7 +131,7 @@ public class LocalComercial {
     public void actualizarDatos() {
     }
 
-    public void cambiarEstado(String estado) {
+    public void cambiarEstado(EstadoLocalComercial estado) {
     }
 
     public String obtenerResumen() {

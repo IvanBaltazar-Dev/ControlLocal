@@ -97,7 +97,7 @@ Principales entidades:
 ```text
 ControlLocal/
 │
-├── src/main/java/com/commercialbrokerage/model
+├── src/main/java/com/controllocal/model
 │   └── Entidades del dominio
 │
 ├── docs/

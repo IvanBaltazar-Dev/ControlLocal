@@ -82,30 +82,27 @@ Principales entidades:
 
 ---
 
-## ⚙️ Tecnologías
+## 🏗️ Arquitectura
 
-- Java  
-- Maven  
-- Programación Orientada a Objetos  
-- JDBC (próximo)  
-- Spring Boot (planeado)  
-
----
-
-## 📁 Estructura
+El proyecto está organizado como un sistema **multi-módulo Maven**, separando responsabilidades por capas:
 
 ```text
 ControlLocal/
 │
-├── src/main/java/com/controllocal/model
-│   └── Entidades del dominio
+├── controllocal-app/          # 🚀 Capa de aplicación (main)
+├── controllocal-dao/          # 🗄️ Acceso a datos (DAO + JDBC)
+├── controllocal-db-manager/   # 🔌 Configuración y conexión a BD
+├── controllocal-model/        # 🧠 Modelo de dominio (entidades)
 │
-├── docs/
-│   └── Diagramas
+├── database/
+│   ├── ddl/                   # Scripts de creación de BD
+│   ├── dml/                   # Scripts de datos (incluye pruebas)
+│   └── sp/                    # Stored procedures (futuro)
 │
-├── pom.xml
-└── README.md
+├── docs/                      # 📊 Diagramas y documentación
+└── pom.xml                    # Parent Maven
 ```
+
 ## 🛠️ Cómo empezar
 
 ### 1. Clonar el repositorio

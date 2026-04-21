@@ -1,33 +1,85 @@
 package com.controllocal.model.inmueble;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Objects;
 
-import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.persona.Propietario;
-
+/**
+ * Representa un local comercial persistido en la tabla local_comercial.
+ */
 public class LocalComercial {
 
-    private long idLocal;
+    private Long idLocal;
     private String codigoLocal;
     private String direccion;
     private String distrito;
-    private double metraje;
-    private double precioReferencial;
+    private BigDecimal metraje;
+    private BigDecimal precioReferencial;
     private String rubroPermitido;
     private String descripcion;
     private EstadoLocalComercial estado;
-    private Propietario propietario;
+    private Long idPropietario;
     private LocalDateTime fechaRegistro;
     private LocalDateTime fechaActualizacion;
-    private List<Captacion> captaciones = new ArrayList<>();
 
-    public long getIdLocal() {
+    public LocalComercial() {
+    }
+
+    public LocalComercial(
+            String codigoLocal,
+            String direccion,
+            String distrito,
+            BigDecimal metraje,
+            BigDecimal precioReferencial,
+            String rubroPermitido,
+            String descripcion,
+            EstadoLocalComercial estado,
+            Long idPropietario
+    ) {
+        this.codigoLocal = codigoLocal;
+        this.direccion = direccion;
+        this.distrito = distrito;
+        this.metraje = metraje;
+        this.precioReferencial = precioReferencial;
+        this.rubroPermitido = rubroPermitido;
+        this.descripcion = descripcion;
+        this.estado = estado;
+        this.idPropietario = idPropietario;
+    }
+
+    public LocalComercial(
+            Long idLocal,
+            String codigoLocal,
+            String direccion,
+            String distrito,
+            BigDecimal metraje,
+            BigDecimal precioReferencial,
+            String rubroPermitido,
+            String descripcion,
+            EstadoLocalComercial estado,
+            Long idPropietario,
+            LocalDateTime fechaRegistro,
+            LocalDateTime fechaActualizacion
+    ) {
+        this.idLocal = idLocal;
+        this.codigoLocal = codigoLocal;
+        this.direccion = direccion;
+        this.distrito = distrito;
+        this.metraje = metraje;
+        this.precioReferencial = precioReferencial;
+        this.rubroPermitido = rubroPermitido;
+        this.descripcion = descripcion;
+        this.estado = estado;
+        this.idPropietario = idPropietario;
+        this.fechaRegistro = fechaRegistro;
+        this.fechaActualizacion = fechaActualizacion;
+    }
+
+    public Long getIdLocal() {
         return idLocal;
     }
 
-    public void setIdLocal(long idLocal) {
+    public void setIdLocal(Long idLocal) {
         this.idLocal = idLocal;
     }
 
@@ -55,19 +107,19 @@ public class LocalComercial {
         this.distrito = distrito;
     }
 
-    public double getMetraje() {
+    public BigDecimal getMetraje() {
         return metraje;
     }
 
-    public void setMetraje(double metraje) {
+    public void setMetraje(BigDecimal metraje) {
         this.metraje = metraje;
     }
 
-    public double getPrecioReferencial() {
+    public BigDecimal getPrecioReferencial() {
         return precioReferencial;
     }
 
-    public void setPrecioReferencial(double precioReferencial) {
+    public void setPrecioReferencial(BigDecimal precioReferencial) {
         this.precioReferencial = precioReferencial;
     }
 
@@ -95,12 +147,12 @@ public class LocalComercial {
         this.estado = estado;
     }
 
-    public Propietario getPropietario() {
-        return propietario;
+    public Long getIdPropietario() {
+        return idPropietario;
     }
 
-    public void setPropietario(Propietario propietario) {
-        this.propietario = propietario;
+    public void setIdPropietario(Long idPropietario) {
+        this.idPropietario = idPropietario;
     }
 
     public LocalDateTime getFechaRegistro() {
@@ -119,21 +171,40 @@ public class LocalComercial {
         this.fechaActualizacion = fechaActualizacion;
     }
 
-    public List<Captacion> getCaptaciones() {
-        return captaciones;
+    @Override
+    public String toString() {
+        return "LocalComercial{" +
+                "idLocal=" + idLocal +
+                ", codigoLocal='" + codigoLocal + '\'' +
+                ", direccion='" + direccion + '\'' +
+                ", distrito='" + distrito + '\'' +
+                ", metraje=" + metraje +
+                ", precioReferencial=" + precioReferencial +
+                ", rubroPermitido='" + rubroPermitido + '\'' +
+                ", descripcion='" + descripcion + '\'' +
+                ", estado=" + estado +
+                ", idPropietario=" + idPropietario +
+                ", fechaRegistro=" + fechaRegistro +
+                ", fechaActualizacion=" + fechaActualizacion +
+                '}';
     }
 
-    public void setCaptaciones(List<Captacion> captaciones) {
-        this.captaciones = captaciones;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof LocalComercial that)) {
+            return false;
+        }
+        if (idLocal == null || that.idLocal == null) {
+            return false;
+        }
+        return Objects.equals(idLocal, that.idLocal);
     }
 
-    public void actualizarDatos() {
-    }
-
-    public void cambiarEstado(EstadoLocalComercial estado) {
-    }
-
-    public String obtenerResumen() {
-        return "";
+    @Override
+    public int hashCode() {
+        return idLocal != null ? Objects.hash(idLocal) : System.identityHashCode(this);
     }
 }

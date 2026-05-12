@@ -88,8 +88,15 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
             """;
 
     private static final String DELETE_SQL = """
-            DELETE FROM usuario_interno
+            UPDATE usuario_interno
+            SET estado = 'INACTIVO'
             WHERE id_usuario = ?
+            """;
+
+    private static final String UPDATE_ESTADO_OPERATIVO_SQL = """
+            UPDATE agente_inmobiliario
+            SET estado_operativo = 'NO_DISPONIBLE'
+            WHERE id_agente = ?
             """;
 
     @Override
@@ -135,6 +142,7 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
                 conn.commit();
                 agente.setIdUsuarioInterno(idGenerado);
                 agente.setIdAgente(idGenerado);
+                agente.setRol(RolUsuarioInterno.AGENTE);
                 return idGenerado;
 
             } catch (Exception e) {
@@ -232,11 +240,27 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
     public boolean eliminar(Long id) {
         validarId(id);
 
-        try (Connection conn = DBManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(DELETE_SQL)) {
+        try (Connection conn = DBManager.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                int filas;
 
-            stmt.setLong(1, id);
-            return stmt.executeUpdate() > 0;
+                try (PreparedStatement stmtAgente = conn.prepareStatement(UPDATE_ESTADO_OPERATIVO_SQL)) {
+                    stmtAgente.setLong(1, id);
+                    stmtAgente.executeUpdate();
+                }
+
+                try (PreparedStatement stmt = conn.prepareStatement(DELETE_SQL)) {
+                    stmt.setLong(1, id);
+                    filas = stmt.executeUpdate();
+                }
+
+                conn.commit();
+                return filas > 0;
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
         } catch (SQLException e) {
             throw new DAOException("Error al eliminar agente con id " + id + ".", e);
         }

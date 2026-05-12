@@ -5,17 +5,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.comercial.EvaluacionSolicitud;
-import com.controllocal.model.comercial.ReasignacionCaptacion;
 
 public class Broker extends UsuarioInterno {
 
     private long idBroker;
     private String codigoBroker;
     private LocalDate fechaDesignacion;
+    private boolean esAdministrador;
     private List<Captacion> captacionesSupervisadas = new ArrayList<>();
-    private List<ReasignacionCaptacion> reasignacionesAutorizadas = new ArrayList<>();
-    private List<EvaluacionSolicitud> evaluacionesRegistradas = new ArrayList<>();
 
     public long getIdBroker() {
         return idBroker;
@@ -41,6 +38,18 @@ public class Broker extends UsuarioInterno {
         this.fechaDesignacion = fechaDesignacion;
     }
 
+    public boolean isEsAdministrador() {
+        return esAdministrador;
+    }
+
+    public boolean getEsAdministrador() {
+        return esAdministrador;
+    }
+
+    public void setEsAdministrador(boolean esAdministrador) {
+        this.esAdministrador = esAdministrador;
+    }
+
     public List<Captacion> getCaptacionesSupervisadas() {
         return captacionesSupervisadas;
     }
@@ -49,32 +58,19 @@ public class Broker extends UsuarioInterno {
         this.captacionesSupervisadas = captacionesSupervisadas;
     }
 
-    public List<ReasignacionCaptacion> getReasignacionesAutorizadas() {
-        return reasignacionesAutorizadas;
-    }
-
-    public void setReasignacionesAutorizadas(List<ReasignacionCaptacion> reasignacionesAutorizadas) {
-        this.reasignacionesAutorizadas = reasignacionesAutorizadas;
-    }
-
-    public List<EvaluacionSolicitud> getEvaluacionesRegistradas() {
-        return evaluacionesRegistradas;
-    }
-
-    public void setEvaluacionesRegistradas(List<EvaluacionSolicitud> evaluacionesRegistradas) {
-        this.evaluacionesRegistradas = evaluacionesRegistradas;
-    }
-
     public void validarCaptacion(Captacion captacion) {
+        if (captacion == null) {
+            return;
+        }
+        captacion.setBrokerRevisor(this);
+        captacion.setFechaRevision(java.time.LocalDateTime.now());
+        captacion.actualizarEstado(com.controllocal.model.comercial.EstadoCaptacion.ACTIVA);
+        if (!captacionesSupervisadas.contains(captacion)) {
+            captacionesSupervisadas.add(captacion);
+        }
     }
 
     public void aprobarCambioSensible(Captacion captacion) {
-    }
-
-    public void reasignarCaptacion(Captacion captacion, AgenteInmobiliario agenteAnterior,
-                                   AgenteInmobiliario agenteNuevo) {
-    }
-
-    public void registrarEvaluacion(EvaluacionSolicitud evaluacionSolicitud) {
+        validarCaptacion(captacion);
     }
 }

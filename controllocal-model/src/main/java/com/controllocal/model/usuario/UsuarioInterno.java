@@ -107,15 +107,17 @@ public abstract class UsuarioInterno {
     }
 
     public boolean autenticar() {
-        return false;
+        return estado == EstadoActivoInactivo.ACTIVO;
     }
 
     public void cerrarSesion() {
     }
 
     public void activar() {
+        this.estado = EstadoActivoInactivo.ACTIVO;
     }
 
     public void desactivar() {
+        this.estado = EstadoActivoInactivo.INACTIVO;
     }
 }

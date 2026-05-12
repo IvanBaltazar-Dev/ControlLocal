@@ -109,11 +109,14 @@ public class Propietario {
     }
 
     public void actualizarDatos() {
+        this.fechaActualizacion = LocalDateTime.now();
     }
 
     public void activar() {
+        this.estado = EstadoActivoInactivo.ACTIVO;
     }
 
     public void desactivar() {
+        this.estado = EstadoActivoInactivo.INACTIVO;
     }
 }

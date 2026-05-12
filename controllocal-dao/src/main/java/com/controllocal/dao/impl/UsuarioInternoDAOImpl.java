@@ -42,6 +42,7 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
                 u.fecha_actualizacion,
                 b.codigo_broker,
                 b.fecha_designacion,
+                b.es_administrador,
                 a.codigo_agente,
                 a.zona_asignada,
                 a.fecha_ingreso,
@@ -68,7 +69,8 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
             """;
 
     private static final String DELETE_SQL = """
-            DELETE FROM usuario_interno
+            UPDATE usuario_interno
+            SET estado = 'INACTIVO'
             WHERE id_usuario = ?
             """;
 
@@ -159,12 +161,13 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
         if ("BROKER".equals(rol)) {
             Broker broker = new Broker();
             broker.setCodigoBroker(rs.getString("codigo_broker"));
+            broker.setEsAdministrador(rs.getBoolean("es_administrador"));
             Date fechaDesig = rs.getDate("fecha_designacion");
             if (fechaDesig != null) {
                 broker.setFechaDesignacion(fechaDesig.toLocalDate());
             }
             usuario = broker;
-        } else {
+        } else if ("AGENTE".equals(rol)) {
             AgenteInmobiliario agente = new AgenteInmobiliario();
             agente.setCodigoAgente(rs.getString("codigo_agente"));
             agente.setZonaAsignada(rs.getString("zona_asignada"));
@@ -177,9 +180,17 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
                 agente.setEstadoOperativo(EstadoOperativoAgente.valueOf(estadoOp));
             }
             usuario = agente;
+        } else {
+            throw new DAOException("Rol de usuario interno no soportado: " + rol);
         }
 
         usuario.setIdUsuarioInterno(rs.getLong("id_usuario"));
+        if (usuario instanceof Broker broker) {
+            broker.setIdBroker(usuario.getIdUsuarioInterno());
+        }
+        if (usuario instanceof AgenteInmobiliario agente) {
+            agente.setIdAgente(usuario.getIdUsuarioInterno());
+        }
         usuario.setNombres(rs.getString("nombres"));
         usuario.setApellidos(rs.getString("apellidos"));
         usuario.setCorreo(rs.getString("correo"));

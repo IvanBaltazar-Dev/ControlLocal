@@ -2,8 +2,6 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.usuario.AgenteInmobiliario;
@@ -26,10 +24,43 @@ public class Captacion {
     private Broker brokerRevisor;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
-    private List<InteraccionComercial> interaccionesComerciales = new ArrayList<>();
-    private List<Visita> visitas = new ArrayList<>();
-    private List<SolicitudAlquiler> solicitudesAlquiler = new ArrayList<>();
-    private List<ReasignacionCaptacion> reasignaciones = new ArrayList<>();
+
+    public Captacion() {
+    }
+
+    public Captacion(
+            long idCaptacion,
+            String codigoCaptacion,
+            LocalDate fechaCaptacion,
+            LocalDate fechaInicioVigencia,
+            LocalDate fechaFinVigencia,
+            double comisionPactada,
+            String observaciones,
+            EstadoCaptacion estado,
+            LocalDateTime fechaRevision,
+            String observacionRevision,
+            LocalComercial localComercial,
+            AgenteInmobiliario agenteResponsable,
+            Broker brokerRevisor,
+            LocalDateTime fechaCreacion,
+            LocalDateTime fechaActualizacion
+    ) {
+        this.idCaptacion = idCaptacion;
+        this.codigoCaptacion = codigoCaptacion;
+        this.fechaCaptacion = fechaCaptacion;
+        this.fechaInicioVigencia = fechaInicioVigencia;
+        this.fechaFinVigencia = fechaFinVigencia;
+        this.comisionPactada = comisionPactada;
+        this.observaciones = observaciones;
+        this.estado = estado;
+        this.fechaRevision = fechaRevision;
+        this.observacionRevision = observacionRevision;
+        this.localComercial = localComercial;
+        this.agenteResponsable = agenteResponsable;
+        this.brokerRevisor = brokerRevisor;
+        this.fechaCreacion = fechaCreacion;
+        this.fechaActualizacion = fechaActualizacion;
+    }
 
     public long getIdCaptacion() {
         return idCaptacion;
@@ -151,59 +182,46 @@ public class Captacion {
         this.fechaActualizacion = fechaActualizacion;
     }
 
-    public List<InteraccionComercial> getInteraccionesComerciales() {
-        return interaccionesComerciales;
-    }
-
-    public void setInteraccionesComerciales(List<InteraccionComercial> interaccionesComerciales) {
-        this.interaccionesComerciales = interaccionesComerciales;
-    }
-
-    public List<Visita> getVisitas() {
-        return visitas;
-    }
-
-    public void setVisitas(List<Visita> visitas) {
-        this.visitas = visitas;
-    }
-
-    public List<SolicitudAlquiler> getSolicitudesAlquiler() {
-        return solicitudesAlquiler;
-    }
-
-    public void setSolicitudesAlquiler(List<SolicitudAlquiler> solicitudesAlquiler) {
-        this.solicitudesAlquiler = solicitudesAlquiler;
-    }
-
-    public List<ReasignacionCaptacion> getReasignaciones() {
-        return reasignaciones;
-    }
-
-    public void setReasignaciones(List<ReasignacionCaptacion> reasignaciones) {
-        this.reasignaciones = reasignaciones;
-    }
-
     public void registrar() {
+        if (estado == null) {
+            this.estado = EstadoCaptacion.PENDIENTE_REVISION;
+        }
     }
 
     public void aprobarIncorporacion() {
+        this.estado = EstadoCaptacion.ACTIVA;
+        this.fechaRevision = LocalDateTime.now();
     }
 
     public void solicitarAjustes() {
+        this.estado = EstadoCaptacion.OBSERVADA;
+        this.fechaRevision = LocalDateTime.now();
     }
 
     public void rechazarIncorporacion() {
+        this.estado = EstadoCaptacion.RECHAZADA;
+        this.fechaRevision = LocalDateTime.now();
     }
 
     public void activar() {
+        this.estado = EstadoCaptacion.ACTIVA;
+        if (this.fechaInicioVigencia == null) {
+            this.fechaInicioVigencia = LocalDate.now();
+        }
     }
 
     public void cerrar() {
+        this.estado = EstadoCaptacion.CERRADA;
+        if (this.fechaFinVigencia == null) {
+            this.fechaFinVigencia = LocalDate.now();
+        }
     }
 
     public void reasignarAgente(AgenteInmobiliario agenteInmobiliario) {
+        this.agenteResponsable = agenteInmobiliario;
     }
 
     public void actualizarEstado(EstadoCaptacion estado) {
+        this.estado = estado;
     }
 }

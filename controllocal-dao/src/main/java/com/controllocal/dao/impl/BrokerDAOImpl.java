@@ -36,8 +36,8 @@ public class BrokerDAOImpl implements BrokerDAO {
             """;
 
     private static final String INSERT_BROKER_SQL = """
-            INSERT INTO broker (id_broker, codigo_broker, fecha_designacion)
-            VALUES (?, ?, ?)
+            INSERT INTO broker (id_broker, codigo_broker, fecha_designacion, es_administrador)
+            VALUES (?, ?, ?, ?)
             """;
 
     private static final String SELECT_BASE = """
@@ -54,7 +54,8 @@ public class BrokerDAOImpl implements BrokerDAO {
                 u.fecha_creacion,
                 u.fecha_actualizacion,
                 b.codigo_broker,
-                b.fecha_designacion
+                b.fecha_designacion,
+                b.es_administrador
             FROM broker b
             INNER JOIN usuario_interno u ON b.id_broker = u.id_usuario
             """;
@@ -78,13 +79,28 @@ public class BrokerDAOImpl implements BrokerDAO {
     private static final String UPDATE_BROKER_SQL = """
             UPDATE broker
             SET codigo_broker = ?,
-                fecha_designacion = ?
+                fecha_designacion = ?,
+                es_administrador = ?
             WHERE id_broker = ?
             """;
 
     private static final String DELETE_SQL = """
-            DELETE FROM usuario_interno
+            UPDATE usuario_interno
+            SET estado = 'INACTIVO'
             WHERE id_usuario = ?
+            """;
+
+    private static final String EXISTS_OTHER_ADMIN_SQL = """
+            SELECT COUNT(*)
+            FROM broker
+            WHERE es_administrador = TRUE
+              AND id_broker <> ?
+            """;
+
+    private static final String SELECT_ADMIN_FLAG_SQL = """
+            SELECT es_administrador
+            FROM broker
+            WHERE id_broker = ?
             """;
 
     @Override
@@ -118,15 +134,18 @@ public class BrokerDAOImpl implements BrokerDAO {
                 }
 
                 try (PreparedStatement stmtBroker = conn.prepareStatement(INSERT_BROKER_SQL)) {
+                    validarAdministrador(conn, idGenerado, broker.isEsAdministrador());
                     stmtBroker.setLong(1, idGenerado);
                     stmtBroker.setString(2, broker.getCodigoBroker());
                     stmtBroker.setDate(3, Date.valueOf(broker.getFechaDesignacion()));
+                    stmtBroker.setBoolean(4, broker.isEsAdministrador());
                     stmtBroker.executeUpdate();
                 }
 
                 conn.commit();
                 broker.setIdUsuarioInterno(idGenerado);
                 broker.setIdBroker(idGenerado);
+                broker.setRol(RolUsuarioInterno.BROKER);
                 return idGenerado;
 
             } catch (Exception e) {
@@ -184,6 +203,8 @@ public class BrokerDAOImpl implements BrokerDAO {
         try (Connection conn = DBManager.getConnection()) {
             conn.setAutoCommit(false);
             try {
+                validarAdministrador(conn, broker.getIdBroker(), broker.isEsAdministrador());
+
                 try (PreparedStatement stmtU = conn.prepareStatement(UPDATE_USUARIO_SQL)) {
                     stmtU.setString(1, broker.getNombres());
                     stmtU.setString(2, broker.getApellidos());
@@ -200,7 +221,8 @@ public class BrokerDAOImpl implements BrokerDAO {
                 try (PreparedStatement stmtB = conn.prepareStatement(UPDATE_BROKER_SQL)) {
                     stmtB.setString(1, broker.getCodigoBroker());
                     stmtB.setDate(2, Date.valueOf(broker.getFechaDesignacion()));
-                    stmtB.setLong(3, broker.getIdBroker());
+                    stmtB.setBoolean(3, broker.isEsAdministrador());
+                    stmtB.setLong(4, broker.getIdBroker());
                     filas = stmtB.executeUpdate();
                 }
 
@@ -222,11 +244,15 @@ public class BrokerDAOImpl implements BrokerDAO {
     public boolean eliminar(Long id) {
         validarId(id);
 
-        try (Connection conn = DBManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(DELETE_SQL)) {
+        try (Connection conn = DBManager.getConnection()) {
+            if (esAdministrador(conn, id)) {
+                throw new DAOException("No se puede desactivar el broker administrador unico.");
+            }
 
-            stmt.setLong(1, id);
-            return stmt.executeUpdate() > 0;
+            try (PreparedStatement stmt = conn.prepareStatement(DELETE_SQL)) {
+                stmt.setLong(1, id);
+                return stmt.executeUpdate() > 0;
+            }
         } catch (SQLException e) {
             throw new DAOException("Error al eliminar broker con id " + id + ".", e);
         }
@@ -260,6 +286,7 @@ public class BrokerDAOImpl implements BrokerDAO {
         if (fechaDesig != null) {
             broker.setFechaDesignacion(fechaDesig.toLocalDate());
         }
+        broker.setEsAdministrador(rs.getBoolean("es_administrador"));
         return broker;
     }
 
@@ -290,6 +317,30 @@ public class BrokerDAOImpl implements BrokerDAO {
         }
         if (broker.getFechaDesignacion() == null) {
             throw new IllegalArgumentException("La fecha de designacion del broker es obligatoria.");
+        }
+    }
+
+    private void validarAdministrador(Connection conn, long idBroker, boolean esAdministrador) throws SQLException {
+        if (!esAdministrador) {
+            return;
+        }
+
+        try (PreparedStatement stmt = conn.prepareStatement(EXISTS_OTHER_ADMIN_SQL)) {
+            stmt.setLong(1, idBroker);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    throw new DAOException("Ya existe un broker administrador registrado.");
+                }
+            }
+        }
+    }
+
+    private boolean esAdministrador(Connection conn, Long id) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(SELECT_ADMIN_FLAG_SQL)) {
+            stmt.setLong(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() && rs.getBoolean("es_administrador");
+            }
         }
     }
 

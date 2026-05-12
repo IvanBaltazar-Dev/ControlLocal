@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+import com.controllocal.model.persona.Propietario;
+
 /**
  * Representa un local comercial persistido en la tabla local_comercial.
  */
@@ -19,6 +21,7 @@ public class LocalComercial {
     private String descripcion;
     private EstadoLocalComercial estado;
     private Long idPropietario;
+    private Propietario propietario;
     private LocalDateTime fechaRegistro;
     private LocalDateTime fechaActualizacion;
 
@@ -44,7 +47,7 @@ public class LocalComercial {
         this.rubroPermitido = rubroPermitido;
         this.descripcion = descripcion;
         this.estado = estado;
-        this.idPropietario = idPropietario;
+        setIdPropietario(idPropietario);
     }
 
     public LocalComercial(
@@ -70,7 +73,7 @@ public class LocalComercial {
         this.rubroPermitido = rubroPermitido;
         this.descripcion = descripcion;
         this.estado = estado;
-        this.idPropietario = idPropietario;
+        setIdPropietario(idPropietario);
         this.fechaRegistro = fechaRegistro;
         this.fechaActualizacion = fechaActualizacion;
     }
@@ -148,11 +151,31 @@ public class LocalComercial {
     }
 
     public Long getIdPropietario() {
+        if (propietario != null && propietario.getIdPropietario() > 0) {
+            return propietario.getIdPropietario();
+        }
         return idPropietario;
     }
 
     public void setIdPropietario(Long idPropietario) {
         this.idPropietario = idPropietario;
+        if (idPropietario == null) {
+            this.propietario = null;
+            return;
+        }
+        if (this.propietario == null) {
+            this.propietario = new Propietario();
+        }
+        this.propietario.setIdPropietario(idPropietario);
+    }
+
+    public Propietario getPropietario() {
+        return propietario;
+    }
+
+    public void setPropietario(Propietario propietario) {
+        this.propietario = propietario;
+        this.idPropietario = propietario != null ? propietario.getIdPropietario() : null;
     }
 
     public LocalDateTime getFechaRegistro() {
@@ -183,7 +206,7 @@ public class LocalComercial {
                 ", rubroPermitido='" + rubroPermitido + '\'' +
                 ", descripcion='" + descripcion + '\'' +
                 ", estado=" + estado +
-                ", idPropietario=" + idPropietario +
+                ", idPropietario=" + getIdPropietario() +
                 ", fechaRegistro=" + fechaRegistro +
                 ", fechaActualizacion=" + fechaActualizacion +
                 '}';

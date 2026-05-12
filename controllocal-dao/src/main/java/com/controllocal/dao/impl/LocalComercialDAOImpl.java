@@ -5,6 +5,7 @@ import com.controllocal.dao.DAOException;
 import com.controllocal.dao.LocalComercialDAO;
 import com.controllocal.model.inmueble.EstadoLocalComercial;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.Propietario;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -86,7 +87,8 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             """;
 
     private static final String DELETE_SQL = """
-            DELETE FROM local_comercial
+            UPDATE local_comercial
+            SET estado = 'INACTIVO'
             WHERE id_local = ?
             """;
 
@@ -205,8 +207,9 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
     private LocalComercial mapRow(ResultSet rs) throws SQLException {
         Timestamp fechaRegistro = rs.getTimestamp("fecha_registro");
         Timestamp fechaActualizacion = rs.getTimestamp("fecha_actualizacion");
+        long idPropietario = rs.getLong("id_propietario");
 
-        return new LocalComercial(
+        LocalComercial local = new LocalComercial(
                 rs.getLong("id_local"),
                 rs.getString("codigo_local"),
                 rs.getString("direccion"),
@@ -216,10 +219,15 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 rs.getString("rubro_permitido"),
                 rs.getString("descripcion"),
                 EstadoLocalComercial.valueOf(rs.getString("estado")),
-                rs.getLong("id_propietario"),
+                idPropietario,
                 fechaRegistro != null ? fechaRegistro.toLocalDateTime() : null,
                 fechaActualizacion != null ? fechaActualizacion.toLocalDateTime() : null
         );
+
+        Propietario propietario = new Propietario();
+        propietario.setIdPropietario(idPropietario);
+        local.setPropietario(propietario);
+        return local;
     }
 
     private void validarLocalParaPersistencia(LocalComercial local, boolean requiereId) {

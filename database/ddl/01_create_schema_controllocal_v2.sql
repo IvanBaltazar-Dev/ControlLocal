@@ -44,9 +44,18 @@ CREATE TABLE broker (
     id_broker BIGINT PRIMARY KEY,
     codigo_broker VARCHAR(20) NOT NULL UNIQUE,
     fecha_designacion DATE NOT NULL,
+    es_administrador BOOLEAN NOT NULL DEFAULT FALSE,
+    broker_admin_unico TINYINT GENERATED ALWAYS AS (
+        CASE
+            WHEN es_administrador THEN 1
+            ELSE NULL
+        END
+    ) STORED,
     CONSTRAINT fk_broker_usuario
         FOREIGN KEY (id_broker) REFERENCES usuario_interno(id_usuario)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT ck_broker_es_administrador CHECK (es_administrador IN (0, 1)),
+    CONSTRAINT uq_broker_admin_unico UNIQUE (broker_admin_unico)
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -437,9 +446,11 @@ INSERT INTO usuario_interno (
 INSERT INTO broker (
     id_broker,
     codigo_broker,
-    fecha_designacion
+    fecha_designacion,
+    es_administrador
 ) VALUES (
     LAST_INSERT_ID(),
-    'BRK-001',
-    CURRENT_DATE
+    'BRK-ADM-001',
+    CURRENT_DATE,
+    TRUE
 );

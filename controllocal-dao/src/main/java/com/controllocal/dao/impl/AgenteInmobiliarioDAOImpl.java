@@ -54,36 +54,45 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
     @Override
     public Long crear(AgenteInmobiliario agente) {
         validar(agente, false);
-        try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setLong(1, agente.getIdUsuarioInterno());
-            ps.setString(2, agente.getCodigoAgente());
-            ps.setString(3, agente.getZonaAsignada());
-            ps.setDate(4, Date.valueOf(agente.getFechaIngreso()));
-            ps.setString(5, agente.getEstadoOperativo().name());
-            ps.executeUpdate();
-            try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) {
-                    Long id = rs.getLong(1);
-                    agente.setIdAgente(id);
-                    agente.setRol(RolUsuarioInterno.AGENTE);
-                    return id;
+        Connection conn = null;
+        try {
+            conn = DBManager.getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
+                ps.setLong(1, agente.getIdUsuarioInterno());
+                ps.setString(2, agente.getCodigoAgente());
+                ps.setString(3, agente.getZonaAsignada());
+                ps.setDate(4, Date.valueOf(agente.getFechaIngreso()));
+                ps.setString(5, agente.getEstadoOperativo().name());
+                ps.executeUpdate();
+
+                try (ResultSet rs = ps.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        Long id = rs.getLong(1);
+                        agente.setIdAgente(id);
+                        agente.setRol(RolUsuarioInterno.AGENTE);
+                        return id;
+                    }
                 }
+                throw new DAOException("No se genero el id de agente inmobiliario.");
             }
-            throw new DAOException("No se genero el id de agente inmobiliario.");
         } catch (SQLException e) {
             throw new DAOException("Error al crear agente inmobiliario.", e);
         }
     }
 
     @Override
+
     public Optional<AgenteInmobiliario> buscarPorId(Long id) {
         JdbcSupport.validarId(id);
-        try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE a.id_agente = ?")) {
-            ps.setLong(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+        // 1. Obtenemos la conexión (la del ThreadLocal que gestiona la BL)
+        Connection conn = null;
+        try {
+            conn = DBManager.getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE a.id_agente = ?")) {
+                ps.setLong(1, id);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+                }
             }
         } catch (SQLException e) {
             throw new DAOException("Error al buscar agente inmobiliario con id " + id + ".", e);

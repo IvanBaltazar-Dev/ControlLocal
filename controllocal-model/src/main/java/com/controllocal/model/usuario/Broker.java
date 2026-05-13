@@ -101,4 +101,10 @@ public class Broker extends UsuarioInterno {
             evaluacion.emitirResultado(evaluacion.getResultado(), evaluacion.getObservaciones());
         }
     }
+    public Broker() {
+    }
+
+    public Broker(Long idBroker) {
+        this.idBroker = idBroker;
+    }
 }

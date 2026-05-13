@@ -10,10 +10,20 @@ public final class DBManager {
     }
 
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(
-                DatabaseConfig.getJdbcUrl(),
-                DatabaseConfig.getUsername(),
-                DatabaseConfig.getPassword()
-        );
+        // 1. Intentamos obtener la conexión del hilo actual (la transacción activa)
+        Connection conn = DatabaseConfig.getConnectionHolder().get();
+
+        // 2. Si no hay una o está cerrada, creamos una nueva
+        if (conn == null || conn.isClosed()) {
+            conn = DriverManager.getConnection(
+                    DatabaseConfig.getJdbcUrl(),
+                    DatabaseConfig.getUsername(),
+                    DatabaseConfig.getPassword()
+            );
+
+            conn.setAutoCommit(false); // Necesario para transacciones manuales
+            DatabaseConfig.getConnectionHolder().set(conn);
+        }
+        return conn;
     }
 }

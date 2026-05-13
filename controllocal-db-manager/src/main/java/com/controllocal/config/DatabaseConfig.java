@@ -2,13 +2,15 @@ package com.controllocal.config;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Properties;
 
 public final class DatabaseConfig {
 
     private static final String PROPERTIES_FILE = "db.properties";
     private static final Properties PROPERTIES = loadProperties();
-
+    private static final ThreadLocal<Connection> connectionHolder = new ThreadLocal<>();
     private DatabaseConfig() {
     }
 
@@ -31,7 +33,9 @@ public final class DatabaseConfig {
     public static String getDatabaseName() {
         return getConfigValue("DB_NAME", "db.name", "controllocal");
     }
-
+    public static ThreadLocal<Connection> getConnectionHolder() {
+        return connectionHolder;
+    }
     public static String getUsername() {
         return getConfigValue("DB_USERNAME", "db.username", "root");
     }
@@ -80,5 +84,33 @@ public final class DatabaseConfig {
         }
 
         return properties;
+    }
+    public static void commit() throws SQLException {
+        Connection conn = connectionHolder.get();
+        if (conn != null) {
+            conn.commit();
+        }
+    }
+    public static void rollback() {
+        Connection conn = connectionHolder.get();
+        if (conn != null) {
+            try {
+                conn.rollback();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    public static void close() {
+        Connection conn = connectionHolder.get();
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            // CRITICAL: Always remove to prevent memory leaks in thread pools
+            connectionHolder.remove();
+        }
     }
 }

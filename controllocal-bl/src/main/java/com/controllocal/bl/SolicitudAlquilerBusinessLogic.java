@@ -1,17 +1,18 @@
 package com.controllocal.bl;
 
 import com.controllocal.model.comercial.SolicitudAlquiler;
+
 import java.util.List;
 
 public interface SolicitudAlquilerBusinessLogic {
 
-    Long registerRequest(SolicitudAlquiler request);
+    Long registrarSolicitud(SolicitudAlquiler solicitud);
 
-    void approveRequest(Long requestId, Long brokerId);
+    void aprobarSolicitud(Long solicitudId, Long brokerId);
 
-    void rejectRequest(Long requestId, Long brokerId, String reason);
+    void rechazarSolicitud(Long solicitudId, Long brokerId, String motivo);
 
-    void attachDocument(Long requestId, Long documentId);
+    void adjuntarDocumento(Long solicitudId, Long documentoId);
 
-    List<SolicitudAlquiler> listPendingRequests();
+    List<SolicitudAlquiler> listarSolicitudesPendientes();
 }

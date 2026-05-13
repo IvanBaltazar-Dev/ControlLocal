@@ -1,7 +1,7 @@
 package com.controllocal.bl.test;
 
-import com.controllocal.bl.customerAcquisitionLifecycle;
-import com.controllocal.bl.impl.customerAcquisitionLifecycleImpl;
+import com.controllocal.bl.CaptacionBusinessLogic;
+import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.usuario.AgenteInmobiliario;
@@ -12,7 +12,7 @@ import java.time.LocalDate;
 public class PruebaCaptacion {
     public static void main(String[] args) {
         try {
-            customerAcquisitionLifecycle service = new customerAcquisitionLifecycleImpl();
+            CaptacionBusinessLogic service = new CaptacionBusinessLogicImpl();
 
             // 1. Preparar los datos , la id debe estar en la bd
             Captacion nueva = new Captacion();

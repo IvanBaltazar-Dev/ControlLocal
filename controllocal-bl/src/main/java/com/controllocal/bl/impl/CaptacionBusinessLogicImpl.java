@@ -1,6 +1,6 @@
 package com.controllocal.bl.impl;
 
-import com.controllocal.bl.customerAcquisitionLifecycle;
+import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.config.DatabaseConfig;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
 import com.controllocal.dao.BrokerDAO;
@@ -20,7 +20,7 @@ import com.controllocal.model.usuario.EstadoOperativoAgente;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public class customerAcquisitionLifecycleImpl implements customerAcquisitionLifecycle {
+public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
 
     // Inyectamos las implementaciones que ya tienes listas
     private final CaptacionDAO captacionDAO = new CaptacionDAOImpl();
@@ -42,7 +42,7 @@ public class customerAcquisitionLifecycleImpl implements customerAcquisitionLife
             // Regla 2: Forzar estado inicial
             acquisition.setEstado(EstadoCaptacion.PENDIENTE_REVISION);
             Long id = captacionDAO.crear(acquisition);
-            
+
             DatabaseConfig.commit();
 
             return id;

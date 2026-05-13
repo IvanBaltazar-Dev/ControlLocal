@@ -1,10 +1,10 @@
 package com.controllocal.bl;
 
 import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.comercial.EstadoCaptacion;
+
 import java.util.List;
 
-public interface customerAcquisitionLifecycle {
+public interface CaptacionBusinessLogic {
 
     /**
      * Registra una nueva captación vinculando un local y un agente.

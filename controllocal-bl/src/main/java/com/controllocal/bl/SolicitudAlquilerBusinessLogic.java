@@ -3,7 +3,7 @@ package com.controllocal.bl;
 import com.controllocal.model.comercial.SolicitudAlquiler;
 import java.util.List;
 
-public interface RentalRequestLifecycle {
+public interface SolicitudAlquilerBusinessLogic {
 
     Long registerRequest(SolicitudAlquiler request);
 

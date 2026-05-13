@@ -69,3 +69,6 @@ secrets.yml
 # ========================
 *.tmp
 *.swp
+
+# Local database credentials
+controllocal-db-manager/src/main/resources/db.properties

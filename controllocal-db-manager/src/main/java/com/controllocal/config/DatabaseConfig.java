@@ -11,6 +11,7 @@ public final class DatabaseConfig {
     private static final String PROPERTIES_FILE = "db.properties";
     private static final Properties PROPERTIES = loadProperties();
     private static final ThreadLocal<Connection> connectionHolder = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> transactionActive = new ThreadLocal<>();
     private DatabaseConfig() {
     }
 
@@ -35,6 +36,18 @@ public final class DatabaseConfig {
     }
     public static ThreadLocal<Connection> getConnectionHolder() {
         return connectionHolder;
+    }
+
+    public static boolean isTransactionActive() {
+        return Boolean.TRUE.equals(transactionActive.get());
+    }
+
+    static void markTransactionActive() {
+        transactionActive.set(Boolean.TRUE);
+    }
+
+    private static void clearTransactionState() {
+        transactionActive.remove();
     }
     public static String getUsername() {
         return getConfigValue("DB_USERNAME", "db.username", "root");
@@ -112,5 +125,6 @@ public final class DatabaseConfig {
             // CRITICAL: Always remove to prevent memory leaks in thread pools
             connectionHolder.remove();
         }
+        clearTransactionState();
     }
 }

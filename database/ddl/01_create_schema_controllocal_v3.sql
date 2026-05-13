@@ -23,7 +23,7 @@ CREATE TABLE persona (
     numero_documento VARCHAR(30) NOT NULL UNIQUE,
     nombres_o_razon_social VARCHAR(150) NOT NULL,
     telefono VARCHAR(20),
-    correo VARCHAR(150),
+    correo VARCHAR(150) UNIQUE,
     estado VARCHAR(20) NOT NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -329,6 +329,12 @@ CREATE TABLE evaluacion_solicitud (
     responsable_evaluacion BIGINT NOT NULL,
     tipo_evaluacion VARCHAR(20) NOT NULL,
     id_solicitud BIGINT NOT NULL,
+    id_solicitud_final BIGINT GENERATED ALWAYS AS (
+        CASE
+            WHEN tipo_evaluacion = 'FINAL' THEN id_solicitud
+            ELSE NULL
+        END
+    ) STORED,
     CONSTRAINT fk_evaluacion_broker
         FOREIGN KEY (responsable_evaluacion) REFERENCES broker(id_broker),
     CONSTRAINT fk_evaluacion_solicitud
@@ -339,7 +345,8 @@ CREATE TABLE evaluacion_solicitud (
     ),
     CONSTRAINT ck_tipo_evaluacion CHECK (
         tipo_evaluacion IN ('PRELIMINAR', 'OBSERVACION', 'FINAL')
-    )
+    ),
+    CONSTRAINT uq_evaluacion_final_por_solicitud UNIQUE (id_solicitud_final)
 ) ENGINE=InnoDB;
 
 -- =========================================================

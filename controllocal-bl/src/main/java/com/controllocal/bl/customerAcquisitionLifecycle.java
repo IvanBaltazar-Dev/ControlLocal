@@ -1,36 +1,40 @@
 package com.controllocal.bl;
 
 import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.comercial.EstadoCaptacion;
+
 import java.util.List;
 
 public interface customerAcquisitionLifecycle {
 
     /**
-     * Registra una nueva captación vinculando un local y un agente.
-     * Debe validar que el agente esté disponible y el local no tenga captaciones activas.
+     * Registra una nueva captacion vinculando un local y un agente.
      */
     Long registerAcquisition(Captacion acquisition);
 
     /**
-     * Cambia el agente responsable de una captación.
-     * Debe registrar el movimiento en la tabla de reasignaciones para auditoría.
+     * Cambia el agente responsable de una captacion y registra auditoria.
      */
     void reassignAgent(Long acquisitionId, Long newAgentId, Long brokerId, String reason);
 
     /**
-     * Proceso de revisión por parte de un Broker.
-     * Actualiza el estado a ACTIVA o RECHAZADA y guarda las observaciones de revisión.
+     * Proceso de revision por parte de un broker.
      */
     void reviewAcquisition(Long acquisitionId, Long brokerId, boolean approved, String remarks);
 
     /**
-     * Cierra una captación (soft delete), cambiando su estado y registrando la fecha de fin.
+     * Metodo historico. Para cumplir trazabilidad se debe usar closeAcquisition(id, brokerId, reason).
      */
     void closeAcquisition(Long acquisitionId);
 
     /**
-     * Lista las captaciones que requieren atención inmediata (ej. Pendientes de revisión).
+     * Cierra una captacion con broker responsable y motivo.
+     */
+    default void closeAcquisition(Long acquisitionId, Long brokerId, String reason) {
+        throw new UnsupportedOperationException("Operacion no implementada.");
+    }
+
+    /**
+     * Lista captaciones pendientes de revision.
      */
     List<Captacion> listPendingReviews();
 }

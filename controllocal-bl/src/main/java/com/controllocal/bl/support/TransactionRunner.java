@@ -1,6 +1,7 @@
 package com.controllocal.bl.support;
 
 import com.controllocal.bl.BusinessException;
+import com.controllocal.config.DBManager;
 import com.controllocal.config.DatabaseConfig;
 
 import java.sql.SQLException;
@@ -12,6 +13,7 @@ public final class TransactionRunner {
 
     public static <T> T write(TransactionalSupplier<T> supplier) {
         try {
+            DBManager.beginTransaction();
             T result = supplier.get();
             DatabaseConfig.commit();
             return result;

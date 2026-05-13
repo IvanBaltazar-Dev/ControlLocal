@@ -1,25 +1,16 @@
 package com.controllocal.app;
 
-import com.controllocal.dao.AgenteInmobiliarioDAO;
-import com.controllocal.dao.BrokerDAO;
-import com.controllocal.dao.CaptacionDAO;
-import com.controllocal.dao.LocalComercialDAO;
-import com.controllocal.dao.PropietarioDAO;
-import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
-import com.controllocal.dao.impl.BrokerDAOImpl;
-import com.controllocal.dao.impl.CaptacionDAOImpl;
-import com.controllocal.dao.impl.LocalComercialDAOImpl;
-import com.controllocal.dao.impl.PropietarioDAOImpl;
+import com.controllocal.dao.*;
+import com.controllocal.dao.impl.*;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.EstadoCaptacion;
 import com.controllocal.model.inmueble.EstadoLocalComercial;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.persona.EstadoActivoInactivo;
+import com.controllocal.model.persona.Persona;
 import com.controllocal.model.persona.Propietario;
 import com.controllocal.model.persona.TipoPersona;
-import com.controllocal.model.usuario.AgenteInmobiliario;
-import com.controllocal.model.usuario.Broker;
-import com.controllocal.model.usuario.EstadoOperativoAgente;
+import com.controllocal.model.usuario.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -30,68 +21,138 @@ import java.util.UUID;
 public class ControlLocalApplication {
 
     public static void main(String[] args) {
-        String sufijo = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        String sufijo = UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, 8)
+                .toUpperCase();
 
+        PersonaDAO personaDAO = new PersonaDAOImpl();
         PropietarioDAO propietarioDAO = new PropietarioDAOImpl();
         LocalComercialDAO localDAO = new LocalComercialDAOImpl();
         BrokerDAO brokerDAO = new BrokerDAOImpl();
         AgenteInmobiliarioDAO agenteDAO = new AgenteInmobiliarioDAOImpl();
         CaptacionDAO captacionDAO = new CaptacionDAOImpl();
+        UsuarioInternoDAO usuarioInternoDAO = new UsuarioInternoDAOImpl();
 
         System.out.println("=== DEMO CONTROLLOCAL ===");
         System.out.println("Sufijo de ejecucion: " + sufijo);
 
         try {
-            Propietario propietario = demoPropietario(propietarioDAO, sufijo);
-            LocalComercial local = demoLocal(localDAO, propietario.getIdPropietario(), sufijo);
-            Broker broker = demoBroker(brokerDAO, sufijo);
-            AgenteInmobiliario agente = demoAgente(agenteDAO, sufijo);
-            Long idCaptacion = demoCaptacion(captacionDAO, local.getIdLocal(), agente.getIdAgente(), broker.getIdBroker(), sufijo);
-            demoEliminaciones(captacionDAO, agenteDAO, brokerDAO, localDAO, propietarioDAO, idCaptacion,
-                    agente.getIdAgente(), broker.getIdBroker(), local.getIdLocal(), propietario.getIdPropietario());
+            Propietario propietario = demoPropietario(personaDAO, propietarioDAO, sufijo);
+
+            LocalComercial local = demoLocal(
+                    localDAO,
+                    propietario.getIdPropietario(),
+                    sufijo
+            );
+
+            Broker broker = demoBroker(
+                    personaDAO,
+                    usuarioInternoDAO,
+                    brokerDAO,
+                    sufijo
+            );
+
+            AgenteInmobiliario agente = demoAgente(
+                    personaDAO,
+                    usuarioInternoDAO,
+                    agenteDAO,
+                    sufijo
+            );
+
+            Long idCaptacion = demoCaptacion(
+                    captacionDAO,
+                    local.getIdLocal(),
+                    agente.getIdAgente(),
+                    broker.getIdBroker(),
+                    sufijo
+            );
+
+            demoEliminaciones(
+                    captacionDAO,
+                    agenteDAO,
+                    brokerDAO,
+                    localDAO,
+                    propietarioDAO,
+                    idCaptacion,
+                    agente.getIdAgente(),
+                    broker.getIdBroker(),
+                    local.getIdLocal(),
+                    propietario.getIdPropietario()
+            );
 
             System.out.println();
             System.out.println("Demo completada correctamente.");
+
         } catch (Exception e) {
             System.err.println("Error durante la demo de ControlLocal: " + e.getMessage());
             e.printStackTrace();
         } finally {
             shutdownMysqlCleanupThread();
         }
+
     }
 
-    private static Propietario demoPropietario(PropietarioDAO dao, String sufijo) {
+    private static Propietario demoPropietario(
+            PersonaDAO personaDAO,
+            PropietarioDAO propietarioDAO,
+            String sufijo
+    ) {
         System.out.println();
         System.out.println("----- CRUD PROPIETARIO -----");
 
+        Persona persona = new Persona();
+        persona.setTipoPersona(TipoPersona.NATURAL);
+        persona.setTipoDocumento("DNI");
+        persona.setNumeroDocumento("7" + sufijo);
+        persona.setNombresORazonSocial("Propietario Demo " + sufijo);
+        persona.setTelefono("900" + sufijo.substring(0, 5));
+        persona.setCorreo("propietario." + sufijo.toLowerCase() + "@controllocal.pe");
+        persona.setEstado(EstadoActivoInactivo.ACTIVO);
+
+        Long idPersona = personaDAO.crear(persona);
+        persona.setIdPersona(idPersona);
+
+        System.out.println("[CREATE PERSONA] ID: " + idPersona);
+
         Propietario propietario = new Propietario();
-        propietario.setTipoPersona(TipoPersona.NATURAL);
-        propietario.setTipoDocumento("DNI");
-        propietario.setNumeroDocumento("7" + sufijo);
-        propietario.setNombresORazonSocial("Propietario Demo " + sufijo);
-        propietario.setTelefono("900" + sufijo.substring(0, 5));
-        propietario.setCorreo("propietario." + sufijo.toLowerCase() + "@controllocal.pe");
-        propietario.setEstado(EstadoActivoInactivo.ACTIVO);
+        propietario.setPersona(persona);
 
-        Long id = dao.crear(propietario);
-        System.out.println("[CREATE] Propietario creado con ID: " + id);
+        Long idPropietario = propietarioDAO.crear(propietario);
+        propietario.setIdPropietario(idPropietario);
 
-        Optional<Propietario> encontrado = dao.buscarPorId(id);
-        encontrado.ifPresent(item -> System.out.println("[READ]   " + item.getNombresORazonSocial() + " | Estado: " + item.getEstado()));
+        System.out.println("[CREATE PROPIETARIO] ID: " + idPropietario);
 
-        if (encontrado.isPresent()) {
-            Propietario actualizar = encontrado.get();
-            actualizar.setTelefono("955" + sufijo.substring(0, 5));
-            actualizar.setCorreo("propietario.actualizado." + sufijo.toLowerCase() + "@controllocal.pe");
-            dao.actualizar(actualizar);
-        }
+        Optional<Propietario> encontrado = propietarioDAO.buscarPorId(idPropietario);
 
-        dao.buscarPorId(id).ifPresent(item ->
-                System.out.println("[UPDATE] Telefono: " + item.getTelefono() + " | Correo: " + item.getCorreo()));
+        encontrado.ifPresent(item -> {
+            Persona p = item.getPersona();
 
-        System.out.println("[LIST]   Total propietarios: " + dao.listarTodos().size());
+            System.out.println("[READ] Propietario ID: " + item.getIdPropietario()
+                    + " | Persona ID: " + (p != null ? p.getIdPersona() : null)
+                    + " | Nombre: " + (p != null ? p.getNombresORazonSocial() : null)
+                    + " | Estado: " + (p != null ? p.getEstado() : null));
+        });
 
-        propietario.setIdPropietario(id);
+        persona.setTelefono("955" + sufijo.substring(0, 5));
+        persona.setCorreo("propietario.actualizado." + sufijo.toLowerCase() + "@controllocal.pe");
+        persona.setNombresORazonSocial("Propietario Demo Actualizado " + sufijo);
+
+        boolean actualizado = personaDAO.actualizar(persona);
+
+        System.out.println("[UPDATE PERSONA] Actualizado: " + actualizado);
+
+        propietarioDAO.buscarPorId(idPropietario).ifPresent(item -> {
+            Persona p = item.getPersona();
+
+            System.out.println("[READ UPDATE] Nombre: " + (p != null ? p.getNombresORazonSocial() : null)
+                    + " | Telefono: " + (p != null ? p.getTelefono() : null)
+                    + " | Correo: " + (p != null ? p.getCorreo() : null));
+        });
+
+        System.out.println("[LIST] Total propietarios: " + propietarioDAO.listarTodos().size());
+
         return propietario;
     }
 
@@ -132,82 +193,164 @@ public class ControlLocalApplication {
         return local;
     }
 
-    private static Broker demoBroker(BrokerDAO dao, String sufijo) {
+    private static Broker demoBroker(
+            PersonaDAO personaDAO,
+            UsuarioInternoDAO usuarioInternoDAO,
+            BrokerDAO brokerDAO,
+            String sufijo
+    ) {
         System.out.println();
         System.out.println("----- CRUD BROKER -----");
 
+        Persona persona = new Persona();
+        persona.setTipoPersona(TipoPersona.NATURAL);
+        persona.setTipoDocumento("DNI");
+        persona.setNumeroDocumento("8" + sufijo);
+        persona.setNombresORazonSocial("Broker Demo " + sufijo);
+        persona.setTelefono("910" + sufijo.substring(0, 5));
+        persona.setCorreo("broker." + sufijo.toLowerCase() + "@controllocal.pe");
+        persona.setEstado(EstadoActivoInactivo.ACTIVO);
+
+        Long idPersona = personaDAO.crear(persona);
+        persona.setIdPersona(idPersona);
+
+        System.out.println("[CREATE PERSONA BROKER] ID: " + idPersona);
+
+        UsuarioInterno usuario = new UsuarioInterno();
+        usuario.setPersona(persona);
+        usuario.setNombreUsuario("broker" + sufijo.toLowerCase());
+        usuario.setContrasenaHash("HASH_" + sufijo);
+        usuario.setEstadoAdministrativo(EstadoActivoInactivo.ACTIVO);
+        usuario.setRol(RolUsuarioInterno.BROKER);
+
+        Long idUsuarioInterno = usuarioInternoDAO.crear(usuario);
+        usuario.setIdUsuarioInterno(idUsuarioInterno);
+
+        System.out.println("[CREATE USUARIO BROKER] ID: " + idUsuarioInterno);
+
         Broker broker = new Broker();
-        broker.setNombres("Broker");
-        broker.setApellidos("Demo " + sufijo);
-        broker.setCorreo("broker." + sufijo.toLowerCase() + "@controllocal.pe");
-        broker.setTelefono("910" + sufijo.substring(0, 5));
-        broker.setNombreUsuario("broker" + sufijo.toLowerCase());
-        broker.setContrasenaHash("HASH_" + sufijo);
-        broker.setEstado(EstadoActivoInactivo.ACTIVO);
+        broker.setIdUsuarioInterno(idUsuarioInterno);
+        broker.setPersona(persona);
+        broker.setNombreUsuario(usuario.getNombreUsuario());
+        broker.setContrasenaHash(usuario.getContrasenaHash());
+        broker.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        broker.setRol(RolUsuarioInterno.BROKER);
         broker.setCodigoBroker("BRK" + sufijo);
         broker.setFechaDesignacion(LocalDate.now());
         broker.setEsAdministrador(false);
 
-        Long id = dao.crear(broker);
-        System.out.println("[CREATE] Broker creado con ID: " + id);
+        Long idBroker = brokerDAO.crear(broker);
+        broker.setIdBroker(idBroker);
 
-        Optional<Broker> encontrado = dao.buscarPorId(id);
-        encontrado.ifPresent(item -> System.out.println("[READ]   " + item.getCodigoBroker() + " | Administrador: " + item.isEsAdministrador()));
+        System.out.println("[CREATE BROKER] ID: " + idBroker);
 
-        if (encontrado.isPresent()) {
-            Broker actualizar = encontrado.get();
-            actualizar.setTelefono("911" + sufijo.substring(0, 5));
-            actualizar.setCodigoBroker("BRK" + sufijo + "A");
-            dao.actualizar(actualizar);
-        }
+        Optional<Broker> encontrado = brokerDAO.buscarPorId(idBroker);
+        encontrado.ifPresent(item -> System.out.println(
+                "[READ] Broker ID: " + item.getIdBroker()
+                        + " | Usuario ID: " + item.getIdUsuarioInterno()
+                        + " | Codigo: " + item.getCodigoBroker()
+                        + " | Administrador: " + item.isEsAdministrador()
+        ));
 
-        dao.buscarPorId(id).ifPresent(item ->
-                System.out.println("[UPDATE] Telefono: " + item.getTelefono() + " | Codigo: " + item.getCodigoBroker()));
+        broker.setCodigoBroker("BRK" + sufijo + "A");
+        boolean actualizado = brokerDAO.actualizar(broker);
 
-        System.out.println("[LIST]   Total brokers: " + dao.listarTodos().size());
+        System.out.println("[UPDATE BROKER] Actualizado: " + actualizado);
 
-        broker.setIdBroker(id);
-        broker.setIdUsuarioInterno(id);
+        brokerDAO.buscarPorId(idBroker).ifPresent(item -> System.out.println(
+                "[READ UPDATE] Codigo: " + item.getCodigoBroker()
+                        + " | Administrador: " + item.isEsAdministrador()
+        ));
+
+        System.out.println("[LIST] Total brokers: " + brokerDAO.listarTodos().size());
+
         return broker;
     }
 
-    private static AgenteInmobiliario demoAgente(AgenteInmobiliarioDAO dao, String sufijo) {
+    private static AgenteInmobiliario demoAgente(
+            PersonaDAO personaDAO,
+            UsuarioInternoDAO usuarioInternoDAO,
+            AgenteInmobiliarioDAO agenteDAO,
+            String sufijo
+    ) {
         System.out.println();
         System.out.println("----- CRUD AGENTE INMOBILIARIO -----");
 
+        // Crear Persona del agente
+        Persona persona = new Persona();
+        persona.setTipoPersona(TipoPersona.NATURAL);
+        persona.setTipoDocumento("DNI");
+        persona.setNumeroDocumento("9" + sufijo);
+        persona.setNombresORazonSocial("Agente Demo " + sufijo);
+        persona.setTelefono("920" + sufijo.substring(0, 5));
+        persona.setCorreo("agente." + sufijo.toLowerCase() + "@controllocal.pe");
+        persona.setEstado(EstadoActivoInactivo.ACTIVO);
+
+        Long idPersona = personaDAO.crear(persona);
+        persona.setIdPersona(idPersona);
+
+        System.out.println("[CREATE PERSONA AGENTE] ID: " + idPersona);
+
+        // Crear UsuarioInterno del agente
+        UsuarioInterno usuario = new UsuarioInterno();
+        usuario.setPersona(persona);
+        usuario.setNombreUsuario("agente" + sufijo.toLowerCase());
+        usuario.setContrasenaHash("HASH_AGT_" + sufijo);
+        usuario.setEstadoAdministrativo(EstadoActivoInactivo.ACTIVO);
+        usuario.setRol(RolUsuarioInterno.AGENTE);
+
+        Long idUsuarioInterno = usuarioInternoDAO.crear(usuario);
+        usuario.setIdUsuarioInterno(idUsuarioInterno);
+
+        System.out.println("[CREATE USUARIO AGENTE] ID: " + idUsuarioInterno);
+
+        // Crear AgenteInmobiliario asociado al UsuarioInterno
         AgenteInmobiliario agente = new AgenteInmobiliario();
-        agente.setNombres("Agente");
-        agente.setApellidos("Demo " + sufijo);
-        agente.setCorreo("agente." + sufijo.toLowerCase() + "@controllocal.pe");
-        agente.setTelefono("920" + sufijo.substring(0, 5));
-        agente.setNombreUsuario("agente" + sufijo.toLowerCase());
-        agente.setContrasenaHash("HASH_AGT_" + sufijo);
-        agente.setEstado(EstadoActivoInactivo.ACTIVO);
+        agente.setIdUsuarioInterno(idUsuarioInterno);
+        agente.setPersona(persona);
+        agente.setNombreUsuario(usuario.getNombreUsuario());
+        agente.setContrasenaHash(usuario.getContrasenaHash());
+        agente.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        agente.setRol(RolUsuarioInterno.AGENTE);
+
         agente.setCodigoAgente("AGT" + sufijo);
         agente.setZonaAsignada("Miraflores");
         agente.setFechaIngreso(LocalDate.now().minusDays(30));
         agente.setEstadoOperativo(EstadoOperativoAgente.DISPONIBLE);
 
-        Long id = dao.crear(agente);
-        System.out.println("[CREATE] Agente creado con ID: " + id);
+        Long idAgente = agenteDAO.crear(agente);
+        agente.setIdAgente(idAgente);
 
-        Optional<AgenteInmobiliario> encontrado = dao.buscarPorId(id);
-        encontrado.ifPresent(item -> System.out.println("[READ]   " + item.getCodigoAgente() + " | Zona: " + item.getZonaAsignada()));
+        System.out.println("[CREATE AGENTE] ID: " + idAgente);
 
-        if (encontrado.isPresent()) {
-            AgenteInmobiliario actualizar = encontrado.get();
-            actualizar.setZonaAsignada("San Borja");
-            actualizar.setEstadoOperativo(EstadoOperativoAgente.NO_DISPONIBLE);
-            dao.actualizar(actualizar);
-        }
+        // LEER
+        Optional<AgenteInmobiliario> encontrado = agenteDAO.buscarPorId(idAgente);
 
-        dao.buscarPorId(id).ifPresent(item ->
-                System.out.println("[UPDATE] Zona: " + item.getZonaAsignada() + " | Estado operativo: " + item.getEstadoOperativo()));
+        encontrado.ifPresent(item -> System.out.println(
+                "[READ] Agente ID: " + item.getIdAgente()
+                        + " | Usuario ID: " + item.getIdUsuarioInterno()
+                        + " | Codigo: " + item.getCodigoAgente()
+                        + " | Zona: " + item.getZonaAsignada()
+                        + " | Estado operativo: " + item.getEstadoOperativo()
+        ));
 
-        System.out.println("[LIST]   Total agentes: " + dao.listarTodos().size());
+        // ACTUALIZAR
+        agente.setZonaAsignada("San Borja");
+        agente.setEstadoOperativo(EstadoOperativoAgente.NO_DISPONIBLE);
 
-        agente.setIdAgente(id);
-        agente.setIdUsuarioInterno(id);
+        boolean actualizado = agenteDAO.actualizar(agente);
+
+        System.out.println("[UPDATE AGENTE] Actualizado: " + actualizado);
+
+        // LEER ACTUALIZAR
+        agenteDAO.buscarPorId(idAgente).ifPresent(item -> System.out.println(
+                "[READ UPDATE] Zona: " + item.getZonaAsignada()
+                        + " | Estado operativo: " + item.getEstadoOperativo()
+        ));
+
+        // LISTAR
+        System.out.println("[LIST] Total agentes: " + agenteDAO.listarTodos().size());
+
         return agente;
     }
 

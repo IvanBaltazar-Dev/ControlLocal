@@ -1,5 +1,6 @@
 package com.controllocal.model.comercial;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -9,12 +10,12 @@ import com.controllocal.model.usuario.Broker;
 
 public class Captacion {
 
-    private long idCaptacion;
+    private Long idCaptacion;
     private String codigoCaptacion;
     private LocalDate fechaCaptacion;
     private LocalDate fechaInicioVigencia;
     private LocalDate fechaFinVigencia;
-    private double comisionPactada;
+    private BigDecimal comisionPactada;
     private String observaciones;
     private EstadoCaptacion estado;
     private LocalDateTime fechaRevision;
@@ -34,7 +35,7 @@ public class Captacion {
             LocalDate fechaCaptacion,
             LocalDate fechaInicioVigencia,
             LocalDate fechaFinVigencia,
-            double comisionPactada,
+            BigDecimal comisionPactada,
             String observaciones,
             EstadoCaptacion estado,
             LocalDateTime fechaRevision,
@@ -62,11 +63,11 @@ public class Captacion {
         this.fechaActualizacion = fechaActualizacion;
     }
 
-    public long getIdCaptacion() {
+    public Long getIdCaptacion() {
         return idCaptacion;
     }
 
-    public void setIdCaptacion(long idCaptacion) {
+    public void setIdCaptacion(Long idCaptacion) {
         this.idCaptacion = idCaptacion;
     }
 
@@ -102,12 +103,16 @@ public class Captacion {
         this.fechaFinVigencia = fechaFinVigencia;
     }
 
-    public double getComisionPactada() {
+    public BigDecimal getComisionPactada() {
         return comisionPactada;
     }
 
-    public void setComisionPactada(double comisionPactada) {
+    public void setComisionPactada(BigDecimal comisionPactada) {
         this.comisionPactada = comisionPactada;
+    }
+
+    public void setComisionPactada(double comisionPactada) {
+        this.comisionPactada = BigDecimal.valueOf(comisionPactada);
     }
 
     public String getObservaciones() {
@@ -188,19 +193,37 @@ public class Captacion {
         }
     }
 
-    public void aprobarIncorporacion() {
+    public void aprobarIncorporacion(Broker broker, String observacion) {
         this.estado = EstadoCaptacion.ACTIVA;
         this.fechaRevision = LocalDateTime.now();
+        this.brokerRevisor = broker;
+        this.observacionRevision = observacion;
+    }
+
+    public void aprobarIncorporacion() {
+        aprobarIncorporacion(brokerRevisor, observacionRevision);
+    }
+
+    public void solicitarAjustes(Broker broker, String observacion) {
+        this.estado = EstadoCaptacion.OBSERVADA;
+        this.fechaRevision = LocalDateTime.now();
+        this.brokerRevisor = broker;
+        this.observacionRevision = observacion;
     }
 
     public void solicitarAjustes() {
-        this.estado = EstadoCaptacion.OBSERVADA;
+        solicitarAjustes(brokerRevisor, observacionRevision);
+    }
+
+    public void rechazarIncorporacion(Broker broker, String observacion) {
+        this.estado = EstadoCaptacion.RECHAZADA;
         this.fechaRevision = LocalDateTime.now();
+        this.brokerRevisor = broker;
+        this.observacionRevision = observacion;
     }
 
     public void rechazarIncorporacion() {
-        this.estado = EstadoCaptacion.RECHAZADA;
-        this.fechaRevision = LocalDateTime.now();
+        rechazarIncorporacion(brokerRevisor, observacionRevision);
     }
 
     public void activar() {

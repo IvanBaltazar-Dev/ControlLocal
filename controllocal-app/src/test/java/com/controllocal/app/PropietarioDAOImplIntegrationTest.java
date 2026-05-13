@@ -2,9 +2,8 @@ package com.controllocal.app;
 
 import com.controllocal.dao.PropietarioDAO;
 import com.controllocal.dao.impl.PropietarioDAOImpl;
-import com.controllocal.model.persona.EstadoActivoInactivo;
+import com.controllocal.model.persona.Persona;
 import com.controllocal.model.persona.Propietario;
-import com.controllocal.model.persona.TipoPersona;
 
 import java.util.Optional;
 
@@ -26,14 +25,14 @@ public class PropietarioDAOImplIntegrationTest {
         System.out.println();
         System.out.println("----- CRUD PROPIETARIO -----");
 
+        Persona persona = ManualTestSupport.crearPersona(
+                "85" + sufijo,
+                "Propietario Demo " + sufijo,
+                "900" + sufijo.substring(0, 5),
+                "propietario." + sufijo.toLowerCase() + "@controllocal.pe"
+        );
         Propietario propietario = new Propietario();
-        propietario.setTipoPersona(TipoPersona.NATURAL);
-        propietario.setTipoDocumento("DNI");
-        propietario.setNumeroDocumento("7" + sufijo);
-        propietario.setNombresORazonSocial("Propietario Demo " + sufijo);
-        propietario.setTelefono("900" + sufijo.substring(0, 5));
-        propietario.setCorreo("propietario." + sufijo.toLowerCase() + "@controllocal.pe");
-        propietario.setEstado(EstadoActivoInactivo.ACTIVO);
+        propietario.setPersona(persona);
 
         Long id = dao.crear(propietario);
         System.out.println("[CREATE] Propietario creado con ID: " + id);

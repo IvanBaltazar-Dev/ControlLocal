@@ -3,51 +3,76 @@ package com.controllocal.model.usuario;
 import java.time.LocalDateTime;
 
 import com.controllocal.model.persona.EstadoActivoInactivo;
+import com.controllocal.model.persona.Persona;
+import com.controllocal.model.persona.TipoPersona;
 
-public abstract class UsuarioInterno {
+public class UsuarioInterno {
 
-    private long idUsuarioInterno;
-    private String nombres;
-    private String apellidos;
-    private String correo;
-    private String telefono;
+    private Long idUsuarioInterno;
+    private Persona persona;
     private String nombreUsuario;
     private String contrasenaHash;
-    private EstadoActivoInactivo estado;
+    private EstadoActivoInactivo estadoAdministrativo;
     private RolUsuarioInterno rol;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
 
-    public long getIdUsuarioInterno() {
+    public Long getIdUsuarioInterno() {
         return idUsuarioInterno;
     }
 
-    public void setIdUsuarioInterno(long idUsuarioInterno) {
+    public void setIdUsuarioInterno(Long idUsuarioInterno) {
         this.idUsuarioInterno = idUsuarioInterno;
     }
 
+    public Persona getPersona() {
+        return persona;
+    }
+
+    public void setPersona(Persona persona) {
+        this.persona = persona;
+    }
+
     public String getNombres() {
-        return nombres;
+        String nombre = persona().getNombresORazonSocial();
+        if (nombre == null) {
+            return null;
+        }
+        int indice = nombre.lastIndexOf(' ');
+        return indice > 0 ? nombre.substring(0, indice) : nombre;
     }
 
     public void setNombres(String nombres) {
-        this.nombres = nombres;
+        String apellidos = getApellidos();
+        persona().setNombresORazonSocial(apellidos == null || apellidos.isBlank() ? nombres : nombres + " " + apellidos);
+        if (persona().getTipoPersona() == null) {
+            persona().setTipoPersona(TipoPersona.NATURAL);
+        }
     }
 
     public String getApellidos() {
-        return apellidos;
+        String nombre = persona().getNombresORazonSocial();
+        if (nombre == null) {
+            return null;
+        }
+        int indice = nombre.lastIndexOf(' ');
+        return indice > 0 ? nombre.substring(indice + 1) : "";
     }
 
     public void setApellidos(String apellidos) {
-        this.apellidos = apellidos;
+        String nombres = getNombres();
+        persona().setNombresORazonSocial(nombres == null || nombres.isBlank() ? apellidos : nombres + " " + apellidos);
+        if (persona().getTipoPersona() == null) {
+            persona().setTipoPersona(TipoPersona.NATURAL);
+        }
     }
 
     public String getCorreo() {
-        return correo;
+        return persona().getCorreo();
     }
 
     public void setCorreo(String correo) {
-        this.correo = correo;
+        persona().setCorreo(correo);
     }
 
     public String getNombreUsuario() {
@@ -59,11 +84,11 @@ public abstract class UsuarioInterno {
     }
 
     public String getTelefono() {
-        return telefono;
+        return persona().getTelefono();
     }
 
     public void setTelefono(String telefono) {
-        this.telefono = telefono;
+        persona().setTelefono(telefono);
     }
 
     public String getContrasenaHash() {
@@ -75,11 +100,19 @@ public abstract class UsuarioInterno {
     }
 
     public EstadoActivoInactivo getEstado() {
-        return estado;
+        return estadoAdministrativo;
     }
 
     public void setEstado(EstadoActivoInactivo estado) {
-        this.estado = estado;
+        this.estadoAdministrativo = estado;
+    }
+
+    public EstadoActivoInactivo getEstadoAdministrativo() {
+        return estadoAdministrativo;
+    }
+
+    public void setEstadoAdministrativo(EstadoActivoInactivo estadoAdministrativo) {
+        this.estadoAdministrativo = estadoAdministrativo;
     }
 
     public RolUsuarioInterno getRol() {
@@ -107,17 +140,24 @@ public abstract class UsuarioInterno {
     }
 
     public boolean autenticar() {
-        return estado == EstadoActivoInactivo.ACTIVO;
+        return estadoAdministrativo == EstadoActivoInactivo.ACTIVO;
     }
 
     public void cerrarSesion() {
     }
 
     public void activar() {
-        this.estado = EstadoActivoInactivo.ACTIVO;
+        this.estadoAdministrativo = EstadoActivoInactivo.ACTIVO;
     }
 
     public void desactivar() {
-        this.estado = EstadoActivoInactivo.INACTIVO;
+        this.estadoAdministrativo = EstadoActivoInactivo.INACTIVO;
+    }
+
+    private Persona persona() {
+        if (persona == null) {
+            persona = new Persona();
+        }
+        return persona;
     }
 }

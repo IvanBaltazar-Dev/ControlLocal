@@ -12,6 +12,8 @@ import java.util.Optional;
  */
 public interface UsuarioInternoDAO {
 
+    Long crear(UsuarioInterno usuario);
+
     Optional<UsuarioInterno> buscarPorId(Long id);
 
     List<UsuarioInterno> listarTodos();

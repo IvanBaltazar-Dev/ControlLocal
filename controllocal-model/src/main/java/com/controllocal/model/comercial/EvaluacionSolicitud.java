@@ -1,0 +1,46 @@
+package com.controllocal.model.comercial;
+
+import java.time.LocalDateTime;
+
+import com.controllocal.model.usuario.Broker;
+
+public class EvaluacionSolicitud {
+
+    private Long idEvaluacion;
+    private LocalDateTime fechaEvaluacion;
+    private ResultadoEvaluacionSolicitud resultado;
+    private String observaciones;
+    private Broker responsableEvaluacion;
+    private TipoEvaluacionSolicitud tipoEvaluacion;
+    private SolicitudAlquiler solicitudAlquiler;
+
+    public Long getIdEvaluacion() { return idEvaluacion; }
+    public void setIdEvaluacion(Long idEvaluacion) { this.idEvaluacion = idEvaluacion; }
+    public LocalDateTime getFechaEvaluacion() { return fechaEvaluacion; }
+    public void setFechaEvaluacion(LocalDateTime fechaEvaluacion) { this.fechaEvaluacion = fechaEvaluacion; }
+    public ResultadoEvaluacionSolicitud getResultado() { return resultado; }
+    public void setResultado(ResultadoEvaluacionSolicitud resultado) { this.resultado = resultado; }
+    public String getObservaciones() { return observaciones; }
+    public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
+    public Broker getResponsableEvaluacion() { return responsableEvaluacion; }
+    public void setResponsableEvaluacion(Broker responsableEvaluacion) { this.responsableEvaluacion = responsableEvaluacion; }
+    public TipoEvaluacionSolicitud getTipoEvaluacion() { return tipoEvaluacion; }
+    public void setTipoEvaluacion(TipoEvaluacionSolicitud tipoEvaluacion) { this.tipoEvaluacion = tipoEvaluacion; }
+    public SolicitudAlquiler getSolicitudAlquiler() { return solicitudAlquiler; }
+    public void setSolicitudAlquiler(SolicitudAlquiler solicitudAlquiler) { this.solicitudAlquiler = solicitudAlquiler; }
+
+    public void emitirResultado(ResultadoEvaluacionSolicitud resultado, String observacion) {
+        this.resultado = resultado;
+        this.observaciones = observacion;
+        this.fechaEvaluacion = LocalDateTime.now();
+    }
+
+    public void actualizarResultado(ResultadoEvaluacionSolicitud resultado) {
+        this.resultado = resultado;
+        this.fechaEvaluacion = LocalDateTime.now();
+    }
+
+    public void registrarObservacion(String observacion) {
+        this.observaciones = observacion;
+    }
+}

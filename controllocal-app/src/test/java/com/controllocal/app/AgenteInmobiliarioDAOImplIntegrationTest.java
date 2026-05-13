@@ -2,9 +2,10 @@ package com.controllocal.app;
 
 import com.controllocal.dao.AgenteInmobiliarioDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
-import com.controllocal.model.persona.EstadoActivoInactivo;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.EstadoOperativoAgente;
+import com.controllocal.model.usuario.RolUsuarioInterno;
+import com.controllocal.model.usuario.UsuarioInterno;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -27,14 +28,23 @@ public class AgenteInmobiliarioDAOImplIntegrationTest {
         System.out.println();
         System.out.println("----- CRUD AGENTE INMOBILIARIO -----");
 
+        UsuarioInterno usuario = ManualTestSupport.crearUsuarioInterno(
+                "84" + sufijo,
+                "Agente Demo " + sufijo,
+                "960" + sufijo.substring(0, 5),
+                "agente." + sufijo.toLowerCase() + "@controllocal.pe",
+                "agente" + sufijo.toLowerCase(),
+                "HASH_AGENTE_" + sufijo,
+                RolUsuarioInterno.AGENTE
+        );
+
         AgenteInmobiliario agente = new AgenteInmobiliario();
-        agente.setNombres("Agente Demo");
-        agente.setApellidos("Apellido " + sufijo);
-        agente.setCorreo("agente." + sufijo.toLowerCase() + "@controllocal.pe");
-        agente.setTelefono("960" + sufijo.substring(0, 5));
-        agente.setNombreUsuario("agente" + sufijo.toLowerCase());
-        agente.setContrasenaHash("HASH_AGENTE_" + sufijo);
-        agente.setEstado(EstadoActivoInactivo.ACTIVO);
+        agente.setIdUsuarioInterno(usuario.getIdUsuarioInterno());
+        agente.setPersona(usuario.getPersona());
+        agente.setNombreUsuario(usuario.getNombreUsuario());
+        agente.setContrasenaHash(usuario.getContrasenaHash());
+        agente.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        agente.setRol(RolUsuarioInterno.AGENTE);
         agente.setCodigoAgente("AGT" + sufijo);
         agente.setZonaAsignada("Surco");
         agente.setFechaIngreso(LocalDate.now().minusDays(7));
@@ -68,7 +78,6 @@ public class AgenteInmobiliarioDAOImplIntegrationTest {
         ));
 
         agente.setIdAgente(id);
-        agente.setIdUsuarioInterno(id);
         return agente;
     }
 }

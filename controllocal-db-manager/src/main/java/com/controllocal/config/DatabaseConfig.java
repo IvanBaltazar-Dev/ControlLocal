@@ -1,67 +1,84 @@
 package com.controllocal.config;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 public final class DatabaseConfig {
 
-    private static final String DEFAULT_HOST = "prog3-labs-1inf30-2026-1.cyhb9uxxuaip.us-east-1.rds.amazonaws.com";
-    private static final int DEFAULT_PORT = 3306;
-    private static final String DEFAULT_DATABASE = "controllocal";
-    private static final String DEFAULT_USERNAME = "admin";
-    private static final String DEFAULT_PASSWORD = "labs1inf3020261";
-    private static final boolean DEFAULT_USE_SSL = true;
-    private static final String DEFAULT_SERVER_TIMEZONE = "UTC";
+    private static final String PROPERTIES_FILE = "db.properties";
+    private static final Properties PROPERTIES = loadProperties();
 
     private DatabaseConfig() {
     }
 
     public static String getHost() {
-        String value = System.getenv("DB_HOST");
-        return (value == null || value.isBlank()) ? DEFAULT_HOST : value;
+        return getConfigValue("DB_HOST", "db.host", "localhost");
     }
 
     public static int getPort() {
-        String value = System.getenv("DB_PORT");
-
-        if (value == null || value.isBlank()) {
-            return DEFAULT_PORT;
-        }
+        String value = getConfigValue("DB_PORT", "db.port", "3306");
 
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
-            System.err.println("Valor inválido para DB_PORT: " + value +
-                    ". Se usará el puerto por defecto: " + DEFAULT_PORT);
-            return DEFAULT_PORT;
+            System.err.println("Valor invalido para DB_PORT/db.port: " + value
+                    + ". Se usara el puerto por defecto: 3306");
+            return 3306;
         }
     }
 
     public static String getDatabaseName() {
-        String value = System.getenv("DB_NAME");
-        return (value == null || value.isBlank()) ? DEFAULT_DATABASE : value;
+        return getConfigValue("DB_NAME", "db.name", "controllocal");
     }
 
     public static String getUsername() {
-        String value = System.getenv("DB_USERNAME");
-        return (value == null || value.isBlank()) ? DEFAULT_USERNAME : value;
+        return getConfigValue("DB_USERNAME", "db.username", "root");
     }
 
     public static String getPassword() {
-        String value = System.getenv("DB_PASSWORD");
-        return (value == null) ? DEFAULT_PASSWORD : value;
+        return getConfigValue("DB_PASSWORD", "db.password", "");
     }
 
     public static boolean isUseSsl() {
-        String value = System.getenv("DB_USE_SSL");
-        return (value == null || value.isBlank()) ? DEFAULT_USE_SSL : Boolean.parseBoolean(value);
+        return Boolean.parseBoolean(getConfigValue("DB_USE_SSL", "db.useSSL", "false"));
     }
 
     public static String getServerTimezone() {
-        String value = System.getenv("DB_SERVER_TIMEZONE");
-        return (value == null || value.isBlank()) ? DEFAULT_SERVER_TIMEZONE : value;
+        return getConfigValue("DB_SERVER_TIMEZONE", "db.serverTimezone", "UTC");
     }
 
     public static String getJdbcUrl() {
         return "jdbc:mysql://" + getHost() + ":" + getPort() + "/" + getDatabaseName()
                 + "?useSSL=" + isUseSsl()
                 + "&serverTimezone=" + getServerTimezone();
+    }
+
+    private static String getConfigValue(String environmentKey, String propertyKey, String defaultValue) {
+        String environmentValue = System.getenv(environmentKey);
+        if (environmentValue != null && !environmentValue.isBlank()) {
+            return environmentValue;
+        }
+
+        String propertyValue = PROPERTIES.getProperty(propertyKey);
+        if (propertyValue != null && !propertyValue.isBlank()) {
+            return propertyValue.trim();
+        }
+
+        return defaultValue;
+    }
+
+    private static Properties loadProperties() {
+        Properties properties = new Properties();
+
+        try (InputStream input = DatabaseConfig.class.getClassLoader().getResourceAsStream(PROPERTIES_FILE)) {
+            if (input != null) {
+                properties.load(input);
+            }
+        } catch (IOException e) {
+            System.err.println("No se pudo cargar " + PROPERTIES_FILE + ". Se usaran valores por defecto.");
+        }
+
+        return properties;
     }
 }

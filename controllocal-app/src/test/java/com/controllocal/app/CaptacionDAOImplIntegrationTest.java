@@ -1,25 +1,18 @@
 package com.controllocal.app;
 
-import com.controllocal.dao.AgenteInmobiliarioDAO;
-import com.controllocal.dao.BrokerDAO;
-import com.controllocal.dao.CaptacionDAO;
-import com.controllocal.dao.LocalComercialDAO;
-import com.controllocal.dao.PropietarioDAO;
-import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
-import com.controllocal.dao.impl.BrokerDAOImpl;
-import com.controllocal.dao.impl.CaptacionDAOImpl;
-import com.controllocal.dao.impl.LocalComercialDAOImpl;
-import com.controllocal.dao.impl.PropietarioDAOImpl;
+import com.controllocal.dao.*;
+import com.controllocal.dao.impl.*;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.EstadoCaptacion;
 import com.controllocal.model.inmueble.EstadoLocalComercial;
 import com.controllocal.model.inmueble.LocalComercial;
-import com.controllocal.model.persona.EstadoActivoInactivo;
+import com.controllocal.model.persona.Persona;
 import com.controllocal.model.persona.Propietario;
-import com.controllocal.model.persona.TipoPersona;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
 import com.controllocal.model.usuario.EstadoOperativoAgente;
+import com.controllocal.model.usuario.RolUsuarioInterno;
+import com.controllocal.model.usuario.UsuarioInterno;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -52,23 +45,22 @@ public class CaptacionDAOImplIntegrationTest {
         System.out.println();
         System.out.println("----- CRUD PROPIETARIO SOPORTE -----");
 
+        Persona persona = ManualTestSupport.crearPersona(
+                "87" + sufijo,
+                "Propietario Demo " + sufijo,
+                "900" + sufijo.substring(0, 5),
+                "propietario." + sufijo.toLowerCase() + "@controllocal.pe"
+        );
+
         Propietario propietario = new Propietario();
-        propietario.setTipoPersona(TipoPersona.NATURAL);
-        propietario.setTipoDocumento("DNI");
-        propietario.setNumeroDocumento("7" + sufijo);
-        propietario.setNombresORazonSocial("Propietario Demo " + sufijo);
-        propietario.setTelefono("900" + sufijo.substring(0, 5));
-        propietario.setCorreo("propietario." + sufijo.toLowerCase() + "@controllocal.pe");
-        propietario.setEstado(EstadoActivoInactivo.ACTIVO);
+        propietario.setPersona(persona);
+        propietario.setIdPropietario(dao.crear(propietario));
+        System.out.println("[CREATE] Propietario creado con ID: " + propietario.getIdPropietario());
 
-        Long id = dao.crear(propietario);
-        System.out.println("[CREATE] Propietario creado con ID: " + id);
-
-        dao.buscarPorId(id).ifPresent(item -> System.out.println(
+        dao.buscarPorId(propietario.getIdPropietario()).ifPresent(item -> System.out.println(
                 "[READ]   " + item.getNombresORazonSocial() + " | Estado: " + item.getEstado()
         ));
 
-        propietario.setIdPropietario(id);
         return propietario;
     }
 
@@ -86,15 +78,13 @@ public class CaptacionDAOImplIntegrationTest {
         local.setDescripcion("Local soporte para demo de captacion");
         local.setEstado(EstadoLocalComercial.DISPONIBLE);
         local.setIdPropietario(idPropietario);
+        local.setIdLocal(dao.crear(local));
+        System.out.println("[CREATE] Local creado con ID: " + local.getIdLocal());
 
-        Long id = dao.crear(local);
-        System.out.println("[CREATE] Local creado con ID: " + id);
-
-        dao.buscarPorId(id).ifPresent(item -> System.out.println(
+        dao.buscarPorId(local.getIdLocal()).ifPresent(item -> System.out.println(
                 "[READ]   " + item.getCodigoLocal() + " | Estado: " + item.getEstado()
         ));
 
-        local.setIdLocal(id);
         return local;
     }
 
@@ -102,27 +92,33 @@ public class CaptacionDAOImplIntegrationTest {
         System.out.println();
         System.out.println("----- CRUD BROKER SOPORTE -----");
 
+        UsuarioInterno usuario = ManualTestSupport.crearUsuarioInterno(
+                "88" + sufijo,
+                "Broker Demo " + sufijo,
+                "950" + sufijo.substring(0, 5),
+                "broker." + sufijo.toLowerCase() + "@controllocal.pe",
+                "brokercap" + sufijo.toLowerCase(),
+                "HASH_BROKER_" + sufijo,
+                RolUsuarioInterno.BROKER
+        );
+
         Broker broker = new Broker();
-        broker.setNombres("Broker Demo");
-        broker.setApellidos("Apellido " + sufijo);
-        broker.setCorreo("broker." + sufijo.toLowerCase() + "@controllocal.pe");
-        broker.setTelefono("950" + sufijo.substring(0, 5));
-        broker.setNombreUsuario("brokercap" + sufijo.toLowerCase());
-        broker.setContrasenaHash("HASH_BROKER_" + sufijo);
-        broker.setEstado(EstadoActivoInactivo.ACTIVO);
+        broker.setIdUsuarioInterno(usuario.getIdUsuarioInterno());
+        broker.setPersona(usuario.getPersona());
+        broker.setNombreUsuario(usuario.getNombreUsuario());
+        broker.setContrasenaHash(usuario.getContrasenaHash());
+        broker.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        broker.setRol(RolUsuarioInterno.BROKER);
         broker.setCodigoBroker("BRC" + sufijo);
         broker.setFechaDesignacion(LocalDate.now());
         broker.setEsAdministrador(false);
+        broker.setIdBroker(dao.crear(broker));
+        System.out.println("[CREATE] Broker creado con ID: " + broker.getIdBroker());
 
-        Long id = dao.crear(broker);
-        System.out.println("[CREATE] Broker creado con ID: " + id);
-
-        dao.buscarPorId(id).ifPresent(item -> System.out.println(
+        dao.buscarPorId(broker.getIdBroker()).ifPresent(item -> System.out.println(
                 "[READ]   " + item.getCodigoBroker() + " | Estado: " + item.getEstado()
         ));
 
-        broker.setIdBroker(id);
-        broker.setIdUsuarioInterno(id);
         return broker;
     }
 
@@ -130,28 +126,34 @@ public class CaptacionDAOImplIntegrationTest {
         System.out.println();
         System.out.println("----- CRUD AGENTE SOPORTE -----");
 
+        UsuarioInterno usuario = ManualTestSupport.crearUsuarioInterno(
+                "89" + sufijo,
+                "Agente Demo " + sufijo,
+                "960" + sufijo.substring(0, 5),
+                "agente." + sufijo.toLowerCase() + "@controllocal.pe",
+                "agentecap" + sufijo.toLowerCase(),
+                "HASH_AGENTE_" + sufijo,
+                RolUsuarioInterno.AGENTE
+        );
+
         AgenteInmobiliario agente = new AgenteInmobiliario();
-        agente.setNombres("Agente Demo");
-        agente.setApellidos("Apellido " + sufijo);
-        agente.setCorreo("agente." + sufijo.toLowerCase() + "@controllocal.pe");
-        agente.setTelefono("960" + sufijo.substring(0, 5));
-        agente.setNombreUsuario("agentecap" + sufijo.toLowerCase());
-        agente.setContrasenaHash("HASH_AGENTE_" + sufijo);
-        agente.setEstado(EstadoActivoInactivo.ACTIVO);
+        agente.setIdUsuarioInterno(usuario.getIdUsuarioInterno());
+        agente.setPersona(usuario.getPersona());
+        agente.setNombreUsuario(usuario.getNombreUsuario());
+        agente.setContrasenaHash(usuario.getContrasenaHash());
+        agente.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        agente.setRol(RolUsuarioInterno.AGENTE);
         agente.setCodigoAgente("AGC" + sufijo);
         agente.setZonaAsignada("Miraflores");
         agente.setFechaIngreso(LocalDate.now().minusDays(10));
         agente.setEstadoOperativo(EstadoOperativoAgente.DISPONIBLE);
+        agente.setIdAgente(dao.crear(agente));
+        System.out.println("[CREATE] Agente creado con ID: " + agente.getIdAgente());
 
-        Long id = dao.crear(agente);
-        System.out.println("[CREATE] Agente creado con ID: " + id);
-
-        dao.buscarPorId(id).ifPresent(item -> System.out.println(
+        dao.buscarPorId(agente.getIdAgente()).ifPresent(item -> System.out.println(
                 "[READ]   " + item.getCodigoAgente() + " | Estado: " + item.getEstadoOperativo()
         ));
 
-        agente.setIdAgente(id);
-        agente.setIdUsuarioInterno(id);
         return agente;
     }
 
@@ -170,11 +172,9 @@ public class CaptacionDAOImplIntegrationTest {
 
         AgenteInmobiliario agente = new AgenteInmobiliario();
         agente.setIdAgente(idAgente);
-        agente.setIdUsuarioInterno(idAgente);
 
         Broker broker = new Broker();
         broker.setIdBroker(idBroker);
-        broker.setIdUsuarioInterno(idBroker);
 
         Captacion captacion = new Captacion();
         captacion.setCodigoCaptacion("CAP" + sufijo);

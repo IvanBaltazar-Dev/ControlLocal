@@ -151,7 +151,7 @@ public class LocalComercial {
     }
 
     public Long getIdPropietario() {
-        if (propietario != null && propietario.getIdPropietario() > 0) {
+        if (propietario != null && propietario.getIdPropietario() != null && propietario.getIdPropietario() > 0) {
             return propietario.getIdPropietario();
         }
         return idPropietario;
@@ -176,6 +176,32 @@ public class LocalComercial {
     public void setPropietario(Propietario propietario) {
         this.propietario = propietario;
         this.idPropietario = propietario != null ? propietario.getIdPropietario() : null;
+    }
+
+    public void cambiarEstado(EstadoLocalComercial estado) {
+        this.estado = estado;
+        this.fechaActualizacion = LocalDateTime.now();
+    }
+
+    public String obtenerResumen() {
+        return codigoLocal + " - " + direccion + " (" + distrito + ")";
+    }
+
+    public void actualizarDatos(
+            String direccion,
+            String distrito,
+            BigDecimal metraje,
+            BigDecimal precioReferencial,
+            String rubroPermitido,
+            String descripcion
+    ) {
+        this.direccion = direccion;
+        this.distrito = distrito;
+        this.metraje = metraje;
+        this.precioReferencial = precioReferencial;
+        this.rubroPermitido = rubroPermitido;
+        this.descripcion = descripcion;
+        this.fechaActualizacion = LocalDateTime.now();
     }
 
     public LocalDateTime getFechaRegistro() {

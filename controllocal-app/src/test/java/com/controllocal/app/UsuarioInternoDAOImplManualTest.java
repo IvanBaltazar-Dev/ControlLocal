@@ -6,9 +6,10 @@ import com.controllocal.dao.UsuarioInternoDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
 import com.controllocal.dao.impl.BrokerDAOImpl;
 import com.controllocal.dao.impl.UsuarioInternoDAOImpl;
-import com.controllocal.model.persona.EstadoActivoInactivo;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
+import com.controllocal.model.usuario.EstadoOperativoAgente;
+import com.controllocal.model.usuario.RolUsuarioInterno;
 import com.controllocal.model.usuario.UsuarioInterno;
 
 import java.time.LocalDate;
@@ -34,52 +35,64 @@ public class UsuarioInternoDAOImplManualTest {
     }
 
     private static Broker demoBroker(BrokerDAO dao, String sufijo) {
+        UsuarioInterno usuario = ManualTestSupport.crearUsuarioInterno(
+                "81" + sufijo,
+                "Broker Usuario Demo " + sufijo,
+                "970" + sufijo.substring(0, 5),
+                "broker.usuario." + sufijo.toLowerCase() + "@controllocal.pe",
+                "usrbroker" + sufijo.toLowerCase(),
+                "HASH_BROKER_USR_" + sufijo,
+                RolUsuarioInterno.BROKER
+        );
+
         Broker broker = new Broker();
-        broker.setNombres("Broker Usuario");
-        broker.setApellidos("Demo " + sufijo);
-        broker.setCorreo("broker.usuario." + sufijo.toLowerCase() + "@controllocal.pe");
-        broker.setTelefono("970" + sufijo.substring(0, 5));
-        broker.setNombreUsuario("usrbroker" + sufijo.toLowerCase());
-        broker.setContrasenaHash("HASH_BROKER_USR_" + sufijo);
-        broker.setEstado(EstadoActivoInactivo.ACTIVO);
+        broker.setIdUsuarioInterno(usuario.getIdUsuarioInterno());
+        broker.setPersona(usuario.getPersona());
+        broker.setNombreUsuario(usuario.getNombreUsuario());
+        broker.setContrasenaHash(usuario.getContrasenaHash());
+        broker.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        broker.setRol(RolUsuarioInterno.BROKER);
         broker.setCodigoBroker("UBK" + sufijo);
         broker.setFechaDesignacion(LocalDate.now());
         broker.setEsAdministrador(false);
-
-        Long id = dao.crear(broker);
-        broker.setIdBroker(id);
-        broker.setIdUsuarioInterno(id);
+        broker.setIdBroker(dao.crear(broker));
         return broker;
     }
 
     private static AgenteInmobiliario demoAgente(AgenteInmobiliarioDAO dao, String sufijo) {
+        UsuarioInterno usuario = ManualTestSupport.crearUsuarioInterno(
+                "82" + sufijo,
+                "Agente Usuario Demo " + sufijo,
+                "971" + sufijo.substring(0, 5),
+                "agente.usuario." + sufijo.toLowerCase() + "@controllocal.pe",
+                "usragente" + sufijo.toLowerCase(),
+                "HASH_AGENTE_USR_" + sufijo,
+                RolUsuarioInterno.AGENTE
+        );
+
         AgenteInmobiliario agente = new AgenteInmobiliario();
-        agente.setNombres("Agente Usuario");
-        agente.setApellidos("Demo " + sufijo);
-        agente.setCorreo("agente.usuario." + sufijo.toLowerCase() + "@controllocal.pe");
-        agente.setTelefono("971" + sufijo.substring(0, 5));
-        agente.setNombreUsuario("usragente" + sufijo.toLowerCase());
-        agente.setContrasenaHash("HASH_AGENTE_USR_" + sufijo);
-        agente.setEstado(EstadoActivoInactivo.ACTIVO);
+        agente.setIdUsuarioInterno(usuario.getIdUsuarioInterno());
+        agente.setPersona(usuario.getPersona());
+        agente.setNombreUsuario(usuario.getNombreUsuario());
+        agente.setContrasenaHash(usuario.getContrasenaHash());
+        agente.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        agente.setRol(RolUsuarioInterno.AGENTE);
         agente.setCodigoAgente("UAG" + sufijo);
         agente.setZonaAsignada("Lince");
         agente.setFechaIngreso(LocalDate.now().minusDays(3));
-        agente.setEstadoOperativo(com.controllocal.model.usuario.EstadoOperativoAgente.DISPONIBLE);
-
-        Long id = dao.crear(agente);
-        agente.setIdAgente(id);
-        agente.setIdUsuarioInterno(id);
+        agente.setEstadoOperativo(EstadoOperativoAgente.DISPONIBLE);
+        agente.setIdAgente(dao.crear(agente));
         return agente;
     }
 
-    private static void demoUsuarioInterno(UsuarioInternoDAO dao, Long idBroker, Long idAgente) {
+    private static void demoUsuarioInterno(UsuarioInternoDAO dao, Long idBrokerUsuario, Long idAgenteUsuario) {
         System.out.println();
         System.out.println("----- CRUD USUARIO INTERNO -----");
 
         List<UsuarioInterno> usuarios = dao.listarTodos();
         System.out.println("[LIST]   Total usuarios internos: " + usuarios.size());
 
-        Optional<UsuarioInterno> encontrado = dao.buscarPorId(idBroker);
+        Optional<UsuarioInterno> encontrado = dao.buscarPorId(idBrokerUsuario);
         encontrado.ifPresent(item -> System.out.println(
                 "[READ]   " + item.getIdUsuarioInterno() + " | " + item.getNombreUsuario()
                         + " | Rol: " + item.getRol()
@@ -91,17 +104,17 @@ public class UsuarioInternoDAOImplManualTest {
             dao.actualizar(actualizar);
         }
 
-        dao.buscarPorId(idBroker).ifPresent(item -> System.out.println(
+        dao.buscarPorId(idBrokerUsuario).ifPresent(item -> System.out.println(
                 "[UPDATE] Telefono: " + item.getTelefono() + " | Estado: " + item.getEstado()
         ));
 
-        dao.eliminar(idBroker);
-        dao.eliminar(idAgente);
+        dao.eliminar(idBrokerUsuario);
+        dao.eliminar(idAgenteUsuario);
 
-        dao.buscarPorId(idBroker).ifPresent(item -> System.out.println(
+        dao.buscarPorId(idBrokerUsuario).ifPresent(item -> System.out.println(
                 "[DELETE] Broker estado final: " + item.getEstado()
         ));
-        dao.buscarPorId(idAgente).ifPresent(item -> System.out.println(
+        dao.buscarPorId(idAgenteUsuario).ifPresent(item -> System.out.println(
                 "[DELETE] Agente estado final: " + item.getEstado()
         ));
     }

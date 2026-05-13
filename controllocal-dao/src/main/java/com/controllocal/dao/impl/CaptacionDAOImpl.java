@@ -120,7 +120,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             statement.setDate(2, Date.valueOf(captacion.getFechaCaptacion()));
             setDate(statement, 3, captacion.getFechaInicioVigencia());
             setDate(statement, 4, captacion.getFechaFinVigencia());
-            statement.setDouble(5, captacion.getComisionPactada());
+            statement.setBigDecimal(5, captacion.getComisionPactada());
             statement.setString(6, captacion.getObservaciones());
             statement.setString(7, captacion.getEstado().name());
             setTimestamp(statement, 8, captacion.getFechaRevision());
@@ -196,7 +196,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             statement.setDate(2, Date.valueOf(captacion.getFechaCaptacion()));
             setDate(statement, 3, captacion.getFechaInicioVigencia());
             setDate(statement, 4, captacion.getFechaFinVigencia());
-            statement.setDouble(5, captacion.getComisionPactada());
+            statement.setBigDecimal(5, captacion.getComisionPactada());
             statement.setString(6, captacion.getObservaciones());
             statement.setString(7, captacion.getEstado().name());
             setTimestamp(statement, 8, captacion.getFechaRevision());
@@ -258,7 +258,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             captacion.setFechaFinVigencia(fechaFin.toLocalDate());
         }
 
-        captacion.setComisionPactada(rs.getDouble("comision_pactada"));
+        captacion.setComisionPactada(rs.getBigDecimal("comision_pactada"));
         captacion.setObservaciones(rs.getString("observaciones"));
         captacion.setEstado(EstadoCaptacion.valueOf(rs.getString("estado")));
 
@@ -298,7 +298,10 @@ public class CaptacionDAOImpl implements CaptacionDAO {
         if (captacion.getFechaCaptacion() == null) {
             throw new IllegalArgumentException("La fecha de captacion es obligatoria.");
         }
-        if (captacion.getComisionPactada() < 0) {
+        if (captacion.getComisionPactada() == null) {
+            throw new IllegalArgumentException("La comision pactada es obligatoria.");
+        }
+        if (captacion.getComisionPactada().signum() < 0) {
             throw new IllegalArgumentException("La comision pactada no puede ser negativa.");
         }
         if (captacion.getEstado() == null) {
@@ -309,7 +312,9 @@ public class CaptacionDAOImpl implements CaptacionDAO {
                 || captacion.getLocalComercial().getIdLocal() <= 0) {
             throw new IllegalArgumentException("El local comercial asociado es obligatorio.");
         }
-        if (captacion.getAgenteResponsable() == null || captacion.getAgenteResponsable().getIdAgente() <= 0) {
+        if (captacion.getAgenteResponsable() == null
+                || captacion.getAgenteResponsable().getIdAgente() == null
+                || captacion.getAgenteResponsable().getIdAgente() <= 0) {
             throw new IllegalArgumentException("El agente responsable es obligatorio.");
         }
         if (captacion.getFechaInicioVigencia() != null

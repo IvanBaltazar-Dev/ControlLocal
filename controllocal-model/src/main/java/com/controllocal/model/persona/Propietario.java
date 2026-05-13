@@ -1,6 +1,5 @@
 package com.controllocal.model.persona;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -8,96 +7,96 @@ import com.controllocal.model.inmueble.LocalComercial;
 
 public class Propietario {
 
-    private long idPropietario;
-    private TipoPersona tipoPersona;
-    private String tipoDocumento;
-    private String numeroDocumento;
-    private String nombresORazonSocial;
-    private String telefono;
-    private String correo;
-    private EstadoActivoInactivo estado;
-    private LocalDateTime fechaCreacion;
-    private LocalDateTime fechaActualizacion;
+    private Long idPropietario;
+    private Persona persona;
     private List<LocalComercial> localesComerciales = new ArrayList<>();
 
-    public long getIdPropietario() {
+    public Long getIdPropietario() {
         return idPropietario;
     }
 
-    public void setIdPropietario(long idPropietario) {
+    public void setIdPropietario(Long idPropietario) {
         this.idPropietario = idPropietario;
     }
 
+    public Persona getPersona() {
+        return persona;
+    }
+
+    public void setPersona(Persona persona) {
+        this.persona = persona;
+    }
+
     public TipoPersona getTipoPersona() {
-        return tipoPersona;
+        return persona().getTipoPersona();
     }
 
     public void setTipoPersona(TipoPersona tipoPersona) {
-        this.tipoPersona = tipoPersona;
+        persona().setTipoPersona(tipoPersona);
     }
 
     public String getTipoDocumento() {
-        return tipoDocumento;
+        return persona().getTipoDocumento();
     }
 
     public void setTipoDocumento(String tipoDocumento) {
-        this.tipoDocumento = tipoDocumento;
+        persona().setTipoDocumento(tipoDocumento);
     }
 
     public String getNumeroDocumento() {
-        return numeroDocumento;
+        return persona().getNumeroDocumento();
     }
 
     public void setNumeroDocumento(String numeroDocumento) {
-        this.numeroDocumento = numeroDocumento;
+        persona().setNumeroDocumento(numeroDocumento);
     }
 
     public String getNombresORazonSocial() {
-        return nombresORazonSocial;
+        return persona().getNombresORazonSocial();
     }
 
     public void setNombresORazonSocial(String nombresORazonSocial) {
-        this.nombresORazonSocial = nombresORazonSocial;
+        persona().setNombresORazonSocial(nombresORazonSocial);
     }
 
     public String getTelefono() {
-        return telefono;
+        return persona().getTelefono();
     }
 
     public void setTelefono(String telefono) {
-        this.telefono = telefono;
+        persona().setTelefono(telefono);
     }
 
     public String getCorreo() {
-        return correo;
+        return persona().getCorreo();
     }
 
     public void setCorreo(String correo) {
-        this.correo = correo;
+        persona().setCorreo(correo);
     }
 
     public EstadoActivoInactivo getEstado() {
-        return estado;
+        return persona().getEstado();
     }
 
     public void setEstado(EstadoActivoInactivo estado) {
-        this.estado = estado;
+        persona().setEstado(estado);
     }
 
-    public LocalDateTime getFechaCreacion() {
-        return fechaCreacion;
+    public java.time.LocalDateTime getFechaCreacion() {
+        return persona().getFechaCreacion();
     }
 
-    public void setFechaCreacion(LocalDateTime fechaCreacion) {
-        this.fechaCreacion = fechaCreacion;
+    public void setFechaCreacion(java.time.LocalDateTime fechaCreacion) {
+        persona().setFechaCreacion(fechaCreacion);
     }
 
-    public LocalDateTime getFechaActualizacion() {
-        return fechaActualizacion;
+    public java.time.LocalDateTime getFechaActualizacion() {
+        return persona().getFechaActualizacion();
     }
 
-    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
-        this.fechaActualizacion = fechaActualizacion;
+    public void setFechaActualizacion(java.time.LocalDateTime fechaActualizacion) {
+        persona().setFechaActualizacion(fechaActualizacion);
     }
 
     public List<LocalComercial> getLocalesComerciales() {
@@ -109,14 +108,25 @@ public class Propietario {
     }
 
     public void actualizarDatos() {
-        this.fechaActualizacion = LocalDateTime.now();
+        persona().setFechaActualizacion(java.time.LocalDateTime.now());
+    }
+
+    public void actualizarDatos(String telefono, String correo, String nombresORazonSocial) {
+        persona().actualizarDatos(telefono, correo, nombresORazonSocial);
     }
 
     public void activar() {
-        this.estado = EstadoActivoInactivo.ACTIVO;
+        persona().activar();
     }
 
     public void desactivar() {
-        this.estado = EstadoActivoInactivo.INACTIVO;
+        persona().desactivar();
+    }
+
+    private Persona persona() {
+        if (persona == null) {
+            persona = new Persona();
+        }
+        return persona;
     }
 }

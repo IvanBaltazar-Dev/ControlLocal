@@ -5,20 +5,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.EvaluacionSolicitud;
+import com.controllocal.model.comercial.ReasignacionCaptacion;
 
 public class Broker extends UsuarioInterno {
 
-    private long idBroker;
+    private Long idBroker;
     private String codigoBroker;
     private LocalDate fechaDesignacion;
     private boolean esAdministrador;
     private List<Captacion> captacionesSupervisadas = new ArrayList<>();
 
-    public long getIdBroker() {
+    public Long getIdBroker() {
         return idBroker;
     }
 
-    public void setIdBroker(long idBroker) {
+    public void setIdBroker(Long idBroker) {
         this.idBroker = idBroker;
     }
 
@@ -72,5 +74,31 @@ public class Broker extends UsuarioInterno {
 
     public void aprobarCambioSensible(Captacion captacion) {
         validarCaptacion(captacion);
+    }
+
+    public ReasignacionCaptacion reasignarCaptacion(
+            Captacion captacion,
+            AgenteInmobiliario agenteNuevo,
+            String motivo
+    ) {
+        AgenteInmobiliario anterior = captacion != null ? captacion.getAgenteResponsable() : null;
+        if (captacion != null) {
+            captacion.setAgenteResponsable(agenteNuevo);
+        }
+        ReasignacionCaptacion reasignacion = new ReasignacionCaptacion();
+        reasignacion.setCaptacion(captacion);
+        reasignacion.setAgenteAnterior(anterior);
+        reasignacion.setAgenteNuevo(agenteNuevo);
+        reasignacion.setBrokerResponsable(this);
+        reasignacion.setMotivo(motivo);
+        reasignacion.registrarCambio();
+        return reasignacion;
+    }
+
+    public void registrarEvaluacion(EvaluacionSolicitud evaluacion) {
+        if (evaluacion != null) {
+            evaluacion.setResponsableEvaluacion(this);
+            evaluacion.emitirResultado(evaluacion.getResultado(), evaluacion.getObservaciones());
+        }
     }
 }

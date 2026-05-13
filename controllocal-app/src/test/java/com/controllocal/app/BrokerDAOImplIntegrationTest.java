@@ -2,8 +2,9 @@ package com.controllocal.app;
 
 import com.controllocal.dao.BrokerDAO;
 import com.controllocal.dao.impl.BrokerDAOImpl;
-import com.controllocal.model.persona.EstadoActivoInactivo;
 import com.controllocal.model.usuario.Broker;
+import com.controllocal.model.usuario.RolUsuarioInterno;
+import com.controllocal.model.usuario.UsuarioInterno;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -26,14 +27,23 @@ public class BrokerDAOImplIntegrationTest {
         System.out.println();
         System.out.println("----- CRUD BROKER -----");
 
+        UsuarioInterno usuario = ManualTestSupport.crearUsuarioInterno(
+                "83" + sufijo,
+                "Broker Demo " + sufijo,
+                "950" + sufijo.substring(0, 5),
+                "broker." + sufijo.toLowerCase() + "@controllocal.pe",
+                "broker" + sufijo.toLowerCase(),
+                "HASH_BROKER_" + sufijo,
+                RolUsuarioInterno.BROKER
+        );
+
         Broker broker = new Broker();
-        broker.setNombres("Broker Demo");
-        broker.setApellidos("Apellido " + sufijo);
-        broker.setCorreo("broker." + sufijo.toLowerCase() + "@controllocal.pe");
-        broker.setTelefono("950" + sufijo.substring(0, 5));
-        broker.setNombreUsuario("broker" + sufijo.toLowerCase());
-        broker.setContrasenaHash("HASH_BROKER_" + sufijo);
-        broker.setEstado(EstadoActivoInactivo.ACTIVO);
+        broker.setIdUsuarioInterno(usuario.getIdUsuarioInterno());
+        broker.setPersona(usuario.getPersona());
+        broker.setNombreUsuario(usuario.getNombreUsuario());
+        broker.setContrasenaHash(usuario.getContrasenaHash());
+        broker.setEstadoAdministrativo(usuario.getEstadoAdministrativo());
+        broker.setRol(RolUsuarioInterno.BROKER);
         broker.setCodigoBroker("BRK" + sufijo);
         broker.setFechaDesignacion(LocalDate.now());
         broker.setEsAdministrador(false);
@@ -65,7 +75,6 @@ public class BrokerDAOImplIntegrationTest {
         ));
 
         broker.setIdBroker(id);
-        broker.setIdUsuarioInterno(id);
         return broker;
     }
 }

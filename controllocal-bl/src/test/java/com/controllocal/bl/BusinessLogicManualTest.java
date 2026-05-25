@@ -1,19 +1,28 @@
 package com.controllocal.bl;
 
-import com.controllocal.bl.support.TransactionRunner;
-import com.controllocal.config.DatabaseConfig;
-import com.controllocal.dao.*;
-import com.controllocal.model.comercial.*;
-import com.controllocal.model.inmueble.LocalComercial;
-import com.controllocal.model.persona.*;
-import com.controllocal.model.usuario.*;
-
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.time.LocalDate;
 import java.util.*;
+
+import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
+import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
+import com.controllocal.bl.impl.SolicitudAlquilerBusinessLogicImpl;
+import com.controllocal.bl.support.TransactionRunner;
+import com.controllocal.config.DatabaseConfig;
+import com.controllocal.dao.*;
+import com.controllocal.model.comercial.*;
+import com.controllocal.model.comercial.enums.EstadoCaptacion;
+import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
+import com.controllocal.model.comercial.enums.MotivoNoContinuidadTipo;
+import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.*;
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.usuario.*;
+import com.controllocal.model.usuario.enums.EstadoOperativoAgente;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 
 public class BusinessLogicManualTest {
 
@@ -37,6 +46,7 @@ public class BusinessLogicManualTest {
 
     private void ejecutar(String nombre, ManualCheck check) {
         try {
+            DatabaseConfig.getConnectionHolder().set(new JdbcRecorder().connection());
             check.run();
             System.out.println("[OK] " + nombre);
         } catch (Throwable e) {
@@ -224,9 +234,10 @@ public class BusinessLogicManualTest {
         final InMemoryBrokerDAO brokerDAO = new InMemoryBrokerDAO();
         final InMemoryReasignacionDAO reasignacionDAO = new InMemoryReasignacionDAO();
         final InMemorySolicitudDAO solicitudDAO = new InMemorySolicitudDAO();
-        final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogic(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO);
-        final BrokerBusinessLogic brokers = new BrokerBusinessLogic(brokerDAO);
-        final SolicitudAlquilerBusinessLogic solicitudes = new SolicitudAlquilerBusinessLogic(solicitudDAO, captacionDAO);
+        final InMemoryOportunidadDAO oportunidadDAO = new InMemoryOportunidadDAO();
+        final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO);
+        final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl(brokerDAO);
+        final SolicitudAlquilerBusinessLogic solicitudes = new SolicitudAlquilerBusinessLogicImpl(solicitudDAO, captacionDAO, oportunidadDAO, agenteDAO);
         final AgenteInmobiliario agente = agente(1L, EstadoOperativoAgente.DISPONIBLE);
         final AgenteInmobiliario agenteNuevo = agente(2L, EstadoOperativoAgente.DISPONIBLE);
         final Broker broker = broker(1L, true);
@@ -263,16 +274,33 @@ public class BusinessLogicManualTest {
             solicitud.setMontoPropuesto(new BigDecimal("3000.00"));
             ClienteInteresado cliente = new ClienteInteresado();
             cliente.setIdCliente(1L);
+            OportunidadComercial oportunidad = oportunidad(captacion, cliente);
             solicitud.setClienteInteresado(cliente);
+            solicitud.setOportunidadComercial(oportunidad);
             solicitud.setCaptacion(captacion);
             solicitud.setAgenteResponsable(agente);
             return solicitud;
         }
 
+        OportunidadComercial oportunidad(Captacion captacion, ClienteInteresado cliente) {
+            OportunidadComercial oportunidad = new OportunidadComercial();
+            oportunidad.setCodigoOportunidad("OPP-001");
+            oportunidad.setFechaRegistro(java.time.LocalDateTime.now());
+            oportunidad.setEstado(EstadoOportunidadComercial.ABIERTA);
+            oportunidad.setClienteInteresado(cliente);
+            oportunidad.setCaptacion(captacion);
+            oportunidad.setAgenteResponsable(agente);
+            oportunidad.setIdOportunidad(oportunidadDAO.crear(oportunidad));
+            return oportunidad;
+        }
+
         MotivoNoContinuidad motivo() {
             MotivoNoContinuidad motivo = new MotivoNoContinuidad();
-            motivo.setRazonPrincipal("No continua");
+            motivo.setRazonPrincipal(MotivoNoContinuidadTipo.OTRO);
             motivo.setAgenteResponsable(agente);
+            OportunidadComercial oportunidad = new OportunidadComercial();
+            oportunidad.setIdOportunidad(1L);
+            motivo.setOportunidadComercial(oportunidad);
             SolicitudAlquiler solicitud = new SolicitudAlquiler();
             solicitud.setIdSolicitud(1L);
             motivo.setSolicitudAlquiler(solicitud);
@@ -364,6 +392,16 @@ public class BusinessLogicManualTest {
         public boolean eliminar(Long id) { return items.remove(id) != null; }
     }
 
+    private static class InMemoryOportunidadDAO implements OportunidadComercialDAO {
+        final Map<Long, OportunidadComercial> items = new LinkedHashMap<>();
+        long sequence = 1;
+        public Long crear(OportunidadComercial oportunidad) { oportunidad.setIdOportunidad(sequence++); items.put(oportunidad.getIdOportunidad(), oportunidad); return oportunidad.getIdOportunidad(); }
+        public Optional<OportunidadComercial> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
+        public List<OportunidadComercial> listarTodos() { return new ArrayList<>(items.values()); }
+        public boolean actualizar(OportunidadComercial oportunidad) { items.put(oportunidad.getIdOportunidad(), oportunidad); return true; }
+        public boolean eliminar(Long id) { return items.remove(id) != null; }
+    }
+
     private static class JdbcRecorder implements InvocationHandler {
         boolean commitCalled;
         boolean rollbackCalled;
@@ -403,3 +441,4 @@ public class BusinessLogicManualTest {
         }
     }
 }
+

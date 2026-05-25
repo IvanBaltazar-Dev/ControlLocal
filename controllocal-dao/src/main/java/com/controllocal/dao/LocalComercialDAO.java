@@ -1,14 +1,14 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.inmueble.LocalComercial;
-
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.model.inmueble.LocalComercial;
 
 /**
  * Contrato de persistencia para la entidad LocalComercial.
  */
-public interface LocalComercialDAO {
+public interface LocalComercialDAO extends CrudDAO<LocalComercial> {
 
     Long crear(LocalComercial local);
 

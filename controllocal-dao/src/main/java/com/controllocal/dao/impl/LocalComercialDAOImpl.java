@@ -1,12 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.LocalComercialDAO;
-import com.controllocal.model.inmueble.EstadoLocalComercial;
-import com.controllocal.model.inmueble.LocalComercial;
-import com.controllocal.model.persona.Propietario;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -16,6 +9,13 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.LocalComercialDAO;
+import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
+import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.Propietario;
 
 /**
  * Implementacion JDBC de LocalComercialDAO usando PreparedStatement.
@@ -88,7 +88,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
 
     private static final String DELETE_SQL = """
             UPDATE local_comercial
-            SET estado = 'INACTIVO'
+            SET estado = 'I'
             WHERE id_local = ?
             """;
 
@@ -106,7 +106,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setBigDecimal(5, local.getPrecioReferencial());
             statement.setString(6, local.getRubroPermitido());
             statement.setString(7, local.getDescripcion());
-            statement.setString(8, local.getEstado().name());
+            JdbcSupport.setEnum(statement, 8, local.getEstado());
             statement.setLong(9, local.getIdPropietario());
 
             int affectedRows = statement.executeUpdate();
@@ -180,7 +180,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setBigDecimal(5, local.getPrecioReferencial());
             statement.setString(6, local.getRubroPermitido());
             statement.setString(7, local.getDescripcion());
-            statement.setString(8, local.getEstado().name());
+            JdbcSupport.setEnum(statement, 8, local.getEstado());
             statement.setLong(9, local.getIdPropietario());
             statement.setLong(10, local.getIdLocal());
 
@@ -218,7 +218,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 rs.getBigDecimal("precio_referencial"),
                 rs.getString("rubro_permitido"),
                 rs.getString("descripcion"),
-                EstadoLocalComercial.valueOf(rs.getString("estado")),
+                JdbcSupport.getEnum(rs, "estado", EstadoLocalComercial.class),
                 idPropietario,
                 fechaRegistro != null ? fechaRegistro.toLocalDateTime() : null,
                 fechaActualizacion != null ? fechaActualizacion.toLocalDateTime() : null
@@ -273,3 +273,4 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
         }
     }
 }
+

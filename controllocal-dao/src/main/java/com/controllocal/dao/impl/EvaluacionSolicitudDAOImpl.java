@@ -1,12 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.EvaluacionSolicitudDAO;
-import com.controllocal.model.comercial.EvaluacionSolicitud;
-import com.controllocal.model.comercial.ResultadoEvaluacionSolicitud;
-import com.controllocal.model.comercial.TipoEvaluacionSolicitud;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -15,6 +8,13 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.EvaluacionSolicitudDAO;
+import com.controllocal.model.comercial.enums.ResultadoEvaluacionSolicitud;
+import com.controllocal.model.comercial.enums.TipoEvaluacionSolicitud;
+import com.controllocal.model.comercial.EvaluacionSolicitud;
 
 public class EvaluacionSolicitudDAOImpl implements EvaluacionSolicitudDAO {
 
@@ -113,10 +113,10 @@ public class EvaluacionSolicitudDAOImpl implements EvaluacionSolicitudDAO {
 
     private void bind(EvaluacionSolicitud evaluacion, PreparedStatement ps) throws SQLException {
         JdbcSupport.setTimestamp(ps, 1, evaluacion.getFechaEvaluacion());
-        ps.setString(2, evaluacion.getResultado().name());
+        JdbcSupport.setEnum(ps, 2, evaluacion.getResultado());
         ps.setString(3, evaluacion.getObservaciones());
         ps.setLong(4, evaluacion.getResponsableEvaluacion().getIdBroker());
-        ps.setString(5, evaluacion.getTipoEvaluacion().name());
+        JdbcSupport.setEnum(ps, 5, evaluacion.getTipoEvaluacion());
         ps.setLong(6, evaluacion.getSolicitudAlquiler().getIdSolicitud());
     }
 
@@ -124,10 +124,10 @@ public class EvaluacionSolicitudDAOImpl implements EvaluacionSolicitudDAO {
         EvaluacionSolicitud evaluacion = new EvaluacionSolicitud();
         evaluacion.setIdEvaluacion(rs.getLong("id_evaluacion"));
         evaluacion.setFechaEvaluacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_evaluacion")));
-        evaluacion.setResultado(ResultadoEvaluacionSolicitud.valueOf(rs.getString("resultado")));
+        evaluacion.setResultado(JdbcSupport.getEnum(rs, "resultado", ResultadoEvaluacionSolicitud.class));
         evaluacion.setObservaciones(rs.getString("observaciones"));
         evaluacion.setResponsableEvaluacion(JdbcSupport.broker(rs.getLong("responsable_evaluacion")));
-        evaluacion.setTipoEvaluacion(TipoEvaluacionSolicitud.valueOf(rs.getString("tipo_evaluacion")));
+        evaluacion.setTipoEvaluacion(JdbcSupport.getEnum(rs, "tipo_evaluacion", TipoEvaluacionSolicitud.class));
         evaluacion.setSolicitudAlquiler(JdbcSupport.solicitud(rs.getLong("id_solicitud")));
         return evaluacion;
     }
@@ -147,3 +147,4 @@ public class EvaluacionSolicitudDAOImpl implements EvaluacionSolicitudDAO {
         JdbcSupport.validarId(JdbcSupport.getIdSolicitud(evaluacion.getSolicitudAlquiler()));
     }
 }
+

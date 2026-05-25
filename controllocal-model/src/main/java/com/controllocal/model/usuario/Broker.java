@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.comercial.EvaluacionSolicitud;
-import com.controllocal.model.comercial.ReasignacionCaptacion;
 
 public class Broker extends UsuarioInterno {
 
@@ -60,47 +58,6 @@ public class Broker extends UsuarioInterno {
         this.captacionesSupervisadas = captacionesSupervisadas;
     }
 
-    public void validarCaptacion(Captacion captacion) {
-        if (captacion == null) {
-            return;
-        }
-        captacion.setBrokerRevisor(this);
-        captacion.setFechaRevision(java.time.LocalDateTime.now());
-        captacion.actualizarEstado(com.controllocal.model.comercial.EstadoCaptacion.ACTIVA);
-        if (!captacionesSupervisadas.contains(captacion)) {
-            captacionesSupervisadas.add(captacion);
-        }
-    }
-
-    public void aprobarCambioSensible(Captacion captacion) {
-        validarCaptacion(captacion);
-    }
-
-    public ReasignacionCaptacion reasignarCaptacion(
-            Captacion captacion,
-            AgenteInmobiliario agenteNuevo,
-            String motivo
-    ) {
-        AgenteInmobiliario anterior = captacion != null ? captacion.getAgenteResponsable() : null;
-        if (captacion != null) {
-            captacion.setAgenteResponsable(agenteNuevo);
-        }
-        ReasignacionCaptacion reasignacion = new ReasignacionCaptacion();
-        reasignacion.setCaptacion(captacion);
-        reasignacion.setAgenteAnterior(anterior);
-        reasignacion.setAgenteNuevo(agenteNuevo);
-        reasignacion.setBrokerResponsable(this);
-        reasignacion.setMotivo(motivo);
-        reasignacion.registrarCambio();
-        return reasignacion;
-    }
-
-    public void registrarEvaluacion(EvaluacionSolicitud evaluacion) {
-        if (evaluacion != null) {
-            evaluacion.setResponsableEvaluacion(this);
-            evaluacion.emitirResultado(evaluacion.getResultado(), evaluacion.getObservaciones());
-        }
-    }
     public Broker() {
     }
 

@@ -1,30 +1,31 @@
 package com.controllocal.bl;
 
-import com.controllocal.bl.impl.customerAcquisitionLifecycleImpl;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
-import com.controllocal.dao.LocalComercialDAO;
-import com.controllocal.dao.PersonaDAO;
-import com.controllocal.dao.PropietarioDAO;
-import com.controllocal.dao.UsuarioInternoDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
 import com.controllocal.dao.impl.LocalComercialDAOImpl;
 import com.controllocal.dao.impl.PersonaDAOImpl;
 import com.controllocal.dao.impl.PropietarioDAOImpl;
 import com.controllocal.dao.impl.UsuarioInternoDAOImpl;
+import com.controllocal.dao.LocalComercialDAO;
+import com.controllocal.dao.PersonaDAO;
+import com.controllocal.dao.PropietarioDAO;
+import com.controllocal.dao.UsuarioInternoDAO;
 import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.inmueble.EstadoLocalComercial;
+import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
 import com.controllocal.model.inmueble.LocalComercial;
-import com.controllocal.model.persona.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
+import com.controllocal.model.persona.enums.TipoPersona;
 import com.controllocal.model.persona.Persona;
 import com.controllocal.model.persona.Propietario;
-import com.controllocal.model.persona.TipoPersona;
 import com.controllocal.model.usuario.AgenteInmobiliario;
-import com.controllocal.model.usuario.EstadoOperativoAgente;
-import com.controllocal.model.usuario.RolUsuarioInterno;
+import com.controllocal.model.usuario.enums.EstadoOperativoAgente;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 import com.controllocal.model.usuario.UsuarioInterno;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
 
 public class PruebaCaptacion {
 
@@ -32,25 +33,25 @@ public class PruebaCaptacion {
         String sufijo = String.valueOf(System.currentTimeMillis()).substring(5);
 
         try {
-            customerAcquisitionLifecycle service = new customerAcquisitionLifecycleImpl();
+            CaptacionBusinessLogic service = new CaptacionBusinessLogicImpl();
 
             LocalComercial local = crearLocalDisponible(sufijo);
             AgenteInmobiliario agente = crearAgenteDisponible(sufijo);
 
-            Captacion nueva = new Captacion();
-            nueva.setCodigoCaptacion("CAPT" + sufijo);
-            nueva.setFechaCaptacion(LocalDate.now());
-            nueva.setComisionPactada(new BigDecimal("5.50"));
-            nueva.setObservaciones("Captacion creada desde PruebaCaptacion");
-            nueva.setLocalComercial(local);
-            nueva.setAgenteResponsable(agente);
+            Captacion captacion = new Captacion();
+            captacion.setCodigoCaptacion("CAPT" + sufijo);
+            captacion.setFechaCaptacion(LocalDate.now());
+            captacion.setComisionPactada(new BigDecimal("5.50"));
+            captacion.setObservaciones("Captacion creada desde prueba manual");
+            captacion.setLocalComercial(local);
+            captacion.setAgenteResponsable(agente);
 
             System.out.println("Intentando registrar captacion...");
-            Long idGenerado = service.registerAcquisition(nueva);
-
-            System.out.println("Exito. Captacion registrada con ID: " + idGenerado);
+            Long idGenerado = service.registrar(captacion);
+            System.out.println("Captacion registrada correctamente. ID generado: " + idGenerado);
         } catch (Exception e) {
-            System.err.println("Error en la prueba: " + e.getMessage());
+            System.err.println("Error en prueba:");
+            System.err.println(e.getMessage());
             e.printStackTrace();
         }
     }
@@ -136,7 +137,7 @@ public class PruebaCaptacion {
     private static Persona crearPersona(String numeroDocumento, String nombre, String telefono, String correo) {
         Persona persona = new Persona();
         persona.setTipoPersona(TipoPersona.NATURAL);
-        persona.setTipoDocumento("DNI");
+        persona.setTipoDocumento(TipoDocumentoIdentidad.DNI);
         persona.setNumeroDocumento(numeroDocumento);
         persona.setNombresORazonSocial(nombre);
         persona.setTelefono(telefono);

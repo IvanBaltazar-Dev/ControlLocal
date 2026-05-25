@@ -8,7 +8,13 @@ import java.sql.SQLException;
 
 public final class DBManager {
 
+    private static final DBManager INSTANCE = new DBManager();
+
     private DBManager() {
+    }
+
+    public static DBManager getInstance() {
+        return INSTANCE;
     }
 
     public static Connection getConnection() throws SQLException {
@@ -33,18 +39,9 @@ public final class DBManager {
         return closeSuppressingConnection(conn);
     }
 
-    public static void beginTransaction() throws SQLException {
+    public static Connection beginTransaction() throws SQLException {
         DatabaseConfig.markTransactionActive();
-        Connection conn = DatabaseConfig.getConnectionHolder().get();
-        if (conn == null || conn.isClosed()) {
-            conn = DriverManager.getConnection(
-                    DatabaseConfig.getJdbcUrl(),
-                    DatabaseConfig.getUsername(),
-                    DatabaseConfig.getPassword()
-            );
-            DatabaseConfig.getConnectionHolder().set(conn);
-        }
-        conn.setAutoCommit(false);
+        return getConnection();
     }
 
     private static Connection closeSuppressingConnection(Connection conn) {

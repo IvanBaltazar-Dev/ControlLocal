@@ -1,11 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.BrokerDAO;
-import com.controllocal.dao.DAOException;
-import com.controllocal.model.usuario.Broker;
-import com.controllocal.model.usuario.RolUsuarioInterno;
-
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -15,6 +9,12 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.BrokerDAO;
+import com.controllocal.dao.DAOException;
+import com.controllocal.model.usuario.Broker;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 
 public class BrokerDAOImpl implements BrokerDAO {
 
@@ -45,7 +45,7 @@ public class BrokerDAOImpl implements BrokerDAO {
     private static final String DELETE_SQL = """
             UPDATE usuario_interno u
             INNER JOIN broker b ON b.id_usuario = u.id_usuario
-            SET u.estado_administrativo = 'INACTIVO'
+            SET u.estado_administrativo = 'I'
             WHERE b.id_broker = ?
             """;
 
@@ -155,3 +155,4 @@ public class BrokerDAOImpl implements BrokerDAO {
         }
     }
 }
+

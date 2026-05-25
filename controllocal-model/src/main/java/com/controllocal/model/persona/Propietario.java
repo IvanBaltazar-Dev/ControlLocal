@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
+import com.controllocal.model.persona.enums.TipoPersona;
 
 public class Propietario {
 
@@ -35,11 +38,11 @@ public class Propietario {
         persona().setTipoPersona(tipoPersona);
     }
 
-    public String getTipoDocumento() {
+    public TipoDocumentoIdentidad getTipoDocumento() {
         return persona().getTipoDocumento();
     }
 
-    public void setTipoDocumento(String tipoDocumento) {
+    public void setTipoDocumento(TipoDocumentoIdentidad tipoDocumento) {
         persona().setTipoDocumento(tipoDocumento);
     }
 

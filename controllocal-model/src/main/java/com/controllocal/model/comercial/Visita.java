@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
+import com.controllocal.model.comercial.enums.EstadoVisita;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
@@ -15,6 +16,7 @@ public class Visita {
     private String observaciones;
     private EstadoVisita estado;
     private String resultado;
+    private OportunidadComercial oportunidadComercial;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
     private AgenteInmobiliario agenteResponsable;
@@ -33,6 +35,8 @@ public class Visita {
     public void setEstado(EstadoVisita estado) { this.estado = estado; }
     public String getResultado() { return resultado; }
     public void setResultado(String resultado) { this.resultado = resultado; }
+    public OportunidadComercial getOportunidadComercial() { return oportunidadComercial; }
+    public void setOportunidadComercial(OportunidadComercial oportunidadComercial) { this.oportunidadComercial = oportunidadComercial; }
     public ClienteInteresado getClienteInteresado() { return clienteInteresado; }
     public void setClienteInteresado(ClienteInteresado clienteInteresado) { this.clienteInteresado = clienteInteresado; }
     public Captacion getCaptacion() { return captacion; }

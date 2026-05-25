@@ -2,6 +2,8 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.comercial.enums.CanalContacto;
+import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
@@ -12,6 +14,7 @@ public class InteraccionComercial {
     private CanalContacto canalContacto;
     private String observaciones;
     private ResultadoInteraccion resultado;
+    private OportunidadComercial oportunidadComercial;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
     private AgenteInmobiliario agenteResponsable;
@@ -27,6 +30,8 @@ public class InteraccionComercial {
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
     public ResultadoInteraccion getResultado() { return resultado; }
     public void setResultado(ResultadoInteraccion resultado) { this.resultado = resultado; }
+    public OportunidadComercial getOportunidadComercial() { return oportunidadComercial; }
+    public void setOportunidadComercial(OportunidadComercial oportunidadComercial) { this.oportunidadComercial = oportunidadComercial; }
     public ClienteInteresado getClienteInteresado() { return clienteInteresado; }
     public void setClienteInteresado(ClienteInteresado clienteInteresado) { this.clienteInteresado = clienteInteresado; }
     public Captacion getCaptacion() { return captacion; }

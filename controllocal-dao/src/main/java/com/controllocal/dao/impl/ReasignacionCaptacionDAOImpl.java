@@ -1,10 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.ReasignacionCaptacionDAO;
-import com.controllocal.model.comercial.ReasignacionCaptacion;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -13,6 +8,11 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.ReasignacionCaptacionDAO;
+import com.controllocal.model.comercial.ReasignacionCaptacion;
 
 public class ReasignacionCaptacionDAOImpl implements ReasignacionCaptacionDAO {
 
@@ -146,3 +146,4 @@ public class ReasignacionCaptacionDAOImpl implements ReasignacionCaptacionDAO {
         JdbcSupport.validarId(JdbcSupport.getIdBroker(reasignacion.getBrokerResponsable()));
     }
 }
+

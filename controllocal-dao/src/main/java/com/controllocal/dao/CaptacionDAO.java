@@ -1,11 +1,11 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.comercial.Captacion;
-
 import java.util.List;
 import java.util.Optional;
 
-public interface CaptacionDAO {
+import com.controllocal.model.comercial.Captacion;
+
+public interface CaptacionDAO extends CrudDAO<Captacion> {
     Long crear(Captacion captacion);
 
     Optional<Captacion> buscarPorId(Long id);

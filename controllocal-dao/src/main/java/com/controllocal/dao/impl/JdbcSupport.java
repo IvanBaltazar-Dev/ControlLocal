@@ -1,19 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.comercial.InteraccionComercial;
-import com.controllocal.model.comercial.SolicitudAlquiler;
-import com.controllocal.model.comercial.Visita;
-import com.controllocal.model.inmueble.LocalComercial;
-import com.controllocal.model.persona.ClienteInteresado;
-import com.controllocal.model.persona.EstadoActivoInactivo;
-import com.controllocal.model.persona.Persona;
-import com.controllocal.model.persona.Propietario;
-import com.controllocal.model.persona.TipoPersona;
-import com.controllocal.model.usuario.AgenteInmobiliario;
-import com.controllocal.model.usuario.Broker;
-import com.controllocal.model.usuario.RolUsuarioInterno;
-
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,6 +10,23 @@ import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+
+import com.controllocal.model.CodigoEnum;
+import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.InteraccionComercial;
+import com.controllocal.model.comercial.OportunidadComercial;
+import com.controllocal.model.comercial.SolicitudAlquiler;
+import com.controllocal.model.comercial.Visita;
+import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.ClienteInteresado;
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
+import com.controllocal.model.persona.enums.TipoPersona;
+import com.controllocal.model.persona.Persona;
+import com.controllocal.model.persona.Propietario;
+import com.controllocal.model.usuario.AgenteInmobiliario;
+import com.controllocal.model.usuario.Broker;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 
 final class JdbcSupport {
 
@@ -68,6 +71,23 @@ final class JdbcSupport {
         }
     }
 
+    static void setEnum(PreparedStatement ps, int index, CodigoEnum value) throws SQLException {
+        if (value == null) {
+            ps.setNull(index, Types.CHAR);
+        } else {
+            ps.setString(index, value.getCodigo());
+        }
+    }
+
+    static <E extends Enum<E> & CodigoEnum> E getEnum(ResultSet rs, String column, Class<E> enumType) throws SQLException {
+        return CodigoEnum.fromCodigo(enumType, rs.getString(column));
+    }
+
+    static <E extends Enum<E> & CodigoEnum> E getNullableEnum(ResultSet rs, String column, Class<E> enumType) throws SQLException {
+        String codigo = rs.getString(column);
+        return codigo != null ? CodigoEnum.fromCodigo(enumType, codigo) : null;
+    }
+
     static LocalDate toLocalDate(Date date) {
         return date != null ? date.toLocalDate() : null;
     }
@@ -83,13 +103,13 @@ final class JdbcSupport {
     static Persona mapPersona(ResultSet rs) throws SQLException {
         Persona persona = new Persona();
         persona.setIdPersona(rs.getLong("id_persona"));
-        persona.setTipoPersona(TipoPersona.valueOf(rs.getString("tipo_persona")));
-        persona.setTipoDocumento(rs.getString("tipo_documento"));
+        persona.setTipoPersona(getEnum(rs, "tipo_persona", TipoPersona.class));
+        persona.setTipoDocumento(getEnum(rs, "tipo_documento", TipoDocumentoIdentidad.class));
         persona.setNumeroDocumento(rs.getString("numero_documento"));
         persona.setNombresORazonSocial(rs.getString("nombres_o_razon_social"));
         persona.setTelefono(rs.getString("telefono"));
         persona.setCorreo(rs.getString("correo"));
-        persona.setEstado(EstadoActivoInactivo.valueOf(rs.getString("estado")));
+        persona.setEstado(getEnum(rs, "estado", EstadoActivoInactivo.class));
         persona.setFechaCreacion(toLocalDateTime(rs.getTimestamp("fecha_creacion")));
         persona.setFechaActualizacion(toLocalDateTime(rs.getTimestamp("fecha_actualizacion")));
         return persona;
@@ -151,6 +171,12 @@ final class JdbcSupport {
         return solicitud;
     }
 
+    static OportunidadComercial oportunidad(Long id) {
+        OportunidadComercial oportunidad = new OportunidadComercial();
+        oportunidad.setIdOportunidad(id);
+        return oportunidad;
+    }
+
     static Long getIdPropietario(Propietario propietario) {
         return propietario != null ? propietario.getIdPropietario() : null;
     }
@@ -187,6 +213,10 @@ final class JdbcSupport {
         return solicitud != null ? solicitud.getIdSolicitud() : null;
     }
 
+    static Long getIdOportunidad(OportunidadComercial oportunidad) {
+        return oportunidad != null ? oportunidad.getIdOportunidad() : null;
+    }
+
     static Long getIdInteraccion(InteraccionComercial interaccion) {
         return interaccion != null ? interaccion.getIdInteraccion() : null;
     }
@@ -195,3 +225,4 @@ final class JdbcSupport {
         return visita != null ? visita.getIdVisita() : null;
     }
 }
+

@@ -1,11 +1,11 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.persona.ClienteInteresado;
-
 import java.util.List;
 import java.util.Optional;
 
-public interface ClienteInteresadoDAO {
+import com.controllocal.model.persona.ClienteInteresado;
+
+public interface ClienteInteresadoDAO extends CrudDAO<ClienteInteresado> {
     Long crear(ClienteInteresado cliente);
     Optional<ClienteInteresado> buscarPorId(Long id);
     List<ClienteInteresado> listarTodos();

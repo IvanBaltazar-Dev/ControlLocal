@@ -1,10 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.ClienteInteresadoDAO;
-import com.controllocal.dao.DAOException;
-import com.controllocal.model.persona.ClienteInteresado;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -13,6 +8,11 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.ClienteInteresadoDAO;
+import com.controllocal.dao.DAOException;
+import com.controllocal.model.persona.ClienteInteresado;
 
 public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
 
@@ -29,7 +29,7 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
     private static final String DELETE_SQL = """
             UPDATE persona p
             INNER JOIN cliente_interesado c ON c.id_persona = p.id_persona
-            SET p.estado = 'INACTIVO'
+            SET p.estado = 'I'
             WHERE c.id_cliente = ?
             """;
 
@@ -128,3 +128,4 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
         JdbcSupport.validarId(JdbcSupport.getIdPersona(cliente.getPersona()));
     }
 }
+

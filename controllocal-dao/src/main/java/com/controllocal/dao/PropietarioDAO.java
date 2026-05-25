@@ -1,11 +1,11 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.persona.Propietario;
-
 import java.util.List;
 import java.util.Optional;
 
-public interface PropietarioDAO {
+import com.controllocal.model.persona.Propietario;
+
+public interface PropietarioDAO extends CrudDAO<Propietario> {
     Long crear(Propietario propietario);
 
     Optional<Propietario> buscarPorId(Long id);

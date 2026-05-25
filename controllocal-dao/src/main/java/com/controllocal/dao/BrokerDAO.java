@@ -1,14 +1,14 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.usuario.Broker;
-
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.model.usuario.Broker;
 
 /**
  * Contrato de persistencia para la entidad Broker.
  */
-public interface BrokerDAO {
+public interface BrokerDAO extends CrudDAO<Broker> {
 
     Long crear(Broker broker);
 

@@ -1,11 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.PropietarioDAO;
-import com.controllocal.model.persona.Persona;
-import com.controllocal.model.persona.Propietario;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -14,6 +8,12 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.PropietarioDAO;
+import com.controllocal.model.persona.Persona;
+import com.controllocal.model.persona.Propietario;
 
 public class PropietarioDAOImpl implements PropietarioDAO {
 
@@ -30,7 +30,7 @@ public class PropietarioDAOImpl implements PropietarioDAO {
     private static final String DELETE_SQL = """
             UPDATE persona p
             INNER JOIN propietario pr ON pr.id_persona = p.id_persona
-            SET p.estado = 'INACTIVO'
+            SET p.estado = 'I'
             WHERE pr.id_propietario = ?
             """;
 
@@ -127,3 +127,4 @@ public class PropietarioDAOImpl implements PropietarioDAO {
         JdbcSupport.validarId(JdbcSupport.getIdPersona(persona));
     }
 }
+

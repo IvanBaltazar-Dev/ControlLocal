@@ -1,12 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.DocumentoSolicitudDAO;
-import com.controllocal.model.comercial.DocumentoSolicitud;
-import com.controllocal.model.comercial.EstadoDocumentoSolicitud;
-import com.controllocal.model.comercial.ResultadoRevisionDocumento;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -15,6 +8,14 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.DocumentoSolicitudDAO;
+import com.controllocal.model.comercial.DocumentoSolicitud;
+import com.controllocal.model.comercial.enums.EstadoDocumentoSolicitud;
+import com.controllocal.model.comercial.enums.ResultadoRevisionDocumento;
+import com.controllocal.model.comercial.enums.TipoDocumentoSolicitud;
 
 public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
 
@@ -36,7 +37,7 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
                 estado = ?, id_solicitud = ?
             WHERE id_documento = ?
             """;
-    private static final String DELETE_SQL = "UPDATE documento_solicitud SET estado = 'OBSERVADO' WHERE id_documento = ?";
+    private static final String DELETE_SQL = "UPDATE documento_solicitud SET estado = 'O' WHERE id_documento = ?";
 
     @Override
     public Long crear(DocumentoSolicitud documento) {
@@ -113,27 +114,27 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
     }
 
     private void bind(DocumentoSolicitud documento, PreparedStatement ps) throws SQLException {
-        ps.setString(1, documento.getTipoDocumento());
+        JdbcSupport.setEnum(ps, 1, documento.getTipoDocumento());
         ps.setString(2, documento.getNombreArchivo());
         ps.setString(3, documento.getRutaArchivo());
         JdbcSupport.setTimestamp(ps, 4, documento.getFechaEntrega());
-        ps.setString(5, documento.getResultadoRevision() != null ? documento.getResultadoRevision().name() : null);
+        JdbcSupport.setEnum(ps, 5, documento.getResultadoRevision());
         ps.setString(6, documento.getObservaciones());
-        ps.setString(7, documento.getEstado().name());
+        JdbcSupport.setEnum(ps, 7, documento.getEstado());
         ps.setLong(8, documento.getSolicitudAlquiler().getIdSolicitud());
     }
 
     private DocumentoSolicitud mapRow(ResultSet rs) throws SQLException {
         DocumentoSolicitud documento = new DocumentoSolicitud();
         documento.setIdDocumento(rs.getLong("id_documento"));
-        documento.setTipoDocumento(rs.getString("tipo_documento"));
+        documento.setTipoDocumento(JdbcSupport.getEnum(rs, "tipo_documento", TipoDocumentoSolicitud.class));
         documento.setNombreArchivo(rs.getString("nombre_archivo"));
         documento.setRutaArchivo(rs.getString("ruta_archivo"));
         documento.setFechaEntrega(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_entrega")));
         String resultado = rs.getString("resultado_revision");
-        documento.setResultadoRevision(resultado != null ? ResultadoRevisionDocumento.valueOf(resultado) : null);
+        documento.setResultadoRevision(resultado != null ? ResultadoRevisionDocumento.fromCodigo(resultado) : null);
         documento.setObservaciones(rs.getString("observaciones"));
-        documento.setEstado(EstadoDocumentoSolicitud.valueOf(rs.getString("estado")));
+        documento.setEstado(JdbcSupport.getEnum(rs, "estado", EstadoDocumentoSolicitud.class));
         documento.setSolicitudAlquiler(JdbcSupport.solicitud(rs.getLong("id_solicitud")));
         return documento;
     }
@@ -145,7 +146,7 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
         if (requiereId) {
             JdbcSupport.validarId(documento.getIdDocumento());
         }
-        if (documento.getTipoDocumento() == null || documento.getTipoDocumento().isBlank()
+        if (documento.getTipoDocumento() == null
                 || documento.getNombreArchivo() == null || documento.getNombreArchivo().isBlank()
                 || documento.getFechaEntrega() == null || documento.getEstado() == null) {
             throw new IllegalArgumentException("El documento de solicitud tiene campos obligatorios incompletos.");
@@ -153,3 +154,4 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
         JdbcSupport.validarId(JdbcSupport.getIdSolicitud(documento.getSolicitudAlquiler()));
     }
 }
+

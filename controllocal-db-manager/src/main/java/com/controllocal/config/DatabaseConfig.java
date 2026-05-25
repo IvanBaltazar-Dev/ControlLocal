@@ -1,7 +1,7 @@
 package com.controllocal.config;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Properties;

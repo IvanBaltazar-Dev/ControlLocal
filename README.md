@@ -33,6 +33,7 @@ Incluye la gestión de:
 - Locales comerciales
 - Captaciones
 - Clientes interesados
+- Oportunidades comerciales
 - Interacciones
 - Visitas
 - Solicitudes de alquiler
@@ -48,10 +49,11 @@ Incluye la gestión de:
 2. Captación de propiedades  
 3. Asignación de agente  
 4. Registro de interesados  
-5. Interacciones comerciales  
-6. Visitas  
-7. Solicitudes  
-8. Evaluación final  
+5. Oportunidades comerciales  
+6. Interacciones comerciales  
+7. Visitas  
+8. Solicitudes  
+9. Evaluación final  
 
 ---
 
@@ -73,6 +75,7 @@ Principales entidades:
 - LocalComercial
 - Captacion (eje del sistema)
 - ClienteInteresado
+- OportunidadComercial
 - InteraccionComercial
 - Visita
 - SolicitudAlquiler

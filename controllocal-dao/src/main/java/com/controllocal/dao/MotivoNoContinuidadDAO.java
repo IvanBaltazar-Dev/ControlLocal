@@ -1,11 +1,11 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.comercial.MotivoNoContinuidad;
-
 import java.util.List;
 import java.util.Optional;
 
-public interface MotivoNoContinuidadDAO {
+import com.controllocal.model.comercial.MotivoNoContinuidad;
+
+public interface MotivoNoContinuidadDAO extends CrudDAO<MotivoNoContinuidad> {
     Long crear(MotivoNoContinuidad motivo);
     Optional<MotivoNoContinuidad> buscarPorId(Long id);
     List<MotivoNoContinuidad> listarTodos();

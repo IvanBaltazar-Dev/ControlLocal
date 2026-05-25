@@ -1,12 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.AgenteInmobiliarioDAO;
-import com.controllocal.dao.DAOException;
-import com.controllocal.model.usuario.AgenteInmobiliario;
-import com.controllocal.model.usuario.EstadoOperativoAgente;
-import com.controllocal.model.usuario.RolUsuarioInterno;
-
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -16,6 +9,13 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.AgenteInmobiliarioDAO;
+import com.controllocal.dao.DAOException;
+import com.controllocal.model.usuario.AgenteInmobiliario;
+import com.controllocal.model.usuario.enums.EstadoOperativoAgente;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 
 public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
 
@@ -47,47 +47,47 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
     private static final String DELETE_SQL = """
             UPDATE agente_inmobiliario a
             INNER JOIN usuario_interno u ON a.id_usuario = u.id_usuario
-            SET a.estado_operativo = 'NO_DISPONIBLE', u.estado_administrativo = 'INACTIVO'
+            SET a.estado_operativo = 'N', u.estado_administrativo = 'I'
             WHERE a.id_agente = ?
             """;
 
     @Override
     public Long crear(AgenteInmobiliario agente) {
         validar(agente, false);
-        Connection conn = null;
-        try {
-            conn = DBManager.getConnection();
-            try (PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
-                ps.setLong(1, agente.getIdUsuarioInterno());
-                ps.setString(2, agente.getCodigoAgente());
-                ps.setString(3, agente.getZonaAsignada());
-                ps.setDate(4, Date.valueOf(agente.getFechaIngreso()));
-                ps.setString(5, agente.getEstadoOperativo().name());
-                ps.executeUpdate();
-
-                try (ResultSet rs = ps.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        Long id = rs.getLong(1);
-                        agente.setIdAgente(id);
-                        agente.setRol(RolUsuarioInterno.AGENTE);
-                        return id;
-                    }
-                }
-                throw new DAOException("No se genero el id de agente inmobiliario.");
-            }
+        try (Connection conn = DBManager.getConnection()) {
+            return crear(agente, conn);
         } catch (SQLException e) {
             throw new DAOException("Error al crear agente inmobiliario.", e);
         }
+    }
+
+    public Long crear(AgenteInmobiliario agente, Connection conn) throws SQLException {
+        validar(agente, false);
+        try (PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setLong(1, agente.getIdUsuarioInterno());
+            ps.setString(2, agente.getCodigoAgente());
+            ps.setString(3, agente.getZonaAsignada());
+            ps.setDate(4, Date.valueOf(agente.getFechaIngreso()));
+            JdbcSupport.setEnum(ps, 5, agente.getEstadoOperativo());
+            ps.executeUpdate();
+
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    Long id = rs.getLong(1);
+                    agente.setIdAgente(id);
+                    agente.setRol(RolUsuarioInterno.AGENTE);
+                    return id;
+                }
+            }
+        }
+        throw new DAOException("No se genero el id de agente inmobiliario.");
     }
 
     @Override
 
     public Optional<AgenteInmobiliario> buscarPorId(Long id) {
         JdbcSupport.validarId(id);
-        // 1. Obtenemos la conexión (la del ThreadLocal que gestiona la BL)
-        Connection conn = null;
-        try {
-            conn = DBManager.getConnection();
+        try (Connection conn = DBManager.getConnection()) {
             try (PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE a.id_agente = ?")) {
                 ps.setLong(1, id);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -124,7 +124,7 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
             ps.setString(2, agente.getCodigoAgente());
             ps.setString(3, agente.getZonaAsignada());
             ps.setDate(4, Date.valueOf(agente.getFechaIngreso()));
-            ps.setString(5, agente.getEstadoOperativo().name());
+            JdbcSupport.setEnum(ps, 5, agente.getEstadoOperativo());
             ps.setLong(6, agente.getIdAgente());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -151,7 +151,7 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
         agente.setCodigoAgente(rs.getString("codigo_agente"));
         agente.setZonaAsignada(rs.getString("zona_asignada"));
         agente.setFechaIngreso(JdbcSupport.toLocalDate(rs.getDate("fecha_ingreso")));
-        agente.setEstadoOperativo(EstadoOperativoAgente.valueOf(rs.getString("estado_operativo")));
+        agente.setEstadoOperativo(JdbcSupport.getEnum(rs, "estado_operativo", EstadoOperativoAgente.class));
         return agente;
     }
 
@@ -169,3 +169,4 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
         }
     }
 }
+

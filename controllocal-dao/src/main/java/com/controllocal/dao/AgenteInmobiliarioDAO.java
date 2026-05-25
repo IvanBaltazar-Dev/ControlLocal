@@ -1,15 +1,15 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.usuario.AgenteInmobiliario;
-
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.model.usuario.AgenteInmobiliario;
 
 /**
  * Contrato de persistencia para la entidad AgenteInmobiliario.
  */
 
-public interface AgenteInmobiliarioDAO {
+public interface AgenteInmobiliarioDAO extends CrudDAO<AgenteInmobiliario> {
 
     Long crear(AgenteInmobiliario agente);
 

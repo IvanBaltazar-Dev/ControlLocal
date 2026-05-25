@@ -2,6 +2,8 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.comercial.enums.ResultadoEvaluacionSolicitud;
+import com.controllocal.model.comercial.enums.TipoEvaluacionSolicitud;
 import com.controllocal.model.usuario.Broker;
 
 public class EvaluacionSolicitud {

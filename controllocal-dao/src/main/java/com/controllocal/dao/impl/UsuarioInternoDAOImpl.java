@@ -1,12 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.UsuarioInternoDAO;
-import com.controllocal.model.persona.EstadoActivoInactivo;
-import com.controllocal.model.usuario.RolUsuarioInterno;
-import com.controllocal.model.usuario.UsuarioInterno;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -15,6 +8,13 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.UsuarioInternoDAO;
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
+import com.controllocal.model.usuario.UsuarioInterno;
 
 public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
 
@@ -42,7 +42,7 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
             WHERE id_usuario = ?
             """;
 
-    private static final String DELETE_SQL = "UPDATE usuario_interno SET estado_administrativo = 'INACTIVO' WHERE id_usuario = ?";
+    private static final String DELETE_SQL = "UPDATE usuario_interno SET estado_administrativo = 'I' WHERE id_usuario = ?";
 
     @Override
     public Long crear(UsuarioInterno usuario) {
@@ -52,8 +52,8 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
             ps.setLong(1, usuario.getPersona().getIdPersona());
             ps.setString(2, usuario.getNombreUsuario());
             ps.setString(3, usuario.getContrasenaHash());
-            ps.setString(4, usuario.getEstadoAdministrativo().name());
-            ps.setString(5, usuario.getRol().name());
+            JdbcSupport.setEnum(ps, 4, usuario.getEstadoAdministrativo());
+            JdbcSupport.setEnum(ps, 5, usuario.getRol());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -106,8 +106,8 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
             ps.setLong(1, usuario.getPersona().getIdPersona());
             ps.setString(2, usuario.getNombreUsuario());
             ps.setString(3, usuario.getContrasenaHash());
-            ps.setString(4, usuario.getEstadoAdministrativo().name());
-            ps.setString(5, usuario.getRol().name());
+            JdbcSupport.setEnum(ps, 4, usuario.getEstadoAdministrativo());
+            JdbcSupport.setEnum(ps, 5, usuario.getRol());
             ps.setLong(6, usuario.getIdUsuarioInterno());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -132,8 +132,8 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
         usuario.setPersona(JdbcSupport.mapPersona(rs));
         usuario.setNombreUsuario(rs.getString("nombre_usuario"));
         usuario.setContrasenaHash(rs.getString("contrasena_hash"));
-        usuario.setEstadoAdministrativo(EstadoActivoInactivo.valueOf(rs.getString("estado_administrativo")));
-        usuario.setRol(RolUsuarioInterno.valueOf(rs.getString("rol")));
+        usuario.setEstadoAdministrativo(JdbcSupport.getEnum(rs, "estado_administrativo", EstadoActivoInactivo.class));
+        usuario.setRol(JdbcSupport.getEnum(rs, "rol", RolUsuarioInterno.class));
         usuario.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("usuario_fecha_creacion")));
         usuario.setFechaActualizacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("usuario_fecha_actualizacion")));
         return usuario;
@@ -158,3 +158,4 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
         }
     }
 }
+

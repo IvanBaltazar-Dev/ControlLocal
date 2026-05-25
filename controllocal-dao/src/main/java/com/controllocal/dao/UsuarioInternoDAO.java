@@ -1,16 +1,16 @@
 package com.controllocal.dao;
 
-import com.controllocal.model.usuario.UsuarioInterno;
-
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.model.usuario.UsuarioInterno;
 
 /**
  * Contrato de persistencia para la entidad UsuarioInterno.
  * La creacion de usuarios se realiza a traves de BrokerDAO o AgenteInmobiliarioDAO,
  * ya que todo usuario interno es siempre un Broker o un Agente.
  */
-public interface UsuarioInternoDAO {
+public interface UsuarioInternoDAO extends CrudDAO<UsuarioInterno> {
 
     Long crear(UsuarioInterno usuario);
 

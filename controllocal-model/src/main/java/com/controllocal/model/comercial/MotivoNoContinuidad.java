@@ -2,15 +2,17 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.comercial.enums.MotivoNoContinuidadTipo;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class MotivoNoContinuidad {
 
     private Long idMotivoNoContinuidad;
     private LocalDateTime fechaHora;
-    private String razonPrincipal;
+    private MotivoNoContinuidadTipo razonPrincipal;
     private String observaciones;
     private AgenteInmobiliario agenteResponsable;
+    private OportunidadComercial oportunidadComercial;
     private InteraccionComercial interaccionComercial;
     private Visita visita;
     private SolicitudAlquiler solicitudAlquiler;
@@ -19,12 +21,14 @@ public class MotivoNoContinuidad {
     public void setIdMotivoNoContinuidad(Long idMotivoNoContinuidad) { this.idMotivoNoContinuidad = idMotivoNoContinuidad; }
     public LocalDateTime getFechaHora() { return fechaHora; }
     public void setFechaHora(LocalDateTime fechaHora) { this.fechaHora = fechaHora; }
-    public String getRazonPrincipal() { return razonPrincipal; }
-    public void setRazonPrincipal(String razonPrincipal) { this.razonPrincipal = razonPrincipal; }
+    public MotivoNoContinuidadTipo getRazonPrincipal() { return razonPrincipal; }
+    public void setRazonPrincipal(MotivoNoContinuidadTipo razonPrincipal) { this.razonPrincipal = razonPrincipal; }
     public String getObservaciones() { return observaciones; }
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
     public AgenteInmobiliario getAgenteResponsable() { return agenteResponsable; }
     public void setAgenteResponsable(AgenteInmobiliario agenteResponsable) { this.agenteResponsable = agenteResponsable; }
+    public OportunidadComercial getOportunidadComercial() { return oportunidadComercial; }
+    public void setOportunidadComercial(OportunidadComercial oportunidadComercial) { this.oportunidadComercial = oportunidadComercial; }
     public InteraccionComercial getInteraccionComercial() { return interaccionComercial; }
     public void setInteraccionComercial(InteraccionComercial interaccionComercial) { this.interaccionComercial = interaccionComercial; validarReferenciaUnica(); }
     public Visita getVisita() { return visita; }

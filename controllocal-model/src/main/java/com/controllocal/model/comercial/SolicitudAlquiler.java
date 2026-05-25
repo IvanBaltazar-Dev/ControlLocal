@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.controllocal.model.comercial.enums.EstadoSolicitudAlquiler;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
@@ -19,6 +20,7 @@ public class SolicitudAlquiler {
     private String observaciones;
     private EstadoSolicitudAlquiler estado;
     private LocalDateTime fechaActualizacionEstado;
+    private OportunidadComercial oportunidadComercial;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
     private AgenteInmobiliario agenteResponsable;
@@ -43,6 +45,8 @@ public class SolicitudAlquiler {
     public void setEstado(EstadoSolicitudAlquiler estado) { this.estado = estado; }
     public LocalDateTime getFechaActualizacionEstado() { return fechaActualizacionEstado; }
     public void setFechaActualizacionEstado(LocalDateTime fechaActualizacionEstado) { this.fechaActualizacionEstado = fechaActualizacionEstado; }
+    public OportunidadComercial getOportunidadComercial() { return oportunidadComercial; }
+    public void setOportunidadComercial(OportunidadComercial oportunidadComercial) { this.oportunidadComercial = oportunidadComercial; }
     public ClienteInteresado getClienteInteresado() { return clienteInteresado; }
     public void setClienteInteresado(ClienteInteresado clienteInteresado) { this.clienteInteresado = clienteInteresado; }
     public Captacion getCaptacion() { return captacion; }

@@ -1,10 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.PersonaDAO;
-import com.controllocal.model.persona.Persona;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -13,6 +8,11 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.PersonaDAO;
+import com.controllocal.model.persona.Persona;
 
 public class PersonaDAOImpl implements PersonaDAO {
 
@@ -37,20 +37,20 @@ public class PersonaDAOImpl implements PersonaDAO {
             WHERE id_persona = ?
             """;
 
-    private static final String DELETE_SQL = "UPDATE persona SET estado = 'INACTIVO' WHERE id_persona = ?";
+    private static final String DELETE_SQL = "UPDATE persona SET estado = 'I' WHERE id_persona = ?";
 
     @Override
     public Long crear(Persona persona) {
         validar(persona, false);
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, persona.getTipoPersona().name());
-            ps.setString(2, persona.getTipoDocumento());
+            PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
+            JdbcSupport.setEnum(ps, 1, persona.getTipoPersona());
+            JdbcSupport.setEnum(ps, 2, persona.getTipoDocumento());
             ps.setString(3, persona.getNumeroDocumento());
             ps.setString(4, persona.getNombresORazonSocial());
             ps.setString(5, persona.getTelefono());
             ps.setString(6, persona.getCorreo());
-            ps.setString(7, persona.getEstado().name());
+            JdbcSupport.setEnum(ps, 7, persona.getEstado());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -98,14 +98,14 @@ public class PersonaDAOImpl implements PersonaDAO {
     public boolean actualizar(Persona persona) {
         validar(persona, true);
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
-            ps.setString(1, persona.getTipoPersona().name());
-            ps.setString(2, persona.getTipoDocumento());
+            PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
+            JdbcSupport.setEnum(ps, 1, persona.getTipoPersona());
+            JdbcSupport.setEnum(ps, 2, persona.getTipoDocumento());
             ps.setString(3, persona.getNumeroDocumento());
             ps.setString(4, persona.getNombresORazonSocial());
             ps.setString(5, persona.getTelefono());
             ps.setString(6, persona.getCorreo());
-            ps.setString(7, persona.getEstado().name());
+            JdbcSupport.setEnum(ps, 7, persona.getEstado());
             ps.setLong(8, persona.getIdPersona());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -133,10 +133,11 @@ public class PersonaDAOImpl implements PersonaDAO {
             JdbcSupport.validarId(persona.getIdPersona());
         }
         if (persona.getTipoPersona() == null || persona.getTipoDocumento() == null
-                || persona.getTipoDocumento().isBlank() || persona.getNumeroDocumento() == null
+                || persona.getNumeroDocumento() == null
                 || persona.getNumeroDocumento().isBlank() || persona.getNombresORazonSocial() == null
                 || persona.getNombresORazonSocial().isBlank() || persona.getEstado() == null) {
             throw new IllegalArgumentException("La persona tiene campos obligatorios incompletos.");
         }
     }
 }
+

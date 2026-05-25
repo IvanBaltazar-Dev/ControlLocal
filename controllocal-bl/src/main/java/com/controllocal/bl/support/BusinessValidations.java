@@ -1,14 +1,19 @@
 package com.controllocal.bl.support;
 
+import java.math.BigDecimal;
+
 import com.controllocal.bl.BusinessException;
 import com.controllocal.model.comercial.*;
+import com.controllocal.model.comercial.enums.EstadoCaptacion;
+import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.persona.ClienteInteresado;
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
 import com.controllocal.model.persona.Persona;
 import com.controllocal.model.persona.Propietario;
 import com.controllocal.model.usuario.*;
-
-import java.math.BigDecimal;
+import com.controllocal.model.usuario.enums.EstadoOperativoAgente;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 
 public final class BusinessValidations {
 
@@ -34,7 +39,9 @@ public final class BusinessValidations {
         if (persona.getTipoPersona() == null) {
             throw new BusinessException("El tipo de persona es obligatorio.");
         }
-        texto(persona.getTipoDocumento(), "El tipo de documento");
+        if (persona.getTipoDocumento() == null) {
+            throw new BusinessException("El tipo de documento es obligatorio.");
+        }
         texto(persona.getNumeroDocumento(), "El numero de documento");
         texto(persona.getNombresORazonSocial(), "El nombre o razon social");
         if (persona.getEstado() == null) {
@@ -75,7 +82,7 @@ public final class BusinessValidations {
         if (broker == null) {
             throw new BusinessException("Broker no encontrado.");
         }
-        if (broker.getEstadoAdministrativo() != null && broker.getEstadoAdministrativo() != com.controllocal.model.persona.EstadoActivoInactivo.ACTIVO) {
+        if (broker.getEstadoAdministrativo() != null && broker.getEstadoAdministrativo() != com.controllocal.model.persona.enums.EstadoActivoInactivo.ACTIVO) {
             throw new BusinessException("El broker no esta activo.");
         }
     }
@@ -107,6 +114,10 @@ public final class BusinessValidations {
     public static void agenteDisponible(AgenteInmobiliario agente) {
         if (agente == null) {
             throw new BusinessException("Agente no encontrado.");
+        }
+        if (agente.getEstadoAdministrativo() != null
+                && agente.getEstadoAdministrativo() != com.controllocal.model.persona.enums.EstadoActivoInactivo.ACTIVO) {
+            throw new BusinessException("El agente debe estar ACTIVO.");
         }
         if (agente.getEstadoOperativo() != EstadoOperativoAgente.DISPONIBLE) {
             throw new BusinessException("El agente debe estar DISPONIBLE.");
@@ -178,8 +189,7 @@ public final class BusinessValidations {
             throw new BusinessException("La fecha de registro de solicitud es obligatoria.");
         }
         positivo(solicitud.getMontoPropuesto(), "El monto propuesto");
-        id(idCliente(solicitud.getClienteInteresado()), "El cliente interesado");
-        id(idCaptacion(solicitud.getCaptacion()), "La captacion de la solicitud");
+        id(idOportunidad(solicitud.getOportunidadComercial()), "La oportunidad comercial de la solicitud");
         id(idAgente(solicitud.getAgenteResponsable()), "El agente responsable de la solicitud");
     }
 
@@ -201,14 +211,39 @@ public final class BusinessValidations {
         if (motivo == null) {
             throw new BusinessException("El motivo de no continuidad es obligatorio.");
         }
-        texto(motivo.getRazonPrincipal(), "La razon principal");
+        if (motivo.getRazonPrincipal() == null) {
+            throw new BusinessException("La razon principal es obligatoria.");
+        }
         id(idAgente(motivo.getAgenteResponsable()), "El agente responsable del motivo");
+        id(idOportunidad(motivo.getOportunidadComercial()), "La oportunidad comercial del motivo");
         int referencias = 0;
         referencias += motivo.getInteraccionComercial() != null ? 1 : 0;
         referencias += motivo.getVisita() != null ? 1 : 0;
         referencias += motivo.getSolicitudAlquiler() != null ? 1 : 0;
-        if (referencias != 1) {
-            throw new BusinessException("El motivo debe asociarse a una sola referencia principal.");
+        if (referencias > 1) {
+            throw new BusinessException("El motivo debe asociarse como maximo a una referencia de origen.");
+        }
+    }
+
+    public static void oportunidad(OportunidadComercial oportunidad) {
+        if (oportunidad == null) {
+            throw new BusinessException("La oportunidad comercial es obligatoria.");
+        }
+        texto(oportunidad.getCodigoOportunidad(), "El codigo de oportunidad");
+        if (oportunidad.getFechaRegistro() == null) {
+            throw new BusinessException("La fecha de registro de oportunidad es obligatoria.");
+        }
+        if (oportunidad.getEstado() == null) {
+            throw new BusinessException("El estado de oportunidad es obligatorio.");
+        }
+        id(idCliente(oportunidad.getClienteInteresado()), "El cliente interesado");
+        id(idCaptacion(oportunidad.getCaptacion()), "La captacion de la oportunidad");
+        id(idAgente(oportunidad.getAgenteResponsable()), "El agente responsable de la oportunidad");
+    }
+
+    public static void oportunidadAbierta(OportunidadComercial oportunidad) {
+        if (oportunidad == null || oportunidad.getEstado() != EstadoOportunidadComercial.ABIERTA) {
+            throw new BusinessException("La oportunidad comercial debe estar ABIERTA.");
         }
     }
 
@@ -216,7 +251,9 @@ public final class BusinessValidations {
         if (documento == null) {
             throw new BusinessException("El documento de solicitud es obligatorio.");
         }
-        texto(documento.getTipoDocumento(), "El tipo de documento");
+        if (documento.getTipoDocumento() == null) {
+            throw new BusinessException("El tipo de documento es obligatorio.");
+        }
         texto(documento.getNombreArchivo(), "El nombre de archivo");
         if (documento.getFechaEntrega() == null) {
             throw new BusinessException("La fecha de entrega es obligatoria.");
@@ -237,8 +274,7 @@ public final class BusinessValidations {
         if (interaccion.getCanalContacto() == null || interaccion.getResultado() == null) {
             throw new BusinessException("La interaccion debe tener canal y resultado.");
         }
-        id(idCliente(interaccion.getClienteInteresado()), "El cliente de la interaccion");
-        id(idCaptacion(interaccion.getCaptacion()), "La captacion de la interaccion");
+        id(idOportunidad(interaccion.getOportunidadComercial()), "La oportunidad comercial de la interaccion");
         id(idAgente(interaccion.getAgenteResponsable()), "El agente de la interaccion");
     }
 
@@ -249,8 +285,7 @@ public final class BusinessValidations {
         if (visita.getFechaVisita() == null || visita.getHoraVisita() == null || visita.getEstado() == null) {
             throw new BusinessException("La visita debe tener fecha, hora y estado.");
         }
-        id(idCliente(visita.getClienteInteresado()), "El cliente de la visita");
-        id(idCaptacion(visita.getCaptacion()), "La captacion de la visita");
+        id(idOportunidad(visita.getOportunidadComercial()), "La oportunidad comercial de la visita");
         id(idAgente(visita.getAgenteResponsable()), "El agente de la visita");
     }
 
@@ -282,6 +317,10 @@ public final class BusinessValidations {
 
     public static Long idSolicitud(SolicitudAlquiler solicitud) {
         return solicitud != null ? solicitud.getIdSolicitud() : null;
+    }
+
+    public static Long idOportunidad(OportunidadComercial oportunidad) {
+        return oportunidad != null ? oportunidad.getIdOportunidad() : null;
     }
 
     private static void positivo(BigDecimal valor, String campo) {

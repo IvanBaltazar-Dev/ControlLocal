@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
 import com.controllocal.model.persona.Propietario;
 
 /**

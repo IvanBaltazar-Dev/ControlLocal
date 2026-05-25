@@ -1,10 +1,11 @@
 package com.controllocal.bl.support;
 
-import com.controllocal.bl.BusinessException;
-import com.controllocal.config.DBManager;
-import com.controllocal.config.DatabaseConfig;
-
+import java.sql.Connection;
 import java.sql.SQLException;
+
+import com.controllocal.bl.BusinessException;
+import com.controllocal.config.DatabaseConfig;
+import com.controllocal.config.DBManager;
 
 public final class TransactionRunner {
 
@@ -12,9 +13,13 @@ public final class TransactionRunner {
     }
 
     public static <T> T write(TransactionalSupplier<T> supplier) {
+        return write((TransactionalConnectionSupplier<T>) conn -> supplier.get());
+    }
+
+    public static <T> T write(TransactionalConnectionSupplier<T> supplier) {
         try {
-            DBManager.beginTransaction();
-            T result = supplier.get();
+            Connection conn = DBManager.beginTransaction();
+            T result = supplier.get(conn);
             DatabaseConfig.commit();
             return result;
         } catch (RuntimeException e) {
@@ -35,6 +40,13 @@ public final class TransactionRunner {
         });
     }
 
+    public static void write(TransactionalConnectionRunnable runnable) {
+        write((TransactionalConnectionSupplier<Void>) conn -> {
+            runnable.run(conn);
+            return null;
+        });
+    }
+
     public static void commit() {
         try {
             DatabaseConfig.commit();
@@ -49,7 +61,17 @@ public final class TransactionRunner {
     }
 
     @FunctionalInterface
+    public interface TransactionalConnectionSupplier<T> {
+        T get(Connection conn) throws Exception;
+    }
+
+    @FunctionalInterface
     public interface TransactionalRunnable {
         void run() throws Exception;
+    }
+
+    @FunctionalInterface
+    public interface TransactionalConnectionRunnable {
+        void run(Connection conn) throws Exception;
     }
 }

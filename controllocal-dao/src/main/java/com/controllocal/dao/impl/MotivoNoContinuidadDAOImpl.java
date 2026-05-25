@@ -1,10 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.DAOException;
-import com.controllocal.dao.MotivoNoContinuidadDAO;
-import com.controllocal.model.comercial.MotivoNoContinuidad;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -14,23 +9,29 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
+import com.controllocal.dao.MotivoNoContinuidadDAO;
+import com.controllocal.model.comercial.enums.MotivoNoContinuidadTipo;
+import com.controllocal.model.comercial.MotivoNoContinuidad;
+
 public class MotivoNoContinuidadDAOImpl implements MotivoNoContinuidadDAO {
 
     private static final String INSERT_SQL = """
             INSERT INTO motivo_no_continuidad (
                 fecha_hora, razon_principal, observaciones, id_agente,
-                id_interaccion, id_visita, id_solicitud
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                id_oportunidad, id_interaccion, id_visita, id_solicitud
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
             SELECT id_motivo_no_continuidad, fecha_hora, razon_principal, observaciones,
-                   id_agente, id_interaccion, id_visita, id_solicitud
+                   id_agente, id_oportunidad, id_interaccion, id_visita, id_solicitud
             FROM motivo_no_continuidad
             """;
     private static final String UPDATE_SQL = """
             UPDATE motivo_no_continuidad
             SET fecha_hora = ?, razon_principal = ?, observaciones = ?, id_agente = ?,
-                id_interaccion = ?, id_visita = ?, id_solicitud = ?
+                id_oportunidad = ?, id_interaccion = ?, id_visita = ?, id_solicitud = ?
             WHERE id_motivo_no_continuidad = ?
             """;
     private static final String DELETE_SQL = "DELETE FROM motivo_no_continuidad WHERE id_motivo_no_continuidad = ?";
@@ -88,9 +89,9 @@ public class MotivoNoContinuidadDAOImpl implements MotivoNoContinuidadDAO {
     public boolean actualizar(MotivoNoContinuidad motivo) {
         validar(motivo, true);
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
+            PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
             bind(motivo, ps);
-            ps.setLong(8, motivo.getIdMotivoNoContinuidad());
+            ps.setLong(9, motivo.getIdMotivoNoContinuidad());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar motivo de no continuidad con id "
@@ -112,21 +113,23 @@ public class MotivoNoContinuidadDAOImpl implements MotivoNoContinuidadDAO {
 
     private void bind(MotivoNoContinuidad motivo, PreparedStatement ps) throws SQLException {
         JdbcSupport.setTimestamp(ps, 1, motivo.getFechaHora());
-        ps.setString(2, motivo.getRazonPrincipal());
+        JdbcSupport.setEnum(ps, 2, motivo.getRazonPrincipal());
         ps.setString(3, motivo.getObservaciones());
         ps.setLong(4, motivo.getAgenteResponsable().getIdAgente());
-        JdbcSupport.setLong(ps, 5, JdbcSupport.getIdInteraccion(motivo.getInteraccionComercial()));
-        JdbcSupport.setLong(ps, 6, JdbcSupport.getIdVisita(motivo.getVisita()));
-        JdbcSupport.setLong(ps, 7, JdbcSupport.getIdSolicitud(motivo.getSolicitudAlquiler()));
+        ps.setLong(5, motivo.getOportunidadComercial().getIdOportunidad());
+        JdbcSupport.setLong(ps, 6, JdbcSupport.getIdInteraccion(motivo.getInteraccionComercial()));
+        JdbcSupport.setLong(ps, 7, JdbcSupport.getIdVisita(motivo.getVisita()));
+        JdbcSupport.setLong(ps, 8, JdbcSupport.getIdSolicitud(motivo.getSolicitudAlquiler()));
     }
 
     private MotivoNoContinuidad mapRow(ResultSet rs) throws SQLException {
         MotivoNoContinuidad motivo = new MotivoNoContinuidad();
         motivo.setIdMotivoNoContinuidad(rs.getLong("id_motivo_no_continuidad"));
         motivo.setFechaHora(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_hora")));
-        motivo.setRazonPrincipal(rs.getString("razon_principal"));
+        motivo.setRazonPrincipal(JdbcSupport.getEnum(rs, "razon_principal", MotivoNoContinuidadTipo.class));
         motivo.setObservaciones(rs.getString("observaciones"));
         motivo.setAgenteResponsable(JdbcSupport.agente(rs.getLong("id_agente")));
+        motivo.setOportunidadComercial(JdbcSupport.oportunidad(rs.getLong("id_oportunidad")));
         Long idInteraccion = rs.getObject("id_interaccion", Long.class);
         Long idVisita = rs.getObject("id_visita", Long.class);
         Long idSolicitud = rs.getObject("id_solicitud", Long.class);
@@ -150,17 +153,18 @@ public class MotivoNoContinuidadDAOImpl implements MotivoNoContinuidadDAO {
             JdbcSupport.validarId(motivo.getIdMotivoNoContinuidad());
         }
         motivo.validarReferenciaUnica();
-        if (motivo.getFechaHora() == null || motivo.getRazonPrincipal() == null
-                || motivo.getRazonPrincipal().isBlank()) {
+        if (motivo.getFechaHora() == null || motivo.getRazonPrincipal() == null) {
             throw new IllegalArgumentException("El motivo de no continuidad tiene campos obligatorios incompletos.");
         }
         JdbcSupport.validarId(JdbcSupport.getIdAgente(motivo.getAgenteResponsable()));
+        JdbcSupport.validarId(JdbcSupport.getIdOportunidad(motivo.getOportunidadComercial()));
         int referencias = 0;
         referencias += JdbcSupport.getIdInteraccion(motivo.getInteraccionComercial()) != null ? 1 : 0;
         referencias += JdbcSupport.getIdVisita(motivo.getVisita()) != null ? 1 : 0;
         referencias += JdbcSupport.getIdSolicitud(motivo.getSolicitudAlquiler()) != null ? 1 : 0;
-        if (referencias != 1) {
-            throw new IllegalArgumentException("Debe existir exactamente una referencia principal.");
+        if (referencias > 1) {
+            throw new IllegalArgumentException("Solo una referencia de origen puede estar presente.");
         }
     }
 }
+

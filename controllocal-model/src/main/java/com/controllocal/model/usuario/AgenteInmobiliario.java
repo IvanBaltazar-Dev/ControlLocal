@@ -5,9 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.comercial.InteraccionComercial;
-import com.controllocal.model.comercial.SolicitudAlquiler;
-import com.controllocal.model.comercial.Visita;
+import com.controllocal.model.usuario.enums.EstadoOperativoAgente;
 
 public class AgenteInmobiliario extends UsuarioInterno {
 
@@ -64,36 +62,5 @@ public class AgenteInmobiliario extends UsuarioInterno {
 
     public void setCaptacionesAsignadas(List<Captacion> captacionesAsignadas) {
         this.captacionesAsignadas = captacionesAsignadas;
-    }
-
-    public void registrarCaptacion(Captacion captacion) {
-        if (captacion == null) {
-            return;
-        }
-        captacion.setAgenteResponsable(this);
-        if (!captacionesAsignadas.contains(captacion)) {
-            captacionesAsignadas.add(captacion);
-        }
-    }
-
-    public void registrarInteraccion(InteraccionComercial interaccion) {
-        if (interaccion != null) {
-            interaccion.setAgenteResponsable(this);
-            interaccion.registrar();
-        }
-    }
-
-    public void programarVisita(Visita visita) {
-        if (visita != null) {
-            visita.setAgenteResponsable(this);
-            visita.programar();
-        }
-    }
-
-    public void registrarSolicitud(SolicitudAlquiler solicitud) {
-        if (solicitud != null) {
-            solicitud.setAgenteResponsable(this);
-            solicitud.registrar();
-        }
     }
 }

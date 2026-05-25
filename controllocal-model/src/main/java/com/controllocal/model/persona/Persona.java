@@ -2,11 +2,15 @@ package com.controllocal.model.persona;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
+import com.controllocal.model.persona.enums.TipoPersona;
+
 public class Persona {
 
     private Long idPersona;
     private TipoPersona tipoPersona;
-    private String tipoDocumento;
+    private TipoDocumentoIdentidad tipoDocumento;
     private String numeroDocumento;
     private String nombresORazonSocial;
     private String telefono;
@@ -31,11 +35,11 @@ public class Persona {
         this.tipoPersona = tipoPersona;
     }
 
-    public String getTipoDocumento() {
+    public TipoDocumentoIdentidad getTipoDocumento() {
         return tipoDocumento;
     }
 
-    public void setTipoDocumento(String tipoDocumento) {
+    public void setTipoDocumento(TipoDocumentoIdentidad tipoDocumento) {
         this.tipoDocumento = tipoDocumento;
     }
 

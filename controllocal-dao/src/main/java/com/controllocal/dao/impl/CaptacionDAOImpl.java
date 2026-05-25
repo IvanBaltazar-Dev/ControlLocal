@@ -1,14 +1,5 @@
 package com.controllocal.dao.impl;
 
-import com.controllocal.config.DBManager;
-import com.controllocal.dao.CaptacionDAO;
-import com.controllocal.dao.DAOException;
-import com.controllocal.model.comercial.Captacion;
-import com.controllocal.model.comercial.EstadoCaptacion;
-import com.controllocal.model.inmueble.LocalComercial;
-import com.controllocal.model.usuario.AgenteInmobiliario;
-import com.controllocal.model.usuario.Broker;
-
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -22,6 +13,15 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.CaptacionDAO;
+import com.controllocal.dao.DAOException;
+import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.enums.EstadoCaptacion;
+import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.usuario.AgenteInmobiliario;
+import com.controllocal.model.usuario.Broker;
 
 public class CaptacionDAOImpl implements CaptacionDAO {
 
@@ -60,7 +60,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
 
     private static final String DELETE_SQL = """
             UPDATE captacion
-            SET estado = 'CERRADA',
+            SET estado = 'C',
                 fecha_fin_vigencia = COALESCE(fecha_fin_vigencia, CURRENT_DATE),
                 fecha_revision = COALESCE(fecha_revision, CURRENT_TIMESTAMP)
             WHERE id_captacion = ?
@@ -69,47 +69,48 @@ public class CaptacionDAOImpl implements CaptacionDAO {
     @Override
     public Long crear(Captacion captacion) {
         validarCaptacionParaPersistencia(captacion, false);
-        Connection connection = null;
-        try {
-            connection = DBManager.getConnection();
-            try (PreparedStatement statement = connection.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
-                statement.setString(1, captacion.getCodigoCaptacion());
-                statement.setDate(2, Date.valueOf(captacion.getFechaCaptacion()));
-                setDate(statement, 3, captacion.getFechaInicioVigencia());
-                setDate(statement, 4, captacion.getFechaFinVigencia());
-                statement.setBigDecimal(5, captacion.getComisionPactada());
-                statement.setString(6, captacion.getObservaciones());
-                statement.setString(7, captacion.getEstado().name());
-                setTimestamp(statement, 8, captacion.getFechaRevision());
-                statement.setString(9, captacion.getObservacionRevision());
-                statement.setLong(10, captacion.getLocalComercial().getIdLocal());
-                statement.setLong(11, captacion.getAgenteResponsable().getIdAgente());
-                setLong(statement, 12, captacion.getBrokerRevisor() != null ? captacion.getBrokerRevisor().getIdBroker() : null);
-
-                if (statement.executeUpdate() == 0) {
-                    throw new DAOException("No se pudo insertar la captacion.");
-                }
-
-                try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
-                    if (generatedKeys.next()) {
-                        long idGenerado = generatedKeys.getLong(1);
-                        captacion.setIdCaptacion(idGenerado);
-                        return idGenerado;
-                    }
-                }
-                throw new DAOException("La insercion no devolvio el id generado.");
-            }
+        try (Connection connection = DBManager.getConnection()) {
+            return crear(captacion, connection);
         } catch (SQLException e) {
             throw new DAOException("Error al crear la captacion con codigo " + captacion.getCodigoCaptacion() + ".", e);
+        }
+    }
+
+    public Long crear(Captacion captacion, Connection connection) throws SQLException {
+        validarCaptacionParaPersistencia(captacion, false);
+        try (PreparedStatement statement = connection.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
+            statement.setString(1, captacion.getCodigoCaptacion());
+            statement.setDate(2, Date.valueOf(captacion.getFechaCaptacion()));
+            setDate(statement, 3, captacion.getFechaInicioVigencia());
+            setDate(statement, 4, captacion.getFechaFinVigencia());
+            statement.setBigDecimal(5, captacion.getComisionPactada());
+            statement.setString(6, captacion.getObservaciones());
+            JdbcSupport.setEnum(statement, 7, captacion.getEstado());
+            setTimestamp(statement, 8, captacion.getFechaRevision());
+            statement.setString(9, captacion.getObservacionRevision());
+            statement.setLong(10, captacion.getLocalComercial().getIdLocal());
+            statement.setLong(11, captacion.getAgenteResponsable().getIdAgente());
+            setLong(statement, 12, captacion.getBrokerRevisor() != null ? captacion.getBrokerRevisor().getIdBroker() : null);
+
+            if (statement.executeUpdate() == 0) {
+                throw new DAOException("No se pudo insertar la captacion.");
+            }
+
+            try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    long idGenerado = generatedKeys.getLong(1);
+                    captacion.setIdCaptacion(idGenerado);
+                    return idGenerado;
+                }
+            }
+            throw new DAOException("La insercion no devolvio el id generado.");
         }
     }
 
     @Override
     public Optional<Captacion> buscarPorId(Long id) {
         validarId(id);
-        Connection connection = null;
-        try {
-            connection = DBManager.getConnection();
+        try (Connection connection = DBManager.getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement(SELECT_BY_ID_SQL)) {
                 statement.setLong(1, id);
                 try (ResultSet resultSet = statement.executeQuery()) {
@@ -127,9 +128,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
     @Override
     public List<Captacion> listarTodos() {
         List<Captacion> captaciones = new ArrayList<>();
-        Connection connection = null;
-        try {
-            connection = DBManager.getConnection();
+        try (Connection connection = DBManager.getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement(SELECT_ALL_SQL);
                  ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
@@ -145,9 +144,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
     @Override
     public boolean actualizar(Captacion captacion) {
         validarCaptacionParaPersistencia(captacion, true);
-        Connection connection = null;
-        try {
-            connection = DBManager.getConnection();
+        try (Connection connection = DBManager.getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement(UPDATE_SQL)) {
                 statement.setString(1, captacion.getCodigoCaptacion());
                 statement.setDate(2, Date.valueOf(captacion.getFechaCaptacion()));
@@ -155,7 +152,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
                 setDate(statement, 4, captacion.getFechaFinVigencia());
                 statement.setBigDecimal(5, captacion.getComisionPactada());
                 statement.setString(6, captacion.getObservaciones());
-                statement.setString(7, captacion.getEstado().name());
+                JdbcSupport.setEnum(statement, 7, captacion.getEstado());
                 setTimestamp(statement, 8, captacion.getFechaRevision());
                 statement.setString(9, captacion.getObservacionRevision());
                 statement.setLong(10, captacion.getLocalComercial().getIdLocal());
@@ -173,9 +170,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
     @Override
     public boolean eliminar(Long id) {
         validarId(id);
-        Connection connection = null;
-        try {
-            connection = DBManager.getConnection();
+        try (Connection connection = DBManager.getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement(DELETE_SQL)) {
                 statement.setLong(1, id);
                 return statement.executeUpdate() > 0;
@@ -185,7 +180,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
         }
     }
 
-    // --- MÉTODOS PRIVADOS DE APOYO (MapRow, Validaciones, Setters) ---
+    // --- MÃƒâ€°TODOS PRIVADOS DE APOYO (MapRow, Validaciones, Setters) ---
 
     private Captacion mapRow(ResultSet rs) throws SQLException {
         LocalComercial local = new LocalComercial();
@@ -211,7 +206,7 @@ public class CaptacionDAOImpl implements CaptacionDAO {
 
         captacion.setComisionPactada(rs.getBigDecimal("comision_pactada"));
         captacion.setObservaciones(rs.getString("observaciones"));
-        captacion.setEstado(EstadoCaptacion.valueOf(rs.getString("estado")));
+        captacion.setEstado(JdbcSupport.getEnum(rs, "estado", EstadoCaptacion.class));
 
         Timestamp fRev = rs.getTimestamp("fecha_revision");
         if (fRev != null) captacion.setFechaRevision(fRev.toLocalDateTime());
@@ -254,3 +249,4 @@ public class CaptacionDAOImpl implements CaptacionDAO {
         else statement.setNull(parameterIndex, Types.BIGINT);
     }
 }
+

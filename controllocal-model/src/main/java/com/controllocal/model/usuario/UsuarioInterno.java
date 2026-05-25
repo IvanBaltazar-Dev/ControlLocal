@@ -2,9 +2,10 @@ package com.controllocal.model.usuario;
 
 import java.time.LocalDateTime;
 
-import com.controllocal.model.persona.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.TipoPersona;
 import com.controllocal.model.persona.Persona;
-import com.controllocal.model.persona.TipoPersona;
+import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 
 public class UsuarioInterno {
 

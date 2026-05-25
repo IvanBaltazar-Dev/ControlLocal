@@ -2,10 +2,14 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.comercial.enums.EstadoDocumentoSolicitud;
+import com.controllocal.model.comercial.enums.ResultadoRevisionDocumento;
+import com.controllocal.model.comercial.enums.TipoDocumentoSolicitud;
+
 public class DocumentoSolicitud {
 
     private Long idDocumento;
-    private String tipoDocumento;
+    private TipoDocumentoSolicitud tipoDocumento;
     private String nombreArchivo;
     private String rutaArchivo;
     private LocalDateTime fechaEntrega;
@@ -16,8 +20,8 @@ public class DocumentoSolicitud {
 
     public Long getIdDocumento() { return idDocumento; }
     public void setIdDocumento(Long idDocumento) { this.idDocumento = idDocumento; }
-    public String getTipoDocumento() { return tipoDocumento; }
-    public void setTipoDocumento(String tipoDocumento) { this.tipoDocumento = tipoDocumento; }
+    public TipoDocumentoSolicitud getTipoDocumento() { return tipoDocumento; }
+    public void setTipoDocumento(TipoDocumentoSolicitud tipoDocumento) { this.tipoDocumento = tipoDocumento; }
     public String getNombreArchivo() { return nombreArchivo; }
     public void setNombreArchivo(String nombreArchivo) { this.nombreArchivo = nombreArchivo; }
     public String getRutaArchivo() { return rutaArchivo; }

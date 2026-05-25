@@ -106,7 +106,40 @@ CREATE TABLE agente_inmobiliario (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 5) Tabla de propietarios
+-- 5) Tabla de asignacion broker-agente
+-- Define que agentes supervisa cada broker normal.
+-- Un agente solo puede tener un broker supervisor activo.
+-- La asignacion nace al registrar un agente propio y puede cambiar por intervencion administrativa.
+-- El broker administrador conserva visibilidad global por regla de negocio.
+-- =========================================================
+CREATE TABLE broker_agente (
+    id_broker_agente BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_broker BIGINT NOT NULL,
+    id_agente BIGINT NOT NULL,
+    fecha_asignacion DATE NOT NULL,
+    fecha_fin DATE NULL,
+    estado CHAR(1) NOT NULL,
+    id_agente_activo BIGINT GENERATED ALWAYS AS (
+        CASE
+            WHEN estado = 'A' THEN id_agente
+            ELSE NULL
+        END
+    ) STORED,
+    CONSTRAINT fk_broker_agente_broker
+        FOREIGN KEY (id_broker) REFERENCES broker(id_broker),
+    CONSTRAINT fk_broker_agente_agente
+        FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    CONSTRAINT ck_broker_agente_estado CHECK (
+        estado IN ('A', 'I')
+    ),
+    CONSTRAINT ck_broker_agente_fechas CHECK (
+        fecha_fin IS NULL OR fecha_fin >= fecha_asignacion
+    ),
+    CONSTRAINT uq_broker_agente_activo UNIQUE (id_agente_activo)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 6) Tabla de propietarios
 -- Un propietario es una persona vinculada al negocio inmobiliario.
 -- =========================================================
 CREATE TABLE propietario (
@@ -117,7 +150,7 @@ CREATE TABLE propietario (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 6) Tabla de locales comerciales
+-- 7) Tabla de locales comerciales
 -- Cada local pertenece a un propietario.
 -- =========================================================
 CREATE TABLE local_comercial (
@@ -147,8 +180,10 @@ CREATE TABLE local_comercial (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 7) Tabla de captaciones
--- Relaciona local comercial, agente inmobiliario y broker.
+-- 8) Tabla de captaciones
+-- Relaciona local comercial y agente inmobiliario.
+-- El broker revisor se registra cuando revisa la captacion.
+-- El alcance de brokers normales se determina con broker_agente.
 -- =========================================================
 CREATE TABLE captacion (
     id_captacion BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -193,7 +228,7 @@ CREATE TABLE captacion (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 8) Tabla de clientes interesados
+-- 9) Tabla de clientes interesados
 -- Un cliente interesado es una persona vinculada al proceso comercial.
 -- =========================================================
 CREATE TABLE cliente_interesado (
@@ -205,7 +240,7 @@ CREATE TABLE cliente_interesado (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 9) Tabla de oportunidades comerciales
+-- 10) Tabla de oportunidades comerciales
 -- Nace cuando un cliente interesado se asocia a una captacion activa.
 -- Permite trazabilidad aunque nunca se genere una solicitud formal.
 -- =========================================================
@@ -242,7 +277,7 @@ CREATE TABLE oportunidad_comercial (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 10) Tabla de interacciones comerciales
+-- 11) Tabla de interacciones comerciales
 -- Se relaciona con oportunidad y agente que realiza la interaccion.
 -- =========================================================
 CREATE TABLE interaccion_comercial (
@@ -267,7 +302,7 @@ CREATE TABLE interaccion_comercial (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 11) Tabla de visitas
+-- 12) Tabla de visitas
 -- Se relaciona con oportunidad y agente que ejecuta la visita.
 -- =========================================================
 CREATE TABLE visita (
@@ -291,7 +326,7 @@ CREATE TABLE visita (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 12) Tabla de solicitudes de alquiler
+-- 13) Tabla de solicitudes de alquiler
 -- Formaliza una oportunidad comercial.
 -- =========================================================
 CREATE TABLE solicitud_alquiler (
@@ -320,7 +355,7 @@ CREATE TABLE solicitud_alquiler (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 13) Tabla de documentos de solicitud
+-- 14) Tabla de documentos de solicitud
 -- Cada documento pertenece a una solicitud.
 -- =========================================================
 CREATE TABLE documento_solicitud (
@@ -349,7 +384,7 @@ CREATE TABLE documento_solicitud (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 14) Tabla de evaluación de solicitudes
+-- 15) Tabla de evaluación de solicitudes
 -- Conserva el historial de evaluaciones de una solicitud.
 -- =========================================================
 CREATE TABLE evaluacion_solicitud (
@@ -380,7 +415,7 @@ CREATE TABLE evaluacion_solicitud (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 15) Tabla de reasignacion de captaciones
+-- 16) Tabla de reasignacion de captaciones
 -- Guarda el historial de reasignación de una captación.
 -- =========================================================
 CREATE TABLE reasignacion_captacion (
@@ -406,7 +441,7 @@ CREATE TABLE reasignacion_captacion (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 16) Tabla de motivos de no continuidad
+-- 17) Tabla de motivos de no continuidad
 -- Cierra la oportunidad cuando el cliente no continua.
 -- Opcionalmente indica si el origen fue una interaccion, visita o solicitud.
 -- =========================================================
@@ -444,7 +479,7 @@ CREATE TABLE motivo_no_continuidad (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 17) Indices de apoyo
+-- 18) Indices de apoyo
 -- Mejoran el rendimiento de búsqueda y relación.
 -- =========================================================
 
@@ -459,6 +494,10 @@ CREATE INDEX idx_broker_usuario ON broker(id_usuario);
 
 CREATE INDEX idx_agente_usuario ON agente_inmobiliario(id_usuario);
 CREATE INDEX idx_agente_estado_operativo ON agente_inmobiliario(estado_operativo);
+
+CREATE INDEX idx_broker_agente_broker ON broker_agente(id_broker);
+CREATE INDEX idx_broker_agente_agente ON broker_agente(id_agente);
+CREATE INDEX idx_broker_agente_estado ON broker_agente(estado);
 
 CREATE INDEX idx_propietario_persona ON propietario(id_persona);
 

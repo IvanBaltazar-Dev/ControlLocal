@@ -10,9 +10,11 @@ import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.bl.support.BusinessValidations;
 import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
+import com.controllocal.dao.BrokerAgenteDAO;
 import com.controllocal.dao.BrokerDAO;
 import com.controllocal.dao.CaptacionDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
+import com.controllocal.dao.impl.BrokerAgenteDAOImpl;
 import com.controllocal.dao.impl.BrokerDAOImpl;
 import com.controllocal.dao.impl.CaptacionDAOImpl;
 import com.controllocal.dao.impl.ReasignacionCaptacionDAOImpl;
@@ -29,9 +31,10 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
     private final AgenteInmobiliarioDAO agenteDAO;
     private final ReasignacionCaptacionDAO reasignacionDAO;
     private final BrokerDAO brokerDAO;
+    private final BrokerAgenteDAO brokerAgenteDAO;
 
     public CaptacionBusinessLogicImpl() {
-        this(new CaptacionDAOImpl(), new AgenteInmobiliarioDAOImpl(), new ReasignacionCaptacionDAOImpl(), new BrokerDAOImpl());
+        this(new CaptacionDAOImpl(), new AgenteInmobiliarioDAOImpl(), new ReasignacionCaptacionDAOImpl(), new BrokerDAOImpl(), new BrokerAgenteDAOImpl());
     }
 
     public CaptacionBusinessLogicImpl(
@@ -40,10 +43,21 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
             ReasignacionCaptacionDAO reasignacionDAO,
             BrokerDAO brokerDAO
     ) {
+        this(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO, new BrokerAgenteDAOImpl());
+    }
+
+    public CaptacionBusinessLogicImpl(
+            CaptacionDAO captacionDAO,
+            AgenteInmobiliarioDAO agenteDAO,
+            ReasignacionCaptacionDAO reasignacionDAO,
+            BrokerDAO brokerDAO,
+            BrokerAgenteDAO brokerAgenteDAO
+    ) {
         this.captacionDAO = captacionDAO;
         this.agenteDAO = agenteDAO;
         this.reasignacionDAO = reasignacionDAO;
         this.brokerDAO = brokerDAO;
+        this.brokerAgenteDAO = brokerAgenteDAO;
     }
 
     public Long registrar(Captacion captacion) {
@@ -85,6 +99,7 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         TransactionRunner.write(conn -> {
             Broker broker = validarBroker(idBroker);
             Captacion captacion = buscarCaptacionObligatoria(idCaptacion);
+            validarAlcanceBrokerSobreCaptacion(broker, captacion);
             validarCaptacionPendienteRevision(captacion);
             if (estadoRevision == EstadoCaptacion.ACTIVA) {
                 validarUnicaCaptacionActivaPorLocal(BusinessValidations.idLocal(captacion));
@@ -109,8 +124,10 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         TransactionRunner.write(conn -> {
             Broker broker = validarBroker(idBroker);
             Captacion captacion = buscarCaptacionObligatoria(idCaptacion);
+            validarAlcanceBrokerSobreCaptacion(broker, captacion);
             BusinessValidations.texto(motivo, "El motivo de reasignacion");
             AgenteInmobiliario agenteNuevo = validarAgenteDisponible(idAgenteNuevo);
+            validarAlcanceBrokerSobreAgente(broker, idAgenteNuevo);
             AgenteInmobiliario agenteAnterior = captacion.getAgenteResponsable();
             Long idAgenteAnterior = BusinessValidations.idAgente(agenteAnterior);
             BusinessValidations.id(idAgenteAnterior, "El agente anterior");
@@ -134,9 +151,10 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
 
     public void cerrarCaptacion(Long idCaptacion, Long idBroker, String motivo) {
         TransactionRunner.write(conn -> {
-            validarBroker(idBroker);
+            Broker broker = validarBroker(idBroker);
             BusinessValidations.texto(motivo, "El motivo de cierre");
             Captacion captacion = buscarCaptacionObligatoria(idCaptacion);
+            validarAlcanceBrokerSobreCaptacion(broker, captacion);
             validarCaptacionActiva(captacion);
             captacion.setObservacionRevision(motivo);
             captacion.cerrar();
@@ -164,8 +182,35 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
     }
 
     @Override
+    public List<Captacion> listarPorBroker(Long idBroker) {
+        Broker broker = validarBroker(idBroker);
+        if (broker.isEsAdministrador()) {
+            return captacionDAO.listarTodos();
+        }
+        return captacionDAO.listarTodos().stream()
+                .filter(captacion -> brokerPuedeSupervisarCaptacion(broker, captacion))
+                .toList();
+    }
+
+    @Override
+    public List<Captacion> listarPorAgente(Long idAgente) {
+        BusinessValidations.id(idAgente, "El id de agente");
+        return captacionDAO.listarTodos().stream()
+                .filter(captacion -> idAgente.equals(BusinessValidations.idAgente(captacion.getAgenteResponsable())))
+                .toList();
+    }
+
+    @Override
     public List<Captacion> listPendingReviews() {
         return captacionDAO.listarTodos().stream()
+                .filter(captacion -> captacion.getEstado() == EstadoCaptacion.PENDIENTE_REVISION
+                        || captacion.getEstado() == EstadoCaptacion.OBSERVADA)
+                .toList();
+    }
+
+    @Override
+    public List<Captacion> listPendingReviews(Long idBroker) {
+        return listarPorBroker(idBroker).stream()
                 .filter(captacion -> captacion.getEstado() == EstadoCaptacion.PENDIENTE_REVISION
                         || captacion.getEstado() == EstadoCaptacion.OBSERVADA)
                 .toList();
@@ -220,10 +265,28 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         }
     }
 
+    private void validarAlcanceBrokerSobreCaptacion(Broker broker, Captacion captacion) {
+        validarAlcanceBrokerSobreAgente(broker, BusinessValidations.idAgente(captacion.getAgenteResponsable()));
+    }
+
+    private void validarAlcanceBrokerSobreAgente(Broker broker, Long idAgente) {
+        BusinessValidations.id(idAgente, "El id de agente");
+        if (broker.isEsAdministrador()) {
+            return;
+        }
+        if (!brokerAgenteDAO.existeAsignacionActiva(broker.getIdBroker(), idAgente)) {
+            throw new BusinessException("El broker no supervisa al agente responsable de esta operacion.");
+        }
+    }
+
+    private boolean brokerPuedeSupervisarCaptacion(Broker broker, Captacion captacion) {
+        Long idAgente = BusinessValidations.idAgente(captacion.getAgenteResponsable());
+        return idAgente != null && brokerAgenteDAO.existeAsignacionActiva(broker.getIdBroker(), idAgente);
+    }
+
     private Captacion buscarCaptacionObligatoria(Long idCaptacion) {
         BusinessValidations.id(idCaptacion, "El id de captacion");
         return captacionDAO.buscarPorId(idCaptacion)
                 .orElseThrow(() -> new BusinessException("Captacion no encontrada."));
     }
 }
-

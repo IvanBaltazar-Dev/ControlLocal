@@ -13,6 +13,7 @@ public interface EvaluacionSolicitudBusinessLogic {
     public Long registrar(EvaluacionSolicitud evaluacion);
     public Optional<EvaluacionSolicitud> buscarPorId(Long idEvaluacion);
     public List<EvaluacionSolicitud> listarTodos();
+    public List<EvaluacionSolicitud> listarPorBroker(Long idBroker);
     public boolean actualizar(EvaluacionSolicitud evaluacion);
     public boolean eliminar(Long idEvaluacion);
 }

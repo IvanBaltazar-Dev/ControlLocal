@@ -124,6 +124,24 @@ public final class BusinessValidations {
         }
     }
 
+    public static void brokerAgente(BrokerAgente brokerAgente) {
+        if (brokerAgente == null) {
+            throw new BusinessException("La asignacion broker-agente es obligatoria.");
+        }
+        id(idBroker(brokerAgente.getBroker()), "El broker supervisor");
+        id(idAgente(brokerAgente.getAgente()), "El agente supervisado");
+        if (brokerAgente.getFechaAsignacion() == null) {
+            throw new BusinessException("La fecha de asignacion broker-agente es obligatoria.");
+        }
+        if (brokerAgente.getFechaFin() != null
+                && brokerAgente.getFechaFin().isBefore(brokerAgente.getFechaAsignacion())) {
+            throw new BusinessException("La fecha de fin no puede ser anterior a la fecha de asignacion.");
+        }
+        if (brokerAgente.getEstado() == null) {
+            throw new BusinessException("El estado de asignacion broker-agente es obligatorio.");
+        }
+    }
+
     public static void propietario(Propietario propietario) {
         if (propietario == null || propietario.getPersona() == null) {
             throw new BusinessException("El propietario debe estar asociado a una persona.");

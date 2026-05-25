@@ -8,14 +8,17 @@ import com.controllocal.bl.BusinessException;
 import com.controllocal.bl.EvaluacionSolicitudBusinessLogic;
 import com.controllocal.bl.support.BusinessValidations;
 import com.controllocal.bl.support.TransactionRunner;
+import com.controllocal.dao.BrokerAgenteDAO;
 import com.controllocal.dao.BrokerDAO;
 import com.controllocal.dao.EvaluacionSolicitudDAO;
+import com.controllocal.dao.impl.BrokerAgenteDAOImpl;
 import com.controllocal.dao.impl.BrokerDAOImpl;
 import com.controllocal.dao.impl.EvaluacionSolicitudDAOImpl;
 import com.controllocal.dao.impl.SolicitudAlquilerDAOImpl;
 import com.controllocal.dao.SolicitudAlquilerDAO;
 import com.controllocal.model.comercial.enums.TipoEvaluacionSolicitud;
 import com.controllocal.model.comercial.EvaluacionSolicitud;
+import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.usuario.Broker;
 
 public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitudBusinessLogic {
@@ -23,9 +26,10 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
     private final EvaluacionSolicitudDAO evaluacionDAO;
     private final SolicitudAlquilerDAO solicitudDAO;
     private final BrokerDAO brokerDAO;
+    private final BrokerAgenteDAO brokerAgenteDAO;
 
     public EvaluacionSolicitudBusinessLogicImpl() {
-        this(new EvaluacionSolicitudDAOImpl(), new SolicitudAlquilerDAOImpl(), new BrokerDAOImpl());
+        this(new EvaluacionSolicitudDAOImpl(), new SolicitudAlquilerDAOImpl(), new BrokerDAOImpl(), new BrokerAgenteDAOImpl());
     }
 
     public EvaluacionSolicitudBusinessLogicImpl(
@@ -33,19 +37,30 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
             SolicitudAlquilerDAO solicitudDAO,
             BrokerDAO brokerDAO
     ) {
+        this(evaluacionDAO, solicitudDAO, brokerDAO, new BrokerAgenteDAOImpl());
+    }
+
+    public EvaluacionSolicitudBusinessLogicImpl(
+            EvaluacionSolicitudDAO evaluacionDAO,
+            SolicitudAlquilerDAO solicitudDAO,
+            BrokerDAO brokerDAO,
+            BrokerAgenteDAO brokerAgenteDAO
+    ) {
         this.evaluacionDAO = evaluacionDAO;
         this.solicitudDAO = solicitudDAO;
         this.brokerDAO = brokerDAO;
+        this.brokerAgenteDAO = brokerAgenteDAO;
     }
 
     public Long registrar(EvaluacionSolicitud evaluacion) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.evaluacion(evaluacion);
-            solicitudDAO.buscarPorId(BusinessValidations.idSolicitud(evaluacion.getSolicitudAlquiler()))
+            SolicitudAlquiler solicitud = solicitudDAO.buscarPorId(BusinessValidations.idSolicitud(evaluacion.getSolicitudAlquiler()))
                     .orElseThrow(() -> new BusinessException("Solicitud no encontrada para evaluacion."));
             Broker broker = brokerDAO.buscarPorId(BusinessValidations.idBroker(evaluacion.getResponsableEvaluacion()))
                     .orElseThrow(() -> new BusinessException("Broker responsable no encontrado."));
             BusinessValidations.brokerValido(broker);
+            validarAlcanceBrokerSobreSolicitud(broker, solicitud);
             validarUnicaEvaluacionFinal(evaluacion);
             if (evaluacion.getFechaEvaluacion() == null) {
                 evaluacion.setFechaEvaluacion(LocalDateTime.now());
@@ -61,6 +76,18 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
 
     public List<EvaluacionSolicitud> listarTodos() {
         return evaluacionDAO.listarTodos();
+    }
+
+    public List<EvaluacionSolicitud> listarPorBroker(Long idBroker) {
+        Broker broker = brokerDAO.buscarPorId(idBroker)
+                .orElseThrow(() -> new BusinessException("Broker no encontrado."));
+        BusinessValidations.brokerValido(broker);
+        if (broker.isEsAdministrador()) {
+            return evaluacionDAO.listarTodos();
+        }
+        return evaluacionDAO.listarTodos().stream()
+                .filter(evaluacion -> idBroker.equals(BusinessValidations.idBroker(evaluacion.getResponsableEvaluacion())))
+                .toList();
     }
 
     public boolean actualizar(EvaluacionSolicitud evaluacion) {
@@ -94,5 +121,15 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
             throw new BusinessException("Solo puede existir una evaluacion final por solicitud.");
         }
     }
-}
 
+    private void validarAlcanceBrokerSobreSolicitud(Broker broker, SolicitudAlquiler solicitud) {
+        Long idAgente = BusinessValidations.idAgente(solicitud.getAgenteResponsable());
+        BusinessValidations.id(idAgente, "El agente responsable de la solicitud");
+        if (broker.isEsAdministrador()) {
+            return;
+        }
+        if (!brokerAgenteDAO.existeAsignacionActiva(broker.getIdBroker(), idAgente)) {
+            throw new BusinessException("El broker no supervisa al agente responsable de esta solicitud.");
+        }
+    }
+}

@@ -33,15 +33,20 @@ Debe integrarse en todos los wireframes en estos puntos:
 ### Autenticacion
 
 - Login.
-- Registro de usuario interno mediante modal.
-- Recuperar contrasena.
-- Mantener sesion activa.
 - Cerrar sesion.
+- Cambio de contrasena desde perfil, como mejora posterior.
+- Mantener sesion activa, como mejora futura cuando exista autenticacion web.
+
+No es obligatorio incluir "Recuperar contrasena" en el MVP porque ControlLocal
+es un sistema interno y los usuarios internos son administrados por el broker
+administrador. Para la primera version, la recuperacion puede resolverse como
+restablecimiento de contrasena desde Gestion de usuarios internos.
 
 ### Panel Broker
 
 - Dashboard de supervision.
-- Bandeja de captaciones pendientes de revision.
+- Registro y administracion de sus agentes inmobiliarios, si es broker normal.
+- Bandeja de captaciones pendientes de revision segun alcance.
 - Detalle de captacion.
 - Aprobar captacion.
 - Observar captacion.
@@ -49,7 +54,8 @@ Debe integrarse en todos los wireframes en estos puntos:
 - Reasignar captacion a otro agente.
 - Cerrar captacion activa.
 - Evaluar solicitud de alquiler.
-- Gestion de usuarios internos, si el broker es administrador.
+- Gestion de brokers normales, solo si es broker administrador.
+- Reasignacion o intervencion de agentes entre brokers, solo si es broker administrador.
 - Reportes y trazabilidad.
 
 ### Panel Agente Inmobiliario
@@ -102,10 +108,11 @@ Usar pantalla completa o pagina dedicada para:
 
 | Modulo / accion | Broker administrador | Broker no administrador | Agente inmobiliario |
 | --- | --- | --- | --- |
-| Ver dashboard de supervision | Si | Si | No |
+| Ver dashboard de supervision | Si, global | Si, solo agentes supervisados | No |
 | Registrar usuarios internos | Si | No | No |
 | Registrar brokers | Si | No | No |
-| Registrar agentes | Si | No | No |
+| Registrar agentes | No, salvo intervencion administrativa | Si, agentes propios | No |
+| Asignar o reasignar agentes entre brokers | Si | No | No |
 | Registrar propietarios | No | No | Si |
 | Registrar locales comerciales | No | No | Si |
 | Registrar captaciones | No | No | Si |
@@ -116,15 +123,16 @@ Usar pantalla completa o pagina dedicada para:
 | Programar visitas | No | No | Si |
 | Registrar solicitud de alquiler | No | No | Si |
 | Cargar documentos de solicitud | No | No | Si |
-| Revisar captaciones | Si | Si | No |
-| Aprobar / observar / rechazar captaciones | Si | Si | No |
-| Reasignar captaciones | Si | Si | No |
-| Cerrar captaciones | Si | Si | No |
-| Evaluar solicitudes | Si | Si | No |
-| Ver reportes globales | Si | Si | No |
+| Revisar captaciones | Si, global | Si, solo agentes supervisados | No |
+| Aprobar / observar / rechazar captaciones | Si, global | Si, solo agentes supervisados | No |
+| Reasignar captaciones | Si, global | Si, solo agentes supervisados | No |
+| Cerrar captaciones | Si, global | Si, solo agentes supervisados | No |
+| Evaluar solicitudes | Si, global | Si, solo agentes supervisados | No |
+| Ver reportes globales | Si | No | No |
+| Ver reportes de equipo | Si | Si, solo agentes supervisados | No |
 | Ver reportes propios | No | No | Si |
 
-Regla clave: el broker administrador administra usuarios y supervisa el proceso, pero no debe registrar captaciones, locales ni clientes. Esas operaciones pertenecen al agente inmobiliario.
+Regla clave: el broker administrador administra brokers, audita el proceso global y puede intervenir reasignando agentes cuando sea necesario, pero no debe registrar captaciones, locales ni clientes. El broker normal registra y administra sus propios agentes inmobiliarios; desde esa alta se crea la supervision activa en `broker_agente`. El broker normal solo puede revisar, reasignar, cerrar y evaluar operaciones de los agentes bajo su responsabilidad. Las operaciones comerciales de registro pertenecen al agente inmobiliario.
 
 ## Vinculaciones correctas del flujo
 
@@ -133,7 +141,7 @@ El flujo objetivo debe quedar asi:
 1. Agente registra propietario.
 2. Agente registra local comercial vinculado al propietario.
 3. Agente registra captacion vinculada al local y al agente responsable.
-4. Broker revisa captacion.
+4. Broker administrador o broker supervisor del agente revisa captacion.
 5. Si el broker observa, el agente corrige y reenvia.
 6. Si el broker rechaza, la captacion termina.
 7. Si el broker aprueba, la captacion queda activa.
@@ -142,7 +150,7 @@ El flujo objetivo debe quedar asi:
 10. Agente registra interacciones y visitas sobre la oportunidad.
 11. Si el cliente continua, agente registra solicitud de alquiler.
 12. Agente carga documentos.
-13. Broker evalua solicitud.
+13. Broker administrador o broker supervisor del agente evalua solicitud.
 14. Si el cliente no continua, agente registra motivo de no continuidad y se cierra la oportunidad.
 
 ## Mantener sesion activa
@@ -154,12 +162,13 @@ Para soportarlo se necesita agregar:
 - Endpoint de login.
 - Hash real de contrasenas.
 - Sesion HTTP o token JWT.
-- Opcion `rememberMe`.
+- Opcion `rememberMe`, solo si se decide implementar "mantener sesion activa".
 - Cookie persistente segura o refresh token.
 - Fecha de expiracion.
 - Endpoint de logout.
 - Invalidacion de sesion/token.
 - Middleware o filtro que valide permisos por rol en cada endpoint.
+- Restablecimiento de contrasena administrado por broker administrador, antes que recuperacion publica por correo.
 
 ### Recomendacion tecnica
 
@@ -181,5 +190,6 @@ Reglas minimas:
 - Agregar logo en login y layout interno.
 - Cambiar formularios largos a pantallas dedicadas.
 - Usar modales solo para acciones breves o confirmaciones.
-- Agregar checkbox "Mantener sesion activa" en login, marcado por defecto en falso.
+- No agregar checkbox "Mantener sesion activa" al MVP; queda como mejora futura.
 - Agregar vista de perfil con accion "Cerrar sesion en este dispositivo".
+- No agregar "Recuperar contrasena" como flujo publico en el MVP; usar restablecimiento por broker administrador.

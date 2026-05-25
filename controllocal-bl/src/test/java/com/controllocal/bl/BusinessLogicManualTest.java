@@ -9,6 +9,7 @@ import java.util.*;
 
 import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
+import com.controllocal.bl.impl.AgenteBusinessLogicImpl;
 import com.controllocal.bl.impl.SolicitudAlquilerBusinessLogicImpl;
 import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.config.DatabaseConfig;
@@ -33,6 +34,10 @@ public class BusinessLogicManualTest {
         runner.ejecutar("Broker aprueba captacion", runner::brokerApruebaCaptacionYCambiaEstadoActiva);
         runner.ejecutar("Broker rechaza captacion", runner::brokerRechazaCaptacionYCambiaEstadoRechazada);
         runner.ejecutar("No broker no revisa captaciones", runner::noPermiteQueNoBrokerReviseCaptaciones);
+        runner.ejecutar("Broker normal no revisa captacion fuera de supervision", runner::brokerNormalNoRevisaCaptacionFueraDeSupervision);
+        runner.ejecutar("Broker normal revisa captacion de agente supervisado", runner::brokerNormalRevisaCaptacionDeAgenteSupervisado);
+        runner.ejecutar("Broker normal registra agente propio", runner::brokerNormalRegistraAgentePropio);
+        runner.ejecutar("Broker administrador no registra agente operativo", runner::brokerAdministradorNoRegistraAgenteOperativo);
         runner.ejecutar("Reasignar captacion con historial", runner::reasignaCaptacionRegistrandoHistorial);
         runner.ejecutar("No reasignar a agente no disponible", runner::noPermiteReasignacionSiNuevoAgenteNoDisponible);
         runner.ejecutar("Solo administrador registra brokers", runner::soloBrokerAdministradorPuedeRegistrarBrokers);
@@ -107,6 +112,50 @@ public class BusinessLogicManualTest {
 
         assertThrows(BusinessException.class,
                 () -> fx.captaciones.aprobarCaptacion(captacion.getIdCaptacion(), 999L, "Intento invalido"));
+    }
+
+    public void brokerNormalNoRevisaCaptacionFueraDeSupervision() {
+        Fixtures fx = new Fixtures();
+        Captacion captacion = fx.guardarCaptacion(EstadoCaptacion.PENDIENTE_REVISION);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> fx.captaciones.aprobarCaptacion(captacion.getIdCaptacion(), fx.brokerNoAdmin.getIdBroker(), "Intento fuera de alcance"));
+
+        assertTrue(ex.getMessage().contains("no supervisa"));
+    }
+
+    public void brokerNormalRevisaCaptacionDeAgenteSupervisado() {
+        Fixtures fx = new Fixtures();
+        fx.asignar(fx.brokerNoAdmin, fx.agente);
+        Captacion captacion = fx.guardarCaptacion(EstadoCaptacion.PENDIENTE_REVISION);
+
+        fx.captaciones.aprobarCaptacion(captacion.getIdCaptacion(), fx.brokerNoAdmin.getIdBroker(), "Aprobada por supervisor");
+
+        assertEquals(EstadoCaptacion.ACTIVA, fx.captacionDAO.items.get(captacion.getIdCaptacion()).getEstado());
+        assertEquals(fx.brokerNoAdmin.getIdBroker(), fx.captacionDAO.items.get(captacion.getIdCaptacion()).getBrokerRevisor().getIdBroker());
+        assertEquals(1, fx.captaciones.listarPorBroker(fx.brokerNoAdmin.getIdBroker()).size());
+    }
+
+    public void brokerNormalRegistraAgentePropio() {
+        Fixtures fx = new Fixtures();
+        AgenteInmobiliario nuevoAgente = fx.agente(3L, EstadoOperativoAgente.DISPONIBLE);
+
+        Long idAgente = fx.agentes.registrar(fx.brokerNoAdmin.getIdBroker(), nuevoAgente);
+
+        assertEquals(Long.valueOf(3L), idAgente);
+        assertTrue(fx.brokerAgenteDAO.existeAsignacionActiva(fx.brokerNoAdmin.getIdBroker(), idAgente));
+        assertEquals(1, fx.agentes.listarPorBroker(fx.brokerNoAdmin.getIdBroker()).size());
+    }
+
+    public void brokerAdministradorNoRegistraAgenteOperativo() {
+        Fixtures fx = new Fixtures();
+        AgenteInmobiliario nuevoAgente = fx.agente(3L, EstadoOperativoAgente.DISPONIBLE);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> fx.agentes.registrar(fx.broker.getIdBroker(), nuevoAgente));
+
+        assertTrue(ex.getMessage().contains("administrador no registra agentes"));
+        assertFalse(fx.brokerAgenteDAO.existeAsignacionActiva(fx.broker.getIdBroker(), nuevoAgente.getIdAgente()));
     }
 
     public void reasignaCaptacionRegistrandoHistorial() {
@@ -232,11 +281,13 @@ public class BusinessLogicManualTest {
         final InMemoryCaptacionDAO captacionDAO = new InMemoryCaptacionDAO();
         final InMemoryAgenteDAO agenteDAO = new InMemoryAgenteDAO();
         final InMemoryBrokerDAO brokerDAO = new InMemoryBrokerDAO();
+        final InMemoryBrokerAgenteDAO brokerAgenteDAO = new InMemoryBrokerAgenteDAO();
         final InMemoryReasignacionDAO reasignacionDAO = new InMemoryReasignacionDAO();
         final InMemorySolicitudDAO solicitudDAO = new InMemorySolicitudDAO();
         final InMemoryOportunidadDAO oportunidadDAO = new InMemoryOportunidadDAO();
-        final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO);
-        final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl(brokerDAO);
+        final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO, brokerAgenteDAO);
+        final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl(brokerDAO, agenteDAO, brokerAgenteDAO);
+        final AgenteBusinessLogic agentes = new AgenteBusinessLogicImpl(agenteDAO, brokerDAO, brokerAgenteDAO);
         final SolicitudAlquilerBusinessLogic solicitudes = new SolicitudAlquilerBusinessLogicImpl(solicitudDAO, captacionDAO, oportunidadDAO, agenteDAO);
         final AgenteInmobiliario agente = agente(1L, EstadoOperativoAgente.DISPONIBLE);
         final AgenteInmobiliario agenteNuevo = agente(2L, EstadoOperativoAgente.DISPONIBLE);
@@ -248,6 +299,16 @@ public class BusinessLogicManualTest {
             agenteDAO.items.put(agenteNuevo.getIdAgente(), agenteNuevo);
             brokerDAO.items.put(broker.getIdBroker(), broker);
             brokerDAO.items.put(brokerNoAdmin.getIdBroker(), brokerNoAdmin);
+        }
+
+        BrokerAgente asignar(Broker broker, AgenteInmobiliario agente) {
+            BrokerAgente brokerAgente = new BrokerAgente();
+            brokerAgente.setBroker(broker);
+            brokerAgente.setAgente(agente);
+            brokerAgente.setFechaAsignacion(LocalDate.now());
+            brokerAgente.setEstado(EstadoActivoInactivo.ACTIVO);
+            brokerAgenteDAO.crear(brokerAgente);
+            return brokerAgente;
         }
 
         Captacion captacionNueva() {
@@ -370,6 +431,60 @@ public class BusinessLogicManualTest {
         public List<Broker> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(Broker broker) { items.put(broker.getIdBroker(), broker); return true; }
         public boolean eliminar(Long id) { return items.remove(id) != null; }
+    }
+
+    private static class InMemoryBrokerAgenteDAO implements BrokerAgenteDAO {
+        final Map<Long, BrokerAgente> items = new LinkedHashMap<>();
+        long sequence = 1;
+
+        public Long crear(BrokerAgente brokerAgente) {
+            brokerAgente.setIdBrokerAgente(sequence++);
+            items.put(brokerAgente.getIdBrokerAgente(), brokerAgente);
+            return brokerAgente.getIdBrokerAgente();
+        }
+
+        public Optional<BrokerAgente> buscarPorId(Long id) {
+            return Optional.ofNullable(items.get(id));
+        }
+
+        public List<BrokerAgente> listarTodos() {
+            return new ArrayList<>(items.values());
+        }
+
+        public List<BrokerAgente> listarActivosPorBroker(Long idBroker) {
+            return items.values().stream()
+                    .filter(item -> item.getEstado() == EstadoActivoInactivo.ACTIVO)
+                    .filter(item -> idBroker.equals(item.getIdBroker()))
+                    .toList();
+        }
+
+        public Optional<BrokerAgente> buscarActivoPorAgente(Long idAgente) {
+            return items.values().stream()
+                    .filter(item -> item.getEstado() == EstadoActivoInactivo.ACTIVO)
+                    .filter(item -> idAgente.equals(item.getIdAgente()))
+                    .findFirst();
+        }
+
+        public boolean existeAsignacionActiva(Long idBroker, Long idAgente) {
+            return items.values().stream()
+                    .filter(item -> item.getEstado() == EstadoActivoInactivo.ACTIVO)
+                    .anyMatch(item -> idBroker.equals(item.getIdBroker()) && idAgente.equals(item.getIdAgente()));
+        }
+
+        public boolean actualizar(BrokerAgente brokerAgente) {
+            items.put(brokerAgente.getIdBrokerAgente(), brokerAgente);
+            return true;
+        }
+
+        public boolean eliminar(Long id) {
+            BrokerAgente brokerAgente = items.get(id);
+            if (brokerAgente == null) {
+                return false;
+            }
+            brokerAgente.setEstado(EstadoActivoInactivo.INACTIVO);
+            brokerAgente.setFechaFin(LocalDate.now());
+            return true;
+        }
     }
 
     private static class InMemoryReasignacionDAO implements ReasignacionCaptacionDAO {

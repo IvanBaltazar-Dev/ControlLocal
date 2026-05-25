@@ -9,7 +9,7 @@ el alquiler.
 
 1. Registrar local comercial y propietario.
 2. Registrar captacion por agente inmobiliario.
-3. Revisar captacion por broker.
+3. Revisar captacion por broker administrador o broker supervisor del agente.
 4. Si el broker solicita ajustes, el agente corrige y vuelve a revision.
 5. Si el broker rechaza, finaliza el proceso de captacion.
 6. Si el broker aprueba, la captacion queda activa.
@@ -21,7 +21,7 @@ el alquiler.
 12. Si no continua, registrar motivo de no continuidad y cerrar oportunidad.
 13. Si continua, registrar solicitud de alquiler asociada a la oportunidad.
 14. Registrar documentacion asociada a la solicitud.
-15. Evaluar solicitud por broker.
+15. Evaluar solicitud por broker administrador o broker supervisor del agente.
 16. Si se observa, actualizar solicitud/documentos y volver a evaluacion.
 17. Si se aprueba, cerrar oportunidad como finalizada exitosa.
 18. Si se rechaza, cerrar oportunidad como finalizada no favorable.
@@ -73,11 +73,11 @@ El flujo debe ser de izquierda a derecha y contener:
 Inicio
 -> Registro de local comercial y propietario
 -> Registro de captacion por el agente inmobiliario
--> Revision de captacion por el broker
+-> Revision de captacion por el broker administrador o broker supervisor del agente
 
-Desde "Revision de captacion por el broker" salen tres caminos:
+Desde "Revision de captacion por el broker administrador o broker supervisor del agente" salen tres caminos:
 1. Aprueba -> Captacion activa
-2. Solicita ajustes -> Correccion de captacion por el agente -> vuelve a Revision de captacion por el broker
+2. Solicita ajustes -> Correccion de captacion por el agente -> vuelve a Revision de captacion por el broker administrador o broker supervisor del agente
 3. Rechaza -> Fin del proceso
 
 Desde "Captacion activa":
@@ -95,12 +95,12 @@ Si la decision es No:
 Si la decision es Si:
 -> Registro de solicitud de alquiler
 -> Registro de documentacion asociada
--> Evaluacion de la solicitud por el broker
+-> Evaluacion de la solicitud por el broker administrador o broker supervisor del agente
 
-Desde "Evaluacion de la solicitud por el broker" salen tres caminos:
+Desde "Evaluacion de la solicitud por el broker administrador o broker supervisor del agente" salen tres caminos:
 1. Aprueba -> Cierre exitoso de la oportunidad -> Fin del proceso
 2. Rechaza -> Cierre no favorable de la oportunidad -> Fin del proceso
-3. Observa / solicita ajustes -> Actualizacion de solicitud o documentos -> vuelve a Evaluacion de la solicitud por el broker
+3. Observa / solicita ajustes -> Actualizacion de solicitud o documentos -> vuelve a Evaluacion de la solicitud por el broker administrador o broker supervisor del agente
 
 Agregar una nota visual pequena debajo de "Creacion de oportunidad comercial":
 "La oportunidad conserva trazabilidad incluso si no se genera solicitud formal".

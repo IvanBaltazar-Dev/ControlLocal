@@ -52,3 +52,24 @@ este activo y disponible.
 Si ya tienes una base creada con la version anterior, debes recrearla o migrarla
 antes de ejecutar los tests manuales, porque estas tablas ahora requieren
 `id_oportunidad`.
+
+## Cambio importante: supervision broker-agente
+
+El esquema incluye `broker_agente` para definir que agentes supervisa cada broker
+normal. El broker administrador mantiene alcance global por regla de negocio y no
+necesita registros en esa tabla para ver o revisar operaciones.
+
+Reglas de alcance:
+
+- Broker administrador: ve y supervisa todo el proceso.
+- Broker administrador: puede reasignar agentes entre brokers cuando exista una
+  intervencion administrativa.
+- Broker normal: registra sus propios agentes y el sistema crea su asignacion
+  activa en `broker_agente`.
+- Broker normal: ve y opera solo sobre agentes con asignacion activa en
+  `broker_agente`.
+- Agente inmobiliario: registra y consulta sus propios movimientos.
+
+La tabla `captacion.id_broker_revisor` no define supervision previa; solo guarda
+quien reviso la captacion. La supervision operativa se obtiene desde
+`broker_agente`.

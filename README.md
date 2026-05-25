@@ -59,7 +59,8 @@ Incluye la gestión de:
 
 ## 👥 Roles
 
-- **Broker:** administración, supervisión y control  
+- **Broker administrador:** administración de brokers, auditoría global y reasignación excepcional de agentes  
+- **Broker:** registro y supervisión de sus propios agentes inmobiliarios  
 - **Agente:** ejecución operativa del proceso comercial  
 
 ---

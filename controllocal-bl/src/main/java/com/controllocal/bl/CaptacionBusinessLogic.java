@@ -27,7 +27,10 @@ public interface CaptacionBusinessLogic {
     public void closeAcquisition(Long acquisitionId);
     public Optional<Captacion> buscarPorId(Long idCaptacion);
     public List<Captacion> listarTodos();
+    public List<Captacion> listarPorBroker(Long idBroker);
+    public List<Captacion> listarPorAgente(Long idAgente);
     public List<Captacion> listPendingReviews();
+    public List<Captacion> listPendingReviews(Long idBroker);
     public boolean actualizar(Captacion captacion);
     public Broker validarBroker(Long brokerId);
     public Broker validarBrokerAdministrador(Long brokerId);

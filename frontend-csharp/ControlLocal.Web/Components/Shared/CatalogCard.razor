@@ -1,0 +1,27 @@
+<div class="card cl-card h-100">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">@Title</span>
+        <button class="btn btn-sm btn-outline-secondary">Agregar</button>
+    </div>
+    <div class="list-group list-group-flush">
+        @foreach (var item in Items)
+        {
+            var parts = item.Split(" - ", 2, StringSplitOptions.TrimEntries);
+            <div class="list-group-item d-flex justify-content-between gap-3 align-items-start">
+                <div>
+                    <div class="fw-semibold">@parts[0]</div>
+                    @if (parts.Length > 1)
+                    {
+                        <div class="text-secondary small">@parts[1]</div>
+                    }
+                </div>
+                <button class="btn btn-sm btn-outline-secondary">Editar</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<string> Items { get; set; } = [];
+}

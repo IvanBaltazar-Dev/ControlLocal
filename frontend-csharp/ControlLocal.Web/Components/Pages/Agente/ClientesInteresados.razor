@@ -1,0 +1,55 @@
+@page "/agente/clientes"
+@inject RoleState RoleState
+
+<PageTitle>Clientes interesados - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">Agente inmobiliario</div>
+        <div class="cl-page-title">Clientes interesados</div>
+        <div class="cl-page-subtitle">Prospectos comerciales registrados por mi para vincular a captaciones activas.</div>
+    </div>
+    <button class="btn btn-primary cl-btn-primary">Registrar cliente</button>
+</div>
+
+<div class="card cl-card">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-lg-3">
+                <select class="form-select">
+                    <option>Tipo de persona</option>
+                    @foreach (var tipo in EnumCatalog.TiposPersona)
+                    {
+                        <option value="@tipo.Label">@tipo.Label</option>
+                    }
+                </select>
+            </div>
+            <div class="col-lg-3"><input class="form-control" placeholder="Rubro comercial" /></div>
+            <div class="col-lg-2">
+                <select class="form-select">
+                    <option>Estado</option>
+                    @foreach (var estado in EnumCatalog.EstadosActivoInactivo)
+                    {
+                        <option value="@estado.Label">@estado.Label</option>
+                    }
+                </select>
+            </div>
+            <div class="col-lg-2"><button class="btn btn-outline-secondary w-100">Mas filtros</button></div>
+            <div class="col-lg-2"><button class="btn btn-outline-secondary w-100">Exportar</button></div>
+        </div>
+    </div>
+    <div class="table-responsive cl-table-card">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Cliente</th><th>Tipo / documento</th><th>Contacto</th><th>Rubro</th><th>Presupuesto</th><th>Estado</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Inversiones Trebol S.A.C.</strong></td><td>Juridica · RUC 20553712008</td><td>+51 1 432 1200<br /><span class="text-secondary small">compras@trebol.pe</span></td><td>Restaurante</td><td>USD 2 500 - 3 200 / mes</td><td><StatusBadge Label="Activo" /></td></tr>
+                <tr><td><strong>Boutique Lila</strong></td><td>Natural · DNI 41882210</td><td>+51 1 718 4400<br /><span class="text-secondary small">lila@gmail.com</span></td><td>Moda</td><td>USD 1 500 - 2 000 / mes</td><td><StatusBadge Label="Activo" /></td></tr>
+                <tr><td><strong>Bodegas del Norte E.I.R.L.</strong></td><td>Juridica · RUC 20441122008</td><td>+51 1 222 1108<br /><span class="text-secondary small">ventas@bdn.com.pe</span></td><td>Retail</td><td>USD 1 200 - 1 800 / mes</td><td><StatusBadge Label="Activo" /></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Agente);
+}

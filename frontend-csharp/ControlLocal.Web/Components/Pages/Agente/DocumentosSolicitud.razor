@@ -1,0 +1,72 @@
+@page "/agente/solicitudes/documentos"
+@inject RoleState RoleState
+
+<PageTitle>Documentos de solicitud - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">SOL-0412</div>
+        <div class="cl-page-title">Documentos de solicitud</div>
+        <div class="cl-page-subtitle">Control de documentos requeridos para la evaluacion de alquiler.</div>
+    </div>
+    <button class="btn btn-primary cl-btn-primary">Adjuntar documento</button>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><MetricCard Label="Registrados" Value="6" Footer="Cargados al expediente" Icon="RG" Tone="blue" /></div>
+    <div class="col-md-3"><MetricCard Label="Validados" Value="4" Footer="Conformes para evaluar" Icon="VD" Tone="green" /></div>
+    <div class="col-md-3"><MetricCard Label="Observados" Value="1" Footer="Pendientes de correccion" Icon="OB" Tone="amber" /></div>
+    <div class="col-md-3"><MetricCard Label="Faltantes" Value="1" Footer="Aun no registrados" Icon="FT" Tone="red" /></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card cl-card h-100">
+            <div class="card-body">
+                <div class="cl-form-section-title">Nuevo documento</div>
+                <div class="mb-3">
+                    <label class="form-label">Tipo de documento</label>
+                    <select class="form-select">
+                        @foreach (var tipo in EnumCatalog.TiposDocumentoSolicitud)
+                        {
+                            <option value="@tipo.Label">@tipo.Label</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Estado</label>
+                    <select class="form-select">
+                        @foreach (var estado in EnumCatalog.EstadosDocumentoSolicitud)
+                        {
+                            <option value="@estado.Label">@estado.Label</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observacion</label>
+                    <textarea class="form-control" rows="4" placeholder="Detalle de revision o subsanacion"></textarea>
+                </div>
+                <button class="btn btn-primary cl-btn-primary w-100">Guardar documento</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="card cl-card">
+            <div class="table-responsive cl-table-card">
+                <table class="table table-hover align-middle">
+                    <thead><tr><th>Documento</th><th>Archivo</th><th>Ultima revision</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        <tr><td>Documento de identidad</td><td>dni_trebol.pdf</td><td>24 May 10:40</td><td><StatusBadge Label="Validado" /></td><td><button class="btn btn-sm btn-outline-secondary">Ver</button></td></tr>
+                        <tr><td>Ficha o constancia RUC</td><td>ruc_trebol.pdf</td><td>24 May 10:41</td><td><StatusBadge Label="Validado" /></td><td><button class="btn btn-sm btn-outline-secondary">Ver</button></td></tr>
+                        <tr><td>Sustento economico</td><td>flujo_caja.pdf</td><td>24 May 12:20</td><td><StatusBadge Label="Observado" /></td><td><button class="btn btn-sm btn-outline-secondary">Subsanar</button></td></tr>
+                        <tr><td>Documento de garantia</td><td>garantia.pdf</td><td>24 May 13:15</td><td><StatusBadge Label="Registrado" /></td><td><button class="btn btn-sm btn-outline-secondary">Ver</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Agente);
+}

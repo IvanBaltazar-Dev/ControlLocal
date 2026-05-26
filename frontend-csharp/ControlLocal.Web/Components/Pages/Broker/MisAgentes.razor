@@ -1,0 +1,354 @@
+@page "/broker/agentes"
+@inject RoleState RoleState
+
+<PageTitle>Mis agentes inmobiliarios - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">Broker</div>
+        <div class="cl-page-title">Mis agentes inmobiliarios</div>
+        <div class="cl-page-subtitle">Equipo bajo tu supervision directa. @_agentes.Count(x => x.Estado == "Activo") activos y @_agentes.Count(x => x.Estado == "Inactivo") inactivo.</div>
+    </div>
+    <button class="btn btn-primary cl-btn-primary" @onclick="OpenNewAsync">Registrar agente</button>
+</div>
+
+<div class="alert alert-info">
+    Al registrar o editar un agente, el broker solo modifica informacion del agente bajo su supervision activa. La reasignacion a otro broker corresponde al broker administrador.
+</div>
+
+<div class="card cl-card">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-lg-4"><input class="form-control" placeholder="Buscar agente, documento o correo" @bind="_search" @bind:event="oninput" /></div>
+            <div class="col-lg-2">
+                <select class="form-select" @bind="_estado">
+                    <option value="">Todos los estados</option>
+                    <option>Activo</option>
+                    <option>Inactivo</option>
+                </select>
+            </div>
+            <div class="col-lg-3">
+                <select class="form-select" @bind="_zona">
+                    <option value="">Todas las zonas</option>
+                    <option>Lima Centro</option>
+                    <option>Lima Sur</option>
+                    <option>Callao</option>
+                    <option>Lima Moderna</option>
+                </select>
+            </div>
+            <div class="col-lg-3 d-flex gap-2"><button class="btn btn-outline-secondary w-100">Mas filtros</button><button class="btn btn-outline-secondary w-100">Exportar</button></div>
+        </div>
+    </div>
+    <div class="table-responsive cl-table-card">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Agente</th><th>Tipo doc.</th><th>Numero doc.</th><th>Zona</th><th>Supervision desde</th><th>Captaciones</th><th>Oportunidades</th><th>Estado adm.</th><th>Estado operativo</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var agente in Filtrados)
+                {
+                    <tr>
+                        <td><div class="d-flex align-items-center gap-2"><div class="cl-avatar small">@agente.Initials</div><div><div class="fw-semibold">@agente.Nombre</div><div class="text-secondary small">@agente.Email</div></div></div></td>
+                        <td>@agente.TipoDocumento</td>
+                        <td>@agente.NumeroDocumento</td>
+                        <td>@agente.Zona</td>
+                        <td>@agente.Desde</td>
+                        <td>@agente.Captaciones</td>
+                        <td>@agente.Oportunidades</td>
+                        <td><StatusBadge Label="@agente.Estado" /></td>
+                        <td><StatusBadge Label="@agente.EstadoOperativo" /></td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" @onclick="() => OpenProfileAsync(agente)">Ver perfil</button>
+                                <button class="btn btn-primary cl-btn-primary" @onclick="() => OpenEditAsync(agente)">Editar</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<ControlLocalDialog @ref="_profileDialog" Title="Perfil del agente" Subtitle="Informacion operativa del agente bajo tu supervision.">
+    @if (_selected is not null)
+    {
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <div class="cl-avatar">@_selected.Initials</div>
+            <div>
+                <div class="h5 mb-0">@_selected.Nombre</div>
+                <div class="text-secondary">@_selected.Email · @_selected.Telefono</div>
+            </div>
+            <div class="ms-auto"><StatusBadge Label="@_selected.Estado" /></div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-4"><div class="cl-detail"><span>Tipo documento</span><strong>@_selected.TipoDocumento</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Numero documento</span><strong>@_selected.NumeroDocumento</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Zona</span><strong>@_selected.Zona</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Supervision desde</span><strong>@_selected.Desde</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Estado administrativo</span><strong>@_selected.Estado</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Estado operativo</span><strong>@_selected.EstadoOperativo</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Captaciones</span><strong>@_selected.Captaciones</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Oportunidades</span><strong>@_selected.Oportunidades</strong></div></div>
+            <div class="col-md-4"><div class="cl-detail"><span>Conversion</span><strong>@_selected.Conversion%</strong></div></div>
+            <div class="col-12"><div class="cl-detail"><span>Observaciones</span><strong>@_selected.Observaciones</strong></div></div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <button class="btn btn-outline-secondary" type="button" @onclick="CloseProfileAsync">Cerrar</button>
+            <button class="btn btn-primary cl-btn-primary" type="button" @onclick="() => OpenEditFromProfileAsync(_selected)">Editar agente</button>
+        </div>
+    }
+</ControlLocalDialog>
+
+<ControlLocalDialog @ref="_editDialog" Title="@EditTitle" Subtitle="El broker puede actualizar informacion y estado del agente a cargo.">
+    <EditForm Model="_form" OnValidSubmit="GuardarAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="cl-form-section">
+            <div class="cl-form-section-title">Datos personales y contacto</div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nombre completo</label>
+                    <InputText class="form-control" @bind-Value="_form.Nombre" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Correo corporativo</label>
+                    <InputText class="form-control" @bind-Value="_form.Email" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Tipo de documento</label>
+                    <InputSelect class="form-select" @bind-Value="_form.TipoDocumento">
+                        @foreach (var tipo in TiposDocumento)
+                        {
+                            <option value="@tipo.Descripcion">@tipo.Descripcion</option>
+                        }
+                    </InputSelect>
+                    <div class="form-text">Selecciona el tipo de documento. El codigo tecnico se asigna internamente al enviar al backend.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Numero de documento</label>
+                    <InputText class="form-control" @bind-Value="_form.NumeroDocumento" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Telefono</label>
+                    <InputText class="form-control" @bind-Value="_form.Telefono" />
+                </div>
+            </div>
+        </div>
+
+        <div class="cl-form-section">
+            <div class="cl-form-section-title">Gestion operativa</div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Zona asignada</label>
+                    <InputSelect class="form-select" @bind-Value="_form.Zona">
+                        <option>Lima Centro</option>
+                        <option>Lima Sur</option>
+                        <option>Callao</option>
+                        <option>Lima Moderna</option>
+                    </InputSelect>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Estado administrativo</label>
+                    <InputSelect class="form-select" @bind-Value="_form.Estado">
+                        <option>Activo</option>
+                        <option>Inactivo</option>
+                    </InputSelect>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Estado operativo</label>
+                    <InputSelect class="form-select" @bind-Value="_form.EstadoOperativo">
+                        @foreach (var estado in EnumCatalog.EstadosOperativoAgente)
+                        {
+                            <option value="@estado.Label">@estado.Label</option>
+                        }
+                    </InputSelect>
+                    <div class="form-text">Solo agentes disponibles pueden registrar ciertos procesos operativos.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Supervision desde</label>
+                    <InputText class="form-control" @bind-Value="_form.Desde" disabled />
+                    <div class="form-text">La relacion BrokerAgente activa se conserva; la reasignacion la hace el broker administrador.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Broker supervisor</label>
+                    <input class="form-control" value="Ricardo Salas" disabled />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Observaciones internas</label>
+                    <InputTextArea class="form-control" @bind-Value="_form.Observaciones" />
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <button class="btn btn-outline-secondary" type="button" @onclick="CloseEditAsync">Cancelar</button>
+            <button class="btn btn-primary cl-btn-primary" type="submit">Guardar cambios</button>
+        </div>
+    </EditForm>
+</ControlLocalDialog>
+
+@code {
+    private ControlLocalDialog? _profileDialog;
+    private ControlLocalDialog? _editDialog;
+    private readonly List<AgenteRow> _agentes =
+    [
+        new(1, "VM", "Valentina Mora", "vmora@controllocal.pe", "DNI", "72014588", "987654321", "Lima Centro", "14 Feb 2024", 18, 11, 32, "Activo", "Disponible", "Agente con alto cumplimiento en seguimiento de oportunidades."),
+        new(2, "CV", "Carolina Vega", "cvega@controllocal.pe", "DNI", "71890344", "984551230", "Lima Sur", "22 Mar 2024", 14, 9, 29, "Activo", "Disponible", "Tiene captaciones pendientes de revision documental."),
+        new(3, "AT", "Andrea Torres", "atorres@controllocal.pe", "Carnet de extranjeria", "CE-73120955", "965441900", "Callao", "06 May 2024", 11, 7, 24, "Activo", "No disponible", "Buen desempeno en visitas guiadas."),
+        new(4, "PR", "Paola Reyes", "preyes@controllocal.pe", "DNI", "70198821", "976112300", "Lima Centro", "18 Jul 2024", 8, 6, 21, "Activo", "Disponible", "Requiere seguimiento en cierre documental."),
+        new(5, "JM", "Jorge Marin", "jmarin@controllocal.pe", "Pasaporte", "P72155670", "955673210", "Lima Moderna", "03 Sep 2024", 7, 4, 18, "Activo", "Disponible", "Cartera concentrada en locales pequenos."),
+        new(6, "NS", "Natalia Solano", "nsolano@controllocal.pe", "DNI", "73349812", "990112455", "Lima Sur", "19 Oct 2024", 4, 3, 16, "Inactivo", "Licencia", "Inactiva temporalmente por licencia.")
+    ];
+
+    private AgenteRow? _selected;
+    private AgenteRow _form = AgenteRow.Empty;
+    private string _search = string.Empty;
+    private string _estado = string.Empty;
+    private string _zona = string.Empty;
+    private bool _editing;
+
+    private string EditTitle => _editing ? "Editar agente" : "Registrar agente";
+
+    private IEnumerable<AgenteRow> Filtrados => _agentes.Where(x =>
+        (string.IsNullOrWhiteSpace(_search)
+            || x.Nombre.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.TipoDocumento.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.NumeroDocumento.Contains(_search, StringComparison.OrdinalIgnoreCase))
+        && (string.IsNullOrWhiteSpace(_estado) || x.Estado == _estado)
+        && (string.IsNullOrWhiteSpace(_zona) || x.Zona == _zona));
+
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Broker);
+
+    private async Task OpenProfileAsync(AgenteRow agente)
+    {
+        _selected = agente;
+        if (_profileDialog is not null) await _profileDialog.ShowAsync();
+    }
+
+    private async Task OpenEditAsync(AgenteRow agente)
+    {
+        _editing = true;
+        _form = agente.Copy();
+        if (_editDialog is not null) await _editDialog.ShowAsync();
+    }
+
+    private async Task OpenEditFromProfileAsync(AgenteRow agente)
+    {
+        await CloseProfileAsync();
+        await OpenEditAsync(agente);
+    }
+
+    private async Task OpenNewAsync()
+    {
+        _editing = false;
+        _form = AgenteRow.New(_agentes.Count + 1);
+        if (_editDialog is not null) await _editDialog.ShowAsync();
+    }
+
+    private async Task GuardarAsync()
+    {
+        _form.Initials = BuildInitials(_form.Nombre);
+        if (_editing)
+        {
+            var index = _agentes.FindIndex(x => x.Id == _form.Id);
+            if (index >= 0)
+            {
+                _agentes[index] = _form.Copy();
+                _selected = _agentes[index];
+            }
+        }
+        else
+        {
+            _agentes.Insert(0, _form.Copy());
+        }
+        await CloseEditAsync();
+    }
+
+    private async Task CloseProfileAsync()
+    {
+        if (_profileDialog is not null) await _profileDialog.CloseAsync();
+    }
+
+    private async Task CloseEditAsync()
+    {
+        if (_editDialog is not null) await _editDialog.CloseAsync();
+    }
+
+    private static string BuildInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0) return "AG";
+        if (parts.Length == 1) return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
+        return $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant();
+    }
+
+    private static string GetTipoDocumentoCodigoBackend(string descripcion) =>
+        TiposDocumento.FirstOrDefault(x => x.Descripcion == descripcion)?.Codigo ?? descripcion;
+
+    private static readonly TipoDocumentoOption[] TiposDocumento =
+    [
+        new("D", "DNI"),
+        new("R", "RUC"),
+        new("C", "Carnet de extranjeria"),
+        new("P", "Pasaporte")
+    ];
+
+    private sealed record TipoDocumentoOption(string Codigo, string Descripcion);
+
+    private sealed class AgenteRow
+    {
+        public AgenteRow(long id, string initials, string nombre, string email, string tipoDocumento, string numeroDocumento, string telefono, string zona, string desde, int captaciones, int oportunidades, int conversion, string estado, string estadoOperativo, string observaciones)
+        {
+            Id = id;
+            Initials = initials;
+            Nombre = nombre;
+            Email = email;
+            TipoDocumento = tipoDocumento;
+            NumeroDocumento = numeroDocumento;
+            Telefono = telefono;
+            Zona = zona;
+            Desde = desde;
+            Captaciones = captaciones;
+            Oportunidades = oportunidades;
+            Conversion = conversion;
+            Estado = estado;
+            EstadoOperativo = estadoOperativo;
+            Observaciones = observaciones;
+        }
+
+        public long Id { get; set; }
+        public string Initials { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Ingrese el nombre del agente.")]
+        public string Nombre { get; set; }
+
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Ingrese un correo valido.")]
+        public string Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Seleccione el tipo de documento.")]
+        public string TipoDocumento { get; set; }
+
+        public string TipoDocumentoCodigoBackend => GetTipoDocumentoCodigoBackend(TipoDocumento);
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Ingrese el numero de documento.")]
+        [System.ComponentModel.DataAnnotations.StringLength(20, MinimumLength = 6, ErrorMessage = "El numero de documento debe tener entre 6 y 20 caracteres.")]
+        public string NumeroDocumento { get; set; }
+
+        public string Telefono { get; set; }
+        public string Zona { get; set; }
+        public string Desde { get; set; }
+        public int Captaciones { get; set; }
+        public int Oportunidades { get; set; }
+        public int Conversion { get; set; }
+        public string Estado { get; set; }
+        public string EstadoOperativo { get; set; }
+        public string Observaciones { get; set; }
+
+        public static AgenteRow Empty => new(0, "AG", string.Empty, string.Empty, "DNI", string.Empty, string.Empty, "Lima Centro", "25 May 2026", 0, 0, 0, "Activo", "Disponible", string.Empty);
+        public static AgenteRow New(long id) => new(id, "NA", "Nuevo agente", "nuevo.agente@controllocal.pe", "DNI", "70000000", "999999999", "Lima Centro", "25 May 2026", 0, 0, 0, "Activo", "Disponible", string.Empty);
+        public AgenteRow Copy() => new(Id, Initials, Nombre, Email, TipoDocumento, NumeroDocumento, Telefono, Zona, Desde, Captaciones, Oportunidades, Conversion, Estado, EstadoOperativo, Observaciones);
+    }
+}

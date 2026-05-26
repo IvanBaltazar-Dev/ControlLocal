@@ -1,0 +1,63 @@
+@page "/agente/oportunidades/detalle"
+@inject RoleState RoleState
+
+<PageTitle>Detalle 360 de oportunidad - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">OP-1098</div>
+        <div class="cl-page-title">Detalle 360 de oportunidad</div>
+        <div class="cl-page-subtitle">Vista integral del cliente, local, interacciones, visitas y solicitud asociada.</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/agente/interacciones">Interacciones</a>
+        <a class="btn btn-primary cl-btn-primary" href="/agente/oportunidades/cierre">Cerrar oportunidad</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><MetricCard Label="Estado" Value="Abierta" Footer="Enum backend" Icon="OP" Tone="blue" /></div>
+    <div class="col-md-3"><MetricCard Label="Monto estimado" Value="USD 2 300" Footer="Alquiler mensual" Icon="US" Tone="green" /></div>
+    <div class="col-md-3"><MetricCard Label="Interacciones" Value="6" Footer="Ultima hace 2 h" Icon="IN" Tone="info" /></div>
+    <div class="col-md-3"><MetricCard Label="Visitas" Value="1" Footer="Programada" Icon="VS" Tone="amber" /></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card cl-card h-100">
+            <div class="card-body">
+                <div class="cl-form-section-title">Cliente interesado</div>
+                <div class="cl-detail mb-2"><span>Nombre</span><strong>Inversiones Trebol</strong></div>
+                <div class="cl-detail mb-2"><span>Tipo persona</span><strong>Juridica</strong></div>
+                <div class="cl-detail mb-2"><span>Documento</span><strong>RUC 20604411890</strong></div>
+                <div class="cl-detail"><span>Contacto</span><strong>contacto@trebol.pe</strong></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card cl-card h-100">
+            <div class="card-body">
+                <div class="cl-form-section-title">Local comercial</div>
+                <div class="cl-local-photo mb-3">Foto del local</div>
+                <div class="cl-detail mb-2"><span>Direccion</span><strong>Av. Petit Thouars 1875</strong></div>
+                <div class="cl-detail mb-2"><span>Distrito</span><strong>Jesus Maria</strong></div>
+                <div class="cl-detail"><span>Estado</span><strong>Disponible</strong></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card cl-card h-100">
+            <div class="card-body">
+                <div class="cl-form-section-title">Linea de tiempo</div>
+                <div class="cl-timeline-item"><strong>Oportunidad creada</strong><span>25 May 09:20 - Estado Abierta</span></div>
+                <div class="cl-timeline-item"><strong>Interaccion registrada</strong><span>25 May 10:15 - Resultado Interesado</span></div>
+                <div class="cl-timeline-item"><strong>Visita programada</strong><span>26 May 16:00 - Estado Programada</span></div>
+                <div class="cl-timeline-item"><strong>Solicitud pendiente</strong><span>Crear solo cuando el cliente confirme documentacion.</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Agente);
+}

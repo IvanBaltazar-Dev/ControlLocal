@@ -1,0 +1,105 @@
+@page "/agente/oportunidades/nueva"
+@inject RoleState RoleState
+@inject NavigationManager Navigation
+
+<PageTitle>Creacion de oportunidad - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">Agente inmobiliario</div>
+        <div class="cl-page-title">Creacion de oportunidad</div>
+        <div class="cl-page-subtitle">Vincula un cliente interesado con un local disponible y deja trazabilidad comercial.</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/oportunidades-comerciales">Volver</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card cl-card">
+            <div class="card-body">
+                <div class="cl-form-section">
+                    <div class="cl-form-section-title">Datos comerciales</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Cliente interesado</label>
+                            <select class="form-select"><option>Inversiones Trebol</option><option>Cafe Lima</option><option>Boutique Lila</option></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Local comercial</label>
+                            <select class="form-select"><option>Av. Petit Thouars 1875</option><option>Jr. Tarata 226</option><option>Av. Primavera 950</option></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Monto estimado</label>
+                            <input class="form-control" value="2300" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Estado inicial</label>
+                            <select class="form-select">
+                                @foreach (var estado in EnumCatalog.EstadosOportunidad)
+                                {
+                                    <option selected="@(estado.Label == "Abierta")" value="@estado.Label">@estado.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Fecha de registro</label>
+                            <input class="form-control" type="date" value="2026-05-25" />
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-form-section">
+                    <div class="cl-form-section-title">Primer contacto</div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Canal</label>
+                            <select class="form-select">
+                                @foreach (var canal in EnumCatalog.CanalesContacto)
+                                {
+                                    <option value="@canal.Label">@canal.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Resultado</label>
+                            <select class="form-select">
+                                @foreach (var resultado in EnumCatalog.ResultadosInteraccion)
+                                {
+                                    <option value="@resultado.Label">@resultado.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Proxima accion</label>
+                            <input class="form-control" value="Agendar visita" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" rows="4">Cliente solicita confirmar disponibilidad y condiciones de garantia.</textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <a class="btn btn-outline-secondary" href="/oportunidades-comerciales">Cancelar</a>
+                    <button class="btn btn-primary cl-btn-primary" @onclick="Save">Crear oportunidad</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card cl-card h-100">
+            <div class="card-body">
+                <div class="cl-form-section-title">Validaciones del flujo</div>
+                <div class="cl-detail mb-2"><span>Estado backend</span><strong>Abierta</strong></div>
+                <div class="cl-detail mb-2"><span>Local requerido</span><strong>Debe estar Disponible</strong></div>
+                <div class="cl-detail mb-2"><span>Cliente requerido</span><strong>Debe estar Activo</strong></div>
+                <div class="cl-detail"><span>Responsable</span><strong>Agente autenticado</strong></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Agente);
+
+    private void Save() => Navigation.NavigateTo("/oportunidades-comerciales");
+}

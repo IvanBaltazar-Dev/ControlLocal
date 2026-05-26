@@ -1,0 +1,76 @@
+@page "/broker/solicitudes/evaluacion"
+@inject RoleState RoleState
+
+<PageTitle>Evaluacion de solicitud - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">SOL-0425</div>
+        <div class="cl-page-title">Evaluacion de solicitud - SOL-0425</div>
+        <div class="cl-page-subtitle">Solicitud completa. 6/6 documentos validados. Pendiente decision del broker.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="/broker/solicitudes">Volver</a>
+        <button class="btn btn-outline-danger">Rechazar</button>
+        <button class="btn btn-outline-secondary">Solicitar ajustes</button>
+        <button class="btn btn-primary cl-btn-primary">Aprobar</button>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card cl-card mb-3">
+            <div class="card-header bg-white fw-semibold">Resumen de la solicitud</div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3"><strong>SOL-0425 · OP-1094 · cliente Boutique Lila</strong><StatusBadge Label="En revision" /></div>
+                <div class="row g-3">
+                    <div class="col-md-4"><div class="cl-detail"><span>Cliente</span><strong>Boutique Lila · RUC</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Representante</span><strong>Lila Castillo</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Rubro</span><strong>Moda / Boutique</strong></div></div>
+                    <div class="col-md-6"><div class="cl-detail"><span>Local</span><strong>Calle Schell 412</strong></div></div>
+                    <div class="col-md-6"><div class="cl-detail"><span>Captacion</span><strong>CAP-0226 · C. Mendoza</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Monto propuesto</span><strong>USD 1 850 / mes</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Garantia</span><strong>2 meses · USD 3 700</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Plazo</span><strong>24 meses</strong></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card cl-card">
+            <div class="card-header bg-white fw-semibold">Documentacion revisada</div>
+            <div class="list-group list-group-flush">
+                @foreach (var doc in Documentos)
+                {
+                    <div class="list-group-item d-flex justify-content-between"><span>@doc</span><StatusBadge Label="Validado" /></div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card cl-card mb-3">
+            <div class="card-header bg-white fw-semibold">Evaluacion final del broker</div>
+            <div class="card-body">
+                <label class="form-label">Analisis financiero</label>
+                <select class="form-select mb-3"><option>Bueno - cliente solvente</option><option>Aceptable - cliente medio</option><option>Con riesgo</option></select>
+                <label class="form-label">Recomendacion</label>
+                <select class="form-select mb-3"><option>Aprobar con condiciones estandar</option><option>Aprobar con garantia adicional</option><option>Observar documentacion</option></select>
+                <label class="form-label">Observacion final del broker</label>
+                <textarea class="form-control" rows="5">Cliente con capacidad de pago buena e historial comercial solido.</textarea>
+            </div>
+        </div>
+        <div class="card cl-card">
+            <div class="card-header bg-white fw-semibold">Indicadores</div>
+            <div class="card-body">
+                <div class="cl-funnel-row"><span>Capacidad de pago</span><strong>Buena</strong></div>
+                <div class="cl-funnel-row"><span>Historico comercial</span><strong>Solido</strong></div>
+                <div class="cl-funnel-row"><span>Documentacion</span><strong>Completa</strong></div>
+                <div class="cl-funnel-row"><span>Riesgo evaluado</span><strong>Bajo</strong></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Broker);
+    private static readonly string[] Documentos = ["DNI representante legal", "Vigencia de poder", "Estado financiero 2025", "Carta garantia solidaria", "Constancia RUC", "Propuesta firmada"];
+}

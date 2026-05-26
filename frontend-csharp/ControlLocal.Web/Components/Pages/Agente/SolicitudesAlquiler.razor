@@ -1,0 +1,57 @@
+@page "/agente/solicitudes"
+@inject RoleState RoleState
+
+<PageTitle>Solicitudes de alquiler - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">Agente inmobiliario</div>
+        <div class="cl-page-title">Solicitudes de alquiler</div>
+        <div class="cl-page-subtitle">Bandeja operativa para preparar expedientes antes de la evaluacion del broker.</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/agente/solicitudes/documentos">Documentos</a>
+        <button class="btn btn-primary cl-btn-primary">Nueva solicitud</button>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><MetricCard Label="Registradas" Value="9" Footer="Expedientes abiertos" Icon="RG" Tone="blue" /></div>
+    <div class="col-md-3"><MetricCard Label="En revision" Value="4" Footer="En bandeja broker" Icon="RV" Tone="amber" /></div>
+    <div class="col-md-3"><MetricCard Label="Observadas" Value="2" Footer="Requieren subsanar" Icon="OB" Tone="red" /></div>
+    <div class="col-md-3"><MetricCard Label="Aprobadas" Value="5" Footer="Listas para cierre" Icon="AP" Tone="green" /></div>
+</div>
+
+<div class="card cl-card">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-lg-3">
+                <select class="form-select">
+                    <option>Estado</option>
+                    @foreach (var estado in EnumCatalog.EstadosSolicitudAlquiler)
+                    {
+                        <option value="@estado.Label">@estado.Label</option>
+                    }
+                </select>
+            </div>
+            <div class="col-lg-7"><input class="form-control" placeholder="Buscar por cliente, local o codigo de solicitud" /></div>
+            <div class="col-lg-2"><button class="btn btn-outline-secondary w-100">Exportar</button></div>
+        </div>
+    </div>
+    <div class="table-responsive cl-table-card">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr><th>Solicitud</th><th>Cliente</th><th>Local</th><th>Fecha</th><th>Documentos</th><th>Estado</th><th></th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>SOL-0412</strong></td><td>Inversiones Trebol</td><td>Av. Petit Thouars 1875</td><td>24 May</td><td>6/6</td><td><StatusBadge Label="En revision" /></td><td><a class="btn btn-sm btn-outline-secondary" href="/agente/solicitudes/documentos">Ver</a></td></tr>
+                <tr><td><strong>SOL-0409</strong></td><td>Boutique Lila</td><td>Jr. Tarata 226</td><td>22 May</td><td>5/6</td><td><StatusBadge Label="Observada" /></td><td><a class="btn btn-sm btn-outline-secondary" href="/agente/solicitudes/documentos">Subsanar</a></td></tr>
+                <tr><td><strong>SOL-0398</strong></td><td>Cafe Lima</td><td>Av. Primavera 950</td><td>18 May</td><td>6/6</td><td><StatusBadge Label="Aprobada" /></td><td><a class="btn btn-sm btn-outline-secondary" href="/agente/solicitudes/documentos">Ver</a></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Agente);
+}

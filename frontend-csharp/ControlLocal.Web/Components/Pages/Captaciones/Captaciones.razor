@@ -1,0 +1,370 @@
+@page "/captaciones"
+@rendermode InteractiveServer
+@inject CaptacionService Service
+@inject RoleState RoleState
+
+<PageTitle>Captaciones - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">@RoleState.CurrentRole</div>
+        <div class="cl-page-title">@Title</div>
+        <div class="cl-page-subtitle">@Subtitle</div>
+    </div>
+    @if (RoleState.CurrentRole == Roles.Agente)
+    {
+        <button class="btn btn-primary cl-btn-primary" @onclick="OpenNewAsync">Registrar captacion</button>
+    }
+</div>
+
+@if (RoleState.CurrentRole == Roles.Broker)
+{
+    <div class="alert alert-info">
+        Bandeja de supervision: el broker revisa captaciones de los agentes bajo su responsabilidad, pero no registra captaciones.
+    </div>
+}
+else if (RoleState.CurrentRole == Roles.BrokerAdministrador)
+{
+    <div class="alert alert-warning">
+        Vista global de auditoria. El broker administrador no registra captaciones operativas.
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><MetricCard Label="Pendientes" Value="@_items.Count(x => x.Estado == "Pendiente de revision").ToString()" Footer="Esperan revision" Icon="PE" Tone="amber" /></div>
+    <div class="col-md-3"><MetricCard Label="Activas" Value="@_items.Count(x => x.Estado == "Activa").ToString()" Footer="Pueden generar oportunidades" Icon="AC" Tone="green" /></div>
+    <div class="col-md-3"><MetricCard Label="Observadas" Value="@_items.Count(x => x.Estado == "Observada").ToString()" Footer="Requieren ajuste" Icon="OB" Tone="red" /></div>
+    <div class="col-md-3"><MetricCard Label="Total" Value="@_items.Count.ToString()" Footer="Mock temporal" Icon="CA" Tone="blue" /></div>
+</div>
+
+<div class="card cl-card">
+    <div class="card-body">
+        <div class="row g-2 align-items-center">
+            <div class="col-lg-7">
+                <input class="form-control" placeholder="Buscar por codigo, local, agente, broker o estado" @bind="_search" @bind:event="oninput" />
+            </div>
+            <div class="col-lg-3">
+                <select class="form-select" @bind="_estado">
+                    <option value="">Todos los estados</option>
+                    @foreach (var estado in EnumCatalog.EstadosCaptacion)
+                    {
+                        <option value="@estado.Label">@estado.Label</option>
+                    }
+                </select>
+            </div>
+            <div class="col-lg-2">
+                <button class="btn btn-outline-secondary w-100">Exportar</button>
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive cl-table-card">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Codigo</th>
+                    <th>Local</th>
+                    <th>Agente</th>
+                    <th>Vigencia</th>
+                    <th>Comision</th>
+                    <th>Estado</th>
+                    <th>Revision</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Filtradas)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@item.CodigoCaptacion</div>
+                            <div class="text-secondary small">@item.FechaCaptacion.ToString("dd/MM/yyyy")</div>
+                        </td>
+                        <td>
+                            <div>@item.DireccionLocal</div>
+                            <div class="text-secondary small">Local #@item.LocalComercialId</div>
+                        </td>
+                        <td>
+                            <div>@item.NombreAgenteResponsable</div>
+                            <div class="text-secondary small">Agente #@item.AgenteResponsableId</div>
+                        </td>
+                        <td>@FormatVigencia(item)</td>
+                        <td>@item.ComisionPactada.ToString("0.##")%</td>
+                        <td><StatusBadge Label="@item.Estado" /></td>
+                        <td>
+                            @if (item.FechaRevision is null)
+                            {
+                                <span class="text-secondary small">Sin revision</span>
+                            }
+                            else
+                            {
+                                <div>@item.NombreBrokerRevisor</div>
+                                <div class="text-secondary small">@item.FechaRevision.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                            }
+                        </td>
+                        <td class="text-end">
+                            @if (RoleState.CurrentRole == Roles.Agente)
+                            {
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => OpenEditAsync(item)">Editar</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary btn-sm cl-btn-primary" @onclick="() => OpenReviewAsync(item)">Revisar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<ControlLocalDialog @ref="_dialog" Title="@DialogTitle" Subtitle="@DialogSubtitle">
+    <EditForm Model="_form" OnValidSubmit="GuardarAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        @if (!string.IsNullOrWhiteSpace(_formError))
+        {
+            <div class="alert alert-danger">@_formError</div>
+        }
+
+        <div class="cl-form-section">
+            <div class="cl-form-section-title">Datos de la captacion</div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Codigo</label>
+                    <InputText class="form-control" @bind-Value="_form.CodigoCaptacion" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Fecha captacion</label>
+                    <InputDate class="form-control" @bind-Value="_form.FechaCaptacion" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Estado</label>
+                    <InputSelect class="form-select" @bind-Value="_form.Estado" disabled="@IsAgentReadOnly">
+                        @foreach (var estado in EnumCatalog.EstadosCaptacion)
+                        {
+                            <option value="@estado.Label">@estado.Label</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Local Id</label>
+                    <InputNumber class="form-control" @bind-Value="_form.LocalComercialId" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Direccion local</label>
+                    <InputText class="form-control" @bind-Value="_form.DireccionLocal" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Agente responsable Id</label>
+                    <InputNumber class="form-control" @bind-Value="_form.AgenteResponsableId" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Agente responsable</label>
+                    <InputText class="form-control" @bind-Value="_form.NombreAgenteResponsable" disabled="@IsReviewMode" />
+                </div>
+            </div>
+        </div>
+
+        <div class="cl-form-section">
+            <div class="cl-form-section-title">Condiciones comerciales</div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Inicio vigencia</label>
+                    <InputDate class="form-control" @bind-Value="_form.FechaInicioVigencia" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Fin vigencia</label>
+                    <InputDate class="form-control" @bind-Value="_form.FechaFinVigencia" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Comision pactada (%)</label>
+                    <InputNumber class="form-control" @bind-Value="_form.ComisionPactada" disabled="@IsReviewMode" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Observaciones</label>
+                    <InputTextArea class="form-control" @bind-Value="_form.Observaciones" disabled="@IsReviewMode" />
+                </div>
+            </div>
+        </div>
+
+        <div class="cl-form-section">
+            <div class="cl-form-section-title">Revision del broker</div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Broker revisor Id</label>
+                    <InputNumber class="form-control" @bind-Value="_form.BrokerRevisorId" disabled="@IsAgentReadOnly" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Broker revisor</label>
+                    <InputText class="form-control" @bind-Value="_form.NombreBrokerRevisor" disabled="@IsAgentReadOnly" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Fecha revision</label>
+                    <InputDate class="form-control" @bind-Value="_form.FechaRevision" disabled="@IsAgentReadOnly" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Observacion revision</label>
+                    <InputTextArea class="form-control" @bind-Value="_form.ObservacionRevision" disabled="@IsAgentReadOnly" />
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <button class="btn btn-outline-secondary" type="button" @onclick="CloseAsync">Cancelar</button>
+            <button class="btn btn-primary cl-btn-primary" type="submit">@PrimaryActionText</button>
+        </div>
+    </EditForm>
+</ControlLocalDialog>
+
+@code {
+    private ControlLocalDialog? _dialog;
+    private List<CaptacionDto> _items = [];
+    private CaptacionDto _form = new();
+    private string _search = string.Empty;
+    private string _estado = string.Empty;
+    private string _formError = string.Empty;
+    private bool _editing;
+    private bool _reviewing;
+
+    private bool IsReviewMode => _reviewing && RoleState.CurrentRole != Roles.Agente;
+    private bool IsAgentReadOnly => RoleState.CurrentRole == Roles.Agente;
+
+    private string Title => RoleState.CurrentRole == Roles.Agente
+        ? "Mis captaciones"
+        : RoleState.CurrentRole == Roles.Broker ? "Captaciones por revisar" : "Captaciones - auditoria global";
+
+    private string Subtitle => RoleState.CurrentRole == Roles.Agente
+        ? "Incorporacion de locales comerciales al proceso de gestion."
+        : RoleState.CurrentRole == Roles.Broker ? "Solo captaciones de agentes bajo tu supervision." : "Vista global sin registro operativo.";
+
+    private string DialogTitle => _reviewing ? "Revisar captacion" : _editing ? "Editar captacion" : "Registrar captacion";
+    private string DialogSubtitle => _reviewing
+        ? "El broker registra la revision sin cambiar los datos comerciales captados por el agente."
+        : "Registro alineado con el modelo Captacion del backend Java.";
+    private string PrimaryActionText => _reviewing ? "Guardar revision" : "Guardar captacion";
+
+    private IEnumerable<CaptacionDto> Filtradas => _items.Where(x =>
+        (string.IsNullOrWhiteSpace(_search)
+            || x.CodigoCaptacion.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.DireccionLocal.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.NombreAgenteResponsable.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.NombreBrokerRevisor.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.Estado.Contains(_search, StringComparison.OrdinalIgnoreCase))
+        && (string.IsNullOrWhiteSpace(_estado) || x.Estado == _estado));
+
+    protected override async Task OnInitializedAsync() => _items = await Service.GetAllAsync();
+
+    private async Task OpenNewAsync()
+    {
+        _editing = false;
+        _reviewing = false;
+        _formError = string.Empty;
+        _form = new CaptacionDto
+        {
+            CodigoCaptacion = $"CAP-{DateTime.Today:yyyy}-{(_items.Count + 1):000}",
+            Estado = "Pendiente de revision",
+            FechaCaptacion = DateOnly.FromDateTime(DateTime.Today),
+            FechaInicioVigencia = DateOnly.FromDateTime(DateTime.Today),
+            FechaFinVigencia = DateOnly.FromDateTime(DateTime.Today.AddMonths(6)),
+            ComisionPactada = 7.00m,
+            NombreAgenteResponsable = "Valentina Mora",
+            AgenteResponsableId = 1
+        };
+        if (_dialog is not null) await _dialog.ShowAsync();
+    }
+
+    private async Task OpenEditAsync(CaptacionDto item)
+    {
+        _editing = true;
+        _reviewing = false;
+        _formError = string.Empty;
+        _form = Clone(item);
+        if (_dialog is not null) await _dialog.ShowAsync();
+    }
+
+    private async Task OpenReviewAsync(CaptacionDto item)
+    {
+        _editing = true;
+        _reviewing = true;
+        _formError = string.Empty;
+        _form = Clone(item);
+        _form.BrokerRevisorId ??= 1;
+        if (string.IsNullOrWhiteSpace(_form.NombreBrokerRevisor))
+        {
+            _form.NombreBrokerRevisor = RoleState.CurrentRole == Roles.BrokerAdministrador ? "Broker administrador" : "Marco Salazar";
+        }
+        _form.FechaRevision ??= DateTime.Now;
+        if (_dialog is not null) await _dialog.ShowAsync();
+    }
+
+    private async Task GuardarAsync()
+    {
+        _formError = ValidateDates();
+        if (!string.IsNullOrWhiteSpace(_formError))
+        {
+            return;
+        }
+
+        _form.FechaActualizacion = DateTime.Now;
+        if (_editing)
+        {
+            var index = _items.FindIndex(x => x.Id == _form.Id);
+            if (index >= 0) _items[index] = Clone(_form);
+        }
+        else
+        {
+            _form.Id = _items.Count == 0 ? 1 : _items.Max(x => x.Id) + 1;
+            _form.FechaCreacion = DateTime.Now;
+            _items.Insert(0, Clone(_form));
+        }
+        await CloseAsync();
+    }
+
+    private string ValidateDates()
+    {
+        if (_form.FechaInicioVigencia is not null
+            && _form.FechaFinVigencia is not null
+            && _form.FechaFinVigencia < _form.FechaInicioVigencia)
+        {
+            return "La fecha fin de vigencia no puede ser anterior a la fecha de inicio.";
+        }
+
+        return string.Empty;
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_dialog is not null) await _dialog.CloseAsync();
+    }
+
+    private static string FormatVigencia(CaptacionDto item)
+    {
+        var inicio = item.FechaInicioVigencia?.ToString("dd/MM/yyyy") ?? "Sin inicio";
+        var fin = item.FechaFinVigencia?.ToString("dd/MM/yyyy") ?? "Sin fin";
+        return $"{inicio} - {fin}";
+    }
+
+    private static CaptacionDto Clone(CaptacionDto item) => new()
+    {
+        Id = item.Id,
+        CodigoCaptacion = item.CodigoCaptacion,
+        LocalComercialId = item.LocalComercialId,
+        DireccionLocal = item.DireccionLocal,
+        AgenteResponsableId = item.AgenteResponsableId,
+        NombreAgenteResponsable = item.NombreAgenteResponsable,
+        FechaCaptacion = item.FechaCaptacion,
+        FechaInicioVigencia = item.FechaInicioVigencia,
+        FechaFinVigencia = item.FechaFinVigencia,
+        ComisionPactada = item.ComisionPactada,
+        Estado = item.Estado,
+        Observaciones = item.Observaciones,
+        BrokerRevisorId = item.BrokerRevisorId,
+        NombreBrokerRevisor = item.NombreBrokerRevisor,
+        FechaRevision = item.FechaRevision,
+        ObservacionRevision = item.ObservacionRevision,
+        FechaCreacion = item.FechaCreacion,
+        FechaActualizacion = item.FechaActualizacion
+    };
+}

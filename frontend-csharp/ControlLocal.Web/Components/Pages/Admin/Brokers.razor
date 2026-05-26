@@ -1,0 +1,72 @@
+@page "/admin/brokers"
+@rendermode InteractiveServer
+@inject RoleState RoleState
+
+<PageTitle>Gestion de brokers - ControlLocal</PageTitle>
+
+<div class="cl-page-hero cl-admin-hero">
+    <div>
+        <div class="cl-page-kicker">Broker administrador</div>
+        <div class="cl-page-title">Gestion de brokers</div>
+        <div class="cl-page-subtitle">8 brokers, 6 activos y 2 inactivos. Administracion a cargo del broker administrador.</div>
+    </div>
+    <button class="btn btn-primary cl-btn-primary">Nuevo broker</button>
+</div>
+
+<div class="card cl-card mb-3">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-lg-4"><input class="form-control" placeholder="Buscar broker, correo o zona" /></div>
+            <div class="col-lg-2">
+                <select class="form-select"><option>Todos los estados</option><option>Activo</option><option>Inactivo</option></select>
+            </div>
+            <div class="col-lg-3">
+                <select class="form-select"><option>Todas las zonas</option><option>Lima Centro</option><option>Lima Sur</option><option>Lima Este</option><option>Callao / Norte</option></select>
+            </div>
+            <div class="col-lg-3 d-flex gap-2">
+                <button class="btn btn-outline-secondary w-100">Mas filtros</button>
+                <button class="btn btn-outline-secondary w-100">Exportar</button>
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive cl-table-card">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Broker</th><th>Documento</th><th>Zona</th><th>Agentes a cargo</th><th>Captac. del mes</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var broker in BrokersData)
+                {
+                    <tr>
+                        <td><div class="d-flex align-items-center gap-2"><div class="cl-avatar small">@broker.Initials</div><div><div class="fw-semibold">@broker.Name</div><div class="text-secondary small">@broker.Email</div></div></div></td>
+                        <td>@broker.Documento</td>
+                        <td>@broker.Zona</td>
+                        <td>@broker.Agentes <span class="text-secondary small">activos</span></td>
+                        <td>@broker.Captaciones</td>
+                        <td><StatusBadge Label="@broker.Estado" /></td>
+                        <td class="text-end"><button class="btn btn-sm btn-outline-secondary">Gestionar</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="text-secondary small">Mostrando 1-8 de 8 resultados.</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        RoleState.SetRole(Roles.BrokerAdministrador);
+    }
+
+    private static readonly BrokerRow[] BrokersData =
+    [
+        new("RS", "Ricardo Salas", "rsalas@controllocal.pe", "DNI 40981234", "Lima Centro / Sur", 7, 38, "Activo"),
+        new("MQ", "Mariana Quintero", "mquintero@controllocal.pe", "DNI 41883320", "Lima Moderna", 6, 31, "Activo"),
+        new("FA", "Felipe Andrade", "fandrade@controllocal.pe", "DNI 42771031", "Lima Este", 5, 27, "Activo"),
+        new("SR", "Sandra Rios", "srios@controllocal.pe", "DNI 43669180", "Callao / Norte", 4, 19, "Activo"),
+        new("LV", "Luis Velarde", "lvelarde@controllocal.pe", "DNI 44220176", "Lima Norte", 0, 0, "Inactivo"),
+        new("ET", "Elena Tafur", "etafur@controllocal.pe", "DNI 45199872", "Lima Moderna", 3, 12, "Activo")
+    ];
+
+    private sealed record BrokerRow(string Initials, string Name, string Email, string Documento, string Zona, int Agentes, int Captaciones, string Estado);
+}

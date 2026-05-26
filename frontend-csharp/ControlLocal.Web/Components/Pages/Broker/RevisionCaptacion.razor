@@ -1,0 +1,75 @@
+@page "/broker/captaciones/revision"
+@inject RoleState RoleState
+
+<PageTitle>Revision de captacion - ControlLocal</PageTitle>
+
+<div class="cl-page-hero">
+    <div>
+        <div class="cl-page-kicker">CAP-0231</div>
+        <div class="cl-page-title">Revision de captacion - CAP-0231</div>
+        <div class="cl-page-subtitle">Enviada por Carolina Vega, agente bajo tu supervision. Hace 2 dias.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="/broker/captaciones">Volver a la bandeja</a>
+        <button class="btn btn-outline-danger">Rechazar</button>
+        <button class="btn btn-outline-secondary">Observar</button>
+        <button class="btn btn-primary cl-btn-primary">Aprobar</button>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card cl-card mb-3">
+            <div class="card-header bg-white fw-semibold">Resumen de la captacion</div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div><strong>CAP-0231 · Pendiente de revision</strong><div class="text-secondary">Av. Petit Thouars 1875</div></div>
+                    <StatusBadge Label="Pendiente de revision" />
+                </div>
+                <div class="cl-local-photo mb-3">foto del local</div>
+                <div class="row g-3">
+                    <div class="col-md-6"><div class="cl-detail"><span>Distrito</span><strong>Jesus Maria, Lima · 95 m2 · Servicios</strong></div></div>
+                    <div class="col-md-6"><div class="cl-detail"><span>Propietario</span><strong>Grupo Bermudez E.I.R.L. · RUC</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Precio referencial</span><strong>USD 1 600 / mes</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Garantia</span><strong>2 meses</strong></div></div>
+                    <div class="col-md-4"><div class="cl-detail"><span>Plazo minimo</span><strong>24 meses</strong></div></div>
+                    <div class="col-md-6"><div class="cl-detail"><span>Vigencia captacion</span><strong>20 May - 20 Ago 2026</strong></div></div>
+                    <div class="col-md-6"><div class="cl-detail"><span>Comision pactada</span><strong>5.0% sobre primera renta</strong></div></div>
+                    <div class="col-md-6"><div class="cl-detail"><span>Exclusividad</span><strong>Si, exclusiva</strong></div></div>
+                    <div class="col-md-6"><div class="cl-detail"><span>Agente</span><strong>Carolina Vega (tu equipo)</strong></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card cl-card">
+            <div class="card-header bg-white fw-semibold">Documentos adjuntos</div>
+            <div class="list-group list-group-flush">
+                <div class="list-group-item d-flex justify-content-between"><span>Contrato_corretaje_firmado.pdf · 1.4 MB</span><StatusBadge Label="Validado" /></div>
+                <div class="list-group-item d-flex justify-content-between"><span>Ficha_tecnica_local.pdf · 1.2 MB</span><button class="btn btn-sm btn-outline-secondary">Ver</button></div>
+                <div class="list-group-item d-flex justify-content-between"><span>Licencia_funcionamiento.pdf · 1.5 MB</span><StatusBadge Label="Observado" /></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card cl-card mb-3">
+            <div class="card-header bg-white fw-semibold">Observaciones del broker</div>
+            <div class="card-body">
+                <label class="form-label">Visible para el agente</label>
+                <textarea class="form-control mb-3" rows="5">Licencia de funcionamiento vencida. Confirma con el propietario antes de aprobar la captacion.</textarea>
+                <button class="btn btn-outline-secondary w-100">Guardar observacion</button>
+            </div>
+        </div>
+        <div class="card cl-card">
+            <div class="card-header bg-white fw-semibold">Linea de tiempo</div>
+            <div class="card-body">
+                <div class="cl-timeline-item"><strong>22 May · 14:08</strong><span>Enviada a revision por C. Vega.</span></div>
+                <div class="cl-timeline-item"><strong>21 May · 16:22</strong><span>Documentos cargados.</span></div>
+                <div class="cl-timeline-item"><strong>20 May · 10:00</strong><span>Captacion registrada como borrador.</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized() => RoleState.SetRole(Roles.Broker);
+}

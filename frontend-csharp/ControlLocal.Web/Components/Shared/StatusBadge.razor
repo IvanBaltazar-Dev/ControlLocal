@@ -1,0 +1,10 @@
+<span class="cl-status @CssClass">@Label</span>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+
+    private string CssClass => Label.ToLowerInvariant()
+        .Replace(" ", "-")
+        .Replace("ó", "o")
+        .Replace("í", "i");
+}

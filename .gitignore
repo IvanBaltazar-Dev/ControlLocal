@@ -70,5 +70,19 @@ secrets.yml
 *.tmp
 *.swp
 
+# ========================
 # Local database credentials
+# ========================
 controllocal-db-manager/src/main/resources/db.properties
+
+# ========================
+# Visual Studio
+# ========================
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.vsidx
+*.db
+.aspnet-data-protection-keys/

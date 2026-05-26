@@ -73,6 +73,7 @@ secrets.yml
 # ========================
 # Local database credentials
 # ========================
+backend-java/controllocal-db-manager/src/main/resources/db.properties
 controllocal-db-manager/src/main/resources/db.properties
 
 # ========================

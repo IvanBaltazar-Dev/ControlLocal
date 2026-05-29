@@ -1,0 +1,232 @@
+@page "/broker-nuevo"
+@inject AppState App
+@using System.Text.RegularExpressions
+
+<PageTitle>Registrar broker · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Brokers", "Nuevo broker" })"
+          Title="Registrar nuevo broker"
+          Subtitle="Da de alta un broker con sus datos completos y credenciales de acceso.">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Tipo de persona" Sub="Natural (persona física) o Jurídica (empresa)">
+                    <div class="cl-grid c2">
+                        <Field Label="Tipo de persona" Required="true">
+                            <select value="@_tipoPersona" @onchange="OnTipoPersonaChange">
+                                <option value="natural">Natural</option>
+                                <option value="juridica">Jurídica</option>
+                            </select>
+                        </Field>
+                        <Field Label="Tipo de documento" Required="true">
+                            <select value="@_tipoDoc" @onchange="OnTipoDocChange">
+                                @foreach (var opt in TipoDocOptions)
+                                {
+                                    <option value="@opt.Value">@opt.Label</option>
+                                }
+                            </select>
+                        </Field>
+                        @if (Err("tipoDoc") is { } e1)
+                        {
+                            <div class="cl-alert red" style="grid-column:1/-1;margin-top:-8px;"><Icon Name="alert" Size="13" /><span>@e1</span></div>
+                        }
+                    </div>
+                </FormSection>
+
+                <FormSection Num="2" Title="Identificación" Sub="@(_tipoPersona == "natural" ? "Datos de la persona física" : "Datos de la empresa")">
+                    <div class="cl-grid c2">
+                        <Field Label="Número de documento" Required="true">
+                            <input placeholder="@(_tipoDoc == "RUC" ? "20 ___ ___ ___" : "__ ___ ___")"
+                                   value="@_numDoc" @oninput="@(e => { _numDoc = e.Value?.ToString() ?? ""; _errors.Remove("numDoc"); })" />
+                            @if (Err("numDoc") is { } e2)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e2</div>
+                            }
+                        </Field>
+                        <Field Label="@(_tipoPersona == "natural" ? "Nombre completo" : "Razón social")" Required="true">
+                            <input placeholder="@(_tipoPersona == "natural" ? "Nombres y apellidos" : "Razón social de la empresa")"
+                                   value="@_nombre" @oninput="@(e => { _nombre = e.Value?.ToString() ?? ""; _errors.Remove("nombre"); })" />
+                            @if (Err("nombre") is { } e3)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e3</div>
+                            }
+                        </Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="3" Title="Contacto" Sub="Medios de contacto corporativo">
+                    <div class="cl-grid c2">
+                        <Field Label="Teléfono" Required="true">
+                            <input placeholder="+51 ___ ___ ___" value="@_telefono" @oninput="@(e => { _telefono = e.Value?.ToString() ?? ""; _errors.Remove("telefono"); })" />
+                            @if (Err("telefono") is { } e4)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e4</div>
+                            }
+                        </Field>
+                        <Field Label="Correo corporativo" Required="true">
+                            <input type="email" placeholder="broker@@empresa.com.pe" value="@_correo" @oninput="@(e => { _correo = e.Value?.ToString() ?? ""; _errors.Remove("correo"); })" />
+                            @if (Err("correo") is { } e5)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e5</div>
+                            }
+                        </Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="4" Title="Credenciales de acceso" Sub="Usuario y contraseña temporal">
+                    <div class="cl-grid c2">
+                        <Field Label="Nombre de usuario" Required="true">
+                            <input placeholder="nombre.apellido o similar" value="@_usuario" @oninput="@(e => { _usuario = e.Value?.ToString() ?? ""; _errors.Remove("usuario"); })" />
+                            @if (Err("usuario") is { } e6)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e6</div>
+                            }
+                        </Field>
+                        <Field Label="Contraseña temporal" Required="true">
+                            <input type="password" placeholder="Mínimo 8 caracteres" value="@_passwd" @oninput="@(e => { _passwd = e.Value?.ToString() ?? ""; _errors.Remove("passwd"); })" />
+                            @if (Err("passwd") is { } e7)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e7</div>
+                            }
+                        </Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="5" Title="Asignación y estado" Sub="Zona de operación y estado inicial">
+                    <div class="cl-grid c2">
+                        <Field Label="Zona asignada" Required="true">
+                            <select value="@_zona" @onchange="@(e => { _zona = e.Value?.ToString() ?? ""; _errors.Remove("zona"); })">
+                                <option value="">Selecciona una zona</option>
+                                <option value="lima-centro">Lima Centro / Sur</option>
+                                <option value="lima-norte">Lima Norte</option>
+                                <option value="lima-este">Lima Este</option>
+                                <option value="callao">Callao / Norte</option>
+                                <option value="lima-moderna">Lima Moderna</option>
+                            </select>
+                            @if (Err("zona") is { } e8)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e8</div>
+                            }
+                        </Field>
+                        <Field Label="Estado" Required="true">
+                            <select value="@_estado" @onchange="@(e => { _estado = e.Value?.ToString() ?? ""; _errors.Remove("estado"); })">
+                                <option value="Activo">Activo</option>
+                                <option value="Inactivo">Inactivo</option>
+                            </select>
+                            @if (Err("estado") is { } e9)
+                            {
+                                <div class="cl-help" style="color:#C0473C;">@e9</div>
+                            }
+                        </Field>
+                    </div>
+                </FormSection>
+
+                <FormFooterBar OnCancel="@(() => App.Navigate("brokers"))" OnSave="@OnGuardar" SaveLabel="Guardar" />
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card" style="position:sticky;top:14px;">
+                    <div class="cl-card-head"><div class="cl-card-title">Se genera automáticamente</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-help" style="margin-bottom:10px;">Estos valores se asignan al confirmar el registro.</div>
+                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
+                            <dt>Código de broker</dt><dd>Automático</dd>
+                            <dt>Fecha de registro</dt><dd>28 May 2026</dd>
+                        </dl>
+                    </div>
+                </div>
+                <div class="cl-alert blue">
+                    <Icon Name="lock" Size="15" />
+                    <span>El broker deberá cambiar la contraseña temporal en su primer ingreso. El acceso es controlado internamente.</span>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="briefcase"
+                       Title="Confirmar registro del broker"
+                       Desc="@($"Se registrará el broker {_nombre} ({_tipoDoc} {_numDoc}). Recibirá las credenciales de acceso temporal.")"
+                       ConfirmLabel="Registrar broker" CancelLabel="Cancelar"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">El broker fue registrado correctamente.</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _tipoPersona = "natural";
+    private string _tipoDoc = "DNI";
+    private string _numDoc = "";
+    private string _nombre = "";
+    private string _telefono = "";
+    private string _correo = "";
+    private string _usuario = "";
+    private string _passwd = "";
+    private string _zona = "";
+    private string _estado = "Activo";
+    private bool _confirm;
+    private bool _toast;
+
+    private readonly Dictionary<string, string> _errors = new();
+
+    private string? Err(string key) => _errors.TryGetValue(key, out var v) ? v : null;
+
+    private record DocOption(string Value, string Label);
+
+    private DocOption[] TipoDocOptions => _tipoPersona == "natural"
+        ? new[] { new DocOption("DNI", "DNI"), new DocOption("CE", "Carné de extranjería"), new DocOption("PAS", "Pasaporte") }
+        : new[] { new DocOption("RUC", "RUC") };
+
+    private void OnTipoPersonaChange(ChangeEventArgs e)
+    {
+        _tipoPersona = e.Value?.ToString() ?? "natural";
+        _tipoDoc = _tipoPersona == "natural" ? "DNI" : "RUC";
+        _errors.Clear();
+    }
+
+    private void OnTipoDocChange(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "";
+        // Silent reject of incoherent combinations.
+        if ((_tipoPersona == "natural" && val == "RUC") || (_tipoPersona == "juridica" && val != "RUC")) return;
+        _tipoDoc = val;
+        _errors.Remove("tipoDoc");
+    }
+
+    private bool Validate()
+    {
+        _errors.Clear();
+        if (string.IsNullOrEmpty(_tipoPersona)) _errors["tipoPersona"] = "Requerido";
+        if (string.IsNullOrEmpty(_tipoDoc)) _errors["tipoDoc"] = "Requerido";
+        if (string.IsNullOrWhiteSpace(_numDoc)) _errors["numDoc"] = "Requerido";
+        if (string.IsNullOrWhiteSpace(_nombre)) _errors["nombre"] = _tipoPersona == "natural" ? "Nombre completo requerido" : "Razón social requerida";
+        if (string.IsNullOrWhiteSpace(_telefono)) _errors["telefono"] = "Requerido";
+        if (string.IsNullOrWhiteSpace(_correo)) _errors["correo"] = "Requerido";
+        else if (!Regex.IsMatch(_correo, @"^[^\s@]+@[^\s@]+\.[^\s@]+$")) _errors["correo"] = "Formato de correo inválido";
+        if (string.IsNullOrWhiteSpace(_usuario)) _errors["usuario"] = "Requerido";
+        if (string.IsNullOrWhiteSpace(_passwd)) _errors["passwd"] = "Requerido";
+        if (string.IsNullOrWhiteSpace(_zona)) _errors["zona"] = "Requerido";
+        if (string.IsNullOrEmpty(_estado)) _errors["estado"] = "Requerido";
+
+        if (_tipoPersona == "natural" && _tipoDoc == "RUC") _errors["tipoDoc"] = "Natural no puede usar RUC";
+        if (_tipoPersona == "juridica" && _tipoDoc != "RUC") _errors["tipoDoc"] = "Jurídica debe usar RUC";
+
+        return _errors.Count == 0;
+    }
+
+    private void OnGuardar()
+    {
+        if (Validate()) _confirm = true;
+    }
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(1500);
+        App.Navigate("brokers");
+    }
+}

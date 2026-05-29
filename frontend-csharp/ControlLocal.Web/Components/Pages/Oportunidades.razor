@@ -1,0 +1,93 @@
+@page "/oportunidades"
+@inject AppState App
+
+<PageTitle>Operaciones del equipo · ControlLocal</PageTitle>
+
+<AppShell Active="Operaciones del equipo" Crumbs="@(new[] { "ControlLocal", "Seguimiento", "Operaciones del equipo" })"
+          Title="Operaciones del equipo"
+          Subtitle="Seguimiento de las operaciones comerciales de los agentes que supervisas">
+    <Actions>
+        <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+        <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="target" Label="Operaciones activas" Value="22" Tone="blue" />
+            <MetricCard Icon="activity" Label="En seguimiento" Value="14" Tone="info" />
+            <MetricCard Icon="fileText" Label="Con solicitud" Value="8" Tone="amber" />
+            <MetricCard Icon="check" Label="Cerradas (mes)" Value="5" Tone="green" />
+        </div>
+
+        <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
+
+        <FilterBar Search="Buscar por operación, cliente, local, agente…">
+            <select class="cl-select"><option>Todos los agentes</option><option>Valentina Mora</option><option>Carolina Vega</option><option>Andrea Torres</option></select>
+            <select class="cl-select"><option>Todas las etapas</option><option>Captada</option><option>Con interacciones</option><option>Con solicitud</option><option>En evaluación</option><option>Alquilada</option></select>
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Operación</th><th>Captación</th><th>Cliente</th><th>Local</th>
+                            <th>Agente</th><th>Etapa</th><th>Monto/mes</th><th>Actualizada</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in _ops)
+                        {
+                            <tr>
+                                <td><span class="mono">@o.Op</span></td>
+                                <td><span class="mono">@o.Cap</span></td>
+                                <td style="font-weight:600;">@o.Client</td>
+                                <td>@o.Local</td>
+                                <td>
+                                    <div class="cl-flex">
+                                        <span class="cl-avatar" style="width:24px;height:24px;font-size:10px;background:@o.Color;">@o.Ini</span>
+                                        <span>@o.Agent</span>
+                                    </div>
+                                </td>
+                                <td><StatusBadge Label="@o.Stage" /></td>
+                                <td>@(o.Amount == "—" ? "—" : $"USD {o.Amount}")</td>
+                                <td><span class="cl-muted" style="font-size:12px;">@o.Updated</span></td>
+                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate("captacion-detail"))">Ver expediente</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="22" />
+
+        <div class="cl-alert blue" style="margin-top:14px;">
+            <Icon Name="info" Size="15" />
+            <span>Como supervisor consultas las operaciones en <b>solo lectura</b>. El registro de interacciones, visitas y solicitudes lo realiza el agente a cargo.</span>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _tab = "Todas";
+
+    private readonly Tabs.TabItem[] _tabs = new[]
+    {
+        new Tabs.TabItem("Todas", 22),
+        new Tabs.TabItem("En captación", 9),
+        new Tabs.TabItem("Con solicitud", 8),
+        new Tabs.TabItem("En evaluación", 3),
+        new Tabs.TabItem("Cerradas", 5),
+    };
+
+    private record OpRow(string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated);
+
+    private readonly OpRow[] _ops = new[]
+    {
+        new OpRow("OP-1094", "CAP-0226", "Boutique Lila", "Calle Schell 412", "VM", "#3A6BB5", "V. Mora", "En evaluación", "1 850", "Hoy 11:40"),
+        new OpRow("OP-1083", "CAP-0218", "Inversiones Trébol", "Av. La Marina 245", "VM", "#3A6BB5", "V. Mora", "Con interacciones", "2 750", "Hoy 09:14"),
+        new OpRow("OP-1085", "CAP-0234", "Café Lima", "Jr. Berlín 230", "CV", "#2F7D52", "C. Vega", "Con solicitud", "1 400", "Ayer"),
+        new OpRow("OP-1077", "CAP-0242", "Carla Espinoza", "Av. Salaverry 2120", "AT", "#C0473C", "A. Torres", "Alquilada", "2 100", "18 May"),
+        new OpRow("OP-1090", "CAP-0231", "Bodegas del Norte", "Av. Petit Thouars 1875", "CV", "#2F7D52", "C. Vega", "Captada", "—", "16 May"),
+        new OpRow("OP-1071", "CAP-0238", "Plásticos del Sur", "Av. Aviación 4012", "PR", "#C98A1E", "P. Reyes", "Con interacciones", "3 500", "15 May"),
+    };
+}

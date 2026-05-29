@@ -1,0 +1,20 @@
+/* ControlLocal — base reset bridging the original prototype's html/body rules
+   into the Blazor host. Keeps the warm paper background and full-height shell. */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-height: 100%;
+  background: #F6F4EF;
+  font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+a { text-decoration: none; color: inherit; }
+button { font-family: inherit; }
+
+/* The Blazor router renders pages directly in <body>; this wrapper lets the
+   espresso sidebar stretch the full viewport like the original #root. */
+.cl-app { min-height: 100vh; }
+
+/* Hide the framework error bar unless an actual error occurs. */
+#blazor-error-ui { display: none; }

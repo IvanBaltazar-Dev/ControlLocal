@@ -1,0 +1,57 @@
+@page "/clientes"
+@inject AppState App
+@inject IClienteService ClienteSvc
+
+<PageTitle>Clientes interesados · ControlLocal</PageTitle>
+
+<AppShell Active="Clientes interesados" Crumbs="@(new[] { "ControlLocal", "Registro", "Clientes interesados" })"
+          Title="Clientes interesados"
+          Subtitle="Prospectos comerciales que registro para vincular a una captación">
+    <Actions>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("cliente-form"))"><Icon Name="plus" Size="13" /> Registrar cliente</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="users" Label="Clientes registrados" Value="142" Tone="blue" />
+            <MetricCard Icon="pin" Label="Vinculados a captación" Value="96" Tone="info" />
+            <MetricCard Icon="clock" Label="Sin vincular" Value="46" Tone="amber" Footer="esperan una captación" />
+            <MetricCard Icon="check" Label="Con alquiler cerrado" Value="28" Tone="green" />
+        </div>
+        <FilterBar Search="Buscar por nombre, razón social, documento, rubro…">
+            <select class="cl-select"><option>Tipo de persona</option><option>Persona natural</option><option>Persona jurídica</option></select>
+            <select class="cl-select"><option>Rubro comercial</option><option>Restaurante</option><option>Moda</option><option>Servicios</option></select>
+            <select class="cl-select"><option>Estado</option><option>Vinculado</option><option>Sin vincular</option></select>
+        </FilterBar>
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th><th>Documento</th><th>Teléfono</th><th>Rubro de interés</th>
+                            <th>Interés comercial</th><th>Captaciones</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in ClienteSvc.All())
+                        {
+                            <tr>
+                                <td>
+                                    <div style="font-weight:600;">@c.Nombre</div>
+                                    <div class="cl-muted" style="font-size:11px;">@c.TipoPersona</div>
+                                </td>
+                                <td><span class="mono">@c.NumeroDocumento</span></td>
+                                <td><span class="mono" style="font-size:12px;">@c.Telefono</span></td>
+                                <td><StatusBadge Label="@c.RubroInteres" ToneOverride="blue" Plain="true" /></td>
+                                <td style="font-size:12px;color:var(--c-text-2);">@c.InteresComercial</td>
+                                <td><span><b>@c.CaptacionesVinculadas</b></span></td>
+                                <td><StatusBadge Label="@c.Estado" /></td>
+                                <td><RowActions Items="@(new[] { "view", "edit" })" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="142" />
+    </ChildContent>
+</AppShell>

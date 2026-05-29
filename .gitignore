@@ -1,89 +1,83 @@
 # ========================
-# MAVEN / BUILD
+# AI / LOCAL ASSISTANTS
+# ========================
+.claude/
+**/.claude/
+.codex-build/
+.codex/
+.aider*
+.cursor/
+.windsurf/
+*.prompt.md
+*.chat.md
+
+# ========================
+# LOCAL CONFIG / SECRETS
+# ========================
+.env
+.env.*
+*.env
+*.local
+*.local.*
+secrets.*
+*.secrets.*
+application.properties
+application.yml
+appsettings.Development.json
+appsettings.Local.json
+appsettings.json
+appsettings.*.json
+!appsettings.example.json
+!appsettings.Production.example.json
+
+# ========================
+# DATABASE CREDENTIALS
+# ========================
+**/db.properties
+!**/db.example.properties
+
+# ========================
+# ASP.NET SECURITY KEYS
+# ========================
+.aspnet-data-protection-keys/
+**/.aspnet-data-protection-keys/
+
+# ========================
+# BUILD OUTPUTS
 # ========================
 target/
 build/
-*.log
+bin/
+obj/
+out/
+dist/
+nbdist/
+.codex-build/
 
 # ========================
-# MAVEN WRAPPER
-# ========================
-!.mvn/wrapper/maven-wrapper.jar
-
-# ========================
-# JAVA
-# ========================
-*.class
-
-# ========================
-# IntelliJ IDEA
+# IDE / EDITOR
 # ========================
 .idea/
+.vscode/
+.vs/
 *.iml
 *.ipr
 *.iws
-out/
+*.user
+*.suo
+*.vsidx
 
 # ========================
-# NetBeans
+# LOGS / TEMP
 # ========================
-nbproject/private/
-nbbuild/
-dist/
-nbdist/
-.nb-gradle/
-
-# ========================
-# Eclipse / STS
-# ========================
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-# ========================
-# VS Code
-# ========================
-.vscode/
+*.log
+*.tmp
+*.swp
+*.bak
+*.backup
 
 # ========================
 # OS
 # ========================
 .DS_Store
 Thumbs.db
-
-# ========================
-# SECURITY (MUY IMPORTANTE)
-# ========================
-.env
-*.env
-application.properties
-application.yml
-secrets.yml
-
-# ========================
-# TEMP FILES
-# ========================
-*.tmp
-*.swp
-
-# ========================
-# Local database credentials
-# ========================
-backend-java/controllocal-db-manager/src/main/resources/db.properties
-controllocal-db-manager/src/main/resources/db.properties
-
-# ========================
-# Visual Studio
-# ========================
-.vs/
-bin/
-obj/
-*.user
-*.suo
-*.vsidx
-*.db
-.aspnet-data-protection-keys/

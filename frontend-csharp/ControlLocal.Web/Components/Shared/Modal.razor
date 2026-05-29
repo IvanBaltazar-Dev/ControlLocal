@@ -1,0 +1,51 @@
+@* Modal shell — short windows for confirmations and brief registers. *@
+@if (Open)
+{
+    <div class="cl-modal-back" @onclick="BackdropClick">
+        <div class="cl-modal @Size" @onclick:stopPropagation="true" role="dialog" aria-modal="true">
+            <div class="cl-modal-head">
+                @if (!string.IsNullOrEmpty(Icon))
+                {
+                    <div class="cl-modal-ico @Tone"><Icon Name="@Icon" Size="19" /></div>
+                }
+                <div style="flex:1">
+                    <div class="cl-modal-title">@Title</div>
+                    @if (!string.IsNullOrEmpty(Desc))
+                    {
+                        <div class="cl-modal-desc">@Desc</div>
+                    }
+                </div>
+                @if (OnClose.HasDelegate)
+                {
+                    <div class="cl-modal-x" @onclick="OnClose"><Icon Name="x" Size="16" /></div>
+                }
+            </div>
+            @if (ChildContent != null)
+            {
+                <div class="cl-modal-body">@ChildContent</div>
+            }
+            @if (Footer != null)
+            {
+                <div class="cl-modal-foot">@Footer</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public string Size { get; set; } = "";
+    [Parameter] public string Tone { get; set; } = "blue";
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Desc { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public bool CloseOnBackdrop { get; set; } = true;
+
+    private async Task BackdropClick()
+    {
+        if (CloseOnBackdrop && OnClose.HasDelegate) await OnClose.InvokeAsync();
+    }
+}

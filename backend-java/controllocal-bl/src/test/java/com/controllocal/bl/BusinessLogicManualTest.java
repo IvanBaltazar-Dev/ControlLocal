@@ -38,6 +38,7 @@ public class BusinessLogicManualTest {
         runner.ejecutar("Broker normal revisa captacion de agente supervisado", runner::brokerNormalRevisaCaptacionDeAgenteSupervisado);
         runner.ejecutar("Broker normal registra agente propio", runner::brokerNormalRegistraAgentePropio);
         runner.ejecutar("Broker administrador no registra agente operativo", runner::brokerAdministradorNoRegistraAgenteOperativo);
+        runner.ejecutar("Broker administrador reasigna agente con motivo", runner::brokerAdministradorReasignaAgenteConMotivo);
         runner.ejecutar("Reasignar captacion con historial", runner::reasignaCaptacionRegistrandoHistorial);
         runner.ejecutar("No reasignar a agente no disponible", runner::noPermiteReasignacionSiNuevoAgenteNoDisponible);
         runner.ejecutar("Solo administrador registra brokers", runner::soloBrokerAdministradorPuedeRegistrarBrokers);
@@ -156,6 +157,23 @@ public class BusinessLogicManualTest {
 
         assertTrue(ex.getMessage().contains("administrador no registra agentes"));
         assertFalse(fx.brokerAgenteDAO.existeAsignacionActiva(fx.broker.getIdBroker(), nuevoAgente.getIdAgente()));
+    }
+
+    public void brokerAdministradorReasignaAgenteConMotivo() {
+        Fixtures fx = new Fixtures();
+        Broker brokerDestino = fx.broker(3L, false);
+        fx.brokerDAO.items.put(brokerDestino.getIdBroker(), brokerDestino);
+        fx.asignar(fx.brokerNoAdmin, fx.agente);
+
+        Long idAsignacion = fx.brokers.asignarAgente(
+                fx.broker.getIdBroker(),
+                brokerDestino.getIdBroker(),
+                fx.agente.getIdAgente(),
+                "Balance de carga entre equipos");
+
+        assertFalse(fx.brokerAgenteDAO.existeAsignacionActiva(fx.brokerNoAdmin.getIdBroker(), fx.agente.getIdAgente()));
+        assertTrue(fx.brokerAgenteDAO.existeAsignacionActiva(brokerDestino.getIdBroker(), fx.agente.getIdAgente()));
+        assertEquals("Balance de carga entre equipos", fx.brokerAgenteDAO.items.get(idAsignacion).getMotivo());
     }
 
     public void reasignaCaptacionRegistrandoHistorial() {
@@ -306,6 +324,7 @@ public class BusinessLogicManualTest {
             brokerAgente.setBroker(broker);
             brokerAgente.setAgente(agente);
             brokerAgente.setFechaAsignacion(LocalDate.now());
+            brokerAgente.setMotivo("Asignacion de prueba");
             brokerAgente.setEstado(EstadoActivoInactivo.ACTIVO);
             brokerAgenteDAO.crear(brokerAgente);
             return brokerAgente;
@@ -384,6 +403,7 @@ public class BusinessLogicManualTest {
             broker.setIdBroker(id);
             broker.setIdUsuarioInterno(id);
             broker.setCodigoBroker("BRK-" + id);
+            broker.setZona("Zona " + id);
             broker.setFechaDesignacion(LocalDate.now());
             broker.setRol(RolUsuarioInterno.BROKER);
             broker.setEstadoAdministrativo(EstadoActivoInactivo.ACTIVO);

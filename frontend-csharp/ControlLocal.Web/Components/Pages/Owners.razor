@@ -1,0 +1,50 @@
+@page "/owners"
+@inject AppState App
+@inject IPropietarioService OwnerSvc
+
+<PageTitle>Propietarios · ControlLocal</PageTitle>
+
+<AppShell Active="Propietarios" Crumbs="@(new[] { "ControlLocal", "Captación", "Propietarios" })"
+          Title="Propietarios"
+          Subtitle="Propietarios que registré para vincular a captaciones">
+    <Actions>
+        <button class="cl-btn"><Icon Name="upload" Size="13" /> Importar</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Registrar propietario</button>
+    </Actions>
+    <ChildContent>
+        <FilterBar Search="Buscar por nombre, razón social, documento…">
+            <select class="cl-select"><option>Tipo de persona</option><option>Persona natural</option><option>Persona jurídica</option></select>
+            <select class="cl-select"><option>Estado</option><option>Activo</option><option>Inactivo</option></select>
+        </FilterBar>
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Propietario</th><th>Documento</th><th>Teléfono</th>
+                            <th>Correo</th><th>Locales</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in OwnerSvc.All())
+                        {
+                            <tr>
+                                <td>
+                                    <div style="font-weight:600;">@o.Nombre</div>
+                                    <div class="cl-muted" style="font-size:11px;">@o.TipoPersona</div>
+                                </td>
+                                <td><span class="mono">@o.NumeroDocumento</span></td>
+                                <td><span class="mono">@o.Telefono</span></td>
+                                <td><span class="cl-muted">@o.Correo</span></td>
+                                <td><span><b>@o.CantidadLocales</b></span></td>
+                                <td><StatusBadge Label="@o.Estado" /></td>
+                                <td><RowActions /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="86" />
+    </ChildContent>
+</AppShell>

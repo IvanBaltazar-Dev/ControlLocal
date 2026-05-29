@@ -1,0 +1,59 @@
+@page "/locales"
+@inject AppState App
+@inject ILocalService LocalSvc
+
+<PageTitle>Locales comerciales · ControlLocal</PageTitle>
+
+<AppShell Active="Locales comerciales" Crumbs="@(new[] { "ControlLocal", "Captación", "Locales comerciales" })"
+          Title="Locales comerciales"
+          Subtitle="Locales que registré · alta del local, propietario y ficha de captación">
+    <Actions>
+        <button class="cl-btn"><Icon Name="layers" Size="13" /> Vista tabla</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Registrar local</button>
+    </Actions>
+    <ChildContent>
+        <FilterBar Search="Buscar por dirección, código, propietario…">
+            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
+            <select class="cl-select"><option>Rango de precio</option><option>USD 500 – 1500</option><option>USD 1500 – 3000</option><option>USD 3000+</option></select>
+            <select class="cl-select"><option>Metraje</option><option>&lt; 50 m²</option><option>50–100 m²</option><option>100–200 m²</option></select>
+            <select class="cl-select"><option>Rubro</option><option>Restaurante</option><option>Moda</option><option>Servicios</option></select>
+            <select class="cl-select"><option>Estado</option><option>Disponible</option><option>En captación</option></select>
+        </FilterBar>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+            @foreach (var l in LocalSvc.All())
+            {
+                <div style="background:#fff;border:1px solid #E5E0D7;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;">
+                    <div style="aspect-ratio:16/10;background:repeating-linear-gradient(135deg, #F1EEE8 0 8px, #FCFBF8 8px 16px);position:relative;">
+                        <div style="position:absolute;inset:0;display:grid;place-items:center;">
+                            <div style="font-family:ui-monospace, Menlo, monospace;font-size:10px;color:#948D81;background:rgba(255,255,255,0.85);padding:4px 8px;border-radius:4px;">foto del local</div>
+                        </div>
+                        <div style="position:absolute;top:10px;left:10px;"><StatusBadge Label="@l.Estado" /></div>
+                        <div style="position:absolute;top:10px;right:10px;background:rgba(11,31,51,0.78);color:#fff;font-size:11px;padding:3px 8px;border-radius:4px;font-family:monospace;">@l.CodigoLocal</div>
+                    </div>
+                    <div style="padding:14px;display:flex;flex-direction:column;gap:6px;">
+                        <div style="font-weight:600;font-size:13.5px;">@l.Direccion</div>
+                        <div style="font-size:11.5px;color:#948D81;display:flex;gap:6px;align-items:center;">
+                            <Icon Name="mapPin" Size="12" /> @l.Distrito
+                        </div>
+                        <div style="display:flex;gap:10px;font-size:11.5px;color:#5A554D;margin-top:4px;">
+                            <span><b>@l.AreaM2</b> m²</span>
+                            <span>·</span>
+                            <span>@l.Rubro</span>
+                        </div>
+                        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:8px;">
+                            <div>
+                                <div style="font-size:11px;color:#948D81;">Precio referencial</div>
+                                <div style="font-size:17px;font-weight:600;">@l.PrecioReferencialTexto <span style="font-size:11px;color:#948D81;">USD / mes</span></div>
+                            </div>
+                            <button class="cl-btn sm primary">Ver detalle</button>
+                        </div>
+                        <div style="border-top:1px solid #EFEBE3;margin-top:8px;padding-top:8px;font-size:11.5px;color:#5A554D;">
+                            Propietario · <b>@l.PropietarioNombre</b>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        <Pagination Total="248" />
+    </ChildContent>
+</AppShell>

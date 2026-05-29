@@ -14,7 +14,7 @@ public interface BrokerBusinessLogic {
     public List<Broker> listarTodos();
     public boolean actualizarBroker(Long idBrokerAdministrador, Broker broker);
     public boolean desactivarBroker(Long idBrokerAdministrador, Long idBroker);
-    public Long asignarAgente(Long idBrokerAdministrador, Long idBrokerSupervisor, Long idAgente);
+    public Long asignarAgente(Long idBrokerAdministrador, Long idBrokerSupervisor, Long idAgente, String motivo);
     public boolean desactivarAsignacionAgente(Long idBrokerAdministrador, Long idBrokerAgente);
     public List<BrokerAgente> listarAgentesSupervisados(Long idBroker);
     public boolean puedeSupervisarAgente(Long idBroker, Long idAgente);

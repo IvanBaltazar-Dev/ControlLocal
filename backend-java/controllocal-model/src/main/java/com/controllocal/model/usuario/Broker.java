@@ -10,6 +10,7 @@ public class Broker extends UsuarioInterno {
 
     private Long idBroker;
     private String codigoBroker;
+    private String zona;
     private LocalDate fechaDesignacion;
     private boolean esAdministrador;
     private List<Captacion> captacionesSupervisadas = new ArrayList<>();
@@ -28,6 +29,14 @@ public class Broker extends UsuarioInterno {
 
     public void setCodigoBroker(String codigoBroker) {
         this.codigoBroker = codigoBroker;
+    }
+
+    public String getZona() {
+        return zona;
+    }
+
+    public void setZona(String zona) {
+        this.zona = zona;
     }
 
     public LocalDate getFechaDesignacion() {

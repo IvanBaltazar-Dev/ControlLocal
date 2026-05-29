@@ -1,0 +1,119 @@
+@page "/captacion-form"
+@inject AppState App
+
+<PageTitle>Nueva captación · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Mis captaciones", "CAP-0233 · Edición" })"
+          Title="Nueva captación · CAP-0233"
+          Subtitle="Condiciones comerciales del local · al enviarla, el broker la revisará para activarla">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("captaciones"))">Cancelar</button>
+        <button class="cl-btn" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="save" Size="13" /> Guardar borrador</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="arrowRight" Size="13" /> Enviar a revisión</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 280px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Datos del local" Sub="Local comercial sobre el que se crea la captación">
+                    <div class="cl-grid c2">
+                        <Field Label="Local" Required="true">
+                            <div style="position:relative;">
+                                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#948D81;"><Icon Name="search" Size="14" /></span>
+                                <input value="Av. La Marina 245, Miraflores" style="padding-left:30px;" />
+                            </div>
+                        </Field>
+                        <Field Label="Código del local"><input value="LOC-0481" disabled /></Field>
+                        <Field Label="Propietario"><input value="Inversiones Trébol S.A.C." disabled /></Field>
+                        <Field Label="Área registrada"><input value="120 m²" disabled /></Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="2" Title="Condiciones comerciales" Sub="Precio y términos que se ofrecerán a los clientes">
+                    <div class="cl-grid c3">
+                        <Field Label="Precio de alquiler (USD/mes)" Required="true"><input placeholder="1 800" /></Field>
+                        <Field Label="Garantía (meses)"><input placeholder="2" /></Field>
+                        <Field Label="Adelanto (meses)"><input placeholder="1" /></Field>
+                        <Field Label="Rubro objetivo"><select><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option></select></Field>
+                        <Field Label="Plazo de contrato"><select><option>12 meses</option><option>24 meses</option><option>36 meses</option></select></Field>
+                        <Field Label="Disponibilidad"><input placeholder="Inmediata" /></Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="3" Title="Vigencia y comisión" Sub="Periodo de la captación y comisión acordada con el propietario">
+                    <div class="cl-grid c3">
+                        <Field Label="Inicio de vigencia" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
+                        <Field Label="Fin de vigencia" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
+                        <Field Label="Comisión (%)" Required="true"><input placeholder="5%" /></Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="4" Title="Observaciones y documentos" Sub="Notas para el broker y respaldo documental de la captación">
+                    <Field Label="Observaciones" Hint="Contexto, condiciones especiales, acuerdos con el propietario">
+                        <textarea rows="3" placeholder="Notas para el broker que revisará la captación…"></textarea>
+                    </Field>
+                    <div style="margin-top:14px;">
+                        <Field Label="Documentos de respaldo">
+                            <div class="cl-ph" style="height:90px;">
+                                <Icon Name="upload" Size="18" /> <span style="margin-left:8px;">Arrastra archivos aquí o haz clic para seleccionar</span>
+                            </div>
+                        </Field>
+                        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid #E5E0D7;border-radius:8px;background:#fff;">
+                                <div class="cl-flex"><Icon Name="fileText" Size="15" /> <span style="font-size:12.5px;">Contrato_de_exclusividad.pdf</span></div>
+                                <span class="cl-muted" style="font-size:11px;">240 KB</span>
+                            </div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid #E5E0D7;border-radius:8px;background:#fff;">
+                                <div class="cl-flex"><Icon Name="fileText" Size="15" /> <span style="font-size:12.5px;">Partida_registral.pdf</span></div>
+                                <span class="cl-muted" style="font-size:11px;">512 KB</span>
+                            </div>
+                        </div>
+                    </div>
+                </FormSection>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card" style="position:sticky;top:14px;">
+                    <div class="cl-card-head"><div class="cl-card-title">Progreso del formulario</div></div>
+                    <div class="cl-card-body">
+                        <div style="display:flex;flex-direction:column;gap:14px;">
+                            @foreach (var s in _steps)
+                            {
+                                var dotStyle = s.Done
+                                    ? "width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:var(--c-walnut);color:#fff;flex:0 0 auto;"
+                                    : "width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:#fff;color:var(--c-walnut);border:2px solid var(--c-walnut);flex:0 0 auto;";
+                                <div class="cl-flex" style="align-items:center;gap:10px;">
+                                    <span style="@dotStyle">@(s.Done ? "✓" : s.Num)</span>
+                                    <span style="font-size:12.5px;@(s.Done ? "" : "font-weight:600;")">@s.Label</span>
+                                </div>
+                            }
+                        </div>
+                        <div style="margin-top:16px;">
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#948D81;margin-bottom:5px;">
+                                <span>Completitud</span><span>88%</span>
+                            </div>
+                            <div style="height:6px;background:#EFEBE3;border-radius:99px;overflow:hidden;">
+                                <div style="height:100%;width:88%;background:var(--c-walnut);"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>Al enviar a revisión, la captación pasa a la <b>bandeja del broker</b>. Podrá aprobarla, observarla o rechazarla.</span>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private record Step(string Num, string Label, bool Done);
+
+    private readonly Step[] _steps = new[]
+    {
+        new Step("1", "Datos del local", true),
+        new Step("2", "Condiciones comerciales", true),
+        new Step("3", "Vigencia y comisión", true),
+        new Step("4", "Observaciones y documentos", false),
+    };
+}

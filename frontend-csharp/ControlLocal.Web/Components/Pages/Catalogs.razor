@@ -1,0 +1,92 @@
+@page "/catalogs"
+
+<PageTitle>Catálogos del sistema · ControlLocal</PageTitle>
+
+<AppShell Active="Catálogos del sistema" Crumbs="@(new[] { "ControlLocal", "Administración", "Catálogos del sistema" })"
+          Title="Catálogos del sistema"
+          Subtitle="Consulta de los valores maestros que utiliza el sistema en sus distintos módulos.">
+    <div class="cl-alert blue" style="margin-bottom:16px;">
+        <Icon Name="info" Size="15" />
+        <span>Los catálogos del sistema son administrados desde backend. Esta pantalla permite consultar los valores utilizados por el sistema.</span>
+    </div>
+    <div class="cl-tabs">
+        @foreach (var t in _data.Keys)
+        {
+            <div class="cl-tab@(_tab == t ? " active" : "")" style="cursor:pointer;" @onclick="@(() => _tab = t)">@t</div>
+        }
+    </div>
+
+    <div class="cl-card">
+        <div class="cl-card-head"><div class="cl-card-title">@_tab</div><span class="cl-muted" style="font-size:11.5px;">Solo consulta</span></div>
+        <div class="cl-card-body" style="padding:0;">
+            <table class="cl-table">
+                <thead><tr><th>Valor mostrado</th><th>Descripción</th><th>Uso dentro del sistema</th><th>Estado</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _data[_tab])
+                    {
+                        <tr>
+                            <td>
+                                @if (r.Badge is not null)
+                                {
+                                    <StatusBadge Label="@r.Label" ToneOverride="@r.Badge" />
+                                }
+                                else
+                                {
+                                    <span style="font-weight:600;">@r.Label</span>
+                                }
+                            </td>
+                            <td style="color:var(--c-text-2);">@r.Desc</td>
+                            <td class="muted">@r.Use</td>
+                            <td><StatusBadge Label="@(r.Estado ?? "Activo")" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</AppShell>
+
+@code {
+    private string _tab = "Estados de captación";
+
+    private record CatRow(string Label, string? Badge, string Desc, string Use, string? Estado = null);
+
+    private readonly Dictionary<string, CatRow[]> _data = new()
+    {
+        ["Estados de captación"] = new[]
+        {
+            new CatRow("Pendiente", "amber", "Captación registrada, aún no enviada a revisión", "Listado y bandeja de captaciones"),
+            new CatRow("Activa", "green", "Aprobada por el broker, en proceso comercial", "Expediente de captación"),
+            new CatRow("Observada", "amber", "Devuelta al agente para subsanar", "Revisión de captación"),
+            new CatRow("Rechazada", "red", "No procede como captación", "Revisión de captación"),
+            new CatRow("Alquilada", "green", "Alquiler cerrado tras aprobar la solicitud", "Cierre del proceso"),
+        },
+        ["Estado de agente"] = new[]
+        {
+            new CatRow("Disponible", "green", "El agente puede recibir asignaciones", "Asignación de agentes"),
+            new CatRow("No disponible", "gray", "El agente no admite nuevas asignaciones", "Asignación de agentes"),
+            new CatRow("En licencia", "amber", "Ausencia temporal; no recibe asignaciones", "Asignación de agentes"),
+        },
+        ["Canales de contacto"] = new[]
+        {
+            new CatRow("Llamada", null, "Comunicación telefónica con el cliente", "Registro de interacciones"),
+            new CatRow("WhatsApp", null, "Mensajería instantánea", "Registro de interacciones"),
+            new CatRow("Correo", null, "Comunicación por correo electrónico", "Registro de interacciones"),
+            new CatRow("Presencial", null, "Reunión o visita en persona", "Registro de interacciones / visitas"),
+        },
+        ["Tipos de documento"] = new[]
+        {
+            new CatRow("DNI", null, "Documento Nacional de Identidad", "Registro de personas"),
+            new CatRow("RUC", null, "Registro Único de Contribuyentes", "Registro de personas jurídicas"),
+            new CatRow("Carné de extranjería", null, "Documento para residentes extranjeros", "Registro de personas"),
+            new CatRow("Pasaporte", null, "Documento de viaje internacional", "Registro de personas"),
+        },
+        ["Motivos de no continuidad"] = new[]
+        {
+            new CatRow("Precio fuera de presupuesto", null, "El cliente considera la renta muy alta", "Cierre de captación"),
+            new CatRow("Ubicación no convenció", null, "La zona no se ajusta a lo buscado", "Cierre de captación"),
+            new CatRow("Encontró otra opción", null, "El cliente eligió otro local", "Cierre de captación"),
+            new CatRow("Cambio de plan comercial", null, "El cliente desiste de alquilar", "Cierre de captación"),
+        },
+    };
+}

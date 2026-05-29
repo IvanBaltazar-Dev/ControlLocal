@@ -1,0 +1,117 @@
+@page "/solicitud-form"
+@inject AppState App
+
+<PageTitle>Crear solicitud · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", "Nueva solicitud" })"
+          Title="Crear solicitud de alquiler"
+          Subtitle="Genera la solicitud a partir de una captación con cliente vinculado · el broker la evaluará">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Cliente y captación" Sub="Selecciona la captación activa con el cliente que desea alquilar">
+                    <div class="cl-grid c2">
+                        <Field Label="Captación" Required="true">
+                            <select>
+                                <option>CAP-0218 · Av. La Marina 245</option>
+                                <option>CAP-0226 · Calle Schell 412</option>
+                                <option>CAP-0234 · Jr. Berlín 230</option>
+                            </select>
+                        </Field>
+                        <Field Label="Cliente interesado" Required="true"><input value="Café del Puerto S.A.C." disabled /></Field>
+                        <Field Label="Local"><input value="Av. La Marina 245, San Miguel" disabled /></Field>
+                        <Field Label="Propietario"><input value="Inmobiliaria Pacífico S.A.C." disabled /></Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="2" Title="Condiciones del alquiler" Sub="Términos acordados que se elevarán al broker para su evaluación">
+                    <div class="cl-grid c3">
+                        <Field Label="Monto mensual (USD)" Required="true"><input placeholder="2 100" /></Field>
+                        <Field Label="Plazo (meses)" Required="true"><select><option>12</option><option>24</option><option>36</option></select></Field>
+                        <Field Label="Inicio del contrato" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
+                        <Field Label="Garantía (meses)"><input placeholder="2" /></Field>
+                        <Field Label="Adelanto (meses)"><input placeholder="1" /></Field>
+                        <Field Label="Comisión (%)"><input value="5%" disabled /></Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="3" Title="Documentos del cliente" Sub="Adjunta el respaldo requerido para la evaluación del broker">
+                    <div class="cl-ph" style="height:100px;">
+                        <Icon Name="upload" Size="20" /> <span style="margin-left:8px;">Arrastra los documentos aquí o haz clic para seleccionar</span>
+                    </div>
+                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+                        @foreach (var d in _docs)
+                        {
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid #E5E0D7;border-radius:8px;background:#fff;">
+                                <div class="cl-flex"><Icon Name="fileText" Size="15" /> <span style="font-size:12.5px;">@d.Name</span></div>
+                                <StatusBadge Label="@d.Status" />
+                            </div>
+                        }
+                    </div>
+                </FormSection>
+
+                <FormFooterBar OnCancel="@(() => App.Navigate("solicitudes"))" OnSave="@(() => _confirm = true)" SaveLabel="Enviar a evaluación">
+                    <Extra>
+                        <button class="cl-btn ghost"><Icon Name="save" Size="13" /> Guardar borrador</button>
+                    </Extra>
+                </FormFooterBar>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card" style="position:sticky;top:14px;">
+                    <div class="cl-card-head"><div class="cl-card-title">Resumen de la operación</div></div>
+                    <div class="cl-card-body">
+                        <dl class="cl-kv">
+                            <dt>Operación</dt><dd><span class="mono">OP-1094</span></dd>
+                            <dt>Cliente</dt><dd>Café del Puerto S.A.C.</dd>
+                            <dt>Local</dt><dd>Av. La Marina 245</dd>
+                            <dt>Monto</dt><dd>USD 2 100 / mes</dd>
+                            <dt>Documentos</dt><dd>4 / 6 cargados</dd>
+                        </dl>
+                    </div>
+                </div>
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>Al enviar, la solicitud pasa a la <b>bandeja del broker</b>. Podrá aprobarla, observarla o rechazarla según los documentos.</span>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="fileText"
+                       Title="¿Enviar la solicitud a evaluación?"
+                       Desc="La solicitud quedará registrada y pasará a la bandeja del broker para su evaluación. Recibirás una notificación con su resolución."
+                       ConfirmLabel="Enviar solicitud" CancelLabel="Revisar datos"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Solicitud enviada a evaluación</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool _confirm;
+    private bool _toast;
+
+    private record Doc(string Name, string Status);
+
+    private readonly Doc[] _docs = new[]
+    {
+        new Doc("DNI / RUC del cliente", "Cargado"),
+        new Doc("Vigencia de poder", "Cargado"),
+        new Doc("Estados financieros", "Cargado"),
+        new Doc("Referencias comerciales", "Cargado"),
+        new Doc("Carta de intención", "Pendiente"),
+        new Doc("Comprobante de garantía", "Pendiente"),
+    };
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(900);
+        App.Navigate("solicitudes");
+    }
+}

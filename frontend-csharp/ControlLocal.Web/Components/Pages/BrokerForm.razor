@@ -1,0 +1,84 @@
+@page "/broker-form"
+@inject AppState App
+@inject IBrokerService Brokers
+
+<PageTitle>Editar broker · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Brokers", b.Nombre, "Editar" })"
+          Title="Editar datos del broker"
+          Subtitle="Actualiza la información administrativa y de contacto del broker seleccionado.">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Identificación" Sub="Datos personales y de documento del broker">
+                    <div class="cl-grid c2">
+                        <Field Label="Nombre completo" Required="true"><input value="@b.Nombre" /></Field>
+                        <Field Label="Usuario" Required="true"><input value="@b.Usuario" /></Field>
+                        <Field Label="Tipo de documento" Required="true">
+                            <select value="@b.TipoDocumento">
+                                <option value="DNI">DNI</option>
+                                <option value="RUC">RUC</option>
+                                <option value="CE">Carné de extranjería</option>
+                                <option value="PAS">Pasaporte</option>
+                            </select>
+                        </Field>
+                        <Field Label="Número de documento" Required="true"><input value="@b.NumeroDocumento" /></Field>
+                    </div>
+                </FormSection>
+                <FormSection Num="2" Title="Contacto y estado" Sub="Medios de contacto y estado administrativo">
+                    <div class="cl-grid c2">
+                        <Field Label="Teléfono" Required="true"><input value="@b.Telefono" /></Field>
+                        <Field Label="Correo" Required="true"><input type="email" value="@b.Email" /></Field>
+                        <Field Label="Estado" Required="true">
+                            <select value="@b.EstadoAdministrativo">
+                                <option>Activo</option>
+                                <option>Inactivo</option>
+                            </select>
+                        </Field>
+                    </div>
+                </FormSection>
+                <FormFooterBar OnCancel="@(() => App.Navigate("brokers"))" OnSave="@(() => _confirm = true)" SaveLabel="Guardar cambios" />
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card" style="position:sticky;top:14px;">
+                    <div class="cl-card-head"><div class="cl-card-title">No editable</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-help" style="margin-bottom:10px;">Estos valores estructurales se mantienen fijos y se administran internamente.</div>
+                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
+                            <dt>Tipo de broker</dt><dd>@b.TipoBroker</dd>
+                            <dt>Código de broker</dt><dd>@b.CodigoBroker</dd>
+                            <dt>Fecha de designación</dt><dd>@b.FechaDesignacionTexto</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="briefcase"
+                       Title="Confirmar actualización del broker"
+                       Desc="Se actualizarán los datos administrativos y de contacto del broker. Esta acción no modificará su tipo de broker, código interno ni fecha de designación."
+                       ConfirmLabel="Confirmar cambios" CancelLabel="Cancelar"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Los datos del broker fueron actualizados correctamente.</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private BrokerDto b => Brokers.First();
+    private bool _confirm;
+    private bool _toast;
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(1000);
+        App.Navigate("brokers");
+    }
+}

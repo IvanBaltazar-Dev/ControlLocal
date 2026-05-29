@@ -1,0 +1,115 @@
+@page "/documentos"
+@inject AppState App
+
+<PageTitle>Documentos SOL-0428 · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", "SOL-0428 · Documentos" })"
+          Title="Documentos · SOL-0428"
+          Subtitle="Subsana las observaciones del broker y reenvía la solicitud a evaluación">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn primary" @onclick="@(() => _confirm = true)"><Icon Name="arrowRight" Size="13" /> Reenviar a evaluación</button>
+    </Actions>
+    <ChildContent>
+        <div class="cl-alert amber" style="margin-bottom:14px;">
+            <Icon Name="alert" Size="15" />
+            <span><b>Observación del broker:</b> Los estados financieros están incompletos y la carta de intención no está firmada. Corrige estos documentos antes de reenviar.</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+            <div class="cl-card">
+                <div class="cl-card-head"><div class="cl-card-title">Checklist de documentos</div><span class="cl-badge amber">2 observados</span></div>
+                <div class="cl-card-body" style="padding:0;">
+                    <table class="cl-table">
+                        <thead><tr><th>Documento</th><th>Estado</th><th>Actualizado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _docs)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="cl-flex"><Icon Name="fileText" Size="15" /> <span style="font-weight:550;">@d.Name</span></div>
+                                        @if (d.Note is not null)
+                                        {
+                                            <div class="cl-muted" style="font-size:11px;margin-top:3px;">@d.Note</div>
+                                        }
+                                    </td>
+                                    <td><StatusBadge Label="@d.Status" /></td>
+                                    <td><span class="cl-muted" style="font-size:12px;">@d.Updated</span></td>
+                                    <td>
+                                        <div class="cl-row-actions">
+                                            <button title="Ver"><Icon Name="eye" Size="14" /></button>
+                                            @if (d.Status == "Observado" || d.Status == "Pendiente")
+                                            {
+                                                <button title="Reemplazar"><Icon Name="upload" Size="13" /></button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Subir documento</div></div>
+                    <div class="cl-card-body">
+                        <Field Label="Tipo de documento">
+                            <select><option>Estados financieros</option><option>Carta de intención</option><option>Otro</option></select>
+                        </Field>
+                        <div class="cl-ph" style="height:90px;margin-top:10px;">
+                            <Icon Name="upload" Size="18" /> <span style="margin-left:8px;">Arrastra o selecciona</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Progreso</div></div>
+                    <div class="cl-card-body">
+                        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;">
+                            <span>Documentos completos</span><span><b>4</b> / 6</span>
+                        </div>
+                        <div style="height:8px;background:#EFEBE3;border-radius:99px;overflow:hidden;">
+                            <div style="height:100%;width:66%;background:var(--c-walnut);"></div>
+                        </div>
+                        <div class="cl-help" style="margin-top:8px;">Completa los 2 documentos observados para reenviar la solicitud.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="arrowRight"
+                       Title="¿Reenviar la solicitud a evaluación?"
+                       Desc="La solicitud volverá a la bandeja del broker con los documentos corregidos para una nueva evaluación."
+                       ConfirmLabel="Reenviar" CancelLabel="Cancelar"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Solicitud reenviada a evaluación</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool _confirm;
+    private bool _toast;
+
+    private record Doc(string Name, string Status, string Updated, string? Note = null);
+
+    private readonly Doc[] _docs = new[]
+    {
+        new Doc("DNI / RUC del cliente", "Verificado", "22 May", null),
+        new Doc("Vigencia de poder", "Verificado", "22 May", null),
+        new Doc("Estados financieros", "Observado", "22 May", "Faltan los dos últimos ejercicios"),
+        new Doc("Referencias comerciales", "Verificado", "22 May", null),
+        new Doc("Carta de intención", "Observado", "22 May", "Documento sin firma del representante"),
+        new Doc("Comprobante de garantía", "Pendiente", "—", null),
+    };
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(900);
+        App.Navigate("solicitudes");
+    }
+}

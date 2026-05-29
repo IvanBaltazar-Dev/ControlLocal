@@ -1,0 +1,178 @@
+@page "/captacion-review"
+@inject AppState App
+
+<PageTitle>Revisar captación · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Captaciones por revisar", "CAP-0226 · Revisión" })"
+          Title="CAP-0226 · Calle Schell 412"
+          Subtitle="Captación enviada por Lucía Ferreyra · revisa el expediente para aprobar, observar o rechazar">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn" @onclick="@(() => _modal = "reasignar")"><Icon Name="swap" Size="13" /> Reasignar</button>
+        <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
+        <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
+        <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Resumen de la captación</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-ph" style="height:160px;margin-bottom:14px;">foto del local</div>
+                        <dl class="cl-kv">
+                            <dt>Código</dt><dd><span class="mono">CAP-0226</span></dd>
+                            <dt>Dirección</dt><dd>Calle Schell 412, Miraflores</dd>
+                            <dt>Propietario</dt><dd>Inversiones Trébol S.A.C.</dd>
+                            <dt>Área</dt><dd>95 m²</dd>
+                            <dt>Precio de alquiler</dt><dd>USD 1 950 / mes</dd>
+                            <dt>Rubro objetivo</dt><dd>Restaurante / Café</dd>
+                            <dt>Vigencia</dt><dd>01/05/2026 — 31/07/2026</dd>
+                            <dt>Comisión acordada</dt><dd>5%</dd>
+                            <dt>Agente</dt><dd>Lucía Ferreyra</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Observaciones del agente</div></div>
+                    <div class="cl-card-body">
+                        <p style="font-size:12.5px;color:var(--c-text-2);margin:0;">El propietario otorga exclusividad por 90 días. El local cuenta con licencia de funcionamiento vigente para giro de restaurante. Se adjunta partida registral y contrato de exclusividad firmado.</p>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Documentos adjuntos</div></div>
+                    <div class="cl-card-body" style="padding:0;">
+                        @for (var i = 0; i < _docs.Length; i++)
+                        {
+                            var d = _docs[i];
+                            var top = i == 0 ? "0" : "1px solid #EFEBE3";
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
+                                <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@d.Name</span></div>
+                                <div class="cl-flex" style="gap:10px;">
+                                    <StatusBadge Label="@d.Status" />
+                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Observaciones del broker</div></div>
+                    <div class="cl-card-body">
+                        <textarea rows="3" placeholder="Anota aquí cualquier observación antes de resolver…"></textarea>
+                        <div class="cl-help" style="margin-top:8px;">Estas notas quedan registradas en la auditoría del expediente y son visibles para el agente.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-alert amber">
+                    <Icon Name="alert" Size="15" />
+                    <span>Esta captación lleva <b>2 días</b> en tu bandeja. Resuélvela para que el agente continúe el proceso comercial.</span>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Historial del expediente</div></div>
+                    <div class="cl-card-body">
+                        <Timeline Items="_timeline" />
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Acciones rápidas</div></div>
+                    <div class="cl-card-body">
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar captación</button>
+                            <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar y devolver</button>
+                            <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
+                            <button class="cl-btn" @onclick="@(() => _modal = "reasignar")"><Icon Name="swap" Size="13" /> Reasignar a otro agente</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="@(_modal == "aprobar")" Tone="green" Icon="check"
+                       Title="¿Aprobar esta captación?"
+                       Desc="La captación quedará activa y disponible para el proceso comercial. El agente podrá vincular clientes y registrar visitas."
+                       ConfirmLabel="Aprobar captación" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@(() => Resolve("Captación aprobada · ahora está activa"))" />
+
+        <ConfirmDialog Open="@(_modal == "observar")" Tone="amber" Icon="alert"
+                       Title="Observar y devolver al agente"
+                       Desc="El agente recibirá las observaciones y deberá subsanarlas antes de reenviar el expediente."
+                       ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@(() => Resolve("Captación observada · devuelta al agente"))">
+            <Field Label="Motivo de la observación" Required="true">
+                <textarea rows="3" placeholder="Indica qué debe corregir el agente…"></textarea>
+            </Field>
+        </ConfirmDialog>
+
+        <ConfirmDialog Open="@(_modal == "rechazar")" Tone="red" Icon="x"
+                       Title="¿Rechazar esta captación?"
+                       Desc="El expediente quedará cerrado como rechazado. Esta acción queda registrada en la auditoría global."
+                       ConfirmLabel="Rechazar captación" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@(() => Resolve("Captación rechazada"))">
+            <Field Label="Motivo del rechazo" Required="true">
+                <select>
+                    <option>Documentación insuficiente</option>
+                    <option>Precio fuera de mercado</option>
+                    <option>Propietario sin exclusividad</option>
+                    <option>Local no apto</option>
+                </select>
+            </Field>
+        </ConfirmDialog>
+
+        <ConfirmDialog Open="@(_modal == "reasignar")" Tone="blue" Icon="users"
+                       Title="Reasignar captación"
+                       Desc="Transfiere este expediente a otro agente bajo tu supervisión. El nuevo agente continuará el proceso."
+                       ConfirmLabel="Reasignar" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@(() => Resolve("Captación reasignada"))">
+            <Field Label="Nuevo agente" Required="true">
+                <select>
+                    <option>Diego Paredes</option>
+                    <option>Ana Torres</option>
+                    <option>Marco Ríos</option>
+                </select>
+            </Field>
+        </ConfirmDialog>
+
+        <Toast Show="@(_toast is not null)">@_toast</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string? _modal;
+    private string? _toast;
+
+    private record Doc(string Name, string Status);
+
+    private readonly Doc[] _docs = new[]
+    {
+        new Doc("Contrato_de_exclusividad.pdf", "Verificado"),
+        new Doc("Partida_registral.pdf", "Verificado"),
+        new Doc("Licencia_funcionamiento.pdf", "Pendiente"),
+    };
+
+    private readonly Timeline.TimelineItem[] _timeline = new[]
+    {
+        new Timeline.TimelineItem("Hace 2 días", "Captación enviada", "Lucía Ferreyra envió el expediente", "done"),
+        new Timeline.TimelineItem("Hace 2 días", "Documentos adjuntados", "3 archivos cargados", "done"),
+        new Timeline.TimelineItem("Ayer", "Revisión iniciada", "Asignada a tu bandeja", "done"),
+        new Timeline.TimelineItem("Hoy", "Pendiente de resolución", "Esperando tu decisión", "active"),
+    };
+
+    private async Task Resolve(string msg)
+    {
+        _modal = null;
+        _toast = msg;
+        StateHasChanged();
+        await Task.Delay(950);
+        App.Navigate("bandeja-captaciones");
+    }
+}

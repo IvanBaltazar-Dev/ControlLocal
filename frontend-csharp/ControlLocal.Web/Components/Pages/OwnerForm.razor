@@ -1,0 +1,79 @@
+@page "/owner-form"
+@inject AppState App
+
+<PageTitle>Registrar propietario · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Propietarios", "Nuevo propietario" })"
+          Title="Registrar propietario"
+          Subtitle="Persona que posee el local · podrás vincularlo a un local comercial al darlo de alta">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("owners"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="max-width:880px;">
+            <FormSection Num="1" Title="Tipo de propietario" Sub="Determina los campos de identificación requeridos">
+                <div class="cl-seg" role="tablist">
+                    <button class="@(_tipo == "juridica" ? "active" : "")" @onclick="@(() => _tipo = "juridica")">Persona jurídica</button>
+                    <button class="@(_tipo == "natural" ? "active" : "")" @onclick="@(() => _tipo = "natural")">Persona natural</button>
+                </div>
+            </FormSection>
+
+            <FormSection Num="2" Title="Identificación" Sub="@(_tipo == "juridica" ? "Datos de la empresa y representante legal" : "Datos personales del propietario")">
+                @if (_tipo == "juridica")
+                {
+                    <div class="cl-grid c2">
+                        <Field Label="Razón social" Required="true"><input placeholder="Ej. Inmobiliaria del Sur S.A.C." /></Field>
+                        <Field Label="RUC" Required="true"><input placeholder="20 ___ ___ ___" /></Field>
+                        <Field Label="Representante legal" Required="true"><input placeholder="Nombre completo" /></Field>
+                        <Field Label="DNI del representante"><input placeholder="__ ___ ___" /></Field>
+                    </div>
+                }
+                else
+                {
+                    <div class="cl-grid c2">
+                        <Field Label="Nombres" Required="true"><input placeholder="Nombres" /></Field>
+                        <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" /></Field>
+                        <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" /></Field>
+                        <Field Label="Estado civil"><select><option>Soltero(a)</option><option>Casado(a)</option><option>Viudo(a)</option><option>Divorciado(a)</option></select></Field>
+                    </div>
+                }
+            </FormSection>
+
+            <FormSection Num="3" Title="Contacto y datos bancarios" Sub="Para coordinar la captación y registrar el pago de comisiones">
+                <div class="cl-grid c2">
+                    <Field Label="Teléfono principal" Required="true"><input placeholder="+51 ___ ___ ___" /></Field>
+                    <Field Label="Teléfono alterno"><input placeholder="Opcional" /></Field>
+                    <Field Label="Correo electrónico" Required="true"><input placeholder="propietario@@correo.com" /></Field>
+                    <Field Label="Dirección fiscal"><input placeholder="Av. / Calle, número, distrito" /></Field>
+                    <Field Label="Banco"><select><option>BCP</option><option>BBVA</option><option>Interbank</option><option>Scotiabank</option></select></Field>
+                    <Field Label="Número de cuenta (CCI)"><input placeholder="002 ___ ___ ___ ___ __" /></Field>
+                </div>
+            </FormSection>
+
+            <FormFooterBar OnCancel="@(() => App.Navigate("owners"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar propietario" />
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="user"
+                       Title="¿Registrar propietario?"
+                       Desc="Se creará el propietario en tu registro. Quedará disponible para vincular a la captación de un local comercial."
+                       ConfirmLabel="Registrar" CancelLabel="Revisar datos"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Propietario registrado correctamente</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _tipo = "juridica";
+    private bool _confirm;
+    private bool _toast;
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(900);
+        App.Navigate("owners");
+    }
+}

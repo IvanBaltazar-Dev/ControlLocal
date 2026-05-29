@@ -86,9 +86,10 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
         });
     }
 
-    public Long asignarAgente(Long idBrokerAdministrador, Long idBrokerSupervisor, Long idAgente) {
+    public Long asignarAgente(Long idBrokerAdministrador, Long idBrokerSupervisor, Long idAgente, String motivo) {
         return TransactionRunner.write(conn -> {
             validarBrokerAdministrador(idBrokerAdministrador);
+            BusinessValidations.texto(motivo, "El motivo de reasignacion de agente");
             Broker brokerSupervisor = validarBroker(idBrokerSupervisor);
             if (brokerSupervisor.isEsAdministrador()) {
                 throw new BusinessException("El broker administrador no requiere asignacion de agentes para supervisar.");
@@ -109,6 +110,7 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
             brokerAgente.setBroker(brokerSupervisor);
             brokerAgente.setAgente(agente);
             brokerAgente.setFechaAsignacion(LocalDate.now());
+            brokerAgente.setMotivo(motivo);
             brokerAgente.setEstado(EstadoActivoInactivo.ACTIVO);
             BusinessValidations.brokerAgente(brokerAgente);
             return brokerAgenteDAO.crear(brokerAgente);

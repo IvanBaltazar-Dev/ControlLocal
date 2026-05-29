@@ -1,0 +1,39 @@
+@page "/recover"
+@inject AppState App
+
+<PageTitle>Restablecimiento · ControlLocal</PageTitle>
+
+<div style="width:100%;min-height:100vh;background:#F6F4EF;font-family:'Inter',-apple-system,sans-serif;color:#221F1B;display:grid;place-items:center;padding:40px;">
+    <div style="width:460px;background:#fff;border-radius:12px;border:1px solid #E5E0D7;padding:32px;box-shadow:0 8px 28px rgba(11,31,51,0.06);">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:26px;">
+            <BrandMark Size="32" Variant="primary" />
+            <div style="font-weight:600;font-size:15px;">ControlLocal</div>
+        </div>
+
+        <div style="width:44px;height:44px;border-radius:10px;background:#EDF2F9;color:#2C5CA0;display:grid;place-items:center;margin-bottom:14px;">
+            <Icon Name="lock" Size="20" />
+        </div>
+        <div style="font-size:20px;font-weight:600;letter-spacing:-0.015em;">Restablecimiento administrado</div>
+        <div style="font-size:13px;color:#5A554D;margin-top:8px;line-height:1.55;">
+            En esta versión del sistema la recuperación automática de contraseña no está disponible. El restablecimiento lo gestiona internamente el equipo de soporte o el broker administrador.
+        </div>
+
+        <div style="margin-top:18px;padding:14px;background:#F6F4EF;border-radius:8px;border:1px solid #EFEBE3;">
+            <div style="font-size:11px;color:#948D81;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Cómo solicitarlo</div>
+            <ol style="margin:0;padding-left:18px;font-size:12.5px;color:#221F1B;line-height:1.7;">
+                <li>Escribe a <b>soporte@@controllocal.pe</b> desde tu correo corporativo, o</li>
+                <li>Contacta a tu <b>broker administrador</b> para registrar el restablecimiento.</li>
+                <li>Recibirás una contraseña temporal que deberás cambiar al iniciar sesión.</li>
+            </ol>
+        </div>
+
+        <div class="cl-alert blue" style="margin-top:16px;">
+            <Icon Name="info" Size="15" />
+            <span>El flujo público de «enviar enlace» queda como mejora futura. Por seguridad, todas las solicitudes quedan registradas en la <b>auditoría global</b>.</span>
+        </div>
+
+        <button @onclick="@(() => App.Navigate("login"))" class="cl-btn primary" style="width:100%;margin-top:18px;padding:10px 14px;justify-content:center;">
+            <Icon Name="chevronLeft" Size="13" /> Volver al inicio de sesión
+        </button>
+    </div>
+</div>

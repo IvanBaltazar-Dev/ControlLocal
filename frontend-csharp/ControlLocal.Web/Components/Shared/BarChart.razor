@@ -1,0 +1,38 @@
+@* Simple bar chart with gridlines and optional x-axis labels. *@
+<svg width="100%" height="@H" viewBox="0 0 @W @H">
+    @foreach (var t in Grid)
+    {
+        var gy = F(Pad + (H - Pad * 2) * t);
+        <line x1="@Pad" x2="@(W - Pad)" y1="@gy" y2="@gy" stroke="#EFEBE3" stroke-width="1" />
+    }
+    @for (var i = 0; i < Data.Length; i++)
+    {
+        var bh = Max == 0 ? 0 : (Data[i] / Max) * (H - Pad * 2);
+        var x = F(Pad + i * Bw + 4);
+        var y = F(H - Pad - bh);
+        var w = F(Bw - 8);
+        <rect x="@x" y="@y" width="@w" height="@F(bh)" fill="@Color" opacity="@(i == Data.Length - 1 ? "1" : "0.7")" rx="2" />
+    }
+    @for (var i = 0; i < Labels.Length; i++)
+    {
+        var lx = F(Pad + i * Bw + Bw / 2);
+        @((MarkupString)$"<text x='{lx}' y='{H - 4}' font-size='9' fill='#948D81' text-anchor='middle'>{Labels[i]}</text>")
+    }
+</svg>
+
+@code {
+    [Parameter] public double[] Data { get; set; } = System.Array.Empty<double>();
+    [Parameter] public string Color { get; set; } = "#2C5CA0";
+    [Parameter] public int Height { get; set; } = 120;
+    [Parameter] public string[] Labels { get; set; } = System.Array.Empty<string>();
+
+    private const int W = 320;
+    private const int Pad = 18;
+    private int H => Height;
+    private double Max => Data.Length == 0 ? 0 : Data.Max();
+    private double Bw => Data.Length == 0 ? 0 : (W - Pad * 2) / (double)Data.Length;
+
+    private static readonly double[] Grid = { 0, 0.25, 0.5, 0.75, 1 };
+
+    private static string F(double d) => d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+}

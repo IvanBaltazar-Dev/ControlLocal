@@ -1,0 +1,58 @@
+@page "/brokers"
+@inject AppState App
+@inject IBrokerService BrokerSvc
+
+<PageTitle>Gestión de brokers · ControlLocal</PageTitle>
+
+<AppShell Active="Brokers" Crumbs="@(new[] { "ControlLocal", "Administración", "Brokers" })"
+          Title="Gestión de brokers"
+          Subtitle="6 brokers · 5 activos · 1 inactivo — busca, revisa y edita los datos de cada broker">
+    <Actions>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("broker-nuevo"))"><Icon Name="plus" Size="13" /> Nuevo broker</button>
+    </Actions>
+    <ChildContent>
+        <FilterBar Search="Buscar broker por nombre o correo…" ShowTail="false">
+            <select class="cl-select"><option>Todos los estados</option><option>Activo</option><option>Inactivo</option></select>
+        </FilterBar>
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Broker</th><th>Tipo</th><th>Documento</th>
+                            <th>Zona o ámbito</th><th>Agentes a cargo</th><th>Estado</th><th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var b in BrokerSvc.All())
+                        {
+                            <tr>
+                                <td>
+                                    <div class="cl-flex">
+                                        <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;">@b.Iniciales</span>
+                                        <div>
+                                            <div style="font-weight:600;">@b.Nombre</div>
+                                            <div class="cl-muted" style="font-size:11px;">@b.Email</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><StatusBadge Label="@b.TipoBroker" /></td>
+                                <td><span class="mono">@b.TipoDocumento @b.NumeroDocumento</span></td>
+                                <td>@b.Zona</td>
+                                <td><span><b>@b.AgentesACargo</b> <span class="cl-muted">supervisados</span></span></td>
+                                <td><StatusBadge Label="@b.EstadoAdministrativo" /></td>
+                                <td>
+                                    <div class="cl-row-actions">
+                                        <button title="Ver perfil" @onclick="@(() => App.Navigate("broker-profile"))"><Icon Name="eye" Size="15" /></button>
+                                        <button title="Editar broker" @onclick="@(() => App.Navigate("broker-form"))"><Icon Name="edit" Size="14" /></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="6" />
+    </ChildContent>
+</AppShell>

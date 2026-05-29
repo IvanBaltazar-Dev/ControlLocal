@@ -138,6 +138,7 @@ public class AgenteBusinessLogicImpl implements AgenteBusinessLogic {
         brokerAgente.setBroker(broker);
         brokerAgente.setAgente(agente);
         brokerAgente.setFechaAsignacion(LocalDate.now());
+        brokerAgente.setMotivo("Asignacion inicial por registro de agente.");
         brokerAgente.setEstado(EstadoActivoInactivo.ACTIVO);
         BusinessValidations.brokerAgente(brokerAgente);
         brokerAgenteDAO.crear(brokerAgente);

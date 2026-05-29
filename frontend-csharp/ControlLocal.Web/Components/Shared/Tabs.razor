@@ -1,0 +1,28 @@
+@* Horizontal tab strip with optional per-tab counts. *@
+<div class="cl-tabs">
+    @foreach (var it in Items)
+    {
+        <div class="cl-tab@(Active == it.Label ? " active" : "")"
+             style="cursor:pointer"
+             @onclick="@(() => Select(it.Label))">
+            @it.Label
+            @if (it.Count is not null)
+            {
+                <span class="cl-tab-count">@it.Count</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    public record TabItem(string Label, int? Count = null);
+
+    [Parameter] public TabItem[] Items { get; set; } = System.Array.Empty<TabItem>();
+    [Parameter] public string? Active { get; set; }
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+
+    private async Task Select(string label)
+    {
+        if (OnSelect.HasDelegate) await OnSelect.InvokeAsync(label);
+    }
+}

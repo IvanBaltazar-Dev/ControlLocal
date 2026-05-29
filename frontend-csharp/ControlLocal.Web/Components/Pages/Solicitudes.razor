@@ -1,0 +1,128 @@
+@page "/solicitudes"
+@inject AppState App
+@inject ISolicitudService SolicitudSvc
+
+<PageTitle>@_title · ControlLocal</PageTitle>
+
+<AppShell Active="@_sideActive" Crumbs="@_crumbs" Title="@_title" Subtitle="@_subtitle">
+    <Actions>
+        @if (_isBroker)
+        {
+            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+        }
+        else
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Nueva solicitud</button>
+        }
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            @if (_isBroker)
+            {
+                <MetricCard Icon="fileText" Label="Por evaluar" Value="6" Tone="amber" Footer="2 vencen hoy" />
+                <MetricCard Icon="alert" Label="Observadas" Value="2" Tone="amber" />
+                <MetricCard Icon="check" Label="Aprobadas (mes)" Value="14" Tone="green" />
+                <MetricCard Icon="x" Label="Rechazadas (mes)" Value="3" Tone="red" />
+            }
+            else
+            {
+                <MetricCard Icon="fileText" Label="Mis solicitudes" Value="9" Tone="info" />
+                <MetricCard Icon="clock" Label="En revisión" Value="2" Tone="amber" />
+                <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="amber" Footer="requieren subsanar" />
+                <MetricCard Icon="check" Label="Aprobadas" Value="6" Tone="green" />
+            }
+        </div>
+
+        <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
+
+        <FilterBar Search="Buscar por código, cliente, local…">
+            <select class="cl-select"><option>Todos los estados</option><option>Registrada</option><option>En revisión</option><option>Observada</option><option>Aprobada</option><option>Rechazada</option></select>
+            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Solicitud</th><th>Operación</th><th>Cliente</th><th>Local</th><th>Distrito</th>
+                            <th>Monto/mes</th><th>Plazo</th><th>Documentos</th><th>Fecha</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in SolicitudSvc.All())
+                        {
+                            <tr>
+                                <td><span class="mono">@s.CodigoSolicitud</span></td>
+                                <td><span class="mono">@s.CodigoOperacion</span></td>
+                                <td style="font-weight:600;">@s.ClienteNombre</td>
+                                <td>@s.DireccionLocal</td>
+                                <td>@s.DistritoLocal</td>
+                                <td>USD <b>@s.MontoMensualTexto</b></td>
+                                <td>@s.PlazoMeses m</td>
+                                <td>
+                                    <div class="cl-flex" style="gap:8px;">
+                                        <div style="flex:1;min-width:54px;height:6px;background:#EFEBE3;border-radius:99px;overflow:hidden;">
+                                            <div style="height:100%;width:@(s.PorcentajeDocumentos)%;background:@(s.PorcentajeDocumentos == 100 ? "var(--c-green)" : "var(--c-walnut)");"></div>
+                                        </div>
+                                        <span class="cl-muted" style="font-size:11px;">@s.DocumentosTexto</span>
+                                    </div>
+                                </td>
+                                <td><span class="cl-muted" style="font-size:12px;">@s.FechaRegistroTexto</span></td>
+                                <td><StatusBadge Label="@s.Estado" /></td>
+                                <td>
+                                    @if (_isBroker)
+                                    {
+                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate("evaluacion"))">Evaluar</button>
+                                    }
+                                    else if (s.Estado == "Observada")
+                                    {
+                                        <button class="cl-btn sm warn" @onclick="@(() => App.Navigate("documentos"))">Subsanar</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="cl-btn sm" @onclick="@(() => App.Navigate("solicitud-detail"))">Ver</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="@(_isBroker ? 6 : 9)" />
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool _isBroker => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private string _tab = "Todas";
+
+    protected override void OnInitialized() => _tab = _isBroker ? "Por evaluar" : "Todas";
+
+    private string _title => _isBroker ? "Solicitudes por evaluar" : "Solicitudes de alquiler";
+    private string _sideActive => _isBroker ? "Solicitudes por evaluar" : "Solicitudes de alquiler";
+    private string _subtitle => _isBroker
+        ? "Solicitudes enviadas por tus agentes · evalúa documentos y resuelve cada operación"
+        : "Solicitudes de alquiler que generé a partir de mis captaciones";
+
+    private string[] _crumbs => _isBroker
+        ? new[] { "ControlLocal", "Bandejas de revisión", "Solicitudes por evaluar" }
+        : new[] { "ControlLocal", "Operación", "Solicitudes de alquiler" };
+
+    private Tabs.TabItem[] _tabs => _isBroker
+        ? new[]
+        {
+            new Tabs.TabItem("Por evaluar", 6),
+            new Tabs.TabItem("Observadas", 2),
+            new Tabs.TabItem("Aprobadas", 14),
+            new Tabs.TabItem("Rechazadas", 3),
+        }
+        : new[]
+        {
+            new Tabs.TabItem("Todas", 9),
+            new Tabs.TabItem("En revisión", 2),
+            new Tabs.TabItem("Observadas", 1),
+            new Tabs.TabItem("Aprobadas", 6),
+        };
+}

@@ -1,0 +1,36 @@
+@* Opinionated confirm dialog for approve / observe / reject / close / reassign / logout. *@
+<Modal Open="Open" OnClose="OnClose" Tone="@Tone" Icon="@Icon" Title="@Title" Desc="@Desc"
+       Size="@(Size ?? "")" ChildContent="ChildContent">
+    <Footer>
+        <button class="cl-btn" @onclick="OnClose">@CancelLabel</button>
+        <button class="cl-btn @BtnClass" @onclick="OnConfirmClick">@ConfirmLabel</button>
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public string Tone { get; set; } = "blue";
+    [Parameter] public string Icon { get; set; } = "info";
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Desc { get; set; }
+    [Parameter] public string ConfirmLabel { get; set; } = "Confirmar";
+    [Parameter] public string CancelLabel { get; set; } = "Cancelar";
+    [Parameter] public string? ConfirmClass { get; set; }
+    [Parameter] public string? Size { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private static readonly Dictionary<string, string> ToneToBtn = new()
+    {
+        ["blue"] = "primary", ["green"] = "success", ["amber"] = "warn", ["red"] = "danger",
+    };
+
+    private string BtnClass => ConfirmClass ?? (ToneToBtn.TryGetValue(Tone, out var b) ? b : "primary");
+
+    private async Task OnConfirmClick()
+    {
+        if (OnConfirm.HasDelegate) await OnConfirm.InvokeAsync();
+        else if (OnClose.HasDelegate) await OnClose.InvokeAsync();
+    }
+}

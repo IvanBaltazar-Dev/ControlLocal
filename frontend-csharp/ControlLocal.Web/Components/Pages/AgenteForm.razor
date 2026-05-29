@@ -1,0 +1,61 @@
+@page "/agente-form"
+@inject AppState App
+
+<PageTitle>Registrar agente · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Mis agentes", "Nuevo agente" })"
+          Title="Registrar agente inmobiliario"
+          Subtitle="Al registrarlo se abre automáticamente una relación activa de supervisión contigo">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("agents"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="max-width:880px;">
+            <FormSection Num="1" Title="Datos personales" Sub="Identificación del agente inmobiliario">
+                <div class="cl-grid c2">
+                    <Field Label="Nombres" Required="true"><input placeholder="Nombres" /></Field>
+                    <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" /></Field>
+                    <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" /></Field>
+                    <Field Label="Teléfono" Required="true"><input placeholder="+51 ___ ___ ___" /></Field>
+                </div>
+            </FormSection>
+
+            <FormSection Num="2" Title="Cuenta de acceso y asignación" Sub="Credenciales del sistema y zona de operación">
+                <div class="cl-grid c2">
+                    <Field Label="Correo corporativo" Required="true"><input placeholder="agente@@controllocal.pe" /></Field>
+                    <Field Label="Usuario" Required="true"><input placeholder="nombre.apellido" /></Field>
+                    <Field Label="Zona asignada" Required="true"><select><option>Lima Centro</option><option>Lima Sur</option><option>Lima Norte</option><option>Lima Este</option></select></Field>
+                    <Field Label="Supervisión" Hint="Quien registra es el broker supervisor"><input value="Ricardo Salas (tú)" disabled /></Field>
+                </div>
+                <div class="cl-alert blue" style="margin-top:14px;">
+                    <Icon Name="lock" Size="15" />
+                    <span>El agente recibirá un correo para definir su contraseña. La relación de supervisión queda activa y solo el <b>broker administrador</b> puede reasignarla.</span>
+                </div>
+            </FormSection>
+
+            <FormFooterBar OnCancel="@(() => App.Navigate("agents"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar agente" />
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"
+                       Title="¿Registrar agente y abrir supervisión?"
+                       Desc="Se creará la cuenta del agente y quedará bajo tu supervisión directa. Podrá registrar captaciones, clientes y operaciones."
+                       ConfirmLabel="Registrar agente" CancelLabel="Revisar datos"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Agente registrado · supervisión activa</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool _confirm;
+    private bool _toast;
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(900);
+        App.Navigate("agents");
+    }
+}

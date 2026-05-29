@@ -1,0 +1,20 @@
+@* Definition pair — label over value. Mirrors the prototype's Def helper. *@
+<div class="cl-def-item">
+    <div class="cl-def-k">@K</div>
+    <div class="cl-def-v">
+        @if (ChildContent != null)
+        {
+            @ChildContent
+        }
+        else
+        {
+            @V
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? K { get; set; }
+    [Parameter] public string? V { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

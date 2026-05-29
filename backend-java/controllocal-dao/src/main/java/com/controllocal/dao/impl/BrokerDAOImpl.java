@@ -19,12 +19,12 @@ import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 public class BrokerDAOImpl implements BrokerDAO {
 
     private static final String INSERT_SQL = """
-            INSERT INTO broker (id_usuario, codigo_broker, fecha_designacion, es_administrador)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO broker (id_usuario, codigo_broker, zona, fecha_designacion, es_administrador)
+            VALUES (?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_SQL = """
-            SELECT b.id_broker, b.codigo_broker, b.fecha_designacion, b.es_administrador,
+            SELECT b.id_broker, b.codigo_broker, b.zona, b.fecha_designacion, b.es_administrador,
                    u.id_usuario, u.nombre_usuario, u.contrasena_hash, u.estado_administrativo, u.rol,
                    u.fecha_creacion AS usuario_fecha_creacion,
                    u.fecha_actualizacion AS usuario_fecha_actualizacion,
@@ -38,7 +38,7 @@ public class BrokerDAOImpl implements BrokerDAO {
 
     private static final String UPDATE_SQL = """
             UPDATE broker
-            SET id_usuario = ?, codigo_broker = ?, fecha_designacion = ?, es_administrador = ?
+            SET id_usuario = ?, codigo_broker = ?, zona = ?, fecha_designacion = ?, es_administrador = ?
             WHERE id_broker = ?
             """;
 
@@ -56,8 +56,9 @@ public class BrokerDAOImpl implements BrokerDAO {
              PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, broker.getIdUsuarioInterno());
             ps.setString(2, broker.getCodigoBroker());
-            ps.setDate(3, Date.valueOf(broker.getFechaDesignacion()));
-            ps.setBoolean(4, broker.isEsAdministrador());
+            ps.setString(3, broker.getZona());
+            ps.setDate(4, Date.valueOf(broker.getFechaDesignacion()));
+            ps.setBoolean(5, broker.isEsAdministrador());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -110,9 +111,10 @@ public class BrokerDAOImpl implements BrokerDAO {
              PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
             ps.setLong(1, broker.getIdUsuarioInterno());
             ps.setString(2, broker.getCodigoBroker());
-            ps.setDate(3, Date.valueOf(broker.getFechaDesignacion()));
-            ps.setBoolean(4, broker.isEsAdministrador());
-            ps.setLong(5, broker.getIdBroker());
+            ps.setString(3, broker.getZona());
+            ps.setDate(4, Date.valueOf(broker.getFechaDesignacion()));
+            ps.setBoolean(5, broker.isEsAdministrador());
+            ps.setLong(6, broker.getIdBroker());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar broker con id " + broker.getIdBroker() + ".", e);
@@ -136,6 +138,7 @@ public class BrokerDAOImpl implements BrokerDAO {
         UsuarioInternoDAOImpl.mapUsuario(rs, broker);
         broker.setIdBroker(rs.getLong("id_broker"));
         broker.setCodigoBroker(rs.getString("codigo_broker"));
+        broker.setZona(rs.getString("zona"));
         broker.setFechaDesignacion(JdbcSupport.toLocalDate(rs.getDate("fecha_designacion")));
         broker.setEsAdministrador(rs.getBoolean("es_administrador"));
         return broker;

@@ -1,0 +1,90 @@
+@page "/captaciones"
+@inject AppState App
+@inject ICaptacionService CaptacionSvc
+
+<PageTitle>Mis captaciones · ControlLocal</PageTitle>
+
+<AppShell Active="Captaciones" Crumbs="@(new[] { "ControlLocal", "Operación", "Captaciones" })"
+          Title="Mis captaciones"
+          Subtitle="Expedientes de captación que registré · seguimiento del proceso comercial">
+    <Actions>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="fileText" Label="Borradores" Value="2" Tone="amber" />
+            <MetricCard Icon="clock" Label="En revisión" Value="3" Tone="amber" />
+            <MetricCard Icon="check" Label="Activas" Value="8" Tone="green" />
+            <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="amber" />
+            <MetricCard Icon="x" Label="Rechazadas" Value="1" Tone="red" />
+            <MetricCard Icon="flag" Label="Cerradas" Value="1" Tone="navy" />
+        </div>
+
+        <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
+
+        <FilterBar Search="Buscar por código, dirección, propietario…">
+            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
+            <select class="cl-select"><option>Estado</option><option>Borrador</option><option>En revisión</option><option>Activa</option><option>Observada</option></select>
+            <select class="cl-select"><option>Vigencia</option><option>Por vencer</option><option>Vigente</option></select>
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th><th>Local</th><th>Distrito</th><th>Área</th>
+                            <th>Propietario</th><th>Vigencia</th><th>Comisión</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in CaptacionSvc.All())
+                        {
+                            <tr>
+                                <td><span class="mono">@c.CodigoCaptacion</span></td>
+                                <td style="font-weight:600;">@c.DireccionLocal</td>
+                                <td>@c.DistritoLocal</td>
+                                <td><span><b>@c.AreaM2</b> m²</span></td>
+                                <td>@c.PropietarioNombre</td>
+                                <td>
+                                    <div style="font-size:12px;">@c.VigenciaTexto</div>
+                                    <div class="cl-muted" style="font-size:11px;">@c.DiasRestantesTexto</div>
+                                </td>
+                                <td><span class="mono">@c.ComisionPactadaTexto</span></td>
+                                <td><StatusBadge Label="@c.Estado" /></td>
+                                <td>
+                                    @if (c.Estado == "Observada")
+                                    {
+                                        <button class="cl-btn sm warn" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
+                                    }
+                                    else if (c.Estado == "Pendiente" || c.Estado == "Borrador")
+                                    {
+                                        <button class="cl-btn sm" @onclick="@(() => App.Navigate("captacion-form"))">Continuar</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="cl-btn sm" @onclick="@(() => App.Navigate("captacion-detail"))">Ver expediente</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="14" />
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _tab = "Todas";
+
+    private readonly Tabs.TabItem[] _tabs = new[]
+    {
+        new Tabs.TabItem("Todas", 14),
+        new Tabs.TabItem("Borradores", 2),
+        new Tabs.TabItem("En revisión", 3),
+        new Tabs.TabItem("Observadas", 1),
+        new Tabs.TabItem("Activas", 8),
+    };
+}

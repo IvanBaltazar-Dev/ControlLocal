@@ -1,0 +1,78 @@
+@* Topbar — fecha, notificaciones y perfil *@
+@inject AppState App
+
+<header class="cl-topbar">
+    <div class="cl-topbar-right">
+        <span class="cl-date">@FechaHoy</span>
+
+        <div class="cl-profile-wrap">
+            <button class="cl-profile" type="button" @onclick="ToggleMenu">
+                <div class="cl-avatar" style="width:28px;height:28px;">@User.Initials</div>
+                <div>
+                    <div class="cl-profile-name">@User.Name</div>
+                    <div class="cl-profile-role">@Roles.Label(Role)</div>
+                </div>
+                <Icon Name="chevronDown" Size="14" Color="#948D81" />
+            </button>
+
+            @if (_menuOpen)
+            {
+                <div class="cl-profile-menu">
+                    <button type="button" @onclick="VerPerfil">
+                        Ver perfil
+                    </button>
+
+                    @if (!IsAdmin)
+                    {
+                        <button type="button" @onclick="CambiarContrasena">
+                            Cambiar contraseña
+                        </button>
+                    }
+
+                    <div class="cl-profile-menu-sep"></div>
+
+                    <button type="button" class="danger" @onclick="Salir">
+                        Cerrar sesión
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</header>
+
+@code {
+    [Parameter] public string Role { get; set; } = Roles.Agente;
+    [Parameter] public int Notifs { get; set; } = 3;
+
+    private bool _menuOpen;
+
+    private RoleUser User => Navigation.UserFor(Role);
+
+    private bool IsAdmin => Role == Roles.Admin;
+
+    private string FechaHoy =>
+        DateTime.Today.ToString("dddd · dd MMM yyyy", new System.Globalization.CultureInfo("es-PE"));
+
+    private void ToggleMenu()
+    {
+        _menuOpen = !_menuOpen;
+    }
+
+    private void VerPerfil()
+    {
+        _menuOpen = false;
+        App.Navigate("broker-profile");
+    }
+
+    private void CambiarContrasena()
+    {
+        _menuOpen = false;
+        App.Navigate("cambiar-contrasena");
+    }
+
+    private void Salir()
+    {
+        _menuOpen = false;
+        App.Navigate("login");
+    }
+}

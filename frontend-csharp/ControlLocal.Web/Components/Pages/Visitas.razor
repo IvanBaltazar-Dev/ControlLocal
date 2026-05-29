@@ -1,0 +1,162 @@
+@page "/visitas"
+@inject AppState App
+@inject IVisitaService VisitaSvc
+
+<PageTitle>Visitas · ControlLocal</PageTitle>
+
+<AppShell Active="Visitas" Crumbs="@(new[] { "ControlLocal", "Operación", "Visitas" })"
+          Title="Agenda de visitas"
+          Subtitle="Visitas a locales coordinadas con tus clientes interesados">
+    <Actions>
+        <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar agenda</button>
+        <button class="cl-btn primary" @onclick="@(() => _modal = true)"><Icon Name="plus" Size="13" /> Programar visita</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="calendar" Label="Programadas" Value="5" Tone="blue" Footer="Próxima: hoy 16:00" />
+            <MetricCard Icon="check" Label="Realizadas (mes)" Value="18" Tone="green" />
+            <MetricCard Icon="clock" Label="Reprogramadas" Value="3" Tone="amber" />
+            <MetricCard Icon="x" Label="Canceladas" Value="2" Tone="red" />
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px;">
+            <div class="cl-card">
+                <div class="cl-card-head">
+                    <div class="cl-card-title">Mayo 2026</div>
+                    <div class="cl-flex" style="gap:6px;">
+                        <button class="cl-btn sm ghost"><Icon Name="chevronLeft" Size="13" /></button>
+                        <button class="cl-btn sm ghost"><Icon Name="arrowRight" Size="13" /></button>
+                    </div>
+                </div>
+                <div class="cl-card-body">
+                    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">
+                        @foreach (var d in _dow)
+                        {
+                            <div style="text-align:center;font-size:10px;font-weight:600;color:#948D81;padding:4px 0;">@d</div>
+                        }
+                        @for (var i = 0; i < _offset; i++)
+                        {
+                            <div></div>
+                        }
+                        @for (var day = 1; day <= 31; day++)
+                        {
+                            var hasVisit = _visitDays.Contains(day);
+                            var isToday = day == 28;
+                            var bg = isToday ? "background:var(--c-primary-50);border-color:var(--c-primary);" : "";
+                            <div style="aspect-ratio:1;border:1px solid #EFEBE3;border-radius:7px;padding:5px;display:flex;flex-direction:column;@bg">
+                                <span style="font-size:11px;@(isToday ? "font-weight:700;color:var(--c-primary);" : "color:#5A554D;")">@day</span>
+                                @if (hasVisit)
+                                {
+                                    <span style="margin-top:auto;align-self:flex-start;width:6px;height:6px;border-radius:50%;background:var(--c-walnut);"></span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="cl-card">
+                <div class="cl-card-head"><div class="cl-card-title">Próximas visitas</div><span class="cl-badge blue">5</span></div>
+                <div class="cl-card-body">
+                    <Timeline Items="_proximas" />
+                </div>
+            </div>
+        </div>
+
+        <FilterBar Search="Buscar por cliente, local, captación…">
+            <select class="cl-select"><option>Todos los estados</option><option>Programada</option><option>Realizada</option><option>Reprogramada</option><option>Cancelada</option></select>
+            <select class="cl-select"><option>Todo el periodo</option><option>Esta semana</option><option>Este mes</option></select>
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th><th>Hora</th><th>Captación</th><th>Cliente</th>
+                            <th>Local</th><th>Distrito</th><th>Agente</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var v in VisitaSvc.Today())
+                        {
+                            <tr>
+                                <td><span style="font-size:12px;">@v.FechaTexto</span></td>
+                                <td><span class="mono">@v.HoraTexto</span></td>
+                                <td><span class="mono">@v.CodigoCaptacion</span></td>
+                                <td style="font-weight:600;">@v.ClienteNombre</td>
+                                <td>@v.DireccionLocal</td>
+                                <td>@v.DistritoLocal</td>
+                                <td>@v.NombreAgente</td>
+                                <td>
+                                    <StatusBadge Label="@v.Estado" />
+                                    @if (v.ResultadoTexto is not null)
+                                    {
+                                        <div class="cl-muted" style="font-size:11px;margin-top:3px;">@v.ResultadoTexto</div>
+                                    }
+                                </td>
+                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate("captacion-detail"))">Ver expediente</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="28" />
+
+        <Modal Open="_modal" Tone="blue" Icon="calendar"
+               Title="Programar visita"
+               Desc="Coordina una visita del cliente a un local de tus captaciones activas."
+               OnClose="@(() => _modal = false)">
+            <ChildContent>
+                <Field Label="Captación / local" Required="true">
+                    <select>
+                        <option>CAP-0218 · Av. La Marina 245</option>
+                        <option>CAP-0226 · Calle Schell 412</option>
+                        <option>CAP-0234 · Jr. Berlín 230</option>
+                    </select>
+                </Field>
+                <div class="cl-grid c2" style="margin-top:12px;">
+                    <Field Label="Cliente" Required="true"><input placeholder="Cliente interesado" /></Field>
+                    <Field Label="Fecha" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
+                    <Field Label="Hora" Required="true"><input placeholder="hh:mm" /></Field>
+                    <Field Label="Acompaña"><input value="Valentina Mora (tú)" disabled /></Field>
+                </div>
+                <div style="margin-top:12px;">
+                    <Field Label="Notas"><textarea rows="2" placeholder="Indicaciones para la visita…"></textarea></Field>
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _modal = false)">Cancelar</button>
+                <button class="cl-btn primary" @onclick="@OnSchedule">Programar visita</button>
+            </Footer>
+        </Modal>
+        <Toast Show="_toast">Visita programada correctamente</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool _modal;
+    private bool _toast;
+
+    private readonly string[] _dow = { "L", "M", "M", "J", "V", "S", "D" };
+    private const int _offset = 4; // 01/05/2026 cae viernes (lunes = 0)
+    private readonly int[] _visitDays = { 18, 20, 22, 24, 25, 26, 28 };
+
+    private readonly Timeline.TimelineItem[] _proximas = new[]
+    {
+        new Timeline.TimelineItem("Hoy · 16:00", "Inversiones Trébol", "Av. La Marina 245 · CAP-0218", "active"),
+        new Timeline.TimelineItem("Mañana · 09:30", "Café Lima", "Jr. Berlín 230 · CAP-0234"),
+        new Timeline.TimelineItem("26 May · 10:00", "Bodegas del Norte", "Av. Petit Thouars 1875 · CAP-0231"),
+        new Timeline.TimelineItem("27 May · 12:00", "Boutique Lila", "Calle Schell 412 · CAP-0226"),
+    };
+
+    private async Task OnSchedule()
+    {
+        _modal = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(2200);
+        _toast = false;
+        StateHasChanged();
+    }
+}

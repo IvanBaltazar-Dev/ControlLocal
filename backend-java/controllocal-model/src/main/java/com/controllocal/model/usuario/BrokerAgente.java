@@ -11,6 +11,7 @@ public class BrokerAgente {
     private AgenteInmobiliario agente;
     private LocalDate fechaAsignacion;
     private LocalDate fechaFin;
+    private String motivo;
     private EstadoActivoInactivo estado;
 
     public Long getIdBrokerAgente() {
@@ -51,6 +52,14 @@ public class BrokerAgente {
 
     public void setFechaFin(LocalDate fechaFin) {
         this.fechaFin = fechaFin;
+    }
+
+    public String getMotivo() {
+        return motivo;
+    }
+
+    public void setMotivo(String motivo) {
+        this.motivo = motivo;
     }
 
     public EstadoActivoInactivo getEstado() {

@@ -69,12 +69,14 @@ SET @id_usuario_broker_admin = (
 INSERT INTO broker (
     id_usuario,
     codigo_broker,
+    zona,
     fecha_designacion,
     es_administrador
 )
 SELECT
     @id_usuario_broker_admin,
     'BRK-ADM-001',
+    'Sede central',
     CURRENT_DATE,
     TRUE
 WHERE @id_usuario_broker_admin IS NOT NULL

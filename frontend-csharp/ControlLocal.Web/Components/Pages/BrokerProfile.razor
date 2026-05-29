@@ -1,0 +1,81 @@
+@page "/broker-profile"
+@inject AppState App
+@inject IBrokerService Brokers
+
+<PageTitle>Perfil de broker · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Brokers", b.Nombre })"
+          Title="@b.Nombre"
+          Subtitle="Perfil del broker · información administrativa en modo lectura">
+    <Actions>
+        <button class="cl-btn" @onclick="@(() => App.Navigate("brokers"))">
+            <Icon Name="chevronLeft" Size="13" /> Volver
+        </button>
+
+        @if (App.Role != Roles.Admin)
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("broker-form"))">
+                <Icon Name="edit" Size="13" /> Editar broker
+            </button>
+        }
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;">
+            <div class="cl-stack">
+                <div class="cl-card" style="text-align:center;padding:24px;">
+                    <div class="cl-avatar" style="width:78px;height:78px;font-size:26px;margin:0 auto;">@b.Iniciales</div>
+                    <div style="font-size:16px;font-weight:650;margin-top:12px;">@b.Nombre</div>
+                    <div class="cl-muted" style="font-size:12px;margin-top:2px;">@b.Usuario</div>
+                    <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+                        <StatusBadge Label="@b.TipoBroker" />
+                        <StatusBadge Label="@b.EstadoAdministrativo" />
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Supervisión</div></div>
+                    <div class="cl-card-body">
+                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
+                            <dt>Agentes supervisados</dt><dd>@b.AgentesACargo</dd>
+                            <dt>Zona o ámbito</dt><dd>@b.Zona</dd>
+                            <dt>Captaciones del mes</dt><dd>@b.CaptacionesActivas</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cl-card">
+                <div class="cl-card-head"><div class="cl-card-title">Datos del broker</div><span class="cl-muted" style="font-size:11.5px;">Solo lectura</span></div>
+                <div class="cl-card-body">
+                    <div style="font-size:11px;color:var(--c-text-3);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:4px;">Identificación y contacto</div>
+                    <div class="cl-def">
+                        <Def K="Nombre completo" V="@b.Nombre" />
+                        <Def K="Usuario" V="@b.Usuario" />
+                        <Def K="Tipo de documento" V="@DocLabel(b.TipoDocumento)" />
+                        <Def K="Número de documento" V="@b.NumeroDocumento" />
+                        <Def K="Teléfono" V="@b.Telefono" />
+                        <Def K="Correo" V="@b.Email" />
+                    </div>
+                    <div class="cl-divider"></div>
+                    <div style="font-size:11px;color:var(--c-text-3);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:4px;">Información estructural <span style="text-transform:none;font-weight:500;color:var(--c-text-3);">· no editable</span></div>
+                    <div class="cl-def">
+                        <Def K="Tipo de broker" V="@b.TipoBroker" />
+                        <Def K="Código de broker" V="@b.CodigoBroker" />
+                        <Def K="Fecha de designación" V="@b.FechaDesignacionTexto" />
+                        <Def K="Estado" V="@b.EstadoAdministrativo" />
+                    </div>
+                    <div class="cl-alert blue" style="margin-top:16px;">
+                        <Icon Name="info" Size="15" />
+                        <span>El tipo de broker, el código y la fecha de designación se gestionan internamente y no se modifican desde el perfil.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private BrokerDto b => Brokers.First();
+
+    private static string DocLabel(string docType) =>
+        docType == "DNI" ? "DNI" : docType == "CE" ? "Carné de extranjería" : docType;
+}

@@ -1,0 +1,34 @@
+@* Row action buttons for tables: view / edit / delete / more. *@
+<div class="cl-row-actions">
+    @foreach (var it in Items)
+    {
+        switch (it)
+        {
+            case "view":
+                <button title="Ver detalle" @onclick="@(() => Fire(OnView))"><Icon Name="eye" Size="14" /></button>
+                break;
+            case "edit":
+                <button title="Editar" @onclick="@(() => Fire(OnEdit))"><Icon Name="edit" Size="13" /></button>
+                break;
+            case "delete":
+                <button class="danger" title="Eliminar" @onclick="@(() => Fire(OnDelete))"><Icon Name="trash" Size="13" /></button>
+                break;
+            case "more":
+                <button title="Más" @onclick="@(() => Fire(OnMore))"><Icon Name="more" Size="14" /></button>
+                break;
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string[] Items { get; set; } = new[] { "view", "edit", "more" };
+    [Parameter] public EventCallback OnView { get; set; }
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+    [Parameter] public EventCallback OnMore { get; set; }
+
+    private async Task Fire(EventCallback cb)
+    {
+        if (cb.HasDelegate) await cb.InvokeAsync();
+    }
+}

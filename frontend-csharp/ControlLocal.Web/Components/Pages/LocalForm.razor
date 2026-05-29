@@ -1,0 +1,114 @@
+@page "/local-form"
+@inject AppState App
+
+<PageTitle>Registrar local · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Locales comerciales", "Nuevo local" })"
+          Title="Registrar local comercial"
+          Subtitle="Alta del inmueble, su propietario y la ficha base para iniciar una captación">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("locales"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Propietario del local" Sub="Vincula un propietario ya registrado o crea uno nuevo">
+                    <div class="cl-grid c2">
+                        <Field Label="Propietario" Required="true">
+                            <select>
+                                <option value="">— Selecciona un propietario —</option>
+                                <option>Inversiones Trébol S.A.C.</option>
+                                <option>María Fernanda Quispe</option>
+                                <option>Grupo Aurora E.I.R.L.</option>
+                            </select>
+                        </Field>
+                        <Field Label="&nbsp;">
+                            <button class="cl-btn" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Nuevo propietario</button>
+                        </Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="2" Title="Ubicación" Sub="Dirección exacta y distrito del local comercial">
+                    <div class="cl-grid c2">
+                        <Field Label="Dirección" Required="true"><input placeholder="Av. / Calle, número" /></Field>
+                        <Field Label="Referencia"><input placeholder="Entre calles, esquina, hito cercano" /></Field>
+                        <Field Label="Distrito" Required="true"><select><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option><option>Barranco</option></select></Field>
+                        <Field Label="Provincia"><input value="Lima" /></Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="3" Title="Características del local" Sub="Datos que verán los clientes interesados en la ficha">
+                    <div class="cl-grid c3">
+                        <Field Label="Área (m²)" Required="true"><input placeholder="Ej. 80" /></Field>
+                        <Field Label="Rubro sugerido"><select><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option><option>Salud</option></select></Field>
+                        <Field Label="Precio referencial (USD/mes)" Required="true"><input placeholder="1 500" /></Field>
+                        <Field Label="Estado del local"><select><option>Disponible</option><option>En captación</option><option>Reservado</option></select></Field>
+                        <Field Label="Antigüedad"><input placeholder="Ej. 5 años" /></Field>
+                        <Field Label="N.° de ambientes"><input placeholder="Ej. 3" /></Field>
+                    </div>
+                    <div style="margin-top:14px;">
+                        <Field Label="Fotos del local" Hint="Sube hasta 8 imágenes en formato JPG o PNG">
+                            <div class="cl-ph" style="height:120px;">
+                                <Icon Name="upload" Size="20" /> <span style="margin-left:8px;">Arrastra las fotos aquí o haz clic para seleccionar</span>
+                            </div>
+                        </Field>
+                    </div>
+                </FormSection>
+
+                <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar local">
+                    <Extra>
+                        <button class="cl-btn ghost"><Icon Name="save" Size="13" /> Guardar borrador</button>
+                    </Extra>
+                </FormFooterBar>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card" style="position:sticky;top:14px;">
+                    <div class="cl-card-head"><div class="cl-card-title">Qué sigue después</div></div>
+                    <div class="cl-card-body">
+                        <Timeline Items="_steps" />
+                    </div>
+                </div>
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>Al registrar el local puedes <b>crear la captación</b> de inmediato o solo guardar el inmueble para captarlo más tarde.</span>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="store"
+                       Title="¿Registrar local comercial?"
+                       Desc="El local quedará registrado. Puedes crear su captación ahora para iniciar el proceso comercial, o solo guardarlo."
+                       ConfirmLabel="Registrar y crear captación" CancelLabel="Solo registrar"
+                       OnClose="@OnOnlyRegister"
+                       OnConfirm="@OnRegisterAndCreate" />
+        <Toast Show="_toast">Local registrado correctamente</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool _confirm;
+    private bool _toast;
+
+    private readonly Timeline.TimelineItem[] _steps = new[]
+    {
+        new Timeline.TimelineItem("Paso 1", "Registrar el local", "Datos del inmueble y propietario", "active"),
+        new Timeline.TimelineItem("Paso 2", "Crear la captación", "Condiciones comerciales y vigencia"),
+        new Timeline.TimelineItem("Paso 3", "Enviar a revisión", "El broker aprueba la captación"),
+    };
+
+    private async Task OnOnlyRegister()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(900);
+        App.Navigate("locales");
+    }
+
+    private void OnRegisterAndCreate()
+    {
+        _confirm = false;
+        App.Navigate("captacion-form");
+    }
+}

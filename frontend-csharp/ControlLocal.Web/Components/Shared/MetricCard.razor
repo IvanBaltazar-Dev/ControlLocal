@@ -1,21 +1,55 @@
-<div class="cl-metric premium">
-    <div class="d-flex justify-content-between align-items-start">
-        <div>
-            <div class="cl-metric-label">@Label</div>
-            <div class="cl-metric-value">@Value</div>
-        </div>
-        <div class="cl-metric-icon @Tone">@Icon</div>
+@* KPI metric card with optional icon, delta and footer. *@
+<div class="cl-metric">
+    <div class="cl-metric-row">
+        @if (!string.IsNullOrEmpty(Icon))
+        {
+            <div class="cl-metric-icon" style="background:@T.Bg;color:@T.Color;">
+                <Icon Name="@Icon" Size="16" />
+            </div>
+        }
+        <div class="cl-metric-label">@Label</div>
     </div>
-    @if (!string.IsNullOrWhiteSpace(Footer))
+    <div class="cl-metric-value">@Value</div>
+    @if (!string.IsNullOrEmpty(Delta))
     {
-        <div class="cl-metric-foot">@Footer</div>
+        <div class="cl-metric-delta @DeltaDir">
+            <Icon Name="@DeltaIcon" Size="11" />
+            @Delta
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Footer))
+    {
+        <div style="font-size:11px;color:#948D81;margin-top:6px;">@Footer</div>
     }
 </div>
 
 @code {
-    [Parameter] public string Label { get; set; } = string.Empty;
-    [Parameter] public string Value { get; set; } = string.Empty;
-    [Parameter] public string Footer { get; set; } = string.Empty;
-    [Parameter] public string Icon { get; set; } = "•";
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? Delta { get; set; }
+    [Parameter] public string DeltaDir { get; set; } = "up";
     [Parameter] public string Tone { get; set; } = "blue";
+    [Parameter] public string? Footer { get; set; }
+
+    private record ToneStyle(string Bg, string Color);
+
+    private static readonly Dictionary<string, ToneStyle> Tones = new()
+    {
+        ["blue"] = new("#EDF2F9", "#2C5CA0"),
+        ["green"] = new("#E9F2EC", "#2F7D52"),
+        ["amber"] = new("#F7EFDD", "#8A5E12"),
+        ["red"] = new("#F6E7E4", "#C0473C"),
+        ["info"] = new("#E6F0F5", "#2C77A0"),
+        ["navy"] = new("#E6E1D8", "#221F1B"),
+    };
+
+    private ToneStyle T => Tones.TryGetValue(Tone, out var t) ? t : Tones["blue"];
+
+    private string DeltaIcon => DeltaDir switch
+    {
+        "up" => "arrowUpRight",
+        "down" => "arrowDownRight",
+        _ => "arrowRight",
+    };
 }

@@ -68,6 +68,7 @@ CREATE TABLE broker (
     id_broker BIGINT AUTO_INCREMENT PRIMARY KEY,
     id_usuario BIGINT NOT NULL UNIQUE,
     codigo_broker VARCHAR(20) NOT NULL UNIQUE,
+    zona VARCHAR(100),
     fecha_designacion DATE NOT NULL,
     es_administrador BOOLEAN NOT NULL DEFAULT FALSE,
     broker_admin_unico TINYINT GENERATED ALWAYS AS (
@@ -118,6 +119,7 @@ CREATE TABLE broker_agente (
     id_agente BIGINT NOT NULL,
     fecha_asignacion DATE NOT NULL,
     fecha_fin DATE NULL,
+    motivo TEXT NOT NULL,
     estado CHAR(1) NOT NULL,
     id_agente_activo BIGINT GENERATED ALWAYS AS (
         CASE

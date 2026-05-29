@@ -1,0 +1,76 @@
+@page "/profile"
+@inject AppState App
+
+<PageTitle>Mi perfil · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Mi perfil" })" Title="Mi perfil"
+          Subtitle="Datos de tu cuenta de usuario en ControlLocal">
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;">
+        <div class="cl-card" style="text-align:center;padding:22px;">
+            <div class="cl-avatar" style="width:88px;height:88px;font-size:28px;margin:0 auto;">@User.Initials</div>
+            <div style="font-size:16px;font-weight:600;margin-top:12px;">@User.Name</div>
+            <div style="font-size:12px;color:#948D81;">@App.Role</div>
+            <div style="margin-top:10px;"><StatusBadge Label="Activo" /></div>
+            <button class="cl-btn" style="width:100%;margin-top:18px;justify-content:center;">
+                <Icon Name="upload" Size="13" /> Cambiar foto
+            </button>
+            <div class="cl-divider"></div>
+            <div style="text-align:left;">
+                <div style="font-size:11px;color:#948D81;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Resumen</div>
+                <dl class="cl-kv">
+                    @if (IsAdmin)
+                    {
+                        <dt>Alcance</dt><dd>Global — todos los brokers</dd>
+                        <dt>Brokers a cargo</dt><dd>8</dd>
+                        <dt>Ingreso</dt><dd>01 Oct 2023</dd>
+                        <dt>Último acceso</dt><dd>Hoy 07:48</dd>
+                    }
+                    else if (IsBroker)
+                    {
+                        <dt>Agentes a cargo</dt><dd>7 activos</dd>
+                        <dt>Zona</dt><dd>Lima Centro / Sur</dd>
+                        <dt>Ingreso</dt><dd>11 Ene 2024</dd>
+                        <dt>Último acceso</dt><dd>Hoy 07:55</dd>
+                    }
+                    else
+                    {
+                        <dt>Broker</dt><dd>Ricardo Salas</dd>
+                        <dt>Zona</dt><dd>Lima Centro / Sur</dd>
+                        <dt>Ingreso</dt><dd>14 Feb 2024</dd>
+                        <dt>Último acceso</dt><dd>Hoy 08:12</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+        <div class="cl-stack">
+            <FormSection Num="1" Title="Datos personales" Sub="Información visible para el broker y el equipo administrativo">
+                <div class="cl-grid c2">
+                    <Field Label="Nombres"><input value="Valentina" /></Field>
+                    <Field Label="Apellidos"><input value="Mora Quispe" /></Field>
+                    <Field Label="Documento (DNI)"><input value="45 893 211" /></Field>
+                    <Field Label="Teléfono"><input value="+51 987 412 008" /></Field>
+                    <Field Label="Correo corporativo"><input value="vmora@@controllocal.pe" /></Field>
+                    <Field Label="Zona asignada"><select><option>Lima Centro / Sur</option></select></Field>
+                </div>
+            </FormSection>
+            <FormSection Num="2" Title="Cuenta de acceso" Sub="Usuario, rol y autenticación">
+                <div class="cl-grid c2">
+                    <Field Label="Usuario"><input value="vmora" disabled /></Field>
+                    <Field Label="Rol"><input value="Agente inmobiliario" disabled /></Field>
+                    <Field Label="Contraseña actual"><input type="password" value="••••••••" /></Field>
+                    <Field Label="Nueva contraseña" Hint="Mínimo 8 caracteres, una mayúscula y un número"><input type="password" placeholder="Ingresa nueva contraseña" /></Field>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:16px;">
+                    <button class="cl-btn primary">Guardar cambios</button>
+                    <button class="cl-btn ghost" style="color:#2C5CA0;">Cambiar contraseña</button>
+                </div>
+            </FormSection>
+        </div>
+    </div>
+</AppShell>
+
+@code {
+    private bool IsAdmin => App.Role == Roles.Admin;
+    private bool IsBroker => App.Role == Roles.Broker;
+    private RoleUser User => Navigation.UserFor(App.Role);
+}

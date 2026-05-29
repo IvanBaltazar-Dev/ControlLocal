@@ -1,0 +1,92 @@
+@page "/agents"
+@inject AppState App
+@inject IAgenteService AgenteSvc
+
+<PageTitle>Mis agentes · ControlLocal</PageTitle>
+
+<AppShell Active="Mis agentes" Crumbs="@(new[] { "ControlLocal", "Mi equipo", "Mis agentes" })"
+          Title="Mis agentes inmobiliarios"
+          Subtitle="Equipo bajo tu supervisión directa · 7 activos · 1 inactivo">
+    <Actions>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("agente-form"))"><Icon Name="plus" Size="13" /> Registrar agente</button>
+    </Actions>
+    <ChildContent>
+        <div class="cl-alert blue" style="margin-bottom:14px;">
+            <Icon Name="info" Size="15" />
+            <span>Al registrar un agente se crea automáticamente una <b>relación activa de supervisión</b> entre tú y el agente. Solo el broker administrador puede reasignar agentes a otro broker.</span>
+        </div>
+        <FilterBar Search="Buscar agente por nombre, DNI o correo…">
+            <select class="cl-select"><option>Todos los estados</option><option>Activo</option><option>Inactivo</option></select>
+            <select class="cl-select"><option>Todas las zonas</option><option>Lima Centro</option><option>Lima Sur</option></select>
+        </FilterBar>
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Agente</th><th>Documento</th><th>Zona</th><th>Supervisión desde</th>
+                            <th>Captaciones</th><th>Operaciones activas</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in AgenteSvc.All())
+                        {
+                            <tr>
+                                <td>
+                                    <div class="cl-flex">
+                                        <span class="cl-avatar" style="width:28px;height:28px;font-size:11px;background:@a.Color;">@a.Iniciales</span>
+                                        <div>
+                                            <div style="font-weight:600;">@a.Nombre</div>
+                                            <div class="cl-muted" style="font-size:11px;">@a.Email</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="mono">@a.NumeroDocumento</span></td>
+                                <td>@a.Zona</td>
+                                <td><span class="cl-muted" style="font-size:12px;">@a.FechaIngresoTexto</span></td>
+                                <td><span><b>@a.CaptacionesActivas</b></span></td>
+                                <td><span><b>@a.OportunidadesActivas</b></span></td>
+                                <td><StatusBadge Label="@a.EstadoAdministrativo" /></td>
+                                <td>
+                                    <div class="cl-row-actions">
+                                        <button title="Ver"><Icon Name="eye" Size="14" /></button>
+                                        <button title="Editar"><Icon Name="edit" Size="13" /></button>
+                                        @if (a.EstadoAdministrativo == "Activo")
+                                        {
+                                            <button class="danger" title="Desactivar" @onclick="@(() => _deactivate = a.Nombre)"><Icon Name="x" Size="13" /></button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="8" />
+
+        <ConfirmDialog Open="@(_deactivate is not null)" Tone="red" Icon="alert"
+                       Title="¿Desactivar agente?"
+                       Desc="@($"Se desactivará a {_deactivate}. No podrá ingresar al sistema ni registrar nuevas operaciones. Sus captaciones activas deberán reasignarse. La acción queda en la auditoría global.")"
+                       ConfirmLabel="Desactivar agente" CancelLabel="Cancelar"
+                       OnClose="@(() => _deactivate = null)"
+                       OnConfirm="@OnDeactivate" />
+        <Toast Show="@(_toast is not null)" Tone="amber" IconName="alert">@_toast</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string? _deactivate;
+    private string? _toast;
+
+    private async Task OnDeactivate()
+    {
+        var n = _deactivate;
+        _deactivate = null;
+        _toast = $"{n} fue desactivado";
+        StateHasChanged();
+        await Task.Delay(2200);
+        _toast = null;
+        StateHasChanged();
+    }
+}

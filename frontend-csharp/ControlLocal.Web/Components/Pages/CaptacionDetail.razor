@@ -1,0 +1,282 @@
+@page "/captacion-detail"
+@inject AppState App
+
+<PageTitle>Expediente de captación · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@_crumbs"
+          Title="CAP-0218 · Av. La Marina 245"
+          Subtitle="Expediente de captación · Miraflores · vinculada a 1 cliente interesado">
+    <Actions>
+        @if (_readOnly)
+        {
+            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("oportunidades"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+            <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
+        else
+        {
+            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+            <button class="cl-btn" @onclick="@(() => _modal = "interaccion")"><Icon Name="activity" Size="13" /> Registrar interacción</button>
+            <button class="cl-btn" @onclick="@(() => _modal = "visita")"><Icon Name="calendar" Size="13" /> Programar visita</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+        }
+    </Actions>
+    <ChildContent>
+        <div class="cl-stage" style="margin-bottom:14px;">
+            @for (var i = 0; i < _stages.Length; i++)
+            {
+                var cls = i < _current ? "done" : (i == _current ? "active" : "");
+                <div class="cl-stage-step @cls">
+                    <div class="cl-stage-k"><span class="cl-stage-dot"></span> Etapa @(i + 1)</div>
+                    <div class="cl-stage-v">@_stages[i]</div>
+                </div>
+            }
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
+            <div>
+                <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
+
+                @if (_tab == "Resumen")
+                {
+                    <div class="cl-stack">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                            <div class="cl-card">
+                                <div class="cl-card-head"><div class="cl-card-title">Datos del local</div></div>
+                                <div class="cl-card-body">
+                                    <dl class="cl-kv">
+                                        <dt>Dirección</dt><dd>Av. La Marina 245</dd>
+                                        <dt>Distrito</dt><dd>Miraflores</dd>
+                                        <dt>Área</dt><dd>120 m²</dd>
+                                        <dt>Propietario</dt><dd>Inversiones Trébol S.A.C.</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                            <div class="cl-card">
+                                <div class="cl-card-head"><div class="cl-card-title">Condiciones comerciales</div></div>
+                                <div class="cl-card-body">
+                                    <dl class="cl-kv">
+                                        <dt>Precio</dt><dd>USD 2 100 / mes</dd>
+                                        <dt>Comisión</dt><dd>5%</dd>
+                                        <dt>Vigencia</dt><dd>15/04 — 15/07/2026</dd>
+                                        <dt>Rubro objetivo</dt><dd>Restaurante / Café</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cl-card">
+                            <div class="cl-card-head"><div class="cl-card-title">Línea de tiempo del expediente</div></div>
+                            <div class="cl-card-body">
+                                <Timeline Items="_timeline" />
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_tab == "Interacciones")
+                {
+                    <div class="cl-card">
+                        <div class="cl-card-body" style="padding:0;">
+                            <table class="cl-table">
+                                <thead><tr><th>Fecha</th><th>Canal</th><th>Cliente</th><th>Resultado</th></tr></thead>
+                                <tbody>
+                                    @foreach (var it in _interacciones)
+                                    {
+                                        <tr>
+                                            <td><span style="font-size:12px;">@it.Date</span></td>
+                                            <td><div class="cl-flex"><Icon Name="@it.Icon" Size="14" /> <span>@it.Channel</span></div></td>
+                                            <td>@it.Client</td>
+                                            <td style="font-size:12px;color:var(--c-text-2);">@it.Result</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else if (_tab == "Visitas")
+                {
+                    <div class="cl-card">
+                        <div class="cl-card-body" style="padding:0;">
+                            <table class="cl-table">
+                                <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Estado</th></tr></thead>
+                                <tbody>
+                                    <tr><td>22/05/2026</td><td>11:00</td><td>Inversiones Trébol S.A.C.</td><td><StatusBadge Label="Realizada" /></td></tr>
+                                    <tr><td>30/05/2026</td><td>16:30</td><td>Café del Puerto S.A.C.</td><td><StatusBadge Label="Programada" /></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else if (_tab == "Solicitud")
+                {
+                    <div class="cl-card">
+                        <div class="cl-card-body" style="text-align:center;padding:40px 20px;">
+                            <div style="color:#948D81;margin-bottom:10px;"><Icon Name="fileText" Size="28" /></div>
+                            <div style="font-weight:600;margin-bottom:4px;">Aún no hay solicitud de alquiler</div>
+                            <div class="cl-muted" style="font-size:12.5px;margin-bottom:14px;">Cuando un cliente decida alquilar, genera la solicitud para iniciar la evaluación.</div>
+                            @if (!_readOnly)
+                            {
+                                <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="cl-card">
+                        <div class="cl-card-body" style="padding:0;">
+                            @for (var i = 0; i < _docs.Length; i++)
+                            {
+                                var top = i == 0 ? "0" : "1px solid #EFEBE3";
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
+                                    <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@_docs[i]</span></div>
+                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Cliente vinculado</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-flex" style="gap:10px;">
+                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2C5CA0;">CP</span>
+                            <div>
+                                <div style="font-weight:600;font-size:13px;">Café del Puerto S.A.C.</div>
+                                <div class="cl-muted" style="font-size:11px;">RUC 20 548 991 233</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:10px;font-size:12px;color:var(--c-text-2);">Interés: <b>Restaurante / Café</b> · 100–150 m² · USD 1 800–2 300</div>
+                    </div>
+                </div>
+
+                @if (!_readOnly)
+                {
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Acciones del expediente</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                <button class="cl-btn" @onclick="@(() => _modal = "interaccion")"><Icon Name="activity" Size="13" /> Registrar interacción</button>
+                                <button class="cl-btn" @onclick="@(() => _modal = "visita")"><Icon Name="calendar" Size="13" /> Programar visita</button>
+                                <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                <button class="cl-btn danger" @onclick="@(() => _modal = "noContinuidad")"><Icon Name="flag" Size="13" /> Marcar sin continuidad</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cl-alert blue">
+                        <Icon Name="info" Size="15" />
+                        <span>Cada interacción y visita queda registrada en el expediente. Al crear la solicitud, el broker la evaluará.</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <Modal Open="@(_modal == "interaccion")" Tone="blue" Icon="activity"
+               Title="Registrar interacción"
+               Desc="Deja constancia del contacto con el cliente interesado."
+               OnClose="@(() => _modal = null)">
+            <ChildContent>
+                <div class="cl-grid c2">
+                    <Field Label="Canal"><select><option>Llamada</option><option>WhatsApp</option><option>Correo</option><option>Presencial</option></select></Field>
+                    <Field Label="Fecha"><input placeholder="dd/mm/aaaa" /></Field>
+                </div>
+                <div style="margin-top:12px;">
+                    <Field Label="Resultado / nota"><textarea rows="3" placeholder="Resumen de la interacción…"></textarea></Field>
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _modal = null)">Cancelar</button>
+                <button class="cl-btn primary" @onclick="@(() => FireToast("Interacción registrada"))">Guardar</button>
+            </Footer>
+        </Modal>
+
+        <Modal Open="@(_modal == "visita")" Tone="blue" Icon="calendar"
+               Title="Programar visita"
+               Desc="Coordina una visita del cliente al local comercial."
+               OnClose="@(() => _modal = null)">
+            <ChildContent>
+                <div class="cl-grid c2">
+                    <Field Label="Fecha"><input placeholder="dd/mm/aaaa" /></Field>
+                    <Field Label="Hora"><input placeholder="hh:mm" /></Field>
+                </div>
+                <div style="margin-top:12px;">
+                    <Field Label="Notas"><textarea rows="2" placeholder="Indicaciones para la visita…"></textarea></Field>
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _modal = null)">Cancelar</button>
+                <button class="cl-btn primary" @onclick="@(() => FireToast("Visita programada"))">Programar</button>
+            </Footer>
+        </Modal>
+
+        <ConfirmDialog Open="@(_modal == "noContinuidad")" Tone="red" Icon="flag"
+                       Title="¿Marcar el expediente sin continuidad?"
+                       Desc="El cliente quedará desvinculado de esta captación. La captación seguirá activa para otros clientes."
+                       ConfirmLabel="Marcar sin continuidad" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@(() => FireToast("Expediente marcado sin continuidad"))" />
+
+        <Toast Show="@(_toast is not null)">@_toast</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private string _tab = "Resumen";
+    private string? _modal;
+    private string? _toast;
+
+    private readonly string[] _stages = { "Captada", "Con interacciones", "Con solicitud", "En evaluación", "Alquilada" };
+    private const int _current = 1;
+
+    private string[] _crumbs => _readOnly
+        ? new[] { "ControlLocal", "Operaciones del equipo", "CAP-0218" }
+        : new[] { "ControlLocal", "Mis captaciones", "CAP-0218" };
+
+    private readonly Tabs.TabItem[] _tabs = new[]
+    {
+        new Tabs.TabItem("Resumen"),
+        new Tabs.TabItem("Interacciones", 5),
+        new Tabs.TabItem("Visitas", 2),
+        new Tabs.TabItem("Solicitud"),
+        new Tabs.TabItem("Documentos"),
+    };
+
+    private record Interaccion(string Date, string Icon, string Channel, string Client, string Result);
+
+    private readonly Interaccion[] _interacciones = new[]
+    {
+        new Interaccion("28/05/2026 · 10:12", "phone", "Llamada", "Café del Puerto S.A.C.", "Interesado, pide visita"),
+        new Interaccion("26/05/2026 · 17:40", "users", "Presencial", "Café del Puerto S.A.C.", "Revisó la ficha en oficina"),
+        new Interaccion("24/05/2026 · 09:05", "mail", "Correo", "Café del Puerto S.A.C.", "Envío de brochure"),
+        new Interaccion("22/05/2026 · 15:20", "activity", "WhatsApp", "Café del Puerto S.A.C.", "Consulta de metraje"),
+        new Interaccion("20/05/2026 · 11:00", "phone", "Llamada", "Café del Puerto S.A.C.", "Primer contacto"),
+    };
+
+    private readonly string[] _docs =
+    {
+        "Ficha_de_captacion.pdf",
+        "Contrato_de_exclusividad.pdf",
+        "Fotos_del_local.zip",
+    };
+
+    private readonly Timeline.TimelineItem[] _timeline = new[]
+    {
+        new Timeline.TimelineItem("15/04/2026", "Captación activada", "Aprobada por el broker", "done"),
+        new Timeline.TimelineItem("20/05/2026", "Cliente vinculado", "Café del Puerto S.A.C.", "done"),
+        new Timeline.TimelineItem("28/05/2026", "Interacciones en curso", "5 contactos registrados", "active"),
+        new Timeline.TimelineItem("—", "Solicitud de alquiler", "Pendiente de generar"),
+    };
+
+    private async Task FireToast(string msg)
+    {
+        _modal = null;
+        _toast = msg;
+        StateHasChanged();
+        await Task.Delay(2200);
+        _toast = null;
+        StateHasChanged();
+    }
+}

@@ -1,33 +1,28 @@
 using ControlLocal.Web.Components;
+using ControlLocal.Web.Data;
 using ControlLocal.Web.Services;
-using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-var dataProtectionPath = Path.Combine(builder.Environment.ContentRootPath, ".aspnet-data-protection-keys");
-Directory.CreateDirectory(dataProtectionPath);
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath));
+// Circuit-scoped UI state (active role + navigation helper).
+builder.Services.AddScoped<AppState>();
 
-builder.Services.AddHttpClient("ControlLocalApi", client =>
-{
-    var baseUrl = builder.Configuration["Api:BaseUrl"] ?? "http://localhost:8080";
-    client.BaseAddress = new Uri(baseUrl);
-    client.Timeout = TimeSpan.FromSeconds(1);
-});
-
-builder.Services.AddScoped<PropietarioService>();
-builder.Services.AddScoped<LocalComercialService>();
-builder.Services.AddScoped<CaptacionService>();
-builder.Services.AddScoped<OportunidadComercialService>();
-builder.Services.AddScoped<RoleState>();
+// Domain services — in-memory mocks today; swap for HttpClient-backed
+// implementations when the Java REST API is available, no UI changes needed.
+builder.Services.AddScoped<IBrokerService, MockBrokerService>();
+builder.Services.AddScoped<IAgenteService, MockAgenteService>();
+builder.Services.AddScoped<IPropietarioService, MockPropietarioService>();
+builder.Services.AddScoped<IClienteService, MockClienteService>();
+builder.Services.AddScoped<ILocalService, MockLocalService>();
+builder.Services.AddScoped<ICaptacionService, MockCaptacionService>();
+builder.Services.AddScoped<ISolicitudService, MockSolicitudService>();
+builder.Services.AddScoped<IVisitaService, MockVisitaService>();
+builder.Services.AddScoped<IAssignmentService, MockAssignmentService>();
+builder.Services.AddScoped<IReasignacionCaptacionService, MockReasignacionCaptacionService>();
 
 var app = builder.Build();
 
@@ -39,10 +34,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+app.UseHttpsRedirection();
 
 app.UseAntiforgery();
 

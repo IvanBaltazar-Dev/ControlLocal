@@ -1,0 +1,310 @@
+@page "/dashboard"
+@inject AppState App
+
+<PageTitle>@Title · ControlLocal</PageTitle>
+
+<AppShell Active="@SideActive" Crumbs="@(new[] { "ControlLocal", Title })" Title="@Title" Subtitle="@Subtitle">
+    <Actions>
+        @if (IsAdmin)
+        {
+            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar PDF</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="briefcase" Size="13" /> Gestión de brokers</button>
+        }
+        else if (IsBroker)
+        {
+            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="pin" Size="13" /> Bandeja de captaciones</button>
+        }
+        else
+        {
+            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
+        }
+    </Actions>
+    <ChildContent>
+        @if (IsAdmin)
+        {
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+                <MetricCard Icon="briefcase" Label="Brokers activos" Value="8" Delta="+1 vs mes anterior" Tone="navy" />
+                <MetricCard Icon="users" Label="Agentes activos" Value="42" Delta="+4 vs mes anterior" Tone="blue" />
+                <MetricCard Icon="pin" Label="Captaciones vigentes" Value="186" Delta="+12%" Tone="info" />
+                <MetricCard Icon="target" Label="Operaciones activas" Value="64" Delta="+8%" Tone="amber" />
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
+                <div class="cl-card">
+                    <div class="cl-card-head">
+                        <div>
+                            <div class="cl-card-title">Actividad comercial — últimos 30 días</div>
+                            <div class="cl-card-sub">Volumen por etapa del proceso</div>
+                        </div>
+                        <select class="cl-select" style="width:140px;"><option>Últimos 30 días</option></select>
+                    </div>
+                    <div class="cl-card-body">
+                        <BarChart Data="_adminBars" Height="180" Labels="_adminBarLabels" />
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Etapas de captación</div></div>
+                    <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
+                        <DonutChart Segments="_adminDonut" />
+                        <div style="flex:1;font-size:12px;">
+                            @foreach (var (c, n, v) in _adminLegend)
+                            {
+                                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+                                    <span style="width:9px;height:9px;border-radius:2px;background:@c;"></span>
+                                    <span style="flex:1;">@n</span>
+                                    <b>@v</b>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Desempeño por broker</div></div>
+                    <div class="cl-card-body" style="padding:0;">
+                        <table class="cl-table">
+                            <thead><tr><th>Broker</th><th>Agentes</th><th>Captac.</th><th>Cierres</th><th>Conversión</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in _adminPerf)
+                                {
+                                    <tr>
+                                        <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r[0])</span>@r[0]</div></td>
+                                        <td>@r[1]</td><td>@r[2]</td><td><b>@r[3]</b></td>
+                                        <td><StatusBadge Label="@r[4]" ToneOverride="@ConvTone(r[4])" Plain="true" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Actividad reciente</div><a class="cl-btn ghost sm" style="color:#2C5CA0;">Ver todo</a></div>
+                    <div class="cl-card-body">
+                        <Timeline Items="_adminTimeline" />
+                    </div>
+                </div>
+            </div>
+        }
+        else if (IsBroker)
+        {
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+                <MetricCard Icon="pin" Label="Captaciones por revisar" Value="9" Delta="3 nuevas hoy" Tone="amber" />
+                <MetricCard Icon="fileText" Label="Solicitudes por evaluar" Value="6" Delta="2 vencen hoy" Tone="red" />
+                <MetricCard Icon="target" Label="Operaciones activas" Value="22" Delta="+3 esta semana" Tone="blue" />
+                <MetricCard Icon="check" Label="Cierres recientes" Value="5" Delta="+2 vs semana ant." Tone="green" />
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Pendientes prioritarios</div><span class="cl-badge red">8 críticos</span></div>
+                    <div class="cl-card-body" style="padding:0;">
+                        <table class="cl-table">
+                            <thead><tr><th>Tipo</th><th>Referencia</th><th>Agente</th><th>Antigüedad</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var r in _brokerPend)
+                                {
+                                    <tr>
+                                        <td>@r[0]</td>
+                                        <td class="mono">@r[1]</td>
+                                        <td>@r[2]</td>
+                                        <td><StatusBadge Label="@r[3]" ToneOverride="@r[4]" Plain="true" /></td>
+                                        <td><button class="cl-btn sm">Revisar</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Conversión del embudo</div></div>
+                    <div class="cl-card-body">
+                        @foreach (var r in _brokerFunnel)
+                        {
+                            <div style="margin-bottom:12px;">
+                                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+                                    <span>@r[0]</span><span><b>@r[1]</b> <span class="cl-muted">· @r[2]</span></span>
+                                </div>
+                                <div style="height:8px;background:#EFEBE3;border-radius:4px;overflow:hidden;">
+                                    <div style="width:@r[2];height:100%;background:@r[3];border-radius:4px;"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="cl-card" style="margin-top:14px;">
+                <div class="cl-card-head"><div class="cl-card-title">Cierres recientes</div></div>
+                <div class="cl-card-body" style="padding:0;">
+                    <table class="cl-table">
+                        <thead><tr><th>Captación</th><th>Cliente</th><th>Local</th><th>Resultado</th><th>Agente</th><th>Cerrado</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _brokerCierres)
+                            {
+                                <tr>
+                                    <td class="mono">@r[0]</td><td>@r[1]</td><td>@r[2]</td>
+                                    <td><StatusBadge Label="@r[3]" /></td><td>@r[4]</td><td class="muted">@r[5]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+                <MetricCard Icon="pin" Label="Mis captaciones" Value="14" Footer="9 activas · 3 pendientes · 2 observadas" Tone="info" />
+                <MetricCard Icon="activity" Label="En seguimiento" Value="8" Delta="+2 esta semana" Tone="blue" />
+                <MetricCard Icon="calendar" Label="Visitas programadas" Value="5" Footer="Próxima: hoy 16:00" Tone="amber" />
+                <MetricCard Icon="fileText" Label="Solicitudes pendientes" Value="3" Footer="2 en revisión · 1 observada" Tone="red" />
+            </div>
+            <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Mis captaciones en seguimiento</div><a class="cl-btn ghost sm" style="color:#2C5CA0;">Ver todas</a></div>
+                    <div class="cl-card-body" style="padding:0;">
+                        <table class="cl-table">
+                            <thead><tr><th>Captación</th><th>Cliente</th><th>Local</th><th>Etapa</th><th>Próx. acción</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in _agenteCaps)
+                                {
+                                    <tr>
+                                        <td class="mono">@r[0]</td><td>@r[1]</td><td>@r[2]</td>
+                                        <td><StatusBadge Label="@r[3]" /></td><td class="muted">@r[4]</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Agenda de hoy</div><span class="cl-badge blue">5 visitas</span></div>
+                    <div class="cl-card-body">
+                        <Timeline Items="_agenteAgenda" />
+                    </div>
+                </div>
+            </div>
+            <div class="cl-card" style="margin-top:14px;">
+                <div class="cl-card-head"><div class="cl-card-title">Tareas próximas</div></div>
+                <div class="cl-card-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+                    @foreach (var r in _agenteTareas)
+                    {
+                        <div style="border:1px solid #E5E0D7;border-radius:8px;padding:12px;background:#FCFBF8;">
+                            <div style="font-size:12px;font-weight:600;">@r[0]</div>
+                            <div style="font-size:11.5px;color:#5A554D;margin-top:4px;">@r[1]</div>
+                            <div style="margin-top:8px;"><StatusBadge Label="@r[2]" ToneOverride="@r[3]" Plain="true" /></div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </ChildContent>
+</AppShell>
+
+@code {
+    private bool IsAdmin => App.Role == Roles.Admin;
+    private bool IsBroker => App.Role == Roles.Broker;
+
+    private string Title => IsAdmin ? "Panel administrativo global" : IsBroker ? "Panel del broker" : "Buen día, Valentina";
+
+    private string Subtitle => IsAdmin
+        ? "Gestión de brokers, auditoría e indicadores de toda la corredora"
+        : IsBroker
+            ? "Supervisión de los agentes a tu cargo · revisión de captaciones y solicitudes"
+            : "Tu actividad comercial de hoy";
+
+    private string SideActive => IsAdmin ? "Dashboard global" : IsBroker ? "Dashboard de equipo" : "Dashboard";
+
+    private static string Initials(string name) =>
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(w => w[0]));
+
+    private static string ConvTone(string pct)
+    {
+        var n = int.Parse(pct.TrimEnd('%'));
+        return n >= 22 ? "green" : n >= 18 ? "amber" : "red";
+    }
+
+    // --- Admin data ---
+    private readonly double[] _adminBars = { 18, 24, 21, 30, 27, 36, 32, 41, 38, 44, 39, 48 };
+    private readonly string[] _adminBarLabels = { "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12" };
+
+    private readonly DonutChart.Segment[] _adminDonut =
+    {
+        new(22, "#2C5CA0"), new(18, "#2C77A0"), new(14, "#2F7D52"), new(6, "#C0473C"), new(4, "#948D81"),
+    };
+
+    private readonly (string Color, string Name, string Value)[] _adminLegend =
+    {
+        ("#2C5CA0", "Captada", "22"),
+        ("#2C77A0", "Con interacciones", "18"),
+        ("#2F7D52", "Alquilada", "14"),
+        ("#C0473C", "Rechazada", "6"),
+        ("#948D81", "No continúa", "4"),
+    };
+
+    private readonly string[][] _adminPerf =
+    {
+        new[] { "Ricardo Salas", "7", "38", "9", "24%" },
+        new[] { "Mariana Quintero", "6", "31", "8", "26%" },
+        new[] { "Felipe Andrade", "5", "27", "5", "19%" },
+        new[] { "Sandra Ríos", "4", "22", "4", "18%" },
+    };
+
+    private readonly Timeline.TimelineItem[] _adminTimeline =
+    {
+        new("Hoy · 11:42", "Captación aprobada", "CAP-0218 · Local Av. La Marina 245 · Aprobada por R. Salas", "done"),
+        new("Hoy · 09:14", "Alquiler cerrado", "CAP-0205 · Cliente Inversiones Trébol S.A.C.", "done"),
+        new("Ayer · 17:30", "Nuevo agente registrado", "Daniel Romero asignado al broker M. Quintero"),
+        new("Ayer · 14:08", "Solicitud observada", "SOL-0421 · 3 documentos pendientes", "warn"),
+    };
+
+    // --- Broker data ---
+    private readonly string[][] _brokerPend =
+    {
+        new[] { "Captación", "CAP-0231", "D. Romero", "2d", "red" },
+        new[] { "Solicitud", "SOL-0428", "C. Vega", "1d", "amber" },
+        new[] { "Captación", "CAP-0229", "M. León", "1d", "amber" },
+        new[] { "Solicitud", "SOL-0425", "V. Mora", "3h", "blue" },
+        new[] { "Captación", "CAP-0226", "A. Torres", "5h", "blue" },
+    };
+
+    private readonly string[][] _brokerFunnel =
+    {
+        new[] { "Captaciones en seguimiento", "64", "100%", "#2C5CA0" },
+        new[] { "Con visita realizada", "41", "64%", "#2C77A0" },
+        new[] { "Con solicitud creada", "28", "44%", "#C98A1E" },
+        new[] { "Cerradas exitosas", "14", "22%", "#2F7D52" },
+    };
+
+    private readonly string[][] _brokerCierres =
+    {
+        new[] { "CAP-0205", "Inversiones Trébol S.A.C.", "Av. La Marina 245", "Alquilada", "V. Mora", "Hoy 09:14" },
+        new[] { "CAP-0226", "Carla Espinoza", "Calle Schell 412", "Alquilada", "C. Vega", "22 May" },
+        new[] { "CAP-0231", "Bodegas del Norte E.I.R.L.", "Av. Petit Thouars 1875", "No continúa", "D. Romero", "20 May" },
+    };
+
+    // --- Agente data ---
+    private readonly string[][] _agenteCaps =
+    {
+        new[] { "CAP-0218", "Inversiones Trébol", "Av. La Marina 245", "Con interacciones", "Visita · hoy 16:00" },
+        new[] { "CAP-0226", "Boutique Lila", "Calle Schell 412", "Con solicitud", "Esperar evaluación" },
+        new[] { "CAP-0231", "Bodegas del Norte", "Av. Petit Thouars 1875", "Captada", "Registrar interacción" },
+        new[] { "CAP-0234", "Café Lima", "Jr. Berlín 230", "Con interacciones", "Programar visita" },
+    };
+
+    private readonly Timeline.TimelineItem[] _agenteAgenda =
+    {
+        new("09:30", "Visita · Café Lima", "Jr. Berlín 230, Miraflores · CAP-0234", "done"),
+        new("11:00", "Llamada · Inversiones Trébol", "Confirmar contrato · CAP-0218", "done"),
+        new("14:30", "Visita · Boutique Lila", "Calle Schell 412 · CAP-0226", "active"),
+        new("16:00", "Visita · Inversiones Trébol", "Av. La Marina 245 · CAP-0218"),
+        new("18:00", "Registro de captación", "CAP-0233 pendiente de envío"),
+    };
+
+    private readonly string[][] _agenteTareas =
+    {
+        new[] { "Enviar a revisión", "CAP-0233 · Local Surco", "Vence mañana", "amber" },
+        new[] { "Subir documentos", "SOL-0425 · cliente Trébol", "3 documentos faltantes", "red" },
+        new[] { "Registrar interacción", "CAP-0231 · cliente sin contacto", "Hace 5 días", "amber" },
+    };
+}

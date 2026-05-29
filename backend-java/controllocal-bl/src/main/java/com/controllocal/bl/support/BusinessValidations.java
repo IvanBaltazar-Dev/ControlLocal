@@ -133,6 +133,7 @@ public final class BusinessValidations {
         if (brokerAgente.getFechaAsignacion() == null) {
             throw new BusinessException("La fecha de asignacion broker-agente es obligatoria.");
         }
+        texto(brokerAgente.getMotivo(), "El motivo de asignacion broker-agente");
         if (brokerAgente.getFechaFin() != null
                 && brokerAgente.getFechaFin().isBefore(brokerAgente.getFechaAsignacion())) {
             throw new BusinessException("La fecha de fin no puede ser anterior a la fecha de asignacion.");

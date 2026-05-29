@@ -1,0 +1,167 @@
+@page "/evaluacion"
+@inject AppState App
+
+<PageTitle>Evaluar solicitud · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes por evaluar", "SOL-0425 · Evaluación" })"
+          Title="SOL-0425 · Boutique Lila"
+          Subtitle="Solicitud enviada por Valentina Mora · evalúa documentos y condiciones para resolver">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
+        <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
+        <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Condiciones de la operación</div></div>
+                    <div class="cl-card-body">
+                        <dl class="cl-kv">
+                            <dt>Operación</dt><dd><span class="mono">OP-1094</span></dd>
+                            <dt>Local</dt><dd>Calle Schell 412, Miraflores</dd>
+                            <dt>Cliente</dt><dd>Boutique Lila</dd>
+                            <dt>Monto mensual</dt><dd>USD 1 850</dd>
+                            <dt>Plazo</dt><dd>24 meses</dd>
+                            <dt>Garantía / adelanto</dt><dd>2 meses / 1 mes</dd>
+                            <dt>Comisión</dt><dd>4.5%</dd>
+                            <dt>Inicio del contrato</dt><dd>01/06/2026</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Documentos a verificar</div><span class="cl-badge green">6 / 6 cargados</span></div>
+                    <div class="cl-card-body" style="padding:0;">
+                        @for (var i = 0; i < _docs.Length; i++)
+                        {
+                            var top = i == 0 ? "0" : "1px solid #EFEBE3";
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
+                                <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@_docs[i].Name</span></div>
+                                <div class="cl-flex" style="gap:10px;">
+                                    <StatusBadge Label="@_docs[i].Status" />
+                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Observaciones del broker</div></div>
+                    <div class="cl-card-body">
+                        <textarea rows="3" placeholder="Anota aquí cualquier observación antes de resolver…"></textarea>
+                        <div class="cl-help" style="margin-top:8px;">Estas notas se registran en la auditoría y son visibles para el agente.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Cliente</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-flex" style="gap:10px;">
+                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2F7D52;">BL</span>
+                            <div>
+                                <div style="font-weight:600;font-size:13px;">Boutique Lila</div>
+                                <div class="cl-muted" style="font-size:11px;">DNI 45 220 118 · Moda</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Historial</div></div>
+                    <div class="cl-card-body">
+                        <Timeline Items="_timeline" />
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Resolución</div></div>
+                    <div class="cl-card-body">
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar y generar contrato</button>
+                            <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar documentos</button>
+                            <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar solicitud</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="@(_modal == "aprobar")" Tone="green" Icon="check"
+                       Title="¿Aprobar la solicitud?"
+                       Desc="Al aprobar, la operación pasa a la etapa de contrato y cierre. Se generará el expediente de alquiler."
+                       ConfirmLabel="Aprobar y continuar al cierre" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@OnApprove" />
+
+        <ConfirmDialog Open="@(_modal == "observar")" Tone="amber" Icon="alert"
+                       Title="Observar y devolver al agente"
+                       Desc="El agente recibirá las observaciones y deberá subsanar los documentos antes de reenviar."
+                       ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@(() => Resolve("Solicitud observada · devuelta al agente"))">
+            <Field Label="Documentos a corregir" Required="true">
+                <textarea rows="3" placeholder="Indica qué debe subsanar el agente…"></textarea>
+            </Field>
+        </ConfirmDialog>
+
+        <ConfirmDialog Open="@(_modal == "rechazar")" Tone="red" Icon="x"
+                       Title="¿Rechazar la solicitud?"
+                       Desc="La solicitud quedará cerrada como rechazada. Esta acción queda registrada en la auditoría global."
+                       ConfirmLabel="Rechazar solicitud" CancelLabel="Cancelar"
+                       OnClose="@(() => _modal = null)"
+                       OnConfirm="@(() => Resolve("Solicitud rechazada"))">
+            <Field Label="Motivo del rechazo" Required="true">
+                <select>
+                    <option>Capacidad de pago insuficiente</option>
+                    <option>Documentación no subsanada</option>
+                    <option>Condiciones fuera de política</option>
+                    <option>Cliente desistió</option>
+                </select>
+            </Field>
+        </ConfirmDialog>
+
+        <Toast Show="@(_toast is not null)">@_toast</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string? _modal;
+    private string? _toast;
+
+    private record Doc(string Name, string Status);
+
+    private readonly Doc[] _docs = new[]
+    {
+        new Doc("DNI del cliente", "Verificado"),
+        new Doc("Estados financieros", "Verificado"),
+        new Doc("Referencias comerciales", "Verificado"),
+        new Doc("Carta de intención", "Verificado"),
+        new Doc("Comprobante de garantía", "Pendiente"),
+        new Doc("Ficha de la operación", "Verificado"),
+    };
+
+    private readonly Timeline.TimelineItem[] _timeline = new[]
+    {
+        new Timeline.TimelineItem("23 May · 11:40", "Solicitud enviada", "Valentina Mora", "done"),
+        new Timeline.TimelineItem("23 May · 14:02", "Asignada a tu bandeja", "Pendiente de evaluación", "done"),
+        new Timeline.TimelineItem("Hoy", "En evaluación", "Esperando tu resolución", "active"),
+    };
+
+    private void OnApprove()
+    {
+        _modal = null;
+        App.Navigate("cierre");
+    }
+
+    private async Task Resolve(string msg)
+    {
+        _modal = null;
+        _toast = msg;
+        StateHasChanged();
+        await Task.Delay(950);
+        App.Navigate("solicitudes");
+    }
+}

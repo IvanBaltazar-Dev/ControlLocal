@@ -1,0 +1,116 @@
+@page "/cliente-form"
+@inject AppState App
+
+<PageTitle>Registrar cliente · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Clientes interesados", "Nuevo cliente" })"
+          Title="Registrar cliente interesado"
+          Subtitle="Prospecto comercial · podrás vincularlo a una captación activa para iniciar el seguimiento">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Tipo de cliente" Sub="Determina los campos de identificación requeridos">
+                    <div class="cl-seg" role="tablist">
+                        <button class="@(_tipo == "juridica" ? "active" : "")" @onclick="@(() => _tipo = "juridica")">Persona jurídica</button>
+                        <button class="@(_tipo == "natural" ? "active" : "")" @onclick="@(() => _tipo = "natural")">Persona natural</button>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="2" Title="Identificación" Sub="@(_tipo == "juridica" ? "Datos de la empresa y representante legal" : "Datos personales del cliente")">
+                    @if (_tipo == "juridica")
+                    {
+                        <div class="cl-grid c2">
+                            <Field Label="Razón social" Required="true"><input placeholder="Ej. Inversiones Trébol S.A.C." /></Field>
+                            <Field Label="RUC" Required="true"><input placeholder="20 ___ ___ ___" /></Field>
+                            <Field Label="Representante legal" Required="true"><input placeholder="Nombre completo" /></Field>
+                            <Field Label="DNI del representante"><input placeholder="__ ___ ___" /></Field>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="cl-grid c2">
+                            <Field Label="Nombres" Required="true"><input placeholder="Nombres" /></Field>
+                            <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" /></Field>
+                            <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" /></Field>
+                            <Field Label="Ocupación / giro"><input placeholder="Ej. Comerciante" /></Field>
+                        </div>
+                    }
+                </FormSection>
+
+                <FormSection Num="3" Title="Contacto" Sub="Datos para coordinar interacciones y visitas">
+                    <div class="cl-grid c2">
+                        <Field Label="Teléfono principal" Required="true"><input placeholder="+51 ___ ___ ___" /></Field>
+                        <Field Label="Teléfono alterno"><input placeholder="Opcional" /></Field>
+                        <Field Label="Correo electrónico" Required="true"><input placeholder="cliente@@correo.com" /></Field>
+                        <Field Label="Canal preferido"><select><option>Llamada</option><option>WhatsApp</option><option>Correo</option><option>Presencial</option></select></Field>
+                    </div>
+                </FormSection>
+
+                <FormSection Num="4" Title="Necesidad comercial" Sub="Qué busca el cliente — ayuda a sugerir captaciones afines">
+                    <div class="cl-grid c3">
+                        <Field Label="Rubro de interés" Required="true"><select><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option><option>Salud</option></select></Field>
+                        <Field Label="Zona buscada"><select><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option></select></Field>
+                        <Field Label="Metraje aprox. (m²)"><input placeholder="Ej. 80" /></Field>
+                        <Field Label="Presupuesto mín. (USD/mes)"><input placeholder="1 000" /></Field>
+                        <Field Label="Presupuesto máx. (USD/mes)"><input placeholder="2 000" /></Field>
+                        <Field Label="Inicio estimado"><input placeholder="dd/mm/aaaa" /></Field>
+                    </div>
+                    <div style="margin-top:14px;">
+                        <Field Label="Notas" Hint="Detalles del interés, condiciones particulares, etc.">
+                            <textarea rows="3" placeholder="Observaciones del cliente…"></textarea>
+                        </Field>
+                    </div>
+                </FormSection>
+
+                <FormFooterBar OnCancel="@(() => App.Navigate("clientes"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar cliente" />
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card" style="position:sticky;top:14px;">
+                    <div class="cl-card-head"><div class="cl-card-title">Vincular a captación</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-help" style="margin-bottom:10px;">Opcional. Puedes vincular el cliente ahora o más tarde desde el expediente de una captación.</div>
+                        <Field Label="Captación activa">
+                            <select>
+                                <option value="">— Sin vincular —</option>
+                                <option>CAP-0218 · Av. La Marina 245</option>
+                                <option>CAP-0226 · Calle Schell 412</option>
+                                <option>CAP-0234 · Jr. Berlín 230</option>
+                            </select>
+                        </Field>
+                    </div>
+                </div>
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>Solo el <b>agente</b> registra clientes. Al vincular el cliente a una captación activa, esa captación inicia su etapa comercial.</span>
+                </div>
+            </div>
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"
+                       Title="¿Registrar cliente interesado?"
+                       Desc="Se creará el cliente en tu cartera. Quedará disponible para vincular a captaciones activas."
+                       ConfirmLabel="Registrar" CancelLabel="Revisar datos"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Cliente registrado correctamente</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _tipo = "juridica";
+    private bool _confirm;
+    private bool _toast;
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(900);
+        App.Navigate("clientes");
+    }
+}

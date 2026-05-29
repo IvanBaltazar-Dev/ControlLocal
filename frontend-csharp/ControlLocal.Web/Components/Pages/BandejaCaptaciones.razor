@@ -1,0 +1,83 @@
+@page "/bandeja-captaciones"
+@inject AppState App
+@inject ICaptacionService CaptacionSvc
+
+<PageTitle>Captaciones por revisar · ControlLocal</PageTitle>
+
+<AppShell Active="Captaciones por revisar" Crumbs="@(new[] { "ControlLocal", "Supervisión", "Captaciones por revisar" })"
+          Title="Captaciones por revisar"
+          Subtitle="Expedientes enviados por tus agentes · aprueba, observa o rechaza cada captación">
+    <Actions>
+        <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+        <button class="cl-btn" @onclick="@(() => App.Navigate("oportunidades"))"><Icon Name="briefcase" Size="13" /> Operaciones del equipo</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="clock" Label="Pendientes de revisión" Value="9" Tone="amber" />
+            <MetricCard Icon="alert" Label="Observadas" Value="4" Tone="amber" />
+            <MetricCard Icon="check" Label="Activas" Value="47" Tone="green" />
+            <MetricCard Icon="users" Label="Agentes con envíos" Value="7" Tone="info" />
+        </div>
+
+        <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
+
+        <FilterBar Search="Buscar por código, agente, dirección…">
+            <select class="cl-select"><option>Todos los agentes</option><option>Lucía Ferreyra</option><option>Diego Paredes</option><option>Ana Torres</option></select>
+            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
+            <select class="cl-select"><option>Antigüedad</option><option>Hoy</option><option>Esta semana</option><option>Más de 7 días</option></select>
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th><th>Local</th><th>Distrito</th><th>Área</th><th>Rubro</th>
+                            <th>Propietario</th><th>Agente</th><th>Enviada</th><th>Comisión</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in CaptacionSvc.Bandeja())
+                        {
+                            <tr>
+                                <td><span class="mono">@c.CodigoCaptacion</span></td>
+                                <td style="font-weight:600;">@c.DireccionLocal</td>
+                                <td>@c.DistritoLocal</td>
+                                <td><span><b>@c.AreaM2</b> m²</span></td>
+                                <td><StatusBadge Label="@c.Rubro" ToneOverride="blue" Plain="true" /></td>
+                                <td>@c.PropietarioNombre</td>
+                                <td>@c.NombreAgenteResponsable</td>
+                                <td>
+                                    <div style="font-size:12px;">@c.FechaEnvioTexto</div>
+                                    <div class="cl-muted" style="font-size:11px;">@c.AntiguedadTexto</div>
+                                </td>
+                                <td><span class="mono">@c.ComisionPactadaTexto</span></td>
+                                <td><StatusBadge Label="@c.Estado" /></td>
+                                <td><button class="cl-btn sm primary" @onclick="@(() => App.Navigate("captacion-review"))">Revisar</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <Pagination Total="9" />
+
+        <div class="cl-alert blue" style="margin-top:14px;">
+            <Icon Name="info" Size="15" />
+            <span>Al <b>aprobar</b> una captación, esta queda activa y disponible para que el agente inicie el proceso comercial con sus clientes interesados.</span>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _tab = "Pendientes";
+
+    private readonly Tabs.TabItem[] _tabs = new[]
+    {
+        new Tabs.TabItem("Pendientes", 9),
+        new Tabs.TabItem("Observadas", 4),
+        new Tabs.TabItem("Activas", 47),
+        new Tabs.TabItem("Rechazadas", 3),
+        new Tabs.TabItem("Cerradas", 12),
+    };
+}

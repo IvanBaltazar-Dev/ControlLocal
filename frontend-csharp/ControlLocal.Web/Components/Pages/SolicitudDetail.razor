@@ -1,0 +1,141 @@
+@page "/solicitud-detail"
+@inject AppState App
+
+<PageTitle>Solicitud SOL-0425 · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", "SOL-0425" })"
+          Title="SOL-0425 · Boutique Lila"
+          Subtitle="Solicitud de alquiler · operación OP-1094 · Calle Schell 412, Miraflores">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn" @onclick="@(() => App.Navigate("documentos"))"><Icon Name="folder" Size="13" /> Gestionar documentos</button>
+    </Actions>
+    <ChildContent>
+        <div class="cl-stage" style="margin-bottom:14px;">
+            @for (var i = 0; i < _stages.Length; i++)
+            {
+                var cls = i < _current ? "done" : (i == _current ? "active" : "");
+                <div class="cl-stage-step @cls">
+                    <div class="cl-stage-k"><span class="cl-stage-dot"></span> @_stages[i].K</div>
+                    <div class="cl-stage-v">@_stages[i].V</div>
+                </div>
+            }
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
+            <div class="cl-stack">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Condiciones solicitadas</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv">
+                                <dt>Monto mensual</dt><dd>USD 1 850</dd>
+                                <dt>Plazo</dt><dd>24 meses</dd>
+                                <dt>Garantía</dt><dd>2 meses</dd>
+                                <dt>Adelanto</dt><dd>1 mes</dd>
+                                <dt>Inicio</dt><dd>01/06/2026</dd>
+                            </dl>
+                        </div>
+                    </div>
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Local y propietario</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv">
+                                <dt>Local</dt><dd>Calle Schell 412</dd>
+                                <dt>Distrito</dt><dd>Miraflores</dd>
+                                <dt>Área</dt><dd>68 m²</dd>
+                                <dt>Propietario</dt><dd>Carlos Mendoza Rivera</dd>
+                                <dt>Comisión</dt><dd>4.5%</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Documentos de la solicitud</div><span class="cl-badge green">6 / 6 completos</span></div>
+                    <div class="cl-card-body" style="padding:0;">
+                        @for (var i = 0; i < _docs.Length; i++)
+                        {
+                            var top = i == 0 ? "0" : "1px solid #EFEBE3";
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
+                                <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@_docs[i].Name</span></div>
+                                <div class="cl-flex" style="gap:10px;">
+                                    <StatusBadge Label="@_docs[i].Status" />
+                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Historial de la solicitud</div></div>
+                    <div class="cl-card-body">
+                        <Timeline Items="_timeline" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Estado actual</div></div>
+                    <div class="cl-card-body">
+                        <div style="text-align:center;padding:6px 0;">
+                            <StatusBadge Label="En revisión" />
+                            <div class="cl-muted" style="font-size:12px;margin-top:8px;">Enviada el 23 May · en bandeja del broker Ricardo Salas</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Cliente</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-flex" style="gap:10px;">
+                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2F7D52;">BL</span>
+                            <div>
+                                <div style="font-weight:600;font-size:13px;">Boutique Lila</div>
+                                <div class="cl-muted" style="font-size:11px;">DNI 45 220 118</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>Mientras la solicitud esté <b>en revisión</b> no puedes editar sus condiciones. Si el broker la observa, podrás subsanarla.</span>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private record Stage(string K, string V);
+
+    private readonly Stage[] _stages =
+    {
+        new("Etapa 1", "Registrada"),
+        new("Etapa 2", "En evaluación"),
+        new("Etapa 3", "Resuelta"),
+        new("Etapa 4", "Contrato / cierre"),
+    };
+    private const int _current = 1;
+
+    private record Doc(string Name, string Status);
+
+    private readonly Doc[] _docs = new[]
+    {
+        new Doc("DNI del cliente", "Verificado"),
+        new Doc("Estados financieros", "Verificado"),
+        new Doc("Referencias comerciales", "Verificado"),
+        new Doc("Carta de intención", "Verificado"),
+        new Doc("Comprobante de garantía", "Verificado"),
+        new Doc("Ficha de la operación", "Verificado"),
+    };
+
+    private readonly Timeline.TimelineItem[] _timeline = new[]
+    {
+        new Timeline.TimelineItem("23 May · 11:20", "Solicitud creada", "Generada desde CAP-0226", "done"),
+        new Timeline.TimelineItem("23 May · 11:34", "Documentos cargados", "6 de 6 documentos", "done"),
+        new Timeline.TimelineItem("23 May · 11:40", "Enviada a evaluación", "Bandeja de Ricardo Salas", "done"),
+        new Timeline.TimelineItem("Hoy", "En revisión", "Esperando resolución del broker", "active"),
+    };
+}

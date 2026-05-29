@@ -1,0 +1,21 @@
+@* Small success toast shown after a confirm resolves. *@
+@if (Show)
+{
+    <div style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:@Bg;color:#fff;padding:11px 16px;border-radius:11px;display:flex;align-items:center;gap:9px;font-size:13px;font-weight:550;box-shadow:0 12px 30px rgba(0,0,0,0.25);z-index:1100;animation:clPop .2s ease;">
+        <Icon Name="@IconName" Size="16" /> @ChildContent
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string Tone { get; set; } = "green";
+    [Parameter] public string IconName { get; set; } = "check";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private static readonly Dictionary<string, string> Bgs = new()
+    {
+        ["green"] = "#1E5538", ["blue"] = "#214676", ["red"] = "#7E2920", ["amber"] = "#79520F",
+    };
+
+    private string Bg => Bgs.TryGetValue(Tone, out var b) ? b : "#1E5538";
+}

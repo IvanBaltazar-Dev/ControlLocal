@@ -1,10 +1,30 @@
-<span class="cl-status @CssClass">@Label</span>
+@* Status pill — maps a label to its semantic tone. Mirrors STATUS_MAP. *@
+<span class="@CssClass">@Label</span>
 
 @code {
-    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? ToneOverride { get; set; }
+    [Parameter] public bool Plain { get; set; }
 
-    private string CssClass => Label.ToLowerInvariant()
-        .Replace(" ", "-")
-        .Replace("ó", "o")
-        .Replace("í", "i");
+    private string Tone => ToneOverride ?? (StatusMap.TryGetValue(Label, out var t) ? t : "gray");
+
+    private string CssClass => $"cl-badge {Tone}{(Plain ? " plain" : "")}";
+
+    public static readonly Dictionary<string, string> StatusMap = new()
+    {
+        ["Borrador"] = "gray", ["En revisión"] = "amber", ["Pendiente"] = "amber",
+        ["Observada"] = "amber", ["Activa"] = "green", ["Rechazada"] = "red", ["Cerrada"] = "gray",
+        ["Alquilada"] = "green", ["Sin alquilar"] = "gray",
+        ["Captada"] = "blue", ["Con interacciones"] = "info", ["Con solicitud"] = "info",
+        ["En evaluación"] = "amber", ["No continúa"] = "gray",
+        ["Registrada"] = "gray", ["Aprobada"] = "green", ["Observada · solicitud"] = "amber",
+        ["Programada"] = "blue", ["Reprogramada"] = "amber", ["Realizada"] = "green", ["Cancelada"] = "red",
+        ["Aprobado"] = "green", ["Observado"] = "amber",
+        ["Activo"] = "green", ["Inactivo"] = "gray", ["Suspendido"] = "red",
+        ["Disponible"] = "green", ["No disponible"] = "gray", ["En licencia"] = "amber",
+        ["Asignación activa"] = "green", ["Supervisión activa"] = "green", ["Supervisión cerrada"] = "gray",
+        ["Broker administrador"] = "info", ["Broker supervisor"] = "blue",
+        ["Abierta"] = "blue", ["En seguimiento"] = "blue", ["Solicitud creada"] = "info",
+        ["Cerrada exitosa"] = "green", ["Cerrada no continúa"] = "gray", ["Cerrada no favorable"] = "red",
+    };
 }

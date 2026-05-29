@@ -1,0 +1,72 @@
+@* Role-scoped sidebar — single source of truth mirroring the permission matrix. *@
+@inject AppState App
+
+<aside class="cl-sidebar">
+    <div class="cl-brand" style="cursor:pointer" @onclick="@(() => App.Navigate("dashboard"))">
+        <BrandMark Size="36" Variant="primary" />
+        <div>
+            <div class="cl-brand-name">ControlLocal</div>
+            <div class="cl-brand-sub">Corretaje comercial</div>
+        </div>
+    </div>
+    <nav class="cl-nav">
+        @foreach (var sec in Sections)
+        {
+            <div class="cl-nav-section">
+                <div class="cl-nav-label">@sec.Section</div>
+                @foreach (var it in sec.Items)
+                {
+                    var isActive = Active == it.Label || (EffectiveRoute is not null && EffectiveRoute == it.Route);
+                    <div class="cl-nav-item@(isActive ? " active" : "")"
+                         style="cursor:pointer"
+                         @onclick="@(() => App.Navigate(it.Route))">
+                        <Icon Name="@it.Icon" Size="15" Class="cl-ico" />
+                        <span>@it.Label</span>
+                        @if (it.Pill is not null)
+                        {
+                            <span class="cl-pill">@it.Pill</span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </nav>
+    <div class="cl-sidebar-foot">
+        <div class="cl-avatar" style="cursor:pointer" @onclick="@(() => App.Navigate("profile"))">@User.Initials</div>
+        <div style="flex:1;min-width:0;cursor:pointer" @onclick="@(() => App.Navigate("profile"))">
+            <div class="cl-foot-name">@User.Name</div>
+            <div class="cl-foot-role">@User.Short</div>
+        </div>
+        <span title="Cerrar sesión" style="cursor:pointer;display:inline-flex" @onclick="@(() => _logoutOpen = true)">
+            <Icon Name="logout" Size="15" Color="#8C8377" />
+        </span>
+    </div>
+    <ConfirmDialog Open="_logoutOpen" Tone="amber" Icon="logout" Size="sm"
+                   Title="¿Cerrar sesión?"
+                   Desc="Se cerrará tu sesión en ControlLocal. Recuerda que la sesión persistente queda como mejora futura — tendrás que volver a ingresar tus credenciales."
+                   ConfirmLabel="Cerrar sesión" CancelLabel="Seguir trabajando"
+                   OnClose="@(() => _logoutOpen = false)"
+                   OnConfirm="@OnLogout" />
+</aside>
+
+@code {
+    [Parameter] public string? Active { get; set; }
+    [Parameter] public string Role { get; set; } = Roles.Agente;
+    [Parameter] public string? Route { get; set; }
+
+    private bool _logoutOpen;
+
+    private NavSection[] Sections =>
+        Navigation.SideNavByRole.TryGetValue(Role, out var s) ? s : Navigation.SideNavByRole[Roles.Agente];
+
+    private RoleUser User => Navigation.UserFor(Role);
+
+    private string? EffectiveRoute =>
+        Route is null ? null : (Navigation.RouteToNav.TryGetValue(Route, out var r) ? r : Route);
+
+    private void OnLogout()
+    {
+        _logoutOpen = false;
+        App.Navigate("login");
+    }
+}

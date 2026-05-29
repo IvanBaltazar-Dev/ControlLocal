@@ -1,0 +1,20 @@
+@* Results count + page buttons. Mirrors the prototype's Pagination helper. *@
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;color:#5A554D;">
+    <span>Mostrando 1–@Shown de @Total resultados</span>
+    <div style="display:flex;gap:4px;">
+        <button class="cl-btn sm" disabled><Icon Name="chevronLeft" Size="12" /></button>
+        <button class="cl-btn sm primary">1</button>
+        <button class="cl-btn sm">2</button>
+        <button class="cl-btn sm">3</button>
+        <button class="cl-btn sm">…</button>
+        <button class="cl-btn sm">@LastPage</button>
+        <button class="cl-btn sm"><Icon Name="chevronRight" Size="12" /></button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Total { get; set; } = 24;
+    [Parameter] public int Shown { get; set; } = 8;
+
+    private int LastPage => (int)System.Math.Ceiling(Total / 8.0);
+}

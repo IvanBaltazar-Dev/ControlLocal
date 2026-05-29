@@ -24,18 +24,18 @@ public class BrokerAgenteDAOImpl implements BrokerAgenteDAO {
 
     private static final String INSERT_SQL = """
             INSERT INTO broker_agente (
-                id_broker, id_agente, fecha_asignacion, fecha_fin, estado
-            ) VALUES (?, ?, ?, ?, ?)
+                id_broker, id_agente, fecha_asignacion, fecha_fin, motivo, estado
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_SQL = """
-            SELECT id_broker_agente, id_broker, id_agente, fecha_asignacion, fecha_fin, estado
+            SELECT id_broker_agente, id_broker, id_agente, fecha_asignacion, fecha_fin, motivo, estado
             FROM broker_agente
             """;
 
     private static final String UPDATE_SQL = """
             UPDATE broker_agente
-            SET id_broker = ?, id_agente = ?, fecha_asignacion = ?, fecha_fin = ?, estado = ?
+            SET id_broker = ?, id_agente = ?, fecha_asignacion = ?, fecha_fin = ?, motivo = ?, estado = ?
             WHERE id_broker_agente = ?
             """;
 
@@ -126,9 +126,9 @@ public class BrokerAgenteDAOImpl implements BrokerAgenteDAO {
     public boolean actualizar(BrokerAgente brokerAgente) {
         validar(brokerAgente, true);
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
+            PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
             bind(brokerAgente, ps);
-            ps.setLong(6, brokerAgente.getIdBrokerAgente());
+            ps.setLong(7, brokerAgente.getIdBrokerAgente());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar asignacion broker-agente con id "
@@ -171,7 +171,8 @@ public class BrokerAgenteDAOImpl implements BrokerAgenteDAO {
         ps.setLong(2, brokerAgente.getIdAgente());
         ps.setDate(3, Date.valueOf(brokerAgente.getFechaAsignacion()));
         setDate(ps, 4, brokerAgente.getFechaFin());
-        JdbcSupport.setEnum(ps, 5, brokerAgente.getEstado());
+        ps.setString(5, brokerAgente.getMotivo());
+        JdbcSupport.setEnum(ps, 6, brokerAgente.getEstado());
     }
 
     private BrokerAgente mapRow(ResultSet rs) throws SQLException {
@@ -185,6 +186,7 @@ public class BrokerAgenteDAOImpl implements BrokerAgenteDAO {
         brokerAgente.setAgente(agente);
         brokerAgente.setFechaAsignacion(JdbcSupport.toLocalDate(rs.getDate("fecha_asignacion")));
         brokerAgente.setFechaFin(JdbcSupport.toLocalDate(rs.getDate("fecha_fin")));
+        brokerAgente.setMotivo(rs.getString("motivo"));
         brokerAgente.setEstado(JdbcSupport.getEnum(rs, "estado", EstadoActivoInactivo.class));
         return brokerAgente;
     }
@@ -198,7 +200,8 @@ public class BrokerAgenteDAOImpl implements BrokerAgenteDAO {
         }
         JdbcSupport.validarId(brokerAgente.getIdBroker());
         JdbcSupport.validarId(brokerAgente.getIdAgente());
-        if (brokerAgente.getFechaAsignacion() == null || brokerAgente.getEstado() == null) {
+        if (brokerAgente.getFechaAsignacion() == null || brokerAgente.getEstado() == null
+                || brokerAgente.getMotivo() == null || brokerAgente.getMotivo().isBlank()) {
             throw new IllegalArgumentException("La asignacion broker-agente tiene campos obligatorios incompletos.");
         }
     }

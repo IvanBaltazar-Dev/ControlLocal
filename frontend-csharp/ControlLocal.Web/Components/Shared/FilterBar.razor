@@ -1,0 +1,23 @@
+@* Filter bar — search input, optional inline filters, trailing actions. *@
+<div class="cl-filterbar">
+    <input class="cl-input search" placeholder="@Search" style="width:280px;" />
+    @ChildContent
+    @if (ShowTail && Tail == null)
+    {
+        <div style="margin-left:auto;display:flex;gap:8px;">
+            <button class="cl-btn sm"><Icon Name="filter" Size="13" /> Más filtros</button>
+            <button class="cl-btn sm"><Icon Name="download" Size="13" /> Exportar</button>
+        </div>
+    }
+    else if (Tail != null)
+    {
+        <div style="margin-left:auto;display:flex;gap:8px;">@Tail</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Search { get; set; } = "Buscar…";
+    [Parameter] public bool ShowTail { get; set; } = true;
+    [Parameter] public RenderFragment? Tail { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

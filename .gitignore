@@ -1,17 +1,4 @@
 # ========================
-# AI / LOCAL ASSISTANTS
-# ========================
-.claude/
-**/.claude/
-.codex-build/
-.codex/
-.aider*
-.cursor/
-.windsurf/
-*.prompt.md
-*.chat.md
-
-# ========================
 # LOCAL CONFIG / SECRETS
 # ========================
 .env
@@ -52,7 +39,6 @@ obj/
 out/
 dist/
 nbdist/
-.codex-build/
 
 # ========================
 # IDE / EDITOR

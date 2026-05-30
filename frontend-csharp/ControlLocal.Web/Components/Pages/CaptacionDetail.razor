@@ -110,7 +110,7 @@
                 {
                     <div class="cl-card">
                         <div class="cl-card-body" style="text-align:center;padding:40px 20px;">
-                            <div style="color:#948D81;margin-bottom:10px;"><Icon Name="fileText" Size="28" /></div>
+                            <div style="color:#7E8794;margin-bottom:10px;"><Icon Name="fileText" Size="28" /></div>
                             <div style="font-weight:600;margin-bottom:4px;">Aún no hay solicitud de alquiler</div>
                             <div class="cl-muted" style="font-size:12.5px;margin-bottom:14px;">Cuando un cliente decida alquilar, genera la solicitud para iniciar la evaluación.</div>
                             @if (!_readOnly)
@@ -126,7 +126,7 @@
                         <div class="cl-card-body" style="padding:0;">
                             @for (var i = 0; i < _docs.Length; i++)
                             {
-                                var top = i == 0 ? "0" : "1px solid #EFEBE3";
+                                var top = i == 0 ? "0" : "1px solid #E2E6EC";
                                 <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
                                     <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@_docs[i]</span></div>
                                     <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
@@ -142,7 +142,7 @@
                     <div class="cl-card-head"><div class="cl-card-title">Cliente vinculado</div></div>
                     <div class="cl-card-body">
                         <div class="cl-flex" style="gap:10px;">
-                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2C5CA0;">CP</span>
+                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#005BFF;">CP</span>
                             <div>
                                 <div style="font-weight:600;font-size:13px;">Café del Puerto S.A.C.</div>
                                 <div class="cl-muted" style="font-size:11px;">RUC 20 548 991 233</div>

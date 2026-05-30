@@ -66,7 +66,7 @@
                             <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
                                 <span>@r[0]</span><span><b>@r[1]</b> <span class="cl-muted">· @r[2]</span></span>
                             </div>
-                            <div style="height:8px;background:#EFEBE3;border-radius:4px;overflow:hidden;">
+                            <div style="height:8px;background:#E2E6EC;border-radius:4px;overflow:hidden;">
                                 <div style="width:@r[2];height:100%;background:@r[3];border-radius:4px;"></div>
                             </div>
                         </div>
@@ -120,22 +120,22 @@
 
     private readonly DonutChart.Segment[] _donut =
     {
-        new(22, "#2C5CA0"), new(18, "#2C77A0"), new(14, "#2F7D52"), new(6, "#C0473C"), new(4, "#948D81"),
+        new(22, "#005BFF"), new(18, "#00AEEF"), new(14, "#2F7D52"), new(6, "#D64550"), new(4, "#7E8794"),
     };
 
     private readonly (string Color, string Name, string Value)[] _legend =
     {
-        ("#2C5CA0", "Captada", "22"),
-        ("#2C77A0", "Con interacciones", "18"),
+        ("#005BFF", "Captada", "22"),
+        ("#00AEEF", "Con interacciones", "18"),
         ("#2F7D52", "Alquilada", "14"),
-        ("#C0473C", "Rechazada", "6"),
-        ("#948D81", "No continúa", "4"),
+        ("#D64550", "Rechazada", "6"),
+        ("#7E8794", "No continúa", "4"),
     };
 
     private readonly string[][] _funnel =
     {
-        new[] { "Captaciones activas", "64", "100%", "#2C5CA0" },
-        new[] { "Con visita realizada", "41", "64%", "#2C77A0" },
+        new[] { "Captaciones activas", "64", "100%", "#005BFF" },
+        new[] { "Con visita realizada", "41", "64%", "#00AEEF" },
         new[] { "Con solicitud creada", "28", "44%", "#C98A1E" },
         new[] { "Cerradas exitosas", "14", "22%", "#2F7D52" },
     };

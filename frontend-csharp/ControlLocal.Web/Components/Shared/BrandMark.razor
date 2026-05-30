@@ -1,5 +1,5 @@
 @* Reusable logo glyph (storefront-shaped square). Variants: primary / light / dark / ghost / walnut. *@
-<div style="width:@(Size)px;height:@(Size)px;border-radius:@(R)px;background:@P.Bg;color:@P.Fg;display:grid;place-items:center;font-weight:700;font-size:@(Math.Round(Size*0.42))px;letter-spacing:-0.02em;position:relative;@(Variant == "light" ? "border:1px solid #E5E0D7;" : "")flex:0 0 @(Size)px;">
+<div style="width:@(Size)px;height:@(Size)px;border-radius:@(R)px;background:@P.Bg;color:@P.Fg;display:grid;place-items:center;font-weight:700;font-size:@(Math.Round(Size*0.42))px;letter-spacing:-0.02em;position:relative;@(Variant == "light" ? "border:1px solid #C9CED6;" : "")flex:0 0 @(Size)px;">
     <div style="position:absolute;inset:@(Inset)px;border:1.5px solid @P.Ring;border-radius:@(Math.Max(2, R - Inset + 2))px;"></div>
     <svg width="@(Math.Round(Size*0.5))" height="@(Math.Round(Size*0.5))" viewBox="0 0 24 24" style="position:relative;z-index:1;">
         <path d="M6 11 L12 6 L18 11 L18 18 L13 18 L13 14 L11 14 L11 18 L6 18 Z" fill="none" stroke="@P.Fg" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
@@ -15,11 +15,11 @@
 
     private static readonly Dictionary<string, Palette> Palettes = new()
     {
-        ["primary"] = new("#2C5CA0", "rgba(255,255,255,0.45)", "#fff"),
-        ["light"] = new("#fff", "rgba(14,91,255,0.35)", "#2C5CA0"),
-        ["dark"] = new("#221F1B", "rgba(255,255,255,0.30)", "#fff"),
-        ["ghost"] = new("transparent", "rgba(14,91,255,0.4)", "#2C5CA0"),
-        ["walnut"] = new("#BB6C43", "rgba(255,255,255,0.5)", "#fff"),
+        ["primary"] = new("#005BFF", "rgba(255,255,255,0.45)", "#fff"),
+        ["light"] = new("#fff", "rgba(14,91,255,0.35)", "#005BFF"),
+        ["dark"] = new("#061A4D", "rgba(255,255,255,0.30)", "#fff"),
+        ["ghost"] = new("transparent", "rgba(14,91,255,0.4)", "#005BFF"),
+        ["walnut"] = new("#005BFF", "rgba(255,255,255,0.5)", "#fff"),
     };
 
     private Palette P => Palettes.TryGetValue(Variant, out var p) ? p : Palettes["primary"];

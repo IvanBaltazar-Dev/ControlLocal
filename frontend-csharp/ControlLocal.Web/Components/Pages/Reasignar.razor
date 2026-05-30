@@ -23,8 +23,8 @@
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
                     @foreach (var a in Assign.Agents())
                     {
-                        var border = _agent == a.Id && a.Seleccionable ? "#BB6C43" : "var(--c-border)";
-                        var bg = !a.Seleccionable ? "var(--c-bg-2)" : _agent == a.Id ? "#FBF6F1" : "#fff";
+                        var border = _agent == a.Id && a.Seleccionable ? "#005BFF" : "var(--c-border)";
+                        var bg = !a.Seleccionable ? "var(--c-bg-2)" : _agent == a.Id ? "#EAF1FF" : "#fff";
                         var cursor = a.Seleccionable ? "pointer" : "not-allowed";
                         var opacity = a.Seleccionable ? "1" : "0.72";
                         var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
@@ -54,8 +54,8 @@
                     {
                         var dup = A is not null && A.BrokerActual == b.Nombre;
                         var selectable = b.Seleccionable && !dup;
-                        var border = _broker == b.Id && selectable ? "#BB6C43" : "var(--c-border)";
-                        var bg = !selectable ? "var(--c-bg-2)" : _broker == b.Id ? "#FBF6F1" : "#fff";
+                        var border = _broker == b.Id && selectable ? "#005BFF" : "var(--c-border)";
+                        var bg = !selectable ? "var(--c-bg-2)" : _broker == b.Id ? "#EAF1FF" : "#fff";
                         var cursor = selectable ? "pointer" : "not-allowed";
                         var opacity = selectable ? "1" : "0.72";
                         var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
@@ -63,7 +63,7 @@
                         <label title="@title" style="@style">
                             <input type="radio" name="assign-broker" disabled="@(!selectable)" checked="@(_broker == b.Id)"
                                    @onchange="@(() => { _broker = b.Id; _err = null; })" />
-                            <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:linear-gradient(135deg,#8C8377,#5A554D);">@b.Iniciales</span>
+                            <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:linear-gradient(135deg,#8C8377,#515B6B);">@b.Iniciales</span>
                             <div style="flex:1;min-width:0;">
                                 <div style="font-weight:600;font-size:13px;">@b.Nombre</div>
                                 <div class="cl-muted" style="font-size:11px;">@b.Zona@(b.TipoBroker == "supervisor" ? $" · {b.AgentesACargo} agentes" : " · administrador")</div>
@@ -102,10 +102,10 @@
                             <div class="cl-def-k">Broker actual</div>
                             <div style="font-size:13px;font-weight:600;margin-top:4px;">@(A?.BrokerActual ?? "—")</div>
                         </div>
-                        <Icon Name="arrowRight" Size="18" Color="#BB6C43" />
+                        <Icon Name="arrowRight" Size="18" Color="#005BFF" />
                         <div style="flex:1;text-align:right;">
                             <div class="cl-def-k">Broker destino</div>
-                            <div style="font-size:13px;font-weight:600;margin-top:4px;color:#BB6C43;">@(B?.Nombre ?? "—")</div>
+                            <div style="font-size:13px;font-weight:600;margin-top:4px;color:#005BFF;">@(B?.Nombre ?? "—")</div>
                         </div>
                     </div>
                     <div class="cl-divider"></div>

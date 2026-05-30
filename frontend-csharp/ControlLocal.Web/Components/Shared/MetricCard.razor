@@ -19,7 +19,7 @@
     }
     @if (!string.IsNullOrEmpty(Footer))
     {
-        <div style="font-size:11px;color:#948D81;margin-top:6px;">@Footer</div>
+        <div style="font-size:11px;color:#7E8794;margin-top:6px;">@Footer</div>
     }
 </div>
 
@@ -36,12 +36,12 @@
 
     private static readonly Dictionary<string, ToneStyle> Tones = new()
     {
-        ["blue"] = new("#EDF2F9", "#2C5CA0"),
+        ["blue"] = new("#EDF2F9", "#005BFF"),
         ["green"] = new("#E9F2EC", "#2F7D52"),
         ["amber"] = new("#F7EFDD", "#8A5E12"),
-        ["red"] = new("#F6E7E4", "#C0473C"),
-        ["info"] = new("#E6F0F5", "#2C77A0"),
-        ["navy"] = new("#E6E1D8", "#221F1B"),
+        ["red"] = new("#F6E7E4", "#D64550"),
+        ["info"] = new("#E6F0F5", "#00AEEF"),
+        ["navy"] = new("#E6E1D8", "#061A4D"),
     };
 
     private ToneStyle T => Tones.TryGetValue(Tone, out var t) ? t : Tones["blue"];

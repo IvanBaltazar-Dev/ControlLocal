@@ -24,8 +24,8 @@
                     @foreach (var c in Reasignaciones.Reasignables())
                     {
                         var sel = _captacion == c.Id;
-                        var border = sel ? "#BB6C43" : "var(--c-border)";
-                        var bg = sel ? "#FBF6F1" : "#fff";
+                        var border = sel ? "#005BFF" : "var(--c-border)";
+                        var bg = sel ? "#EAF1FF" : "#fff";
                         var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:pointer;";
                         <label style="@style">
                             <input type="radio" name="reasignar-captacion" checked="@sel"
@@ -51,8 +51,8 @@
                         var disponible = a.EstadoAdministrativo == "Activo" && a.EstadoOperativo == "Disponible";
                         var selectable = disponible && !esActual;
                         var sel = _agente == a.Id;
-                        var border = sel && selectable ? "#BB6C43" : "var(--c-border)";
-                        var bg = !selectable ? "var(--c-bg-2)" : sel ? "#FBF6F1" : "#fff";
+                        var border = sel && selectable ? "#005BFF" : "var(--c-border)";
+                        var bg = !selectable ? "var(--c-bg-2)" : sel ? "#EAF1FF" : "#fff";
                         var cursor = selectable ? "pointer" : "not-allowed";
                         var opacity = selectable ? "1" : "0.72";
                         var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
@@ -99,10 +99,10 @@
                             <div class="cl-def-k">Agente actual</div>
                             <div style="font-size:13px;font-weight:600;margin-top:4px;">@(C?.NombreAgenteResponsable ?? "—")</div>
                         </div>
-                        <Icon Name="arrowRight" Size="18" Color="#BB6C43" />
+                        <Icon Name="arrowRight" Size="18" Color="#005BFF" />
                         <div style="flex:1;text-align:right;">
                             <div class="cl-def-k">Agente nuevo</div>
-                            <div style="font-size:13px;font-weight:600;margin-top:4px;color:#BB6C43;">@(A?.Nombre ?? "—")</div>
+                            <div style="font-size:13px;font-weight:600;margin-top:4px;color:#005BFF;">@(A?.Nombre ?? "—")</div>
                         </div>
                     </div>
                     <div class="cl-divider"></div>

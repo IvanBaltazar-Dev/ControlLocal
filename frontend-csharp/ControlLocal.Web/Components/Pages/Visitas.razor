@@ -32,7 +32,7 @@
                     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">
                         @foreach (var d in _dow)
                         {
-                            <div style="text-align:center;font-size:10px;font-weight:600;color:#948D81;padding:4px 0;">@d</div>
+                            <div style="text-align:center;font-size:10px;font-weight:600;color:#7E8794;padding:4px 0;">@d</div>
                         }
                         @for (var i = 0; i < _offset; i++)
                         {
@@ -43,8 +43,8 @@
                             var hasVisit = _visitDays.Contains(day);
                             var isToday = day == 28;
                             var bg = isToday ? "background:var(--c-primary-50);border-color:var(--c-primary);" : "";
-                            <div style="aspect-ratio:1;border:1px solid #EFEBE3;border-radius:7px;padding:5px;display:flex;flex-direction:column;@bg">
-                                <span style="font-size:11px;@(isToday ? "font-weight:700;color:var(--c-primary);" : "color:#5A554D;")">@day</span>
+                            <div style="aspect-ratio:1;border:1px solid #E2E6EC;border-radius:7px;padding:5px;display:flex;flex-direction:column;@bg">
+                                <span style="font-size:11px;@(isToday ? "font-weight:700;color:var(--c-primary);" : "color:#515B6B;")">@day</span>
                                 @if (hasVisit)
                                 {
                                     <span style="margin-top:auto;align-self:flex-start;width:6px;height:6px;border-radius:50%;background:var(--c-walnut);"></span>

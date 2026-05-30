@@ -43,7 +43,7 @@
                                    value="@_numDoc" @oninput="@(e => { _numDoc = e.Value?.ToString() ?? ""; _errors.Remove("numDoc"); })" />
                             @if (Err("numDoc") is { } e2)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e2</div>
+                                <div class="cl-help" style="color:#D64550;">@e2</div>
                             }
                         </Field>
                         <Field Label="@(_tipoPersona == "natural" ? "Nombre completo" : "Razón social")" Required="true">
@@ -51,7 +51,7 @@
                                    value="@_nombre" @oninput="@(e => { _nombre = e.Value?.ToString() ?? ""; _errors.Remove("nombre"); })" />
                             @if (Err("nombre") is { } e3)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e3</div>
+                                <div class="cl-help" style="color:#D64550;">@e3</div>
                             }
                         </Field>
                     </div>
@@ -63,14 +63,14 @@
                             <input placeholder="+51 ___ ___ ___" value="@_telefono" @oninput="@(e => { _telefono = e.Value?.ToString() ?? ""; _errors.Remove("telefono"); })" />
                             @if (Err("telefono") is { } e4)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e4</div>
+                                <div class="cl-help" style="color:#D64550;">@e4</div>
                             }
                         </Field>
                         <Field Label="Correo corporativo" Required="true">
                             <input type="email" placeholder="broker@@empresa.com.pe" value="@_correo" @oninput="@(e => { _correo = e.Value?.ToString() ?? ""; _errors.Remove("correo"); })" />
                             @if (Err("correo") is { } e5)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e5</div>
+                                <div class="cl-help" style="color:#D64550;">@e5</div>
                             }
                         </Field>
                     </div>
@@ -82,14 +82,14 @@
                             <input placeholder="nombre.apellido o similar" value="@_usuario" @oninput="@(e => { _usuario = e.Value?.ToString() ?? ""; _errors.Remove("usuario"); })" />
                             @if (Err("usuario") is { } e6)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e6</div>
+                                <div class="cl-help" style="color:#D64550;">@e6</div>
                             }
                         </Field>
                         <Field Label="Contraseña temporal" Required="true">
                             <input type="password" placeholder="Mínimo 8 caracteres" value="@_passwd" @oninput="@(e => { _passwd = e.Value?.ToString() ?? ""; _errors.Remove("passwd"); })" />
                             @if (Err("passwd") is { } e7)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e7</div>
+                                <div class="cl-help" style="color:#D64550;">@e7</div>
                             }
                         </Field>
                     </div>
@@ -108,7 +108,7 @@
                             </select>
                             @if (Err("zona") is { } e8)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e8</div>
+                                <div class="cl-help" style="color:#D64550;">@e8</div>
                             }
                         </Field>
                         <Field Label="Estado" Required="true">
@@ -118,7 +118,7 @@
                             </select>
                             @if (Err("estado") is { } e9)
                             {
-                                <div class="cl-help" style="color:#C0473C;">@e9</div>
+                                <div class="cl-help" style="color:#D64550;">@e9</div>
                             }
                         </Field>
                     </div>

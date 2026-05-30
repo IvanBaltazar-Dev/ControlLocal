@@ -63,7 +63,7 @@
     private bool IsAdmin => Role == Roles.Admin;
 
     private string FechaHoy =>
-        DateTime.Today.ToString("dddd · dd MMM yyyy", new System.Globalization.CultureInfo("es-PE"));
+        DateTime.Today.ToString("dddd · dd MMMM yyyy", new System.Globalization.CultureInfo("es-PE"));
 
     private void ToggleMenu()
     {

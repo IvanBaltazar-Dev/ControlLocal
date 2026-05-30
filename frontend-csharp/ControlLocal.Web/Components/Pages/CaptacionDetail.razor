@@ -1,27 +1,24 @@
-@page "/captacion-detail"
+@page "/captacion-detail/{CodigoParam?}"
 @inject AppState App
+@inject ICaptacionService CaptacionSvc
+@inject IOportunidadService OportunidadSvc
+@inject ISolicitudService SolicitudSvc
 
-<PageTitle>Expediente de captación · ControlLocal</PageTitle>
+<PageTitle>Expediente @_cap.CodigoCaptacion · ControlLocal</PageTitle>
 
 <AppShell Crumbs="@_crumbs"
-          Title="CAP-0218 · Av. La Marina 245"
-          Subtitle="Expediente de captación · Miraflores · vinculada a 1 cliente interesado">
+          Title="@($"{_cap.CodigoCaptacion} · {_cap.DireccionLocal}")"
+          Subtitle="@($"Expediente de la propiedad · {_cap.DistritoLocal}")">
     <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate(_readOnly ? "oportunidades" : "captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
         @if (_readOnly)
         {
-            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("oportunidades"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
             <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
-        }
-        else
-        {
-            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-            <button class="cl-btn" @onclick="@(() => _modal = "interaccion")"><Icon Name="activity" Size="13" /> Registrar interacción</button>
-            <button class="cl-btn" @onclick="@(() => _modal = "visita")"><Icon Name="calendar" Size="13" /> Programar visita</button>
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
         }
     </Actions>
     <ChildContent>
-        <div class="cl-stage" style="margin-bottom:14px;">
+        @* ----- Etapa de la PROPIEDAD (resumen del avance entre sus clientes) ----- *@
+        <div class="cl-stage" style="margin-bottom:6px;">
             @for (var i = 0; i < _stages.Length; i++)
             {
                 var cls = i < _current ? "done" : (i == _current ? "active" : "");
@@ -30,6 +27,9 @@
                     <div class="cl-stage-v">@_stages[i]</div>
                 </div>
             }
+        </div>
+        <div class="cl-muted" style="font-size:12px;margin-bottom:14px;">
+            @_ops.Count cliente(s) interesado(s) · @_solicitudes.Count con solicitud · etapa más avanzada: <b>@_stages[_current]</b>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
@@ -44,10 +44,10 @@
                                 <div class="cl-card-head"><div class="cl-card-title">Datos del local</div></div>
                                 <div class="cl-card-body">
                                     <dl class="cl-kv">
-                                        <dt>Dirección</dt><dd>Av. La Marina 245</dd>
-                                        <dt>Distrito</dt><dd>Miraflores</dd>
-                                        <dt>Área</dt><dd>120 m²</dd>
-                                        <dt>Propietario</dt><dd>Inversiones Trébol S.A.C.</dd>
+                                        <dt>Dirección</dt><dd>@_cap.DireccionLocal</dd>
+                                        <dt>Distrito</dt><dd>@_cap.DistritoLocal</dd>
+                                        <dt>Área</dt><dd>@_cap.AreaM2 m²</dd>
+                                        <dt>Propietario</dt><dd>@_cap.PropietarioNombre</dd>
                                     </dl>
                                 </div>
                             </div>
@@ -55,67 +55,70 @@
                                 <div class="cl-card-head"><div class="cl-card-title">Condiciones comerciales</div></div>
                                 <div class="cl-card-body">
                                     <dl class="cl-kv">
-                                        <dt>Precio</dt><dd>USD 2 100 / mes</dd>
-                                        <dt>Comisión</dt><dd>5%</dd>
-                                        <dt>Vigencia</dt><dd>15/04 — 15/07/2026</dd>
-                                        <dt>Rubro objetivo</dt><dd>Restaurante / Café</dd>
+                                        <dt>Comisión</dt><dd>@_cap.ComisionPactadaTexto%</dd>
+                                        <dt>Vigencia</dt><dd>@_cap.VigenciaTexto</dd>
+                                        <dt>Estado captación</dt><dd>@_cap.Estado</dd>
                                     </dl>
                                 </div>
                             </div>
                         </div>
+
+                        @* ----- Clientes interesados → cada uno abre su seguimiento ----- *@
                         <div class="cl-card">
-                            <div class="cl-card-head"><div class="cl-card-title">Línea de tiempo del expediente</div></div>
-                            <div class="cl-card-body">
-                                <Timeline Items="_timeline" />
+                            <div class="cl-card-head">
+                                <div class="cl-card-title">Clientes interesados</div>
+                                <span class="cl-badge blue">@_ops.Count</span>
+                            </div>
+                            <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                                @foreach (var o in _ops)
+                                {
+                                    <button @onclick="@(() => App.Navigate($"oportunidad-detail/{o.Id}"))"
+                                            style="text-align:left;display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid var(--c-border);border-radius:11px;background:#fff;cursor:pointer;">
+                                        <span class="cl-avatar" style="width:32px;height:32px;font-size:11px;flex:0 0 32px;background:#005BFF;">@Iniciales(o.ClienteNombre)</span>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:600;font-size:13px;">@o.ClienteNombre</div>
+                                            <div class="cl-muted" style="font-size:11px;">@o.CodigoOportunidad · desde @o.FechaRegistroTexto</div>
+                                        </div>
+                                        <StatusBadge Label="@o.Estado" />
+                                        <span class="cl-flex" style="gap:4px;color:var(--c-primary);font-size:12px;font-weight:600;">Ver seguimiento <Icon Name="arrowRight" Size="13" /></span>
+                                    </button>
+                                }
+                                @if (_ops.Count == 0)
+                                {
+                                    <div class="cl-muted" style="font-size:12px;">Aún no hay clientes interesados en esta propiedad.</div>
+                                }
+                                <div class="cl-help">Cada cliente es una oportunidad independiente con su propio seguimiento (interacciones, visitas y solicitud).</div>
                             </div>
                         </div>
                     </div>
                 }
-                else if (_tab == "Interacciones")
+                else if (_tab == "Solicitudes")
                 {
                     <div class="cl-card">
                         <div class="cl-card-body" style="padding:0;">
                             <table class="cl-table">
-                                <thead><tr><th>Fecha</th><th>Canal</th><th>Cliente</th><th>Resultado</th></tr></thead>
+                                <thead><tr><th>Solicitud</th><th>Cliente</th><th>Monto/mes</th><th>Docs</th><th>Estado</th><th></th></tr></thead>
                                 <tbody>
-                                    @foreach (var it in _interacciones)
+                                    @foreach (var s in _solicitudes)
                                     {
                                         <tr>
-                                            <td><span style="font-size:12px;">@it.Date</span></td>
-                                            <td><div class="cl-flex"><Icon Name="@it.Icon" Size="14" /> <span>@it.Channel</span></div></td>
-                                            <td>@it.Client</td>
-                                            <td style="font-size:12px;color:var(--c-text-2);">@it.Result</td>
+                                            <td><span class="mono">@s.CodigoSolicitud</span></td>
+                                            <td style="font-weight:600;">@s.ClienteNombre</td>
+                                            <td>USD @s.MontoMensualTexto</td>
+                                            <td><span class="cl-muted" style="font-size:12px;">@s.DocumentosTexto</span></td>
+                                            <td><StatusBadge Label="@s.Estado" /></td>
+                                            <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"solicitud-detail/{s.CodigoSolicitud}"))"><Icon Name="eye" Size="12" /> Ver</button></td>
                                         </tr>
                                     }
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                }
-                else if (_tab == "Visitas")
-                {
-                    <div class="cl-card">
-                        <div class="cl-card-body" style="padding:0;">
-                            <table class="cl-table">
-                                <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Estado</th></tr></thead>
-                                <tbody>
-                                    <tr><td>22/05/2026</td><td>11:00</td><td>Inversiones Trébol S.A.C.</td><td><StatusBadge Label="Realizada" /></td></tr>
-                                    <tr><td>30/05/2026</td><td>16:30</td><td>Café del Puerto S.A.C.</td><td><StatusBadge Label="Programada" /></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                }
-                else if (_tab == "Solicitud")
-                {
-                    <div class="cl-card">
-                        <div class="cl-card-body" style="text-align:center;padding:40px 20px;">
-                            <div style="color:#7E8794;margin-bottom:10px;"><Icon Name="fileText" Size="28" /></div>
-                            <div style="font-weight:600;margin-bottom:4px;">Aún no hay solicitud de alquiler</div>
-                            <div class="cl-muted" style="font-size:12.5px;margin-bottom:14px;">Cuando un cliente decida alquilar, genera la solicitud para iniciar la evaluación.</div>
-                            @if (!_readOnly)
+                            @if (_solicitudes.Count == 0)
                             {
-                                <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                <div style="padding:40px 20px;text-align:center;color:#7E8794;">
+                                    <div style="margin-bottom:8px;"><Icon Name="fileText" Size="26" /></div>
+                                    <div style="font-weight:600;margin-bottom:4px;">Sin solicitudes en esta propiedad</div>
+                                    <div class="cl-muted" style="font-size:12.5px;">Cuando un cliente decida alquilar, su solicitud aparecerá aquí.</div>
+                                </div>
                             }
                         </div>
                     </div>
@@ -139,121 +142,78 @@
 
             <div class="cl-stack">
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Cliente vinculado</div></div>
+                    <div class="cl-card-head"><div class="cl-card-title">Estado de la propiedad</div></div>
                     <div class="cl-card-body">
-                        <div class="cl-flex" style="gap:10px;">
-                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#005BFF;">CP</span>
-                            <div>
-                                <div style="font-weight:600;font-size:13px;">Café del Puerto S.A.C.</div>
-                                <div class="cl-muted" style="font-size:11px;">RUC 20 548 991 233</div>
-                            </div>
-                        </div>
-                        <div style="margin-top:10px;font-size:12px;color:var(--c-text-2);">Interés: <b>Restaurante / Café</b> · 100–150 m² · USD 1 800–2 300</div>
+                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
+                            <dt>Captación</dt><dd><StatusBadge Label="@_cap.Estado" /></dd>
+                            <dt>Clientes interesados</dt><dd>@_ops.Count</dd>
+                            <dt>Con solicitud</dt><dd>@_solicitudes.Count</dd>
+                            <dt>Vigencia</dt><dd>@_cap.VigenciaTexto</dd>
+                        </dl>
                     </div>
                 </div>
-
-                @if (!_readOnly)
-                {
-                    <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Acciones del expediente</div></div>
-                        <div class="cl-card-body">
-                            <div style="display:flex;flex-direction:column;gap:8px;">
-                                <button class="cl-btn" @onclick="@(() => _modal = "interaccion")"><Icon Name="activity" Size="13" /> Registrar interacción</button>
-                                <button class="cl-btn" @onclick="@(() => _modal = "visita")"><Icon Name="calendar" Size="13" /> Programar visita</button>
-                                <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
-                                <button class="cl-btn danger" @onclick="@(() => _modal = "noContinuidad")"><Icon Name="flag" Size="13" /> Marcar sin continuidad</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="cl-alert blue">
-                        <Icon Name="info" Size="15" />
-                        <span>Cada interacción y visita queda registrada en el expediente. Al crear la solicitud, el broker la evaluará.</span>
-                    </div>
-                }
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>Este expediente es la <b>propiedad</b>. Las interacciones, visitas y solicitudes se gestionan dentro del <b>seguimiento de cada cliente</b>.</span>
+                </div>
             </div>
         </div>
-
-        <Modal Open="@(_modal == "interaccion")" Tone="blue" Icon="activity"
-               Title="Registrar interacción"
-               Desc="Deja constancia del contacto con el cliente interesado."
-               OnClose="@(() => _modal = null)">
-            <ChildContent>
-                <div class="cl-grid c2">
-                    <Field Label="Canal"><select><option>Llamada</option><option>WhatsApp</option><option>Correo</option><option>Presencial</option></select></Field>
-                    <Field Label="Fecha"><input placeholder="dd/mm/aaaa" /></Field>
-                </div>
-                <div style="margin-top:12px;">
-                    <Field Label="Resultado / nota"><textarea rows="3" placeholder="Resumen de la interacción…"></textarea></Field>
-                </div>
-            </ChildContent>
-            <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modal = null)">Cancelar</button>
-                <button class="cl-btn primary" @onclick="@(() => FireToast("Interacción registrada"))">Guardar</button>
-            </Footer>
-        </Modal>
-
-        <Modal Open="@(_modal == "visita")" Tone="blue" Icon="calendar"
-               Title="Programar visita"
-               Desc="Coordina una visita del cliente al local comercial."
-               OnClose="@(() => _modal = null)">
-            <ChildContent>
-                <div class="cl-grid c2">
-                    <Field Label="Fecha"><input placeholder="dd/mm/aaaa" /></Field>
-                    <Field Label="Hora"><input placeholder="hh:mm" /></Field>
-                </div>
-                <div style="margin-top:12px;">
-                    <Field Label="Notas"><textarea rows="2" placeholder="Indicaciones para la visita…"></textarea></Field>
-                </div>
-            </ChildContent>
-            <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modal = null)">Cancelar</button>
-                <button class="cl-btn primary" @onclick="@(() => FireToast("Visita programada"))">Programar</button>
-            </Footer>
-        </Modal>
-
-        <ConfirmDialog Open="@(_modal == "noContinuidad")" Tone="red" Icon="flag"
-                       Title="¿Marcar el expediente sin continuidad?"
-                       Desc="El cliente quedará desvinculado de esta captación. La captación seguirá activa para otros clientes."
-                       ConfirmLabel="Marcar sin continuidad" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@(() => FireToast("Expediente marcado sin continuidad"))" />
-
-        <Toast Show="@(_toast is not null)">@_toast</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
+    [Parameter] public string? CodigoParam { get; set; }
+
+    private CaptacionDto _cap = new();
+    private IReadOnlyList<OportunidadComercialDto> _ops = new List<OportunidadComercialDto>();
+    private IReadOnlyList<SolicitudAlquilerDto> _solicitudes = new List<SolicitudAlquilerDto>();
+
     private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
     private string _tab = "Resumen";
-    private string? _modal;
-    private string? _toast;
 
-    private readonly string[] _stages = { "Captada", "Con interacciones", "Con solicitud", "En evaluación", "Alquilada" };
-    private const int _current = 1;
+    private readonly string[] _stages = { "Captación activa", "Clientes interesados", "Con solicitud", "En evaluación", "Alquilada" };
+    private int _current;
 
-    private string[] _crumbs => _readOnly
-        ? new[] { "ControlLocal", "Operaciones del equipo", "CAP-0218" }
-        : new[] { "ControlLocal", "Mis captaciones", "CAP-0218" };
+    protected override void OnParametersSet()
+    {
+        _cap = (string.IsNullOrEmpty(CodigoParam) ? null : CaptacionSvc.ByCodigo(CodigoParam)) ?? CaptacionSvc.All().First();
+        _ops = OportunidadSvc.ByCaptacion(_cap.CodigoCaptacion);
+        // Solicitudes de los clientes de esta propiedad (match tolerante por nombre).
+        _solicitudes = SolicitudSvc.All().Where(s =>
+            _ops.Any(o => o.ClienteNombre.Contains(s.ClienteNombre) || s.ClienteNombre.Contains(o.ClienteNombre))).ToList();
+        _current = EtapaPropiedad();
+    }
 
-    private readonly Tabs.TabItem[] _tabs = new[]
+    // Etapa de la propiedad = avance del cliente más adelantado (rollup honesto).
+    private int EtapaPropiedad()
+    {
+        var max = 0;
+        foreach (var o in _ops)
+        {
+            max = Math.Max(max, o.Estado switch
+            {
+                "Abierta" or "En seguimiento" => 1,
+                "Solicitud creada" => 2,
+                "En evaluación" => 3,
+                "Alquilada" or "Finalizada exitosa" or "Cerrada exitosa" => 4,
+                _ => 0,
+            });
+        }
+        if (_solicitudes.Any(s => s.Estado is "En revisión" or "Observada")) max = Math.Max(max, 3);
+        if (_solicitudes.Any(s => s.Estado == "Aprobada")) max = 4;
+        return max;
+    }
+
+    private Tabs.TabItem[] _tabs => new[]
     {
         new Tabs.TabItem("Resumen"),
-        new Tabs.TabItem("Interacciones", 5),
-        new Tabs.TabItem("Visitas", 2),
-        new Tabs.TabItem("Solicitud"),
+        new Tabs.TabItem("Solicitudes", _solicitudes.Count > 0 ? _solicitudes.Count : (int?)null),
         new Tabs.TabItem("Documentos"),
     };
 
-    private record Interaccion(string Date, string Icon, string Channel, string Client, string Result);
-
-    private readonly Interaccion[] _interacciones = new[]
-    {
-        new Interaccion("28/05/2026 · 10:12", "phone", "Llamada", "Café del Puerto S.A.C.", "Interesado, pide visita"),
-        new Interaccion("26/05/2026 · 17:40", "users", "Presencial", "Café del Puerto S.A.C.", "Revisó la ficha en oficina"),
-        new Interaccion("24/05/2026 · 09:05", "mail", "Correo", "Café del Puerto S.A.C.", "Envío de brochure"),
-        new Interaccion("22/05/2026 · 15:20", "activity", "WhatsApp", "Café del Puerto S.A.C.", "Consulta de metraje"),
-        new Interaccion("20/05/2026 · 11:00", "phone", "Llamada", "Café del Puerto S.A.C.", "Primer contacto"),
-    };
+    private string[] _crumbs => _readOnly
+        ? new[] { "ControlLocal", "Operaciones del equipo", _cap.CodigoCaptacion }
+        : new[] { "ControlLocal", "Mis captaciones", _cap.CodigoCaptacion };
 
     private readonly string[] _docs =
     {
@@ -262,21 +222,12 @@
         "Fotos_del_local.zip",
     };
 
-    private readonly Timeline.TimelineItem[] _timeline = new[]
+    private static string Iniciales(string nombre)
     {
-        new Timeline.TimelineItem("15/04/2026", "Captación activada", "Aprobada por el broker", "done"),
-        new Timeline.TimelineItem("20/05/2026", "Cliente vinculado", "Café del Puerto S.A.C.", "done"),
-        new Timeline.TimelineItem("28/05/2026", "Interacciones en curso", "5 contactos registrados", "active"),
-        new Timeline.TimelineItem("—", "Solicitud de alquiler", "Pendiente de generar"),
-    };
-
-    private async Task FireToast(string msg)
-    {
-        _modal = null;
-        _toast = msg;
-        StateHasChanged();
-        await Task.Delay(2200);
-        _toast = null;
-        StateHasChanged();
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 0) return "?";
+        return partes.Length == 1
+            ? partes[0][..Math.Min(2, partes[0].Length)].ToUpper()
+            : $"{partes[0][0]}{partes[1][0]}".ToUpper();
     }
 }

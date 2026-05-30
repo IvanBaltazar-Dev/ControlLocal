@@ -1,0 +1,284 @@
+@page "/oportunidad-detail/{IdParam?}"
+@inject AppState App
+@inject IOportunidadService OportunidadSvc
+@inject ICaptacionService CaptacionSvc
+@inject IInteraccionService InteraccionSvc
+@inject IVisitaService VisitaSvc
+@inject ISolicitudService SolicitudSvc
+
+<PageTitle>Seguimiento · @(_op?.ClienteNombre ?? "Cliente") · ControlLocal</PageTitle>
+
+@if (_op is null)
+{
+    <AppShell Title="Seguimiento del cliente" Crumbs="@(new[] { "ControlLocal", "Seguimiento" })">
+        <ChildContent>
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Oportunidad no encontrada.</div></div>
+        </ChildContent>
+    </AppShell>
+}
+else
+{
+    <AppShell Crumbs="@_crumbs"
+              Title="@($"Seguimiento · {_op.ClienteNombre}")"
+              Subtitle="@($"{_op.CodigoOportunidad} · {_cap?.DireccionLocal ?? _op.DireccionLocal} · {_op.CaptacionCodigo}")">
+        <Actions>
+            <button class="cl-btn ghost" @onclick="@(() => App.Navigate($"captacion-detail/{_op.CaptacionCodigo}"))"><Icon Name="chevronLeft" Size="13" /> Expediente de la propiedad</button>
+            @if (_readOnly)
+            {
+                <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+            }
+        </Actions>
+        <ChildContent>
+            @* ----- Etapa del cliente (la barra lineal vive AQUÍ, por oportunidad) ----- *@
+            @if (_noContinua)
+            {
+                <div class="cl-alert red" style="margin-bottom:14px;">
+                    <Icon Name="flag" Size="15" />
+                    <span>Este cliente <b>no continúa</b> con la propiedad. La oportunidad está cerrada.</span>
+                </div>
+            }
+            else
+            {
+                <div class="cl-stage" style="margin-bottom:14px;">
+                    @for (var i = 0; i < _stages.Length; i++)
+                    {
+                        var cls = i < _current ? "done" : (i == _current ? "active" : "");
+                        <div class="cl-stage-step @cls">
+                            <div class="cl-stage-k"><span class="cl-stage-dot"></span> Etapa @(i + 1)</div>
+                            <div class="cl-stage-v">@_stages[i]</div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Cliente y propiedad</div><StatusBadge Label="@_op.Estado" /></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                                <div><div class="cl-def-k">Cliente interesado</div><div style="font-weight:600;margin-top:6px;">@_op.ClienteNombre</div></div>
+                                <div><div class="cl-def-k">Oportunidad</div><div style="font-weight:600;margin-top:6px;">@_op.CodigoOportunidad</div></div>
+                                <div><div class="cl-def-k">Propiedad</div><div style="font-weight:600;margin-top:6px;">@(_cap?.DireccionLocal ?? _op.DireccionLocal) · @_op.CaptacionCodigo</div></div>
+                                <div><div class="cl-def-k">Agente responsable</div><div style="font-weight:600;margin-top:6px;">@_op.NombreAgenteResponsable</div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ----- Interacciones de este cliente ----- *@
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Interacciones</div><span class="cl-badge blue">@_interacciones.Count</span></div>
+                        <div class="cl-card-body" style="padding:0;">
+                            <table class="cl-table">
+                                <thead><tr><th>Fecha</th><th>Canal</th><th>Resultado</th><th>Observaciones</th></tr></thead>
+                                <tbody>
+                                    @foreach (var it in _interacciones)
+                                    {
+                                        <tr>
+                                            <td style="font-size:12px;color:#7E8794;">@it.FechaHoraTexto</td>
+                                            <td><CanalBadge Canal="@it.CanalContacto" /></td>
+                                            <td><ResultadoBadge Resultado="@it.Resultado" /></td>
+                                            <td style="font-size:12px;color:var(--c-text-2);">@it.Observaciones</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (_interacciones.Count == 0)
+                            {
+                                <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Aún no hay interacciones con este cliente.</div>
+                            }
+                        </div>
+                    </div>
+
+                    @* ----- Visitas de este cliente ----- *@
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Visitas</div><span class="cl-badge blue">@_visitas.Count</span></div>
+                        <div class="cl-card-body" style="padding:0;">
+                            <table class="cl-table">
+                                <thead><tr><th>Fecha</th><th>Hora</th><th>Estado</th><th>Resultado</th></tr></thead>
+                                <tbody>
+                                    @foreach (var v in _visitas)
+                                    {
+                                        <tr>
+                                            <td style="font-size:12px;">@v.FechaTexto</td>
+                                            <td><span class="mono">@v.HoraTexto</span></td>
+                                            <td><StatusBadge Label="@EnumCatalog.LabelFor(EnumCatalog.EstadosVisita, v.Estado)" /></td>
+                                            <td>@if (!string.IsNullOrEmpty(v.Resultado)) { <ResultadoBadge Resultado="@v.Resultado" /> } else { <span class="cl-muted" style="font-size:12px;">—</span> }</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (_visitas.Count == 0)
+                            {
+                                <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Aún no hay visitas con este cliente.</div>
+                            }
+                        </div>
+                    </div>
+
+                    @* ----- Solicitud de este cliente ----- *@
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Solicitud de alquiler</div></div>
+                        <div class="cl-card-body">
+                            @if (_solicitud is not null)
+                            {
+                                <div class="cl-flex" style="justify-content:space-between;gap:10px;">
+                                    <div>
+                                        <div style="font-weight:600;">@_solicitud.CodigoSolicitud · USD @_solicitud.MontoMensualTexto/mes</div>
+                                        <div class="cl-muted" style="font-size:12px;margin-top:3px;">@_solicitud.PlazoMeses meses · documentos @_solicitud.DocumentosTexto · @_solicitud.FechaRegistroTexto</div>
+                                    </div>
+                                    <div class="cl-flex" style="gap:8px;">
+                                        <StatusBadge Label="@_solicitud.Estado" />
+                                        <button class="cl-btn sm" @onclick="@(() => App.Navigate($"solicitud-detail/{_solicitud.CodigoSolicitud}"))"><Icon Name="eye" Size="12" /> Ver solicitud</button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="text-align:center;padding:24px 10px;">
+                                    <div class="cl-muted" style="font-size:12.5px;margin-bottom:12px;">Este cliente aún no tiene solicitud de alquiler.</div>
+                                    @if (!_readOnly)
+                                    {
+                                        <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @* ----- Acciones del seguimiento (por cliente) ----- *@
+                <div class="cl-stack">
+                    @if (!_readOnly && !_noContinua)
+                    {
+                        <div class="cl-card">
+                            <div class="cl-card-head"><div class="cl-card-title">Acciones del seguimiento</div></div>
+                            <div class="cl-card-body">
+                                <div style="display:flex;flex-direction:column;gap:8px;">
+                                    <button class="cl-btn" @onclick="@(() => App.Navigate($"interaccion-form/{_op.Id}"))"><Icon Name="activity" Size="13" /> Registrar interacción</button>
+                                    <button class="cl-btn" @onclick="@(() => App.Navigate("visitas"))"><Icon Name="calendar" Size="13" /> Programar visita</button>
+                                    <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                    <button class="cl-btn danger" @onclick="AbrirCierre"><Icon Name="flag" Size="13" /> Marcar sin continuidad</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    <div class="cl-alert blue">
+                        <Icon Name="info" Size="15" />
+                        <span>Esto es el <b>seguimiento de un cliente</b>. Una misma propiedad puede tener varios clientes, cada uno con su propio seguimiento.</span>
+                    </div>
+                </div>
+            </div>
+
+            @* ----- Modal: marcar sin continuidad (captura el motivo aquí mismo) ----- *@
+            <Modal Open="_modalCierre" Tone="red" Icon="flag"
+                   Title="Marcar cliente sin continuidad"
+                   Desc="@($"{_op.ClienteNombre} quedará desvinculado de esta propiedad y la oportunidad se cerrará.")"
+                   OnClose="@(() => _modalCierre = false)">
+                <ChildContent>
+                    <Field Label="Motivo de no continuidad" Required="true">
+                        <select @bind="_razon">
+                            <option value="">— Seleccionar motivo —</option>
+                            @foreach (var m in EnumCatalog.MotivosNoContinuidad)
+                            {
+                                <option value="@m.Code">@m.Label</option>
+                            }
+                        </select>
+                    </Field>
+                    <div style="margin-top:12px;">
+                        <Field Label="Observaciones"><textarea rows="2" placeholder="Detalle del motivo…" @bind="_obs"></textarea></Field>
+                    </div>
+                    @if (_err is not null)
+                    {
+                        <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                    }
+                </ChildContent>
+                <Footer>
+                    <button class="cl-btn ghost" @onclick="@(() => _modalCierre = false)">Cancelar</button>
+                    <button class="cl-btn primary" @onclick="ConfirmarCierre">Marcar sin continuidad</button>
+                </Footer>
+            </Modal>
+
+            <Toast Show="_toast">@_toastMsg</Toast>
+        </ChildContent>
+    </AppShell>
+}
+
+@code {
+    [Parameter] public string? IdParam { get; set; }
+
+    private OportunidadComercialDto? _op;
+    private CaptacionDto? _cap;
+    private List<InteraccionComercialDto> _interacciones = new();
+    private List<VisitaDto> _visitas = new();
+    private SolicitudAlquilerDto? _solicitud;
+
+    private bool _modalCierre, _toast;
+    private string _razon = "", _obs = "", _toastMsg = "";
+    private string? _err;
+
+    private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
+
+    private readonly string[] _stages = { "Interesado", "En seguimiento", "Solicitud creada", "En evaluación", "Alquilada" };
+    private int _current;
+    private bool _noContinua;
+
+    private string[] _crumbs => new[] { "ControlLocal", "Seguimiento", _op?.CodigoOportunidad ?? "" };
+
+    protected override void OnParametersSet()
+    {
+        _op = (long.TryParse(IdParam, out var id) ? OportunidadSvc.ById(id) : null)
+              ?? OportunidadSvc.All().FirstOrDefault();
+        if (_op is null) return;
+
+        _cap = CaptacionSvc.ByCodigo(_op.CaptacionCodigo);
+        _interacciones = InteraccionSvc.All().Where(i => i.OportunidadId == _op.Id).ToList();
+        _visitas = VisitaSvc.All().Where(v => v.OportunidadId == _op.Id).ToList();
+        // Solicitud por nombre de cliente (tolerante a sufijos como "S.A.C.").
+        _solicitud = SolicitudSvc.All().FirstOrDefault(s =>
+            _op.ClienteNombre.Contains(s.ClienteNombre) || s.ClienteNombre.Contains(_op.ClienteNombre));
+
+        (_current, _noContinua) = EtapaDe(_op.Estado);
+    }
+
+    // Mapea el estado de la oportunidad al índice de etapa del cliente.
+    private static (int, bool) EtapaDe(string estado) => estado switch
+    {
+        "Abierta" => (0, false),
+        "En seguimiento" => (1, false),
+        "Solicitud creada" => (2, false),
+        "En evaluación" => (3, false),
+        "Alquilada" or "Cerrada exitosa" or "Finalizada exitosa" => (4, false),
+        "No continúa" or "Cerrada no favorable" or "Finalizada no favorable" => (0, true),
+        _ => (0, false),
+    };
+
+    private void AbrirCierre()
+    {
+        _razon = ""; _obs = ""; _err = null;
+        _modalCierre = true;
+    }
+
+    private void ConfirmarCierre()
+    {
+        if (string.IsNullOrWhiteSpace(_razon))
+        {
+            _err = "Debes indicar el motivo de no continuidad.";
+            return;
+        }
+        _modalCierre = false;
+        _noContinua = true;
+        if (_op is not null) _op.Estado = "No continúa";
+        var motivoLabel = EnumCatalog.LabelFor(EnumCatalog.MotivosNoContinuidad, _razon);
+        Notificar($"Oportunidad cerrada · motivo: {motivoLabel}");
+    }
+
+    private async void Notificar(string mensaje)
+    {
+        _toastMsg = mensaje;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(2600);
+        _toast = false;
+        StateHasChanged();
+    }
+}

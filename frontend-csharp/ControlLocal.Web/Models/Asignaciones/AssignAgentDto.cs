@@ -23,4 +23,7 @@ public class AssignAgentDto
 
     // Motivo por el que el agente no es seleccionable (opcional).
     public string? MotivoNoDisponible { get; set; }
+
+    // Flag para excluir al administrador global de listas seleccionables.
+    public bool EsAdministrador { get; set; }
 }

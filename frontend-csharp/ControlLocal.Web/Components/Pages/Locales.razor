@@ -1,59 +1,278 @@
 @page "/locales"
 @inject AppState App
-@inject ILocalService LocalSvc
+@inject IProspeccionService ProspeccionSvc
 
-<PageTitle>Locales comerciales · ControlLocal</PageTitle>
+<PageTitle>Locales en prospección · ControlLocal</PageTitle>
 
 <AppShell Active="Locales comerciales" Crumbs="@(new[] { "ControlLocal", "Captación", "Locales comerciales" })"
-          Title="Locales comerciales"
-          Subtitle="Locales que registré · alta del local, propietario y ficha de captación">
+          Title="Prospección de locales"
+          Subtitle="Seguimiento de inmuebles hasta captarlos · contacto con el propietario, propuesta y decisión">
     <Actions>
-        <button class="cl-btn"><Icon Name="layers" Size="13" /> Vista tabla</button>
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Registrar local</button>
     </Actions>
     <ChildContent>
-        <FilterBar Search="Buscar por dirección, código, propietario…">
-            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
-            <select class="cl-select"><option>Rango de precio</option><option>USD 500 – 1500</option><option>USD 1500 – 3000</option><option>USD 3000+</option></select>
-            <select class="cl-select"><option>Metraje</option><option>&lt; 50 m²</option><option>50–100 m²</option><option>100–200 m²</option></select>
-            <select class="cl-select"><option>Rubro</option><option>Restaurante</option><option>Moda</option><option>Servicios</option></select>
-            <select class="cl-select"><option>Estado</option><option>Disponible</option><option>En captación</option></select>
-        </FilterBar>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
-            @foreach (var l in LocalSvc.All())
-            {
-                <div style="background:#fff;border:1px solid #C9CED6;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;">
-                    <div style="aspect-ratio:16/10;background:repeating-linear-gradient(135deg, #EDF2F9 0 8px, #F8FAFD 8px 16px);position:relative;">
-                        <div style="position:absolute;inset:0;display:grid;place-items:center;">
-                            <div style="font-family:ui-monospace, Menlo, monospace;font-size:10px;color:#7E8794;background:rgba(255,255,255,0.85);padding:4px 8px;border-radius:4px;">foto del local</div>
-                        </div>
-                        <div style="position:absolute;top:10px;left:10px;"><StatusBadge Label="@l.Estado" /></div>
-                        <div style="position:absolute;top:10px;right:10px;background:rgba(11,31,51,0.78);color:#fff;font-size:11px;padding:3px 8px;border-radius:4px;font-family:monospace;">@l.CodigoLocal</div>
-                    </div>
-                    <div style="padding:14px;display:flex;flex-direction:column;gap:6px;">
-                        <div style="font-weight:600;font-size:13.5px;">@l.Direccion</div>
-                        <div style="font-size:11.5px;color:#7E8794;display:flex;gap:6px;align-items:center;">
-                            <Icon Name="mapPin" Size="12" /> @l.Distrito
-                        </div>
-                        <div style="display:flex;gap:10px;font-size:11.5px;color:#515B6B;margin-top:4px;">
-                            <span><b>@l.AreaM2</b> m²</span>
-                            <span>·</span>
-                            <span>@l.Rubro</span>
-                        </div>
-                        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:8px;">
-                            <div>
-                                <div style="font-size:11px;color:#7E8794;">Precio referencial</div>
-                                <div style="font-size:17px;font-weight:600;">@l.PrecioReferencialTexto <span style="font-size:11px;color:#7E8794;">USD / mes</span></div>
-                            </div>
-                            <button class="cl-btn sm primary">Ver detalle</button>
-                        </div>
-                        <div style="border-top:1px solid #E2E6EC;margin-top:8px;padding-top:8px;font-size:11.5px;color:#515B6B;">
-                            Propietario · <b>@l.PropietarioNombre</b>
-                        </div>
-                    </div>
-                </div>
-            }
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="store" Label="En prospección" Value="@EnProspeccion.ToString()" Tone="blue" />
+            <MetricCard Icon="clock" Label="Por recontactar" Value="@_porRecontactar.Count.ToString()" Tone="amber" Footer="Seguimiento ≤ 15 días" />
+            <MetricCard Icon="pin" Label="Captados" Value="@Contar("T").ToString()" Tone="green" />
+            <MetricCard Icon="x" Label="Descartados" Value="@Contar("D").ToString()" Tone="red" />
         </div>
-        <Pagination Total="248" />
+
+        @if (_porRecontactar.Count > 0)
+        {
+            var vencidos = _porRecontactar.Count(p => EsVencido(p));
+            <div class="cl-alert @(vencidos > 0 ? "red" : "amber")" style="margin-bottom:16px;">
+                <Icon Name="clock" Size="15" />
+                <span>
+                    Tienes <b>@_porRecontactar.Count</b> local(es) en seguimiento por recontactar@(vencidos > 0 ? $" · {vencidos} vencido(s)" : "").
+                    No dejes vencer la ventana de 15 días: cada recontacto a tiempo es una captación que no pierdes.
+                </span>
+            </div>
+        }
+
+        <FilterBar Search="Buscar por dirección, código, propietario…">
+            <select class="cl-select" @bind="_filtroEstado">
+                <option value="">Todas las etapas</option>
+                @foreach (var e in EnumCatalog.EstadosProspeccion)
+                {
+                    <option value="@e.Code">@e.Label</option>
+                }
+            </select>
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th><th>Dirección</th><th>Distrito</th><th>Propietario</th>
+                            <th>Etapa</th><th>Seguimiento</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Filtradas())
+                        {
+                            <tr>
+                                <td><span class="mono">@p.LocalCodigo</span></td>
+                                <td style="font-weight:600;">@p.Direccion</td>
+                                <td>@p.Distrito</td>
+                                <td>@p.PropietarioNombre</td>
+                                <td><StatusBadge Label="@EnumCatalog.LabelFor(EnumCatalog.EstadosProspeccion, p.Estado)" /></td>
+                                <td>
+                                    @if (p.Estado == "S" && p.FechaRecontacto is not null)
+                                    {
+                                        var vencido = EsVencido(p);
+                                        <span class="cl-badge @(vencido ? "red" : "amber")">@(vencido ? $"Vencido · {p.FechaRecontactoTexto}" : $"Recontactar {p.FechaRecontactoTexto}")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="cl-muted" style="font-size:12px;">@UltimoHito(p)</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="cl-flex" style="gap:6px;justify-content:flex-end;">
+                                        @if (p.Estado == "P")
+                                        {
+                                            <button class="cl-btn sm primary" @onclick="@(() => Avanzar(p, ProspeccionSvc.Contactar, "Propietario contactado"))"><Icon Name="phone" Size="12" /> Contactar</button>
+                                        }
+                                        else if (p.Estado == "C")
+                                        {
+                                            <button class="cl-btn sm primary" @onclick="@(() => Avanzar(p, ProspeccionSvc.RegistrarReunion, "Reunión registrada"))"><Icon Name="users" Size="12" /> Reunión</button>
+                                        }
+                                        else if (p.Estado == "R")
+                                        {
+                                            <button class="cl-btn sm primary" @onclick="@(() => Avanzar(p, ProspeccionSvc.EntregarPropuesta, "Propuesta entregada"))"><Icon Name="fileText" Size="12" /> Entregar propuesta</button>
+                                        }
+                                        else if (p.Estado is "E" or "S")
+                                        {
+                                            <button class="cl-btn sm primary" @onclick="@(() => AbrirCaptar(p))"><Icon Name="pin" Size="12" /> Captar</button>
+                                            <button class="cl-btn sm" @onclick="@(() => AbrirPosponer(p))"><Icon Name="clock" Size="12" /> Posponer</button>
+                                            <button class="cl-btn sm ghost" @onclick="@(() => AbrirRechazar(p))"><Icon Name="x" Size="12" /> Rechazar</button>
+                                        }
+                                        else if (p.Estado == "T")
+                                        {
+                                            <span class="cl-badge green plain"><Icon Name="check" Size="11" /> @p.CaptacionCodigo</span>
+                                        }
+                                        <button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"local-detail/{p.LocalId}"))"><Icon Name="eye" Size="12" /> Ver</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (!Filtradas().Any())
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="store" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin locales en este filtro</div>
+                        <div style="font-size:12px;">Registra un local para iniciar su prospección.</div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ---------- Modal: Posponer (recontactar ≤15 días) ---------- *@
+        <Modal Open="_modalPosponer" Tone="amber" Icon="clock"
+               Title="Posponer · por ahora no"
+               Desc="@($"El propietario de {_target?.Direccion} pidió tiempo. Agenda el recontacto (máx. 15 días).")"
+               OnClose="@(() => _modalPosponer = false)">
+            <ChildContent>
+                <Field Label="Fecha de recontacto" Required="true"><input type="date" @bind="_fechaRecontactoPick" /></Field>
+                <div class="cl-help" style="margin-top:6px;">No puede superar 15 días desde hoy. El local quedará en <b>seguimiento</b> y aparecerá en la alerta de recontacto.</div>
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                }
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _modalPosponer = false)">Cancelar</button>
+                <button class="cl-btn primary" @onclick="ConfirmarPosponer">Agendar recontacto</button>
+            </Footer>
+        </Modal>
+
+        @* ---------- Modal: Rechazar ---------- *@
+        <Modal Open="_modalRechazar" Tone="red" Icon="x"
+               Title="Rechazo del propietario"
+               Desc="@($"Registra por qué {_target?.PropietarioNombre} no acepta la captación de {_target?.Direccion}.")"
+               OnClose="@(() => _modalRechazar = false)">
+            <ChildContent>
+                <Field Label="Motivo del rechazo" Required="true">
+                    <textarea rows="3" placeholder="Ej. No acepta la comisión, prefiere alquilar por su cuenta…" @bind="_motivoTmp"></textarea>
+                </Field>
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                }
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _modalRechazar = false)">Volver</button>
+                <button class="cl-btn primary" @onclick="ConfirmarRechazar">Registrar rechazo</button>
+            </Footer>
+        </Modal>
+
+        @* ---------- Modal: Captar ---------- *@
+        <Modal Open="_modalCaptar" Tone="green" Icon="pin"
+               Title="Captar local"
+               Desc="@($"El propietario de {_target?.Direccion} aceptó. Al captar se crea la captación (pendiente de revisión del broker).")"
+               OnClose="@(() => _modalCaptar = false)">
+            <ChildContent>
+                <Field Label="Comisión pactada (%)" Required="true"><input type="number" step="0.1" min="0" @bind="_comisionTmp" /></Field>
+                <div class="cl-help" style="margin-top:6px;">La captación nace en estado <b>Pendiente de revisión</b>; el broker la aprueba para activarla.</div>
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                }
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _modalCaptar = false)">Cancelar</button>
+                <button class="cl-btn primary" @onclick="ConfirmarCaptar">Captar local</button>
+            </Footer>
+        </Modal>
+
+        <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
+
+@code {
+    private string _filtroEstado = "";
+    private IReadOnlyList<ProspeccionDto> _porRecontactar = new List<ProspeccionDto>();
+
+    private bool _modalPosponer, _modalRechazar, _modalCaptar, _toast;
+    private ProspeccionDto? _target;
+    private DateOnly? _fechaRecontactoPick;
+    private string _motivoTmp = "", _toastMsg = "";
+    private decimal _comisionTmp = 5.0m;
+    private string? _err;
+
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override void OnInitialized() => Recalcular();
+
+    private int EnProspeccion => ProspeccionSvc.All().Count(p => p.Estado is "P" or "C" or "R" or "E" or "S");
+    private int Contar(string estado) => ProspeccionSvc.All().Count(p => p.Estado == estado);
+
+    private IEnumerable<ProspeccionDto> Filtradas() =>
+        ProspeccionSvc.All().Where(p => string.IsNullOrEmpty(_filtroEstado) || p.Estado == _filtroEstado);
+
+    private static bool EsVencido(ProspeccionDto p) =>
+        p.Estado == "S" && p.FechaRecontacto is { } f && f < Hoy;
+
+    private void Recalcular() => _porRecontactar = ProspeccionSvc.PorRecontactar(15);
+
+    private static string UltimoHito(ProspeccionDto p) => p.Estado switch
+    {
+        "P" => "Sin contactar",
+        "C" => $"Contactado {p.FechaContactoTexto}",
+        "R" => $"Reunión {p.FechaReunionTexto}",
+        "E" => $"Propuesta {p.FechaPropuestaTexto}",
+        "T" => "Captado",
+        "D" => p.Observaciones ?? "Descartado",
+        _ => "—",
+    };
+
+    private void AbrirPosponer(ProspeccionDto p) { _target = p; _fechaRecontactoPick = null; _err = null; _modalPosponer = true; }
+    private void AbrirRechazar(ProspeccionDto p) { _target = p; _motivoTmp = ""; _err = null; _modalRechazar = true; }
+    private void AbrirCaptar(ProspeccionDto p) { _target = p; _comisionTmp = 5.0m; _err = null; _modalCaptar = true; }
+
+    // Avanza una etapa simple del embudo (contactar / reunión / propuesta).
+    private void Avanzar(ProspeccionDto p, Func<long, ProspeccionDto> accion, string mensaje)
+    {
+        try
+        {
+            accion(p.Id);
+            Recalcular();
+            Notificar(mensaje);
+        }
+        catch (InvalidOperationException ex) { Notificar(ex.Message); }
+    }
+
+    private void ConfirmarPosponer()
+    {
+        if (_target is null) return;
+        if (_fechaRecontactoPick is null) { _err = "Indica la fecha de recontacto."; return; }
+        try
+        {
+            ProspeccionSvc.Posponer(_target.Id, _fechaRecontactoPick.Value);
+            _modalPosponer = false;
+            Recalcular();
+            Notificar("Recontacto agendado. Quedó en seguimiento.");
+        }
+        catch (InvalidOperationException ex) { _err = ex.Message; }
+    }
+
+    private void ConfirmarRechazar()
+    {
+        if (_target is null) return;
+        try
+        {
+            ProspeccionSvc.Rechazar(_target.Id, _motivoTmp);
+            _modalRechazar = false;
+            Recalcular();
+            Notificar("Prospección descartada por rechazo del propietario.");
+        }
+        catch (InvalidOperationException ex) { _err = ex.Message; }
+    }
+
+    private void ConfirmarCaptar()
+    {
+        if (_target is null) return;
+        try
+        {
+            var p = ProspeccionSvc.Captar(_target.Id, _comisionTmp);
+            _modalCaptar = false;
+            Recalcular();
+            Notificar($"¡Local captado! Se creó la captación {p.CaptacionCodigo} (pendiente de revisión).");
+        }
+        catch (InvalidOperationException ex) { _err = ex.Message; }
+    }
+
+    private async void Notificar(string mensaje)
+    {
+        _toastMsg = mensaje;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(2600);
+        _toast = false;
+        StateHasChanged();
+    }
+}

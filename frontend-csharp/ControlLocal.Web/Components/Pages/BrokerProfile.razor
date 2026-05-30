@@ -1,4 +1,4 @@
-@page "/broker-profile"
+@page "/broker-profile/{CodigoParam?}"
 @inject AppState App
 @inject IBrokerService Brokers
 
@@ -74,7 +74,14 @@
 </AppShell>
 
 @code {
-    private BrokerDto b => Brokers.First();
+    [Parameter] public string? CodigoParam { get; set; }
+
+    private BrokerDto b = new();
+
+    protected override void OnParametersSet()
+    {
+        b = (string.IsNullOrEmpty(CodigoParam) ? null : Brokers.ById(CodigoParam)) ?? Brokers.First();
+    }
 
     private static string DocLabel(string docType) =>
         docType == "DNI" ? "DNI" : docType == "CE" ? "Carné de extranjería" : docType;

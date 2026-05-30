@@ -1,0 +1,77 @@
+@page "/owner-detail/{IdParam?}"
+@inject AppState App
+@inject IPropietarioService OwnerSvc
+
+<PageTitle>@_o.Nombre · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Registro", "Propietarios", _o.Nombre })"
+          Title="@_o.Nombre"
+          Subtitle="@($"Propietario · {_o.TipoPersona}")">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("owners"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"owner-form/{_o.Id}"))"><Icon Name="edit" Size="13" /> Editar propietario</button>
+    </Actions>
+    <ChildContent>
+        <div style="max-width:880px;">
+            <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Datos del propietario</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                                <div>
+                                    <div class="cl-def-k">Nombre o razón social</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_o.Nombre</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Tipo de persona</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_o.TipoPersona</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Número de documento</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_o.NumeroDocumento</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Teléfono</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_o.Telefono</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Correo</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_o.Correo</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Estado</div></div>
+                        <div class="cl-card-body">
+                            <div style="text-align:center;padding:6px 0;">
+                                <StatusBadge Label="@_o.Estado" />
+                                <div class="cl-muted" style="font-size:12px;margin-top:8px;">@_o.CantidadLocales local(es) registrado(s)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cl-alert blue">
+                        <Icon Name="info" Size="15" />
+                        <span>Los locales de este propietario pueden registrarse como captaciones desde el módulo de locales.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    [Parameter] public string? IdParam { get; set; }
+
+    private PropietarioDto _o = new();
+
+    protected override void OnParametersSet()
+    {
+        _o = (long.TryParse(IdParam, out var id) ? OwnerSvc.ById(id) : null)
+             ?? OwnerSvc.All().First();
+    }
+}

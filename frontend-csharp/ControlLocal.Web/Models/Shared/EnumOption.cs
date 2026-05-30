@@ -81,6 +81,25 @@ public static class EnumCatalog
         new("D", "Descartado")
     ];
 
+    public static readonly IReadOnlyList<EnumOption> EstadosProspeccion =
+    [
+        new("P", "Prospecto"),
+        new("C", "Contactado"),
+        new("R", "Reunion"),
+        new("E", "Propuesta entregada"),
+        new("S", "En seguimiento"),
+        new("T", "Captado"),
+        new("D", "Descartado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ResultadosPropuesta =
+    [
+        new("P", "Pendiente"),
+        new("A", "Aceptada"),
+        new("R", "Rechazada"),
+        new("S", "Pospuesta")
+    ];
+
     public static readonly IReadOnlyList<EnumOption> EstadosVisita =
     [
         new("P", "Programada"),
@@ -152,4 +171,7 @@ public static class EnumCatalog
 
     public static string CodeFor(IEnumerable<EnumOption> options, string label) =>
         options.FirstOrDefault(x => x.Label == label)?.Code ?? label;
+
+    public static string LabelFor(IEnumerable<EnumOption> options, string? code) =>
+        options.FirstOrDefault(x => x.Code == code)?.Label ?? code ?? "";
 }

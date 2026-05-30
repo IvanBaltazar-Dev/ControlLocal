@@ -2,7 +2,7 @@ package com.controllocal.model.inmueble.enums;
 
 import com.controllocal.model.CodigoEnum;
 
-public enum EstadoLocalComercial implements CodigoEnum {
+    public enum EstadoLocalComercial implements CodigoEnum {
     DISPONIBLE("D", "Disponible"),
     NO_DISPONIBLE("N", "No disponible"),
     INACTIVO("I", "Inactivo");

@@ -1,11 +1,14 @@
 @page "/local-form"
+@page "/local-form/{IdParam?}"
 @inject AppState App
+@inject ILocalService LocalSvc
+@inject IPropietarioService PropSvc
 
-<PageTitle>Registrar local · ControlLocal</PageTitle>
+<PageTitle>@(_isEdit ? "Editar local" : "Registrar local") · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Locales comerciales", "Nuevo local" })"
-          Title="Registrar local comercial"
-          Subtitle="Alta del inmueble, su propietario y la ficha base para iniciar una captación">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Locales comerciales", _isEdit ? _l.CodigoLocal : "Nuevo local" })"
+          Title="@(_isEdit ? "Editar local comercial" : "Registrar local comercial")"
+          Subtitle="@(_isEdit ? $"Edita datos del local {_l.CodigoLocal}" : "Alta del inmueble, su propietario y la ficha base para iniciar una captación")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("locales"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
@@ -15,12 +18,17 @@
                 <FormSection Num="1" Title="Propietario del local" Sub="Vincula un propietario ya registrado o crea uno nuevo">
                     <div class="cl-grid c2">
                         <Field Label="Propietario" Required="true">
-                            <select>
-                                <option value="">— Selecciona un propietario —</option>
-                                <option>Inversiones Trébol S.A.C.</option>
-                                <option>María Fernanda Quispe</option>
-                                <option>Grupo Aurora E.I.R.L.</option>
+                            <select @bind="_propietarioId" disabled="@_isEdit">
+                                <option value="0">— Selecciona un propietario —</option>
+                                @foreach (var p in PropSvc.All())
+                                {
+                                    <option value="@p.Id">@p.Nombre</option>
+                                }
                             </select>
+                            @if (_isEdit)
+                            {
+                                <div class="cl-muted" style="font-size:11px;margin-top:6px;">No se puede cambiar el propietario. Contacta con administración si necesitas reasignar.</div>
+                            }
                         </Field>
                         <Field Label="&nbsp;">
                             <button class="cl-btn" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Nuevo propietario</button>
@@ -30,21 +38,21 @@
 
                 <FormSection Num="2" Title="Ubicación" Sub="Dirección exacta y distrito del local comercial">
                     <div class="cl-grid c2">
-                        <Field Label="Dirección" Required="true"><input placeholder="Av. / Calle, número" /></Field>
-                        <Field Label="Referencia"><input placeholder="Entre calles, esquina, hito cercano" /></Field>
-                        <Field Label="Distrito" Required="true"><select><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option><option>Barranco</option></select></Field>
-                        <Field Label="Provincia"><input value="Lima" /></Field>
+                        <Field Label="Dirección" Required="true"><input placeholder="Av. / Calle, número" @bind="_direccion" /></Field>
+                        <Field Label="Referencia"><input placeholder="Entre calles, esquina, hito cercano" @bind="_referencia" /></Field>
+                        <Field Label="Distrito" Required="true"><select @bind="_distrito"><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option><option>Barranco</option></select></Field>
+                        <Field Label="Provincia"><input value="Lima" disabled="true" /></Field>
                     </div>
                 </FormSection>
 
                 <FormSection Num="3" Title="Características del local" Sub="Datos que verán los clientes interesados en la ficha">
                     <div class="cl-grid c3">
-                        <Field Label="Área (m²)" Required="true"><input placeholder="Ej. 80" /></Field>
-                        <Field Label="Rubro sugerido"><select><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option><option>Salud</option></select></Field>
-                        <Field Label="Precio referencial (USD/mes)" Required="true"><input placeholder="1 500" /></Field>
-                        <Field Label="Estado del local"><select><option>Disponible</option><option>En captación</option><option>Reservado</option></select></Field>
-                        <Field Label="Antigüedad"><input placeholder="Ej. 5 años" /></Field>
-                        <Field Label="N.° de ambientes"><input placeholder="Ej. 3" /></Field>
+                        <Field Label="Área (m²)" Required="true"><input placeholder="Ej. 80" @bind="_areaMts" type="number" /></Field>
+                        <Field Label="Rubro sugerido"><select @bind="_rubro"><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option><option>Salud</option></select></Field>
+                        <Field Label="Precio referencial (USD/mes)" Required="true"><input placeholder="1 500" @bind="_precioRef" type="number" /></Field>
+                        <Field Label="Disponibilidad"><select @bind="_estado"><option>Disponible</option><option>No disponible</option><option>Inactivo</option></select></Field>
+                        <Field Label="Antigüedad"><input placeholder="Ej. 5 años" @bind="_antiguedad" /></Field>
+                        <Field Label="N.° de ambientes"><input placeholder="Ej. 3" @bind="_ambientes" /></Field>
                     </div>
                     <div style="margin-top:14px;">
                         <Field Label="Fotos del local" Hint="Sube hasta 8 imágenes en formato JPG o PNG">
@@ -55,11 +63,18 @@
                     </div>
                 </FormSection>
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar local">
-                    <Extra>
-                        <button class="cl-btn ghost"><Icon Name="save" Size="13" /> Guardar borrador</button>
-                    </Extra>
-                </FormFooterBar>
+                @if (_isEdit)
+                {
+                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Guardar cambios" />
+                }
+                else
+                {
+                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar local">
+                        <Extra>
+                            <button class="cl-btn ghost"><Icon Name="save" Size="13" /> Guardar borrador</button>
+                        </Extra>
+                    </FormFooterBar>
+                }
             </div>
 
             <div class="cl-stack">
@@ -87,8 +102,44 @@
 </AppShell>
 
 @code {
+    [Parameter] public string? IdParam { get; set; }
+
+    private LocalComercialDto _l = new();
+    private bool _isEdit = false;
+
+    private long _propietarioId;
+    private string _direccion = "";
+    private string _referencia = "";
+    private string _distrito = "Miraflores";
+    private string _areaMts = "";
+    private string _rubro = "Restaurante / Café";
+    private string _precioRef = "";
+    private string _estado = "Disponible";
+    private string _antiguedad = "";
+    private string _ambientes = "";
+
     private bool _confirm;
     private bool _toast;
+
+    protected override void OnParametersSet()
+    {
+        if (long.TryParse(IdParam, out var id))
+        {
+            _l = LocalSvc.ById(id) ?? new();
+            _isEdit = _l.Id > 0;
+
+            if (_isEdit)
+            {
+                _propietarioId = _l.PropietarioId ?? 0;
+                _direccion = _l.Direccion;
+                _distrito = _l.Distrito;
+                _areaMts = _l.AreaM2.ToString();
+                _rubro = _l.Rubro;
+                _precioRef = _l.PrecioReferencial.ToString();
+                _estado = _l.Estado;
+            }
+        }
+    }
 
     private readonly Timeline.TimelineItem[] _steps = new[]
     {

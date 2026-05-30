@@ -1,72 +1,175 @@
 @page "/owner-form"
+@page "/owner-form/{IdParam?}"
 @inject AppState App
+@inject IPropietarioService OwnerSvc
 
-<PageTitle>Registrar propietario · ControlLocal</PageTitle>
+<PageTitle>@(_isEdit ? "Editar propietario" : "Registrar propietario") · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Propietarios", "Nuevo propietario" })"
-          Title="Registrar propietario"
-          Subtitle="Persona que posee el local · podrás vincularlo a un local comercial al darlo de alta">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Propietarios", _isEdit ? _nombre : "Nuevo propietario" })"
+          Title="@(_isEdit ? "Editar propietario" : "Registrar propietario")"
+          Subtitle="@(_isEdit
+              ? "Actualiza los datos de contacto. Los datos de identidad no se pueden modificar."
+              : "Persona que posee el local · podrás vincularlo a un local comercial al darlo de alta")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("owners"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
         <div style="max-width:880px;">
-            <FormSection Num="1" Title="Tipo de propietario" Sub="Determina los campos de identificación requeridos">
+            <FormSection Num="1" Title="Tipo de propietario" Sub="@(_isEdit ? "No se puede cambiar tras el registro" : "Determina los campos de identificación requeridos")">
                 <div class="cl-seg" role="tablist">
-                    <button class="@(_tipo == "juridica" ? "active" : "")" @onclick="@(() => _tipo = "juridica")">Persona jurídica</button>
-                    <button class="@(_tipo == "natural" ? "active" : "")" @onclick="@(() => _tipo = "natural")">Persona natural</button>
+                    <button class="@(_tipo == "juridica" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => { if (!_isEdit) { _tipo = "juridica"; _err = null; } })">Persona jurídica</button>
+                    <button class="@(_tipo == "natural" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => { if (!_isEdit) { _tipo = "natural"; _err = null; } })">Persona natural</button>
                 </div>
+                @if (_isEdit)
+                {
+                    <div class="cl-muted" style="font-size:11px;margin-top:8px;display:flex;align-items:center;gap:6px;">
+                        <Icon Name="lock" Size="12" /> El tipo de propietario quedó fijado al registrarlo.
+                    </div>
+                }
             </FormSection>
 
-            <FormSection Num="2" Title="Identificación" Sub="@(_tipo == "juridica" ? "Datos de la empresa y representante legal" : "Datos personales del propietario")">
+            <FormSection Num="2" Title="Identificación" Sub="@(_tipo == "juridica" ? "Datos de la empresa" : "Datos personales del propietario")">
                 @if (_tipo == "juridica")
                 {
                     <div class="cl-grid c2">
-                        <Field Label="Razón social" Required="true"><input placeholder="Ej. Inmobiliaria del Sur S.A.C." /></Field>
-                        <Field Label="RUC" Required="true"><input placeholder="20 ___ ___ ___" /></Field>
-                        <Field Label="Representante legal" Required="true"><input placeholder="Nombre completo" /></Field>
-                        <Field Label="DNI del representante"><input placeholder="__ ___ ___" /></Field>
+                        <Field Label="Razón social" Required="true"><input @bind="_nombre" placeholder="Ej. Inmobiliaria del Sur S.A.C." @oninput="@(() => _err = null)" /></Field>
+                        <Field Label="RUC" Required="true">
+                            <input @bind="_numeroDocumento" placeholder="20 ___ ___ ___" disabled="@_isEdit" @oninput="@(() => _err = null)" />
+                            @if (_isEdit)
+                            {
+                                <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El RUC no se puede modificar.</div>
+                            }
+                        </Field>
                     </div>
                 }
                 else
                 {
                     <div class="cl-grid c2">
-                        <Field Label="Nombres" Required="true"><input placeholder="Nombres" /></Field>
-                        <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" /></Field>
-                        <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" /></Field>
-                        <Field Label="Estado civil"><select><option>Soltero(a)</option><option>Casado(a)</option><option>Viudo(a)</option><option>Divorciado(a)</option></select></Field>
+                        <Field Label="Nombres" Required="true"><input @bind="_nombre" placeholder="Nombres" @oninput="@(() => _err = null)" /></Field>
+                        <Field Label="Tipo de documento" Required="true">
+                            <select @bind="_tipoDocumento" disabled="@_isEdit">
+                                <option value="">— Seleccionar —</option>
+                                <option value="D">DNI</option>
+                                <option value="C">Carné de extranjería</option>
+                                <option value="P">Pasaporte</option>
+                            </select>
+                        </Field>
+                        <Field Label="Número de documento" Required="true">
+                            <input @bind="_numeroDocumento" placeholder="__ ___ ___" disabled="@_isEdit" @oninput="@(() => _err = null)" />
+                            @if (_isEdit)
+                            {
+                                <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El documento de identidad no se puede modificar.</div>
+                            }
+                        </Field>
                     </div>
                 }
             </FormSection>
 
-            <FormSection Num="3" Title="Contacto y datos bancarios" Sub="Para coordinar la captación y registrar el pago de comisiones">
+            <FormSection Num="3" Title="Contacto" Sub="Teléfono y correo para coordinación">
                 <div class="cl-grid c2">
-                    <Field Label="Teléfono principal" Required="true"><input placeholder="+51 ___ ___ ___" /></Field>
-                    <Field Label="Teléfono alterno"><input placeholder="Opcional" /></Field>
-                    <Field Label="Correo electrónico" Required="true"><input placeholder="propietario@@correo.com" /></Field>
-                    <Field Label="Dirección fiscal"><input placeholder="Av. / Calle, número, distrito" /></Field>
-                    <Field Label="Banco"><select><option>BCP</option><option>BBVA</option><option>Interbank</option><option>Scotiabank</option></select></Field>
-                    <Field Label="Número de cuenta (CCI)"><input placeholder="002 ___ ___ ___ ___ __" /></Field>
+                    <Field Label="Teléfono" Required="true"><input @bind="_telefono" placeholder="+51 ___ ___ ___" @oninput="@(() => _err = null)" /></Field>
+                    <Field Label="Correo electrónico" Required="true"><input @bind="_correo" placeholder="propietario@@correo.com" @oninput="@(() => _err = null)" /></Field>
                 </div>
             </FormSection>
 
-            <FormFooterBar OnCancel="@(() => App.Navigate("owners"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar propietario" />
+            @if (_isEdit)
+            {
+                <FormSection Num="4" Title="Estado" Sub="Un propietario inactivo no aparece disponible para nuevas captaciones">
+                    <div class="cl-seg" role="tablist">
+                        <button class="@(_estado == "Activo" ? "active" : "")" @onclick="@(() => { _estado = "Activo"; _err = null; })">Activo</button>
+                        <button class="@(_estado == "Inactivo" ? "active" : "")" @onclick="@(() => { _estado = "Inactivo"; _err = null; })">Inactivo</button>
+                    </div>
+                </FormSection>
+            }
+
+            @if (_err is not null)
+            {
+                <div class="cl-alert red" style="margin-bottom:14px;">
+                    <Icon Name="alert" Size="15" /><span>@_err</span>
+                </div>
+            }
+
+            <FormFooterBar OnCancel="@(() => App.Navigate("owners"))" OnSave="@TryConfirm"
+                           SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar propietario")" />
         </div>
 
-        <ConfirmDialog Open="_confirm" Tone="blue" Icon="user"
-                       Title="¿Registrar propietario?"
-                       Desc="Se creará el propietario en tu registro. Quedará disponible para vincular a la captación de un local comercial."
-                       ConfirmLabel="Registrar" CancelLabel="Revisar datos"
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="@(_isEdit ? "edit" : "user")"
+                       Title="@(_isEdit ? "¿Guardar cambios?" : "¿Registrar propietario?")"
+                       Desc="@(_isEdit
+                           ? "Se actualizarán los datos de contacto y el estado del propietario. La identidad permanece sin cambios."
+                           : "Se creará el propietario en tu registro. Quedará disponible para vincular a la captación de un local comercial.")"
+                       ConfirmLabel="@(_isEdit ? "Guardar" : "Registrar")" CancelLabel="Revisar datos"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
-        <Toast Show="_toast">Propietario registrado correctamente</Toast>
+        <Toast Show="_toast">@(_isEdit ? "Cambios guardados correctamente" : "Propietario registrado correctamente")</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
+    [Parameter] public string? IdParam { get; set; }
+
+    private bool _isEdit;
     private string _tipo = "juridica";
+    private string _nombre = "";
+    private string _tipoDocumento = "R"; // R=RUC para juridica, D/C/P para natural
+    private string _numeroDocumento = "";
+    private string _telefono = "";
+    private string _correo = "";
+    private string _estado = "Activo";
     private bool _confirm;
     private bool _toast;
+    private string? _err;
+
+    protected override void OnParametersSet()
+    {
+        if (long.TryParse(IdParam, out var id) && OwnerSvc.ById(id) is { } owner)
+        {
+            _isEdit = true;
+            _nombre = owner.Nombre;
+            _numeroDocumento = owner.NumeroDocumento;
+            _telefono = owner.Telefono;
+            _correo = owner.Correo;
+            _estado = string.IsNullOrEmpty(owner.Estado) ? "Activo" : owner.Estado;
+            _tipo = owner.TipoPersona.Contains("jurídica", StringComparison.OrdinalIgnoreCase) ? "juridica" : "natural";
+            _tipoDocumento = ResolveTipoDocumento(owner);
+        }
+        else
+        {
+            _isEdit = false;
+            _tipoDocumento = "R"; // RUC por defecto para personas jurídicas
+        }
+    }
+
+    // Deriva el tipo de documento desde el DTO (campo explícito o texto "Persona … · XXX").
+    private static string ResolveTipoDocumento(Models.Propietarios.PropietarioDto owner)
+    {
+        if (!string.IsNullOrWhiteSpace(owner.TipoDocumento))
+            return owner.TipoDocumento;
+
+        var tp = owner.TipoPersona;
+        if (tp.Contains("RUC", StringComparison.OrdinalIgnoreCase)) return "R";
+        if (tp.Contains("Carné", StringComparison.OrdinalIgnoreCase) || tp.Contains("extranjería", StringComparison.OrdinalIgnoreCase)) return "C";
+        if (tp.Contains("Pasaporte", StringComparison.OrdinalIgnoreCase)) return "P";
+        return "D";
+    }
+
+    private void TryConfirm()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) { _err = "El nombre o razón social es obligatorio."; return; }
+
+        if (!_isEdit && _tipo == "natural" && string.IsNullOrWhiteSpace(_tipoDocumento))
+        {
+            _err = "Debes seleccionar un tipo de documento.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_numeroDocumento)) { _err = "El número de documento es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_telefono)) { _err = "El teléfono es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo es obligatorio."; return; }
+
+        _err = null;
+        _confirm = true;
+    }
 
     private async Task OnConfirm()
     {

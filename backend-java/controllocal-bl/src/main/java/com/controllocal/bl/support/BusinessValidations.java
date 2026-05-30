@@ -308,6 +308,21 @@ public final class BusinessValidations {
         id(idAgente(visita.getAgenteResponsable()), "El agente de la visita");
     }
 
+    public static void prospeccion(Prospeccion prospeccion) {
+        if (prospeccion == null) {
+            throw new BusinessException("La prospeccion es obligatoria.");
+        }
+        if (prospeccion.getEstado() == null) {
+            throw new BusinessException("El estado de la prospeccion es obligatorio.");
+        }
+        if (prospeccion.getLocalComercial() == null
+                || prospeccion.getLocalComercial().getIdLocal() == null
+                || prospeccion.getLocalComercial().getIdLocal() <= 0) {
+            throw new BusinessException("El local de la prospeccion es obligatorio.");
+        }
+        id(idAgente(prospeccion.getAgenteResponsable()), "El agente de la prospeccion");
+    }
+
     public static Long idPersona(Persona persona) {
         return persona != null ? persona.getIdPersona() : null;
     }

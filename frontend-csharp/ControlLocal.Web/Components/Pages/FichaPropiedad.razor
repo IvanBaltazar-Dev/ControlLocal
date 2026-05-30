@@ -1,0 +1,152 @@
+@page "/ficha-propiedad/{CodigoParam?}"
+@using ControlLocal.Web.Services
+@inject AppState App
+@inject ICaptacionService CaptacionSvc
+@inject ILocalService LocalSvc
+@inject IPropietarioService PropSvc
+
+<PageTitle>Ficha @_m.Codigo · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Captaciones", _m.Codigo, "Ficha de propiedad" })">
+    <ChildContent>
+        <DetailHero Eyebrow="@($"Ficha de propiedad · {_m.Codigo}")" EyebrowIcon="store"
+                    Title="@_m.Direccion"
+                    Subtitle="@($"{_m.Distrito} · {_m.Rubro}")" SubtitleIcon="mapPin"
+                    Status="@_m.Estado"
+                    Stats="_stats">
+            <Actions>
+                <button class="cl-btn on-dark" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+                <a class="cl-btn on-light" href="@($"/ficha/{_m.Codigo}/pdf")" target="_blank" rel="noopener">
+                    <Icon Name="download" Size="14" /> Exportar PDF
+                </a>
+            </Actions>
+        </DetailHero>
+
+        <div style="display:grid;grid-template-columns:1fr 330px;gap:16px;align-items:start;">
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head">
+                        <div class="cl-card-title">Galería del local</div>
+                        <span class="cl-muted" style="font-size:12px;">Fotos referenciales</span>
+                    </div>
+                    <div class="cl-card-body">
+                        <div class="cl-gallery">
+                            <div class="shot hero-shot"><span class="shot-tag">fachada</span></div>
+                            <div class="shot"><span class="shot-tag">interior</span></div>
+                            <div class="shot"><span class="shot-tag">depósito</span></div>
+                            <div class="shot"><span class="shot-tag">acceso</span></div>
+                            <div class="shot"><span class="more">+6 fotos</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Características de la propiedad</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-specs">
+                            <Spec Icon="layers" K="Área" V="@($"{_m.AreaM2} m²")" />
+                            <Spec Icon="store" K="Rubro sugerido" V="@_m.Rubro" />
+                            <Spec Icon="grid" K="Ambientes" V="@_m.Ambientes" />
+                            <Spec Icon="checkCircle" K="Conservación" V="@_m.Antiguedad" />
+                            <Spec Icon="mapPin" K="Distrito" V="@_m.Distrito" />
+                            <Spec Icon="pin" K="Referencia" V="@_m.Referencia" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Descripción</div></div>
+                    <div class="cl-card-body">
+                        <div style="font-size:13px;line-height:1.7;color:var(--c-text-2);">@_m.Descripcion</div>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Ubicación</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-flex" style="gap:8px;margin-bottom:10px;">
+                            <Icon Name="mapPin" Size="16" />
+                            <span style="font-weight:600;">@_m.Direccion</span>
+                            <span class="cl-muted">· @_m.Distrito</span>
+                        </div>
+                        <div class="cl-ph" style="height:180px;">mapa de ubicación</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cl-stack">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Condiciones comerciales</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-price">USD @_m.PrecioTexto <small>/ mes</small></div>
+                        <div class="cl-divider"></div>
+                        <dl class="cl-kv">
+                            <dt>Comisión</dt><dd>@_m.ComisionTexto%</dd>
+                            <dt>Vigencia</dt><dd>@_m.VigenciaTexto</dd>
+                            <dt>Restante</dt><dd>@(string.IsNullOrEmpty(_m.DiasRestantesTexto) ? "—" : _m.DiasRestantesTexto)</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Propietario</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-flex" style="gap:11px;margin-bottom:12px;">
+                            <span class="cl-avatar" style="width:40px;height:40px;font-size:14px;background:#005BFF;">@Initials(_m.PropietarioNombre)</span>
+                            <div style="min-width:0;">
+                                <div style="font-weight:600;font-size:13.5px;">@_m.PropietarioNombre</div>
+                                <div class="cl-muted" style="font-size:11.5px;">@_m.PropietarioTipo</div>
+                            </div>
+                        </div>
+                        <dl class="cl-kv">
+                            <dt>Documento</dt><dd>@_m.PropietarioDocumento</dd>
+                            <dt>Teléfono</dt><dd>@_m.PropietarioTelefono</dd>
+                            <dt>Correo</dt><dd>@_m.PropietarioCorreo</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Agente responsable</div></div>
+                    <div class="cl-card-body">
+                        <div class="cl-flex" style="gap:10px;">
+                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;">@Initials(_m.AgenteNombre)</span>
+                            <div style="font-weight:600;font-size:13px;">@_m.AgenteNombre</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-alert blue">
+                    <Icon Name="download" Size="15" />
+                    <span>Exporta la ficha a <b>PDF</b> para compartirla con el cliente o el propietario.</span>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    [Parameter] public string? CodigoParam { get; set; }
+
+    private FichaModel _m = new();
+    private List<DetailHero.Stat> _stats = new();
+
+    protected override void OnParametersSet()
+    {
+        _m = FichaBuilder.Build(CodigoParam, CaptacionSvc, LocalSvc, PropSvc);
+        _stats = new()
+        {
+            new("Área", _m.AreaM2.ToString(), "m²"),
+            new("Precio ref.", $"USD {_m.PrecioTexto}", "/ mes"),
+            new("Comisión", $"{_m.ComisionTexto}%"),
+            new("Vigencia", _m.VigenciaTexto),
+        };
+    }
+
+    private static string Initials(string name) =>
+        string.Concat((name ?? "")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => char.IsLetter(w[0]))
+            .Take(2)
+            .Select(w => char.ToUpper(w[0])));
+}

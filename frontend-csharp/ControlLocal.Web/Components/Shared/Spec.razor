@@ -1,0 +1,14 @@
+@* Característica con icono: usado en la ficha de propiedad (cl-specs). *@
+<div class="cl-spec">
+    <div class="cl-spec-ic"><Icon Name="@Icon" Size="16" /></div>
+    <div style="min-width:0;">
+        <div class="cl-spec-k">@K</div>
+        <div class="cl-spec-v">@V</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? K { get; set; }
+    [Parameter] public string? V { get; set; }
+}

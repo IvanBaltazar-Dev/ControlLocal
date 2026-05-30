@@ -45,7 +45,9 @@
                                 <td style="font-size:12px;color:var(--c-text-2);">@c.InteresComercial</td>
                                 <td><span><b>@c.CaptacionesVinculadas</b></span></td>
                                 <td><StatusBadge Label="@c.Estado" /></td>
-                                <td><RowActions Items="@(new[] { "view", "edit" })" /></td>
+                                <td><RowActions Items="@(new[] { "view", "edit" })"
+                                                OnView="@(() => App.Navigate($"cliente-detail/{c.Id}"))"
+                                                OnEdit="@(() => App.Navigate("cliente-form"))" /></td>
                             </tr>
                         }
                     </tbody>

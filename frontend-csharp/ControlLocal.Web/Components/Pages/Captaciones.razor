@@ -28,49 +28,49 @@
             <select class="cl-select"><option>Vigencia</option><option>Por vencer</option><option>Vigente</option></select>
         </FilterBar>
 
-        <div class="cl-card">
-            <div class="cl-card-body" style="padding:0;">
-                <table class="cl-table">
-                    <thead>
-                        <tr>
-                            <th>Código</th><th>Local</th><th>Distrito</th><th>Área</th>
-                            <th>Propietario</th><th>Vigencia</th><th>Comisión</th><th>Estado</th><th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var c in CaptacionSvc.All())
-                        {
-                            <tr>
-                                <td><span class="mono">@c.CodigoCaptacion</span></td>
-                                <td style="font-weight:600;">@c.DireccionLocal</td>
-                                <td>@c.DistritoLocal</td>
-                                <td><span><b>@c.AreaM2</b> m²</span></td>
-                                <td>@c.PropietarioNombre</td>
-                                <td>
-                                    <div style="font-size:12px;">@c.VigenciaTexto</div>
-                                    <div class="cl-muted" style="font-size:11px;">@c.DiasRestantesTexto</div>
-                                </td>
-                                <td><span class="mono">@c.ComisionPactadaTexto</span></td>
-                                <td><StatusBadge Label="@c.Estado" /></td>
-                                <td>
-                                    @if (c.Estado == "Observada")
-                                    {
-                                        <button class="cl-btn sm warn" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
-                                    }
-                                    else if (c.Estado == "Pendiente" || c.Estado == "Borrador")
-                                    {
-                                        <button class="cl-btn sm" @onclick="@(() => App.Navigate("captacion-form"))">Continuar</button>
-                                    }
-                                    else
-                                    {
-                                        <button class="cl-btn sm" @onclick="@(() => App.Navigate("captacion-detail"))">Ver expediente</button>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+        <div class="cl-gallery-grid">
+            @foreach (var c in CaptacionSvc.All())
+            {
+                <div class="cl-prop-card">
+                    <div class="cl-prop-photo">
+                        <div class="ph-label">foto del local</div>
+                        <div class="top-l"><StatusBadge Label="@c.Estado" /></div>
+                        <div class="top-r">@c.CodigoCaptacion</div>
+                    </div>
+                    <div class="cl-prop-body">
+                        <div style="font-weight:600;font-size:13.5px;">@c.DireccionLocal</div>
+                        <div style="font-size:11.5px;color:var(--c-text-3);display:flex;gap:6px;align-items:center;">
+                            <Icon Name="mapPin" Size="12" /> @c.DistritoLocal
+                        </div>
+                        <div style="display:flex;gap:10px;font-size:11.5px;color:var(--c-text-2);margin-top:2px;">
+                            <span><b>@c.AreaM2</b> m²</span>
+                            <span>·</span>
+                            <span>Comisión <b>@c.ComisionPactadaTexto@(c.ComisionPactadaTexto == "—" ? "" : "%")</b></span>
+                        </div>
+                        <div style="border-top:1px solid var(--c-border-2);margin-top:6px;padding-top:8px;font-size:11.5px;color:var(--c-text-2);">
+                            <div style="display:flex;align-items:center;gap:6px;"><Icon Name="calendar" Size="12" /> @c.VigenciaTexto</div>
+                            <div class="cl-muted" style="font-size:11px;margin-top:2px;">@c.DiasRestantesTexto</div>
+                        </div>
+                        <div style="font-size:11.5px;color:var(--c-text-2);">Propietario · <b>@c.PropietarioNombre</b></div>
+
+                        <div class="cl-prop-foot">
+                            @if (c.Estado == "Observada")
+                            {
+                                <button class="cl-btn sm warn cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
+                            }
+                            else if (c.Estado is "Pendiente" or "Borrador")
+                            {
+                                <button class="cl-btn sm cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Continuar</button>
+                            }
+                            else
+                            {
+                                <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate($"ficha-propiedad/{c.CodigoCaptacion}"))"><Icon Name="store" Size="13" /> Ver ficha</button>
+                                <button class="cl-btn sm" @onclick="@(() => App.Navigate($"captacion-detail/{c.CodigoCaptacion}"))" title="Abrir expediente"><Icon Name="folder" Size="13" /></button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
         <Pagination Total="14" />
     </ChildContent>

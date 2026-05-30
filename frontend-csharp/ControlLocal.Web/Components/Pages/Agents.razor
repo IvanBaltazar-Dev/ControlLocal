@@ -49,8 +49,8 @@
                                 <td><StatusBadge Label="@a.EstadoAdministrativo" /></td>
                                 <td>
                                     <div class="cl-row-actions">
-                                        <button title="Ver"><Icon Name="eye" Size="14" /></button>
-                                        <button title="Editar"><Icon Name="edit" Size="13" /></button>
+                                        <button title="Ver" @onclick="@(() => App.Navigate($"agente-detail/{a.Id}"))"><Icon Name="eye" Size="14" /></button>
+                                        <button title="Editar" @onclick="@(() => App.Navigate("agente-form"))"><Icon Name="edit" Size="13" /></button>
                                         @if (a.EstadoAdministrativo == "Activo")
                                         {
                                             <button class="danger" title="Desactivar" @onclick="@(() => _deactivate = a.Nombre)"><Icon Name="x" Size="13" /></button>

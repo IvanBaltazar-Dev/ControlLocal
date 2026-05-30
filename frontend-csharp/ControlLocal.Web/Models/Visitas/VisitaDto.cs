@@ -1,9 +1,15 @@
 namespace ControlLocal.Web.Models.Visitas;
 
 // DTO de una visita a un local comercial.
+// Alineado al backend Java (Visita: fechaVisita, horaVisita, observaciones,
+// estado [EstadoVisita], resultado [ResultadoInteraccion], oportunidad, cliente,
+// captacion, agente). Estado y Resultado viajan como código (1 carácter) igual
+// que en el resto de DTOs.
 public class VisitaDto
 {
     public long Id { get; set; }
+
+    public long OportunidadId { get; set; }
 
     // Fecha lista para mostrar (ej. "24 May 2026").
     public string FechaTexto { get; set; } = string.Empty;
@@ -21,8 +27,12 @@ public class VisitaDto
 
     public string NombreAgente { get; set; } = string.Empty;
 
-    public string Estado { get; set; } = string.Empty;
+    // Código EstadoVisita: P=Programada, G=Reprogramada, C=Cancelada, R=Realizada.
+    public string Estado { get; set; } = "P";
 
-    // Resultado de la visita (opcional, solo para visitas ya realizadas).
-    public string? ResultadoTexto { get; set; }
+    // Código ResultadoInteraccion: I/N/S/D/P. Null mientras la visita no se realiza.
+    public string? Resultado { get; set; }
+
+    // Notas de la visita / motivo de cancelación.
+    public string? Observaciones { get; set; }
 }

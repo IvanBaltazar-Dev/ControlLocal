@@ -1,0 +1,250 @@
+@page "/interaccion-detail/{InteraccionIdParam}"
+@inject AppState App
+@inject IInteraccionService InteraccionSvc
+@inject ICaptacionService CaptacionSvc
+@inject IClienteService ClienteSvc
+
+<PageTitle>Interacción · @_cliente · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Operación", "Interacciones", "Detalle" })"
+          Title="@($"Interacción registrada · {_fechaHora}")"
+          Subtitle="@($"{_cliente} · {GetCanalLabel(_canalContacto)}")">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("interacciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="max-width:920px;">
+            <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
+                <div class="cl-stack">
+                    <!-- DATOS DE LA INTERACCIÓN -->
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Datos de la interacción</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                                <div>
+                                    <div class="cl-def-k">Fecha y hora</div>
+                                    <div style="font-weight:600;margin-top:6px;font-size:14px;">@_fechaHora</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Canal de contacto</div>
+                                    <div style="margin-top:8px;">
+                                        <div style="display:flex;align-items:center;gap:8px;">
+                                            <CanalBadge Canal="@_canalContacto" />
+                                            @if (!string.IsNullOrEmpty(_telefonoCliente))
+                                            {
+                                                <span style="font-size:12px;color:#515B6B;font-weight:500;">@_telefonoCliente</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Cliente</div>
+                                    <div style="font-weight:600;margin-top:6px;font-size:14px;">@_cliente</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Agente responsable</div>
+                                    <div style="font-weight:600;margin-top:6px;font-size:14px;">@_agente</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- EXTRACTO DEL LOCAL/CAPTACIÓN -->
+                    @if (_captacion != null)
+                    {
+                        <div class="cl-card">
+                            <div class="cl-card-head"><div class="cl-card-title">Local en evaluación</div></div>
+                            <div class="cl-card-body">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                                    <div>
+                                        <div class="cl-def-k">Código</div>
+                                        <div style="font-weight:600;margin-top:6px;">@_captacion.CodigoCaptacion</div>
+                                    </div>
+                                    <div>
+                                        <div class="cl-def-k">Propietario</div>
+                                        <div style="font-weight:600;margin-top:6px;">@_captacion.PropietarioNombre</div>
+                                    </div>
+                                    <div style="grid-column:1/-1;">
+                                        <div class="cl-def-k">Dirección</div>
+                                        <div style="font-weight:600;margin-top:6px;">@_captacion.DireccionLocal, @_captacion.DistritoLocal</div>
+                                    </div>
+                                    <div>
+                                        <div class="cl-def-k">Área</div>
+                                        <div style="font-weight:600;margin-top:6px;">@_captacion.AreaM2 m²</div>
+                                    </div>
+                                    <div>
+                                        <div class="cl-def-k">Comisión</div>
+                                        <div style="font-weight:600;margin-top:6px;">@_captacion.ComisionPactadaTexto%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- OBSERVACIONES -->
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div class="cl-card-title">Observaciones</div>
+                            <button class="cl-btn sm" @onclick="@(() => _editModal = true)"><Icon Name="edit" Size="12" /> Editar notas</button>
+                        </div>
+                        <div class="cl-card-body">
+                            <div style="color:#4D5461;font-size:13px;line-height:1.7;">
+                                @if (string.IsNullOrEmpty(_observaciones))
+                                {
+                                    <div class="cl-muted">Sin observaciones registradas</div>
+                                }
+                                else
+                                {
+                                    @_observaciones
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL DERECHO: ESTADO Y ACCIONES -->
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Resultado</div></div>
+                        <div class="cl-card-body">
+                            <div style="text-align:center;padding:12px 0;margin-bottom:16px;">
+                                <ResultadoBadge Resultado="@_resultado" />
+                            </div>
+                            <div class="cl-divider"></div>
+                            <div style="margin-top:16px;">
+                                <div class="cl-def-k" style="margin-bottom:10px;">Cambiar resultado</div>
+                                <select @bind="_nuevoResultado" style="width:100%;padding:10px;border:1px solid #E2E6EC;border-radius:6px;font-size:13px;margin-bottom:10px;">
+                                    <option value="">— Seleccionar —</option>
+                                    <option value="I">Interesado</option>
+                                    <option value="N">No interesado</option>
+                                    <option value="S">Seguimiento</option>
+                                    <option value="D">Descartado</option>
+                                    <option value="P">Pendiente</option>
+                                </select>
+                                <button class="cl-btn primary" style="width:100%;justify-content:center;" @onclick="ActualizarResultado">
+                                    <Icon Name="check" Size="13" /> Actualizar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (_toastMsg is not null)
+                    {
+                        <div class="cl-alert blue">
+                            <Icon Name="check" Size="15" />
+                            <span>@_toastMsg</span>
+                        </div>
+                    }
+
+                    <div class="cl-alert blue">
+                        <Icon Name="info" Size="15" />
+                        <span><b>Nota:</b> Una interacción no se puede editar completamente. Solo actualiza el resultado o anota nuevas observaciones.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: EDITAR OBSERVACIONES -->
+        <Modal Open="@_editModal" Tone="blue" Icon="edit"
+               Title="Editar observaciones"
+               Desc="Actualiza las notas sobre esta interacción"
+               OnClose="@(() => _editModal = false)">
+            <ChildContent>
+                <div style="margin-bottom:14px;">
+                    <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+                        <span style="font-weight:600;color:#2D3748;">Observaciones</span>
+                        <textarea @bind="_obsEditTemp" rows="4" placeholder="Anota los detalles de la interacción..." style="padding:10px;border:1px solid #E2E6EC;border-radius:6px;font-size:13px;font-family:inherit;"></textarea>
+                    </label>
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _editModal = false)">Cancelar</button>
+                <button class="cl-btn primary" @onclick="GuardarObservaciones">Guardar observaciones</button>
+            </Footer>
+        </Modal>
+    </ChildContent>
+</AppShell>
+
+@code {
+    [Parameter]
+    public string? InteraccionIdParam { get; set; }
+
+    private long _id;
+    private string _fechaHora = "";
+    private string _cliente = "";
+    private string _telefonoCliente = "";
+    private string _canalContacto = "";
+    private string _resultado = "";
+    private string _observaciones = "";
+    private string _agente = "";
+    private CaptacionDto? _captacion;
+
+    private string _nuevoResultado = "";
+    private string? _toastMsg;
+    private bool _editModal = false;
+    private string _obsEditTemp = "";
+
+    protected override void OnParametersSet()
+    {
+        var inter = (long.TryParse(InteraccionIdParam, out var id) ? InteraccionSvc.ById(id) : null)
+                   ?? InteraccionSvc.All().FirstOrDefault();
+
+        if (inter != null)
+        {
+            _id = inter.Id;
+            _fechaHora = inter.FechaHoraTexto;
+            _cliente = inter.ClienteNombre;
+            _canalContacto = inter.CanalContacto;
+            _resultado = inter.Resultado;
+            _observaciones = inter.Observaciones;
+            _agente = inter.NombreAgenteResponsable;
+            _obsEditTemp = _observaciones;
+
+            // Cargar teléfono del cliente
+            var cliente = ClienteSvc.All().FirstOrDefault(c => c.Nombre == inter.ClienteNombre);
+            _telefonoCliente = cliente?.Telefono ?? "";
+
+            // Cargar detalles de la captación
+            _captacion = CaptacionSvc.ByCodigo(inter.CaptacionCodigo);
+        }
+    }
+
+    private void ActualizarResultado()
+    {
+        if (string.IsNullOrEmpty(_nuevoResultado))
+            return;
+
+        _resultado = _nuevoResultado;
+        _nuevoResultado = "";
+        _toastMsg = "Resultado actualizado correctamente";
+
+        _ = Task.Delay(2500).ContinueWith(_ =>
+        {
+            _toastMsg = null;
+            StateHasChanged();
+        });
+    }
+
+    private void GuardarObservaciones()
+    {
+        _observaciones = _obsEditTemp;
+        _editModal = false;
+        _toastMsg = "Observaciones guardadas correctamente";
+
+        _ = Task.Delay(2000).ContinueWith(_ =>
+        {
+            _toastMsg = null;
+            StateHasChanged();
+        });
+    }
+
+    private string GetCanalLabel(string canal) => canal switch
+    {
+        "L" => "Llamada",
+        "W" => "WhatsApp",
+        "E" => "Email",
+        "P" => "Presencial",
+        "O" => "Otro",
+        _ => "—"
+    };
+}

@@ -1,0 +1,87 @@
+@page "/interacciones"
+@inject AppState App
+
+<PageTitle>Interacciones comerciales · ControlLocal</PageTitle>
+
+<AppShell Active="Interacciones comerciales" Crumbs="@(new[] { "ControlLocal", "Operación", "Interacciones comerciales" })"
+          Title="Registro de interacciones comerciales"
+          Subtitle="Seguimiento de todos los contactos con clientes · actualiza el estado según avance">
+    <Actions>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("interaccion-form"))"><Icon Name="plus" Size="13" /> Nueva interacción</button>
+    </Actions>
+    <ChildContent>
+        <div class="cl-card">
+            <div class="cl-card-head">
+                <div class="cl-card-title">Interacciones recientes</div>
+                <div style="display:flex;gap:8px;">
+                    <select @bind="_filterResultado" style="flex:0 0 150px;">
+                        <option value="">Todas</option>
+                        <option value="I">Interesado</option>
+                        <option value="N">No interesado</option>
+                        <option value="S">Seguimiento</option>
+                        <option value="D">Descartado</option>
+                        <option value="P">Pendiente</option>
+                    </select>
+                </div>
+            </div>
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Captación</th>
+                            <th>Canal</th>
+                            <th>Cliente</th>
+                            <th>Resultado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inter in _interacciones.Where(i => string.IsNullOrEmpty(_filterResultado) || i.Resultado == _filterResultado))
+                        {
+                            <tr @onclick="@(() => App.Navigate($"interaccion-detail/{inter.Id}"))">
+                                <td style="font-size:12px;color:#7E8794;">@inter.FechaHoraTexto</td>
+                                <td style="font-weight:600;font-size:13px;">@inter.CaptacionCodigo</td>
+                                <td><CanalBadge Canal="@inter.CanalContacto" /></td>
+                                <td>@inter.ClienteNombre</td>
+                                <td><ResultadoBadge Resultado="@inter.Resultado" /></td>
+                                <td><button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"interaccion-detail/{inter.Id}"))"><Icon Name="eye" Size="13" /> Ver</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (!_interacciones.Any())
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="target" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin interacciones registradas</div>
+                        <div style="font-size:12px;">Comienza registrando tu primer contacto con un cliente</div>
+                    </div>
+                }
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _filterResultado = "";
+
+    private List<InteraccionComercialDto> _interacciones = new()
+    {
+        new() { Id = 1, CaptacionCodigo = "CAP-0218", CanalContacto = "L", ClienteNombre = "Jorge Martinez", Resultado = "I", FechaHoraTexto = "29 May 2026 · 14:30" },
+        new() { Id = 2, CaptacionCodigo = "CAP-0226", CanalContacto = "W", ClienteNombre = "María Rodríguez", Resultado = "S", FechaHoraTexto = "28 May 2026 · 11:15" },
+        new() { Id = 3, CaptacionCodigo = "CAP-0234", CanalContacto = "E", ClienteNombre = "Carlos González", Resultado = "N", FechaHoraTexto = "27 May 2026 · 09:45" },
+        new() { Id = 4, CaptacionCodigo = "CAP-0237", CanalContacto = "P", ClienteNombre = "Ana López", Resultado = "I", FechaHoraTexto = "26 May 2026 · 16:20" },
+        new() { Id = 5, CaptacionCodigo = "CAP-0241", CanalContacto = "L", ClienteNombre = "Pedro Sánchez", Resultado = "P", FechaHoraTexto = "25 May 2026 · 13:00" },
+    };
+
+    public class InteraccionComercialDto
+    {
+        public long Id { get; set; }
+        public string CaptacionCodigo { get; set; } = string.Empty;
+        public string CanalContacto { get; set; } = string.Empty;
+        public string ClienteNombre { get; set; } = string.Empty;
+        public string Resultado { get; set; } = string.Empty;
+        public string FechaHoraTexto { get; set; } = string.Empty;
+    }
+}

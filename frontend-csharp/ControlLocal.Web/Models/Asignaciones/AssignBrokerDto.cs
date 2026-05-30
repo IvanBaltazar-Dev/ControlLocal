@@ -24,4 +24,5 @@ public class AssignBrokerDto
 
     // Motivo por el que el broker no es seleccionable (opcional).
     public string? MotivoNoDisponible { get; set; }
+    public bool EsAdministrador { get; set; }
 }

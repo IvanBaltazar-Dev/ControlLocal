@@ -174,6 +174,14 @@ public class BusinessLogicManualTest {
         assertFalse(fx.brokerAgenteDAO.existeAsignacionActiva(fx.brokerNoAdmin.getIdBroker(), fx.agente.getIdAgente()));
         assertTrue(fx.brokerAgenteDAO.existeAsignacionActiva(brokerDestino.getIdBroker(), fx.agente.getIdAgente()));
         assertEquals("Balance de carga entre equipos", fx.brokerAgenteDAO.items.get(idAsignacion).getMotivo());
+
+        assertEquals(1, fx.reasignacionAgenteBrokerDAO.items.size());
+        ReasignacionAgenteBroker historial = fx.reasignacionAgenteBrokerDAO.items.get(1L);
+        assertEquals(fx.brokerNoAdmin.getIdBroker(), historial.getBrokerAnterior().getIdBroker());
+        assertEquals(brokerDestino.getIdBroker(), historial.getBrokerNuevo().getIdBroker());
+        assertEquals(fx.broker.getIdBroker(), historial.getBrokerAdministrador().getIdBroker());
+        assertEquals(fx.agente.getIdAgente(), historial.getAgente().getIdAgente());
+        assertNotNull(historial.getFechaCambio());
     }
 
     public void reasignaCaptacionRegistrandoHistorial() {
@@ -301,10 +309,11 @@ public class BusinessLogicManualTest {
         final InMemoryBrokerDAO brokerDAO = new InMemoryBrokerDAO();
         final InMemoryBrokerAgenteDAO brokerAgenteDAO = new InMemoryBrokerAgenteDAO();
         final InMemoryReasignacionDAO reasignacionDAO = new InMemoryReasignacionDAO();
+        final InMemoryReasignacionAgenteBrokerDAO reasignacionAgenteBrokerDAO = new InMemoryReasignacionAgenteBrokerDAO();
         final InMemorySolicitudDAO solicitudDAO = new InMemorySolicitudDAO();
         final InMemoryOportunidadDAO oportunidadDAO = new InMemoryOportunidadDAO();
         final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO, brokerAgenteDAO);
-        final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl(brokerDAO, agenteDAO, brokerAgenteDAO);
+        final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl(brokerDAO, agenteDAO, brokerAgenteDAO, reasignacionAgenteBrokerDAO);
         final AgenteBusinessLogic agentes = new AgenteBusinessLogicImpl(agenteDAO, brokerDAO, brokerAgenteDAO);
         final SolicitudAlquilerBusinessLogic solicitudes = new SolicitudAlquilerBusinessLogicImpl(solicitudDAO, captacionDAO, oportunidadDAO, agenteDAO);
         final AgenteInmobiliario agente = agente(1L, EstadoOperativoAgente.DISPONIBLE);
@@ -514,6 +523,16 @@ public class BusinessLogicManualTest {
         public Optional<ReasignacionCaptacion> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
         public List<ReasignacionCaptacion> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(ReasignacionCaptacion reasignacion) { items.put(reasignacion.getIdReasignacion(), reasignacion); return true; }
+        public boolean eliminar(Long id) { return items.remove(id) != null; }
+    }
+
+    private static class InMemoryReasignacionAgenteBrokerDAO implements ReasignacionAgenteBrokerDAO {
+        final Map<Long, ReasignacionAgenteBroker> items = new LinkedHashMap<>();
+        long sequence = 1;
+        public Long crear(ReasignacionAgenteBroker reasignacion) { reasignacion.setIdReasignacion(sequence++); items.put(reasignacion.getIdReasignacion(), reasignacion); return reasignacion.getIdReasignacion(); }
+        public Optional<ReasignacionAgenteBroker> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
+        public List<ReasignacionAgenteBroker> listarTodos() { return new ArrayList<>(items.values()); }
+        public boolean actualizar(ReasignacionAgenteBroker reasignacion) { items.put(reasignacion.getIdReasignacion(), reasignacion); return true; }
         public boolean eliminar(Long id) { return items.remove(id) != null; }
     }
 

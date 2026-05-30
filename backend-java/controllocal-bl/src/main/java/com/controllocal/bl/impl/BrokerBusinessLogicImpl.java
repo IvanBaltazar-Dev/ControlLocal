@@ -11,32 +11,42 @@ import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
 import com.controllocal.dao.BrokerAgenteDAO;
 import com.controllocal.dao.BrokerDAO;
+import com.controllocal.dao.ReasignacionAgenteBrokerDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
 import com.controllocal.dao.impl.BrokerAgenteDAOImpl;
 import com.controllocal.dao.impl.BrokerDAOImpl;
+import com.controllocal.dao.impl.ReasignacionAgenteBrokerDAOImpl;
 import com.controllocal.model.persona.enums.EstadoActivoInactivo;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
 import com.controllocal.model.usuario.BrokerAgente;
+import com.controllocal.model.usuario.ReasignacionAgenteBroker;
 
 public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
 
     private final BrokerDAO brokerDAO;
     private final AgenteInmobiliarioDAO agenteDAO;
     private final BrokerAgenteDAO brokerAgenteDAO;
+    private final ReasignacionAgenteBrokerDAO reasignacionDAO;
 
     public BrokerBusinessLogicImpl() {
-        this(new BrokerDAOImpl(), new AgenteInmobiliarioDAOImpl(), new BrokerAgenteDAOImpl());
+        this(new BrokerDAOImpl(), new AgenteInmobiliarioDAOImpl(), new BrokerAgenteDAOImpl(), new ReasignacionAgenteBrokerDAOImpl());
     }
 
     public BrokerBusinessLogicImpl(BrokerDAO brokerDAO) {
-        this(brokerDAO, new AgenteInmobiliarioDAOImpl(), new BrokerAgenteDAOImpl());
+        this(brokerDAO, new AgenteInmobiliarioDAOImpl(), new BrokerAgenteDAOImpl(), new ReasignacionAgenteBrokerDAOImpl());
     }
 
     public BrokerBusinessLogicImpl(BrokerDAO brokerDAO, AgenteInmobiliarioDAO agenteDAO, BrokerAgenteDAO brokerAgenteDAO) {
+        this(brokerDAO, agenteDAO, brokerAgenteDAO, new ReasignacionAgenteBrokerDAOImpl());
+    }
+
+    public BrokerBusinessLogicImpl(BrokerDAO brokerDAO, AgenteInmobiliarioDAO agenteDAO, BrokerAgenteDAO brokerAgenteDAO,
+                                   ReasignacionAgenteBrokerDAO reasignacionDAO) {
         this.brokerDAO = brokerDAO;
         this.agenteDAO = agenteDAO;
         this.brokerAgenteDAO = brokerAgenteDAO;
+        this.reasignacionDAO = reasignacionDAO;
     }
 
     public Long registrarBroker(Long idBrokerAdministrador, Broker broker) {
@@ -88,7 +98,7 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
 
     public Long asignarAgente(Long idBrokerAdministrador, Long idBrokerSupervisor, Long idAgente, String motivo) {
         return TransactionRunner.write(conn -> {
-            validarBrokerAdministrador(idBrokerAdministrador);
+            Broker administrador = validarBrokerAdministrador(idBrokerAdministrador);
             BusinessValidations.texto(motivo, "El motivo de reasignacion de agente");
             Broker brokerSupervisor = validarBroker(idBrokerSupervisor);
             if (brokerSupervisor.isEsAdministrador()) {
@@ -97,12 +107,14 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
             AgenteInmobiliario agente = agenteDAO.buscarPorId(idAgente)
                     .orElseThrow(() -> new BusinessException("Agente no encontrado."));
             BusinessValidations.agenteDisponible(agente);
+            Broker brokerAnterior = null;
             Optional<BrokerAgente> asignacionActiva = brokerAgenteDAO.buscarActivoPorAgente(idAgente);
             if (asignacionActiva.isPresent()) {
                 BrokerAgente asignacion = asignacionActiva.get();
                 if (idBrokerSupervisor.equals(asignacion.getIdBroker())) {
                     throw new BusinessException("El agente ya esta asignado a ese broker supervisor.");
                 }
+                brokerAnterior = asignacion.getBroker();
                 brokerAgenteDAO.eliminar(asignacion.getIdBrokerAgente());
             }
 
@@ -113,7 +125,19 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
             brokerAgente.setMotivo(motivo);
             brokerAgente.setEstado(EstadoActivoInactivo.ACTIVO);
             BusinessValidations.brokerAgente(brokerAgente);
-            return brokerAgenteDAO.crear(brokerAgente);
+            Long idAsignacion = brokerAgenteDAO.crear(brokerAgente);
+
+            // Traza historica del cambio (broker anterior -> nuevo, autorizado por el admin).
+            ReasignacionAgenteBroker reasignacion = new ReasignacionAgenteBroker();
+            reasignacion.setAgente(agente);
+            reasignacion.setBrokerAnterior(brokerAnterior);
+            reasignacion.setBrokerNuevo(brokerSupervisor);
+            reasignacion.setBrokerAdministrador(administrador);
+            reasignacion.setMotivo(motivo);
+            reasignacion.registrarCambio();
+            reasignacionDAO.crear(reasignacion);
+
+            return idAsignacion;
         });
     }
 
@@ -131,6 +155,10 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
             return brokerAgenteDAO.listarTodos();
         }
         return brokerAgenteDAO.listarActivosPorBroker(idBroker);
+    }
+
+    public List<ReasignacionAgenteBroker> listarReasignacionesAgenteBroker() {
+        return reasignacionDAO.listarTodos();
     }
 
     public boolean puedeSupervisarAgente(Long idBroker, Long idAgente) {

@@ -1,0 +1,93 @@
+@page "/local-detail/{IdParam?}"
+@inject AppState App
+@inject ILocalService LocalSvc
+
+<PageTitle>@_l.CodigoLocal · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Registro", "Locales", _l.CodigoLocal })"
+          Title="@($"{_l.CodigoLocal} · {_l.Direccion}")"
+          Subtitle="@($"Local comercial · {_l.Distrito}")">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("locales"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="pin" Size="13" /> Crear captación</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"local-form/{_l.Id}"))"><Icon Name="edit" Size="13" /> Editar local</button>
+    </Actions>
+    <ChildContent>
+        <div style="max-width:880px;">
+            <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Datos del local</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                                <div>
+                                    <div class="cl-def-k">Código</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_l.CodigoLocal</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Dirección</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_l.Direccion</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Distrito</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_l.Distrito</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Área</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_l.AreaM2 m²</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Rubro</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_l.Rubro</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Condiciones</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                                <div>
+                                    <div class="cl-def-k">Precio referencial</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_l.PrecioReferencialTexto <span class="cl-muted" style="font-weight:400;">USD / mes</span></div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Propietario</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_l.PropietarioNombre</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Estado</div></div>
+                        <div class="cl-card-body">
+                            <div style="text-align:center;padding:6px 0;">
+                                <StatusBadge Label="@_l.Estado" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cl-alert blue">
+                        <Icon Name="info" Size="15" />
+                        <span>Desde un local registrado puedes generar la ficha de captación para iniciar el proceso comercial.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    [Parameter] public string? IdParam { get; set; }
+
+    private LocalComercialDto _l = new();
+
+    protected override void OnParametersSet()
+    {
+        _l = (long.TryParse(IdParam, out var id) ? LocalSvc.ById(id) : null)
+             ?? LocalSvc.All().First();
+    }
+}

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import com.controllocal.model.comercial.enums.EstadoVisita;
+import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
@@ -15,7 +16,7 @@ public class Visita {
     private LocalTime horaVisita;
     private String observaciones;
     private EstadoVisita estado;
-    private String resultado;
+    private ResultadoInteraccion resultado;
     private OportunidadComercial oportunidadComercial;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
@@ -33,8 +34,8 @@ public class Visita {
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
     public EstadoVisita getEstado() { return estado; }
     public void setEstado(EstadoVisita estado) { this.estado = estado; }
-    public String getResultado() { return resultado; }
-    public void setResultado(String resultado) { this.resultado = resultado; }
+    public ResultadoInteraccion getResultado() { return resultado; }
+    public void setResultado(ResultadoInteraccion resultado) { this.resultado = resultado; }
     public OportunidadComercial getOportunidadComercial() { return oportunidadComercial; }
     public void setOportunidadComercial(OportunidadComercial oportunidadComercial) { this.oportunidadComercial = oportunidadComercial; }
     public ClienteInteresado getClienteInteresado() { return clienteInteresado; }
@@ -65,9 +66,18 @@ public class Visita {
         this.fechaActualizacion = LocalDateTime.now();
     }
 
-    public void registrarResultado(String resultado) {
+    public void registrarResultado(ResultadoInteraccion resultado) {
         this.resultado = resultado;
         this.estado = EstadoVisita.REALIZADA;
         this.fechaActualizacion = LocalDateTime.now();
+    }
+
+    /**
+     * Estados desde los que la visita aun puede cambiar (reprogramarse,
+     * cancelarse o registrarse su resultado). Una visita REALIZADA o CANCELADA
+     * es terminal.
+     */
+    public boolean esModificable() {
+        return estado == EstadoVisita.PROGRAMADA || estado == EstadoVisita.REPROGRAMADA;
     }
 }

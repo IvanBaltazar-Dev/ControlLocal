@@ -1,0 +1,101 @@
+@page "/cliente-detail/{IdParam?}"
+@inject AppState App
+@inject IClienteService ClienteSvc
+
+<PageTitle>@_c.Nombre · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Registro", "Clientes", _c.Nombre })"
+          Title="@_c.Nombre"
+          Subtitle="@($"Cliente interesado · {_c.TipoPersona}")">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("cliente-form"))"><Icon Name="edit" Size="13" /> Editar cliente</button>
+    </Actions>
+    <ChildContent>
+        <div style="max-width:880px;">
+            <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Datos del cliente</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                                <div>
+                                    <div class="cl-def-k">Nombre o razón social</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_c.Nombre</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Tipo de persona</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_c.TipoPersona</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Número de documento</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_c.NumeroDocumento</div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Teléfono</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_c.Telefono</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Interés comercial</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                                <div>
+                                    <div class="cl-def-k">Rubro de interés</div>
+                                    <div style="margin-top:8px;"><StatusBadge Label="@_c.RubroInteres" ToneOverride="blue" Plain="true" /></div>
+                                </div>
+                                <div>
+                                    <div class="cl-def-k">Captaciones vinculadas</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_c.CaptacionesVinculadas</div>
+                                </div>
+                            </div>
+                            <div class="cl-divider" style="margin:14px 0;"></div>
+                            <div class="cl-def-k">Detalle del interés</div>
+                            <div style="color:#4D5461;font-size:13px;line-height:1.6;margin-top:4px;">
+                                @if (string.IsNullOrEmpty(_c.InteresComercial))
+                                {
+                                    <span class="cl-muted">Sin detalle registrado</span>
+                                }
+                                else
+                                {
+                                    @_c.InteresComercial
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Estado</div></div>
+                        <div class="cl-card-body">
+                            <div style="text-align:center;padding:6px 0;">
+                                <StatusBadge Label="@_c.Estado" />
+                                <div class="cl-muted" style="font-size:12px;margin-top:8px;">@_c.CaptacionesVinculadas captación(es) vinculada(s)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cl-alert blue">
+                        <Icon Name="info" Size="15" />
+                        <span>Vincula el cliente a una captación activa para iniciar el seguimiento comercial.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    [Parameter] public string? IdParam { get; set; }
+
+    private ClienteInteresadoDto _c = new();
+
+    protected override void OnParametersSet()
+    {
+        _c = (long.TryParse(IdParam, out var id) ? ClienteSvc.ById(id) : null)
+             ?? ClienteSvc.All().First();
+    }
+}

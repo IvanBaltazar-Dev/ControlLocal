@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.controllocal.model.usuario.BrokerAgente;
 import com.controllocal.model.usuario.Broker;
+import com.controllocal.model.usuario.ReasignacionAgenteBroker;
 
 public interface BrokerBusinessLogic {
 
@@ -17,6 +18,7 @@ public interface BrokerBusinessLogic {
     public Long asignarAgente(Long idBrokerAdministrador, Long idBrokerSupervisor, Long idAgente, String motivo);
     public boolean desactivarAsignacionAgente(Long idBrokerAdministrador, Long idBrokerAgente);
     public List<BrokerAgente> listarAgentesSupervisados(Long idBroker);
+    public List<ReasignacionAgenteBroker> listarReasignacionesAgenteBroker();
     public boolean puedeSupervisarAgente(Long idBroker, Long idAgente);
     public Broker validarBroker(Long idBroker);
     public Broker validarBrokerAdministrador(Long idBrokerAdministrador);

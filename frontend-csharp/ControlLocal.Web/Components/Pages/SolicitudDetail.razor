@@ -1,11 +1,12 @@
-@page "/solicitud-detail"
+@page "/solicitud-detail/{CodigoParam?}"
 @inject AppState App
+@inject ISolicitudService SolicitudSvc
 
-<PageTitle>Solicitud SOL-0425 · ControlLocal</PageTitle>
+<PageTitle>Solicitud @_s.CodigoSolicitud · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", "SOL-0425" })"
-          Title="SOL-0425 · Boutique Lila"
-          Subtitle="Solicitud de alquiler · operación OP-1094 · Calle Schell 412, Miraflores">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", _s.CodigoSolicitud })"
+          Title="@($"{_s.CodigoSolicitud} · {_s.ClienteNombre}")"
+          Subtitle="@($"Solicitud de alquiler · operación {_s.CodigoOperacion} · {_s.DireccionLocal}, {_s.DistritoLocal}")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
         <button class="cl-btn" @onclick="@(() => App.Navigate("documentos"))"><Icon Name="folder" Size="13" /> Gestionar documentos</button>
@@ -29,8 +30,8 @@
                         <div class="cl-card-head"><div class="cl-card-title">Condiciones solicitadas</div></div>
                         <div class="cl-card-body">
                             <dl class="cl-kv">
-                                <dt>Monto mensual</dt><dd>USD 1 850</dd>
-                                <dt>Plazo</dt><dd>24 meses</dd>
+                                <dt>Monto mensual</dt><dd>USD @_s.MontoMensualTexto</dd>
+                                <dt>Plazo</dt><dd>@_s.PlazoMeses meses</dd>
                                 <dt>Garantía</dt><dd>2 meses</dd>
                                 <dt>Adelanto</dt><dd>1 mes</dd>
                                 <dt>Inicio</dt><dd>01/06/2026</dd>
@@ -41,8 +42,8 @@
                         <div class="cl-card-head"><div class="cl-card-title">Local y propietario</div></div>
                         <div class="cl-card-body">
                             <dl class="cl-kv">
-                                <dt>Local</dt><dd>Calle Schell 412</dd>
-                                <dt>Distrito</dt><dd>Miraflores</dd>
+                                <dt>Local</dt><dd>@_s.DireccionLocal</dd>
+                                <dt>Distrito</dt><dd>@_s.DistritoLocal</dd>
                                 <dt>Área</dt><dd>68 m²</dd>
                                 <dt>Propietario</dt><dd>Carlos Mendoza Rivera</dd>
                                 <dt>Comisión</dt><dd>4.5%</dd>
@@ -52,7 +53,7 @@
                 </div>
 
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Documentos de la solicitud</div><span class="cl-badge green">6 / 6 completos</span></div>
+                    <div class="cl-card-head"><div class="cl-card-title">Documentos de la solicitud</div><span class="cl-badge green">@_s.DocumentosTexto completos</span></div>
                     <div class="cl-card-body" style="padding:0;">
                         @for (var i = 0; i < _docs.Length; i++)
                         {
@@ -81,8 +82,8 @@
                     <div class="cl-card-head"><div class="cl-card-title">Estado actual</div></div>
                     <div class="cl-card-body">
                         <div style="text-align:center;padding:6px 0;">
-                            <StatusBadge Label="En revisión" />
-                            <div class="cl-muted" style="font-size:12px;margin-top:8px;">Enviada el 23 May · en bandeja del broker Ricardo Salas</div>
+                            <StatusBadge Label="@_s.Estado" />
+                            <div class="cl-muted" style="font-size:12px;margin-top:8px;">Registrada el @_s.FechaRegistroTexto · operación @_s.CodigoOperacion</div>
                         </div>
                     </div>
                 </div>
@@ -90,10 +91,10 @@
                     <div class="cl-card-head"><div class="cl-card-title">Cliente</div></div>
                     <div class="cl-card-body">
                         <div class="cl-flex" style="gap:10px;">
-                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2F7D52;">BL</span>
+                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2F7D52;">@Initials(_s.ClienteNombre)</span>
                             <div>
-                                <div style="font-weight:600;font-size:13px;">Boutique Lila</div>
-                                <div class="cl-muted" style="font-size:11px;">DNI 45 220 118</div>
+                                <div style="font-weight:600;font-size:13px;">@_s.ClienteNombre</div>
+                                <div class="cl-muted" style="font-size:11px;">Operación @_s.CodigoOperacion</div>
                             </div>
                         </div>
                     </div>
@@ -108,6 +109,21 @@
 </AppShell>
 
 @code {
+    [Parameter] public string? CodigoParam { get; set; }
+
+    private SolicitudAlquilerDto _s = new();
+
+    protected override void OnParametersSet()
+    {
+        _s = (string.IsNullOrEmpty(CodigoParam) ? null : SolicitudSvc.ByCodigo(CodigoParam)) ?? SolicitudSvc.All().First();
+    }
+
+    private static string Initials(string name) =>
+        string.Concat((name ?? "")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(w => char.ToUpper(w[0])));
+
     private record Stage(string K, string V);
 
     private readonly Stage[] _stages =

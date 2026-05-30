@@ -313,7 +313,10 @@ CREATE TABLE visita (
     hora_visita TIME NOT NULL,
     observaciones TEXT,
     estado CHAR(1) NOT NULL,
-    resultado TEXT,
+    -- Desenlace comercial de la visita. Comparte el dominio de
+    -- interaccion_comercial.resultado para responder de forma uniforme
+    -- "¿debemos darle seguimiento?". Es NULL mientras la visita no se realiza.
+    resultado CHAR(1) NULL,
     id_oportunidad BIGINT NOT NULL,
     id_agente BIGINT NOT NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -324,6 +327,50 @@ CREATE TABLE visita (
         FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
     CONSTRAINT ck_visita_estado CHECK (
         estado IN ('P', 'G', 'C', 'R')
+    ),
+    CONSTRAINT ck_visita_resultado CHECK (
+        resultado IS NULL OR resultado IN ('P', 'I', 'N', 'S', 'D')
+    )
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 12-bis) Tabla de prospecciones (pre-captacion)
+-- Embudo del agente persiguiendo al propietario para captar el local.
+-- Espejo, del lado de la oferta, de oportunidad_comercial.
+-- Las fechas de cada hito sirven como historial de interacciones con el dueno.
+-- Al aceptar la propuesta nace una captacion (id_captacion).
+-- =========================================================
+CREATE TABLE prospeccion (
+    id_prospeccion BIGINT AUTO_INCREMENT PRIMARY KEY,
+    codigo_prospeccion VARCHAR(20) NOT NULL UNIQUE,
+    fecha_registro DATETIME NOT NULL,
+    estado CHAR(1) NOT NULL,
+    resultado_propuesta CHAR(1) NULL,
+    fecha_contacto DATE NULL,
+    fecha_reunion DATE NULL,
+    fecha_propuesta DATE NULL,
+    -- "Por ahora no": recontactar en un lapso no mayor a 15 dias.
+    fecha_recontacto DATE NULL,
+    observaciones TEXT,
+    id_local BIGINT NOT NULL,
+    id_agente BIGINT NOT NULL,
+    id_captacion BIGINT NULL,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_prospeccion_local
+        FOREIGN KEY (id_local) REFERENCES local_comercial(id_local),
+    CONSTRAINT fk_prospeccion_agente
+        FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    CONSTRAINT fk_prospeccion_captacion
+        FOREIGN KEY (id_captacion) REFERENCES captacion(id_captacion),
+    CONSTRAINT ck_prospeccion_estado CHECK (
+        estado IN ('P', 'C', 'R', 'E', 'S', 'T', 'D')
+    ),
+    CONSTRAINT ck_prospeccion_resultado CHECK (
+        resultado_propuesta IS NULL OR resultado_propuesta IN ('P', 'A', 'R', 'S')
+    ),
+    CONSTRAINT ck_prospeccion_recontacto CHECK (
+        fecha_recontacto IS NULL OR estado = 'S'
     )
 ) ENGINE=InnoDB;
 
@@ -443,6 +490,34 @@ CREATE TABLE reasignacion_captacion (
 ) ENGINE=InnoDB;
 
 -- =========================================================
+-- 16-bis) Historial de reasignacion de agentes entre brokers
+-- Traza el evento (broker anterior -> broker nuevo) autorizado por el broker
+-- administrador. La supervision vigente se mantiene en broker_agente; esta
+-- tabla solo conserva el historico del cambio (analoga a reasignacion_captacion).
+-- id_broker_anterior es NULL cuando es la primera asignacion del agente.
+-- =========================================================
+CREATE TABLE reasignacion_agente_broker (
+    id_reasignacion BIGINT AUTO_INCREMENT PRIMARY KEY,
+    fecha_cambio DATETIME NOT NULL,
+    motivo TEXT NOT NULL,
+    id_agente BIGINT NOT NULL,
+    id_broker_anterior BIGINT NULL,
+    id_broker_nuevo BIGINT NOT NULL,
+    id_broker_administrador BIGINT NOT NULL,
+    CONSTRAINT fk_reasignacion_ab_agente
+        FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    CONSTRAINT fk_reasignacion_ab_broker_anterior
+        FOREIGN KEY (id_broker_anterior) REFERENCES broker(id_broker),
+    CONSTRAINT fk_reasignacion_ab_broker_nuevo
+        FOREIGN KEY (id_broker_nuevo) REFERENCES broker(id_broker),
+    CONSTRAINT fk_reasignacion_ab_broker_admin
+        FOREIGN KEY (id_broker_administrador) REFERENCES broker(id_broker),
+    CONSTRAINT ck_reasignacion_ab_brokers CHECK (
+        id_broker_anterior IS NULL OR id_broker_anterior <> id_broker_nuevo
+    )
+) ENGINE=InnoDB;
+
+-- =========================================================
 -- 17) Tabla de motivos de no continuidad
 -- Cierra la oportunidad cuando el cliente no continua.
 -- Opcionalmente indica si el origen fue una interaccion, visita o solicitud.
@@ -524,6 +599,11 @@ CREATE INDEX idx_interaccion_fecha ON interaccion_comercial(fecha_hora);
 CREATE INDEX idx_visita_oportunidad ON visita(id_oportunidad);
 CREATE INDEX idx_visita_agente ON visita(id_agente);
 CREATE INDEX idx_visita_estado ON visita(estado);
+
+CREATE INDEX idx_prospeccion_local ON prospeccion(id_local);
+CREATE INDEX idx_prospeccion_agente ON prospeccion(id_agente);
+CREATE INDEX idx_prospeccion_estado ON prospeccion(estado);
+CREATE INDEX idx_prospeccion_recontacto ON prospeccion(fecha_recontacto);
 
 CREATE INDEX idx_solicitud_oportunidad ON solicitud_alquiler(id_oportunidad);
 CREATE INDEX idx_solicitud_agente ON solicitud_alquiler(id_agente);

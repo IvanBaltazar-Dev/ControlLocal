@@ -171,6 +171,16 @@ final class JdbcSupport {
         return solicitud;
     }
 
+    static com.controllocal.model.comercial.Prospeccion prospeccion(Long id) {
+        com.controllocal.model.comercial.Prospeccion prospeccion = new com.controllocal.model.comercial.Prospeccion();
+        prospeccion.setIdProspeccion(id);
+        return prospeccion;
+    }
+
+    static Long getIdProspeccion(com.controllocal.model.comercial.Prospeccion prospeccion) {
+        return prospeccion != null ? prospeccion.getIdProspeccion() : null;
+    }
+
     static OportunidadComercial oportunidad(Long id) {
         OportunidadComercial oportunidad = new OportunidadComercial();
         oportunidad.setIdOportunidad(id);

@@ -21,7 +21,7 @@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">1 · Agente a reasignar</div></div>
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
-                    @foreach (var a in Assign.Agents())
+                    @foreach (var a in Assign.Agents().Where(a => !a.EsAdministrador))
                     {
                         var border = _agent == a.Id && a.Seleccionable ? "#005BFF" : "var(--c-border)";
                         var bg = !a.Seleccionable ? "var(--c-bg-2)" : _agent == a.Id ? "#EAF1FF" : "#fff";
@@ -50,7 +50,7 @@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">2 · Nuevo Broker asignado</div></div>
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
-                    @foreach (var b in Assign.Brokers())
+                    @foreach (var b in Assign.Brokers().Where(b => !b.EsAdministrador))
                     {
                         var dup = A is not null && A.BrokerActual == b.Nombre;
                         var selectable = b.Seleccionable && !dup;
@@ -69,7 +69,7 @@
                                 <div class="cl-muted" style="font-size:11px;">@b.Zona@(b.TipoBroker == "supervisor" ? $" · {b.AgentesACargo} agentes" : " · administrador")</div>
                             </div>
                             <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-                                <StatusBadge Label="@(b.TipoBroker == "admin" ? "Broker administrador" : "Broker supervisor")" />
+                                <StatusBadge Label="Broker supervisor" />
                                 <StatusBadge Label="@b.EstadoAdministrativo" />
                             </div>
                         </label>
@@ -112,7 +112,7 @@
                     <dl class="cl-kv" style="grid-template-columns:1fr auto;">
                         <dt>Agente</dt><dd>@(A?.Nombre ?? "—")</dd>
                         <dt>Fecha de asignación</dt><dd>28 May 2026</dd>
-                        <dt>Autoriza</dt><dd>Alejandro Téllez</dd>
+                        <dt>Autoriza</dt><dd>Administración</dd>
                     </dl>
                     <button class="cl-btn primary" style="width:100%;margin-top:14px;justify-content:center;" @onclick="TryConfirm">
                         <Icon Name="swap" Size="14" /> Confirmar asignación

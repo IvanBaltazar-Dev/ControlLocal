@@ -13,6 +13,9 @@ public class PropietarioDto
     // Descripción del tipo de persona y documento (ej. "Persona jurídica · RUC").
     public string TipoPersona { get; set; } = string.Empty;
 
+    // Tipo de documento: D=DNI, R=RUC, C=Carnet de extranjería, P=Pasaporte
+    public string TipoDocumento { get; set; } = string.Empty;
+
     [Required(ErrorMessage = "El número de documento es obligatorio.")]
     public string NumeroDocumento { get; set; } = string.Empty;
 

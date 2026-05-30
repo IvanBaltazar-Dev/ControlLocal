@@ -43,28 +43,36 @@
             </div>
         </div>
         <div class="cl-stack">
-            <FormSection Num="1" Title="Datos personales" Sub="Información visible para el broker y el equipo administrativo">
-                <div class="cl-grid c2">
-                    <Field Label="Nombres"><input value="Valentina" /></Field>
-                    <Field Label="Apellidos"><input value="Mora Quispe" /></Field>
-                    <Field Label="Documento (DNI)"><input value="45 893 211" /></Field>
-                    <Field Label="Teléfono"><input value="+51 987 412 008" /></Field>
-                    <Field Label="Correo corporativo"><input value="vmora@@controllocal.pe" /></Field>
-                    <Field Label="Zona asignada"><select><option>Lima Centro / Sur</option></select></Field>
+            @if (IsAdmin)
+            {
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>Como administrador global, solo tienes acceso de lectura a tu perfil. Contacta al equipo de soporte para cambios.</span>
                 </div>
-            </FormSection>
-            <FormSection Num="2" Title="Cuenta de acceso" Sub="Usuario, rol y autenticación">
-                <div class="cl-grid c2">
-                    <Field Label="Usuario"><input value="vmora" disabled /></Field>
-                    <Field Label="Rol"><input value="Agente inmobiliario" disabled /></Field>
-                    <Field Label="Contraseña actual"><input type="password" value="••••••••" /></Field>
-                    <Field Label="Nueva contraseña" Hint="Mínimo 8 caracteres, una mayúscula y un número"><input type="password" placeholder="Ingresa nueva contraseña" /></Field>
-                </div>
-                <div style="display:flex;gap:8px;margin-top:16px;">
-                    <button class="cl-btn primary">Guardar cambios</button>
-                    <button class="cl-btn ghost" style="color:#005BFF;">Cambiar contraseña</button>
-                </div>
-            </FormSection>
+            }
+            else
+            {
+                <FormSection Num="1" Title="Datos personales" Sub="Solo puedes editar tu teléfono. Otros datos se editan mediante el broker">
+                    <div class="cl-grid c2">
+                        <Field Label="Nombres"><input value="Valentina" disabled="true" /></Field>
+                        <Field Label="Apellidos"><input value="Mora Quispe" disabled="true" /></Field>
+                        <Field Label="Documento (DNI)"><input value="45 893 211" disabled="true" /></Field>
+                        <Field Label="Teléfono" Hint="El único campo que puedes editar"><input value="+51 987 412 008" style="border-color:#005BFF;" /></Field>
+                        <Field Label="Correo corporativo"><input value="vmora@@controllocal.pe" disabled="true" /></Field>
+                        <Field Label="Zona asignada"><select disabled="true"><option>Lima Centro / Sur</option></select></Field>
+                    </div>
+                    <button class="cl-btn primary" style="margin-top:16px;">Guardar teléfono</button>
+                </FormSection>
+
+                <FormSection Num="2" Title="Seguridad" Sub="Gestión de contraseña">
+                    <div class="cl-stack" style="gap:14px;">
+                        <div style="padding:12px;background:#F7F8FA;border-radius:8px;border-left:3px solid #005BFF;">
+                            <div style="font-size:13px;color:#515B6B;">Tu contraseña se cambió por última vez hace 45 días. Recomendamos cambiarla regularmente por seguridad.</div>
+                        </div>
+                        <button class="cl-btn primary" @onclick="@(() => App.Navigate("cambiar-contrasena"))"><Icon Name="lock" Size="13" /> Cambiar contraseña</button>
+                    </div>
+                </FormSection>
+            }
         </div>
     </div>
 </AppShell>

@@ -13,6 +13,7 @@ import com.controllocal.config.DBManager;
 import com.controllocal.dao.DAOException;
 import com.controllocal.dao.VisitaDAO;
 import com.controllocal.model.comercial.enums.EstadoVisita;
+import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.comercial.Visita;
 
 public class VisitaDAOImpl implements VisitaDAO {
@@ -46,7 +47,7 @@ public class VisitaDAOImpl implements VisitaDAO {
             JdbcSupport.setTime(ps, 2, visita.getHoraVisita());
             ps.setString(3, visita.getObservaciones());
             JdbcSupport.setEnum(ps, 4, visita.getEstado());
-            ps.setString(5, visita.getResultado());
+            JdbcSupport.setEnum(ps, 5, visita.getResultado());
             ps.setLong(6, visita.getOportunidadComercial().getIdOportunidad());
             ps.setLong(7, visita.getAgenteResponsable().getIdAgente());
             ps.executeUpdate();
@@ -101,7 +102,7 @@ public class VisitaDAOImpl implements VisitaDAO {
             JdbcSupport.setTime(ps, 2, visita.getHoraVisita());
             ps.setString(3, visita.getObservaciones());
             JdbcSupport.setEnum(ps, 4, visita.getEstado());
-            ps.setString(5, visita.getResultado());
+            JdbcSupport.setEnum(ps, 5, visita.getResultado());
             ps.setLong(6, visita.getOportunidadComercial().getIdOportunidad());
             ps.setLong(7, visita.getAgenteResponsable().getIdAgente());
             ps.setLong(8, visita.getIdVisita());
@@ -130,7 +131,7 @@ public class VisitaDAOImpl implements VisitaDAO {
         visita.setHoraVisita(JdbcSupport.toLocalTime(rs.getTime("hora_visita")));
         visita.setObservaciones(rs.getString("observaciones"));
         visita.setEstado(JdbcSupport.getEnum(rs, "estado", EstadoVisita.class));
-        visita.setResultado(rs.getString("resultado"));
+        visita.setResultado(JdbcSupport.getNullableEnum(rs, "resultado", ResultadoInteraccion.class));
         visita.setOportunidadComercial(JdbcSupport.oportunidad(rs.getLong("id_oportunidad")));
         visita.setClienteInteresado(JdbcSupport.cliente(rs.getLong("id_cliente")));
         visita.setCaptacion(JdbcSupport.captacion(rs.getLong("id_captacion")));

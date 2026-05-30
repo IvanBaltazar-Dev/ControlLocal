@@ -30,4 +30,22 @@ public enum ResultadoInteraccion implements CodigoEnum {
     public static ResultadoInteraccion fromCodigo(String codigo) {
         return CodigoEnum.fromCodigo(ResultadoInteraccion.class, codigo);
     }
+
+    /**
+     * Indica si el resultado mantiene viva la oportunidad y amerita seguimiento.
+     * Se comparte entre interacciones y visitas para responder, de forma uniforme,
+     * "¿debemos darle seguimiento?".
+     */
+    public boolean mantieneOportunidadAbierta() {
+        return this == PENDIENTE || this == INTERESADO || this == SEGUIMIENTO;
+    }
+
+    /**
+     * Indica si el resultado implica que el cliente no continua. En ese caso el
+     * flujo debe registrar un {@code MotivoNoContinuidad} ligado al origen
+     * (interaccion o visita) para cerrar la oportunidad.
+     */
+    public boolean implicaNoContinuidad() {
+        return this == NO_INTERESADO || this == DESCARTADO;
+    }
 }

@@ -1,0 +1,146 @@
+@page "/cambiar-contrasena"
+@inject AppState App
+
+<PageTitle>Cambiar contraseña · ControlLocal</PageTitle>
+
+@if (IsAdmin)
+{
+    <AppShell Crumbs="@(new[] { "ControlLocal" })" Title="Acceso denegado">
+        <div class="cl-card" style="max-width:500px;margin:40px auto;padding:40px;text-align:center;">
+            <Icon Name="lock" Size="48" style="color:#C0473C;margin-bottom:16px;" />
+            <div style="font-size:16px;font-weight:600;margin-bottom:8px;">No autorizado</div>
+            <div style="color:#7E8794;margin-bottom:24px;">El administrador global no puede cambiar contraseña desde aquí.</div>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("dashboard"))">Volver al dashboard</button>
+        </div>
+    </AppShell>
+}
+else
+{
+    <AppShell Crumbs="@(new[] { "ControlLocal", "Cambiar contraseña" })"
+              Title="Cambiar contraseña"
+              Subtitle="Actualiza tu contraseña para mantener tu cuenta segura">
+        <Actions>
+            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("profile"))"><Icon Name="chevronLeft" Size="13" /> Volver a perfil</button>
+        </Actions>
+        <ChildContent>
+            <div style="max-width:500px;">
+                <div class="cl-card">
+                    <div class="cl-card-body">
+                        <FormSection Num="1" Title="Verificación" Sub="Confirma tu contraseña actual">
+                            <div class="cl-grid c1">
+                                <Field Label="Contraseña actual" Required="true">
+                                    <input type="password" @bind="_contraActual" placeholder="Ingresa tu contraseña actual" />
+                                </Field>
+                            </div>
+                        </FormSection>
+
+                        <FormSection Num="2" Title="Nueva contraseña" Sub="Elige una contraseña segura">
+                            <div class="cl-grid c1">
+                                <Field Label="Nueva contraseña" Required="true" Hint="Mínimo 8 caracteres, una mayúscula y un número">
+                                    <input type="password" @bind="_contraNueva" placeholder="Ingresa nueva contraseña" />
+                                </Field>
+                                <Field Label="Confirmar contraseña" Required="true">
+                                    <input type="password" @bind="_contraConfirm" placeholder="Repite la nueva contraseña" />
+                                </Field>
+                            </div>
+                        </FormSection>
+
+                        @if (!string.IsNullOrEmpty(_err))
+                        {
+                            <div class="cl-alert red" style="margin-bottom:14px;">
+                                <Icon Name="alert" Size="15" /><span>@_err</span>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(_msg))
+                        {
+                            <div class="cl-alert green" style="margin-bottom:14px;">
+                                <Icon Name="check" Size="15" /><span>@_msg</span>
+                            </div>
+                        }
+
+                        <div style="display:flex;gap:8px;margin-top:24px;">
+                            <button class="cl-btn primary" @onclick="Guardar">
+                                <Icon Name="lock" Size="13" /> Cambiar contraseña
+                            </button>
+                            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("profile"))">Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-alert blue" style="margin-top:16px;">
+                    <Icon Name="info" Size="15" />
+                    <span><b>Consejos de seguridad:</b> Usa una combinación de mayúsculas, minúsculas, números y símbolos. No compartas tu contraseña con nadie.</span>
+                </div>
+            </div>
+        </ChildContent>
+    </AppShell>
+}
+
+@code {
+    private bool IsAdmin => App.Role == Roles.Admin;
+    private string _contraActual = "";
+    private string _contraNueva = "";
+    private string _contraConfirm = "";
+    private string _err = "";
+    private string _msg = "";
+
+    private void Guardar()
+    {
+        _err = "";
+        _msg = "";
+
+        // Validar contraseña actual (mock: cualquier cosa != vacío)
+        if (string.IsNullOrWhiteSpace(_contraActual))
+        {
+            _err = "Debes ingresar tu contraseña actual.";
+            return;
+        }
+
+        // Validar que no sea igual a la actual
+        if (_contraActual == _contraNueva)
+        {
+            _err = "La nueva contraseña debe ser diferente a la actual.";
+            return;
+        }
+
+        // Validar nueva contraseña
+        if (string.IsNullOrWhiteSpace(_contraNueva) || _contraNueva.Length < 8)
+        {
+            _err = "La nueva contraseña debe tener mínimo 8 caracteres.";
+            return;
+        }
+
+        // Validar mayúscula
+        if (!_contraNueva.Any(char.IsUpper))
+        {
+            _err = "La contraseña debe contener al menos una mayúscula.";
+            return;
+        }
+
+        // Validar número
+        if (!_contraNueva.Any(char.IsDigit))
+        {
+            _err = "La contraseña debe contener al menos un número.";
+            return;
+        }
+
+        // Validar confirmación
+        if (_contraNueva != _contraConfirm)
+        {
+            _err = "Las contraseñas no coinciden.";
+            return;
+        }
+
+        // Éxito
+        _msg = "Contraseña cambiada correctamente. Redirigiendo al perfil...";
+        _contraActual = "";
+        _contraNueva = "";
+        _contraConfirm = "";
+
+        _ = Task.Delay(1500).ContinueWith(_ =>
+        {
+            App.Navigate("profile");
+        });
+    }
+}

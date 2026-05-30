@@ -1,0 +1,19 @@
+@if (!string.IsNullOrEmpty(Resultado))
+{
+    var (tone, label) = Resultado switch
+    {
+        "I" => ("green", "Interesado"),
+        "N" => ("red", "No interesado"),
+        "S" => ("blue", "Seguimiento"),
+        "D" => ("amber", "Descartado"),
+        "P" => ("gray", "Pendiente"),
+        _ => ("gray", "—")
+    };
+
+    <StatusBadge Label="@label" ToneOverride="@tone" />
+}
+
+@code {
+    [Parameter]
+    public string Resultado { get; set; } = string.Empty;
+}

@@ -1,0 +1,162 @@
+@page "/interaccion-form"
+@page "/interaccion-form/{CaptacionIdParam}"
+@inject AppState App
+@using ControlLocal.Web.Models.Oportunidades;
+
+<PageTitle>Registrar interacción · ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Operación", "Nueva interacción" })"
+          Title="Registrar interacción comercial"
+          Subtitle="Seguimiento de contactos con clientes · el agente puede registrar cualquier contacto rápidamente">
+    <Actions>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+    </Actions>
+    <ChildContent>
+        <div style="max-width:880px;">
+            <FormSection Num="1" Title="Captación" Sub="Selecciona el local comercial sobre el cual es la interacción">
+                <div class="cl-grid c1">
+                    <Field Label="Captación" Required="true">
+                        <select @bind="_captacionId">
+                            <option value="0">— Seleccionar —</option>
+                            @foreach (var cap in _captaciones)
+                            {
+                                <option value="@cap.Id">@cap.CodigoCaptacion · @cap.DireccionLocal (@cap.DistritoLocal)</option>
+                            }
+                        </select>
+                    </Field>
+                </div>
+            </FormSection>
+
+            <FormSection Num="2" Title="Canal de contacto" Sub="Cómo estableciste el contacto con el cliente">
+                <div class="cl-grid c2">
+                    <Field Label="Canal" Required="true">
+                        <select @bind="_canalContacto">
+                            <option value="">— Seleccionar —</option>
+                            <option value="L">Llamada</option>
+                            <option value="W">WhatsApp</option>
+                            <option value="E">Email</option>
+                            <option value="P">Presencial</option>
+                            <option value="O">Otro</option>
+                        </select>
+                    </Field>
+                </div>
+            </FormSection>
+
+            <FormSection Num="3" Title="Cliente" Sub="Quién realizó o recibió la interacción">
+                <div class="cl-grid c2">
+                    <Field Label="Cliente interesado" Required="true">
+                        <div style="display:flex;gap:8px;">
+                            <select @bind="_clienteId" style="flex:1;">
+                                <option value="0">— Seleccionar cliente —</option>
+                                @foreach (var cli in _clientes)
+                                {
+                                    <option value="@cli.Id">@cli.Nombre (@cli.NumeroDocumento)</option>
+                                }
+                            </select>
+                            <button class="cl-btn ghost" style="flex:0 0 auto;" title="Registrar nuevo cliente" @onclick="@(() => App.Navigate("cliente-form"))">
+                                <Icon Name="plus" Size="14" />
+                            </button>
+                        </div>
+                    </Field>
+                </div>
+            </FormSection>
+
+            <FormSection Num="4" Title="Resultado" Sub="Estado de la interacción con el cliente">
+                <div class="cl-grid c2">
+                    <Field Label="Resultado" Required="true">
+                        <select @bind="_resultado">
+                            <option value="">— Seleccionar —</option>
+                            <option value="I">Interesado</option>
+                            <option value="N">No interesado</option>
+                            <option value="S">Seguimiento</option>
+                            <option value="D">Descartado</option>
+                            <option value="P">Pendiente</option>
+                        </select>
+                    </Field>
+                    <Field Label="Observaciones">
+                        <textarea rows="3" @bind="_observaciones" placeholder="Notas adicionales sobre la interacción..."></textarea>
+                    </Field>
+                </div>
+            </FormSection>
+
+            @if (_err is not null)
+            {
+                <div class="cl-alert red" style="margin-bottom:14px;">
+                    <Icon Name="alert" Size="15" /><span>@_err</span>
+                </div>
+            }
+
+            <FormFooterBar OnCancel="@(() => App.Navigate("interacciones"))" OnSave="@TryConfirm" SaveLabel="Registrar interacción" />
+        </div>
+
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="target"
+                       Title="¿Registrar interacción comercial?"
+                       Desc="Se guardará el registro de este contacto. Podrás ver el historial de interacciones en la captación."
+                       ConfirmLabel="Confirmar" CancelLabel="Revisar datos"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Interacción registrada correctamente</Toast>
+    </ChildContent>
+</AppShell>
+
+@code {
+    [Parameter]
+    public string? CaptacionIdParam { get; set; }
+
+    private long _captacionId;
+    private string _canalContacto = "";
+    private long _clienteId;
+    private string _resultado = "";
+    private string _observaciones = "";
+    private bool _confirm;
+    private bool _toast;
+    private string? _err;
+
+    protected override void OnInitialized()
+    {
+        // Si viene con parámetro de captación, pre-llenar
+        if (!string.IsNullOrEmpty(CaptacionIdParam) && long.TryParse(CaptacionIdParam, out var captId))
+        {
+            _captacionId = captId;
+        }
+    }
+
+    // Datos de prueba
+    private List<(long Id, string CodigoCaptacion, string DireccionLocal, string DistritoLocal)> _captaciones = new()
+    {
+        (1, "CAP-0218", "Av. La Marina 245", "San Miguel"),
+        (2, "CAP-0226", "Calle Schell 412", "Miraflores"),
+        (3, "CAP-0234", "Jr. Berlín 230", "Miraflores"),
+        (4, "CAP-0237", "Av. Salaverry 2120", "Jesús María"),
+        (5, "CAP-0241", "Av. Perú 2845", "San Martín"),
+    };
+
+    private List<(long Id, string Nombre, string NumeroDocumento)> _clientes = new()
+    {
+        (1, "Jorge Martinez", "45 123 456"),
+        (2, "María Rodríguez", "46 234 567"),
+        (3, "Carlos González", "47 345 678"),
+        (4, "Ana López", "48 456 789"),
+        (5, "Pedro Sánchez", "49 567 890"),
+    };
+
+    private void TryConfirm()
+    {
+        if (_captacionId == 0) { _err = "Debes seleccionar una captación."; return; }
+        if (string.IsNullOrWhiteSpace(_canalContacto)) { _err = "Debes seleccionar un canal de contacto."; return; }
+        if (_clienteId == 0) { _err = "Debes seleccionar o registrar un cliente."; return; }
+        if (string.IsNullOrWhiteSpace(_resultado)) { _err = "Debes seleccionar un resultado."; return; }
+
+        _err = null;
+        _confirm = true;
+    }
+
+    private async Task OnConfirm()
+    {
+        _confirm = false;
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(900);
+        App.Navigate("interacciones");
+    }
+}

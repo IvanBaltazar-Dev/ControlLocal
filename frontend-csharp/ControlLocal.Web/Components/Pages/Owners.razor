@@ -38,7 +38,9 @@
                                 <td><span class="cl-muted">@o.Correo</span></td>
                                 <td><span><b>@o.CantidadLocales</b></span></td>
                                 <td><StatusBadge Label="@o.Estado" /></td>
-                                <td><RowActions /></td>
+                                <td><RowActions Items="@(new[] { "view", "edit" })"
+                                                OnView="@(() => App.Navigate($"owner-detail/{o.Id}"))"
+                                                OnEdit="@(() => App.Navigate($"owner-form/{o.Id}"))" /></td>
                             </tr>
                         }
                     </tbody>

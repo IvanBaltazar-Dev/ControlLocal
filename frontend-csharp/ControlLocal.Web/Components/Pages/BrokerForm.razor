@@ -42,20 +42,6 @@
                 </FormSection>
                 <FormFooterBar OnCancel="@(() => App.Navigate("brokers"))" OnSave="@(() => _confirm = true)" SaveLabel="Guardar cambios" />
             </div>
-
-            <div class="cl-stack">
-                <div class="cl-card" style="position:sticky;top:14px;">
-                    <div class="cl-card-head"><div class="cl-card-title">No editable</div></div>
-                    <div class="cl-card-body">
-                        <div class="cl-help" style="margin-bottom:10px;">Estos valores estructurales se mantienen fijos y se administran internamente.</div>
-                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
-                            <dt>Tipo de broker</dt><dd>@b.TipoBroker</dd>
-                            <dt>Código de broker</dt><dd>@b.CodigoBroker</dd>
-                            <dt>Fecha de designación</dt><dd>@b.FechaDesignacionTexto</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="briefcase"

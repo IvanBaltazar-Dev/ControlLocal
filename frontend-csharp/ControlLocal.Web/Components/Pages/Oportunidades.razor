@@ -51,7 +51,7 @@
                                 <td><StatusBadge Label="@o.Stage" /></td>
                                 <td>@(o.Amount == "—" ? "—" : $"USD {o.Amount}")</td>
                                 <td><span class="cl-muted" style="font-size:12px;">@o.Updated</span></td>
-                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate("captacion-detail"))">Ver expediente</button></td>
+                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"captacion-detail/{o.Cap}"))">Ver expediente</button></td>
                             </tr>
                         }
                     </tbody>

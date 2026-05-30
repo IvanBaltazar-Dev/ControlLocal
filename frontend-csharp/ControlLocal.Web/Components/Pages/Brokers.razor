@@ -24,7 +24,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var b in BrokerSvc.All())
+                        @foreach (var b in BrokerSvc.All().Where(b => !b.EsAdministrador))
                         {
                             <tr>
                                 <td>
@@ -43,7 +43,7 @@
                                 <td><StatusBadge Label="@b.EstadoAdministrativo" /></td>
                                 <td>
                                     <div class="cl-row-actions">
-                                        <button title="Ver perfil" @onclick="@(() => App.Navigate("broker-profile"))"><Icon Name="eye" Size="15" /></button>
+                                        <button title="Ver perfil" @onclick="@(() => App.Navigate($"broker-profile/{b.CodigoBroker}"))"><Icon Name="eye" Size="15" /></button>
                                         <button title="Editar broker" @onclick="@(() => App.Navigate("broker-form"))"><Icon Name="edit" Size="14" /></button>
                                     </div>
                                 </td>

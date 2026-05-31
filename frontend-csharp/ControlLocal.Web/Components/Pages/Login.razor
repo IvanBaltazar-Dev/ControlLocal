@@ -69,22 +69,34 @@
             <div style="margin-top:18px;display:flex;flex-direction:column;gap:12px;">
                 <div>
                     <label class="cl-label">Usuario o correo corporativo</label>
-                    <input class="cl-login-input" value="vmora@@controllocal.pe" />
+                    <input class="cl-login-input" @bind-value="_usuario" placeholder="ejemplo@controllocal.pe" type="email" required />
                 </div>
                 <div>
                     <label class="cl-label">Contraseña</label>
                     <div style="position:relative;">
-                        <input class="cl-login-input" type="password" value="••••••••••" style="padding-right:40px;" />
+                        <input class="cl-login-input" type="password" @bind-value="_contrasena" placeholder="Introduce tu contraseña" style="padding-right:40px;" required />
                         <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#7E8794;cursor:pointer;display:inline-flex;">
                             <Icon Name="eye" Size="16" />
                         </div>
                     </div>
                 </div>
             </div>
-
-            <button @onclick="Ingresar" style="width:100%;margin-top:20px;padding:13px 16px;justify-content:center;display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:linear-gradient(135deg, #005BFF, #0048CC);color:#fff;border:0;border-radius:11px;font:inherit;font-size:14px;font-weight:600;box-shadow:0 8px 20px rgba(0,91,255,0.32);">
-                Ingresar al sistema
-                <Icon Name="arrowRight" Size="15" />
+            @if (!string.IsNullOrEmpty(_mensajeError))
+            {
+                <div style="color: #E02424; background: #FDE8E8; padding: 10px; border-radius: 8px; font-size: 13px; margin-top: 15px; font-weight: 500;">
+                    @_mensajeError
+                </div>
+            }
+            <button @onclick="Ingresar" disabled="@_cargando" style="width:100%;margin-top:20px;padding:13px 16px; ...">
+                @if (_cargando)
+                {
+                    <span>Iniciando sesión...</span>
+                }
+                else
+                {
+                    <span>Ingresar al sistema</span>
+                    <Icon Name="arrowRight" Size="15" />
+                }
             </button>
 
             <div style="margin-top:14px;font-size:11.5px;color:#515B6B;display:flex;gap:8px;align-items:flex-start;">
@@ -100,7 +112,12 @@
 </div>
 
 @code {
-    private string _picked = Roles.Agente;
+    //private string _picked = Roles.Agente;
+    private string _picked = "";
+    private string _usuario = "";
+    private string _contrasena = "";
+    private bool _cargando = false;
+    private string _mensajeError = "";
 
     private readonly (string Key, string Icon, string Sub)[] _roles =
     {
@@ -109,5 +126,38 @@
         (Roles.Admin, "briefcase", "Administra brokers, asignaciones y configuración general del sistema."),
     };
 
-    private void Ingresar() => App.Navigate("dashboard", _picked);
+    private async Task Ingresar()
+    {
+        // Validaciones básicas antes de enviar al servidor
+        if (string.IsNullOrEmpty(_picked))
+        {
+            _mensajeError = "Por favor, selecciona tu perfil de acceso.";
+            return;
+        }
+        if (string.IsNullOrEmpty(_usuario) || string.IsNullOrEmpty(_contrasena))
+        {
+            _mensajeError = "Por favor, ingresa tu usuario y contraseña.";
+            return;
+        }
+
+        _mensajeError = "";
+        _cargando = true;
+
+        try
+        {
+            // AQUÍ SE LLAMA AL SERVICIO DE AUTENTICACIÓN REAL
+            // EJEMPLO: var resultado = await AuthService.Login(_usuario, _contrasena, _picked);
+            
+            // Si es correcto, rediriges:
+            App.Navigate("dashboard", _picked);
+        }
+        catch (Exception ex) //mensajes al usuario si está equivocado
+        {
+            _mensajeError = "Credenciales incorrectas o error de conexión.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 }

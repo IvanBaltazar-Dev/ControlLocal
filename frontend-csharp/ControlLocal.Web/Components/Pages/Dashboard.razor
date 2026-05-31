@@ -28,7 +28,7 @@
                 <MetricCard Icon="briefcase" Label="Brokers activos" Value="8" Delta="+1 vs mes anterior" Tone="navy" />
                 <MetricCard Icon="users" Label="Agentes activos" Value="42" Delta="+4 vs mes anterior" Tone="blue" />
                 <MetricCard Icon="pin" Label="Captaciones vigentes" Value="186" Delta="+12%" Tone="info" />
-                <MetricCard Icon="target" Label="Operaciones activas" Value="64" Delta="+8%" Tone="amber" />
+                <MetricCard Icon="target" Label="Operaciones activas" Value="64" Delta="+8%" Tone="blue" />
             </div>
             <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
                 <div class="cl-card">
@@ -90,7 +90,7 @@
         else if (IsBroker)
         {
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
-                <MetricCard Icon="pin" Label="Captaciones por revisar" Value="9" Delta="3 nuevas hoy" Tone="amber" />
+                <MetricCard Icon="pin" Label="Captaciones por revisar" Value="9" Delta="3 nuevas hoy" Tone="blue" />
                 <MetricCard Icon="fileText" Label="Solicitudes por evaluar" Value="6" Delta="2 vencen hoy" Tone="red" />
                 <MetricCard Icon="target" Label="Operaciones activas" Value="22" Delta="+3 esta semana" Tone="blue" />
                 <MetricCard Icon="check" Label="Cierres recientes" Value="5" Delta="+2 vs semana ant." Tone="green" />
@@ -156,12 +156,14 @@
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
                 <MetricCard Icon="pin" Label="Mis captaciones" Value="14" Footer="9 activas · 3 pendientes · 2 observadas" Tone="info" />
                 <MetricCard Icon="activity" Label="En seguimiento" Value="8" Delta="+2 esta semana" Tone="blue" />
-                <MetricCard Icon="calendar" Label="Visitas programadas" Value="5" Footer="Próxima: hoy 16:00" Tone="amber" />
+                <MetricCard Icon="calendar" Label="Visitas programadas" Value="5" Footer="Próxima: hoy 16:00" Tone="blue" />
                 <MetricCard Icon="fileText" Label="Solicitudes pendientes" Value="3" Footer="2 en revisión · 1 observada" Tone="red" />
             </div>
             <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;">
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Mis captaciones en seguimiento</div><a class="cl-btn ghost sm" style="color:#005BFF;">Ver todas</a></div>
+                    <div class="cl-card-head"><div class="cl-card-title">Mis captaciones en seguimiento</div>
+                    <a class="cl-btn ghost sm" style="color:#005BFF;" href="/captaciones">Ver todas</a>
+                </div>
                     <div class="cl-card-body" style="padding:0;">
                         <table class="cl-table">
                             <thead><tr><th>Captación</th><th>Cliente</th><th>Local</th><th>Etapa</th><th>Próx. acción</th></tr></thead>
@@ -221,7 +223,7 @@
     private static string ConvTone(string pct)
     {
         var n = int.Parse(pct.TrimEnd('%'));
-        return n >= 22 ? "green" : n >= 18 ? "amber" : "red";
+        return n >= 22 ? "green" : n >= 18 ? "blue" : "red";
     }
 
     // --- Admin data ---
@@ -255,15 +257,15 @@
         new("Hoy · 11:42", "Captación aprobada", "CAP-0218 · Local Av. La Marina 245 · Aprobada por R. Salas", "done"),
         new("Hoy · 09:14", "Alquiler cerrado", "CAP-0205 · Cliente Inversiones Trébol S.A.C.", "done"),
         new("Ayer · 17:30", "Nuevo agente registrado", "Daniel Romero asignado al broker M. Quintero"),
-        new("Ayer · 14:08", "Solicitud observada", "SOL-0421 · 3 documentos pendientes", "warn"),
+        new("Ayer · 14:08", "Solicitud observada", "SOL-0421 · 3 documentos pendientes", "primary"),
     };
 
     // --- Broker data ---
     private readonly string[][] _brokerPend =
     {
         new[] { "Captación", "CAP-0231", "D. Romero", "2d", "red" },
-        new[] { "Solicitud", "SOL-0428", "C. Vega", "1d", "amber" },
-        new[] { "Captación", "CAP-0229", "M. León", "1d", "amber" },
+        new[] { "Solicitud", "SOL-0428", "C. Vega", "1d", "blue" },
+        new[] { "Captación", "CAP-0229", "M. León", "1d", "blue" },
         new[] { "Solicitud", "SOL-0425", "V. Mora", "3h", "blue" },
         new[] { "Captación", "CAP-0226", "A. Torres", "5h", "blue" },
     };
@@ -272,7 +274,7 @@
     {
         new[] { "Captaciones en seguimiento", "64", "100%", "#005BFF" },
         new[] { "Con visita realizada", "41", "64%", "#00AEEF" },
-        new[] { "Con solicitud creada", "28", "44%", "#C98A1E" },
+        new[] { "Con solicitud creada", "28", "44%", "#00AEEF" },
         new[] { "Cerradas exitosas", "14", "22%", "#2F7D52" },
     };
 
@@ -303,8 +305,8 @@
 
     private readonly string[][] _agenteTareas =
     {
-        new[] { "Enviar a revisión", "CAP-0233 · Local Surco", "Vence mañana", "amber" },
+        new[] { "Enviar a revisión", "CAP-0233 · Local Surco", "Vence mañana", "blue" },
         new[] { "Subir documentos", "SOL-0425 · cliente Trébol", "3 documentos faltantes", "red" },
-        new[] { "Registrar interacción", "CAP-0231 · cliente sin contacto", "Hace 5 días", "amber" },
+        new[] { "Registrar interacción", "CAP-0231 · cliente sin contacto", "Hace 5 días", "blue" },
     };
 }

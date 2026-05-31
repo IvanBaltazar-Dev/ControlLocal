@@ -12,10 +12,10 @@
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="fileText" Label="Borradores" Value="2" Tone="amber" />
-            <MetricCard Icon="clock" Label="En revisión" Value="3" Tone="amber" />
+            <MetricCard Icon="fileText" Label="Borradores" Value="2" Tone="blue" />
+            <MetricCard Icon="clock" Label="En revisión" Value="3" Tone="blue" />
             <MetricCard Icon="check" Label="Activas" Value="8" Tone="green" />
-            <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="amber" />
+            <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="blue" />
             <MetricCard Icon="x" Label="Rechazadas" Value="1" Tone="red" />
             <MetricCard Icon="flag" Label="Cerradas" Value="1" Tone="navy" />
         </div>
@@ -56,7 +56,7 @@
                         <div class="cl-prop-foot">
                             @if (c.Estado == "Observada")
                             {
-                                <button class="cl-btn sm warn cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
+                                <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
                             }
                             else if (c.Estado is "Pendiente" or "Borrador")
                             {

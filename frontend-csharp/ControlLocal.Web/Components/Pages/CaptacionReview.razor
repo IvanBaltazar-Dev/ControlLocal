@@ -10,7 +10,7 @@
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
         <button class="cl-btn" @onclick="@(() => _modal = "reasignar")"><Icon Name="swap" Size="13" /> Reasignar</button>
         <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
-        <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
+        <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
         <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar</button>
     </Actions>
     <ChildContent>
@@ -69,7 +69,7 @@
             </div>
 
             <div class="cl-stack">
-                <div class="cl-alert amber">
+                <div class="cl-alert blue">
                     <Icon Name="alert" Size="15" />
                     <span>Esta captación lleva <b>2 días</b> en tu bandeja. Resuélvela para que el agente continúe el proceso comercial.</span>
                 </div>
@@ -84,7 +84,7 @@
                     <div class="cl-card-body">
                         <div style="display:flex;flex-direction:column;gap:8px;">
                             <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar captación</button>
-                            <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar y devolver</button>
+                            <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar y devolver</button>
                             <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
                             <button class="cl-btn" @onclick="@(() => _modal = "reasignar")"><Icon Name="swap" Size="13" /> Reasignar a otro agente</button>
                         </div>
@@ -100,7 +100,7 @@
                        OnClose="@(() => _modal = null)"
                        OnConfirm="@(() => Resolve("Captación aprobada · ahora está activa"))" />
 
-        <ConfirmDialog Open="@(_modal == "observar")" Tone="amber" Icon="alert"
+        <ConfirmDialog Open="@(_modal == "observar")" Tone="blue" Icon="alert"
                        Title="Observar y devolver al agente"
                        Desc="El agente recibirá las observaciones y deberá subsanarlas antes de reenviar el expediente."
                        ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"

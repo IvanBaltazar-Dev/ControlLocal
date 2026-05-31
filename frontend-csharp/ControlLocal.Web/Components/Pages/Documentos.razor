@@ -11,14 +11,14 @@
         <button class="cl-btn primary" @onclick="@(() => _confirm = true)"><Icon Name="arrowRight" Size="13" /> Reenviar a evaluación</button>
     </Actions>
     <ChildContent>
-        <div class="cl-alert amber" style="margin-bottom:14px;">
+        <div class="cl-alert blue" style="margin-bottom:14px;">
             <Icon Name="alert" Size="15" />
             <span><b>Observación del broker:</b> Los estados financieros están incompletos y la carta de intención no está firmada. Corrige estos documentos antes de reenviar.</span>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
             <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">Checklist de documentos</div><span class="cl-badge amber">2 observados</span></div>
+                <div class="cl-card-head"><div class="cl-card-title">Checklist de documentos</div><span class="cl-badge blue">2 observados</span></div>
                 <div class="cl-card-body" style="padding:0;">
                     <table class="cl-table">
                         <thead><tr><th>Documento</th><th>Estado</th><th>Actualizado</th><th></th></tr></thead>
@@ -70,7 +70,7 @@
                             <span>Documentos completos</span><span><b>4</b> / 6</span>
                         </div>
                         <div style="height:8px;background:#E2E6EC;border-radius:99px;overflow:hidden;">
-                            <div style="height:100%;width:66%;background:var(--c-walnut);"></div>
+                            <div style="height:100%;width:66%;background:var(--c-primary);"></div>
                         </div>
                         <div class="cl-help" style="margin-top:8px;">Completa los 2 documentos observados para reenviar la solicitud.</div>
                     </div>

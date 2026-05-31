@@ -9,7 +9,7 @@
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
         <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
-        <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
+        <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
         <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar</button>
     </Actions>
     <ChildContent>
@@ -81,7 +81,7 @@
                     <div class="cl-card-body">
                         <div style="display:flex;flex-direction:column;gap:8px;">
                             <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar y generar contrato</button>
-                            <button class="cl-btn warn" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar documentos</button>
+                            <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar documentos</button>
                             <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar solicitud</button>
                         </div>
                     </div>
@@ -96,7 +96,7 @@
                        OnClose="@(() => _modal = null)"
                        OnConfirm="@OnApprove" />
 
-        <ConfirmDialog Open="@(_modal == "observar")" Tone="amber" Icon="alert"
+        <ConfirmDialog Open="@(_modal == "observar")" Tone="blue" Icon="alert"
                        Title="Observar y devolver al agente"
                        Desc="El agente recibirá las observaciones y deberá subsanar los documentos antes de reenviar."
                        ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"

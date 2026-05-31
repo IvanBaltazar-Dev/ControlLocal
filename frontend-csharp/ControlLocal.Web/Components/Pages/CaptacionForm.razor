@@ -79,8 +79,8 @@
                             @foreach (var s in _steps)
                             {
                                 var dotStyle = s.Done
-                                    ? "width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:var(--c-walnut);color:#fff;flex:0 0 auto;"
-                                    : "width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:#fff;color:var(--c-walnut);border:2px solid var(--c-walnut);flex:0 0 auto;";
+                                    ? "width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:var(--c-primary);color:#fff;flex:0 0 auto;"
+                                    : "width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:#fff;color:var(--c-primary);border:2px solid var(--c-primary);flex:0 0 auto;";
                                 <div class="cl-flex" style="align-items:center;gap:10px;">
                                     <span style="@dotStyle">@(s.Done ? "✓" : s.Num)</span>
                                     <span style="font-size:12.5px;@(s.Done ? "" : "font-weight:600;")">@s.Label</span>
@@ -92,7 +92,7 @@
                                 <span>Completitud</span><span>88%</span>
                             </div>
                             <div style="height:6px;background:#E2E6EC;border-radius:99px;overflow:hidden;">
-                                <div style="height:100%;width:88%;background:var(--c-walnut);"></div>
+                                <div style="height:100%;width:88%;background:var(--c-primary);"></div>
                             </div>
                         </div>
                     </div>

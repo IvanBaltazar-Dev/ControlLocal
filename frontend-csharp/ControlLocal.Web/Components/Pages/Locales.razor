@@ -13,7 +13,7 @@
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="store" Label="En prospección" Value="@EnProspeccion.ToString()" Tone="blue" />
-            <MetricCard Icon="clock" Label="Por recontactar" Value="@_porRecontactar.Count.ToString()" Tone="amber" Footer="Seguimiento ≤ 15 días" />
+            <MetricCard Icon="clock" Label="Por recontactar" Value="@_porRecontactar.Count.ToString()" Tone="blue" Footer="Seguimiento ≤ 15 días" />
             <MetricCard Icon="pin" Label="Captados" Value="@Contar("T").ToString()" Tone="green" />
             <MetricCard Icon="x" Label="Descartados" Value="@Contar("D").ToString()" Tone="red" />
         </div>
@@ -21,7 +21,7 @@
         @if (_porRecontactar.Count > 0)
         {
             var vencidos = _porRecontactar.Count(p => EsVencido(p));
-            <div class="cl-alert @(vencidos > 0 ? "red" : "amber")" style="margin-bottom:16px;">
+            <div class="cl-alert @(vencidos > 0 ? "red" : "blue")" style="margin-bottom:16px;">
                 <Icon Name="clock" Size="15" />
                 <span>
                     Tienes <b>@_porRecontactar.Count</b> local(es) en seguimiento por recontactar@(vencidos > 0 ? $" · {vencidos} vencido(s)" : "").
@@ -62,7 +62,7 @@
                                     @if (p.Estado == "S" && p.FechaRecontacto is not null)
                                     {
                                         var vencido = EsVencido(p);
-                                        <span class="cl-badge @(vencido ? "red" : "amber")">@(vencido ? $"Vencido · {p.FechaRecontactoTexto}" : $"Recontactar {p.FechaRecontactoTexto}")</span>
+                                        <span class="cl-badge @(vencido ? "red" : "blue")">@(vencido ? $"Vencido · {p.FechaRecontactoTexto}" : $"Recontactar {p.FechaRecontactoTexto}")</span>
                                     }
                                     else
                                     {
@@ -112,7 +112,7 @@
         </div>
 
         @* ---------- Modal: Posponer (recontactar ≤15 días) ---------- *@
-        <Modal Open="_modalPosponer" Tone="amber" Icon="clock"
+        <Modal Open="_modalPosponer" Tone="blue" Icon="clock"
                Title="Posponer · por ahora no"
                Desc="@($"El propietario de {_target?.Direccion} pidió tiempo. Agenda el recontacto (máx. 15 días).")"
                OnClose="@(() => _modalPosponer = false)">

@@ -14,7 +14,7 @@
 
     private static readonly Dictionary<string, string> Bgs = new()
     {
-        ["green"] = "#1E5538", ["blue"] = "#214676", ["red"] = "#7E2920", ["amber"] = "#79520F",
+        ["green"] = "#1E5538", ["blue"] = "#214676", ["red"] = "#7E2920",
     };
 
     private string Bg => Bgs.TryGetValue(Tone, out var b) ? b : "#1E5538";

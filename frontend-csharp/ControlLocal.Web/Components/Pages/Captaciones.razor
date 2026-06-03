@@ -8,53 +8,28 @@
           Title="Mis captaciones"
           Subtitle="Expedientes de captación que registré · seguimiento del proceso comercial">
     <Actions>
-        <button class="cl-btn" @onclick="ExportarCaptaciones"><Icon Name="download" Size="13" /> Exportar</button>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="fileText" Label="Borradores" Value="2" Tone="amber" OnClick="@(() => FiltrarPorEstado("Borradores"))" />
-            <MetricCard Icon="clock" Label="En revisión" Value="3" Tone="amber" OnClick="@(() => FiltrarPorEstado("En revisión"))" />
-            <MetricCard Icon="check" Label="Activas" Value="8" Tone="green" OnClick="@(() => FiltrarPorEstado("Activas"))" />
-            <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="amber" OnClick="@(() => FiltrarPorEstado("Observadas"))" />
-            <MetricCard Icon="x" Label="Rechazadas" Value="1" Tone="red" OnClick="@(() => FiltrarPorEstado("Rechazadas"))" />
-            <MetricCard Icon="flag" Label="Cerradas" Value="1" Tone="navy" OnClick="@(() => FiltrarPorEstado("Cerradas"))" />
+            <MetricCard Icon="fileText" Label="Borradores" Value="2" Tone="blue" />
+            <MetricCard Icon="clock" Label="En revisión" Value="3" Tone="blue" />
+            <MetricCard Icon="check" Label="Activas" Value="8" Tone="green" />
+            <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="blue" />
+            <MetricCard Icon="x" Label="Rechazadas" Value="1" Tone="red" />
+            <MetricCard Icon="flag" Label="Cerradas" Value="1" Tone="navy" />
         </div>
 
-        <Tabs Active="@_tab" OnSelect="@(t => { _tab = t; _filtroDistrito = ""; _filtroEstado = ""; })" Items="_tabs" />
+        <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
         <FilterBar Search="Buscar por código, dirección, propietario…">
-            <select class="cl-select" @bind="_filtroDistrito">
-                <option value="">Distrito</option>
-                <option>Miraflores</option>
-                <option>San Isidro</option>
-                <option>Surco</option>
-                <option>San Miguel</option>
-                <option>Jesús María</option>
-                <option>San Martín</option>
-                <option>Magdalena</option>
-            </select>
-            <select class="cl-select" @bind="_filtroEstado">
-                <option value="">Estado</option>
-                <option>Pendiente</option>
-                <option>Activa</option>
-                <option>Observada</option>
-                <option>Rechazada</option>
-            </select>
+            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
+            <select class="cl-select"><option>Estado</option><option>Borrador</option><option>En revisión</option><option>Activa</option><option>Observada</option></select>
             <select class="cl-select"><option>Vigencia</option><option>Por vencer</option><option>Vigente</option></select>
-            <button class="cl-btn sm" @onclick="MasFiltros"><Icon Name="filter" Size="12" /> Más filtros</button>
         </FilterBar>
 
-        @if (_toastMsg is not null)
-        {
-            <div class="cl-alert blue" style="margin-bottom:10px;">
-                <Icon Name="check" Size="15" />
-                <span>@_toastMsg</span>
-            </div>
-        }
-
         <div class="cl-gallery-grid">
-            @foreach (var c in CaptacionesFiltradas)
+            @foreach (var c in CaptacionSvc.All())
             {
                 <div class="cl-prop-card">
                     <div class="cl-prop-photo">
@@ -81,7 +56,7 @@
                         <div class="cl-prop-foot">
                             @if (c.Estado == "Observada")
                             {
-                                <button class="cl-btn sm warn cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
+                                <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
                             }
                             else if (c.Estado is "Pendiente" or "Borrador")
                             {
@@ -103,9 +78,6 @@
 
 @code {
     private string _tab = "Todas";
-    private string _filtroDistrito = "";
-    private string _filtroEstado = "";
-    private string? _toastMsg;
 
     private readonly Tabs.TabItem[] _tabs = new[]
     {
@@ -115,57 +87,4 @@
         new Tabs.TabItem("Observadas", 1),
         new Tabs.TabItem("Activas", 8),
     };
-
-    private IEnumerable<CaptacionDto> CaptacionesFiltradas
-    {
-        get
-        {
-            var lista = CaptacionSvc.All().AsEnumerable();
-
-            lista = _tab switch
-            {
-                "Borradores"  => lista.Where(c => c.Estado is "Borrador" or "Pendiente"),
-                "En revisión" => lista.Where(c => c.Estado == "En revisión"),
-                "Observadas"  => lista.Where(c => c.Estado == "Observada"),
-                "Activas"     => lista.Where(c => c.Estado == "Activa"),
-                "Rechazadas"  => lista.Where(c => c.Estado == "Rechazada"),
-                "Cerradas"    => lista.Where(c => c.Estado is "Cerrada" or "Cerradas"),
-                _             => lista
-            };
-
-            if (!string.IsNullOrEmpty(_filtroDistrito))
-                lista = lista.Where(c => c.DistritoLocal.Contains(_filtroDistrito, StringComparison.OrdinalIgnoreCase));
-
-            if (!string.IsNullOrEmpty(_filtroEstado))
-                lista = lista.Where(c => c.Estado == _filtroEstado);
-
-            return lista;
-        }
-    }
-
-    private void FiltrarPorEstado(string tab)
-    {
-        _tab = tab;
-        _filtroDistrito = "";
-        _filtroEstado = "";
-    }
-
-    private void ExportarCaptaciones()
-    {
-        _toastMsg = "Exportación generada correctamente";
-        _ = OcultarToastAsync();
-    }
-
-    private void MasFiltros()
-    {
-        _toastMsg = "Filtros avanzados disponibles próximamente";
-        _ = OcultarToastAsync();
-    }
-
-    private async Task OcultarToastAsync()
-    {
-        await Task.Delay(2500);
-        _toastMsg = null;
-        await InvokeAsync(StateHasChanged);
-    }
 }

@@ -15,17 +15,26 @@
             <div>
                 <FormSection Num="1" Title="Identificación" Sub="Datos personales y de documento del broker">
                     <div class="cl-grid c2">
-                        <Field Label="Nombre completo" Required="true"><input value="@b.Nombre" /></Field>
-                        <Field Label="Usuario" Required="true"><input value="@b.Usuario" /></Field>
+                        <Field Label="Nombre completo" Required="true">
+                            <input value="@b.Nombre" disabled />
+                        </Field>
+        
+                        <Field Label="Usuario" Required="true">
+                            <input value="@b.Usuario" disabled />
+                        </Field>
+        
                         <Field Label="Tipo de documento" Required="true">
-                            <select value="@b.TipoDocumento">
+                            <select value="@b.TipoDocumento" disabled>
                                 <option value="DNI">DNI</option>
                                 <option value="RUC">RUC</option>
                                 <option value="CE">Carné de extranjería</option>
                                 <option value="PAS">Pasaporte</option>
                             </select>
                         </Field>
-                        <Field Label="Número de documento" Required="true"><input value="@b.NumeroDocumento" /></Field>
+        
+                        <Field Label="Número de documento" Required="true">
+                            <input value="@b.NumeroDocumento" disabled />
+                        </Field>
                     </div>
                 </FormSection>
                 <FormSection Num="2" Title="Contacto y estado" Sub="Medios de contacto y estado administrativo">

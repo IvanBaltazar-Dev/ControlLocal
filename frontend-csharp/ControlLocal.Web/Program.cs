@@ -16,6 +16,10 @@ builder.Services.AddRazorComponents()
 // Circuit-scoped UI state (active role + navigation helper).
 builder.Services.AddScoped<AppState>();
 
+// Autenticación — mock en memoria hoy; cambiar por HttpAuthService contra el
+// backend Java (POST /auth/login) sin tocar la UI.
+builder.Services.AddScoped<IAuthService, MockAuthService>();
+
 // Domain services — in-memory mocks today; swap for HttpClient-backed
 // implementations when the Java REST API is available, no UI changes needed.
 builder.Services.AddScoped<IBrokerService, MockBrokerService>();

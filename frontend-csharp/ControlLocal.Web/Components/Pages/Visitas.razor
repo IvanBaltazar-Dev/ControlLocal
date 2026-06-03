@@ -10,14 +10,15 @@
           Title="Agenda de visitas"
           Subtitle="Visitas a locales coordinadas con tus clientes interesados">
     <Actions>
-        <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar agenda</button>
+        @*IMPLEMENTACION PROXIMAMENTE*@
+        @*<button class="cl-btn"><Icon Name="download" Size="13" /> Exportar agenda</button>*@
         <button class="cl-btn primary" @onclick="AbrirProgramar"><Icon Name="plus" Size="13" /> Programar visita</button>
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="calendar" Label="Programadas" Value="@Contar("P").ToString()" Tone="blue" />
             <MetricCard Icon="check" Label="Realizadas" Value="@Contar("R").ToString()" Tone="green" />
-            <MetricCard Icon="clock" Label="Reprogramadas" Value="@Contar("G").ToString()" Tone="amber" />
+            <MetricCard Icon="clock" Label="Reprogramadas" Value="@Contar("G").ToString()" Tone="blue" />
             <MetricCard Icon="x" Label="Canceladas" Value="@Contar("C").ToString()" Tone="red" />
         </div>
 
@@ -49,7 +50,7 @@
                                 <span style="font-size:11px;@(isToday ? "font-weight:700;color:var(--c-primary);" : "color:#515B6B;")">@day</span>
                                 @if (hasVisit)
                                 {
-                                    <span style="margin-top:auto;align-self:flex-start;width:6px;height:6px;border-radius:50%;background:var(--c-walnut);"></span>
+                                    <span style="margin-top:auto;align-self:flex-start;width:6px;height:6px;border-radius:50%;background:var(--c-primary);"></span>
                                 }
                             </div>
                         }
@@ -183,7 +184,7 @@
         </Modal>
 
         @* ---------- Modal: Reprogramar ---------- *@
-        <Modal Open="_modalReprogramar" Tone="amber" Icon="clock"
+        <Modal Open="_modalReprogramar" Tone="blue" Icon="clock"
                Title="Reprogramar visita"
                Desc="@($"Mueve la fecha y hora de la visita con {_target?.ClienteNombre}.")"
                OnClose="@(() => _modalReprogramar = false)">
@@ -254,7 +255,7 @@
                             </select>
                         </Field>
                     </div>
-                    <div class="cl-alert amber" style="margin-top:12px;">
+                    <div class="cl-alert blue" style="margin-top:12px;">
                         <Icon Name="info" Size="15" />
                         <span>El cliente <b>no continúa</b>: al registrar se guardará el motivo y la <b>oportunidad se cerrará</b> automáticamente.</span>
                     </div>

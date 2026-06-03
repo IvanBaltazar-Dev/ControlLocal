@@ -62,7 +62,12 @@
                 <div class="cl-card">
                     <div class="cl-card-head"><div class="cl-card-title">Observaciones del broker</div></div>
                     <div class="cl-card-body">
-                        <textarea rows="3" placeholder="Anota aquí cualquier observación antes de resolver…"></textarea>
+                        <Field Label="Observaciones">
+                            <textarea rows="3"
+                                      value="@_motivo"
+                                      @oninput="@(e => _motivo = e.Value?.ToString() ?? "")"
+                                      placeholder="Ej. Documentación conforme; ajustar la vigencia al contrato de exclusividad…"></textarea>
+                        </Field>
                         <div class="cl-help" style="margin-top:8px;">Estas notas quedan registradas en la auditoría del expediente y son visibles para el agente.</div>
                     </div>
                 </div>
@@ -149,6 +154,7 @@
 @code {
     private string? _modal;
     private string? _toast;
+    private string _motivo = "";
 
     private record Doc(string Name, string Status);
 

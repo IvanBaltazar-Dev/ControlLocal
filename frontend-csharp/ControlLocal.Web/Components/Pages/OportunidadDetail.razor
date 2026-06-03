@@ -1,4 +1,5 @@
 @page "/oportunidad-detail/{IdParam?}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IOportunidadService OportunidadSvc
 @inject ICaptacionService CaptacionSvc
@@ -272,13 +273,10 @@ else
         Notificar($"Oportunidad cerrada · motivo: {motivoLabel}");
     }
 
-    private async void Notificar(string mensaje)
+    private void Notificar(string mensaje)
     {
         _toastMsg = mensaje;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(2600);
-        _toast = false;
-        StateHasChanged();
+        _ = DelayThenRenderAsync(2600, () => _toast = false);
     }
 }

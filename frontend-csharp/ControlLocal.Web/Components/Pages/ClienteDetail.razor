@@ -9,7 +9,7 @@
           Subtitle="@($"Cliente interesado · {_c.TipoPersona}")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("cliente-form"))"><Icon Name="edit" Size="13" /> Editar cliente</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"cliente-form/{_c.Id}"))"><Icon Name="edit" Size="13" /> Editar cliente</button>
     </Actions>
     <ChildContent>
         <div style="max-width:880px;">

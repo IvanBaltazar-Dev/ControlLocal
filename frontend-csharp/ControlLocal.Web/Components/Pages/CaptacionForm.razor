@@ -1,29 +1,38 @@
 @page "/captacion-form"
 @page "/captacion-form/{CodigoParam}"
+@page "/captacion-form/captar/{ProspeccionId:long}"
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
+@inject IProspeccionService ProspeccionSvc
 
-<PageTitle>@(_esEdicion ? "Editar captación" : "Nueva captación") · ControlLocal</PageTitle>
+<PageTitle>@_tituloPagina · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Mis captaciones", _esEdicion ? $"{_codigo} · Editar" : "Nueva captación" })"
-          Title="@(_esEdicion ? $"Editar captación · {_codigo}" : "Nueva captación")"
-          Subtitle="@(_esEdicion
-              ? "Actualiza las condiciones comerciales de la captación · al enviarla, el broker la revisará"
-              : "Condiciones comerciales del local · al enviarla, el broker la revisará para activarla")">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Mis captaciones", _crumbFinal })"
+          Title="@_titulo"
+          Subtitle="@_subtitulo">
     <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("captaciones"))">Cancelar</button>
-        <button class="cl-btn" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="save" Size="13" /> Guardar borrador</button>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="arrowRight" Size="13" /> Enviar a revisión</button>
+        <button class="cl-btn ghost" @onclick="OnCancelar">Cancelar</button>
+        @if (!_esCaptar)
+        {
+            <button class="cl-btn" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="save" Size="13" /> Guardar borrador</button>
+        }
+        <button class="cl-btn primary" @onclick="OnPrimary"><Icon Name="arrowRight" Size="13" /> @(_esCaptar ? "Captar y enviar a revisión" : "Enviar a revisión")</button>
     </Actions>
     <ChildContent>
+        @if (_err is not null)
+        {
+            <div class="cl-alert red" style="margin-bottom:14px;">
+                <Icon Name="alert" Size="15" /><span>@_err</span>
+            </div>
+        }
         <div style="display:grid;grid-template-columns:1fr 280px;gap:14px;">
             <div>
-                <FormSection Num="1" Title="Datos del local" Sub="Local comercial sobre el que se crea la captación">
+                <FormSection Num="1" Title="Datos del local" Sub="@(_esNuevo ? "Local comercial sobre el que se crea la captación" : "Datos del inmueble ya registrados · no editables")">
                     <div class="cl-grid c2">
                         <Field Label="Local" Required="true">
                             <div style="position:relative;">
                                 <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#7E8794;"><Icon Name="search" Size="14" /></span>
-                                <input @bind="_local" @bind:event="oninput" placeholder="Busca el local por dirección o código" style="padding-left:30px;" />
+                                <input @bind="_local" @bind:event="oninput" disabled="@(!_esNuevo)" placeholder="Busca el local por dirección o código" style="padding-left:30px;" />
                             </div>
                         </Field>
                         <Field Label="Código del local"><input value="@_codigoLocal" placeholder="—" disabled /></Field>
@@ -47,7 +56,7 @@
                     <div class="cl-grid c3">
                         <Field Label="Inicio de vigencia" Required="true"><input placeholder="dd/mm/aaaa" @bind="_inicioVigencia" @bind:event="oninput" /></Field>
                         <Field Label="Fin de vigencia" Required="true"><input placeholder="dd/mm/aaaa" @bind="_finVigencia" @bind:event="oninput" /></Field>
-                        <Field Label="Comisión (%)" Required="true"><input placeholder="5%" @bind="_comision" @bind:event="oninput" /></Field>
+                        <Field Label="Comisión (%)" Required="true"><input placeholder="5" @bind="_comision" @bind:event="oninput" /></Field>
                     </div>
                 </FormSection>
 
@@ -73,15 +82,22 @@
                 </div>
             </div>
         </div>
+
+        <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
-    // Sin parámetro = captación nueva (formulario en blanco).
-    // Con código = edición de una captación existente (se precarga su expediente).
+    // Sin parámetro          = captación nueva (formulario en blanco).
+    // {CodigoParam}           = edición de una captación existente (precarga su expediente).
+    // captar/{ProspeccionId}  = captar un local prospectado: datos del local bloqueados,
+    //                           solo se completan las condiciones comerciales faltantes.
     [Parameter] public string? CodigoParam { get; set; }
+    [Parameter] public long ProspeccionId { get; set; }
 
-    private bool _esEdicion => !string.IsNullOrWhiteSpace(CodigoParam);
+    private bool _esCaptar => ProspeccionId > 0;
+    private bool _esEdicion => !_esCaptar && !string.IsNullOrWhiteSpace(CodigoParam);
+    private bool _esNuevo => !_esCaptar && !_esEdicion;
 
     // Datos del local (solo lectura: provienen del local captado).
     private string _codigo = "";
@@ -104,28 +120,103 @@
     private string _comision = "";
     private string _observaciones = "";
 
+    private bool _toast;
+    private string _toastMsg = "";
+    private string? _err;
+
     protected override void OnParametersSet()
     {
-        if (!_esEdicion)
+        if (_esCaptar)
         {
-            // Registro nuevo: el formulario permanece en blanco.
+            var pros = ProspeccionSvc.ById(ProspeccionId);
+            if (pros is null) { _err = "No se encontró el local en prospección."; return; }
+            if (pros.Estado is not ("E" or "S"))
+                _err = "Este local no está en una etapa donde se pueda captar.";
+
+            _codigoLocal = pros.LocalCodigo;
+            _local = string.IsNullOrWhiteSpace(pros.Distrito) ? pros.Direccion : $"{pros.Direccion}, {pros.Distrito}";
+            _propietario = pros.PropietarioNombre;
+            _area = pros.AreaM2 > 0 ? $"{pros.AreaM2} m²" : "";
             return;
         }
 
-        var cap = CaptacionSvc.ByCodigo(CodigoParam!);
-        if (cap is null) return;
+        if (_esEdicion)
+        {
+            var cap = CaptacionSvc.ByCodigo(CodigoParam!);
+            if (cap is null) return;
 
-        _codigo = cap.CodigoCaptacion;
-        _local = string.IsNullOrWhiteSpace(cap.DistritoLocal) ? cap.DireccionLocal : $"{cap.DireccionLocal}, {cap.DistritoLocal}";
-        _propietario = cap.PropietarioNombre;
-        _area = cap.AreaM2 > 0 ? $"{cap.AreaM2} m²" : "";
-        _comision = cap.ComisionPactadaTexto is { Length: > 0 } t && t != "—" ? t : "";
-        _inicioVigencia = cap.FechaInicioVigencia?.ToString("dd/MM/yyyy") ?? "";
-        _finVigencia = cap.FechaFinVigencia?.ToString("dd/MM/yyyy") ?? "";
-        _observaciones = cap.Observaciones ?? "";
+            _codigo = cap.CodigoCaptacion;
+            _local = string.IsNullOrWhiteSpace(cap.DistritoLocal) ? cap.DireccionLocal : $"{cap.DireccionLocal}, {cap.DistritoLocal}";
+            _propietario = cap.PropietarioNombre;
+            _area = cap.AreaM2 > 0 ? $"{cap.AreaM2} m²" : "";
+            _comision = cap.ComisionPactadaTexto is { Length: > 0 } t && t != "—" ? t : "";
+            _inicioVigencia = cap.FechaInicioVigencia?.ToString("dd/MM/yyyy") ?? "";
+            _finVigencia = cap.FechaFinVigencia?.ToString("dd/MM/yyyy") ?? "";
+            _observaciones = cap.Observaciones ?? "";
+        }
+        // _esNuevo: el formulario permanece en blanco.
     }
 
-    // Progreso interactivo de las secciones del formulario.
+    // ---- Encabezado dependiente del modo ----
+    private string _tituloPagina => _esCaptar ? "Captar local" : _esEdicion ? "Editar captación" : "Nueva captación";
+    private string _titulo => _esCaptar ? $"Captar local · {_codigoLocal}"
+                            : _esEdicion ? $"Editar captación · {_codigo}"
+                            : "Nueva captación";
+    private string _crumbFinal => _esCaptar ? $"Captar {_codigoLocal}"
+                                : _esEdicion ? $"{_codigo} · Editar"
+                                : "Nueva captación";
+    private string _subtitulo => _esCaptar
+        ? "Completa las condiciones comerciales para captar el local · los datos del inmueble ya están registrados"
+        : _esEdicion
+            ? "Actualiza las condiciones comerciales de la captación · al enviarla, el broker la revisará"
+            : "Condiciones comerciales del local · al enviarla, el broker la revisará para activarla";
+
+    // ---- Acciones del encabezado ----
+    private void OnCancelar() => App.Navigate(_esCaptar ? "locales" : "captaciones");
+
+    private async Task OnPrimary()
+    {
+        if (_esCaptar)
+        {
+            await CaptarLocal();
+            return;
+        }
+        App.Navigate("captaciones");
+    }
+
+    // Captar = crear la captación a partir de la prospección. Espeja la regla de
+    // negocio: la captación nace en estado Pendiente de revisión del broker.
+    private async Task CaptarLocal()
+    {
+        var comision = ParseComision(_comision);
+        if (comision is null) { _err = "Indica una comisión válida (porcentaje)."; return; }
+
+        try
+        {
+            var p = ProspeccionSvc.Captar(ProspeccionId, comision.Value);
+            _err = null;
+            _toastMsg = $"¡Local captado! Se creó la captación {p.CaptacionCodigo} (pendiente de revisión).";
+            _toast = true;
+            StateHasChanged();
+            await Task.Delay(1100);
+            App.Navigate("captaciones");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _err = ex.Message;
+        }
+    }
+
+    private static decimal? ParseComision(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var limpio = raw.Replace("%", "").Trim();
+        return decimal.TryParse(limpio, System.Globalization.NumberStyles.Any,
+                   System.Globalization.CultureInfo.InvariantCulture, out var v) && v >= 0
+            ? v : null;
+    }
+
+    // ---- Progreso interactivo de las secciones del formulario ----
     private bool IsStep1Complete => !string.IsNullOrWhiteSpace(_local);
     private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_precioAlquiler);
     private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_inicioVigencia)

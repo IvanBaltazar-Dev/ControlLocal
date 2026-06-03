@@ -1,4 +1,5 @@
 @page "/locales"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IProspeccionService ProspeccionSvc
 
@@ -14,8 +15,10 @@
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="store" Label="En prospección" Value="@EnProspeccion.ToString()" Tone="blue" />
             <MetricCard Icon="clock" Label="Por recontactar" Value="@_porRecontactar.Count.ToString()" Tone="blue" Footer="Seguimiento ≤ 15 días" />
-            <MetricCard Icon="pin" Label="Captados" Value="@Contar("T").ToString()" Tone="green" />
-            <MetricCard Icon="x" Label="Descartados" Value="@Contar("D").ToString()" Tone="red" />
+            <MetricCard Icon="pin" Label="Captados" Value="@Contar("T").ToString()" Tone="green"
+                        Active="@(_filtroEstado == "T")" OnClick="@(() => _filtroEstado = _filtroEstado == "T" ? "" : "T")" />
+            <MetricCard Icon="x" Label="Descartados" Value="@Contar("D").ToString()" Tone="red"
+                        Active="@(_filtroEstado == "D")" OnClick="@(() => _filtroEstado = _filtroEstado == "D" ? "" : "D")" />
         </div>
 
         @if (_porRecontactar.Count > 0)
@@ -30,7 +33,9 @@
             </div>
         }
 
-        <FilterBar Search="Buscar por dirección, código, propietario…">
+        <FilterBar Search="Buscar por dirección, código, propietario…"
+                   @bind-Value="_query" ResultCount="Filtradas().Count()"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
             <select class="cl-select" @bind="_filtroEstado">
                 <option value="">Todas las etapas</option>
                 @foreach (var e in EnumCatalog.EstadosProspeccion)
@@ -38,6 +43,7 @@
                     <option value="@e.Code">@e.Label</option>
                 }
             </select>
+            <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
         </FilterBar>
 
         <div class="cl-card">
@@ -85,7 +91,7 @@
                                         }
                                         else if (p.Estado is "E" or "S")
                                         {
-                                            <button class="cl-btn sm primary" @onclick="@(() => AbrirCaptar(p))"><Icon Name="pin" Size="12" /> Captar</button>
+                                            <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"captacion-form/captar/{p.Id}"))"><Icon Name="pin" Size="12" /> Captar</button>
                                             <button class="cl-btn sm" @onclick="@(() => AbrirPosponer(p))"><Icon Name="clock" Size="12" /> Posponer</button>
                                             <button class="cl-btn sm ghost" @onclick="@(() => AbrirRechazar(p))"><Icon Name="x" Size="12" /> Rechazar</button>
                                         }
@@ -150,38 +156,27 @@
             </Footer>
         </Modal>
 
-        @* ---------- Modal: Captar ---------- *@
-        <Modal Open="_modalCaptar" Tone="green" Icon="pin"
-               Title="Captar local"
-               Desc="@($"El propietario de {_target?.Direccion} aceptó. Al captar se crea la captación (pendiente de revisión del broker).")"
-               OnClose="@(() => _modalCaptar = false)">
-            <ChildContent>
-                <Field Label="Comisión pactada (%)" Required="true"><input type="number" step="0.1" min="0" @bind="_comisionTmp" /></Field>
-                <div class="cl-help" style="margin-top:6px;">La captación nace en estado <b>Pendiente de revisión</b>; el broker la aprueba para activarla.</div>
-                @if (_err is not null)
-                {
-                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
-                }
-            </ChildContent>
-            <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalCaptar = false)">Cancelar</button>
-                <button class="cl-btn primary" @onclick="ConfirmarCaptar">Captar local</button>
-            </Footer>
-        </Modal>
-
         <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
     private string _filtroEstado = "";
+    private string _query = "";
+    private string _distrito = "";
     private IReadOnlyList<ProspeccionDto> _porRecontactar = new List<ProspeccionDto>();
 
-    private bool _modalPosponer, _modalRechazar, _modalCaptar, _toast;
+    private IReadOnlyList<string> _distritos => ProspeccionSvc.All().Select(p => p.Distrito)
+        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+
+    private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
+
+    private void LimpiarFiltros() { _filtroEstado = ""; _query = ""; _distrito = ""; }
+
+    private bool _modalPosponer, _modalRechazar, _toast;
     private ProspeccionDto? _target;
     private DateOnly? _fechaRecontactoPick;
     private string _motivoTmp = "", _toastMsg = "";
-    private decimal _comisionTmp = 5.0m;
     private string? _err;
 
     private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
@@ -192,7 +187,15 @@
     private int Contar(string estado) => ProspeccionSvc.All().Count(p => p.Estado == estado);
 
     private IEnumerable<ProspeccionDto> Filtradas() =>
-        ProspeccionSvc.All().Where(p => string.IsNullOrEmpty(_filtroEstado) || p.Estado == _filtroEstado);
+        ProspeccionSvc.All().Where(p =>
+            (string.IsNullOrEmpty(_filtroEstado) || p.Estado == _filtroEstado) &&
+            (string.IsNullOrEmpty(_distrito) || p.Distrito == _distrito) &&
+            (string.IsNullOrEmpty(_query) || Coincide(p, _query)));
+
+    private static bool Coincide(ProspeccionDto p, string q) =>
+        (p.Direccion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (p.LocalCodigo?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (p.PropietarioNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
 
     private static bool EsVencido(ProspeccionDto p) =>
         p.Estado == "S" && p.FechaRecontacto is { } f && f < Hoy;
@@ -212,7 +215,6 @@
 
     private void AbrirPosponer(ProspeccionDto p) { _target = p; _fechaRecontactoPick = null; _err = null; _modalPosponer = true; }
     private void AbrirRechazar(ProspeccionDto p) { _target = p; _motivoTmp = ""; _err = null; _modalRechazar = true; }
-    private void AbrirCaptar(ProspeccionDto p) { _target = p; _comisionTmp = 5.0m; _err = null; _modalCaptar = true; }
 
     // Avanza una etapa simple del embudo (contactar / reunión / propuesta).
     private void Avanzar(ProspeccionDto p, Func<long, ProspeccionDto> accion, string mensaje)
@@ -253,26 +255,10 @@
         catch (InvalidOperationException ex) { _err = ex.Message; }
     }
 
-    private void ConfirmarCaptar()
-    {
-        if (_target is null) return;
-        try
-        {
-            var p = ProspeccionSvc.Captar(_target.Id, _comisionTmp);
-            _modalCaptar = false;
-            Recalcular();
-            Notificar($"¡Local captado! Se creó la captación {p.CaptacionCodigo} (pendiente de revisión).");
-        }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
-    }
-
-    private async void Notificar(string mensaje)
+    private void Notificar(string mensaje)
     {
         _toastMsg = mensaje;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(2600);
-        _toast = false;
-        StateHasChanged();
+        _ = DelayThenRenderAsync(2600, () => _toast = false);
     }
 }

@@ -1,4 +1,5 @@
 @page "/reasignar"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IAssignmentService Assign
 
@@ -7,9 +8,11 @@
 <AppShell Active="Reasignar agentes" Crumbs="@(new[] { "ControlLocal", "Administración", "Reasignar agentes" })"
           Title="Reasignar agente a broker supervisor"
           Subtitle="Selecciona un agente disponible y reasígnalo a un broker activo.">
+    @*Proximamente
     <Actions>
         <button class="cl-btn"><Icon Name="history" Size="13" /> historial</button>
     </Actions>
+    *@
     <ChildContent>
         <div class="cl-alert blue" style="margin-bottom:14px;">
             <Icon Name="info" Size="15" />
@@ -182,9 +185,7 @@
     {
         _confirm = false;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(2400);
-        _toast = false;
-        StateHasChanged();
+        await RenderIfAliveAsync();
+        await DelayThenRenderAsync(2400, () => _toast = false);
     }
 }

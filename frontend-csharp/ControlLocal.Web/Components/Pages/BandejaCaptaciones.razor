@@ -12,19 +12,25 @@
         <button class="cl-btn" @onclick="@(() => App.Navigate("oportunidades"))"><Icon Name="briefcase" Size="13" /> Operaciones del equipo</button>
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="clock" Label="Pendientes de revisión" Value="9" Tone="blue" />
-            <MetricCard Icon="alert" Label="Observadas" Value="4" Tone="blue" />
-            <MetricCard Icon="check" Label="Activas" Value="47" Tone="green" />
-            <MetricCard Icon="users" Label="Agentes con envíos" Value="7" Tone="info" />
+        @{ var filtradas = Filtradas().ToList(); }
+        <div style="display:grid;grid-template-columns:repeat(@(_estados.Length + 2),1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="layers" Label="Total" Value="@Todas.Count.ToString()" Tone="gray"
+                        Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
+            @foreach (var e in _estados)
+            {
+                <MetricCard Icon="@IconoEstado(e)" Label="@e" Value="@CuentaEstado(e).ToString()" Tone="@TonoEstado(e)"
+                            Active="@(_tab == e)" OnClick="@(() => _tab = e)" />
+            }
+            <MetricCard Icon="users" Label="Agentes con envíos" Value="@_agentes.Count.ToString()" Tone="info" />
         </div>
 
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
-        <FilterBar Search="Buscar por código, agente, dirección…">
-            <select class="cl-select"><option>Todos los agentes</option><option>Lucía Ferreyra</option><option>Diego Paredes</option><option>Ana Torres</option></select>
-            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
-            <select class="cl-select"><option>Antigüedad</option><option>Hoy</option><option>Esta semana</option><option>Más de 7 días</option></select>
+        <FilterBar Search="Buscar por código, agente, dirección…"
+                   @bind-Value="_query" ResultCount="filtradas.Count"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Todos los agentes" Options="_agentes" @bind-Value="_agente" />
+            <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
         </FilterBar>
 
         <div class="cl-card">
@@ -37,7 +43,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var c in CaptacionSvc.Bandeja())
+                        @foreach (var c in filtradas)
                         {
                             <tr>
                                 <td><span class="mono">@c.CodigoCaptacion</span></td>
@@ -58,9 +64,17 @@
                         }
                     </tbody>
                 </table>
+                @if (filtradas.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="pin" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin captaciones en este filtro</div>
+                        <div style="font-size:12px;">Ajusta la búsqueda o limpia los filtros.</div>
+                    </div>
+                }
             </div>
         </div>
-        <Pagination Total="9" />
+        <Pagination Total="filtradas.Count" />
 
         <div class="cl-alert blue" style="margin-top:14px;">
             <Icon Name="info" Size="15" />
@@ -70,14 +84,52 @@
 </AppShell>
 
 @code {
-    private string _tab = "Pendientes";
+    private string _tab = "Todas";
+    private string _query = "", _agente = "", _distrito = "";
 
-    private readonly Tabs.TabItem[] _tabs = new[]
+    private IReadOnlyList<BandejaCaptacionDto> Todas => CaptacionSvc.Bandeja();
+
+    private string[] _estados => Todas.Select(c => c.Estado).Distinct().OrderBy(x => x).ToArray();
+    private IReadOnlyList<string> _agentes => Todas.Select(c => c.NombreAgenteResponsable)
+        .Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().OrderBy(x => x).ToList();
+    private IReadOnlyList<string> _distritos => Todas.Select(c => c.DistritoLocal)
+        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+
+    private int CuentaEstado(string e) => Todas.Count(c => c.Estado == e);
+
+    private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", Todas.Count) }
+        .Concat(_estados.Select(e => new Tabs.TabItem(e, CuentaEstado(e))))
+        .ToArray();
+
+    private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query)
+                               || !string.IsNullOrEmpty(_agente) || !string.IsNullOrEmpty(_distrito);
+
+    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _agente = ""; _distrito = ""; }
+
+    private IEnumerable<BandejaCaptacionDto> Filtradas() => Todas.Where(c =>
+        (_tab == "Todas" || c.Estado == _tab) &&
+        (string.IsNullOrEmpty(_agente) || c.NombreAgenteResponsable == _agente) &&
+        (string.IsNullOrEmpty(_distrito) || c.DistritoLocal == _distrito) &&
+        (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
+
+    private static bool Coincide(BandejaCaptacionDto c, string q) =>
+        (c.CodigoCaptacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (c.NombreAgenteResponsable?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (c.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private static string TonoEstado(string e) => e switch
     {
-        new Tabs.TabItem("Pendientes", 9),
-        new Tabs.TabItem("Observadas", 4),
-        new Tabs.TabItem("Activas", 47),
-        new Tabs.TabItem("Rechazadas", 3),
-        new Tabs.TabItem("Cerradas", 12),
+        "Activa" => "green",
+        "Observada" => "info",
+        "Rechazada" => "red",
+        _ => "blue",
+    };
+
+    private static string IconoEstado(string e) => e switch
+    {
+        "Observada" => "alert",
+        "Activa" => "check",
+        "Rechazada" => "x",
+        _ => "clock",
     };
 }

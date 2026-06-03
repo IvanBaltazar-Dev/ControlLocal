@@ -1,4 +1,5 @@
 @page "/visitas"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IVisitaService VisitaSvc
 
@@ -14,10 +15,14 @@
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="calendar" Label="Programadas" Value="@Contar("P").ToString()" Tone="blue" />
-            <MetricCard Icon="check" Label="Realizadas" Value="@Contar("R").ToString()" Tone="green" />
-            <MetricCard Icon="clock" Label="Reprogramadas" Value="@Contar("G").ToString()" Tone="blue" />
-            <MetricCard Icon="x" Label="Canceladas" Value="@Contar("C").ToString()" Tone="red" />
+            <MetricCard Icon="calendar" Label="Programadas" Value="@Contar("P").ToString()" Tone="blue"
+                        Active="@(_filtroEstado == "P")" OnClick="@(() => ToggleEstado("P"))" />
+            <MetricCard Icon="check" Label="Realizadas" Value="@Contar("R").ToString()" Tone="green"
+                        Active="@(_filtroEstado == "R")" OnClick="@(() => ToggleEstado("R"))" />
+            <MetricCard Icon="clock" Label="Reprogramadas" Value="@Contar("G").ToString()" Tone="blue"
+                        Active="@(_filtroEstado == "G")" OnClick="@(() => ToggleEstado("G"))" />
+            <MetricCard Icon="x" Label="Canceladas" Value="@Contar("C").ToString()" Tone="red"
+                        Active="@(_filtroEstado == "C")" OnClick="@(() => ToggleEstado("C"))" />
         </div>
 
         <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px;">
@@ -70,15 +75,10 @@
             </div>
         </div>
 
-        <FilterBar Search="Buscar por cliente, local, captación…">
-            <select class="cl-select" @bind="_filtroEstado">
-                <option value="">Todos los estados</option>
-                @foreach (var e in EnumCatalog.EstadosVisita)
-                {
-                    <option value="@e.Code">@e.Label</option>
-                }
-            </select>
-            <select class="cl-select"><option>Todo el periodo</option><option>Esta semana</option><option>Este mes</option></select>
+        <FilterBar Search="Buscar por cliente, local, captación, agente…"
+                   @bind-Value="_query" ResultCount="VisitasFiltradas().Count()"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
         </FilterBar>
 
         <div class="cl-card">
@@ -272,8 +272,29 @@
     private static bool ImplicaNoContinuidad(string codigo) => codigo is "N" or "D";
     private static bool MantieneAbierta(string codigo) => codigo is "I" or "S" or "P";
 
+    private string _query = "";
+    private string _distrito = "";
+
+    private IReadOnlyList<string> _distritos => VisitaSvc.All().Select(v => v.DistritoLocal)
+        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+
+    private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
+
+    private void LimpiarFiltros() { _filtroEstado = ""; _query = ""; _distrito = ""; }
+
+    private void ToggleEstado(string code) => _filtroEstado = _filtroEstado == code ? "" : code;
+
     private IEnumerable<VisitaDto> VisitasFiltradas() =>
-        VisitaSvc.All().Where(v => string.IsNullOrEmpty(_filtroEstado) || v.Estado == _filtroEstado);
+        VisitaSvc.All().Where(v =>
+            (string.IsNullOrEmpty(_filtroEstado) || v.Estado == _filtroEstado) &&
+            (string.IsNullOrEmpty(_distrito) || v.DistritoLocal == _distrito) &&
+            (string.IsNullOrEmpty(_query) || Coincide(v, _query)));
+
+    private static bool Coincide(VisitaDto v, string q) =>
+        (v.ClienteNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (v.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (v.CodigoCaptacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (v.NombreAgente?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
 
     // Recalcula la agenda (calendario + próximas) a partir de las visitas vivas.
     private void Recalcular()
@@ -363,13 +384,10 @@
         catch (InvalidOperationException ex) { _err = ex.Message; }
     }
 
-    private async void Notificar(string mensaje)
+    private void Notificar(string mensaje)
     {
         _toastMsg = mensaje;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(2600);
-        _toast = false;
-        StateHasChanged();
+        _ = DelayThenRenderAsync(2600, () => _toast = false);
     }
 }

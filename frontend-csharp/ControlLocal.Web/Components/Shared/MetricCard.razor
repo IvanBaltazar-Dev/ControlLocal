@@ -1,5 +1,6 @@
-@* KPI metric card with optional icon, delta and footer. *@
-<div class="cl-metric @(OnClick.HasDelegate ? "cl-metric-clickable" : "")" @onclick="OnClick" style="@(OnClick.HasDelegate ? "cursor:pointer;" : "")">
+@* KPI metric card with optional icon, delta and footer. Clicable (OnClick) puede
+   actuar como atajo de filtro; Active resalta el KPI seleccionado. *@
+<div class="cl-metric @(OnClick.HasDelegate ? "cl-metric-clickable" : "")" @onclick="OnClick" style="@_style">
     <div class="cl-metric-row">
         @if (!string.IsNullOrEmpty(Icon))
         {
@@ -32,6 +33,11 @@
     [Parameter] public string Tone { get; set; } = "blue";
     [Parameter] public string? Footer { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public bool Active { get; set; }
+
+    private string _style =>
+        (OnClick.HasDelegate ? "cursor:pointer;" : "")
+        + (Active ? "outline:2px solid #005BFF;outline-offset:-2px;box-shadow:0 0 0 4px rgba(0,91,255,0.08);" : "");
 
     private record ToneStyle(string Bg, string Color);
 

@@ -1,24 +1,45 @@
-@* Filter bar — search input, optional inline filters, trailing actions. *@
+@* Barra de filtros — búsqueda (two-way), filtros secundarios (ChildContent),
+   contador de resultados y acción de limpiar. *@
 <div class="cl-filterbar">
-    <input class="cl-input search" placeholder="@Search" style="width:280px;" />
+    <input class="cl-input search" placeholder="@Search" style="width:280px;"
+           value="@Value" @oninput="OnInput" />
     @ChildContent
-    @if (ShowTail && Tail == null)
+    @if (OnClear.HasDelegate && HasActiveFilters)
     {
-        <div style="margin-left:auto;display:flex;gap:8px;">
-            @*IMPLEMENTACION FUTURA*@
-            @*<button class="cl-btn sm"><Icon Name="filter" Size="13" /> Más filtros</button>*@
+        <button class="cl-btn sm ghost" @onclick="OnClear" title="Limpiar filtros"><Icon Name="x" Size="12" /> Limpiar</button>
+    }
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+        @if (ResultCount is not null)
+        {
+            <span class="cl-muted" style="font-size:12px;white-space:nowrap;">@ResultCount resultado@(ResultCount == 1 ? "" : "s")</span>
+        }
+        @if (Tail != null)
+        {
+            @Tail
+        }
+        else if (ShowTail)
+        {
             <button class="cl-btn sm"><Icon Name="download" Size="13" /> Exportar</button>
-        </div>
-    }
-    else if (Tail != null)
-    {
-        <div style="margin-left:auto;display:flex;gap:8px;">@Tail</div>
-    }
+        }
+    </div>
 </div>
 
 @code {
     [Parameter] public string Search { get; set; } = "Buscar…";
+
+    // Texto de búsqueda (two-way: usar @bind-Value).
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    // Contador de resultados y limpieza de filtros (opcionales).
+    [Parameter] public int? ResultCount { get; set; }
+    [Parameter] public bool HasActiveFilters { get; set; }
+    [Parameter] public EventCallback OnClear { get; set; }
+
     [Parameter] public bool ShowTail { get; set; } = true;
     [Parameter] public RenderFragment? Tail { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private async Task OnInput(ChangeEventArgs e) =>
+        await ValueChanged.InvokeAsync(e.Value?.ToString() ?? "");
 }

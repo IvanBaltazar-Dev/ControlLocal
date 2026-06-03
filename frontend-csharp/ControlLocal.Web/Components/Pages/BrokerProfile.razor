@@ -14,7 +14,7 @@
 
         @if (App.Role != Roles.Admin)
         {
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("broker-form"))">
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate($"broker-form/{b.CodigoBroker}"))">
                 <Icon Name="edit" Size="13" /> Editar broker
             </button>
         }

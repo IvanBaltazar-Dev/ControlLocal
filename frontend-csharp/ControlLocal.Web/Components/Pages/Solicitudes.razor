@@ -16,28 +16,23 @@
         }
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            @if (_isBroker)
+        @{ var filtradas = Filtradas().ToList(); }
+        <div style="display:grid;grid-template-columns:repeat(@(_estados.Length + 1),1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="fileText" Label="Total" Value="@Todas.Count.ToString()" Tone="gray"
+                        Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
+            @foreach (var e in _estados)
             {
-                <MetricCard Icon="fileText" Label="Por evaluar" Value="6" Tone="blue" Footer="2 vencen hoy" />
-                <MetricCard Icon="alert" Label="Observadas" Value="2" Tone="blue" />
-                <MetricCard Icon="check" Label="Aprobadas (mes)" Value="14" Tone="green" />
-                <MetricCard Icon="x" Label="Rechazadas (mes)" Value="3" Tone="red" />
-            }
-            else
-            {
-                <MetricCard Icon="fileText" Label="Mis solicitudes" Value="9" Tone="info" />
-                <MetricCard Icon="clock" Label="En revisión" Value="2" Tone="blue" />
-                <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="blue" Footer="requieren subsanar" />
-                <MetricCard Icon="check" Label="Aprobadas" Value="6" Tone="green" />
+                <MetricCard Icon="@IconoEstado(e)" Label="@e" Value="@CuentaEstado(e).ToString()" Tone="@TonoEstado(e)"
+                            Active="@(_tab == e)" OnClick="@(() => _tab = e)" />
             }
         </div>
 
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
-        <FilterBar Search="Buscar por código, cliente, local…">
-            <select class="cl-select"><option>Todos los estados</option><option>Registrada</option><option>En revisión</option><option>Observada</option><option>Aprobada</option><option>Rechazada</option></select>
-            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
+        <FilterBar Search="Buscar por código, cliente, local…"
+                   @bind-Value="_query" ResultCount="filtradas.Count"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
         </FilterBar>
 
         <div class="cl-card">
@@ -50,7 +45,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var s in SolicitudSvc.All())
+                        @foreach (var s in filtradas)
                         {
                             <tr>
                                 <td><span class="mono">@s.CodigoSolicitud</span></td>
@@ -88,17 +83,68 @@
                         }
                     </tbody>
                 </table>
+                @if (filtradas.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="fileText" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin solicitudes en este filtro</div>
+                        <div style="font-size:12px;">Ajusta la búsqueda o limpia los filtros.</div>
+                    </div>
+                }
             </div>
         </div>
-        <Pagination Total="@(_isBroker ? 6 : 9)" />
+        <Pagination Total="filtradas.Count" />
     </ChildContent>
 </AppShell>
 
 @code {
     private bool _isBroker => App.Role == Roles.Broker || App.Role == Roles.Admin;
     private string _tab = "Todas";
+    private string _query = "", _distrito = "";
 
-    protected override void OnInitialized() => _tab = _isBroker ? "Por evaluar" : "Todas";
+    // El broker arranca viendo lo que debe evaluar.
+    protected override void OnInitialized() => _tab = _isBroker ? "En revisión" : "Todas";
+
+    private IReadOnlyList<SolicitudAlquilerDto> Todas => SolicitudSvc.All();
+
+    private string[] _estados => Todas.Select(s => s.Estado).Distinct().OrderBy(x => x).ToArray();
+    private IReadOnlyList<string> _distritos => Todas.Select(s => s.DistritoLocal)
+        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+
+    private int CuentaEstado(string e) => Todas.Count(s => s.Estado == e);
+
+    private bool HayFiltros => _tab != (_isBroker ? "En revisión" : "Todas")
+                               || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
+
+    private void LimpiarFiltros() { _tab = _isBroker ? "En revisión" : "Todas"; _query = ""; _distrito = ""; }
+
+    private IEnumerable<SolicitudAlquilerDto> Filtradas() => Todas.Where(s =>
+        (_tab == "Todas" || s.Estado == _tab) &&
+        (string.IsNullOrEmpty(_distrito) || s.DistritoLocal == _distrito) &&
+        (string.IsNullOrEmpty(_query) || Coincide(s, _query)));
+
+    private static bool Coincide(SolicitudAlquilerDto s, string q) =>
+        (s.CodigoSolicitud?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (s.ClienteNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (s.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (s.CodigoOperacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private static string TonoEstado(string e) => e switch
+    {
+        "Aprobada" => "green",
+        "Rechazada" => "red",
+        "Observada" => "info",
+        _ => "blue",
+    };
+
+    private static string IconoEstado(string e) => e switch
+    {
+        "Aprobada" => "check",
+        "Rechazada" => "x",
+        "Observada" => "alert",
+        "En revisión" => "clock",
+        _ => "fileText",
+    };
 
     private string _title => _isBroker ? "Solicitudes por evaluar" : "Solicitudes de alquiler";
     private string _sideActive => _isBroker ? "Solicitudes por evaluar" : "Solicitudes de alquiler";
@@ -110,19 +156,7 @@
         ? new[] { "ControlLocal", "Bandejas de revisión", "Solicitudes por evaluar" }
         : new[] { "ControlLocal", "Operación", "Solicitudes de alquiler" };
 
-    private Tabs.TabItem[] _tabs => _isBroker
-        ? new[]
-        {
-            new Tabs.TabItem("Por evaluar", 6),
-            new Tabs.TabItem("Observadas", 2),
-            new Tabs.TabItem("Aprobadas", 14),
-            new Tabs.TabItem("Rechazadas", 3),
-        }
-        : new[]
-        {
-            new Tabs.TabItem("Todas", 9),
-            new Tabs.TabItem("En revisión", 2),
-            new Tabs.TabItem("Observadas", 1),
-            new Tabs.TabItem("Aprobadas", 6),
-        };
+    private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", Todas.Count) }
+        .Concat(_estados.Select(e => new Tabs.TabItem(e, CuentaEstado(e))))
+        .ToArray();
 }

@@ -1,5 +1,4 @@
 @page "/reasignar-captaciones"
-@inherits SafeComponentBase
 @inject AppState App
 @inject IReasignacionCaptacionService Reasignaciones
 
@@ -17,58 +16,77 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             @* Selector de captación *@
             <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">1 · Captación a reasignar</div></div>
-                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:scroll;">
-                    @foreach (var c in Reasignaciones.Reasignables())
-                    {
-                        var sel = _captacion == c.Id;
-                        var border = sel ? "#005BFF" : "var(--c-border)";
-                        var bg = sel ? "#EAF1FF" : "#fff";
-                        var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:pointer;";
-                        <label style="@style">
-                            <input type="radio" name="reasignar-captacion" checked="@sel"
-                                   @onchange="@(() => { _captacion = c.Id; _agente = 0; _err = null; })" />
-                            <div style="flex:1;min-width:0;">
-                                <div style="font-weight:600;font-size:13px;">@c.CodigoCaptacion · @c.DireccionLocal</div>
-                                <div class="cl-muted" style="font-size:11px;">@c.DistritoLocal · Agente actual: @c.NombreAgenteResponsable</div>
-                            </div>
-                            <StatusBadge Label="@c.Estado" />
-                        </label>
-                    }
+                <div class="cl-card-head">
+                    <div class="cl-card-title">1 · Captación a reasignar</div>
+                </div>
+
+                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                    <div style="display:flex;flex-direction:column;gap:8px;height:300px;overflow-y:scroll;scrollbar-gutter:stable;padding-right:6px;">
+                        @foreach (var c in Reasignaciones.Reasignables())
+                        {
+                            var sel = _captacion == c.Id;
+                            var border = sel ? "#005BFF" : "var(--c-border)";
+                            var bg = sel ? "#EAF1FF" : "#fff";
+                            var style = $"display:flex;flex:0 0 auto;min-height:72px;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:pointer;";
+
+                            <label style="@style">
+                                <input type="radio" name="reasignar-captacion" checked="@sel"
+                                       @onchange="@(() => { _captacion = c.Id; _agente = 0; _err = null; })" />
+
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:600;font-size:13px;">@c.CodigoCaptacion · @c.DireccionLocal</div>
+                                    <div class="cl-muted" style="font-size:11px;">@c.DistritoLocal · Agente actual: @c.NombreAgenteResponsable</div>
+                                </div>
+
+                                <StatusBadge Label="@c.Estado" />
+                            </label>
+                        }
+                    </div>
+
                     <div class="cl-help">Las captaciones rechazadas, cerradas o vencidas no se pueden reasignar.</div>
                 </div>
             </div>
 
             @* Selector de agente destino *@
             <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">2 · Nuevo agente responsable</div></div>
-                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
-                    @foreach (var a in Reasignaciones.AgentesDestino())
-                    {
-                        var esActual = C is not null && a.Id == C.AgenteResponsableId;
-                        var disponible = a.EstadoAdministrativo == "Activo" && a.EstadoOperativo == "Disponible";
-                        var selectable = disponible && !esActual;
-                        var sel = _agente == a.Id;
-                        var border = sel && selectable ? "#005BFF" : "var(--c-border)";
-                        var bg = !selectable ? "var(--c-bg-2)" : sel ? "#EAF1FF" : "#fff";
-                        var cursor = selectable ? "pointer" : "not-allowed";
-                        var opacity = selectable ? "1" : "0.72";
-                        var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
-                        var motivo = esActual ? "La captación ya está asignada a este agente" : !disponible ? "Agente no disponible para asignación" : "";
-                        <label title="@motivo" style="@style">
-                            <input type="radio" name="reasignar-agente" disabled="@(!selectable)" checked="@sel"
-                                   @onchange="@(() => { _agente = a.Id; _err = null; })" />
-                            <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:@a.Color;">@a.Iniciales</span>
-                            <div style="flex:1;min-width:0;">
-                                <div style="font-weight:600;font-size:13px;">@a.Nombre</div>
-                                <div class="cl-muted" style="font-size:11px;">DNI: @a.NumeroDocumento<br />@a.CaptacionesActivas captaciones activas</div>
-                            </div>
-                            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-                                <StatusBadge Label="@a.EstadoAdministrativo" />
-                                <StatusBadge Label="@a.EstadoOperativo" />
-                            </div>
-                        </label>
-                    }
+                <div class="cl-card-head">
+                    <div class="cl-card-title">2 · Nuevo agente responsable</div>
+                </div>
+
+                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                    <div style="display:flex;flex-direction:column;gap:8px;height:300px;overflow-y:scroll;scrollbar-gutter:stable;padding-right:6px;">
+                        @foreach (var a in Reasignaciones.AgentesDestino())
+                        {
+                            var esActual = C is not null && a.Id == C.AgenteResponsableId;
+                            var disponible = a.EstadoAdministrativo == "Activo" && a.EstadoOperativo == "Disponible";
+                            var selectable = disponible && !esActual;
+                            var sel = _agente == a.Id;
+                            var border = sel && selectable ? "#005BFF" : "var(--c-border)";
+                            var bg = !selectable ? "var(--c-bg-2)" : sel ? "#EAF1FF" : "#fff";
+                            var cursor = selectable ? "pointer" : "not-allowed";
+                            var opacity = selectable ? "1" : "0.72";
+                            var style = $"display:flex;flex:0 0 auto;min-height:72px;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
+                            var motivo = esActual ? "La captación ya está asignada a este agente" : !disponible ? "Agente no disponible para asignación" : "";
+
+                            <label title="@motivo" style="@style">
+                                <input type="radio" name="reasignar-agente" disabled="@(!selectable)" checked="@sel"
+                                       @onchange="@(() => { _agente = a.Id; _err = null; })" />
+
+                                <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:@a.Color;">@a.Iniciales</span>
+
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:600;font-size:13px;">@a.Nombre</div>
+                                    <div class="cl-muted" style="font-size:11px;">DNI: @a.NumeroDocumento<br />@a.CaptacionesActivas captaciones activas</div>
+                                </div>
+
+                                <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+                                    <StatusBadge Label="@a.EstadoAdministrativo" />
+                                    <StatusBadge Label="@a.EstadoOperativo" />
+                                </div>
+                            </label>
+                        }
+                    </div>
+
                     <div class="cl-help">Los agentes inactivos o en licencia se muestran como no disponibles para selección.</div>
                 </div>
             </div>
@@ -81,49 +99,83 @@
                     <textarea rows="3" value="@_motivo" @oninput="@(e => { _motivo = e.Value?.ToString() ?? ""; _err = null; })"
                               placeholder="Ej. Balance de carga del equipo tras nuevas captaciones…"></textarea>
                 </Field>
+
                 @if (_err is not null)
                 {
                     <div class="cl-alert red" style="margin-top:12px;">
-                        <Icon Name="alert" Size="15" /><span>@_err</span>
+                        <Icon Name="alert" Size="15" />
+                        <span>@_err</span>
                     </div>
                 }
             </FormSection>
 
             <div class="cl-card" style="align-self:start;">
-                <div class="cl-card-head"><div class="cl-card-title">Comparación</div></div>
+                <div class="cl-card-head">
+                    <div class="cl-card-title">Comparación</div>
+                </div>
+
                 <div class="cl-card-body">
                     <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;">
                         <div style="flex:1;">
                             <div class="cl-def-k">Agente actual</div>
                             <div style="font-size:13px;font-weight:600;margin-top:4px;">@(C?.NombreAgenteResponsable ?? "—")</div>
                         </div>
+
                         <Icon Name="arrowRight" Size="18" Color="#005BFF" />
+
                         <div style="flex:1;text-align:right;">
                             <div class="cl-def-k">Agente nuevo</div>
                             <div style="font-size:13px;font-weight:600;margin-top:4px;color:#005BFF;">@(A?.Nombre ?? "—")</div>
                         </div>
                     </div>
+
                     <div class="cl-divider"></div>
+
                     <dl class="cl-kv" style="grid-template-columns:1fr auto;">
-                        <dt>Captación</dt><dd>@(C?.CodigoCaptacion ?? "—")</dd>
-                        <dt>Local</dt><dd>@(C?.DireccionLocal ?? "—")</dd>
-                        <dt>Fecha del cambio</dt><dd>28 May 2026</dd>
-                        <dt>Responsable</dt><dd>Ricardo Salas</dd>
+                        <dt>Captación</dt>
+                        <dd>@(C?.CodigoCaptacion ?? "—")</dd>
+
+                        <dt>Local</dt>
+                        <dd>@(C?.DireccionLocal ?? "—")</dd>
+
+                        <dt>Fecha del cambio</dt>
+                        <dd>28 May 2026</dd>
+
+                        <dt>Responsable</dt>
+                        <dd>Ricardo Salas</dd>
                     </dl>
+
                     <button class="cl-btn primary" style="width:100%;margin-top:14px;justify-content:center;" @onclick="TryConfirm">
                         <Icon Name="swap" Size="14" /> Confirmar reasignación
                     </button>
-                    <button class="cl-btn ghost" style="width:100%;margin-top:6px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("captaciones"))">Cancelar</button>
+
+                    <button class="cl-btn ghost" style="width:100%;margin-top:6px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("captaciones"))">
+                        Cancelar
+                    </button>
                 </div>
             </div>
         </div>
 
-        @* Historial *@
+        @* Historial interno *@
         <div class="cl-card" style="margin-top:14px;">
-            <div class="cl-card-head"><div class="cl-card-title">Reasignaciones recientes</div></div>
+            <div class="cl-card-head">
+                <div class="cl-card-title">Reasignaciones recientes</div>
+            </div>
+
             <div class="cl-card-body" style="padding:0;">
                 <table class="cl-table">
-                    <thead><tr><th>Fecha</th><th>Captación</th><th>Local</th><th>Agente anterior</th><th>Agente nuevo</th><th>Responsable</th><th>Motivo</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Captación</th>
+                            <th>Local</th>
+                            <th>Agente anterior</th>
+                            <th>Agente nuevo</th>
+                            <th>Responsable</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+
                     <tbody>
                         @foreach (var h in Reasignaciones.Historial())
                         {
@@ -148,6 +200,7 @@
                        ConfirmLabel="Confirmar reasignación" CancelLabel="Cancelar"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
+
         <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
@@ -171,11 +224,36 @@
 
     private void TryConfirm()
     {
-        if (C is null) { _err = "Selecciona una captación para reasignar."; return; }
-        if (A is null) { _err = "Selecciona el agente destino."; return; }
-        if (A.EstadoAdministrativo != "Activo" || A.EstadoOperativo != "Disponible") { _err = "El agente seleccionado no está disponible para asignación."; return; }
-        if (A.Id == C.AgenteResponsableId) { _err = "La captación ya está asignada a ese agente."; return; }
-        if (string.IsNullOrWhiteSpace(_motivo)) { _err = "Debes ingresar un motivo para continuar."; return; }
+        if (C is null)
+        {
+            _err = "Selecciona una captación para reasignar.";
+            return;
+        }
+
+        if (A is null)
+        {
+            _err = "Selecciona el agente destino.";
+            return;
+        }
+
+        if (A.EstadoAdministrativo != "Activo" || A.EstadoOperativo != "Disponible")
+        {
+            _err = "El agente seleccionado no está disponible para asignación.";
+            return;
+        }
+
+        if (A.Id == C.AgenteResponsableId)
+        {
+            _err = "La captación ya está asignada a ese agente.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_motivo))
+        {
+            _err = "Debes ingresar un motivo para continuar.";
+            return;
+        }
+
         _err = null;
         _confirm = true;
     }
@@ -183,6 +261,7 @@
     private async Task OnConfirm()
     {
         _confirm = false;
+
         try
         {
             var registro = Reasignaciones.Reasignar(new ReasignarCaptacionRequest
@@ -192,6 +271,7 @@
                 BrokerResponsableId = 1,
                 Motivo = _motivo,
             });
+
             _toastMsg = $"{registro.CodigoCaptacion} reasignada a {registro.AgenteNuevoNombre}.";
             _agente = 0;
             _motivo = "";
@@ -201,8 +281,13 @@
             _err = ex.Message;
             return;
         }
+
         _toast = true;
-        await RenderIfAliveAsync();
-        await DelayThenRenderAsync(2400, () => _toast = false);
+        StateHasChanged();
+
+        await Task.Delay(2400);
+
+        _toast = false;
+        StateHasChanged();
     }
 }

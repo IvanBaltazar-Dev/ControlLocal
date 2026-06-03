@@ -8,9 +8,6 @@
 <AppShell Active="Reasignar captaciones" Crumbs="@(new[] { "ControlLocal", "Mi equipo", "Reasignar captaciones" })"
           Title="Reasignar captación a otro agente"
           Subtitle="Selecciona una captación de tu equipo y reasígnala a un agente disponible bajo tu supervisión.">
-    <Actions>
-        <button class="cl-btn"><Icon Name="history" Size="13" /> historial</button>
-    </Actions>
     <ChildContent>
         <div class="cl-alert blue" style="margin-bottom:14px;">
             <Icon Name="info" Size="15" />
@@ -21,7 +18,7 @@
             @* Selector de captación *@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">1 · Captación a reasignar</div></div>
-                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:scroll;">
                     @foreach (var c in Reasignaciones.Reasignables())
                     {
                         var sel = _captacion == c.Id;
@@ -45,7 +42,7 @@
             @* Selector de agente destino *@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">2 · Nuevo agente responsable</div></div>
-                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
                     @foreach (var a in Reasignaciones.AgentesDestino())
                     {
                         var esActual = C is not null && a.Id == C.AgenteResponsableId;

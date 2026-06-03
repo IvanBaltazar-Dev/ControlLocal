@@ -17,7 +17,7 @@
             @* Selector de captación *@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">1 · Captación a reasignar</div></div>
-                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:scroll;">
                     @foreach (var c in Reasignaciones.Reasignables())
                     {
                         var sel = _captacion == c.Id;
@@ -41,7 +41,7 @@
             @* Selector de agente destino *@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">2 · Nuevo agente responsable</div></div>
-                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
                     @foreach (var a in Reasignaciones.AgentesDestino())
                     {
                         var esActual = C is not null && a.Id == C.AgenteResponsableId;

@@ -56,11 +56,11 @@
                         <div class="cl-prop-foot">
                             @if (c.Estado == "Observada")
                             {
-                                <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
+                                <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate($"captacion-form/{c.CodigoCaptacion}"))">Subsanar</button>
                             }
                             else if (c.Estado is "Pendiente" or "Borrador")
                             {
-                                <button class="cl-btn sm cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Continuar</button>
+                                <button class="cl-btn sm cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate($"captacion-form/{c.CodigoCaptacion}"))">Continuar</button>
                             }
                             else
                             {

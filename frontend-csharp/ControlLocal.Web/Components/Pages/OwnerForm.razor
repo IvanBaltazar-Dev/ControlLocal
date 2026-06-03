@@ -14,11 +14,12 @@
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("owners"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
-        <div style="max-width:880px;">
-            <FormSection Num="1" Title="Tipo de propietario" Sub="@(_isEdit ? "No se puede cambiar tras el registro" : "Determina los campos de identificación requeridos")">
+        <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;max-width:1100px;">
+            <div>
+                <FormSection Num="1" Title="Tipo de propietario" Sub="@(_isEdit ? "No se puede cambiar tras el registro" : "Determina los campos de identificación requeridos")">
                 <div class="cl-seg" role="tablist">
-                    <button class="@(_tipo == "juridica" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => { if (!_isEdit) { _tipo = "juridica"; _err = null; } })">Persona jurídica</button>
-                    <button class="@(_tipo == "natural" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => { if (!_isEdit) { _tipo = "natural"; _err = null; } })">Persona natural</button>
+                    <button class="@(_tipo == "juridica" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => { if (!_isEdit) { _tipo = "juridica"; _tipoDocumento = "R"; _err = null; } })">Persona jurídica</button>
+                    <button class="@(_tipo == "natural" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => { if (!_isEdit) { _tipo = "natural"; _tipoDocumento = ""; _err = null; } })">Persona natural</button>
                 </div>
                 @if (_isEdit)
                 {
@@ -46,14 +47,7 @@
                 {
                     <div class="cl-grid c2">
                         <Field Label="Nombres" Required="true"><input @bind="_nombre" placeholder="Nombres" @oninput="@(() => _err = null)" /></Field>
-                        <Field Label="Tipo de documento" Required="true">
-                            <select @bind="_tipoDocumento" disabled="@_isEdit">
-                                <option value="">— Seleccionar —</option>
-                                <option value="D">DNI</option>
-                                <option value="C">Carné de extranjería</option>
-                                <option value="P">Pasaporte</option>
-                            </select>
-                        </Field>
+                        <DocumentTypeSelector PersonType="natural" SelectedDocType="@_tipoDocumento" OnChange="OnTipoDocChange" Disabled="@_isEdit" />
                         <Field Label="Número de documento" Required="true">
                             <input @bind="_numeroDocumento" placeholder="__ ___ ___" disabled="@_isEdit" @oninput="@(() => _err = null)" />
                             @if (_isEdit)
@@ -91,6 +85,11 @@
 
             <FormFooterBar OnCancel="@(() => App.Navigate("owners"))" OnSave="@TryConfirm"
                            SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar propietario")" />
+            </div>
+
+            <div class="cl-stack">
+                <FormStepsSidebar Steps="_pasos" />
+            </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="@(_isEdit ? "edit" : "user")"
@@ -119,6 +118,37 @@
     private bool _confirm;
     private bool _toast;
     private string? _err;
+
+    // Progreso interactivo de las secciones del formulario.
+    private bool IsStep1Complete => !string.IsNullOrEmpty(_tipo);
+    private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_nombre) && !string.IsNullOrWhiteSpace(_numeroDocumento)
+                                    && (_tipo == "juridica" || !string.IsNullOrWhiteSpace(_tipoDocumento));
+    private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_telefono) && !string.IsNullOrWhiteSpace(_correo);
+    private bool IsStep4Complete => !_isEdit || !string.IsNullOrEmpty(_estado);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos
+    {
+        get
+        {
+            var pasos = new List<FormStepsSidebar.Step>
+            {
+                new("Tipo", "Natural o Jurídica", IsStep1Complete),
+                new("Identificación", "Documento y nombre", IsStep2Complete),
+                new("Contacto", "Teléfono y correo", IsStep3Complete),
+            };
+            if (_isEdit)
+            {
+                pasos.Add(new FormStepsSidebar.Step("Estado", "Activo o inactivo", IsStep4Complete));
+            }
+            return pasos;
+        }
+    }
+
+    private void OnTipoDocChange(string val)
+    {
+        _tipoDocumento = val;
+        _err = null;
+    }
 
     protected override void OnParametersSet()
     {

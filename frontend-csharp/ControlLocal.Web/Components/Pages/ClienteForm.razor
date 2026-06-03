@@ -25,8 +25,8 @@
                     @if (_tipo == "juridica")
                     {
                         <div class="cl-grid c2">
-                            <Field Label="Razón social" Required="true"><input @bind="_razonSocial" placeholder="Ej. Inversiones Trébol S.A.C." /></Field>
-                            <Field Label="RUC" Required="true"><input @bind="_documento" placeholder="20 ___ ___ ___" /></Field>
+                            <Field Label="Razón social" Required="true"><input @bind="_razonSocial" @bind:event="oninput" placeholder="Ej. Inversiones Trébol S.A.C." /></Field>
+                            <Field Label="RUC" Required="true"><input @bind="_documento" @bind:event="oninput" placeholder="20 ___ ___ ___" /></Field>
                             <Field Label="Representante legal" Required="true"><input placeholder="Nombre completo" /></Field>
                             <Field Label="DNI del representante"><input placeholder="__ ___ ___" /></Field>
                         </div>
@@ -34,9 +34,10 @@
                     else
                     {
                         <div class="cl-grid c2">
-                            <Field Label="Nombres" Required="true"><input @bind="_nombres" placeholder="Nombres" /></Field>
-                            <Field Label="Apellidos" Required="true"><input @bind="_apellidos" placeholder="Apellidos" /></Field>
-                            <Field Label="DNI" Required="true"><input @bind="_documento" placeholder="__ ___ ___" /></Field>
+                            <Field Label="Nombres" Required="true"><input @bind="_nombres" @bind:event="oninput" placeholder="Nombres" /></Field>
+                            <Field Label="Apellidos" Required="true"><input @bind="_apellidos" @bind:event="oninput" placeholder="Apellidos" /></Field>
+                            <DocumentTypeSelector PersonType="natural" SelectedDocType="@_tipoDoc" OnChange="OnTipoDocChange" />
+                            <Field Label="Número de documento" Required="true"><input @bind="_documento" @bind:event="oninput" placeholder="__ ___ ___" /></Field>
                             <Field Label="Ocupación / giro"><input placeholder="Ej. Comerciante" /></Field>
                         </div>
                     }
@@ -44,9 +45,9 @@
 
                 <FormSection Num="3" Title="Contacto" Sub="Datos para coordinar interacciones y visitas">
                     <div class="cl-grid c2">
-                        <Field Label="Teléfono principal" Required="true"><input @bind="_telefono" placeholder="+51 ___ ___ ___" /></Field>
+                        <Field Label="Teléfono principal" Required="true"><input @bind="_telefono" @bind:event="oninput" placeholder="+51 ___ ___ ___" /></Field>
                         <Field Label="Teléfono alterno"><input placeholder="Opcional" /></Field>
-                        <Field Label="Correo electrónico" Required="true"><input placeholder="cliente@@correo.com" /></Field>
+                        <Field Label="Correo electrónico" Required="true"><input @bind="_correo" @bind:event="oninput" placeholder="cliente@@correo.com" /></Field>
                         <Field Label="Canal preferido"><select><option>Llamada</option><option>WhatsApp</option><option>Correo</option><option>Presencial</option></select></Field>
                     </div>
                 </FormSection>
@@ -82,20 +83,7 @@
             </div>
 
             <div class="cl-stack">
-                <div class="cl-card" style="position:sticky;top:14px;">
-                    <div class="cl-card-head"><div class="cl-card-title">Vincular a captación</div></div>
-                    <div class="cl-card-body">
-                        <div class="cl-help" style="margin-bottom:10px;">Opcional. Puedes vincular el cliente ahora o más tarde desde el expediente de una captación.</div>
-                        <Field Label="Captación activa">
-                            <select>
-                                <option value="">— Sin vincular —</option>
-                                <option>CAP-0218 · Av. La Marina 245</option>
-                                <option>CAP-0226 · Calle Schell 412</option>
-                                <option>CAP-0234 · Jr. Berlín 230</option>
-                            </select>
-                        </Field>
-                    </div>
-                </div>
+                <FormStepsSidebar Steps="_pasos" />
                 <div class="cl-alert blue">
                     <Icon Name="info" Size="15" />
                     <span>Solo el <b>agente</b> registra clientes. Al vincular el cliente a una captación activa, esa captación inicia su etapa comercial.</span>
@@ -125,10 +113,34 @@
     private string _razonSocial = "";
     private string _nombres = "";
     private string _apellidos = "";
+    private string _tipoDoc = "";       // Código de documento (D/C/P) para persona natural.
     private string _documento = "";
     private string _telefono = "";
+    private string _correo = "";
     private string _rubro = "Restaurante / Café";
     private string _notas = "";
+
+    // Progreso interactivo de las secciones del formulario.
+    private bool IsStep1Complete => !string.IsNullOrEmpty(_tipo);
+    private bool IsStep2Complete => _tipo == "juridica"
+        ? !string.IsNullOrWhiteSpace(_razonSocial) && !string.IsNullOrWhiteSpace(_documento)
+        : !string.IsNullOrWhiteSpace(_nombres) && !string.IsNullOrWhiteSpace(_apellidos)
+          && !string.IsNullOrWhiteSpace(_tipoDoc) && !string.IsNullOrWhiteSpace(_documento);
+    private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_telefono) && !string.IsNullOrWhiteSpace(_correo);
+    private bool IsStep4Complete => !string.IsNullOrWhiteSpace(_rubro);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
+    {
+        new FormStepsSidebar.Step("Tipo de cliente", "Natural o Jurídica", IsStep1Complete),
+        new FormStepsSidebar.Step("Identificación", "Documento y nombre", IsStep2Complete),
+        new FormStepsSidebar.Step("Contacto", "Teléfono y correo", IsStep3Complete),
+        new FormStepsSidebar.Step("Necesidad", "Rubro y presupuesto", IsStep4Complete),
+    };
+
+    private void OnTipoDocChange(string val)
+    {
+        _tipoDoc = val;
+    }
 
     protected override void OnParametersSet()
     {

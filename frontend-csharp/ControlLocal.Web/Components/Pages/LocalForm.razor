@@ -38,7 +38,7 @@
 
                 <FormSection Num="2" Title="Ubicación" Sub="Dirección exacta y distrito del local comercial">
                     <div class="cl-grid c2">
-                        <Field Label="Dirección" Required="true"><input placeholder="Av. / Calle, número" @bind="_direccion" /></Field>
+                        <Field Label="Dirección" Required="true"><input placeholder="Av. / Calle, número" @bind="_direccion" @bind:event="oninput" /></Field>
                         <Field Label="Referencia"><input placeholder="Entre calles, esquina, hito cercano" @bind="_referencia" /></Field>
                         <Field Label="Distrito" Required="true"><select @bind="_distrito"><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option><option>Barranco</option></select></Field>
                         <Field Label="Provincia"><input value="Lima" disabled="true" /></Field>
@@ -47,9 +47,9 @@
 
                 <FormSection Num="3" Title="Características del local" Sub="Datos que verán los clientes interesados en la ficha">
                     <div class="cl-grid c3">
-                        <Field Label="Área (m²)" Required="true"><input placeholder="Ej. 80" @bind="_areaMts" type="number" /></Field>
+                        <Field Label="Área (m²)" Required="true"><input placeholder="Ej. 80" @bind="_areaMts" @bind:event="oninput" type="number" /></Field>
                         <Field Label="Rubro sugerido"><select @bind="_rubro"><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option><option>Salud</option></select></Field>
-                        <Field Label="Precio referencial (USD/mes)" Required="true"><input placeholder="1 500" @bind="_precioRef" type="number" /></Field>
+                        <Field Label="Precio referencial (USD/mes)" Required="true"><input placeholder="1 500" @bind="_precioRef" @bind:event="oninput" type="number" /></Field>
                         <Field Label="Disponibilidad"><select @bind="_estado"><option>Disponible</option><option>No disponible</option><option>Inactivo</option></select></Field>
                         <Field Label="Antigüedad"><input placeholder="Ej. 5 años" @bind="_antiguedad" /></Field>
                         <Field Label="N.° de ambientes"><input placeholder="Ej. 3" @bind="_ambientes" /></Field>
@@ -78,12 +78,7 @@
             </div>
 
             <div class="cl-stack">
-                <div class="cl-card" style="position:sticky;top:14px;">
-                    <div class="cl-card-head"><div class="cl-card-title">Qué sigue después</div></div>
-                    <div class="cl-card-body">
-                        <Timeline Items="_steps" />
-                    </div>
-                </div>
+                <FormStepsSidebar Steps="_pasos" />
                 <div class="cl-alert blue">
                     <Icon Name="info" Size="15" />
                     <span>Al registrar el local puedes <b>crear la captación</b> de inmediato o solo guardar el inmueble para captarlo más tarde.</span>
@@ -141,11 +136,16 @@
         }
     }
 
-    private readonly Timeline.TimelineItem[] _steps = new[]
+    // Progreso interactivo de las secciones del formulario.
+    private bool IsStep1Complete => _propietarioId > 0;
+    private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_direccion) && !string.IsNullOrWhiteSpace(_distrito);
+    private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_areaMts) && !string.IsNullOrWhiteSpace(_precioRef);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
     {
-        new Timeline.TimelineItem("Paso 1", "Registrar el local", "Datos del inmueble y propietario", "active"),
-        new Timeline.TimelineItem("Paso 2", "Crear la captación", "Condiciones comerciales y vigencia"),
-        new Timeline.TimelineItem("Paso 3", "Enviar a revisión", "El broker aprueba la captación"),
+        new FormStepsSidebar.Step("Propietario", "Dueño del local", IsStep1Complete),
+        new FormStepsSidebar.Step("Ubicación", "Dirección y distrito", IsStep2Complete),
+        new FormStepsSidebar.Step("Características", "Área, rubro, precio", IsStep3Complete),
     };
 
     private async Task OnOnlyRegister()

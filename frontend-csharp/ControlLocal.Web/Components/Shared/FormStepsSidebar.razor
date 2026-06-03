@@ -1,0 +1,63 @@
+@* Panel lateral de pasos del formulario. Fuente única de la verdad para el
+   progreso interactivo: recibe la lista de pasos y pinta el círculo de cada uno
+   a medida que se completan. El "paso actual" es el primero sin completar. *@
+
+<div class="form-steps-sidebar">
+    <div class="form-steps-title">@Title</div>
+    @for (var i = 0; i < Steps.Count; i++)
+    {
+        var paso = Steps[i];
+        <FormProgressStep StepNumber="@(i + 1)"
+                          Title="@paso.Title"
+                          Description="@paso.Description"
+                          IsComplete="@paso.IsComplete"
+                          IsCurrent="@(CurrentStep == i + 1)" />
+    }
+</div>
+
+<style>
+.form-steps-sidebar {
+    position: sticky;
+    top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #eee;
+}
+
+.form-steps-title {
+    font-weight: 600;
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+</style>
+
+@code {
+    // Un paso del formulario: título, guía breve y si ya está completo.
+    public record Step(string Title, string Description, bool IsComplete);
+
+    [Parameter, EditorRequired] public IReadOnlyList<Step> Steps { get; set; } = Array.Empty<Step>();
+
+    [Parameter] public string Title { get; set; } = "Pasos";
+
+    // Paso actual = primero sin completar (1-based). -1 si están todos completos.
+    private int CurrentStep
+    {
+        get
+        {
+            for (var i = 0; i < Steps.Count; i++)
+            {
+                if (!Steps[i].IsComplete) return i + 1;
+            }
+            return -1;
+        }
+    }
+}

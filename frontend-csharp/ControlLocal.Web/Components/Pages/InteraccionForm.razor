@@ -12,8 +12,9 @@
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
-        <div style="max-width:880px;">
-            <FormSection Num="1" Title="Captación" Sub="Selecciona el local comercial sobre el cual es la interacción">
+        <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Captación" Sub="Selecciona el local comercial sobre el cual es la interacción">
                 <div class="cl-grid c1">
                     <Field Label="Captación" Required="true">
                         <select @bind="_captacionId">
@@ -87,6 +88,15 @@
             }
 
             <FormFooterBar OnCancel="@(() => App.Navigate("interacciones"))" OnSave="@TryConfirm" SaveLabel="Registrar interacción" />
+            </div>
+
+            <div class="cl-stack">
+                <FormStepsSidebar Steps="_pasos" />
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>El agente registra cualquier contacto rápidamente. Si el resultado es de <b>no continuidad</b>, la oportunidad se cierra con su motivo.</span>
+                </div>
+            </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="target"
@@ -111,6 +121,20 @@
     private bool _confirm;
     private bool _toast;
     private string? _err;
+
+    // Progreso interactivo de las secciones del formulario.
+    private bool IsStep1Complete => _captacionId > 0;
+    private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_canalContacto);
+    private bool IsStep3Complete => _clienteId > 0;
+    private bool IsStep4Complete => !string.IsNullOrWhiteSpace(_resultado);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
+    {
+        new FormStepsSidebar.Step("Captación", "Local de la interacción", IsStep1Complete),
+        new FormStepsSidebar.Step("Canal", "Cómo fue el contacto", IsStep2Complete),
+        new FormStepsSidebar.Step("Cliente", "Quién participó", IsStep3Complete),
+        new FormStepsSidebar.Step("Resultado", "Desenlace del contacto", IsStep4Complete),
+    };
 
     protected override void OnInitialized()
     {

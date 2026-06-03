@@ -86,6 +86,7 @@ public static class Navigation
         ["captacion-review"] = "bandeja-captaciones",
         ["interaccion-form"] = "interacciones",
         ["interaccion-detail"] = "interacciones",
+        ["visita-form"] = "visitas",
         ["solicitud-form"] = "solicitudes",
         ["solicitud-detail"] = "solicitudes",
         ["documentos"] = "solicitudes",

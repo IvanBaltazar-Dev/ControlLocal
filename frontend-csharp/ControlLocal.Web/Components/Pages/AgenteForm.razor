@@ -10,30 +10,36 @@
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("agents"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
-        <div style="max-width:880px;">
-            <FormSection Num="1" Title="Datos personales" Sub="Identificación del agente inmobiliario">
-                <div class="cl-grid c2">
-                    <Field Label="Nombres" Required="true"><input placeholder="Nombres" /></Field>
-                    <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" /></Field>
-                    <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" /></Field>
-                    <Field Label="Teléfono" Required="true"><input placeholder="+51 ___ ___ ___" /></Field>
-                </div>
-            </FormSection>
+        <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;max-width:1100px;">
+            <div>
+                <FormSection Num="1" Title="Datos personales" Sub="Identificación del agente inmobiliario">
+                    <div class="cl-grid c2">
+                        <Field Label="Nombres" Required="true"><input placeholder="Nombres" @bind="_nombres" @bind:event="oninput" /></Field>
+                        <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" @bind="_apellidos" @bind:event="oninput" /></Field>
+                        <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" @bind="_dni" @bind:event="oninput" /></Field>
+                        <Field Label="Teléfono" Required="true"><input placeholder="+51 ___ ___ ___" @bind="_telefono" @bind:event="oninput" /></Field>
+                    </div>
+                </FormSection>
 
-            <FormSection Num="2" Title="Cuenta de acceso y asignación" Sub="Credenciales del sistema y zona de operación">
-                <div class="cl-grid c2">
-                    <Field Label="Correo corporativo" Required="true"><input placeholder="agente@@controllocal.pe" /></Field>
-                    <Field Label="Usuario" Required="true"><input placeholder="nombre.apellido" /></Field>
-                    <Field Label="Zona asignada" Required="true"><select><option>Lima Centro</option><option>Lima Sur</option><option>Lima Norte</option><option>Lima Este</option></select></Field>
-                    <Field Label="Supervisión" Hint="Quien registra es el broker supervisor"><input value="Ricardo Salas (tú)" disabled /></Field>
-                </div>
-                <div class="cl-alert blue" style="margin-top:14px;">
-                    <Icon Name="lock" Size="15" />
-                    <span>El agente recibirá un correo para definir su contraseña. La relación de supervisión queda activa y solo el <b>broker administrador</b> puede reasignarla.</span>
-                </div>
-            </FormSection>
+                <FormSection Num="2" Title="Cuenta de acceso y asignación" Sub="Credenciales del sistema y zona de operación">
+                    <div class="cl-grid c2">
+                        <Field Label="Correo corporativo" Required="true"><input placeholder="agente@@controllocal.pe" @bind="_correo" @bind:event="oninput" /></Field>
+                        <Field Label="Usuario" Required="true"><input placeholder="nombre.apellido" @bind="_usuario" @bind:event="oninput" /></Field>
+                        <Field Label="Zona asignada" Required="true"><select @bind="_zona"><option value="">— Seleccionar —</option><option>Lima Centro</option><option>Lima Sur</option><option>Lima Norte</option><option>Lima Este</option></select></Field>
+                        <Field Label="Supervisión" Hint="Quien registra es el broker supervisor"><input value="Ricardo Salas (tú)" disabled /></Field>
+                    </div>
+                    <div class="cl-alert blue" style="margin-top:14px;">
+                        <Icon Name="lock" Size="15" />
+                        <span>El agente recibirá un correo para definir su contraseña. La relación de supervisión queda activa y solo el <b>broker administrador</b> puede reasignarla.</span>
+                    </div>
+                </FormSection>
 
-            <FormFooterBar OnCancel="@(() => App.Navigate("agents"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar agente" />
+                <FormFooterBar OnCancel="@(() => App.Navigate("agents"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar agente" />
+            </div>
+
+            <div class="cl-stack">
+                <FormStepsSidebar Steps="_pasos" />
+            </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"
@@ -49,6 +55,27 @@
 @code {
     private bool _confirm;
     private bool _toast;
+
+    // Campos enlazados al formulario.
+    private string _nombres = "";
+    private string _apellidos = "";
+    private string _dni = "";
+    private string _telefono = "";
+    private string _correo = "";
+    private string _usuario = "";
+    private string _zona = "";
+
+    // Progreso interactivo de las secciones del formulario.
+    private bool IsStep1Complete => !string.IsNullOrWhiteSpace(_nombres) && !string.IsNullOrWhiteSpace(_apellidos)
+                                    && !string.IsNullOrWhiteSpace(_dni) && !string.IsNullOrWhiteSpace(_telefono);
+    private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_correo) && !string.IsNullOrWhiteSpace(_usuario)
+                                    && !string.IsNullOrWhiteSpace(_zona);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
+    {
+        new FormStepsSidebar.Step("Datos personales", "Nombre, DNI, teléfono", IsStep1Complete),
+        new FormStepsSidebar.Step("Cuenta y zona", "Correo, usuario, zona", IsStep2Complete),
+    };
 
     private async Task OnConfirm()
     {

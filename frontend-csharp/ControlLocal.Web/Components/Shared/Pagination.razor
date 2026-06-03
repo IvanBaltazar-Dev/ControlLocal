@@ -1,14 +1,22 @@
-@* Results count + page buttons. Mirrors the prototype's Pagination helper. *@
+@* Results count + page buttons with interactive page selection. *@
 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;color:#515B6B;">
-    <span>Mostrando 1–@Shown de @Total resultados</span>
+    <span>Mostrando @ShownFrom–@ShownTo de @Total resultados</span>
     <div style="display:flex;gap:4px;">
-        <button class="cl-btn sm" disabled><Icon Name="chevronLeft" Size="12" /></button>
-        <button class="cl-btn sm primary">1</button>
-        <button class="cl-btn sm">2</button>
-        <button class="cl-btn sm">3</button>
-        <button class="cl-btn sm">…</button>
-        <button class="cl-btn sm">@LastPage</button>
-        <button class="cl-btn sm"><Icon Name="chevronRight" Size="12" /></button>
+        <button class="cl-btn sm" disabled="@(_page == 1)" @onclick="Anterior"><Icon Name="chevronLeft" Size="12" /></button>
+        @for (var p = 1; p <= System.Math.Min(LastPage, 3); p++)
+        {
+            var pCopy = p;
+            <button class="cl-btn sm @(_page == pCopy ? "primary" : "")" @onclick="@(() => _page = pCopy)">@pCopy</button>
+        }
+        @if (LastPage > 4)
+        {
+            <button class="cl-btn sm" disabled>…</button>
+        }
+        @if (LastPage > 3)
+        {
+            <button class="cl-btn sm @(_page == LastPage ? "primary" : "")" @onclick="@(() => _page = LastPage)">@LastPage</button>
+        }
+        <button class="cl-btn sm" disabled="@(_page == LastPage)" @onclick="Siguiente"><Icon Name="chevronRight" Size="12" /></button>
     </div>
 </div>
 
@@ -16,5 +24,11 @@
     [Parameter] public int Total { get; set; } = 24;
     [Parameter] public int Shown { get; set; } = 8;
 
-    private int LastPage => (int)System.Math.Ceiling(Total / 8.0);
+    private int _page = 1;
+    private int LastPage => (int)System.Math.Ceiling(Total / (double)Shown);
+    private int ShownFrom => (_page - 1) * Shown + 1;
+    private int ShownTo => System.Math.Min(_page * Shown, Total);
+
+    private void Anterior() { if (_page > 1) _page--; }
+    private void Siguiente() { if (_page < LastPage) _page++; }
 }

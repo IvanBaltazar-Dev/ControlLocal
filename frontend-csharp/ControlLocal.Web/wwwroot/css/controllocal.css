@@ -29,8 +29,6 @@
   /* Functional */
   --c-green: #1F9D6B;
   --c-green-50: #E5F4EE;
-  --c-amber: #C98A1E;
-  --c-amber-50: #F7EFDD;
   --c-red: #D64550;
   --c-red-50: #FBE7E9;
   --c-info: #00AEEF;
@@ -209,8 +207,6 @@
 .cl-btn.danger:hover { filter: brightness(0.95); }
 .cl-btn.success { background: var(--c-green); color: #fff; border-color: var(--c-green); }
 .cl-btn.success:hover { filter: brightness(0.96); }
-.cl-btn.warn { background: var(--c-amber); color: #fff; border-color: var(--c-amber); }
-.cl-btn.warn:hover { filter: brightness(0.96); }
 .cl-btn.ghost { background: transparent; border-color: transparent; box-shadow: none; }
 .cl-btn.ghost:hover { background: var(--c-bg-2); }
 .cl-btn.sm { padding: 6px 11px; font-size: 12px; border-radius: 8px; }
@@ -260,9 +256,8 @@
 }
 .cl-badge.gray { background: var(--c-bg-2); color: var(--c-text-2); }
 .cl-badge.green { background: var(--c-green-50); color: #226040; }
-.cl-badge.amber { background: var(--c-amber-50); color: #8A5E12; }
-.cl-badge.red { background: var(--c-red-50); color: #98352C; }
 .cl-badge.blue { background: var(--c-primary-50); color: #214676; }
+.cl-badge.red { background: var(--c-red-50); color: #98352C; }
 .cl-badge.info { background: var(--c-info-50); color: #1F5A79; }
 .cl-badge.plain::before { display: none; }
 
@@ -394,7 +389,7 @@
 }
 .cl-tl-dot.done { background: var(--c-green); border-color: var(--c-green); }
 .cl-tl-dot.active { background: #fff; border-color: var(--c-primary); box-shadow: 0 0 0 4px rgba(0,91,255,0.16); }
-.cl-tl-dot.warn { background: var(--c-amber); border-color: var(--c-amber); }
+.cl-tl-dot.primary { background: var(--c-primary); border-color: var(--c-primary); }
 .cl-tl-dot.red { background: var(--c-red); border-color: var(--c-red); }
 .cl-tl-time { font-size: 11px; color: var(--c-text-3); }
 .cl-tl-title { font-size: 13px; font-weight: 600; margin-top: 2px; }
@@ -425,7 +420,6 @@
 }
 .cl-modal-ico.blue { background: var(--c-primary-50); color: var(--c-primary); }
 .cl-modal-ico.green { background: var(--c-green-50); color: var(--c-green); }
-.cl-modal-ico.amber { background: var(--c-amber-50); color: var(--c-amber); }
 .cl-modal-ico.red { background: var(--c-red-50); color: var(--c-red); }
 .cl-modal-title { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
 .cl-modal-desc { font-size: 12.5px; color: var(--c-text-2); margin-top: 3px; line-height: 1.5; }
@@ -442,8 +436,7 @@
   display: flex; gap: 11px; padding: 13px 15px; border-radius: var(--r-md);
   border: 1px solid; font-size: 12.5px; line-height: 1.45;
 }
-.cl-alert.amber { background: var(--c-amber-50); border-color: #ECD6A8; color: #79520F; }
-.cl-alert.blue { background: var(--c-info-50); border-color: #BFD9E5; color: #1C4F69; }
+.cl-alert.blue { background: var(--c-primary-50); border-color: #C9CED6; color: #214676; }
 .cl-alert.red { background: var(--c-red-50); border-color: #E6BFB9; color: #7E2920; }
 .cl-alert.green { background: var(--c-green-50); border-color: #BEDBC8; color: #1E5538; }
 .cl-alert b { font-weight: 600; }
@@ -680,6 +673,276 @@
 /* ============ GALERÍA DE TARJETAS (captaciones) ============ */
 .cl-gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 @media (max-width: 1180px) { .cl-gallery-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ============================================================== */
+/* ============ LOGIN HERO (pantalla de acceso) ================= */
+/* ============================================================== */
+.cl-login {
+  position: fixed; inset: 0; overflow: hidden;
+  background: #020B24;
+  font-family: 'Inter', -apple-system, sans-serif;
+  color: #0a1f4d;
+  animation: cl-login-fade .7s ease both;
+}
+@keyframes cl-login-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Escena a pantalla completa (cover, sin barras). Ken Burns sutil = movimiento. */
+/* Escena a PANTALLA COMPLETA (cover): llena la pantalla y escala con la
+   resolución. Encuadre 'left 35%' para no recortar el logo (margen sup. 5%) ni
+   las tarjetas (margen inf. 8%), y mantener el lado izquierdo en pantallas
+   angostas. Fija a propósito: cualquier zoom rompería ese margen. */
+/* Escena 16:9 (1672×941): en una pantalla 16:9 'cover' la llena perfecto, sin
+   recortar nada. La marca vive a la izquierda; la ventana de credenciales va a la
+   derecha (sobre el local), enmarcada por el scrim. */
+.cl-login__bg {
+  position: absolute; inset: 0;
+  background: url('../img/login.png?v=9') center center / cover no-repeat;
+}
+
+/* Foco de luz que "respira" sobre el render 3D (dinamismo sin mover el contenido). */
+.cl-login__glow {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(34% 42% at 33% 46%, rgba(45,150,255,0.26), transparent 70%);
+  animation: cl-glowpulse 6.5s ease-in-out infinite;
+}
+@keyframes cl-glowpulse {
+  0%, 100% { opacity: .45; }
+  50%      { opacity: 1; }
+}
+
+/* Oscurece la derecha (legibilidad de la tarjeta) y aporta profundidad. */
+.cl-login__scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(95deg, rgba(2,11,36,0) 36%, rgba(2,11,36,0.32) 54%, rgba(2,11,36,0.70) 76%, rgba(2,11,36,0.82) 100%),
+    linear-gradient(0deg, rgba(2,8,24,0.55), transparent 42%),
+    radial-gradient(140% 90% at 50% -12%, rgba(0,40,110,0.28), transparent 60%);
+}
+
+/* Barrido de brillo sutil sobre la escena. */
+.cl-login__sheen {
+  position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.06) 46%, transparent 60%);
+  animation: cl-sweep 9s ease-in-out infinite;
+}
+@keyframes cl-sweep {
+  0%   { transform: translateX(-45%); opacity: 0; }
+  45%  { opacity: 1; }
+  100% { transform: translateX(45%); opacity: 0; }
+}
+
+/* Orbes de luz que derivan detrás de la tarjeta. */
+.cl-login__orb {
+  position: absolute; border-radius: 50%; filter: blur(48px);
+  pointer-events: none; opacity: .5; will-change: transform; z-index: 1;
+}
+.cl-login__orb--a {
+  width: 380px; height: 380px; right: 2%; top: -4%;
+  background: radial-gradient(circle, rgba(0,140,255,0.42), transparent 65%);
+  animation: cl-float-a 13s ease-in-out infinite alternate;
+}
+.cl-login__orb--b {
+  width: 320px; height: 320px; right: 24%; bottom: -90px;
+  background: radial-gradient(circle, rgba(0,91,255,0.34), transparent 65%);
+  animation: cl-float-b 17s ease-in-out infinite alternate;
+}
+@keyframes cl-float-a { from { transform: translate3d(0,0,0); } to { transform: translate3d(-28px, 24px, 0); } }
+@keyframes cl-float-b { from { transform: translate3d(0,0,0); } to { transform: translate3d(26px, -28px, 0); } }
+
+/* Escenario: empuja la tarjeta a la derecha (como el mockup). */
+.cl-login__stage {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 40px clamp(24px, 6vw, 96px);
+}
+
+/* Tarjeta de acceso (vidrio esmerilado). */
+.cl-loginbox {
+  position: relative; z-index: 1;
+  width: min(100%, 432px);
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.75);
+  border-radius: 24px;
+  box-shadow: 0 40px 90px rgba(2,11,36,0.55), 0 12px 30px rgba(2,11,36,0.28);
+  padding: 34px 34px 24px;
+  animation: cl-box-in .8s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes cl-box-in {
+  from { opacity: 0; transform: translateY(28px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.cl-loginbox__shield {
+  position: absolute; top: 18px; right: 18px;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(160deg, #eef2f8, #d7deea);
+  box-shadow: inset 0 1px 0 #fff, 0 4px 10px rgba(2,11,36,0.12);
+}
+
+.cl-loginbox__logo {
+  width: 60px; height: 60px; border-radius: 17px; margin: 2px auto 0;
+  display: grid; place-items: center; position: relative;
+  background: linear-gradient(150deg, #2a7bff, #0a3fd0 72%);
+  box-shadow: 0 12px 26px rgba(0,73,204,0.50), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+.cl-loginbox__logo::after {
+  content: ''; position: absolute; inset: 5px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.22);
+}
+
+.cl-loginbox__hello {
+  margin-top: 14px; text-align: center;
+  font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #2a7bff;
+}
+.cl-loginbox__title {
+  margin: 4px 0 0; text-align: center;
+  font-size: 27px; font-weight: 700; letter-spacing: -.02em; color: #0a1f4d;
+}
+.cl-loginbox__rule {
+  width: 46px; height: 3px; border-radius: 2px; margin: 11px auto 0;
+  background: linear-gradient(90deg, #2a7bff, #7fb0ff);
+}
+.cl-loginbox__sub {
+  margin-top: 12px; text-align: center;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: #8893a6;
+}
+
+.cl-loginbox__error {
+  display: flex; align-items: center; gap: 8px; margin-top: 14px;
+  padding: 10px 12px; border-radius: 11px;
+  background: #fdecec; border: 1px solid #f6c9c9; color: #b3261e;
+  font-size: 12.5px; font-weight: 500;
+  animation: cl-fade-up .3s ease both;
+}
+.cl-loginbox__error svg { flex: 0 0 auto; }
+.cl-loginbox__error.shake { animation: cl-shake .42s ease both; }
+@keyframes cl-fade-up { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes cl-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-5px); }
+  40%, 60% { transform: translateX(5px); }
+}
+
+/* Campos con icono a izquierda y acción a la derecha. */
+.cl-loginfield { position: relative; display: flex; align-items: center; margin-top: 11px; }
+.cl-loginbox__sub + .cl-loginfield { margin-top: 20px; }
+.cl-loginfield__ic {
+  position: absolute; left: 14px; display: inline-flex; color: #9aa4b4; pointer-events: none;
+  transition: color .15s ease;
+}
+.cl-loginfield__in {
+  width: 100%; box-sizing: border-box; padding: 13px 44px;
+  font: inherit; font-size: 13.5px; color: #0a1f4d;
+  background: #f5f7fb; border: 1.5px solid #e3e8f0; border-radius: 13px; outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.cl-loginfield__in::placeholder { color: #9aa4b4; }
+.cl-loginfield__in:focus { background: #fff; border-color: #2a7bff; box-shadow: 0 0 0 4px rgba(0,91,255,0.14); }
+.cl-loginfield__in:focus ~ .cl-loginfield__ic { color: #2a7bff; }
+.cl-loginfield__ok {
+  position: absolute; right: 14px; display: inline-flex; color: #1fb573;
+  opacity: 0; transform: scale(.7); pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.cl-loginfield__ok.is-on { opacity: 1; transform: none; }
+.cl-loginfield__eye {
+  position: absolute; right: 10px; display: inline-flex; padding: 6px;
+  border: 0; background: transparent; color: #9aa4b4; cursor: pointer; border-radius: 8px;
+  transition: color .15s ease, background .15s ease;
+}
+.cl-loginfield__eye:hover { color: #2a7bff; background: #eef4ff; }
+
+/* Botón principal con destello y flecha en círculo. */
+.cl-loginbox__cta {
+  position: relative; overflow: hidden; width: 100%; margin-top: 18px;
+  padding: 14px 18px; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  border: 0; border-radius: 14px; font: inherit; font-size: 14.5px; font-weight: 600; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, #2a7bff, #0a3fd0);
+  box-shadow: 0 14px 30px rgba(0,73,204,0.42);
+  transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+}
+.cl-loginbox__cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 18px 38px rgba(0,73,204,0.5); filter: brightness(1.04); }
+.cl-loginbox__cta:active:not(:disabled) { transform: translateY(0); }
+.cl-loginbox__cta:disabled { cursor: default; opacity: .9; }
+.cl-loginbox__cta::before {
+  content: ''; position: absolute; top: 0; left: -60%; width: 45%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.4), transparent);
+  transform: skewX(-18deg); animation: cl-sheen-btn 3.4s ease-in-out infinite;
+}
+@keyframes cl-sheen-btn { 0%, 60% { left: -60%; } 100% { left: 130%; } }
+.cl-loginbox__cta-go {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.18);
+}
+
+.cl-spin {
+  width: 17px; height: 17px; border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,0.45); border-top-color: #fff;
+  animation: cl-spin .7s linear infinite;
+}
+@keyframes cl-spin { to { transform: rotate(360deg); } }
+
+.cl-loginbox__help { margin-top: 14px; text-align: center; font-size: 12px; color: #5b6677; }
+.cl-loginbox__help a { color: #2a7bff; font-weight: 600; cursor: pointer; text-decoration: none; }
+.cl-loginbox__help a:hover { text-decoration: underline; }
+
+.cl-loginbox__foot {
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid #e9edf3;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+}
+.cl-loginbox__sec { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 500; color: #6b7689; }
+.cl-livedot {
+  width: 9px; height: 9px; border-radius: 50%; background: #22c55e;
+  animation: cl-pulse 2s ease-out infinite;
+}
+@keyframes cl-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
+
+/* Entrada escalonada de los elementos de la tarjeta (dinamismo). */
+.cl-loginbox__logo  { animation: cl-pop .6s cubic-bezier(.2,.8,.2,1.25) .12s both, cl-logoglow 3.2s ease-in-out 1.2s infinite; }
+.cl-loginbox__hello { animation: cl-rise .5s ease .26s both; }
+.cl-loginbox__title { animation: cl-rise .5s ease .32s both; }
+.cl-loginbox__rule  { animation: cl-rise .5s ease .38s both; }
+.cl-loginbox__sub   { animation: cl-rise .5s ease .44s both; }
+.cl-loginfield      { animation: cl-rise .5s ease both; }
+.cl-loginbox__cta   { animation: cl-rise .5s ease .70s both; }
+.cl-loginbox__help  { animation: cl-rise .5s ease .78s both; }
+.cl-loginbox__foot  { animation: cl-rise .5s ease .84s both; }
+@keyframes cl-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cl-pop  { 0% { opacity: 0; transform: scale(.55) rotate(-10deg); } 100% { opacity: 1; transform: none; } }
+@keyframes cl-logoglow {
+  0%, 100% { box-shadow: 0 12px 26px rgba(0,73,204,0.50), inset 0 1px 0 rgba(255,255,255,0.4); }
+  50%      { box-shadow: 0 16px 36px rgba(0,120,255,0.80), inset 0 1px 0 rgba(255,255,255,0.5); }
+}
+
+/* Responsive: en pantallas angostas la tarjeta se centra y el scrim oscurece
+   de forma uniforme para que la escena siga visible pero legible detrás. */
+@media (max-width: 980px) {
+  .cl-login__stage { justify-content: center; padding: 24px; }
+  .cl-login__scrim {
+    background:
+      linear-gradient(180deg, rgba(2,11,36,0.55), rgba(2,8,24,0.86)),
+      radial-gradient(120% 70% at 50% 0, rgba(0,40,110,0.30), transparent 60%);
+  }
+  .cl-login__bg { background-position: 28% center; }
+}
+@media (max-width: 520px) {
+  .cl-loginbox { padding: 26px 20px 20px; border-radius: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-login, .cl-login__bg, .cl-login__glow, .cl-login__orb, .cl-login__sheen, .cl-loginbox,
+  .cl-loginbox__logo, .cl-loginbox__hello, .cl-loginbox__title, .cl-loginbox__rule,
+  .cl-loginbox__sub, .cl-loginfield, .cl-loginbox__cta, .cl-loginbox__help,
+  .cl-loginbox__foot, .cl-loginbox__cta::before, .cl-livedot { animation: none; }
+}
 .cl-prop-card {
   background: #fff; border: 1px solid var(--c-border); border-radius: var(--r-lg);
   overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-sm);

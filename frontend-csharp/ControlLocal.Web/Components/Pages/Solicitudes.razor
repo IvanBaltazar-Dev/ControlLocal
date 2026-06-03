@@ -19,16 +19,16 @@
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             @if (_isBroker)
             {
-                <MetricCard Icon="fileText" Label="Por evaluar" Value="6" Tone="amber" Footer="2 vencen hoy" />
-                <MetricCard Icon="alert" Label="Observadas" Value="2" Tone="amber" />
+                <MetricCard Icon="fileText" Label="Por evaluar" Value="6" Tone="blue" Footer="2 vencen hoy" />
+                <MetricCard Icon="alert" Label="Observadas" Value="2" Tone="blue" />
                 <MetricCard Icon="check" Label="Aprobadas (mes)" Value="14" Tone="green" />
                 <MetricCard Icon="x" Label="Rechazadas (mes)" Value="3" Tone="red" />
             }
             else
             {
                 <MetricCard Icon="fileText" Label="Mis solicitudes" Value="9" Tone="info" />
-                <MetricCard Icon="clock" Label="En revisión" Value="2" Tone="amber" />
-                <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="amber" Footer="requieren subsanar" />
+                <MetricCard Icon="clock" Label="En revisión" Value="2" Tone="blue" />
+                <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="blue" Footer="requieren subsanar" />
                 <MetricCard Icon="check" Label="Aprobadas" Value="6" Tone="green" />
             }
         </div>
@@ -63,7 +63,7 @@
                                 <td>
                                     <div class="cl-flex" style="gap:8px;">
                                         <div style="flex:1;min-width:54px;height:6px;background:#E2E6EC;border-radius:99px;overflow:hidden;">
-                                            <div style="height:100%;width:@(s.PorcentajeDocumentos)%;background:@(s.PorcentajeDocumentos == 100 ? "var(--c-green)" : "var(--c-walnut)");"></div>
+                                            <div style="height:100%;width:@(s.PorcentajeDocumentos)%;background:@(s.PorcentajeDocumentos == 100 ? "var(--c-green)" : "var(--c-primary)");"></div>
                                         </div>
                                         <span class="cl-muted" style="font-size:11px;">@s.DocumentosTexto</span>
                                     </div>
@@ -77,7 +77,7 @@
                                     }
                                     else if (s.Estado == "Observada")
                                     {
-                                        <button class="cl-btn sm warn" @onclick="@(() => App.Navigate("documentos"))">Subsanar</button>
+                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate("documentos"))">Subsanar</button>
                                     }
                                     else
                                     {

@@ -8,43 +8,19 @@
           Title="Clientes interesados"
           Subtitle="Prospectos comerciales que registro para vincular a una captación">
     <Actions>
-        @if (_toastMsg is not null)
-        {
-            <div class="cl-alert blue" style="padding:6px 12px;font-size:12px;"><Icon Name="check" Size="13" /> @_toastMsg</div>
-        }
-        <button class="cl-btn" @onclick="Exportar"><Icon Name="download" Size="13" /> Exportar</button>
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("cliente-form"))"><Icon Name="plus" Size="13" /> Registrar cliente</button>
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="users" Label="Clientes registrados" Value="142" Tone="blue"
-                        OnClick="@(() => { _filtroTipo = ""; _filtroEstado = ""; })" />
-            <MetricCard Icon="pin" Label="Vinculados a captación" Value="96" Tone="info"
-                        OnClick="@(() => { _filtroTipo = ""; _filtroEstado = "Activo"; })" />
-            <MetricCard Icon="clock" Label="Sin vincular" Value="46" Tone="amber" Footer="esperan una captación"
-                        OnClick="@(() => { _filtroTipo = ""; _filtroEstado = "Inactivo"; })" />
-            <MetricCard Icon="check" Label="Con alquiler cerrado" Value="28" Tone="green"
-                        OnClick="@(() => { _filtroTipo = ""; _filtroEstado = ""; })" />
+            <MetricCard Icon="users" Label="Clientes registrados" Value="142" Tone="blue" />
+            <MetricCard Icon="pin" Label="Vinculados a captación" Value="96" Tone="info" />
+            <MetricCard Icon="clock" Label="Sin vincular" Value="46" Tone="blue" Footer="esperan una captación" />
+            <MetricCard Icon="check" Label="Con alquiler cerrado" Value="28" Tone="green" />
         </div>
         <FilterBar Search="Buscar por nombre, razón social, documento, rubro…">
-            <select class="cl-select" @bind="_filtroTipo">
-                <option value="">Tipo de persona</option>
-                <option value="natural">Persona natural</option>
-                <option value="juridica">Persona jurídica</option>
-            </select>
-            <select class="cl-select" @bind="_filtroRubro">
-                <option value="">Rubro comercial</option>
-                <option>Restaurante / Café</option>
-                <option>Moda / Boutique</option>
-                <option>Servicios</option>
-                <option>Retail</option>
-            </select>
-            <select class="cl-select" @bind="_filtroEstado">
-                <option value="">Estado</option>
-                <option value="Activo">Activo</option>
-                <option value="Inactivo">Inactivo</option>
-            </select>
-            <button class="cl-btn sm" @onclick="MasFiltros"><Icon Name="filter" Size="12" /> Más filtros</button>
+            <select class="cl-select"><option>Tipo de persona</option><option>Persona natural</option><option>Persona jurídica</option></select>
+            <select class="cl-select"><option>Rubro comercial</option><option>Restaurante</option><option>Moda</option><option>Servicios</option></select>
+            <select class="cl-select"><option>Estado</option><option>Vinculado</option><option>Sin vincular</option></select>
         </FilterBar>
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
@@ -56,7 +32,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var c in ClientesFiltrados)
+                        @foreach (var c in ClienteSvc.All())
                         {
                             <tr>
                                 <td>
@@ -71,64 +47,13 @@
                                 <td><StatusBadge Label="@c.Estado" /></td>
                                 <td><RowActions Items="@(new[] { "view", "edit" })"
                                                 OnView="@(() => App.Navigate($"cliente-detail/{c.Id}"))"
-                                                OnEdit="@(() => App.Navigate($"cliente-form/{c.Id}"))" /></td>
+                                                OnEdit="@(() => App.Navigate("cliente-form"))" /></td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
         </div>
-        <Pagination Total="@ClientesFiltrados.Count()" />
+        <Pagination Total="142" />
     </ChildContent>
 </AppShell>
-
-@code {
-    private string _filtroTipo = "";
-    private string _filtroRubro = "";
-    private string _filtroEstado = "";
-    private string? _toastMsg;
-
-    private IEnumerable<ClienteInteresadoDto> ClientesFiltrados
-    {
-        get
-        {
-            var lista = ClienteSvc.All().AsEnumerable();
-
-            if (!string.IsNullOrEmpty(_filtroTipo))
-            {
-                if (_filtroTipo == "natural")
-                    lista = lista.Where(c => c.TipoPersona.ToLowerInvariant().Contains("natural"));
-                else
-                    lista = lista.Where(c => c.TipoPersona.ToLowerInvariant()
-                                .Replace("í", "i").Replace("i", "i").Contains("juridica"));
-            }
-
-            if (!string.IsNullOrEmpty(_filtroRubro))
-                lista = lista.Where(c => c.RubroInteres.Contains(_filtroRubro, StringComparison.OrdinalIgnoreCase));
-
-            if (!string.IsNullOrEmpty(_filtroEstado))
-                lista = lista.Where(c => c.Estado == _filtroEstado);
-
-            return lista;
-        }
-    }
-
-    private void Exportar()
-    {
-        _toastMsg = "Exportación generada correctamente";
-        _ = OcultarToastAsync();
-    }
-
-    private void MasFiltros()
-    {
-        _toastMsg = "Filtros avanzados disponibles próximamente";
-        _ = OcultarToastAsync();
-    }
-
-    private async Task OcultarToastAsync()
-    {
-        await Task.Delay(2500);
-        _toastMsg = null;
-        await InvokeAsync(StateHasChanged);
-    }
-}

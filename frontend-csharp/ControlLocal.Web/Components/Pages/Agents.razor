@@ -71,7 +71,7 @@
                        ConfirmLabel="Desactivar agente" CancelLabel="Cancelar"
                        OnClose="@(() => _deactivate = null)"
                        OnConfirm="@OnDeactivate" />
-        <Toast Show="@(_toast is not null)" Tone="amber" IconName="alert">@_toast</Toast>
+        <Toast Show="@(_toast is not null)" Tone="blue" IconName="alert">@_toast</Toast>
     </ChildContent>
 </AppShell>
 

@@ -1,128 +1,154 @@
 @page "/"
 @page "/login"
 @inject AppState App
+@inject IAuthService Auth
 
 <PageTitle>Inicio de sesión · ControlLocal</PageTitle>
 
-<div style="width:100%;min-height:100vh;display:flex;font-family:'Inter',-apple-system,sans-serif;color:#061A4D;background:radial-gradient(1200px 700px at 12% 10%, #F4F7FB 0%, rgba(244,247,251,0) 55%), radial-gradient(1000px 800px at 95% 100%, #EDF2F9 0%, rgba(237,242,249,0) 60%), linear-gradient(150deg, #FFFFFF 0%, #F8FAFD 48%, #EAF1FF 100%);">
+<div class="cl-login">
+    @* Escena a pantalla completa (cover) + glow que respira sobre el render 3D *@
+    <div class="cl-login__bg"></div>
+    <div class="cl-login__glow"></div>
+    <div class="cl-login__scrim"></div>
+    <div class="cl-login__orb cl-login__orb--a"></div>
+    <div class="cl-login__orb cl-login__orb--b"></div>
+    <div class="cl-login__sheen"></div>
 
-    @* Left brand panel *@
-    <div style="width:44%;background:linear-gradient(165deg, #061A4D 0%, #020B24 60%, #0A2358 100%);color:#FFFFFF;padding:52px 48px;display:flex;flex-direction:column;position:relative;overflow:hidden;">
-        <div style="display:flex;align-items:center;gap:12px;position:relative;z-index:1;">
-            <BrandMark Size="42" Variant="walnut" />
-            <div>
-                <div style="font-weight:600;font-size:19px;color:#fff;">ControlLocal</div>
-                <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#9FB2D6;">Corretaje comercial</div>
+    <div class="cl-login__stage">
+        <div class="cl-loginbox">
+            <span class="cl-loginbox__shield" title="Conexión protegida">
+                <Icon Name="lock" Size="15" Color="#5b6b86" />
+            </span>
+
+            @* Marca tipo "app icon" (glifo de circuito ControlLocal) *@
+            <div class="cl-loginbox__logo">
+                <svg width="34" height="34" viewBox="0 0 40 40" fill="none"
+                     stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M27 9.5a13 13 0 1 0 0 21" />
+                    <path d="M23.2 15a7 7 0 1 0 0 10" />
+                    <path d="M20 5.5V18" />
+                    <circle cx="20" cy="20" r="2.5" fill="#fff" stroke="none" />
+                    <circle cx="20" cy="5.5" r="2.4" fill="#fff" stroke="none" />
+                    <circle cx="27" cy="9.5" r="2.1" fill="#fff" stroke="none" />
+                    <circle cx="27" cy="30.5" r="2.1" fill="#fff" stroke="none" />
+                    <circle cx="10.5" cy="27" r="2.1" fill="#fff" stroke="none" />
+                </svg>
             </div>
-        </div>
-        <div style="margin-top:auto;position:relative;z-index:1;">
-            <div style="font-size:29px;font-weight:600;line-height:1.18;letter-spacing:-0.022em;max-width:400px;color:#fff;">
-                Gestión integral del proceso de alquiler comercial.
-            </div>
-            <div style="font-size:13.5px;color:#C3D0E8;margin-top:16px;max-width:390px;line-height:1.55;">
-                Gestiona captaciones, agentes, brokers y oportunidades comerciales desde una plataforma centralizada.
-            </div>
-            <div style="display:flex;gap:28px;margin-top:30px;font-size:11px;color:#8FA3C4;">
-                <div><div style="color:#fff;font-size:17px;font-weight:600;">248</div>Locales activos</div>
-                <div><div style="color:#fff;font-size:17px;font-weight:600;">96</div>Captaciones activas</div>
-                <div><div style="color:#fff;font-size:17px;font-weight:600;">14</div>Alquileres cerrados</div>
-            </div>
-        </div>
-        <div style="position:absolute;right:-120px;top:-80px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle, rgba(0,174,239,0.40), rgba(0,174,239,0));"></div>
-        <div style="position:absolute;left:-90px;bottom:-110px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle, rgba(0,91,255,0.32), rgba(0,91,255,0));"></div>
-        <svg style="position:absolute;right:-40px;top:120px;opacity:0.08;" width="360" height="360" viewBox="0 0 400 400">
-            @for (var i = 0; i < 18; i++)
+
+            <div class="cl-loginbox__hello">Bienvenido</div>
+            <h1 class="cl-loginbox__title">Iniciar sesión</h1>
+            <div class="cl-loginbox__rule"></div>
+            <div class="cl-loginbox__sub">Ingresa con tu cuenta corporativa</div>
+
+            @if (_error is not null)
             {
-                <line x1="@(i * 32)" y1="0" x2="0" y2="@(i * 32)" stroke="#FFFFFF" stroke-width="1" />
+                <div class="cl-loginbox__error@(_shake ? " shake" : "")">
+                    <Icon Name="alert" Size="15" />
+                    <span>@_error</span>
+                </div>
             }
-        </svg>
-    </div>
 
-    @* Right form *@
-    <div style="flex:1;display:grid;place-items:center;padding:48px 40px;">
-        <div style="width:432px;background:rgba(255,255,255,0.82);backdrop-filter:blur(10px) saturate(1.3);border:1px solid rgba(255,255,255,0.7);border-radius:20px;box-shadow:0 30px 70px rgba(6,26,77,0.16), 0 8px 20px rgba(6,26,77,0.08);padding:34px 34px 28px;">
-            <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#005BFF;font-weight:600;">Bienvenido</div>
-            <div style="font-size:25px;font-weight:650;letter-spacing:-0.02em;margin-top:5px;">Inicio de sesión</div>
-            <div style="font-size:13px;color:#515B6B;margin-top:6px;line-height:1.5;">
-                Selecciona tu perfil de prueba e ingresa con tus credenciales de la corredora.
+            <div class="cl-loginfield" style="animation-delay:.52s">
+                <span class="cl-loginfield__ic"><Icon Name="user" Size="17" /></span>
+                <input class="cl-loginfield__in" placeholder="Usuario o correo corporativo"
+                       value="@_usuario" @oninput="OnUser" @onkeydown="OnKey"
+                       autocomplete="username" aria-label="Usuario o correo corporativo" />
+                <span class="cl-loginfield__ok@(_userOk ? " is-on" : "")"><Icon Name="checkCircle" Size="16" /></span>
             </div>
 
-            @* Profile cards *@
-            <div style="margin-top:20px;">
-                <div style="font-size:10.5px;letter-spacing:0.09em;text-transform:uppercase;color:#7E8794;font-weight:600;margin-bottom:9px;">Perfil de acceso</div>
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                    @foreach (var (key, icon, sub) in _roles)
-                    {
-                        <button type="button" class="cl-rolecard@(_picked == key ? " sel" : "")" @onclick="@(() => _picked = key)">
-                            <span class="cl-rolecard-ic"><Icon Name="@icon" Size="18" /></span>
-                            <span style="flex:1;">
-                                <span class="cl-rolecard-name">@Roles.Label(key)</span>
-                                <span class="cl-rolecard-desc">@sub</span>
-                            </span>
-                            <span class="cl-rolecard-check"><Icon Name="checkCircle" Size="18" /></span>
-                        </button>
-                    }
-                </div>
+            <div class="cl-loginfield" style="animation-delay:.58s">
+                <span class="cl-loginfield__ic"><Icon Name="lock" Size="16" /></span>
+                <input class="cl-loginfield__in" placeholder="Contraseña"
+                       type="@(_showPass ? "text" : "password")"
+                       value="@_password" @oninput="OnPass" @onkeydown="OnKey"
+                       autocomplete="current-password" aria-label="Contraseña" />
+                <button type="button" class="cl-loginfield__eye" @onclick="TogglePass" tabindex="-1"
+                        aria-label="@(_showPass ? "Ocultar contraseña" : "Mostrar contraseña")">
+                    <Icon Name="eye" Size="16" />
+                </button>
             </div>
 
-            @* Credentials *@
-            <div style="margin-top:18px;display:flex;flex-direction:column;gap:12px;">
-                <div>
-                    <label class="cl-label">Usuario o correo corporativo</label>
-                    <input class="cl-login-input" value="vmora@@controllocal.pe" />
-                </div>
-                <div>
-                    <label class="cl-label">Contraseña</label>
-                    <div style="position:relative;">
-                        <input class="cl-login-input"
-                               type="@PasswordInputType"
-                               @bind="_password"
-                               style="padding-right:40px;" />
-
-                        <button type="button"
-                                @onclick="TogglePassword"
-                                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#7E8794;cursor:pointer;display:inline-flex;background:transparent;border:0;padding:0;">
-                            <Icon Name="@(_showPassword ? "eyeOff" : "eye")" Size="16" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <button @onclick="Ingresar" style="width:100%;margin-top:20px;padding:13px 16px;justify-content:center;display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:linear-gradient(135deg, #005BFF, #0048CC);color:#fff;border:0;border-radius:11px;font:inherit;font-size:14px;font-weight:600;box-shadow:0 8px 20px rgba(0,91,255,0.32);">
-                Ingresar al sistema
-                <Icon Name="arrowRight" Size="15" />
+            <button type="button" class="cl-loginbox__cta" @onclick="Ingresar" disabled="@_loading">
+                @if (_loading)
+                {
+                    <span class="cl-spin"></span>
+                    <span>Verificando…</span>
+                }
+                else
+                {
+                    <span>Ingresar al sistema</span>
+                    <span class="cl-loginbox__cta-go"><Icon Name="arrowRight" Size="15" /></span>
+                }
             </button>
 
-            <div style="margin-top:14px;font-size:11.5px;color:#515B6B;display:flex;gap:8px;align-items:flex-start;">
-                <Icon Name="lock" Size="14" Color="#7E8794" />
-                <span>¿No recuerdas tu contraseña? <a @onclick="@(() => App.Navigate("recover"))" style="color:#005BFF;font-weight:600;cursor:pointer;">Solicita un restablecimiento</a> al equipo de soporte interno.</span>
+            <div class="cl-loginbox__help">
+                ¿No recuerdas tu contraseña?
+                <a @onclick="@(() => App.Navigate("recover"))">Solicita un restablecimiento</a>
             </div>
 
-            <div style="margin-top:18px;padding-top:16px;border-top:1px solid #E2E6EC;font-size:11px;color:#7E8794;text-align:center;">
-                v2.5.0 · Soporte interno: soporte@@controllocal.pe
+            <div class="cl-loginbox__foot">
+                <span class="cl-loginbox__sec">
+                    <Icon Name="lock" Size="13" Color="#6b7689" />
+                    Conexión segura y protegida
+                </span>
+                <span class="cl-livedot"></span>
             </div>
         </div>
     </div>
 </div>
 
 @code {
-    private string _picked = Roles.Agente;
-    private string _password = "123456789";
-    private bool _showPassword = false;
+    private string _usuario = "";
+    private string _password = "";
+    private bool _showPass;
+    private bool _userOk;
+    private bool _loading;
+    private bool _shake;
+    private string? _error;
 
-    private string PasswordInputType => _showPassword ? "text" : "password";
-
-    private void TogglePassword()
+    private void OnUser(ChangeEventArgs e)
     {
-        _showPassword = !_showPassword;
+        _usuario = e.Value?.ToString() ?? "";
+        _userOk = _usuario.Trim().Length >= 3;
+        _error = null;
     }
 
-    private readonly (string Key, string Icon, string Sub)[] _roles =
+    private void OnPass(ChangeEventArgs e)
     {
-        (Roles.Agente, "user", "Gestiona propietarios, locales, captaciones y oportunidades."),
-        (Roles.Broker, "users", "Supervisa agentes, revisa operaciones y acompaña el proceso comercial."),
-        (Roles.Admin, "briefcase", "Administra brokers, asignaciones y configuración general del sistema."),
-    };
+        _password = e.Value?.ToString() ?? "";
+        _error = null;
+    }
 
-    private void Ingresar() => App.Navigate("dashboard", _picked);
+    private void TogglePass() => _showPass = !_showPass;
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter")
+            await Ingresar();
+    }
+
+    private async Task Ingresar()
+    {
+        if (_loading) return;
+
+        _error = null;
+        _loading = true;
+
+        var result = await Auth.LoginAsync(_usuario, _password);
+
+        _loading = false;
+
+        if (result.Success && result.User is not null)
+        {
+            App.SignIn(result.User);
+            App.Navigate("dashboard");
+            return;
+        }
+
+        _error = result.Error ?? "No se pudo iniciar sesión.";
+        _shake = true;
+        StateHasChanged();
+        await Task.Delay(450);
+        _shake = false;
+    }
 }

@@ -18,6 +18,25 @@ public class AppState
 
     public void SetRole(string role) => Role = role;
 
+    // Usuario autenticado en la sesión actual (null si nadie ha iniciado sesión).
+    public AuthUser? CurrentUser { get; private set; }
+
+    public bool IsAuthenticated => CurrentUser is not null;
+
+    // Inicia sesión: fija el usuario y sincroniza el rol que usan Sidebar/Topbar.
+    public void SignIn(AuthUser user)
+    {
+        CurrentUser = user;
+        Role = user.Role;
+    }
+
+    // Cierra sesión y vuelve al rol por defecto.
+    public void SignOut()
+    {
+        CurrentUser = null;
+        Role = Roles.Agente;
+    }
+
     public void Navigate(string route, string? role = null)
     {
         if (!string.IsNullOrEmpty(role)) Role = role;

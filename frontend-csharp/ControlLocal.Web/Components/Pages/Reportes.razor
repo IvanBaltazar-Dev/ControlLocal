@@ -15,14 +15,14 @@
                 <MetricCard Icon="pin" Label="Captaciones totales" Value="186" Delta="+12%" Tone="navy" />
                 <MetricCard Icon="check" Label="Operaciones cerradas" Value="64" Delta="+8%" Tone="green" />
                 <MetricCard Icon="target" Label="Tasa de conversión" Value="22%" Delta="+2 pts" Tone="blue" />
-                <MetricCard Icon="briefcase" Label="Comisión generada" Value="USD 128 K" Delta="+15%" Tone="amber" />
+                <MetricCard Icon="briefcase" Label="Comisión generada" Value="USD 128 K" Delta="+15%" Tone="blue" />
             }
             else
             {
                 <MetricCard Icon="pin" Label="Captaciones del equipo" Value="64" Delta="+6 este mes" Tone="navy" />
                 <MetricCard Icon="check" Label="Cierres del equipo" Value="14" Delta="+2 vs mes ant." Tone="green" />
                 <MetricCard Icon="target" Label="Conversión" Value="22%" Delta="+3 pts" Tone="blue" />
-                <MetricCard Icon="calendar" Label="Visitas realizadas" Value="98" Delta="+11" Tone="amber" />
+                <MetricCard Icon="calendar" Label="Visitas realizadas" Value="98" Delta="+11" Tone="blue" />
             }
         </div>
 
@@ -112,7 +112,7 @@
     private static string ConvTone(string pct)
     {
         var n = int.Parse(pct.TrimEnd('%'));
-        return n >= 22 ? "green" : n >= 18 ? "amber" : "red";
+        return n >= 22 ? "green" : n >= 18 ? "blue" : "red";
     }
 
     private readonly double[] _bars = { 6, 8, 7, 11, 9, 14 };
@@ -136,7 +136,7 @@
     {
         new[] { "Captaciones activas", "64", "100%", "#005BFF" },
         new[] { "Con visita realizada", "41", "64%", "#00AEEF" },
-        new[] { "Con solicitud creada", "28", "44%", "#C98A1E" },
+        new[] { "Con solicitud creada", "28", "44%", "#00AEEF" },
         new[] { "Cerradas exitosas", "14", "22%", "#2F7D52" },
     };
 

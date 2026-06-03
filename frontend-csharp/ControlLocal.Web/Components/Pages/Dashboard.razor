@@ -5,19 +5,23 @@
 
 <AppShell Active="@SideActive" Crumbs="@(new[] { "ControlLocal", Title })" Title="@Title" Subtitle="@Subtitle">
     <Actions>
+        @if (_toastExportar is not null)
+        {
+            <div class="cl-alert blue" style="padding:6px 12px;font-size:12px;"><Icon Name="check" Size="13" /> @_toastExportar</div>
+        }
         @if (IsAdmin)
         {
-            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar PDF</button>
+            <button class="cl-btn" @onclick="Exportar"><Icon Name="download" Size="13" /> Exportar PDF</button>
             <button class="cl-btn primary" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="briefcase" Size="13" /> Gestión de brokers</button>
         }
         else if (IsBroker)
         {
-            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn" @onclick="Exportar"><Icon Name="download" Size="13" /> Exportar</button>
             <button class="cl-btn primary" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="pin" Size="13" /> Bandeja de captaciones</button>
         }
         else
         {
-            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn" @onclick="Exportar"><Icon Name="download" Size="13" /> Exportar</button>
             <button class="cl-btn primary" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
         }
     </Actions>
@@ -161,16 +165,17 @@
             </div>
             <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;">
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Mis captaciones en seguimiento</div><a class="cl-btn ghost sm" style="color:#005BFF;">Ver todas</a></div>
+                    <div class="cl-card-head"><div class="cl-card-title">Mis captaciones en seguimiento</div><button class="cl-btn ghost sm" style="color:#005BFF;" @onclick="@(() => App.Navigate("captaciones"))">Ver todas</button></div>
                     <div class="cl-card-body" style="padding:0;">
                         <table class="cl-table">
-                            <thead><tr><th>Captación</th><th>Cliente</th><th>Local</th><th>Etapa</th><th>Próx. acción</th></tr></thead>
+                            <thead><tr><th>Captación</th><th>Cliente</th><th>Local</th><th>Etapa</th><th>Próx. acción</th><th></th></tr></thead>
                             <tbody>
                                 @foreach (var r in _agenteCaps)
                                 {
                                     <tr>
                                         <td class="mono">@r[0]</td><td>@r[1]</td><td>@r[2]</td>
                                         <td><StatusBadge Label="@r[3]" /></td><td class="muted">@r[4]</td>
+                                        <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"ficha-propiedad/{r[0]}"))">Ver detalle</button></td>
                                     </tr>
                                 }
                             </tbody>
@@ -204,6 +209,21 @@
 @code {
     private bool IsAdmin => App.Role == Roles.Admin;
     private bool IsBroker => App.Role == Roles.Broker;
+
+    private string? _toastExportar;
+
+    private void Exportar()
+    {
+        _toastExportar = "Exportación generada correctamente";
+        _ = OcultarToastExportarAsync();
+    }
+
+    private async Task OcultarToastExportarAsync()
+    {
+        await Task.Delay(2500);
+        _toastExportar = null;
+        await InvokeAsync(StateHasChanged);
+    }
 
     private string Title => IsAdmin ? "Panel administrativo global" : IsBroker ? "Panel del broker" : "Buen día, Valentina";
 

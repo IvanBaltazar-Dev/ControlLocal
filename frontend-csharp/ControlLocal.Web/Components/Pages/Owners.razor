@@ -8,13 +8,27 @@
           Title="Propietarios"
           Subtitle="Propietarios que registré para vincular a captaciones">
     <Actions>
-        <button class="cl-btn"><Icon Name="upload" Size="13" /> Importar</button>
+        @if (_toastMsg is not null)
+        {
+            <div class="cl-alert blue" style="padding:6px 12px;font-size:12px;"><Icon Name="check" Size="13" /> @_toastMsg</div>
+        }
+        <button class="cl-btn" @onclick="Importar"><Icon Name="upload" Size="13" /> Importar</button>
+        <button class="cl-btn" @onclick="Exportar"><Icon Name="download" Size="13" /> Exportar</button>
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Registrar propietario</button>
     </Actions>
     <ChildContent>
         <FilterBar Search="Buscar por nombre, razón social, documento…">
-            <select class="cl-select"><option>Tipo de persona</option><option>Persona natural</option><option>Persona jurídica</option></select>
-            <select class="cl-select"><option>Estado</option><option>Activo</option><option>Inactivo</option></select>
+            <select class="cl-select" @bind="_filtroTipo">
+                <option value="">Tipo de persona</option>
+                <option value="natural">Persona natural</option>
+                <option value="juridica">Persona jurídica</option>
+            </select>
+            <select class="cl-select" @bind="_filtroEstado">
+                <option value="">Estado</option>
+                <option>Activo</option>
+                <option>Inactivo</option>
+            </select>
+            <button class="cl-btn sm" @onclick="MasFiltros"><Icon Name="filter" Size="12" /> Más filtros</button>
         </FilterBar>
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
@@ -26,7 +40,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var o in OwnerSvc.All())
+                        @foreach (var o in PropietariosFiltrados)
                         {
                             <tr>
                                 <td>
@@ -47,6 +61,59 @@
                 </table>
             </div>
         </div>
-        <Pagination Total="86" />
+        <Pagination Total="@PropietariosFiltrados.Count()" />
     </ChildContent>
 </AppShell>
+
+@code {
+    private string _filtroTipo = "";
+    private string _filtroEstado = "";
+    private string? _toastMsg;
+
+    private IEnumerable<PropietarioDto> PropietariosFiltrados
+    {
+        get
+        {
+            var lista = OwnerSvc.All().AsEnumerable();
+
+            if (!string.IsNullOrEmpty(_filtroTipo))
+            {
+                if (_filtroTipo == "natural")
+                    lista = lista.Where(o => o.TipoPersona.ToLowerInvariant().Contains("natural"));
+                else
+                    lista = lista.Where(o => o.TipoPersona.ToLowerInvariant()
+                                .Replace("í", "i").Contains("juridica"));
+            }
+
+            if (!string.IsNullOrEmpty(_filtroEstado))
+                lista = lista.Where(o => o.Estado == _filtroEstado);
+
+            return lista;
+        }
+    }
+
+    private void Importar()
+    {
+        _toastMsg = "Funcionalidad de importación disponible en próxima versión";
+        _ = OcultarToastAsync();
+    }
+
+    private void Exportar()
+    {
+        _toastMsg = "Exportación generada correctamente";
+        _ = OcultarToastAsync();
+    }
+
+    private void MasFiltros()
+    {
+        _toastMsg = "Filtros avanzados disponibles próximamente";
+        _ = OcultarToastAsync();
+    }
+
+    private async Task OcultarToastAsync()
+    {
+        await Task.Delay(2500);
+        _toastMsg = null;
+        await InvokeAsync(StateHasChanged);
+    }
+}

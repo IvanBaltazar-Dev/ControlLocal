@@ -1,11 +1,13 @@
 @page "/cliente-form"
+@page "/cliente-form/{ClienteId:long}"
 @inject AppState App
+@inject IClienteService ClienteSvc
 
-<PageTitle>Registrar cliente · ControlLocal</PageTitle>
+<PageTitle>@(_esEdicion ? "Editar cliente" : "Registrar cliente") · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Clientes interesados", "Nuevo cliente" })"
-          Title="Registrar cliente interesado"
-          Subtitle="Prospecto comercial · podrás vincularlo a una captación activa para iniciar el seguimiento">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Clientes interesados", _esEdicion ? "Editar cliente" : "Nuevo cliente" })"
+          Title="@(_esEdicion ? "Editar cliente interesado" : "Registrar cliente interesado")"
+          Subtitle="@(_esEdicion ? "Actualiza los datos del prospecto comercial" : "Prospecto comercial · podrás vincularlo a una captación activa para iniciar el seguimiento")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
@@ -23,8 +25,8 @@
                     @if (_tipo == "juridica")
                     {
                         <div class="cl-grid c2">
-                            <Field Label="Razón social" Required="true"><input placeholder="Ej. Inversiones Trébol S.A.C." /></Field>
-                            <Field Label="RUC" Required="true"><input placeholder="20 ___ ___ ___" /></Field>
+                            <Field Label="Razón social" Required="true"><input @bind="_razonSocial" placeholder="Ej. Inversiones Trébol S.A.C." /></Field>
+                            <Field Label="RUC" Required="true"><input @bind="_documento" placeholder="20 ___ ___ ___" /></Field>
                             <Field Label="Representante legal" Required="true"><input placeholder="Nombre completo" /></Field>
                             <Field Label="DNI del representante"><input placeholder="__ ___ ___" /></Field>
                         </div>
@@ -32,9 +34,9 @@
                     else
                     {
                         <div class="cl-grid c2">
-                            <Field Label="Nombres" Required="true"><input placeholder="Nombres" /></Field>
-                            <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" /></Field>
-                            <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" /></Field>
+                            <Field Label="Nombres" Required="true"><input @bind="_nombres" placeholder="Nombres" /></Field>
+                            <Field Label="Apellidos" Required="true"><input @bind="_apellidos" placeholder="Apellidos" /></Field>
+                            <Field Label="DNI" Required="true"><input @bind="_documento" placeholder="__ ___ ___" /></Field>
                             <Field Label="Ocupación / giro"><input placeholder="Ej. Comerciante" /></Field>
                         </div>
                     }
@@ -42,7 +44,7 @@
 
                 <FormSection Num="3" Title="Contacto" Sub="Datos para coordinar interacciones y visitas">
                     <div class="cl-grid c2">
-                        <Field Label="Teléfono principal" Required="true"><input placeholder="+51 ___ ___ ___" /></Field>
+                        <Field Label="Teléfono principal" Required="true"><input @bind="_telefono" placeholder="+51 ___ ___ ___" /></Field>
                         <Field Label="Teléfono alterno"><input placeholder="Opcional" /></Field>
                         <Field Label="Correo electrónico" Required="true"><input placeholder="cliente@@correo.com" /></Field>
                         <Field Label="Canal preferido"><select><option>Llamada</option><option>WhatsApp</option><option>Correo</option><option>Presencial</option></select></Field>
@@ -51,7 +53,18 @@
 
                 <FormSection Num="4" Title="Necesidad comercial" Sub="Qué busca el cliente — ayuda a sugerir captaciones afines">
                     <div class="cl-grid c3">
-                        <Field Label="Rubro de interés" Required="true"><select><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option><option>Salud</option></select></Field>
+                        <Field Label="Rubro de interés" Required="true">
+                            <select @bind="_rubro">
+                                <option>Restaurante / Café</option>
+                                <option>Moda / Boutique</option>
+                                <option>Servicios</option>
+                                <option>Retail</option>
+                                <option>Salud</option>
+                                <option>Café / Postres</option>
+                                <option>Retail / Almacén</option>
+                                <option>Servicios / Consultorio</option>
+                            </select>
+                        </Field>
                         <Field Label="Zona buscada"><select><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option></select></Field>
                         <Field Label="Metraje aprox. (m²)"><input placeholder="Ej. 80" /></Field>
                         <Field Label="Presupuesto mín. (USD/mes)"><input placeholder="1 000" /></Field>
@@ -60,12 +73,12 @@
                     </div>
                     <div style="margin-top:14px;">
                         <Field Label="Notas" Hint="Detalles del interés, condiciones particulares, etc.">
-                            <textarea rows="3" placeholder="Observaciones del cliente…"></textarea>
+                            <textarea @bind="_notas" rows="3" placeholder="Observaciones del cliente…"></textarea>
                         </Field>
                     </div>
                 </FormSection>
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("clientes"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar cliente" />
+                <FormFooterBar OnCancel="@(() => App.Navigate("clientes"))" OnSave="@(() => _confirm = true)" SaveLabel="@(_esEdicion ? "Guardar cambios" : "Registrar cliente")" />
             </div>
 
             <div class="cl-stack">
@@ -91,19 +104,67 @@
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"
-                       Title="¿Registrar cliente interesado?"
-                       Desc="Se creará el cliente en tu cartera. Quedará disponible para vincular a captaciones activas."
-                       ConfirmLabel="Registrar" CancelLabel="Revisar datos"
+                       Title="@(_esEdicion ? "¿Guardar cambios?" : "¿Registrar cliente interesado?")"
+                       Desc="@(_esEdicion ? "Se actualizarán los datos del cliente en tu cartera." : "Se creará el cliente en tu cartera. Quedará disponible para vincular a captaciones activas.")"
+                       ConfirmLabel="@(_esEdicion ? "Guardar" : "Registrar")" CancelLabel="Revisar datos"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
-        <Toast Show="_toast">Cliente registrado correctamente</Toast>
+        <Toast Show="_toast">@(_esEdicion ? "Cliente actualizado correctamente" : "Cliente registrado correctamente")</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
+    [Parameter] public long ClienteId { get; set; }
+
     private string _tipo = "juridica";
     private bool _confirm;
     private bool _toast;
+    private bool _esEdicion => ClienteId > 0;
+
+    // Campos enlazados al formulario
+    private string _razonSocial = "";
+    private string _nombres = "";
+    private string _apellidos = "";
+    private string _documento = "";
+    private string _telefono = "";
+    private string _rubro = "Restaurante / Café";
+    private string _notas = "";
+
+    protected override void OnParametersSet()
+    {
+        if (!_esEdicion) return;
+
+        var c = ClienteSvc.ById(ClienteId);
+        if (c == null) return;
+
+        _tipo = c.TipoPersona.ToLowerInvariant().Contains("natural") ? "natural" : "juridica";
+        _documento = c.NumeroDocumento;
+        _telefono = c.Telefono;
+        _notas = c.InteresComercial;
+
+        if (!string.IsNullOrEmpty(c.RubroInteres))
+            _rubro = c.RubroInteres;
+
+        if (_tipo == "juridica")
+        {
+            _razonSocial = c.Nombre;
+        }
+        else
+        {
+            // Separar en nombres y apellidos: las dos últimas palabras = apellidos
+            var partes = c.Nombre.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (partes.Length >= 3)
+            {
+                _apellidos = string.Join(" ", partes.TakeLast(2));
+                _nombres   = string.Join(" ", partes.SkipLast(2));
+            }
+            else
+            {
+                _nombres   = c.Nombre;
+                _apellidos = "";
+            }
+        }
+    }
 
     private async Task OnConfirm()
     {

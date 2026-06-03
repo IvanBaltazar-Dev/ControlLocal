@@ -1,5 +1,5 @@
 @* KPI metric card with optional icon, delta and footer. *@
-<div class="cl-metric">
+<div class="cl-metric @(OnClick.HasDelegate ? "cl-metric-clickable" : "")" @onclick="OnClick" style="@(OnClick.HasDelegate ? "cursor:pointer;" : "")">
     <div class="cl-metric-row">
         @if (!string.IsNullOrEmpty(Icon))
         {
@@ -31,6 +31,7 @@
     [Parameter] public string DeltaDir { get; set; } = "up";
     [Parameter] public string Tone { get; set; } = "blue";
     [Parameter] public string? Footer { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
 
     private record ToneStyle(string Bg, string Color);
 

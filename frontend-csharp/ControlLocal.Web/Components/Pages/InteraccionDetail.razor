@@ -218,11 +218,7 @@
         _nuevoResultado = "";
         _toastMsg = "Resultado actualizado correctamente";
 
-        _ = Task.Delay(2500).ContinueWith(_ =>
-        {
-            _toastMsg = null;
-            StateHasChanged();
-        });
+        _ = OcultarToastAsync();
     }
 
     private void GuardarObservaciones()
@@ -231,11 +227,14 @@
         _editModal = false;
         _toastMsg = "Observaciones guardadas correctamente";
 
-        _ = Task.Delay(2000).ContinueWith(_ =>
-        {
-            _toastMsg = null;
-            StateHasChanged();
-        });
+        _ = OcultarToastAsync();
+    }
+
+    private async Task OcultarToastAsync()
+    {
+        await Task.Delay(2000);
+        _toastMsg = null;
+        await InvokeAsync(StateHasChanged);
     }
 
     private string GetCanalLabel(string canal) => canal switch

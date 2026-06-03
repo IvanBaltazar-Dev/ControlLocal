@@ -74,10 +74,16 @@
                 <div>
                     <label class="cl-label">Contraseña</label>
                     <div style="position:relative;">
-                        <input class="cl-login-input" type="password" value="••••••••••" style="padding-right:40px;" />
-                        <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#7E8794;cursor:pointer;display:inline-flex;">
-                            <Icon Name="eye" Size="16" />
-                        </div>
+                        <input class="cl-login-input"
+                               type="@PasswordInputType"
+                               @bind="_password"
+                               style="padding-right:40px;" />
+
+                        <button type="button"
+                                @onclick="TogglePassword"
+                                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#7E8794;cursor:pointer;display:inline-flex;background:transparent;border:0;padding:0;">
+                            <Icon Name="@(_showPassword ? "eyeOff" : "eye")" Size="16" />
+                        </button>
                     </div>
                 </div>
             </div>
@@ -101,6 +107,15 @@
 
 @code {
     private string _picked = Roles.Agente;
+    private string _password = "123456789";
+    private bool _showPassword = false;
+
+    private string PasswordInputType => _showPassword ? "text" : "password";
+
+    private void TogglePassword()
+    {
+        _showPassword = !_showPassword;
+    }
 
     private readonly (string Key, string Icon, string Sub)[] _roles =
     {

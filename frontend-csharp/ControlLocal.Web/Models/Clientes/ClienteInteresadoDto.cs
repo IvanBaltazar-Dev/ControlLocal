@@ -19,6 +19,9 @@ public class ClienteInteresadoDto
     [Phone(ErrorMessage = "Ingrese un teléfono válido.")]
     public string Telefono { get; set; } = string.Empty;
 
+    [EmailAddress(ErrorMessage = "Ingrese un correo vÃ¡lido.")]
+    public string Correo { get; set; } = string.Empty;
+
     public string RubroInteres { get; set; } = string.Empty;
 
     public string InteresComercial { get; set; } = string.Empty;

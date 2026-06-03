@@ -19,11 +19,17 @@ public class AgenteDto
     [Required(ErrorMessage = "El nombre es obligatorio.")]
     public string Nombre { get; set; } = string.Empty;
 
+    public string TipoPersona { get; set; } = "Persona natural";
+
+    public string TipoDocumento { get; set; } = "D";
+
     [EmailAddress(ErrorMessage = "Ingrese un correo válido.")]
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "El número de documento es obligatorio.")]
     public string NumeroDocumento { get; set; } = string.Empty;
+
+    public string Telefono { get; set; } = string.Empty;
 
     public string Zona { get; set; } = string.Empty;
 

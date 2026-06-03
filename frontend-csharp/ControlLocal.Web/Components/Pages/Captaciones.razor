@@ -11,25 +11,28 @@
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="fileText" Label="Borradores" Value="2" Tone="blue" />
-            <MetricCard Icon="clock" Label="En revisión" Value="3" Tone="blue" />
-            <MetricCard Icon="check" Label="Activas" Value="8" Tone="green" />
-            <MetricCard Icon="alert" Label="Observadas" Value="1" Tone="blue" />
-            <MetricCard Icon="x" Label="Rechazadas" Value="1" Tone="red" />
-            <MetricCard Icon="flag" Label="Cerradas" Value="1" Tone="navy" />
+        @{ var filtradas = Filtradas().ToList(); }
+        <div style="display:grid;grid-template-columns:repeat(@(_estados.Length + 1),1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="layers" Label="Total" Value="@Todas.Count.ToString()" Tone="gray"
+                        Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
+            @foreach (var e in _estados)
+            {
+                <MetricCard Icon="@IconoEstado(e)" Label="@e" Value="@CuentaEstado(e).ToString()" Tone="@TonoEstado(e)"
+                            Active="@(_tab == e)" OnClick="@(() => _tab = e)" />
+            }
         </div>
 
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
-        <FilterBar Search="Buscar por código, dirección, propietario…">
-            <select class="cl-select"><option>Distrito</option><option>Miraflores</option><option>San Isidro</option><option>Surco</option></select>
-            <select class="cl-select"><option>Estado</option><option>Borrador</option><option>En revisión</option><option>Activa</option><option>Observada</option></select>
-            <select class="cl-select"><option>Vigencia</option><option>Por vencer</option><option>Vigente</option></select>
+        <FilterBar Search="Buscar por código, dirección, propietario…"
+                   @bind-Value="_query" ResultCount="filtradas.Count"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
+            <FilterSelect Placeholder="Vigencia" Options="_vigencias" @bind-Value="_vigencia" />
         </FilterBar>
 
         <div class="cl-gallery-grid">
-            @foreach (var c in CaptacionSvc.All())
+            @foreach (var c in filtradas)
             {
                 <div class="cl-prop-card">
                     <div class="cl-prop-photo">
@@ -56,11 +59,11 @@
                         <div class="cl-prop-foot">
                             @if (c.Estado == "Observada")
                             {
-                                <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Subsanar</button>
+                                <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate($"captacion-form/{c.CodigoCaptacion}"))">Subsanar</button>
                             }
                             else if (c.Estado is "Pendiente" or "Borrador")
                             {
-                                <button class="cl-btn sm cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate("captacion-form"))">Continuar</button>
+                                <button class="cl-btn sm cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate($"captacion-form/{c.CodigoCaptacion}"))">Continuar</button>
                             }
                             else
                             {
@@ -72,19 +75,91 @@
                 </div>
             }
         </div>
-        <Pagination Total="14" />
+        @if (filtradas.Count == 0)
+        {
+            <div class="cl-card"><div style="padding:40px;text-align:center;color:#7E8794;">
+                <Icon Name="pin" Size="28" style="margin-bottom:10px;" />
+                <div style="font-weight:600;margin-bottom:4px;">Sin captaciones en este filtro</div>
+                <div style="font-size:12px;">Ajusta la búsqueda o limpia los filtros.</div>
+            </div></div>
+        }
+        else
+        {
+            <Pagination Total="filtradas.Count" />
+        }
     </ChildContent>
 </AppShell>
 
 @code {
     private string _tab = "Todas";
+    private string _query = "";
+    private string _distrito = "";
+    private string _vigencia = "";
 
-    private readonly Tabs.TabItem[] _tabs = new[]
+    private IReadOnlyList<CaptacionDto> Todas => CaptacionSvc.All();
+
+    // Dimensiones derivadas de los datos (sin valores hardcodeados).
+    private string[] _estados => Todas.Select(c => c.Estado).Distinct().OrderBy(x => x).ToArray();
+    private IReadOnlyList<string> _distritos => Todas.Select(c => c.DistritoLocal).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+    private readonly IReadOnlyList<string> _vigencias = new[] { "Por vencer", "Vigente" };
+
+    private int CuentaEstado(string e) => Todas.Count(c => c.Estado == e);
+
+    private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", Todas.Count) }
+        .Concat(_estados.Select(e => new Tabs.TabItem(e, CuentaEstado(e))))
+        .ToArray();
+
+    private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query)
+                               || !string.IsNullOrEmpty(_distrito) || !string.IsNullOrEmpty(_vigencia);
+
+    private void LimpiarFiltros()
     {
-        new Tabs.TabItem("Todas", 14),
-        new Tabs.TabItem("Borradores", 2),
-        new Tabs.TabItem("En revisión", 3),
-        new Tabs.TabItem("Observadas", 1),
-        new Tabs.TabItem("Activas", 8),
+        _tab = "Todas"; _query = ""; _distrito = ""; _vigencia = "";
+    }
+
+    private IEnumerable<CaptacionDto> Filtradas() => Todas.Where(c =>
+        (_tab == "Todas" || c.Estado == _tab) &&
+        (string.IsNullOrEmpty(_distrito) || c.DistritoLocal == _distrito) &&
+        (string.IsNullOrEmpty(_vigencia) || VigenciaCat(c) == _vigencia) &&
+        (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
+
+    private static bool Coincide(CaptacionDto c, string q) =>
+        (c.CodigoCaptacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (c.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (c.PropietarioNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    // Vigencia solo aplica a captaciones activas; se deriva de los días restantes.
+    private static string? VigenciaCat(CaptacionDto c)
+    {
+        if (c.Estado != "Activa") return null;
+        var dias = ParseDias(c.DiasRestantesTexto);
+        return dias is <= 60 ? "Por vencer" : "Vigente";
+    }
+
+    private static int? ParseDias(string? texto)
+    {
+        if (string.IsNullOrEmpty(texto)) return null;
+        var m = System.Text.RegularExpressions.Regex.Match(texto, @"\d+");
+        return m.Success ? int.Parse(m.Value) : (int?)null;
+    }
+
+    private static string TonoEstado(string e) => e switch
+    {
+        "Activa" => "green",
+        "Observada" => "info",
+        "Rechazada" => "red",
+        "Vencida" => "red",
+        "Cerrada" => "navy",
+        _ => "blue",
+    };
+
+    private static string IconoEstado(string e) => e switch
+    {
+        "Activa" => "check",
+        "Observada" => "alert",
+        "Rechazada" => "x",
+        "Cerrada" => "flag",
+        "Vencida" => "clock",
+        _ => "clock",
     };
 }

@@ -1,4 +1,5 @@
 @page "/agents"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IAgenteService AgenteSvc
 
@@ -15,9 +16,12 @@
             <Icon Name="info" Size="15" />
             <span>Al registrar un agente se crea automáticamente una <b>relación activa de supervisión</b> entre tú y el agente. Solo el broker administrador puede reasignar agentes a otro broker.</span>
         </div>
-        <FilterBar Search="Buscar agente por nombre, DNI o correo…">
-            <select class="cl-select"><option>Todos los estados</option><option>Activo</option><option>Inactivo</option></select>
-            <select class="cl-select"><option>Todas las zonas</option><option>Lima Centro</option><option>Lima Sur</option></select>
+        @{ var filtrados = Filtrados().ToList(); }
+        <FilterBar Search="Buscar agente por nombre, DNI o correo…"
+                   @bind-Value="_query" ResultCount="filtrados.Count"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Todos los estados" Options="_estados" @bind-Value="_estado" />
+            <FilterSelect Placeholder="Todas las zonas" Options="_zonas" @bind-Value="_zona" />
         </FilterBar>
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
@@ -29,7 +33,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var a in AgenteSvc.All())
+                        @foreach (var a in filtrados)
                         {
                             <tr>
                                 <td>
@@ -50,7 +54,7 @@
                                 <td>
                                     <div class="cl-row-actions">
                                         <button title="Ver" @onclick="@(() => App.Navigate($"agente-detail/{a.Id}"))"><Icon Name="eye" Size="14" /></button>
-                                        <button title="Editar" @onclick="@(() => App.Navigate("agente-form"))"><Icon Name="edit" Size="13" /></button>
+                                        <button title="Editar" @onclick="@(() => App.Navigate($"agente-form/{a.Id}"))"><Icon Name="edit" Size="13" /></button>
                                         @if (a.EstadoAdministrativo == "Activo")
                                         {
                                             <button class="danger" title="Desactivar" @onclick="@(() => _deactivate = a.Nombre)"><Icon Name="x" Size="13" /></button>
@@ -61,9 +65,17 @@
                         }
                     </tbody>
                 </table>
+                @if (filtrados.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="users" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin agentes en este filtro</div>
+                        <div style="font-size:12px;">Ajusta la búsqueda o limpia los filtros.</div>
+                    </div>
+                }
             </div>
         </div>
-        <Pagination Total="8" />
+        <Pagination Total="filtrados.Count" />
 
         <ConfirmDialog Open="@(_deactivate is not null)" Tone="red" Icon="alert"
                        Title="¿Desactivar agente?"
@@ -79,14 +91,34 @@
     private string? _deactivate;
     private string? _toast;
 
+    private string _query = "", _estado = "", _zona = "";
+
+    private IReadOnlyList<AgenteDto> Todos => AgenteSvc.All();
+
+    private readonly IReadOnlyList<string> _estados = new[] { "Activo", "Inactivo" };
+    private IReadOnlyList<string> _zonas => Todos.Select(a => a.Zona)
+        .Where(z => !string.IsNullOrWhiteSpace(z)).Distinct().OrderBy(x => x).ToList();
+
+    private bool HayFiltros => new[] { _query, _estado, _zona }.Any(s => !string.IsNullOrEmpty(s));
+
+    private void LimpiarFiltros() { _query = _estado = _zona = ""; }
+
+    private IEnumerable<AgenteDto> Filtrados() => Todos.Where(a =>
+        (string.IsNullOrEmpty(_estado) || a.EstadoAdministrativo == _estado) &&
+        (string.IsNullOrEmpty(_zona) || a.Zona == _zona) &&
+        (string.IsNullOrEmpty(_query) || Coincide(a, _query)));
+
+    private static bool Coincide(AgenteDto a, string q) =>
+        (a.Nombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (a.NumeroDocumento?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (a.Email?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+
     private async Task OnDeactivate()
     {
         var n = _deactivate;
         _deactivate = null;
         _toast = $"{n} fue desactivado";
-        StateHasChanged();
-        await Task.Delay(2200);
-        _toast = null;
-        StateHasChanged();
+        await RenderIfAliveAsync();
+        await DelayThenRenderAsync(2200, () => _toast = null);
     }
 }

@@ -1,61 +1,265 @@
 @page "/agente-form"
+@page "/agente-form/{IdParam:long}"
+@inherits SafeComponentBase
 @inject AppState App
+@inject IAgenteService AgenteSvc
 
-<PageTitle>Registrar agente · ControlLocal</PageTitle>
+<PageTitle>@(_isEdit ? "Editar agente" : "Registrar agente") · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Mis agentes", "Nuevo agente" })"
-          Title="Registrar agente inmobiliario"
-          Subtitle="Al registrarlo se abre automáticamente una relación activa de supervisión contigo">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Mis agentes", _isEdit ? _nombreMostrar : "Nuevo agente" })"
+          Title="@(_isEdit ? "Editar agente inmobiliario" : "Registrar agente inmobiliario")"
+          Subtitle="@(_isEdit
+              ? "Actualiza contacto, zona y estado. La identidad y el usuario no se pueden modificar."
+              : "Al registrarlo se abre automáticamente una relación activa de supervisión contigo")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("agents"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
-        <div style="max-width:880px;">
-            <FormSection Num="1" Title="Datos personales" Sub="Identificación del agente inmobiliario">
-                <div class="cl-grid c2">
-                    <Field Label="Nombres" Required="true"><input placeholder="Nombres" /></Field>
-                    <Field Label="Apellidos" Required="true"><input placeholder="Apellidos" /></Field>
-                    <Field Label="DNI" Required="true"><input placeholder="__ ___ ___" /></Field>
-                    <Field Label="Teléfono" Required="true"><input placeholder="+51 ___ ___ ___" /></Field>
-                </div>
-            </FormSection>
+        <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;max-width:1100px;">
+            <div>
+                <FormSection Num="1" Title="Tipo de agente" Sub="@(_isEdit ? "No se puede cambiar tras el registro" : "Determina los campos de identificación requeridos")">
+                    <div class="cl-seg" role="tablist">
+                        <button class="@(_tipo == "juridica" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => SetTipo("juridica"))">Persona jurídica</button>
+                        <button class="@(_tipo == "natural" ? "active" : "")" disabled="@_isEdit" @onclick="@(() => SetTipo("natural"))">Persona natural</button>
+                    </div>
+                    @if (_isEdit)
+                    {
+                        <div class="cl-muted" style="font-size:11px;margin-top:8px;display:flex;align-items:center;gap:6px;">
+                            <Icon Name="lock" Size="12" /> El tipo de agente quedó fijado al registrarlo.
+                        </div>
+                    }
+                </FormSection>
 
-            <FormSection Num="2" Title="Cuenta de acceso y asignación" Sub="Credenciales del sistema y zona de operación">
-                <div class="cl-grid c2">
-                    <Field Label="Correo corporativo" Required="true"><input placeholder="agente@@controllocal.pe" /></Field>
-                    <Field Label="Usuario" Required="true"><input placeholder="nombre.apellido" /></Field>
-                    <Field Label="Zona asignada" Required="true"><select><option>Lima Centro</option><option>Lima Sur</option><option>Lima Norte</option><option>Lima Este</option></select></Field>
-                    <Field Label="Supervisión" Hint="Quien registra es el broker supervisor"><input value="Ricardo Salas (tú)" disabled /></Field>
-                </div>
-                <div class="cl-alert blue" style="margin-top:14px;">
-                    <Icon Name="lock" Size="15" />
-                    <span>El agente recibirá un correo para definir su contraseña. La relación de supervisión queda activa y solo el <b>broker administrador</b> puede reasignarla.</span>
-                </div>
-            </FormSection>
+                <FormSection Num="2" Title="Identificación" Sub="@(_tipo == "juridica" ? "Datos de la empresa agente" : "Datos personales del agente")">
+                    @if (_tipo == "juridica")
+                    {
+                        <div class="cl-grid c2">
+                            <Field Label="Razón social" Required="true"><input @bind="_razonSocial" @bind:event="oninput" placeholder="Ej. Gestión Comercial S.A.C." /></Field>
+                            <Field Label="RUC" Required="true">
+                                <input @bind="_documento" @bind:event="oninput" placeholder="20 ___ ___ ___" disabled="@_isEdit" />
+                                @if (_isEdit)
+                                {
+                                    <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El RUC no se puede modificar.</div>
+                                }
+                            </Field>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="cl-grid c2">
+                            <Field Label="Nombre completo" Required="true"><input @bind="_nombreNatural" @bind:event="oninput" placeholder="Nombres y apellidos" /></Field>
+                            <DocumentTypeSelector PersonType="natural" SelectedDocType="@_tipoDoc" OnChange="OnTipoDocChange" Disabled="@_isEdit" />
+                            <Field Label="Número de documento" Required="true">
+                                <input @bind="_documento" @bind:event="oninput" placeholder="__ ___ ___" disabled="@_isEdit" />
+                                @if (_isEdit)
+                                {
+                                    <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El documento de identidad no se puede modificar.</div>
+                                }
+                            </Field>
+                        </div>
+                    }
+                </FormSection>
 
-            <FormFooterBar OnCancel="@(() => App.Navigate("agents"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar agente" />
+                <FormSection Num="3" Title="Cuenta de acceso y asignación" Sub="Credenciales del sistema y zona de operación">
+                    <div class="cl-grid c2">
+                        <Field Label="Correo corporativo" Required="true"><input @bind="_correo" @bind:event="oninput" placeholder="agente@@controllocal.pe" /></Field>
+                        <Field Label="Teléfono" Required="true"><input @bind="_telefono" @bind:event="oninput" placeholder="+51 ___ ___ ___" /></Field>
+                        <Field Label="Usuario" Required="true">
+                            <input @bind="_usuario" @bind:event="oninput" placeholder="nombre.apellido" disabled="@_isEdit" />
+                            @if (_isEdit)
+                            {
+                                <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El usuario de acceso no se puede modificar.</div>
+                            }
+                        </Field>
+                        <Field Label="Zona asignada" Required="true"><select @bind="_zona"><option value="">— Seleccionar —</option><option>Lima Centro</option><option>Lima Sur</option><option>Lima Norte</option><option>Lima Este</option><option>Lima Moderna</option><option>Callao</option></select></Field>
+                        <Field Label="Supervisión" Hint="Quien registra es el broker supervisor"><input value="@_supervision" disabled /></Field>
+                    </div>
+                    <div class="cl-alert blue" style="margin-top:14px;">
+                        <Icon Name="lock" Size="15" />
+                        <span>La relación de supervisión queda activa y solo el <b>broker administrador</b> puede reasignarla.</span>
+                    </div>
+                </FormSection>
+
+                @if (_isEdit)
+                {
+                    <FormSection Num="4" Title="Estado" Sub="Control administrativo y disponibilidad operativa">
+                        <div class="cl-grid c2">
+                            <Field Label="Estado administrativo" Required="true">
+                                <select @bind="_estadoAdministrativo"><option>Activo</option><option>Inactivo</option></select>
+                            </Field>
+                            <Field Label="Estado operativo">
+                                <select @bind="_estadoOperativo"><option value="">— Sin estado operativo —</option><option>Disponible</option><option>En licencia</option><option>No disponible</option></select>
+                            </Field>
+                        </div>
+                    </FormSection>
+                }
+
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-bottom:14px;">
+                        <Icon Name="alert" Size="15" /><span>@_err</span>
+                    </div>
+                }
+
+                <FormFooterBar OnCancel="@(() => App.Navigate("agents"))" OnSave="@TryConfirm" SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar agente")" />
+            </div>
+
+            <div class="cl-stack">
+                <FormStepsSidebar Steps="_pasos" />
+            </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"
-                       Title="¿Registrar agente y abrir supervisión?"
-                       Desc="Se creará la cuenta del agente y quedará bajo tu supervisión directa. Podrá registrar captaciones, clientes y operaciones."
-                       ConfirmLabel="Registrar agente" CancelLabel="Revisar datos"
+                       Title="@(_isEdit ? "¿Guardar cambios del agente?" : "¿Registrar agente y abrir supervisión?")"
+                       Desc="@(_isEdit ? "Se actualizarán contacto, zona y estado. La identidad y el usuario permanecen sin cambios." : "Se creará la cuenta del agente y quedará bajo tu supervisión directa. Podrá registrar captaciones, clientes y operaciones.")"
+                       ConfirmLabel="@(_isEdit ? "Guardar cambios" : "Registrar agente")" CancelLabel="Revisar datos"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
-        <Toast Show="_toast">Agente registrado · supervisión activa</Toast>
+        <Toast Show="_toast">@(_isEdit ? "Agente actualizado correctamente" : "Agente registrado · supervisión activa")</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
+    [Parameter] public long IdParam { get; set; }
+
+    private bool _isEdit => IdParam > 0;
     private bool _confirm;
     private bool _toast;
+
+    private string _tipo = "natural";
+    private string _razonSocial = "";
+    private string _nombreNatural = "";
+    private string _tipoDoc = "D";
+    private string _documento = "";
+    private string _telefono = "";
+    private string _correo = "";
+    private string _usuario = "";
+    private string _zona = "";
+    private string _supervision = "Ricardo Salas (tú)";
+    private string _estadoAdministrativo = "Activo";
+    private string _estadoOperativo = "";
+    private string? _err;
+
+    private string _nombreMostrar => _tipo == "juridica" ? _razonSocial : _nombreNatural;
+
+    private bool IsStep1Complete => !string.IsNullOrEmpty(_tipo);
+    private bool IsStep2Complete => _tipo == "juridica"
+        ? !string.IsNullOrWhiteSpace(_razonSocial) && !string.IsNullOrWhiteSpace(_documento)
+        : !string.IsNullOrWhiteSpace(_nombreNatural) && !string.IsNullOrWhiteSpace(_tipoDoc) && !string.IsNullOrWhiteSpace(_documento);
+    private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_correo) && !string.IsNullOrWhiteSpace(_telefono)
+                                    && !string.IsNullOrWhiteSpace(_usuario) && !string.IsNullOrWhiteSpace(_zona);
+    private bool IsStep4Complete => !_isEdit || !string.IsNullOrWhiteSpace(_estadoAdministrativo);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos
+    {
+        get
+        {
+            var pasos = new List<FormStepsSidebar.Step>
+            {
+                new("Tipo de agente", "Natural o jurídica", IsStep1Complete),
+                new("Identificación", "Documento y nombre", IsStep2Complete),
+                new("Cuenta y zona", "Correo, usuario, zona", IsStep3Complete),
+            };
+            if (_isEdit)
+            {
+                pasos.Add(new FormStepsSidebar.Step("Estado", "Administrativo y operativo", IsStep4Complete));
+            }
+            return pasos;
+        }
+    }
+
+    private void SetTipo(string tipo)
+    {
+        if (_isEdit) return;
+
+        _tipo = tipo;
+        _tipoDoc = tipo == "juridica" ? "R" : "";
+        _documento = "";
+        _err = null;
+    }
+
+    private void OnTipoDocChange(string val)
+    {
+        _tipoDoc = val;
+        _err = null;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!_isEdit) return;
+
+        var agente = AgenteSvc.ById(IdParam);
+        if (agente is null)
+        {
+            _err = "No se encontró el agente seleccionado.";
+            return;
+        }
+
+        _tipo = agente.TipoPersona.Contains("jur", StringComparison.OrdinalIgnoreCase) ? "juridica" : "natural";
+        _tipoDoc = string.IsNullOrWhiteSpace(agente.TipoDocumento) ? ResolveTipoDocumento(agente.TipoPersona) : agente.TipoDocumento;
+        _documento = agente.NumeroDocumento;
+        _telefono = agente.Telefono;
+        _correo = agente.Email;
+        _usuario = UserFromEmail(agente.Email);
+        _zona = agente.Zona;
+        _supervision = string.IsNullOrWhiteSpace(agente.BrokerNombre) ? "Ricardo Salas (tú)" : agente.BrokerNombre;
+        _estadoAdministrativo = string.IsNullOrWhiteSpace(agente.EstadoAdministrativo) ? "Activo" : agente.EstadoAdministrativo;
+        _estadoOperativo = agente.EstadoOperativo;
+
+        if (_tipo == "juridica")
+        {
+            _razonSocial = agente.Nombre;
+            _nombreNatural = "";
+        }
+        else
+        {
+            _nombreNatural = agente.Nombre;
+            _razonSocial = "";
+        }
+    }
+
+    private void TryConfirm()
+    {
+        if (_tipo == "juridica" && string.IsNullOrWhiteSpace(_razonSocial)) { _err = "La razón social es obligatoria."; return; }
+        if (_tipo == "natural" && string.IsNullOrWhiteSpace(_nombreNatural)) { _err = "El nombre completo es obligatorio."; return; }
+        if (_tipo == "natural" && string.IsNullOrWhiteSpace(_tipoDoc)) { _err = "Debes seleccionar un tipo de documento."; return; }
+        if (string.IsNullOrWhiteSpace(_documento)) { _err = "El número de documento es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_telefono)) { _err = "El teléfono es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo corporativo es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_usuario)) { _err = "El usuario es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_zona)) { _err = "Selecciona una zona asignada."; return; }
+
+        _err = null;
+        _confirm = true;
+    }
 
     private async Task OnConfirm()
     {
         _confirm = false;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(900);
+        await RenderIfAliveAsync();
+        try
+        {
+            await Task.Delay(900, DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
         App.Navigate("agents");
+    }
+
+    private static string ResolveTipoDocumento(string tipoPersona)
+    {
+        if (tipoPersona.Contains("RUC", StringComparison.OrdinalIgnoreCase)) return "R";
+        if (tipoPersona.Contains("Carn", StringComparison.OrdinalIgnoreCase) || tipoPersona.Contains("extranjer", StringComparison.OrdinalIgnoreCase)) return "C";
+        if (tipoPersona.Contains("Pasaporte", StringComparison.OrdinalIgnoreCase)) return "P";
+        return "D";
+    }
+
+    private static string UserFromEmail(string email)
+    {
+        var at = email.IndexOf('@');
+        return at > 0 ? email[..at] : "";
     }
 }

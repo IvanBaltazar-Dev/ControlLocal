@@ -13,9 +13,12 @@
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Registrar propietario</button>
     </Actions>
     <ChildContent>
-        <FilterBar Search="Buscar por nombre, razón social, documento…">
-            <select class="cl-select"><option>Tipo de persona</option><option>Persona natural</option><option>Persona jurídica</option></select>
-            <select class="cl-select"><option>Estado</option><option>Activo</option><option>Inactivo</option></select>
+        @{ var filtrados = Filtrados().ToList(); }
+        <FilterBar Search="Buscar por nombre, razón social, documento…"
+                   @bind-Value="_query" ResultCount="filtrados.Count"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Tipo de persona" Options="_tipos" @bind-Value="_tipo" />
+            <FilterSelect Placeholder="Estado" Options="_estados" @bind-Value="_estado" />
         </FilterBar>
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
@@ -27,7 +30,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var o in OwnerSvc.All())
+                        @foreach (var o in filtrados)
                         {
                             <tr>
                                 <td>
@@ -46,8 +49,38 @@
                         }
                     </tbody>
                 </table>
+                @if (filtrados.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="user" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin propietarios en este filtro</div>
+                        <div style="font-size:12px;">Ajusta la búsqueda o limpia los filtros.</div>
+                    </div>
+                }
             </div>
         </div>
-        <Pagination Total="86" />
+        <Pagination Total="filtrados.Count" />
     </ChildContent>
 </AppShell>
+
+@code {
+    private string _query = "", _tipo = "", _estado = "";
+
+    private IReadOnlyList<PropietarioDto> Todos => OwnerSvc.All();
+
+    private readonly IReadOnlyList<string> _tipos = new[] { "Natural", "Jurídica" };
+    private readonly IReadOnlyList<string> _estados = new[] { "Activo", "Inactivo" };
+
+    private bool HayFiltros => new[] { _query, _tipo, _estado }.Any(s => !string.IsNullOrEmpty(s));
+
+    private void LimpiarFiltros() { _query = _tipo = _estado = ""; }
+
+    private IEnumerable<PropietarioDto> Filtrados() => Todos.Where(o =>
+        (string.IsNullOrEmpty(_tipo) || (o.TipoPersona?.Contains(_tipo, StringComparison.OrdinalIgnoreCase) ?? false)) &&
+        (string.IsNullOrEmpty(_estado) || o.Estado == _estado) &&
+        (string.IsNullOrEmpty(_query) || Coincide(o, _query)));
+
+    private static bool Coincide(PropietarioDto o, string q) =>
+        (o.Nombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (o.NumeroDocumento?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+}

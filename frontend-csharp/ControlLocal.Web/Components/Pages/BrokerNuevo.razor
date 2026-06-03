@@ -128,16 +128,7 @@
             </div>
 
             <div class="cl-stack">
-                <div class="cl-card" style="position:sticky;top:14px;">
-                    <div class="cl-card-head"><div class="cl-card-title">Se genera automáticamente</div></div>
-                    <div class="cl-card-body">
-                        <div class="cl-help" style="margin-bottom:10px;">Estos valores se asignan al confirmar el registro.</div>
-                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
-                            <dt>Código de broker</dt><dd>Automático</dd>
-                            <dt>Fecha de registro</dt><dd>28 May 2026</dd>
-                        </dl>
-                    </div>
-                </div>
+                <FormStepsSidebar Steps="_pasos" />
                 <div class="cl-alert blue">
                     <Icon Name="lock" Size="15" />
                     <span>El broker deberá cambiar la contraseña temporal en su primer ingreso. El acceso es controlado internamente.</span>
@@ -172,6 +163,22 @@
     private readonly Dictionary<string, string> _errors = new();
 
     private string? Err(string key) => _errors.TryGetValue(key, out var v) ? v : null;
+
+    // Progreso interactivo de las secciones del formulario.
+    private bool IsStep1Complete => !string.IsNullOrEmpty(_tipoPersona) && !string.IsNullOrEmpty(_tipoDoc);
+    private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_numDoc) && !string.IsNullOrWhiteSpace(_nombre);
+    private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_telefono) && !string.IsNullOrWhiteSpace(_correo);
+    private bool IsStep4Complete => !string.IsNullOrWhiteSpace(_usuario) && !string.IsNullOrWhiteSpace(_passwd);
+    private bool IsStep5Complete => !string.IsNullOrWhiteSpace(_zona) && !string.IsNullOrEmpty(_estado);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
+    {
+        new FormStepsSidebar.Step("Tipo de persona", "Natural o Jurídica", IsStep1Complete),
+        new FormStepsSidebar.Step("Identificación", "Documento y nombre", IsStep2Complete),
+        new FormStepsSidebar.Step("Contacto", "Teléfono y correo", IsStep3Complete),
+        new FormStepsSidebar.Step("Credenciales", "Usuario y contraseña", IsStep4Complete),
+        new FormStepsSidebar.Step("Asignación", "Zona y estado", IsStep5Complete),
+    };
 
     private record DocOption(string Value, string Label);
 

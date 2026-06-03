@@ -1,0 +1,22 @@
+@* Filtro secundario estandarizado: select con una opción "todos" (value vacío)
+   y bindeo two-way. Uso: <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" /> *@
+<select class="cl-select" value="@Value" @onchange="OnChange">
+    <option value="">@Placeholder</option>
+    @foreach (var opt in Options)
+    {
+        <option value="@opt">@opt</option>
+    }
+</select>
+
+@code {
+    // Texto de la opción "todos" (se selecciona con value vacío).
+    [Parameter] public string Placeholder { get; set; } = "Todos";
+
+    [Parameter] public IReadOnlyList<string> Options { get; set; } = Array.Empty<string>();
+
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private async Task OnChange(ChangeEventArgs e) =>
+        await ValueChanged.InvokeAsync(e.Value?.ToString() ?? "");
+}

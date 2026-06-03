@@ -1,7 +1,7 @@
 @* Lucide-style line icons, 1.6px stroke. Ported from the prototype's icons.jsx. *@
 <svg width="@Size" height="@Size" viewBox="0 0 24 24" fill="none"
      stroke="@Color" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
-     class="@Class">
+     class="@Class" @attributes="AdditionalAttributes">
     @((MarkupString)(Paths.TryGetValue(Name ?? "", out var p) ? p : Paths["grid"]))
 </svg>
 
@@ -10,6 +10,7 @@
     [Parameter] public double Size { get; set; } = 16;
     [Parameter] public string Color { get; set; } = "currentColor";
     [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 
     private static readonly Dictionary<string, string> Paths = new()
     {

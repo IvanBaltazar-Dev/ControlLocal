@@ -1,8 +1,7 @@
 @page "/visitas"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IVisitaService VisitaSvc
-@inject ICaptacionService CaptacionSvc
-@inject IClienteService ClienteSvc
 
 <PageTitle>Visitas · ControlLocal</PageTitle>
 
@@ -12,14 +11,18 @@
     <Actions>
         @*IMPLEMENTACION PROXIMAMENTE*@
         @*<button class="cl-btn"><Icon Name="download" Size="13" /> Exportar agenda</button>*@
-        <button class="cl-btn primary" @onclick="AbrirProgramar"><Icon Name="plus" Size="13" /> Programar visita</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("visita-form"))"><Icon Name="plus" Size="13" /> Programar visita</button>
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="calendar" Label="Programadas" Value="@Contar("P").ToString()" Tone="blue" />
-            <MetricCard Icon="check" Label="Realizadas" Value="@Contar("R").ToString()" Tone="green" />
-            <MetricCard Icon="clock" Label="Reprogramadas" Value="@Contar("G").ToString()" Tone="blue" />
-            <MetricCard Icon="x" Label="Canceladas" Value="@Contar("C").ToString()" Tone="red" />
+            <MetricCard Icon="calendar" Label="Programadas" Value="@Contar("P").ToString()" Tone="blue"
+                        Active="@(_filtroEstado == "P")" OnClick="@(() => ToggleEstado("P"))" />
+            <MetricCard Icon="check" Label="Realizadas" Value="@Contar("R").ToString()" Tone="green"
+                        Active="@(_filtroEstado == "R")" OnClick="@(() => ToggleEstado("R"))" />
+            <MetricCard Icon="clock" Label="Reprogramadas" Value="@Contar("G").ToString()" Tone="blue"
+                        Active="@(_filtroEstado == "G")" OnClick="@(() => ToggleEstado("G"))" />
+            <MetricCard Icon="x" Label="Canceladas" Value="@Contar("C").ToString()" Tone="red"
+                        Active="@(_filtroEstado == "C")" OnClick="@(() => ToggleEstado("C"))" />
         </div>
 
         <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px;">
@@ -72,15 +75,10 @@
             </div>
         </div>
 
-        <FilterBar Search="Buscar por cliente, local, captación…">
-            <select class="cl-select" @bind="_filtroEstado">
-                <option value="">Todos los estados</option>
-                @foreach (var e in EnumCatalog.EstadosVisita)
-                {
-                    <option value="@e.Code">@e.Label</option>
-                }
-            </select>
-            <select class="cl-select"><option>Todo el periodo</option><option>Esta semana</option><option>Este mes</option></select>
+        <FilterBar Search="Buscar por cliente, local, captación, agente…"
+                   @bind-Value="_query" ResultCount="VisitasFiltradas().Count()"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
         </FilterBar>
 
         <div class="cl-card">
@@ -139,49 +137,6 @@
                 }
             </div>
         </div>
-
-        @* ---------- Modal: Programar visita ---------- *@
-        <Modal Open="_modalProgramar" Tone="blue" Icon="calendar"
-               Title="Programar visita"
-               Desc="Coordina una visita del cliente a un local de tus captaciones activas."
-               OnClose="@(() => _modalProgramar = false)">
-            <ChildContent>
-                <Field Label="Captación / local" Required="true">
-                    <select @bind="_form.CaptacionCodigo">
-                        <option value="">— Seleccionar captación —</option>
-                        @foreach (var c in CaptacionSvc.All().Where(c => c.Estado == "Activa"))
-                        {
-                            <option value="@c.CodigoCaptacion">@c.CodigoCaptacion · @c.DireccionLocal</option>
-                        }
-                    </select>
-                </Field>
-                <div class="cl-grid c2" style="margin-top:12px;">
-                    <Field Label="Cliente" Required="true">
-                        <select @bind="_form.ClienteNombre">
-                            <option value="">— Seleccionar cliente —</option>
-                            @foreach (var cli in ClienteSvc.All().Where(c => c.Estado == "Activo"))
-                            {
-                                <option value="@cli.Nombre">@cli.Nombre</option>
-                            }
-                        </select>
-                    </Field>
-                    <Field Label="Acompaña"><input value="Valentina Mora (tú)" disabled /></Field>
-                    <Field Label="Fecha" Required="true"><input type="date" @bind="_fechaPick" /></Field>
-                    <Field Label="Hora" Required="true"><input type="time" @bind="_horaPick" /></Field>
-                </div>
-                <div style="margin-top:12px;">
-                    <Field Label="Notas"><textarea rows="2" placeholder="Indicaciones para la visita…" @bind="_form.Observaciones"></textarea></Field>
-                </div>
-                @if (_err is not null)
-                {
-                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
-                }
-            </ChildContent>
-            <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalProgramar = false)">Cancelar</button>
-                <button class="cl-btn primary" @onclick="ConfirmarProgramar">Programar visita</button>
-            </Footer>
-        </Modal>
 
         @* ---------- Modal: Reprogramar ---------- *@
         <Modal Open="_modalReprogramar" Tone="blue" Icon="clock"
@@ -288,10 +243,10 @@
     private int[] _visitDays = Array.Empty<int>();
     private Timeline.TimelineItem[] _proximas = Array.Empty<Timeline.TimelineItem>();
 
-    // Estado de modales y acción en curso.
-    private bool _modalProgramar, _modalReprogramar, _modalCancelar, _modalResultado;
+    // Estado de modales y acción en curso. Programar una visita vive en su propia
+    // página (visita-form); aquí solo quedan las acciones por fila de la agenda.
+    private bool _modalReprogramar, _modalCancelar, _modalResultado;
     private VisitaDto? _target;
-    private VisitaFormRequest _form = new();
     private DateOnly? _fechaPick;
     private TimeOnly? _horaPick;
     private string _motivoTmp = "", _resultadoTmp = "", _obsTmp = "", _razonTmp = "";
@@ -317,8 +272,29 @@
     private static bool ImplicaNoContinuidad(string codigo) => codigo is "N" or "D";
     private static bool MantieneAbierta(string codigo) => codigo is "I" or "S" or "P";
 
+    private string _query = "";
+    private string _distrito = "";
+
+    private IReadOnlyList<string> _distritos => VisitaSvc.All().Select(v => v.DistritoLocal)
+        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+
+    private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
+
+    private void LimpiarFiltros() { _filtroEstado = ""; _query = ""; _distrito = ""; }
+
+    private void ToggleEstado(string code) => _filtroEstado = _filtroEstado == code ? "" : code;
+
     private IEnumerable<VisitaDto> VisitasFiltradas() =>
-        VisitaSvc.All().Where(v => string.IsNullOrEmpty(_filtroEstado) || v.Estado == _filtroEstado);
+        VisitaSvc.All().Where(v =>
+            (string.IsNullOrEmpty(_filtroEstado) || v.Estado == _filtroEstado) &&
+            (string.IsNullOrEmpty(_distrito) || v.DistritoLocal == _distrito) &&
+            (string.IsNullOrEmpty(_query) || Coincide(v, _query)));
+
+    private static bool Coincide(VisitaDto v, string q) =>
+        (v.ClienteNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (v.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (v.CodigoCaptacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (v.NombreAgente?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
 
     // Recalcula la agenda (calendario + próximas) a partir de las visitas vivas.
     private void Recalcular()
@@ -345,13 +321,6 @@
         return int.TryParse(token, out var d) ? d : 0;
     }
 
-    private void AbrirProgramar()
-    {
-        _form = new VisitaFormRequest();
-        _fechaPick = null; _horaPick = null; _err = null;
-        _modalProgramar = true;
-    }
-
     private void AbrirReprogramar(VisitaDto v)
     {
         _target = v;
@@ -371,20 +340,6 @@
         _target = v;
         _resultadoTmp = ""; _obsTmp = ""; _razonTmp = ""; _err = null;
         _modalResultado = true;
-    }
-
-    private void ConfirmarProgramar()
-    {
-        try
-        {
-            _form.FechaTexto = FormatFecha(_fechaPick);
-            _form.HoraTexto = FormatHora(_horaPick);
-            var v = VisitaSvc.Programar(_form);
-            _modalProgramar = false;
-            Recalcular();
-            Notificar($"Visita programada con {v.ClienteNombre}.");
-        }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
     }
 
     private void ConfirmarReprogramar()
@@ -429,13 +384,10 @@
         catch (InvalidOperationException ex) { _err = ex.Message; }
     }
 
-    private async void Notificar(string mensaje)
+    private void Notificar(string mensaje)
     {
         _toastMsg = mensaje;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(2600);
-        _toast = false;
-        StateHasChanged();
+        _ = DelayThenRenderAsync(2600, () => _toast = false);
     }
 }

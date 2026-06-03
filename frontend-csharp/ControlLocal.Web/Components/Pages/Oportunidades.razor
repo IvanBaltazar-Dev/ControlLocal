@@ -11,18 +11,23 @@
         <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="target" Label="Operaciones activas" Value="22" Tone="blue" />
-            <MetricCard Icon="activity" Label="En seguimiento" Value="14" Tone="info" />
-            <MetricCard Icon="fileText" Label="Con solicitud" Value="8" Tone="blue" />
-            <MetricCard Icon="check" Label="Cerradas (mes)" Value="5" Tone="green" />
+        @{ var filtradas = Filtradas().ToList(); }
+        <div style="display:grid;grid-template-columns:repeat(@(_etapas.Length + 1),1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="target" Label="Total" Value="@_ops.Length.ToString()" Tone="gray"
+                        Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
+            @foreach (var e in _etapas)
+            {
+                <MetricCard Icon="activity" Label="@e" Value="@CuentaEtapa(e).ToString()" Tone="@TonoEtapa(e)"
+                            Active="@(_tab == e)" OnClick="@(() => _tab = e)" />
+            }
         </div>
 
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
-        <FilterBar Search="Buscar por operación, cliente, local, agente…">
-            <select class="cl-select"><option>Todos los agentes</option><option>Valentina Mora</option><option>Carolina Vega</option><option>Andrea Torres</option></select>
-            <select class="cl-select"><option>Todas las etapas</option><option>Captada</option><option>Con interacciones</option><option>Con solicitud</option><option>En evaluación</option><option>Alquilada</option></select>
+        <FilterBar Search="Buscar por operación, cliente, local, agente…"
+                   @bind-Value="_query" ResultCount="filtradas.Count"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Todos los agentes" Options="_agentes" @bind-Value="_agente" />
         </FilterBar>
 
         <div class="cl-card">
@@ -35,7 +40,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var o in _ops)
+                        @foreach (var o in filtradas)
                         {
                             <tr>
                                 <td><span class="mono">@o.Op</span></td>
@@ -56,9 +61,17 @@
                         }
                     </tbody>
                 </table>
+                @if (filtradas.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="target" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin operaciones en este filtro</div>
+                        <div style="font-size:12px;">Ajusta la búsqueda o limpia los filtros.</div>
+                    </div>
+                }
             </div>
         </div>
-        <Pagination Total="22" />
+        <Pagination Total="filtradas.Count" />
 
         <div class="cl-alert blue" style="margin-top:14px;">
             <Icon Name="info" Size="15" />
@@ -69,14 +82,41 @@
 
 @code {
     private string _tab = "Todas";
+    private string _query = "";
+    private string _agente = "";
 
-    private readonly Tabs.TabItem[] _tabs = new[]
+    // Dimensiones derivadas de los datos (sin valores hardcodeados).
+    private string[] _etapas => _ops.Select(o => o.Stage).Distinct().OrderBy(x => x).ToArray();
+    private IReadOnlyList<string> _agentes => _ops.Select(o => o.Agent).Distinct().OrderBy(x => x).ToList();
+
+    private int CuentaEtapa(string e) => _ops.Count(o => o.Stage == e);
+
+    private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", _ops.Length) }
+        .Concat(_etapas.Select(e => new Tabs.TabItem(e, CuentaEtapa(e))))
+        .ToArray();
+
+    private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_agente);
+
+    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _agente = ""; }
+
+    private IEnumerable<OpRow> Filtradas() => _ops.Where(o =>
+        (_tab == "Todas" || o.Stage == _tab) &&
+        (string.IsNullOrEmpty(_agente) || o.Agent == _agente) &&
+        (string.IsNullOrEmpty(_query) || Coincide(o, _query)));
+
+    private static bool Coincide(OpRow o, string q) =>
+        o.Op.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || o.Client.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || o.Local.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || o.Agent.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || o.Cap.Contains(q, StringComparison.OrdinalIgnoreCase);
+
+    private static string TonoEtapa(string e) => e switch
     {
-        new Tabs.TabItem("Todas", 22),
-        new Tabs.TabItem("En captación", 9),
-        new Tabs.TabItem("Con solicitud", 8),
-        new Tabs.TabItem("En evaluación", 3),
-        new Tabs.TabItem("Cerradas", 5),
+        "Alquilada" => "green",
+        "Captada" => "blue",
+        "En evaluación" => "info",
+        _ => "blue",
     };
 
     private record OpRow(string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated);

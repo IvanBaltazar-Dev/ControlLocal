@@ -1,4 +1,5 @@
 @page "/interaccion-detail/{InteraccionIdParam}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IInteraccionService InteraccionSvc
 @inject ICaptacionService CaptacionSvc
@@ -232,9 +233,7 @@
 
     private async Task OcultarToastAsync()
     {
-        await Task.Delay(2000);
-        _toastMsg = null;
-        await InvokeAsync(StateHasChanged);
+        await DelayThenRenderAsync(2000, () => _toastMsg = null);
     }
 
     private string GetCanalLabel(string canal) => canal switch

@@ -696,7 +696,7 @@
    derecha (sobre el local), enmarcada por el scrim. */
 .cl-login__bg {
   position: absolute; inset: 0;
-  background: url('../img/login.png?v=9') center center / cover no-repeat;
+  background: url('../img/login.webp?v=9') center center / cover no-repeat;
 }
 
 /* Foco de luz que "respira" sobre el render 3D (dinamismo sin mover el contenido). */

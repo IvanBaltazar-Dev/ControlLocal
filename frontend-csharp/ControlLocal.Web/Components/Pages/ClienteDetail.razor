@@ -35,34 +35,24 @@
                                     <div class="cl-def-k">Teléfono</div>
                                     <div style="font-weight:600;margin-top:4px;">@_c.Telefono</div>
                                 </div>
+                                <div>
+                                    <div class="cl-def-k">Correo</div>
+                                    <div style="font-weight:600;margin-top:4px;">@_c.Correo</div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Interés comercial</div></div>
+                        <div class="cl-card-head"><div class="cl-card-title">Perfil comercial y consentimientos</div></div>
                         <div class="cl-card-body">
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
                                 <div>
                                     <div class="cl-def-k">Rubro de interés</div>
                                     <div style="margin-top:8px;"><StatusBadge Label="@_c.RubroInteres" ToneOverride="blue" Plain="true" /></div>
                                 </div>
-                                <div>
-                                    <div class="cl-def-k">Captaciones vinculadas</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_c.CaptacionesVinculadas</div>
-                                </div>
-                            </div>
-                            <div class="cl-divider" style="margin:14px 0;"></div>
-                            <div class="cl-def-k">Detalle del interés</div>
-                            <div style="color:#4D5461;font-size:13px;line-height:1.6;margin-top:4px;">
-                                @if (string.IsNullOrEmpty(_c.InteresComercial))
-                                {
-                                    <span class="cl-muted">Sin detalle registrado</span>
-                                }
-                                else
-                                {
-                                    @_c.InteresComercial
-                                }
+                                <div><div class="cl-def-k">Contacto comercial</div><div style="font-weight:600;margin-top:4px;">@(_c.ConsentimientoContacto == true ? "Autorizado" : "No autorizado")</div></div>
+                                <div><div class="cl-def-k">Uso de datos</div><div style="font-weight:600;margin-top:4px;">@(_c.ConsentimientoUsoDato == true ? "Autorizado" : "No autorizado")</div></div>
                             </div>
                         </div>
                     </div>
@@ -74,7 +64,7 @@
                         <div class="cl-card-body">
                             <div style="text-align:center;padding:6px 0;">
                                 <StatusBadge Label="@_c.Estado" />
-                                <div class="cl-muted" style="font-size:12px;margin-top:8px;">@_c.CaptacionesVinculadas captación(es) vinculada(s)</div>
+                                <div class="cl-muted" style="font-size:12px;margin-top:8px;">Registro del cliente interesado</div>
                             </div>
                         </div>
                     </div>

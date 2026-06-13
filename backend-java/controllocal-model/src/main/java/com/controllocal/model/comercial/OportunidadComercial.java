@@ -2,6 +2,7 @@ package com.controllocal.model.comercial;
 
 import java.time.LocalDateTime;
 
+import com.controllocal.model.comercial.enums.DesenlaceOportunidad;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
@@ -30,6 +31,9 @@ public class OportunidadComercial {
     public void setFechaRegistro(LocalDateTime fechaRegistro) { this.fechaRegistro = fechaRegistro; }
     public EstadoOportunidadComercial getEstado() { return estado; }
     public void setEstado(EstadoOportunidadComercial estado) { this.estado = estado; }
+
+    // Desenlace derivado del estado: F -> cerrada favorable, X -> caida; null en proceso.
+    public DesenlaceOportunidad getDesenlace() { return DesenlaceOportunidad.fromEstado(estado); }
     public LocalDateTime getFechaActualizacionEstado() { return fechaActualizacionEstado; }
     public void setFechaActualizacionEstado(LocalDateTime fechaActualizacionEstado) { this.fechaActualizacionEstado = fechaActualizacionEstado; }
     public String getMotivoCierre() { return motivoCierre; }

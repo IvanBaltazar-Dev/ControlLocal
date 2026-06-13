@@ -9,7 +9,7 @@
 <AppShell Crumbs="@(new[] { "ControlLocal", "Clientes interesados", _isEdit ? _nombreMostrar : "Nuevo cliente" })"
           Title="@(_isEdit ? "Editar cliente interesado" : "Registrar cliente interesado")"
           Subtitle="@(_isEdit
-              ? "Actualiza contacto, necesidad comercial y estado. La identidad no se puede modificar."
+              ? "Actualiza contacto, rubro, consentimientos y estado. La identidad no se puede modificar."
               : "Prospecto comercial · podrás vincularlo a una captación activa para iniciar el seguimiento")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
@@ -42,8 +42,6 @@
                                     <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El RUC no se puede modificar.</div>
                                 }
                             </Field>
-                            <Field Label="Representante legal"><input @bind="_representante" @bind:event="oninput" placeholder="Nombre completo" /></Field>
-                            <Field Label="DNI del representante"><input @bind="_dniRepresentante" @bind:event="oninput" placeholder="__ ___ ___" /></Field>
                         </div>
                     }
                     else
@@ -58,7 +56,6 @@
                                     <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El documento de identidad no se puede modificar.</div>
                                 }
                             </Field>
-                            <Field Label="Ocupación / giro"><input @bind="_ocupacion" @bind:event="oninput" placeholder="Ej. Comerciante" /></Field>
                         </div>
                     }
                 </FormSection>
@@ -66,14 +63,12 @@
                 <FormSection Num="3" Title="Contacto" Sub="Datos para coordinar interacciones y visitas">
                     <div class="cl-grid c2">
                         <Field Label="Teléfono principal" Required="true"><input @bind="_telefono" @bind:event="oninput" placeholder="+51 ___ ___ ___" /></Field>
-                        <Field Label="Teléfono alterno"><input @bind="_telefonoAlt" @bind:event="oninput" placeholder="Opcional" /></Field>
                         <Field Label="Correo electrónico" Required="true"><input @bind="_correo" @bind:event="oninput" placeholder="cliente@@correo.com" /></Field>
-                        <Field Label="Canal preferido"><select @bind="_canal"><option>Llamada</option><option>WhatsApp</option><option>Correo</option><option>Presencial</option></select></Field>
                     </div>
                 </FormSection>
 
-                <FormSection Num="4" Title="Necesidad comercial" Sub="Qué busca el cliente; ayuda a sugerir captaciones afines">
-                    <div class="cl-grid c3">
+                <FormSection Num="4" Title="Perfil comercial y consentimientos" Sub="Datos disponibles en el registro del cliente interesado">
+                    <div class="cl-grid c2">
                         <Field Label="Rubro de interés" Required="true">
                             <select @bind="_rubro">
                                 <option>Restaurante / Café</option>
@@ -86,16 +81,16 @@
                                 <option>Servicios / Consultorio</option>
                             </select>
                         </Field>
-                        <Field Label="Zona buscada"><select @bind="_zona"><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option></select></Field>
-                        <Field Label="Metraje aprox. (m²)"><input @bind="_metraje" @bind:event="oninput" placeholder="Ej. 80" /></Field>
-                        <Field Label="Presupuesto mín. (USD/mes)"><input @bind="_presupuestoMin" @bind:event="oninput" placeholder="1 000" /></Field>
-                        <Field Label="Presupuesto máx. (USD/mes)"><input @bind="_presupuestoMax" @bind:event="oninput" placeholder="2 000" /></Field>
-                        <Field Label="Inicio estimado"><input @bind="_inicioEstimado" @bind:event="oninput" placeholder="dd/mm/aaaa" /></Field>
                     </div>
-                    <div style="margin-top:14px;">
-                        <Field Label="Notas" Hint="Detalles del interés, condiciones particulares, etc.">
-                            <textarea @bind="_notas" @bind:event="oninput" rows="3" placeholder="Observaciones del cliente..."></textarea>
-                        </Field>
+                    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+                        <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                            <input type="checkbox" @bind="_consentimientoContacto" style="width:auto;" />
+                            Autoriza recibir comunicaciones comerciales.
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                            <input type="checkbox" @bind="_consentimientoUsoDato" style="width:auto;" />
+                            Autoriza el uso de sus datos para la gestión inmobiliaria.
+                        </label>
                     </div>
                 </FormSection>
 
@@ -130,7 +125,7 @@
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"
                        Title="@(_isEdit ? "¿Guardar cambios?" : "¿Registrar cliente interesado?")"
-                       Desc="@(_isEdit ? "Se actualizarán contacto, necesidad comercial y estado. La identidad permanece sin cambios." : "Se creará el cliente en tu cartera. Quedará disponible para vincular a captaciones activas.")"
+                       Desc="@(_isEdit ? "Se actualizarán contacto, rubro, consentimientos y estado. La identidad permanece sin cambios." : "Se creará el cliente en tu cartera. Quedará disponible para vincular a oportunidades comerciales.")"
                        ConfirmLabel="@(_isEdit ? "Guardar" : "Registrar")" CancelLabel="Revisar datos"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
@@ -150,20 +145,11 @@
     private string _nombreNatural = "";
     private string _tipoDoc = "R";
     private string _documento = "";
-    private string _representante = "";
-    private string _dniRepresentante = "";
-    private string _ocupacion = "";
     private string _telefono = "";
-    private string _telefonoAlt = "";
     private string _correo = "";
-    private string _canal = "WhatsApp";
     private string _rubro = "Restaurante / Café";
-    private string _zona = "Miraflores";
-    private string _metraje = "";
-    private string _presupuestoMin = "";
-    private string _presupuestoMax = "";
-    private string _inicioEstimado = "";
-    private string _notas = "";
+    private bool _consentimientoContacto = true;
+    private bool _consentimientoUsoDato = true;
     private string _estado = "Activo";
     private string? _err;
 
@@ -186,7 +172,7 @@
                 new("Tipo de cliente", "Natural o jurídica", IsStep1Complete),
                 new("Identificación", "Documento y nombre", IsStep2Complete),
                 new("Contacto", "Teléfono y correo", IsStep3Complete),
-                new("Necesidad", "Rubro y presupuesto", IsStep4Complete),
+                new("Perfil comercial", "Rubro y consentimientos", IsStep4Complete),
             };
             if (_isEdit)
             {
@@ -224,12 +210,15 @@
         }
 
         _tipo = c.TipoPersona.Contains("natural", StringComparison.OrdinalIgnoreCase) ? "natural" : "juridica";
-        _tipoDoc = ResolveTipoDocumento(c.TipoPersona);
+        _tipoDoc = string.IsNullOrWhiteSpace(c.TipoDocumento)
+            ? ResolveTipoDocumento(c.TipoPersona)
+            : c.TipoDocumento;
         _documento = c.NumeroDocumento;
         _telefono = c.Telefono;
         _correo = c.Correo;
         _rubro = string.IsNullOrWhiteSpace(c.RubroInteres) ? _rubro : c.RubroInteres;
-        _notas = c.InteresComercial;
+        _consentimientoContacto = c.ConsentimientoContacto ?? false;
+        _consentimientoUsoDato = c.ConsentimientoUsoDato ?? false;
         _estado = string.IsNullOrWhiteSpace(c.Estado) ? "Activo" : c.Estado;
 
         if (_tipo == "juridica")
@@ -260,17 +249,38 @@
     private async Task OnConfirm()
     {
         _confirm = false;
-        _toast = true;
-        await RenderIfAliveAsync();
         try
         {
+            var cliente = new Models.Clientes.ClienteInteresadoDto
+            {
+                Id = ClienteId,
+                Nombre = _nombreMostrar.Trim(),
+                TipoPersona = _tipo == "juridica" ? "Persona juridica" : "Persona natural",
+                TipoDocumento = _tipo == "juridica" ? "R" : _tipoDoc,
+                NumeroDocumento = _documento.Trim(),
+                Telefono = _telefono.Trim(),
+                Correo = _correo.Trim(),
+                RubroInteres = _rubro,
+                Estado = _estado,
+                ConsentimientoContacto = _consentimientoContacto,
+                ConsentimientoUsoDato = _consentimientoUsoDato,
+            };
+            if (_isEdit) ClienteSvc.Actualizar(cliente);
+            else ClienteSvc.Agregar(cliente);
+
+            _toast = true;
+            await RenderIfAliveAsync();
             await Task.Delay(900, DisposedToken);
+            App.Navigate("clientes");
         }
         catch (OperationCanceledException)
         {
             return;
         }
-        App.Navigate("clientes");
+        catch (Exception error)
+        {
+            _err = error.Message;
+        }
     }
 
     private static string ResolveTipoDocumento(string tipoPersona)

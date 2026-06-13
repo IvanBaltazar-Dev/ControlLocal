@@ -11,8 +11,11 @@
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("broker-nuevo"))"><Icon Name="plus" Size="13" /> Nuevo broker</button>
     </Actions>
     <ChildContent>
-        @{ var filtrados = Filtrados().ToList(); }
-        <FilterBar Search="Buscar broker por nombre o correo…" ShowTail="false"
+        @{
+            var filtrados = Filtrados().ToList();
+            var visibles = Paginador.Pagina(filtrados, ref _pagina);
+        }
+        <FilterBar Search="Buscar broker por nombre o correo…"
                    @bind-Value="_query" ResultCount="filtrados.Count"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
             <FilterSelect Placeholder="Todos los estados" Options="_estados" @bind-Value="_estado" />
@@ -28,7 +31,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var b in filtrados)
+                        @foreach (var b in visibles)
                         {
                             <tr>
                                 <td>
@@ -41,7 +44,7 @@
                                     </div>
                                 </td>
                                 <td><StatusBadge Label="@b.TipoBroker" /></td>
-                                <td><span class="mono">@b.TipoDocumento @b.NumeroDocumento</span></td>
+                                <td><span class="mono">@DocLabel(b.TipoDocumento) @b.NumeroDocumento</span></td>
                                 <td>@b.Zona</td>
                                 <td><span><b>@b.AgentesACargo</b> <span class="cl-muted">supervisados</span></span></td>
                                 <td><StatusBadge Label="@b.EstadoAdministrativo" /></td>
@@ -65,12 +68,13 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtrados.Count" />
+        <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
     </ChildContent>
 </AppShell>
 
 @code {
     private string _query = "", _estado = "", _zona = "";
+    private int _pagina = 1;
 
     // Los brokers administradores no se listan en esta gestión.
     private IReadOnlyList<BrokerDto> Todos => BrokerSvc.All().Where(b => !b.EsAdministrador).ToList();
@@ -81,7 +85,7 @@
 
     private bool HayFiltros => new[] { _query, _estado, _zona }.Any(s => !string.IsNullOrEmpty(s));
 
-    private void LimpiarFiltros() { _query = _estado = _zona = ""; }
+    private void LimpiarFiltros() { _query = _estado = _zona = ""; _pagina = 1; }
 
     private IEnumerable<BrokerDto> Filtrados() => Todos.Where(b =>
         (string.IsNullOrEmpty(_estado) || b.EstadoAdministrativo == _estado) &&
@@ -91,4 +95,13 @@
     private static bool Coincide(BrokerDto b, string q) =>
         (b.Nombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
         || (b.Email?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private static string DocLabel(string valor) => valor switch
+    {
+        "DNI" => "DNI",
+        "RUC" => "RUC",
+        "CE" => "Carnet de extranjeria",
+        "PAS" => "Pasaporte",
+        _ => EnumCatalog.LabelFor(EnumCatalog.TiposDocumentoIdentidad, valor),
+    };
 }

@@ -19,13 +19,15 @@ public class PersonaDAOImpl implements PersonaDAO {
     private static final String INSERT_SQL = """
             INSERT INTO persona (
                 tipo_persona, tipo_documento, numero_documento,
-                nombres_o_razon_social, telefono, correo, estado
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                nombres_o_razon_social, telefono, correo, estado,
+                consentimiento_uso_dato
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_SQL = """
             SELECT id_persona, tipo_persona, tipo_documento, numero_documento,
                    nombres_o_razon_social, telefono, correo, estado,
+                   consentimiento_uso_dato,
                    fecha_creacion, fecha_actualizacion
             FROM persona
             """;
@@ -33,7 +35,8 @@ public class PersonaDAOImpl implements PersonaDAO {
     private static final String UPDATE_SQL = """
             UPDATE persona
             SET tipo_persona = ?, tipo_documento = ?, numero_documento = ?,
-                nombres_o_razon_social = ?, telefono = ?, correo = ?, estado = ?
+                nombres_o_razon_social = ?, telefono = ?, correo = ?, estado = ?,
+                consentimiento_uso_dato = ?
             WHERE id_persona = ?
             """;
 
@@ -51,6 +54,7 @@ public class PersonaDAOImpl implements PersonaDAO {
             ps.setString(5, persona.getTelefono());
             ps.setString(6, persona.getCorreo());
             JdbcSupport.setEnum(ps, 7, persona.getEstado());
+            JdbcSupport.setBoolean(ps, 8, persona.getConsentimientoUsoDato());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -106,7 +110,8 @@ public class PersonaDAOImpl implements PersonaDAO {
             ps.setString(5, persona.getTelefono());
             ps.setString(6, persona.getCorreo());
             JdbcSupport.setEnum(ps, 7, persona.getEstado());
-            ps.setLong(8, persona.getIdPersona());
+            JdbcSupport.setBoolean(ps, 8, persona.getConsentimientoUsoDato());
+            ps.setLong(9, persona.getIdPersona());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar persona con id " + persona.getIdPersona() + ".", e);

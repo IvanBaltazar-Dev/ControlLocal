@@ -19,7 +19,10 @@ import com.controllocal.dao.CaptacionDAO;
 import com.controllocal.dao.DAOException;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.enums.EstadoCaptacion;
+import com.controllocal.model.comercial.enums.OperacionRequerimiento;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.Persona;
+import com.controllocal.model.persona.Propietario;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
 
@@ -29,32 +32,50 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             INSERT INTO captacion (
                 codigo_captacion, fecha_captacion, fecha_inicio_vigencia, fecha_fin_vigencia,
                 comision_pactada, observaciones, estado, fecha_revision,
-                observacion_revision, id_local, id_agente, id_broker_revisor
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                observacion_revision, id_local, id_agente, id_broker_revisor,
+                motivo_operacion, urgencia, exclusividad
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
-    private static final String SELECT_BY_ID_SQL = """
-            SELECT id_captacion, codigo_captacion, fecha_captacion, fecha_inicio_vigencia, 
-                   fecha_fin_vigencia, comision_pactada, observaciones, estado, fecha_revision, 
-                   observacion_revision, id_local, id_agente, id_broker_revisor, 
-                   fecha_creacion, fecha_actualizacion
-            FROM captacion WHERE id_captacion = ?
+    private static final String SELECT_SQL = """
+            SELECT c.id_captacion, c.codigo_captacion, c.fecha_captacion, c.fecha_inicio_vigencia,
+                   c.fecha_fin_vigencia, c.comision_pactada, c.observaciones, c.estado, c.fecha_revision,
+                   c.observacion_revision, c.id_local, c.id_agente, c.id_broker_revisor,
+                   c.motivo_operacion, c.urgencia, c.exclusividad,
+                   c.fecha_creacion, c.fecha_actualizacion,
+                   l.codigo_local, l.direccion AS local_direccion, l.distrito AS local_distrito,
+                   l.metraje AS local_metraje, l.precio_referencial AS local_precio,
+                   l.rubro_permitido AS local_rubro, l.descripcion AS local_descripcion,
+                   l.estado AS local_estado, l.id_propietario,
+                   pp.nombres_o_razon_social AS propietario_nombre,
+                   ap.nombres_o_razon_social AS agente_nombre
+            FROM captacion c
+            INNER JOIN local_comercial l ON l.id_local = c.id_local
+            INNER JOIN propietario p ON p.id_propietario = l.id_propietario
+            INNER JOIN persona pp ON pp.id_persona = p.id_persona
+            INNER JOIN agente_inmobiliario a ON a.id_agente = c.id_agente
+            INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
+            INNER JOIN persona ap ON ap.id_persona = au.id_persona
             """;
 
-    private static final String SELECT_ALL_SQL = """
-            SELECT id_captacion, codigo_captacion, fecha_captacion, fecha_inicio_vigencia, 
-                   fecha_fin_vigencia, comision_pactada, observaciones, estado, fecha_revision, 
-                   observacion_revision, id_local, id_agente, id_broker_revisor, 
-                   fecha_creacion, fecha_actualizacion
-            FROM captacion ORDER BY id_captacion
-            """;
+    private static final String SELECT_BY_ID_SQL =
+            SELECT_SQL + " WHERE c.id_captacion = ?";
+
+    private static final String SELECT_ALL_SQL =
+            SELECT_SQL + " ORDER BY c.id_captacion";
+
+    private static final String SELECT_PAGE_SQL =
+            SELECT_SQL + " ORDER BY c.id_captacion LIMIT ? OFFSET ?";
+
+    private static final String COUNT_SQL = "SELECT COUNT(*) FROM captacion";
 
     private static final String UPDATE_SQL = """
             UPDATE captacion
-            SET codigo_captacion = ?, fecha_captacion = ?, fecha_inicio_vigencia = ?, 
-                fecha_fin_vigencia = ?, comision_pactada = ?, observaciones = ?, 
-                estado = ?, fecha_revision = ?, observacion_revision = ?, 
-                id_local = ?, id_agente = ?, id_broker_revisor = ?
+            SET codigo_captacion = ?, fecha_captacion = ?, fecha_inicio_vigencia = ?,
+                fecha_fin_vigencia = ?, comision_pactada = ?, observaciones = ?,
+                estado = ?, fecha_revision = ?, observacion_revision = ?,
+                id_local = ?, id_agente = ?, id_broker_revisor = ?,
+                motivo_operacion = ?, urgencia = ?, exclusividad = ?
             WHERE id_captacion = ?
             """;
 
@@ -91,6 +112,9 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             statement.setLong(10, captacion.getLocalComercial().getIdLocal());
             statement.setLong(11, captacion.getAgenteResponsable().getIdAgente());
             setLong(statement, 12, captacion.getBrokerRevisor() != null ? captacion.getBrokerRevisor().getIdBroker() : null);
+            JdbcSupport.setEnum(statement, 13, captacion.getMotivoOperacion());
+            JdbcSupport.setInteger(statement, 14, captacion.getUrgencia());
+            JdbcSupport.setBoolean(statement, 15, captacion.getExclusividad());
 
             if (statement.executeUpdate() == 0) {
                 throw new DAOException("No se pudo insertar la captacion.");
@@ -142,6 +166,35 @@ public class CaptacionDAOImpl implements CaptacionDAO {
     }
 
     @Override
+    public List<Captacion> listarPagina(int limite, int desplazamiento) {
+        List<Captacion> captaciones = new ArrayList<>();
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_PAGE_SQL)) {
+            statement.setInt(1, limite);
+            statement.setInt(2, desplazamiento);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    captaciones.add(mapRow(resultSet));
+                }
+            }
+            return captaciones;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar la pagina de captaciones.", e);
+        }
+    }
+
+    @Override
+    public long contar() {
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(COUNT_SQL);
+             ResultSet resultSet = statement.executeQuery()) {
+            return resultSet.next() ? resultSet.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar las captaciones.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(Captacion captacion) {
         validarCaptacionParaPersistencia(captacion, true);
         try (Connection connection = DBManager.getConnection()) {
@@ -158,7 +211,10 @@ public class CaptacionDAOImpl implements CaptacionDAO {
                 statement.setLong(10, captacion.getLocalComercial().getIdLocal());
                 statement.setLong(11, captacion.getAgenteResponsable().getIdAgente());
                 setLong(statement, 12, captacion.getBrokerRevisor() != null ? captacion.getBrokerRevisor().getIdBroker() : null);
-                statement.setLong(13, captacion.getIdCaptacion());
+                JdbcSupport.setEnum(statement, 13, captacion.getMotivoOperacion());
+                JdbcSupport.setInteger(statement, 14, captacion.getUrgencia());
+                JdbcSupport.setBoolean(statement, 15, captacion.getExclusividad());
+                statement.setLong(16, captacion.getIdCaptacion());
 
                 return statement.executeUpdate() > 0;
             }
@@ -180,15 +236,34 @@ public class CaptacionDAOImpl implements CaptacionDAO {
         }
     }
 
-    // --- MÃƒâ€°TODOS PRIVADOS DE APOYO (MapRow, Validaciones, Setters) ---
+    // --- Metodos privados de apoyo (mapRow, validaciones, setters) ---
 
     private Captacion mapRow(ResultSet rs) throws SQLException {
         LocalComercial local = new LocalComercial();
         local.setIdLocal(rs.getLong("id_local"));
+        local.setCodigoLocal(rs.getString("codigo_local"));
+        local.setDireccion(rs.getString("local_direccion"));
+        local.setDistrito(rs.getString("local_distrito"));
+        local.setMetraje(rs.getBigDecimal("local_metraje"));
+        local.setPrecioReferencial(rs.getBigDecimal("local_precio"));
+        local.setRubroPermitido(rs.getString("local_rubro"));
+        local.setDescripcion(rs.getString("local_descripcion"));
+        local.setEstado(JdbcSupport.getEnum(rs, "local_estado",
+                com.controllocal.model.inmueble.enums.EstadoLocalComercial.class));
+
+        Persona personaPropietario = new Persona();
+        personaPropietario.setNombresORazonSocial(rs.getString("propietario_nombre"));
+        Propietario propietario = new Propietario();
+        propietario.setIdPropietario(rs.getLong("id_propietario"));
+        propietario.setPersona(personaPropietario);
+        local.setPropietario(propietario);
 
         AgenteInmobiliario agente = new AgenteInmobiliario();
         long idAgente = rs.getLong("id_agente");
         agente.setIdAgente(idAgente);
+        Persona personaAgente = new Persona();
+        personaAgente.setNombresORazonSocial(rs.getString("agente_nombre"));
+        agente.setPersona(personaAgente);
 
         Long idBroker = rs.getObject("id_broker_revisor", Long.class);
         Broker broker = (idBroker != null) ? new Broker(idBroker) : null;
@@ -212,6 +287,9 @@ public class CaptacionDAOImpl implements CaptacionDAO {
         if (fRev != null) captacion.setFechaRevision(fRev.toLocalDateTime());
 
         captacion.setObservacionRevision(rs.getString("observacion_revision"));
+        captacion.setMotivoOperacion(JdbcSupport.getNullableEnum(rs, "motivo_operacion", OperacionRequerimiento.class));
+        captacion.setUrgencia(JdbcSupport.getNullableInt(rs, "urgencia"));
+        captacion.setExclusividad(JdbcSupport.getNullableBoolean(rs, "exclusividad"));
         captacion.setLocalComercial(local);
         captacion.setAgenteResponsable(agente);
         captacion.setBrokerRevisor(broker);
@@ -249,4 +327,3 @@ public class CaptacionDAOImpl implements CaptacionDAO {
         else statement.setNull(parameterIndex, Types.BIGINT);
     }
 }
-

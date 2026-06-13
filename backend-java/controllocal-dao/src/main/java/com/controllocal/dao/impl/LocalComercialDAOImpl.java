@@ -14,6 +14,9 @@ import com.controllocal.config.DBManager;
 import com.controllocal.dao.DAOException;
 import com.controllocal.dao.LocalComercialDAO;
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
+import com.controllocal.model.inmueble.enums.EstadoPublicacion;
+import com.controllocal.model.inmueble.enums.TipoInmueble;
+import com.controllocal.model.inmueble.enums.UsoInmueble;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.persona.Propietario;
 
@@ -21,6 +24,33 @@ import com.controllocal.model.persona.Propietario;
  * Implementacion JDBC de LocalComercialDAO usando PreparedStatement.
  */
 public class LocalComercialDAOImpl implements LocalComercialDAO {
+
+    private static final String COLUMNAS_SQL = """
+                l.id_local,
+                l.codigo_local,
+                l.direccion,
+                l.distrito,
+                l.metraje,
+                l.precio_referencial,
+                l.rubro_permitido,
+                l.descripcion,
+                l.estado,
+                l.id_propietario,
+                l.tipo_inmueble,
+                l.uso,
+                l.ambientes,
+                l.antiguedad_anios,
+                l.zona_urbanizacion,
+                l.geo_lat,
+                l.geo_long,
+                l.estado_publicacion,
+                pp.nombres_o_razon_social AS propietario_nombre,
+                l.fecha_registro,
+                l.fecha_actualizacion
+            FROM local_comercial l
+            INNER JOIN propietario p ON p.id_propietario = l.id_propietario
+            INNER JOIN persona pp ON pp.id_persona = p.id_persona
+            """;
 
     private static final String INSERT_SQL = """
             INSERT INTO local_comercial (
@@ -32,45 +62,28 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 rubro_permitido,
                 descripcion,
                 estado,
-                id_propietario
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id_propietario,
+                tipo_inmueble,
+                uso,
+                ambientes,
+                antiguedad_anios,
+                zona_urbanizacion,
+                geo_lat,
+                geo_long,
+                estado_publicacion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
-    private static final String SELECT_BY_ID_SQL = """
-            SELECT
-                id_local,
-                codigo_local,
-                direccion,
-                distrito,
-                metraje,
-                precio_referencial,
-                rubro_permitido,
-                descripcion,
-                estado,
-                id_propietario,
-                fecha_registro,
-                fecha_actualizacion
-            FROM local_comercial
-            WHERE id_local = ?
-            """;
+    private static final String SELECT_BY_ID_SQL =
+            "SELECT" + COLUMNAS_SQL + " WHERE id_local = ?";
 
-    private static final String SELECT_ALL_SQL = """
-            SELECT
-                id_local,
-                codigo_local,
-                direccion,
-                distrito,
-                metraje,
-                precio_referencial,
-                rubro_permitido,
-                descripcion,
-                estado,
-                id_propietario,
-                fecha_registro,
-                fecha_actualizacion
-            FROM local_comercial
-            ORDER BY id_local
-            """;
+    private static final String SELECT_ALL_SQL =
+            "SELECT" + COLUMNAS_SQL + " ORDER BY id_local";
+
+    private static final String SELECT_PAGE_SQL =
+            "SELECT" + COLUMNAS_SQL + " ORDER BY id_local LIMIT ? OFFSET ?";
+
+    private static final String COUNT_SQL = "SELECT COUNT(*) FROM local_comercial";
 
     private static final String UPDATE_SQL = """
             UPDATE local_comercial
@@ -82,7 +95,15 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 rubro_permitido = ?,
                 descripcion = ?,
                 estado = ?,
-                id_propietario = ?
+                id_propietario = ?,
+                tipo_inmueble = ?,
+                uso = ?,
+                ambientes = ?,
+                antiguedad_anios = ?,
+                zona_urbanizacion = ?,
+                geo_lat = ?,
+                geo_long = ?,
+                estado_publicacion = ?
             WHERE id_local = ?
             """;
 
@@ -108,6 +129,14 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setString(7, local.getDescripcion());
             JdbcSupport.setEnum(statement, 8, local.getEstado());
             statement.setLong(9, local.getIdPropietario());
+            JdbcSupport.setEnum(statement, 10, local.getTipoInmueble());
+            JdbcSupport.setEnum(statement, 11, local.getUso());
+            JdbcSupport.setInteger(statement, 12, local.getAmbientes());
+            JdbcSupport.setInteger(statement, 13, local.getAntiguedadAnios());
+            statement.setString(14, local.getZonaUrbanizacion());
+            statement.setBigDecimal(15, local.getGeoLat());
+            statement.setBigDecimal(16, local.getGeoLong());
+            JdbcSupport.setEnum(statement, 17, local.getEstadoPublicacion());
 
             int affectedRows = statement.executeUpdate();
             if (affectedRows == 0) {
@@ -167,6 +196,39 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
     }
 
     @Override
+    public List<LocalComercial> listarPagina(int limite, int desplazamiento) {
+        List<LocalComercial> locales = new ArrayList<>();
+
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_PAGE_SQL)) {
+
+            statement.setInt(1, limite);
+            statement.setInt(2, desplazamiento);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    locales.add(mapRow(resultSet));
+                }
+            }
+            return locales;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar la pagina de locales comerciales.", e);
+        }
+    }
+
+    @Override
+    public long contar() {
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(COUNT_SQL);
+             ResultSet resultSet = statement.executeQuery()) {
+
+            return resultSet.next() ? resultSet.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar los locales comerciales.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(LocalComercial local) {
         validarLocalParaPersistencia(local, true);
 
@@ -182,7 +244,15 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setString(7, local.getDescripcion());
             JdbcSupport.setEnum(statement, 8, local.getEstado());
             statement.setLong(9, local.getIdPropietario());
-            statement.setLong(10, local.getIdLocal());
+            JdbcSupport.setEnum(statement, 10, local.getTipoInmueble());
+            JdbcSupport.setEnum(statement, 11, local.getUso());
+            JdbcSupport.setInteger(statement, 12, local.getAmbientes());
+            JdbcSupport.setInteger(statement, 13, local.getAntiguedadAnios());
+            statement.setString(14, local.getZonaUrbanizacion());
+            statement.setBigDecimal(15, local.getGeoLat());
+            statement.setBigDecimal(16, local.getGeoLong());
+            JdbcSupport.setEnum(statement, 17, local.getEstadoPublicacion());
+            statement.setLong(18, local.getIdLocal());
 
             return statement.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -224,8 +294,18 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 fechaActualizacion != null ? fechaActualizacion.toLocalDateTime() : null
         );
 
+        local.setTipoInmueble(JdbcSupport.getNullableEnum(rs, "tipo_inmueble", TipoInmueble.class));
+        local.setUso(JdbcSupport.getNullableEnum(rs, "uso", UsoInmueble.class));
+        local.setAmbientes(JdbcSupport.getNullableInt(rs, "ambientes"));
+        local.setAntiguedadAnios(JdbcSupport.getNullableInt(rs, "antiguedad_anios"));
+        local.setZonaUrbanizacion(rs.getString("zona_urbanizacion"));
+        local.setGeoLat(rs.getBigDecimal("geo_lat"));
+        local.setGeoLong(rs.getBigDecimal("geo_long"));
+        local.setEstadoPublicacion(JdbcSupport.getNullableEnum(rs, "estado_publicacion", EstadoPublicacion.class));
+
         Propietario propietario = new Propietario();
         propietario.setIdPropietario(idPropietario);
+        propietario.setNombresORazonSocial(rs.getString("propietario_nombre"));
         local.setPropietario(propietario);
         return local;
     }
@@ -273,4 +353,3 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
         }
     }
 }
-

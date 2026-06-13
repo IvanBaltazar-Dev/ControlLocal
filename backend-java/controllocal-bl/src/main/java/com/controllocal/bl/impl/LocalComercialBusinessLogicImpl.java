@@ -39,6 +39,15 @@ public class LocalComercialBusinessLogicImpl implements LocalComercialBusinessLo
         return localDAO.listarTodos();
     }
 
+    public List<LocalComercial> listarPagina(int limite, int desplazamiento) {
+        BusinessValidations.pagina(limite, desplazamiento);
+        return localDAO.listarPagina(limite, desplazamiento);
+    }
+
+    public long contar() {
+        return localDAO.contar();
+    }
+
     public boolean actualizar(LocalComercial local) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(local != null ? local.getIdLocal() : null, "El id de local comercial");

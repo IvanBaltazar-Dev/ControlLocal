@@ -17,6 +17,7 @@
         <module>controllocal-db-manager</module>
         <module>controllocal-app</module>
         <module>controllocal-bl</module>
+        <module>controllocal-rest</module>
     </modules>
 
     <properties>

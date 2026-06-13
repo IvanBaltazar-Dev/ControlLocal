@@ -22,6 +22,7 @@ public class PropietarioDAOImpl implements PropietarioDAO {
             SELECT pr.id_propietario,
                    p.id_persona, p.tipo_persona, p.tipo_documento, p.numero_documento,
                    p.nombres_o_razon_social, p.telefono, p.correo, p.estado,
+                   p.consentimiento_uso_dato,
                    p.fecha_creacion, p.fecha_actualizacion
             FROM propietario pr
             INNER JOIN persona p ON pr.id_persona = p.id_persona
@@ -80,6 +81,35 @@ public class PropietarioDAOImpl implements PropietarioDAO {
             return propietarios;
         } catch (SQLException e) {
             throw new DAOException("Error al listar propietarios.", e);
+        }
+    }
+
+    @Override
+    public List<Propietario> listarPagina(int limite, int desplazamiento) {
+        List<Propietario> propietarios = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY pr.id_propietario LIMIT ? OFFSET ?")) {
+            ps.setInt(1, limite);
+            ps.setInt(2, desplazamiento);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    propietarios.add(mapRow(rs));
+                }
+            }
+            return propietarios;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar la pagina de propietarios.", e);
+        }
+    }
+
+    @Override
+    public long contar() {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM propietario");
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar propietarios.", e);
         }
     }
 

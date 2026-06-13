@@ -69,7 +69,88 @@ public static class EnumCatalog
         new("W", "WhatsApp"),
         new("E", "Email"),
         new("P", "Presencial"),
+        new("R", "Reunion"),
+        new("T", "Portal"),
         new("O", "Otro")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> OperacionesRequerimiento =
+    [
+        new("A", "Alquiler"),
+        new("C", "Compra")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> TiposInmueble =
+    [
+        new("L", "Local"),
+        new("O", "Oficina"),
+        new("D", "Departamento"),
+        new("C", "Casa"),
+        new("T", "Terreno"),
+        new("X", "Otro")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> UsosInmueble =
+    [
+        new("C", "Comercial"),
+        new("V", "Vivienda"),
+        new("I", "Industrial"),
+        new("M", "Mixto")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> EstadosPublicacion =
+    [
+        new("B", "Borrador"),
+        new("P", "Publicado"),
+        new("S", "Pausado"),
+        new("C", "Cerrado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> Monedas =
+    [
+        new("PEN", "Soles"),
+        new("USD", "Dolares")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> HitosPrecio =
+    [
+        new("E", "Esperado"),
+        new("R", "Recomendado"),
+        new("U", "Autorizado"),
+        new("P", "Publicado"),
+        new("O", "Ofertado"),
+        new("A", "Aceptado"),
+        new("C", "Cerrado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ObjecionesVisita =
+    [
+        new("P", "Precio"),
+        new("U", "Ubicacion"),
+        new("E", "Estado del inmueble"),
+        new("C", "Condiciones"),
+        new("O", "Otra")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> OpinionesPrecio =
+    [
+        new("A", "Alto"),
+        new("J", "Justo"),
+        new("B", "Bajo")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ProximasAccionesVisita =
+    [
+        new("V", "Nueva visita"),
+        new("O", "Oferta"),
+        new("S", "Seguimiento"),
+        new("D", "Descartado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> DesenlacesOportunidad =
+    [
+        new("F", "Cerrada favorable"),
+        new("X", "Caida")
     ];
 
     public static readonly IReadOnlyList<EnumOption> ResultadosInteraccion =

@@ -12,40 +12,51 @@ using ControlLocal.Web.Models.Visitas;
 
 namespace ControlLocal.Web.Data;
 
-// Service interfaces — the screens depend only on these. The in-memory mock
-// implementations below can later be swapped for HttpClient-backed ones that
-// call the Java REST API, with no changes to the components. They already work
-// with the domain DTOs (Models/*) so the contract is the final one.
+// Contratos de servicios de dominio. Las pantallas dependen solo de estas
+// interfaces; la implementación activa (mock en memoria o cliente REST de
+// Services/Api) se decide por configuración en Program.cs.
 
 public interface IBrokerService
 {
     IReadOnlyList<BrokerDto> All();
     BrokerDto? ById(string codigoBroker);
     BrokerDto First();
+    BrokerDto Agregar(BrokerDto broker);
+    BrokerDto Actualizar(BrokerDto broker);
 }
 
 public interface IAgenteService
 {
     IReadOnlyList<AgenteDto> All();
     AgenteDto? ById(long id);
+    AgenteDto Agregar(AgenteDto agente);
+    AgenteDto Actualizar(AgenteDto agente);
+    AgenteDto Desactivar(long id);
 }
 
 public interface IPropietarioService
 {
     IReadOnlyList<PropietarioDto> All();
     PropietarioDto? ById(long id);
+    // Alta individual o desde la bandeja de importación; asigna el id y devuelve el registro.
+    PropietarioDto Agregar(PropietarioDto propietario);
+    PropietarioDto Actualizar(PropietarioDto propietario);
 }
 
 public interface IClienteService
 {
     IReadOnlyList<ClienteInteresadoDto> All();
     ClienteInteresadoDto? ById(long id);
+    ClienteInteresadoDto Agregar(ClienteInteresadoDto cliente);
+    ClienteInteresadoDto Actualizar(ClienteInteresadoDto cliente);
 }
 
 public interface ILocalService
 {
     IReadOnlyList<LocalComercialDto> All();
     LocalComercialDto? ById(long id);
+    LocalComercialDto Agregar(LocalComercialDto local);
+    LocalComercialDto Actualizar(LocalComercialDto local);
 }
 
 // Prospección (pre-captación): el agente persigue al propietario hasta captar el
@@ -65,6 +76,7 @@ public interface IProspeccionService
     ProspeccionDto Descartar(long id, string motivo);
     // El propietario acepta: marca Captado y simula la captación creada.
     ProspeccionDto Captar(long id, decimal comisionPactada);
+    ProspeccionDto MarcarCaptado(long id, string codigoCaptacion);
 }
 
 public interface ICaptacionService
@@ -72,18 +84,29 @@ public interface ICaptacionService
     IReadOnlyList<CaptacionDto> All();
     IReadOnlyList<BandejaCaptacionDto> Bandeja();
     CaptacionDto? ByCodigo(string codigo);
+    CaptacionDto Agregar(CaptacionDto captacion);
+    CaptacionDto Actualizar(CaptacionDto captacion);
+    Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default);
+    Task ResolverBandejaAsync(string codigo, string decision, string? observacion, CancellationToken ct = default);
+    Task ReasignarBandejaAsync(string codigo, long idNuevoAgente, string motivo, CancellationToken ct = default);
+    Task CerrarAsync(long id, string motivo, CancellationToken ct = default);
 }
 
 public interface ISolicitudService
 {
     IReadOnlyList<SolicitudAlquilerDto> All();
     SolicitudAlquilerDto? ByCodigo(string codigo);
+    SolicitudAlquilerDto Agregar(SolicitudFormRequest request);
+    SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud);
+    EvaluacionSolicitudDto Evaluar(string codigoSolicitud, EvaluacionSolicitudDto evaluacion);
 }
 
 public interface IInteraccionService
 {
     IReadOnlyList<InteraccionComercialDto> All();
     InteraccionComercialDto? ById(long id);
+    InteraccionComercialDto Agregar(InteraccionFormRequest request);
+    InteraccionComercialDto Actualizar(long id, string? resultado = null, string? observaciones = null);
 }
 
 // Espeja VisitaBusinessLogic del backend Java: listado + transiciones de estado
@@ -96,6 +119,8 @@ public interface IOportunidadService
     OportunidadComercialDto? ById(long id);
     // Todos los clientes interesados (oportunidades) de una captación.
     IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion);
+    OportunidadComercialDto MarcarSolicitudCreada(long id);
+    OportunidadComercialDto CerrarNoContinua(long id, string razon, string? observaciones);
 }
 
 public interface IVisitaService
@@ -111,7 +136,7 @@ public interface IVisitaService
     // PATCH /visitas/{id}/resultado — marca REALIZADA y registra el desenlace.
     // Si el resultado es de no continuidad (N/D), razonNoContinuidad es obligatorio:
     // registra el motivo ligado a la visita y cierra la oportunidad.
-    VisitaDto RegistrarResultado(long id, string resultado, string? observaciones, string? razonNoContinuidad);
+    VisitaDto RegistrarResultado(long id, VisitaResultadoRequest request);
 }
 
 public interface IAssignmentService
@@ -120,6 +145,8 @@ public interface IAssignmentService
     IReadOnlyList<AssignBrokerDto> Brokers();
     // Historial de reasignaciones de agentes entre brokers (relación BrokerAgente).
     IReadOnlyList<BrokerAgenteDto> Historial();
+    // Asigna el agente al broker destino, cierra la supervisión anterior y registra el historial.
+    BrokerAgenteDto ReasignarAgente(string agenteId, string brokerId, string motivo);
 }
 
 // Reasignación de captaciones a otro agente del equipo. Espeja el flujo de
@@ -142,7 +169,7 @@ public interface IReasignacionCaptacionService
 
 public class MockBrokerService : IBrokerService
 {
-    private static readonly BrokerDto[] Data =
+    private static readonly List<BrokerDto> Data = new()
     {
         new() { CodigoBroker = "BRK-001", Iniciales = "RS", Nombre = "Ricardo Salas", Email = "rsalas@controllocal.pe", TipoDocumento = "DNI", NumeroDocumento = "08 412 991", Telefono = "+51 998 110 220", Usuario = "rsalas", Zona = "Lima Centro / Sur", TipoBroker = "Broker supervisor", FechaDesignacionTexto = "11 Ene 2024", AgentesACargo = 7, CaptacionesActivas = 38, EstadoAdministrativo = "Activo", EsAdministrador = false },
         new() { CodigoBroker = "BRK-002", Iniciales = "MQ", Nombre = "Mariana Quintero", Email = "mquintero@controllocal.pe", TipoDocumento = "DNI", NumeroDocumento = "10 552 408", Telefono = "+51 987 220 411", Usuario = "mquintero", Zona = "Lima Norte", TipoBroker = "Broker supervisor", FechaDesignacionTexto = "03 Feb 2024", AgentesACargo = 6, CaptacionesActivas = 31, EstadoAdministrativo = "Activo", EsAdministrador = false },
@@ -155,11 +182,38 @@ public class MockBrokerService : IBrokerService
     public IReadOnlyList<BrokerDto> All() => Data;
     public BrokerDto? ById(string codigoBroker) => Data.FirstOrDefault(b => b.CodigoBroker == codigoBroker);
     public BrokerDto First() => Data[0];
+
+    public BrokerDto Agregar(BrokerDto broker)
+    {
+        broker.Id = Data.Count == 0 ? 1 : Math.Max(Data.Max(item => item.Id), Data.Count) + 1;
+        broker.CodigoBroker = string.IsNullOrWhiteSpace(broker.CodigoBroker)
+            ? $"BRK-{broker.Id:000}"
+            : broker.CodigoBroker;
+        broker.FechaDesignacion ??= DateOnly.FromDateTime(DateTime.Today);
+        broker.FechaDesignacionTexto = broker.FechaDesignacion.Value.ToString("dd MMM yyyy");
+        broker.TipoBroker = string.IsNullOrWhiteSpace(broker.TipoBroker) ? "Broker supervisor" : broker.TipoBroker;
+        broker.Iniciales = Iniciales(broker.Nombre);
+        Data.Add(broker);
+        return broker;
+    }
+
+    public BrokerDto Actualizar(BrokerDto broker)
+    {
+        var indice = Data.FindIndex(item => item.CodigoBroker == broker.CodigoBroker);
+        if (indice < 0) throw new InvalidOperationException("Broker no encontrado.");
+        Data[indice] = broker;
+        return broker;
+    }
+
+    private static string Iniciales(string nombre) => string.Concat(
+        nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(parte => char.ToUpperInvariant(parte[0])));
 }
 
 public class MockAgenteService : IAgenteService
 {
-    private static readonly AgenteDto[] Data =
+    private static readonly List<AgenteDto> Data = new()
     {
         new() { Id = 1, Iniciales = "VM", Color = "#3A6BB5", Nombre = "Valentina Mora", TipoPersona = "Persona natural", TipoDocumento = "D", Email = "vmora@controllocal.pe", NumeroDocumento = "45 893 211", Telefono = "+51 998 110 311", Zona = "Lima Centro", FechaIngresoTexto = "14 Feb 2024", CaptacionesActivas = 14, OportunidadesActivas = 8, EstadoAdministrativo = "Activo" },
         new() { Id = 2, Iniciales = "CV", Color = "#2F7D52", Nombre = "Carolina Vega", TipoPersona = "Persona natural", TipoDocumento = "D", Email = "cvega@controllocal.pe", NumeroDocumento = "46 220 411", Telefono = "+51 987 220 411", Zona = "Lima Sur", FechaIngresoTexto = "22 Mar 2024", CaptacionesActivas = 9, OportunidadesActivas = 5, EstadoAdministrativo = "Activo" },
@@ -171,11 +225,46 @@ public class MockAgenteService : IAgenteService
 
     public IReadOnlyList<AgenteDto> All() => Data;
     public AgenteDto? ById(long id) => Data.FirstOrDefault(a => a.Id == id);
+
+    public AgenteDto Agregar(AgenteDto agente)
+    {
+        agente.Id = Data.Count == 0 ? 1 : Data.Max(item => item.Id) + 1;
+        agente.CodigoAgente = string.IsNullOrWhiteSpace(agente.CodigoAgente)
+            ? $"AGE-{agente.Id:000}"
+            : agente.CodigoAgente;
+        agente.FechaIngreso ??= DateOnly.FromDateTime(DateTime.Today);
+        agente.FechaIngresoTexto = agente.FechaIngreso.Value.ToString("dd MMM yyyy");
+        agente.Iniciales = Iniciales(agente.Nombre);
+        agente.Color = string.IsNullOrWhiteSpace(agente.Color) ? "#3A6BB5" : agente.Color;
+        Data.Add(agente);
+        return agente;
+    }
+
+    public AgenteDto Actualizar(AgenteDto agente)
+    {
+        var indice = Data.FindIndex(item => item.Id == agente.Id);
+        if (indice < 0) throw new InvalidOperationException("Agente no encontrado.");
+        Data[indice] = agente;
+        return agente;
+    }
+
+    public AgenteDto Desactivar(long id)
+    {
+        var agente = ById(id) ?? throw new InvalidOperationException("Agente no encontrado.");
+        agente.EstadoAdministrativo = "Inactivo";
+        agente.EstadoOperativo = "No disponible";
+        return agente;
+    }
+
+    private static string Iniciales(string nombre) => string.Concat(
+        nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(parte => char.ToUpperInvariant(parte[0])));
 }
 
 public class MockPropietarioService : IPropietarioService
 {
-    private static readonly PropietarioDto[] Data =
+    private readonly List<PropietarioDto> _data = new()
     {
         new() { Id = 1, Nombre = "Inmobiliaria Pacífico S.A.C.", TipoPersona = "Persona jurídica · RUC", NumeroDocumento = "20 553 102 884", Telefono = "+51 1 432 8800", Correo = "contacto@pacifico.com.pe", CantidadLocales = 6, Estado = "Activo" },
         new() { Id = 2, Nombre = "Carlos Mendoza Rivera", TipoPersona = "Persona natural · DNI", NumeroDocumento = "08 412 991", Telefono = "+51 998 220 411", Correo = "cmendoza@gmail.com", CantidadLocales = 2, Estado = "Activo" },
@@ -185,29 +274,60 @@ public class MockPropietarioService : IPropietarioService
         new() { Id = 6, Nombre = "Roberto Linares Cruz", TipoPersona = "Persona natural · DNI", NumeroDocumento = "07 823 145", Telefono = "+51 991 552 008", Correo = "rlinares@yahoo.com", CantidadLocales = 1, Estado = "Activo" },
     };
 
-    public IReadOnlyList<PropietarioDto> All() => Data;
-    public PropietarioDto? ById(long id) => Data.FirstOrDefault(p => p.Id == id);
+    public IReadOnlyList<PropietarioDto> All() => _data;
+    public PropietarioDto? ById(long id) => _data.FirstOrDefault(p => p.Id == id);
+
+    public PropietarioDto Agregar(PropietarioDto propietario)
+    {
+        propietario.Id = _data.Max(p => p.Id) + 1;
+        if (string.IsNullOrWhiteSpace(propietario.Estado)) propietario.Estado = "Activo";
+        _data.Add(propietario);
+        return propietario;
+    }
+
+    public PropietarioDto Actualizar(PropietarioDto propietario)
+    {
+        var indice = _data.FindIndex(item => item.Id == propietario.Id);
+        if (indice < 0) throw new InvalidOperationException("Propietario no encontrado.");
+        _data[indice] = propietario;
+        return propietario;
+    }
 }
 
 public class MockClienteService : IClienteService
 {
-    private static readonly ClienteInteresadoDto[] Data =
+    private readonly List<ClienteInteresadoDto> _data = new()
     {
-        new() { Id = 1, Nombre = "Inversiones Trébol S.A.C.", TipoPersona = "Persona jurídica · RUC", NumeroDocumento = "20 558 110 442", Telefono = "+51 1 445 7800", Correo = "contacto@trebol.pe", RubroInteres = "Restaurante / Café", InteresComercial = "Locales 80–150 m² en Lima moderna", CaptacionesVinculadas = 2, Estado = "Activo" },
-        new() { Id = 2, Nombre = "Boutique Lila", TipoPersona = "Persona natural · DNI", NumeroDocumento = "45 220 118", Telefono = "+51 998 552 110", Correo = "lila.boutique@gmail.com", RubroInteres = "Moda / Boutique", InteresComercial = "Local en Miraflores < 80 m²", CaptacionesVinculadas = 1, Estado = "Activo" },
-        new() { Id = 3, Nombre = "Bodegas del Norte E.I.R.L.", TipoPersona = "Persona jurídica · RUC", NumeroDocumento = "20 471 882 004", Telefono = "+51 1 552 1180", Correo = "operaciones@bodegasnorte.pe", RubroInteres = "Retail / Almacén", InteresComercial = "Locales > 150 m² con depósito", CaptacionesVinculadas = 3, Estado = "Activo" },
-        new() { Id = 4, Nombre = "Café Lima", TipoPersona = "Persona natural · DNI", NumeroDocumento = "44 118 902", Telefono = "+51 987 220 004", Correo = "cafelima@gmail.com", RubroInteres = "Café / Postres", InteresComercial = "Esquinas comerciales en Miraflores", CaptacionesVinculadas = 1, Estado = "Activo" },
-        new() { Id = 5, Nombre = "Carla Espinoza Núñez", TipoPersona = "Persona natural · DNI", NumeroDocumento = "46 552 008", Telefono = "+51 991 002 552", Correo = "cespinoza@gmail.com", RubroInteres = "Servicios / Consultorio", InteresComercial = "Oficina-local en San Isidro", CaptacionesVinculadas = 1, Estado = "Activo" },
-        new() { Id = 6, Nombre = "Distribuidora El Sol S.R.L.", TipoPersona = "Persona jurídica · RUC", NumeroDocumento = "20 502 110 778", Telefono = "+51 1 718 2200", Correo = "ventas@elsol.pe", RubroInteres = "Retail", InteresComercial = "Locales en avenidas principales", CaptacionesVinculadas = 0, Estado = "Inactivo" },
+        new() { Id = 1, Nombre = "Inversiones Trébol S.A.C.", TipoPersona = "Persona jurídica · RUC", NumeroDocumento = "20 558 110 442", Telefono = "+51 1 445 7800", Correo = "contacto@trebol.pe", RubroInteres = "Restaurante / Café", ConsentimientoContacto = true, ConsentimientoUsoDato = true, Estado = "Activo" },
+        new() { Id = 2, Nombre = "Boutique Lila", TipoPersona = "Persona natural · DNI", NumeroDocumento = "45 220 118", Telefono = "+51 998 552 110", Correo = "lila.boutique@gmail.com", RubroInteres = "Moda / Boutique", ConsentimientoContacto = true, ConsentimientoUsoDato = true, Estado = "Activo" },
+        new() { Id = 3, Nombre = "Bodegas del Norte E.I.R.L.", TipoPersona = "Persona jurídica · RUC", NumeroDocumento = "20 471 882 004", Telefono = "+51 1 552 1180", Correo = "operaciones@bodegasnorte.pe", RubroInteres = "Retail / Almacén", ConsentimientoContacto = true, ConsentimientoUsoDato = true, Estado = "Activo" },
+        new() { Id = 4, Nombre = "Café Lima", TipoPersona = "Persona natural · DNI", NumeroDocumento = "44 118 902", Telefono = "+51 987 220 004", Correo = "cafelima@gmail.com", RubroInteres = "Café / Postres", ConsentimientoContacto = true, ConsentimientoUsoDato = true, Estado = "Activo" },
+        new() { Id = 5, Nombre = "Carla Espinoza Núñez", TipoPersona = "Persona natural · DNI", NumeroDocumento = "46 552 008", Telefono = "+51 991 002 552", Correo = "cespinoza@gmail.com", RubroInteres = "Servicios / Consultorio", ConsentimientoContacto = true, ConsentimientoUsoDato = true, Estado = "Activo" },
+        new() { Id = 6, Nombre = "Distribuidora El Sol S.R.L.", TipoPersona = "Persona jurídica · RUC", NumeroDocumento = "20 502 110 778", Telefono = "+51 1 718 2200", Correo = "ventas@elsol.pe", RubroInteres = "Retail", ConsentimientoContacto = false, ConsentimientoUsoDato = true, Estado = "Inactivo" },
     };
 
-    public IReadOnlyList<ClienteInteresadoDto> All() => Data;
-    public ClienteInteresadoDto? ById(long id) => Data.FirstOrDefault(c => c.Id == id);
+    public IReadOnlyList<ClienteInteresadoDto> All() => _data;
+    public ClienteInteresadoDto? ById(long id) => _data.FirstOrDefault(c => c.Id == id);
+
+    public ClienteInteresadoDto Agregar(ClienteInteresadoDto cliente)
+    {
+        cliente.Id = _data.Count == 0 ? 1 : _data.Max(item => item.Id) + 1;
+        _data.Add(cliente);
+        return cliente;
+    }
+
+    public ClienteInteresadoDto Actualizar(ClienteInteresadoDto cliente)
+    {
+        var indice = _data.FindIndex(item => item.Id == cliente.Id);
+        if (indice < 0) throw new InvalidOperationException("Cliente no encontrado.");
+        _data[indice] = cliente;
+        return cliente;
+    }
 }
 
 public class MockLocalService : ILocalService
 {
-    private static readonly LocalComercialDto[] Data =
+    private readonly List<LocalComercialDto> _data = new()
     {
         // Estado = disponibilidad del inmueble (EstadoLocalComercial: Disponible/No disponible/Inactivo).
         // La etapa de prospección/captación es un eje aparte (ver IProspeccionService).
@@ -219,8 +339,24 @@ public class MockLocalService : ILocalService
         new() { Id = 6, CodigoLocal = "LC-0242", Estado = "Disponible", Direccion = "Av. Salaverry 2120", Distrito = "Jesús María, Lima", AreaM2 = 88, Rubro = "Servicios médicos", PrecioReferencialTexto = "2 200", PropietarioNombre = "R. Linares" },
     };
 
-    public IReadOnlyList<LocalComercialDto> All() => Data;
-    public LocalComercialDto? ById(long id) => Data.FirstOrDefault(l => l.Id == id);
+    public IReadOnlyList<LocalComercialDto> All() => _data;
+    public LocalComercialDto? ById(long id) => _data.FirstOrDefault(l => l.Id == id);
+
+    public LocalComercialDto Agregar(LocalComercialDto local)
+    {
+        local.Id = _data.Count == 0 ? 1 : _data.Max(item => item.Id) + 1;
+        if (string.IsNullOrWhiteSpace(local.CodigoLocal)) local.CodigoLocal = $"LC-{local.Id:0000}";
+        _data.Add(local);
+        return local;
+    }
+
+    public LocalComercialDto Actualizar(LocalComercialDto local)
+    {
+        var indice = _data.FindIndex(item => item.Id == local.Id);
+        if (indice < 0) throw new InvalidOperationException("Local no encontrado.");
+        _data[indice] = local;
+        return local;
+    }
 }
 
 public class MockProspeccionService : IProspeccionService
@@ -323,12 +459,19 @@ public class MockProspeccionService : IProspeccionService
 
     public ProspeccionDto Captar(long id, decimal comisionPactada)
     {
-        var p = EnProceso(id, "captar");
         if (comisionPactada < 0)
             throw new InvalidOperationException("La comisión pactada no puede ser negativa.");
+        return MarcarCaptado(id, $"CAP-{1000 + id:0000}");
+    }
+
+    public ProspeccionDto MarcarCaptado(long id, string codigoCaptacion)
+    {
+        var p = EnProceso(id, "captar");
+        if (string.IsNullOrWhiteSpace(codigoCaptacion))
+            throw new InvalidOperationException("El codigo de captacion es obligatorio.");
         p.Estado = "T";
         p.ResultadoPropuesta = "A";
-        p.CaptacionCodigo = $"CAP-{1000 + p.Id:0000}"; // simula la captación creada (pendiente de revisión)
+        p.CaptacionCodigo = codigoCaptacion;
         p.FechaRecontacto = null;
         p.FechaRecontactoTexto = null;
         return p;
@@ -351,61 +494,288 @@ public class MockProspeccionService : IProspeccionService
 
 public class MockCaptacionService : ICaptacionService
 {
-    private static readonly CaptacionDto[] Data =
+    private static readonly List<CaptacionDto> Data = new()
     {
-        new() { CodigoCaptacion = "CAP-0218", DireccionLocal = "Av. La Marina 245", DistritoLocal = "San Miguel", AreaM2 = 120, PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "01 Abr – 01 Oct 2026", DiasRestantesTexto = "venc. en 130 días", ComisionPactadaTexto = "5.0", Estado = "Activa" },
-        new() { CodigoCaptacion = "CAP-0226", DireccionLocal = "Calle Schell 412", DistritoLocal = "Miraflores", AreaM2 = 68, PropietarioNombre = "Carlos Mendoza", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "15 May – 15 Nov 2026", DiasRestantesTexto = "venc. en 175 días", ComisionPactadaTexto = "4.5", Estado = "Activa" },
-        new() { CodigoCaptacion = "CAP-0233", DireccionLocal = "Av. Caminos del Inca 1820", DistritoLocal = "Surco", AreaM2 = 140, PropietarioNombre = "A. Pereyra", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "Borrador", DiasRestantesTexto = "no enviado", ComisionPactadaTexto = "—", Estado = "Pendiente" },
-        new() { CodigoCaptacion = "CAP-0234", DireccionLocal = "Jr. Berlín 230", DistritoLocal = "Miraflores", AreaM2 = 52, PropietarioNombre = "A. Pereyra", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "10 May – 10 Nov 2026", DiasRestantesTexto = "venc. en 170 días", ComisionPactadaTexto = "5.5", Estado = "Activa" },
-        new() { CodigoCaptacion = "CAP-0237", DireccionLocal = "Av. Salaverry 2120", DistritoLocal = "Jesús María", AreaM2 = 88, PropietarioNombre = "R. Linares", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "En revisión", DiasRestantesTexto = "enviada hace 1d", ComisionPactadaTexto = "5.0", Estado = "Pendiente" },
-        new() { CodigoCaptacion = "CAP-0241", DireccionLocal = "Av. Perú 2845", DistritoLocal = "San Martín", AreaM2 = 72, PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "Observada", DiasRestantesTexto = "requiere ajuste", ComisionPactadaTexto = "4.5", Estado = "Observada" },
-        new() { CodigoCaptacion = "CAP-0244", DireccionLocal = "Av. Brasil 2890", DistritoLocal = "Magdalena", AreaM2 = 60, PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "23 May – 23 Ago 2026", DiasRestantesTexto = "venc. en 91 días", ComisionPactadaTexto = "5.0", Estado = "Rechazada" },
+        new() { Id = 1, LocalId = 1, CodigoCaptacion = "CAP-0218", DireccionLocal = "Av. La Marina 245", DistritoLocal = "San Miguel", AreaM2 = 120, PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "01 Abr – 01 Oct 2026", DiasRestantesTexto = "venc. en 130 días", ComisionPactadaTexto = "5.0", Estado = "Activa" },
+        new() { Id = 2, LocalId = 2, CodigoCaptacion = "CAP-0227", DireccionLocal = "Calle Schell 412", DistritoLocal = "Miraflores", AreaM2 = 68, PropietarioNombre = "Carlos Mendoza", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "15 May – 15 Nov 2026", DiasRestantesTexto = "venc. en 175 días", ComisionPactadaTexto = "4.5", Estado = "Activa" },
+        new() { Id = 3, LocalId = 3, CodigoCaptacion = "CAP-0233", DireccionLocal = "Av. Caminos del Inca 1820", DistritoLocal = "Surco", AreaM2 = 140, PropietarioNombre = "A. Pereyra", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "Borrador", DiasRestantesTexto = "no enviado", ComisionPactadaTexto = "—", Estado = "Pendiente de revision" },
+        new() { Id = 4, LocalId = 4, CodigoCaptacion = "CAP-0234", DireccionLocal = "Jr. Berlín 230", DistritoLocal = "Miraflores", AreaM2 = 52, PropietarioNombre = "A. Pereyra", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "10 May – 10 Nov 2026", DiasRestantesTexto = "venc. en 170 días", ComisionPactadaTexto = "5.5", Estado = "Activa" },
+        new() { Id = 5, LocalId = 5, CodigoCaptacion = "CAP-0237", DireccionLocal = "Av. Salaverry 2120", DistritoLocal = "Jesús María", AreaM2 = 88, PropietarioNombre = "R. Linares", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "En revisión", DiasRestantesTexto = "enviada hace 1d", ComisionPactadaTexto = "5.0", Estado = "Pendiente de revision" },
+        new() { Id = 6, LocalId = 6, CodigoCaptacion = "CAP-0241", DireccionLocal = "Av. Perú 2845", DistritoLocal = "San Martín", AreaM2 = 72, PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "Observada", DiasRestantesTexto = "requiere ajuste", ComisionPactadaTexto = "4.5", Estado = "Observada" },
+        new() { Id = 7, LocalId = 7, CodigoCaptacion = "CAP-0244", DireccionLocal = "Av. Brasil 2890", DistritoLocal = "Magdalena", AreaM2 = 60, PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "23 May – 23 Ago 2026", DiasRestantesTexto = "venc. en 91 días", ComisionPactadaTexto = "5.0", Estado = "Rechazada" },
     };
 
-    private static readonly BandejaCaptacionDto[] BandejaData =
+    private static readonly List<BandejaCaptacionDto> BandejaData = new()
     {
-        new() { CodigoCaptacion = "CAP-0231", DireccionLocal = "Av. Petit Thouars 1875", DistritoLocal = "Jesús María", AreaM2 = 95, Rubro = "Servicios", PropietarioNombre = "Grupo Bermúdez", NombreAgenteResponsable = "Carolina Vega", FechaEnvioTexto = "22 May 14:08", AntiguedadTexto = "hace 2d", ComisionPactadaTexto = "5.0", Estado = "Pendiente" },
-        new() { CodigoCaptacion = "CAP-0233", DireccionLocal = "Av. Caminos del Inca 1820", DistritoLocal = "Surco", AreaM2 = 140, Rubro = "Restaurante", PropietarioNombre = "A. Pereyra", NombreAgenteResponsable = "Valentina Mora", FechaEnvioTexto = "23 May 11:30", AntiguedadTexto = "hace 1d", ComisionPactadaTexto = "5.0", Estado = "Pendiente" },
-        new() { CodigoCaptacion = "CAP-0236", DireccionLocal = "Av. Pardo 2120", DistritoLocal = "Miraflores", AreaM2 = 78, Rubro = "Moda", PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Andrea Torres", FechaEnvioTexto = "23 May 16:42", AntiguedadTexto = "hace 21h", ComisionPactadaTexto = "4.5", Estado = "Pendiente" },
+        new() { CodigoCaptacion = "CAP-0231", DireccionLocal = "Av. Petit Thouars 1875", DistritoLocal = "Jesús María", AreaM2 = 95, Rubro = "Servicios", PropietarioNombre = "Grupo Bermúdez", NombreAgenteResponsable = "Carolina Vega", FechaEnvioTexto = "22 May 14:08", AntiguedadTexto = "hace 2d", ComisionPactadaTexto = "5.0", Estado = "Pendiente de revision" },
+        new() { CodigoCaptacion = "CAP-0233", DireccionLocal = "Av. Caminos del Inca 1820", DistritoLocal = "Surco", AreaM2 = 140, Rubro = "Restaurante", PropietarioNombre = "A. Pereyra", NombreAgenteResponsable = "Valentina Mora", FechaEnvioTexto = "23 May 11:30", AntiguedadTexto = "hace 1d", ComisionPactadaTexto = "5.0", Estado = "Pendiente de revision" },
+        new() { CodigoCaptacion = "CAP-0236", DireccionLocal = "Av. Pardo 2120", DistritoLocal = "Miraflores", AreaM2 = 78, Rubro = "Moda", PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Andrea Torres", FechaEnvioTexto = "23 May 16:42", AntiguedadTexto = "hace 21h", ComisionPactadaTexto = "4.5", Estado = "Pendiente de revision" },
         new() { CodigoCaptacion = "CAP-0238", DireccionLocal = "Av. Aviación 4012", DistritoLocal = "San Borja", AreaM2 = 180, Rubro = "Retail", PropietarioNombre = "Comercial Andina", NombreAgenteResponsable = "Jorge Marín", FechaEnvioTexto = "21 May 10:00", AntiguedadTexto = "hace 3d", ComisionPactadaTexto = "5.0", Estado = "Observada" },
-        new() { CodigoCaptacion = "CAP-0240", DireccionLocal = "Av. Tomás Marsano 3400", DistritoLocal = "Surco", AreaM2 = 75, Rubro = "Servicios", PropietarioNombre = "R. Linares", NombreAgenteResponsable = "Carolina Vega", FechaEnvioTexto = "22 May 09:15", AntiguedadTexto = "hace 2d", ComisionPactadaTexto = "4.5", Estado = "Pendiente" },
+        new() { CodigoCaptacion = "CAP-0240", DireccionLocal = "Av. Tomás Marsano 3400", DistritoLocal = "Surco", AreaM2 = 75, Rubro = "Servicios", PropietarioNombre = "R. Linares", NombreAgenteResponsable = "Carolina Vega", FechaEnvioTexto = "22 May 09:15", AntiguedadTexto = "hace 2d", ComisionPactadaTexto = "4.5", Estado = "Pendiente de revision" },
         new() { CodigoCaptacion = "CAP-0243", DireccionLocal = "Av. Brasil 2890", DistritoLocal = "Magdalena", AreaM2 = 60, Rubro = "Café", PropietarioNombre = "Inmobiliaria Pacífico", NombreAgenteResponsable = "Paola Reyes", FechaEnvioTexto = "23 May 17:50", AntiguedadTexto = "hace 20h", ComisionPactadaTexto = "5.0", Estado = "Observada" },
     };
 
     public IReadOnlyList<CaptacionDto> All() => Data;
     public IReadOnlyList<BandejaCaptacionDto> Bandeja() => BandejaData;
     public CaptacionDto? ByCodigo(string codigo) => Data.FirstOrDefault(c => c.CodigoCaptacion == codigo);
+
+    public CaptacionDto Agregar(CaptacionDto captacion)
+    {
+        captacion.Id = Data.Count == 0 ? 1 : Data.Max(item => item.Id) + 1;
+        captacion.CodigoCaptacion = string.IsNullOrWhiteSpace(captacion.CodigoCaptacion)
+            ? $"CAP-{captacion.Id:0000}"
+            : captacion.CodigoCaptacion;
+        captacion.FechaCaptacion ??= DateOnly.FromDateTime(DateTime.Today);
+        captacion.Estado = "Pendiente de revision";
+        captacion.ComisionPactadaTexto = captacion.ComisionPactada.ToString(
+            "0.0", System.Globalization.CultureInfo.InvariantCulture);
+        Data.Add(captacion);
+        BandejaData.Add(new BandejaCaptacionDto
+        {
+            Id = captacion.Id,
+            CodigoCaptacion = captacion.CodigoCaptacion,
+            DireccionLocal = captacion.DireccionLocal,
+            DistritoLocal = captacion.DistritoLocal,
+            AreaM2 = captacion.AreaM2,
+            Rubro = captacion.Rubro,
+            PropietarioNombre = captacion.PropietarioNombre,
+            NombreAgenteResponsable = captacion.NombreAgenteResponsable,
+            FechaEnvioTexto = captacion.FechaCaptacion?.ToString("dd MMM yyyy") ?? "",
+            AntiguedadTexto = "hoy",
+            ComisionPactadaTexto = captacion.ComisionPactadaTexto,
+            Estado = captacion.Estado,
+        });
+        return captacion;
+    }
+
+    public CaptacionDto Actualizar(CaptacionDto captacion)
+    {
+        var indice = Data.FindIndex(item => item.Id == captacion.Id);
+        if (indice < 0) throw new InvalidOperationException("Captacion no encontrada.");
+        if (Data[indice].Estado is not ("Pendiente de revision" or "Observada"))
+            throw new InvalidOperationException("Solo se puede editar una captacion pendiente u observada.");
+        captacion.Estado = "Pendiente de revision";
+        captacion.ComisionPactadaTexto = captacion.ComisionPactada.ToString(
+            "0.0", System.Globalization.CultureInfo.InvariantCulture);
+        Data[indice] = captacion;
+        var bandeja = BandejaData.FirstOrDefault(item => item.CodigoCaptacion == captacion.CodigoCaptacion);
+        if (bandeja is not null)
+        {
+            bandeja.ComisionPactadaTexto = captacion.ComisionPactadaTexto;
+            bandeja.Estado = captacion.Estado;
+        }
+        return captacion;
+    }
+
+    public Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default)
+    {
+        var captacion = ByCodigo(codigo);
+        if (captacion is null)
+        {
+            var bandeja = BandejaData.FirstOrDefault(c => c.CodigoCaptacion == codigo);
+            if (bandeja is not null)
+            {
+                captacion = new CaptacionDto
+                {
+                    Id = bandeja.Id,
+                    CodigoCaptacion = bandeja.CodigoCaptacion,
+                    DireccionLocal = bandeja.DireccionLocal,
+                    DistritoLocal = bandeja.DistritoLocal,
+                    AreaM2 = bandeja.AreaM2,
+                    Rubro = bandeja.Rubro,
+                    PropietarioNombre = bandeja.PropietarioNombre,
+                    NombreAgenteResponsable = bandeja.NombreAgenteResponsable,
+                    ComisionPactadaTexto = bandeja.ComisionPactadaTexto,
+                    Estado = bandeja.Estado,
+                    Observaciones = "Expediente enviado para revision del broker.",
+                };
+                Data.Add(captacion);
+            }
+        }
+        return Task.FromResult(captacion);
+    }
+
+    public async Task ResolverBandejaAsync(string codigo, string decision, string? observacion, CancellationToken ct = default)
+    {
+        var captacion = await ObtenerPorCodigoAsync(codigo, ct)
+            ?? throw new InvalidOperationException("Captacion no encontrada.");
+        var accion = decision.Trim().ToUpperInvariant();
+        if (accion is "OBSERVAR" or "RECHAZAR" && string.IsNullOrWhiteSpace(observacion))
+            throw new InvalidOperationException("Debes ingresar un motivo para continuar.");
+
+        captacion.Estado = accion switch
+        {
+            "APROBAR" => "Activa",
+            "OBSERVAR" => "Observada",
+            "RECHAZAR" => "Rechazada",
+            _ => throw new InvalidOperationException("Decision no valida."),
+        };
+        captacion.ObservacionRevision = observacion ?? "";
+        BandejaData.RemoveAll(item => item.CodigoCaptacion == codigo);
+    }
+
+    public async Task ReasignarBandejaAsync(string codigo, long idNuevoAgente, string motivo, CancellationToken ct = default)
+    {
+        if (idNuevoAgente <= 0 || string.IsNullOrWhiteSpace(motivo))
+            throw new InvalidOperationException("Selecciona un agente destino e ingresa el motivo.");
+        var captacion = await ObtenerPorCodigoAsync(codigo, ct)
+            ?? throw new InvalidOperationException("Captacion no encontrada.");
+        captacion.AgenteResponsableId = idNuevoAgente;
+        captacion.NombreAgenteResponsable = $"Agente #{idNuevoAgente}";
+        var bandeja = BandejaData.FirstOrDefault(item => item.CodigoCaptacion == codigo);
+        if (bandeja is not null)
+            bandeja.NombreAgenteResponsable = captacion.NombreAgenteResponsable;
+    }
+
+    public Task CerrarAsync(long id, string motivo, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(motivo))
+            throw new InvalidOperationException("El motivo de cierre es obligatorio.");
+        var captacion = Data.FirstOrDefault(item => item.Id == id)
+            ?? throw new InvalidOperationException("Captacion no encontrada.");
+        if (captacion.Estado != "Activa")
+            throw new InvalidOperationException("Solo se puede cerrar una captacion activa.");
+        captacion.Estado = "Cerrada";
+        captacion.ObservacionRevision = motivo.Trim();
+        return Task.CompletedTask;
+    }
 }
 
-public class MockSolicitudService : ISolicitudService
+public class MockSolicitudService(IOportunidadService oportunidades) : ISolicitudService
 {
-    private static readonly SolicitudAlquilerDto[] Data =
+    private readonly List<SolicitudAlquilerDto> _data = new()
     {
-        new() { CodigoSolicitud = "SOL-0425", CodigoOperacion = "OP-1094", ClienteNombre = "Boutique Lila", DireccionLocal = "Calle Schell 412", DistritoLocal = "Miraflores", MontoMensualTexto = "1 850", PlazoMeses = 24, DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "23 May", Estado = "En revisión" },
-        new() { CodigoSolicitud = "SOL-0428", CodigoOperacion = "OP-1083", ClienteNombre = "Inversiones Trébol", DireccionLocal = "Av. La Marina 245", DistritoLocal = "San Miguel", MontoMensualTexto = "2 750", PlazoMeses = 36, DocumentosTexto = "5/6", PorcentajeDocumentos = 83, FechaRegistroTexto = "22 May", Estado = "Observada" },
-        new() { CodigoSolicitud = "SOL-0430", CodigoOperacion = "OP-1085", ClienteNombre = "Café Lima", DireccionLocal = "Jr. Berlín 230", DistritoLocal = "Miraflores", MontoMensualTexto = "1 400", PlazoMeses = 24, DocumentosTexto = "4/6", PorcentajeDocumentos = 66, FechaRegistroTexto = "22 May", Estado = "Registrada" },
-        new() { CodigoSolicitud = "SOL-0421", CodigoOperacion = "OP-1077", ClienteNombre = "Carla Espinoza", DireccionLocal = "Av. Salaverry 2120", DistritoLocal = "Jesús María", MontoMensualTexto = "2 100", PlazoMeses = 24, DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "18 May", Estado = "Aprobada" },
-        new() { CodigoSolicitud = "SOL-0415", CodigoOperacion = "OP-1071", ClienteNombre = "Plásticos del Sur", DireccionLocal = "Av. Aviación 4012", DistritoLocal = "San Borja", MontoMensualTexto = "3 500", PlazoMeses = 36, DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "15 May", Estado = "Rechazada" },
-        new() { CodigoSolicitud = "SOL-0418", CodigoOperacion = "OP-1068", ClienteNombre = "Restaurantes Bocca", DireccionLocal = "Av. Brasil 2890", DistritoLocal = "Magdalena", MontoMensualTexto = "1 950", PlazoMeses = 24, DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "14 May", Estado = "Aprobada" },
+        new() { Id = 1, OportunidadId = 4, CodigoSolicitud = "SOL-0425", CodigoOperacion = "OP-1094", ClienteNombre = "Boutique Lila", DireccionLocal = "Calle Schell 412", DistritoLocal = "Miraflores", MontoMensual = 1850, MontoMensualTexto = "1 850", PlazoMeses = 24, PlazoTentativo = "24 meses", DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "23 May", Estado = "En revision" },
+        new() { Id = 2, OportunidadId = 1, CodigoSolicitud = "SOL-0428", CodigoOperacion = "OP-1083", ClienteNombre = "Inversiones Trébol", DireccionLocal = "Av. La Marina 245", DistritoLocal = "San Miguel", MontoMensual = 2750, MontoMensualTexto = "2 750", PlazoMeses = 36, PlazoTentativo = "36 meses", DocumentosTexto = "5/6", PorcentajeDocumentos = 83, FechaRegistroTexto = "22 May", Estado = "Observada" },
+        new() { Id = 3, OportunidadId = 5, CodigoSolicitud = "SOL-0430", CodigoOperacion = "OP-1085", ClienteNombre = "Café Lima", DireccionLocal = "Jr. Berlín 230", DistritoLocal = "Miraflores", MontoMensual = 1400, MontoMensualTexto = "1 400", PlazoMeses = 24, PlazoTentativo = "24 meses", DocumentosTexto = "4/6", PorcentajeDocumentos = 66, FechaRegistroTexto = "22 May", Estado = "Registrada" },
+        new() { Id = 4, CodigoSolicitud = "SOL-0421", CodigoOperacion = "OP-1077", ClienteNombre = "Carla Espinoza", DireccionLocal = "Av. Salaverry 2120", DistritoLocal = "Jesús María", MontoMensual = 2100, MontoMensualTexto = "2 100", PlazoMeses = 24, PlazoTentativo = "24 meses", DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "18 May", Estado = "Aprobada" },
+        new() { Id = 5, CodigoSolicitud = "SOL-0415", CodigoOperacion = "OP-1071", ClienteNombre = "Plásticos del Sur", DireccionLocal = "Av. Aviación 4012", DistritoLocal = "San Borja", MontoMensual = 3500, MontoMensualTexto = "3 500", PlazoMeses = 36, PlazoTentativo = "36 meses", DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "15 May", Estado = "Rechazada" },
+        new() { Id = 6, CodigoSolicitud = "SOL-0418", CodigoOperacion = "OP-1068", ClienteNombre = "Restaurantes Bocca", DireccionLocal = "Av. Brasil 2890", DistritoLocal = "Magdalena", MontoMensual = 1950, MontoMensualTexto = "1 950", PlazoMeses = 24, PlazoTentativo = "24 meses", DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "14 May", Estado = "Aprobada" },
     };
 
-    public IReadOnlyList<SolicitudAlquilerDto> All() => Data;
-    public SolicitudAlquilerDto? ByCodigo(string codigo) => Data.FirstOrDefault(s => s.CodigoSolicitud == codigo);
+    public IReadOnlyList<SolicitudAlquilerDto> All() => _data;
+    public SolicitudAlquilerDto? ByCodigo(string codigo) => _data.FirstOrDefault(s => s.CodigoSolicitud == codigo);
+
+    public SolicitudAlquilerDto Agregar(SolicitudFormRequest request)
+    {
+        var oportunidad = oportunidades.ById(request.OportunidadId)
+            ?? throw new InvalidOperationException("Oportunidad comercial no encontrada.");
+        if (request.MontoPropuesto <= 0)
+            throw new InvalidOperationException("El monto propuesto debe ser mayor que cero.");
+        if (string.IsNullOrWhiteSpace(request.PlazoTentativo))
+            throw new InvalidOperationException("El plazo tentativo es obligatorio.");
+
+        var id = _data.Count == 0 ? 1 : _data.Max(item => item.Id) + 1;
+        var digitosPlazo = new string(request.PlazoTentativo.TakeWhile(char.IsDigit).ToArray());
+        var plazoMeses = int.TryParse(digitosPlazo, out var meses) ? meses : 0;
+        var solicitud = new SolicitudAlquilerDto
+        {
+            Id = id,
+            CodigoSolicitud = $"SOL-{id:0000}",
+            CodigoOperacion = oportunidad.CodigoOportunidad,
+            OportunidadId = oportunidad.Id,
+            ClienteNombre = oportunidad.ClienteNombre,
+            DireccionLocal = oportunidad.DireccionLocal,
+            MontoMensual = request.MontoPropuesto,
+            MontoMensualTexto = request.MontoPropuesto.ToString("N0"),
+            PlazoMeses = plazoMeses,
+            PlazoTentativo = request.PlazoTentativo,
+            Observaciones = request.Observaciones ?? "",
+            FechaRegistroTexto = DateTime.Today.ToString("dd MMM"),
+            Estado = request.EnviarAEvaluacion ? "En revision" : "Registrada",
+            DocumentosTexto = "0/0",
+        };
+        _data.Insert(0, solicitud);
+        oportunidades.MarcarSolicitudCreada(oportunidad.Id);
+        return solicitud;
+    }
+
+    public SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud)
+    {
+        var solicitud = ByCodigo(codigoSolicitud)
+            ?? throw new InvalidOperationException("Solicitud no encontrada.");
+        solicitud.Estado = "En revision";
+        return solicitud;
+    }
+
+    public EvaluacionSolicitudDto Evaluar(string codigoSolicitud, EvaluacionSolicitudDto evaluacion)
+    {
+        var solicitud = ByCodigo(codigoSolicitud)
+            ?? throw new InvalidOperationException("Solicitud no encontrada.");
+        if (!EnumCatalog.TiposEvaluacionSolicitud.Any(item => item.Code == evaluacion.TipoEvaluacion))
+            throw new InvalidOperationException("El tipo de evaluacion no es valido.");
+        if (!EnumCatalog.ResultadosEvaluacionSolicitud.Any(item => item.Code == evaluacion.Resultado))
+            throw new InvalidOperationException("El resultado de evaluacion no es valido.");
+        if (evaluacion.Resultado is "R" or "O" && string.IsNullOrWhiteSpace(evaluacion.Observaciones))
+            throw new InvalidOperationException("Las observaciones son obligatorias al observar o rechazar.");
+
+        evaluacion.Id = DateTime.UtcNow.Ticks;
+        evaluacion.SolicitudId = solicitud.Id;
+        evaluacion.FechaEvaluacionTexto = DateTime.Now.ToString("dd MMM yyyy HH:mm");
+        solicitud.Estado = evaluacion.Resultado switch
+        {
+            "A" => "Aprobada",
+            "R" => "Rechazada",
+            _ => "Observada",
+        };
+        return evaluacion;
+    }
 }
 
-public class MockInteraccionService : IInteraccionService
+public class MockInteraccionService(IOportunidadService oportunidades) : IInteraccionService
 {
-    private static readonly InteraccionComercialDto[] Data = new[]
+    private readonly List<InteraccionComercialDto> _data = new()
     {
         new InteraccionComercialDto { Id = 1, OportunidadId = 1, FechaHoraTexto = "29 May 2026 · 14:30", CanalContacto = "L", ClienteNombre = "Jorge Martinez", CaptacionCodigo = "CAP-0218", Resultado = "I", Observaciones = "Cliente muy interesado en la zona de San Miguel. Seguimiento próxima semana.", NombreAgenteResponsable = "Valentina Mora" },
-        new InteraccionComercialDto { Id = 2, OportunidadId = 2, FechaHoraTexto = "28 May 2026 · 11:15", CanalContacto = "W", ClienteNombre = "María Rodríguez", CaptacionCodigo = "CAP-0226", Resultado = "S", Observaciones = "Interesada en locales en Miraflores. Requiere metraje entre 50 y 100 m².", NombreAgenteResponsable = "Valentina Mora" },
+        new InteraccionComercialDto { Id = 2, OportunidadId = 2, FechaHoraTexto = "28 May 2026 · 11:15", CanalContacto = "W", ClienteNombre = "María Rodríguez", CaptacionCodigo = "CAP-0227", Resultado = "S", Observaciones = "Interesada en locales en Miraflores. Requiere metraje entre 50 y 100 m².", NombreAgenteResponsable = "Valentina Mora" },
         new InteraccionComercialDto { Id = 3, OportunidadId = 3, FechaHoraTexto = "27 May 2026 · 09:45", CanalContacto = "E", ClienteNombre = "Carlos González", CaptacionCodigo = "CAP-0234", Resultado = "N", Observaciones = "No sigue adelante por cambio de planes.", NombreAgenteResponsable = "Carolina Vega" },
         new InteraccionComercialDto { Id = 4, OportunidadId = 4, FechaHoraTexto = "26 May 2026 · 16:20", CanalContacto = "P", ClienteNombre = "Ana López", CaptacionCodigo = "CAP-0237", Resultado = "I", Observaciones = "Visitó el local. Muy conforme con las instalaciones.", NombreAgenteResponsable = "Andrea Torres" },
         new InteraccionComercialDto { Id = 5, OportunidadId = 5, FechaHoraTexto = "25 May 2026 · 13:00", CanalContacto = "L", ClienteNombre = "Pedro Sánchez", CaptacionCodigo = "CAP-0241", Resultado = "P", Observaciones = "Pendiente de respuesta del cliente.", NombreAgenteResponsable = "Paola Reyes" },
     };
 
-    public IReadOnlyList<InteraccionComercialDto> All() => Data;
-    public InteraccionComercialDto? ById(long id) => Data.FirstOrDefault(i => i.Id == id);
+    public IReadOnlyList<InteraccionComercialDto> All() => _data;
+    public InteraccionComercialDto? ById(long id) => _data.FirstOrDefault(i => i.Id == id);
+
+    public InteraccionComercialDto Agregar(InteraccionFormRequest request)
+    {
+        var oportunidad = oportunidades.ById(request.OportunidadId)
+            ?? throw new InvalidOperationException("Oportunidad comercial no encontrada.");
+        if (!EnumCatalog.CanalesContacto.Any(item => item.Code == request.CanalContacto))
+            throw new InvalidOperationException("El canal de contacto no es valido.");
+        if (!EnumCatalog.ResultadosInteraccion.Any(item => item.Code == request.Resultado))
+            throw new InvalidOperationException("El resultado no es valido.");
+
+        var interaccion = new InteraccionComercialDto
+        {
+            Id = _data.Count == 0 ? 1 : _data.Max(item => item.Id) + 1,
+            OportunidadId = oportunidad.Id,
+            FechaHoraTexto = DateTime.Now.ToString("dd MMM yyyy · HH:mm"),
+            CanalContacto = request.CanalContacto,
+            Resultado = request.Resultado,
+            Observaciones = request.Observaciones ?? "",
+            TranscripcionNota = request.TranscripcionNota ?? "",
+            ClienteNombre = oportunidad.ClienteNombre,
+            CaptacionCodigo = oportunidad.CaptacionCodigo,
+            NombreAgenteResponsable = oportunidad.NombreAgenteResponsable,
+        };
+        _data.Insert(0, interaccion);
+        return interaccion;
+    }
+
+    public InteraccionComercialDto Actualizar(long id, string? resultado = null, string? observaciones = null)
+    {
+        var interaccion = ById(id)
+            ?? throw new InvalidOperationException("Interaccion comercial no encontrada.");
+        if (resultado is not null)
+        {
+            if (!EnumCatalog.ResultadosInteraccion.Any(item => item.Code == resultado))
+                throw new InvalidOperationException("El resultado no es valido.");
+            interaccion.Resultado = resultado;
+        }
+        if (observaciones is not null)
+            interaccion.Observaciones = observaciones.Trim();
+        return interaccion;
+    }
 }
 
 public class MockOportunidadService : IOportunidadService
@@ -416,7 +786,7 @@ public class MockOportunidadService : IOportunidadService
         new() { Id = 1, CodigoOportunidad = "OP-1083", CaptacionId = 1, CaptacionCodigo = "CAP-0218", DireccionLocal = "Av. La Marina 245", ClienteNombre = "Inversiones Trébol S.A.C.", NombreAgenteResponsable = "V. Mora", Estado = "En seguimiento", FechaRegistroTexto = "20 May 2026" },
         new() { Id = 2, CodigoOportunidad = "OP-1101", CaptacionId = 1, CaptacionCodigo = "CAP-0218", DireccionLocal = "Av. La Marina 245", ClienteNombre = "Café del Puerto S.A.C.", NombreAgenteResponsable = "V. Mora", Estado = "Solicitud creada", FechaRegistroTexto = "22 May 2026" },
         new() { Id = 3, CodigoOportunidad = "OP-1108", CaptacionId = 1, CaptacionCodigo = "CAP-0218", DireccionLocal = "Av. La Marina 245", ClienteNombre = "Boutique Andina E.I.R.L.", NombreAgenteResponsable = "V. Mora", Estado = "Abierta", FechaRegistroTexto = "27 May 2026" },
-        new() { Id = 4, CodigoOportunidad = "OP-1094", CaptacionId = 2, CaptacionCodigo = "CAP-0226", DireccionLocal = "Calle Schell 412", ClienteNombre = "Boutique Lila", NombreAgenteResponsable = "V. Mora", Estado = "Solicitud creada", FechaRegistroTexto = "18 May 2026" },
+        new() { Id = 4, CodigoOportunidad = "OP-1094", CaptacionId = 2, CaptacionCodigo = "CAP-0227", DireccionLocal = "Calle Schell 412", ClienteNombre = "Boutique Lila", NombreAgenteResponsable = "V. Mora", Estado = "Solicitud creada", FechaRegistroTexto = "18 May 2026" },
         new() { Id = 5, CodigoOportunidad = "OP-1085", CaptacionId = 4, CaptacionCodigo = "CAP-0234", DireccionLocal = "Jr. Berlín 230", ClienteNombre = "Café Lima", NombreAgenteResponsable = "C. Vega", Estado = "Solicitud creada", FechaRegistroTexto = "16 May 2026" },
         new() { Id = 6, CodigoOportunidad = "OP-1090", CaptacionId = 3, CaptacionCodigo = "CAP-0231", DireccionLocal = "Av. Petit Thouars 1875", ClienteNombre = "Bodegas del Norte", NombreAgenteResponsable = "C. Vega", Estado = "Abierta", FechaRegistroTexto = "16 May 2026" },
     };
@@ -425,9 +795,33 @@ public class MockOportunidadService : IOportunidadService
     public OportunidadComercialDto? ById(long id) => Data.FirstOrDefault(o => o.Id == id);
     public IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion) =>
         Data.Where(o => o.CaptacionCodigo == codigoCaptacion).ToList();
+
+    public OportunidadComercialDto MarcarSolicitudCreada(long id)
+    {
+        var oportunidad = Requerir(id);
+        oportunidad.Estado = "Solicitud creada";
+        return oportunidad;
+    }
+
+    public OportunidadComercialDto CerrarNoContinua(long id, string razon, string? observaciones)
+    {
+        var oportunidad = Requerir(id);
+        if (!EnumCatalog.MotivosNoContinuidad.Any(item => item.Code == razon))
+            throw new InvalidOperationException("El motivo de no continuidad no es valido.");
+        var motivo = EnumCatalog.LabelFor(EnumCatalog.MotivosNoContinuidad, razon);
+        oportunidad.Estado = "No continua";
+        oportunidad.MotivoCierre = motivo;
+        oportunidad.Observaciones = observaciones?.Trim() ?? "";
+        oportunidad.FechaCierreTexto = DateTime.Now.ToString("dd MMM yyyy HH:mm");
+        return oportunidad;
+    }
+
+    private static OportunidadComercialDto Requerir(long id) =>
+        Data.FirstOrDefault(item => item.Id == id)
+        ?? throw new InvalidOperationException("Oportunidad comercial no encontrada.");
 }
 
-public class MockVisitaService : IVisitaService
+public class MockVisitaService(IOportunidadService oportunidades) : IVisitaService
 {
     // Agente autenticado en el prototipo (espeja al usuario en sesión).
     private const string AgenteSesion = "V. Mora";
@@ -450,19 +844,18 @@ public class MockVisitaService : IVisitaService
 
     public VisitaDto Programar(VisitaFormRequest request)
     {
-        // Reglas espejo del backend: captación, cliente, fecha y hora obligatorias.
-        if (string.IsNullOrWhiteSpace(request.CaptacionCodigo))
-            throw new InvalidOperationException("Debes seleccionar una captación.");
-        if (string.IsNullOrWhiteSpace(request.ClienteNombre))
-            throw new InvalidOperationException("Debes seleccionar un cliente interesado.");
+        var oportunidad = oportunidades.ById(request.OportunidadId)
+            ?? throw new InvalidOperationException("Debes seleccionar una oportunidad comercial.");
         if (string.IsNullOrWhiteSpace(request.FechaTexto) || string.IsNullOrWhiteSpace(request.HoraTexto))
             throw new InvalidOperationException("La fecha y la hora de la visita son obligatorias.");
 
         var visita = new VisitaDto
         {
             Id = ++_nextId,
-            CodigoCaptacion = request.CaptacionCodigo,
-            ClienteNombre = request.ClienteNombre,
+            OportunidadId = oportunidad.Id,
+            CodigoCaptacion = oportunidad.CaptacionCodigo,
+            ClienteNombre = oportunidad.ClienteNombre,
+            DireccionLocal = oportunidad.DireccionLocal,
             FechaTexto = request.FechaTexto,
             HoraTexto = request.HoraTexto,
             NombreAgente = AgenteSesion,
@@ -496,31 +889,45 @@ public class MockVisitaService : IVisitaService
         return visita;
     }
 
-    public VisitaDto RegistrarResultado(long id, string resultado, string? observaciones, string? razonNoContinuidad)
+    public VisitaDto RegistrarResultado(long id, VisitaResultadoRequest request)
     {
         var visita = Requerir(id);
         AsegurarModificable(visita, "registrar el resultado de");
-        if (string.IsNullOrWhiteSpace(resultado))
+        if (!EnumCatalog.ResultadosInteraccion.Any(item => item.Code == request.Resultado))
             throw new InvalidOperationException("El resultado de la visita es obligatorio.");
+        if (request.NivelInteres is < 1 or > 5)
+            throw new InvalidOperationException("El nivel de interes debe estar entre 1 y 5.");
+        if (!CodigoOpcionalValido(EnumCatalog.ObjecionesVisita, request.ObjecionPrincipal)
+            || !CodigoOpcionalValido(EnumCatalog.OpinionesPrecio, request.OpinionPrecio)
+            || !CodigoOpcionalValido(EnumCatalog.ProximasAccionesVisita, request.ProximaAccion))
+            throw new InvalidOperationException("El desenlace cualitativo contiene un valor invalido.");
 
         visita.Estado = "R";
-        visita.Resultado = resultado;
-        if (!string.IsNullOrWhiteSpace(observaciones))
-            visita.Observaciones = observaciones;
+        visita.Resultado = request.Resultado;
+        visita.NivelInteres = request.NivelInteres;
+        visita.ObjecionPrincipal = request.ObjecionPrincipal;
+        visita.OpinionPrecio = request.OpinionPrecio;
+        visita.ProximaAccion = request.ProximaAccion;
+        if (!string.IsNullOrWhiteSpace(request.Observaciones))
+            visita.Observaciones = request.Observaciones;
 
         // Desenlace de no continuidad: el motivo es obligatorio. Espeja el backend:
         // registra el motivo (ligado a la visita) y cierra la oportunidad.
-        if (resultado is "N" or "D")
+        if (request.Resultado is "N" or "D")
         {
-            if (string.IsNullOrWhiteSpace(razonNoContinuidad))
+            if (string.IsNullOrWhiteSpace(request.RazonNoContinuidad))
                 throw new InvalidOperationException("Debes indicar el motivo de no continuidad.");
-            var motivoLabel = EnumCatalog.LabelFor(EnumCatalog.MotivosNoContinuidad, razonNoContinuidad);
-            visita.Observaciones = string.IsNullOrWhiteSpace(observaciones)
+            var motivoLabel = EnumCatalog.LabelFor(EnumCatalog.MotivosNoContinuidad, request.RazonNoContinuidad);
+            visita.Observaciones = string.IsNullOrWhiteSpace(request.Observaciones)
                 ? $"No continúa · {motivoLabel}"
-                : $"{observaciones} · No continúa: {motivoLabel}";
+                : $"{request.Observaciones} · No continúa: {motivoLabel}";
+            oportunidades.CerrarNoContinua(visita.OportunidadId, request.RazonNoContinuidad, request.Observaciones);
         }
         return visita;
     }
+
+    private static bool CodigoOpcionalValido(IEnumerable<EnumOption> opciones, string? codigo) =>
+        string.IsNullOrWhiteSpace(codigo) || opciones.Any(item => item.Code == codigo);
 
     private VisitaDto Requerir(long id) =>
         _data.FirstOrDefault(v => v.Id == id)
@@ -554,7 +961,7 @@ public class MockAssignmentService : IAssignmentService
     new() { Id = "b4", Iniciales = "AT", Nombre = "Alejandro Téllez", Zona = "Global", EstadoAdministrativo = "Activo", TipoBroker = "admin", AgentesACargo = 0, Seleccionable = false, MotivoNoDisponible = "No se puede asignar a un broker administrador", EsAdministrador = true },
 };
 
-    private static readonly BrokerAgenteDto[] HistorialData =
+    private readonly List<BrokerAgenteDto> _historial = new()
     {
         new() { Id = 1, AgenteNombre = "Daniel Romero", BrokerAnteriorNombre = "M. Quintero", BrokerNuevoNombre = "R. Salas", BrokerAdministradorNombre = "Administración", FechaAsignacionTexto = "22 May 2026", Motivo = "Cese del broker anterior", Estado = "Activa" },
         new() { Id = 2, AgenteNombre = "Matías León", BrokerAnteriorNombre = "S. Ríos", BrokerNuevoNombre = "F. Andrade", BrokerAdministradorNombre = "Administración", FechaAsignacionTexto = "18 May 2026", Motivo = "Redistribución de zona", Estado = "Activa" },
@@ -564,7 +971,45 @@ public class MockAssignmentService : IAssignmentService
 
     public IReadOnlyList<AssignAgentDto> Agents() => AgentData;
     public IReadOnlyList<AssignBrokerDto> Brokers() => BrokerData;
-    public IReadOnlyList<BrokerAgenteDto> Historial() => HistorialData;
+    public IReadOnlyList<BrokerAgenteDto> Historial() => _historial;
+
+    public BrokerAgenteDto ReasignarAgente(string agenteId, string brokerId, string motivo)
+    {
+        var agente = AgentData.FirstOrDefault(a => a.Id == agenteId)
+            ?? throw new InvalidOperationException("Agente no encontrado.");
+        var broker = BrokerData.FirstOrDefault(b => b.Id == brokerId)
+            ?? throw new InvalidOperationException("Broker destino no encontrado.");
+
+        if (!agente.Seleccionable)
+            throw new InvalidOperationException("El agente seleccionado no está disponible para asignación.");
+        if (broker.EsAdministrador)
+            throw new InvalidOperationException("No puedes asignar agentes a un broker administrador.");
+        if (!broker.Seleccionable)
+            throw new InvalidOperationException("El broker destino no está activo.");
+        if (agente.BrokerActual == broker.Nombre)
+            throw new InvalidOperationException("Este agente ya pertenece al broker seleccionado.");
+        if (string.IsNullOrWhiteSpace(motivo))
+            throw new InvalidOperationException("Debes ingresar un motivo para continuar.");
+
+        // La supervisión anterior del agente queda cerrada desde hoy.
+        foreach (var h in _historial.Where(h => h.AgenteNombre == agente.Nombre && h.Estado == "Activa"))
+            h.Estado = "Cerrada";
+
+        var registro = new BrokerAgenteDto
+        {
+            Id = _historial.Max(h => h.Id) + 1,
+            AgenteNombre = agente.Nombre,
+            BrokerAnteriorNombre = agente.BrokerActual,
+            BrokerNuevoNombre = broker.Nombre,
+            BrokerAdministradorNombre = "Administración",
+            FechaAsignacionTexto = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture),
+            Motivo = motivo,
+            Estado = "Activa",
+        };
+        _historial.Insert(0, registro);
+        agente.BrokerActual = broker.Nombre;
+        return registro;
+    }
 }
 
 public class MockReasignacionCaptacionService : IReasignacionCaptacionService
@@ -580,7 +1025,7 @@ public class MockReasignacionCaptacionService : IReasignacionCaptacionService
     private static readonly CaptacionDto[] CaptacionesData =
     {
         new() { Id = 1, CodigoCaptacion = "CAP-0218", DireccionLocal = "Av. La Marina 245", DistritoLocal = "San Miguel", AgenteResponsableId = 1, NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "01 Abr – 01 Oct 2026", DiasRestantesTexto = "venc. en 130 días", Estado = "Activa" },
-        new() { Id = 2, CodigoCaptacion = "CAP-0226", DireccionLocal = "Calle Schell 412", DistritoLocal = "Miraflores", AgenteResponsableId = 1, NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "15 May – 15 Nov 2026", DiasRestantesTexto = "venc. en 175 días", Estado = "Activa" },
+        new() { Id = 2, CodigoCaptacion = "CAP-0227", DireccionLocal = "Calle Schell 412", DistritoLocal = "Miraflores", AgenteResponsableId = 1, NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "15 May – 15 Nov 2026", DiasRestantesTexto = "venc. en 175 días", Estado = "Activa" },
         new() { Id = 3, CodigoCaptacion = "CAP-0234", DireccionLocal = "Jr. Berlín 230", DistritoLocal = "Miraflores", AgenteResponsableId = 2, NombreAgenteResponsable = "Carolina Vega", VigenciaTexto = "10 May – 10 Nov 2026", DiasRestantesTexto = "venc. en 170 días", Estado = "Activa" },
         new() { Id = 4, CodigoCaptacion = "CAP-0237", DireccionLocal = "Av. Salaverry 2120", DistritoLocal = "Jesús María", AgenteResponsableId = 4, NombreAgenteResponsable = "Paola Reyes", VigenciaTexto = "En revisión", DiasRestantesTexto = "enviada hace 1d", Estado = "Observada" },
         new() { Id = 5, CodigoCaptacion = "CAP-0241", DireccionLocal = "Av. Perú 2845", DistritoLocal = "San Martín", AgenteResponsableId = 1, NombreAgenteResponsable = "Valentina Mora", VigenciaTexto = "Observada", DiasRestantesTexto = "requiere ajuste", Estado = "Observada" },

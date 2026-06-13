@@ -16,6 +16,9 @@ public interface UsuarioInternoDAO extends CrudDAO<UsuarioInterno> {
 
     Optional<UsuarioInterno> buscarPorId(Long id);
 
+    // Busqueda por credencial de acceso (login del API REST).
+    Optional<UsuarioInterno> buscarPorNombreUsuario(String nombreUsuario);
+
     List<UsuarioInterno> listarTodos();
 
     boolean actualizar(UsuarioInterno usuario);

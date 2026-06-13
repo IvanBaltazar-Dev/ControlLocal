@@ -58,6 +58,11 @@ public class AgenteBusinessLogicImpl implements AgenteBusinessLogic {
         return agenteDAO.buscarPorId(idAgente);
     }
 
+    public Optional<AgenteInmobiliario> buscarPorUsuario(Long idUsuario) {
+        BusinessValidations.id(idUsuario, "El id de usuario");
+        return agenteDAO.buscarPorUsuario(idUsuario);
+    }
+
     public List<AgenteInmobiliario> listarTodos() {
         return agenteDAO.listarTodos();
     }

@@ -139,7 +139,7 @@ else
                                     <div class="cl-muted" style="font-size:12.5px;margin-bottom:12px;">Este cliente aún no tiene solicitud de alquiler.</div>
                                     @if (!_readOnly)
                                     {
-                                        <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"solicitud-form/{_op.Id}"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
                                     }
                                 </div>
                             }
@@ -156,8 +156,8 @@ else
                             <div class="cl-card-body">
                                 <div style="display:flex;flex-direction:column;gap:8px;">
                                     <button class="cl-btn" @onclick="@(() => App.Navigate($"interaccion-form/{_op.Id}"))"><Icon Name="activity" Size="13" /> Registrar interacción</button>
-                                    <button class="cl-btn" @onclick="@(() => App.Navigate("visitas"))"><Icon Name="calendar" Size="13" /> Programar visita</button>
-                                    <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                    <button class="cl-btn" @onclick="@(() => App.Navigate($"visita-form/{_op.Id}"))"><Icon Name="calendar" Size="13" /> Programar visita</button>
+                                    <button class="cl-btn primary" @onclick="@(() => App.Navigate($"solicitud-form/{_op.Id}"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
                                     <button class="cl-btn danger" @onclick="AbrirCierre"><Icon Name="flag" Size="13" /> Marcar sin continuidad</button>
                                 </div>
                             </div>
@@ -249,7 +249,7 @@ else
         "Solicitud creada" => (2, false),
         "En evaluación" => (3, false),
         "Alquilada" or "Cerrada exitosa" or "Finalizada exitosa" => (4, false),
-        "No continúa" or "Cerrada no favorable" or "Finalizada no favorable" => (0, true),
+        "No continua" or "No continúa" or "Cerrada no favorable" or "Finalizada no favorable" => (0, true),
         _ => (0, false),
     };
 
@@ -267,8 +267,9 @@ else
             return;
         }
         _modalCierre = false;
+        if (_op is null) return;
+        _op = OportunidadSvc.CerrarNoContinua(_op.Id, _razon, _obs);
         _noContinua = true;
-        if (_op is not null) _op.Estado = "No continúa";
         var motivoLabel = EnumCatalog.LabelFor(EnumCatalog.MotivosNoContinuidad, _razon);
         Notificar($"Oportunidad cerrada · motivo: {motivoLabel}");
     }

@@ -182,6 +182,17 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
     }
 
     @Override
+    public List<Captacion> listarPagina(int limite, int desplazamiento) {
+        BusinessValidations.pagina(limite, desplazamiento);
+        return captacionDAO.listarPagina(limite, desplazamiento);
+    }
+
+    @Override
+    public long contar() {
+        return captacionDAO.contar();
+    }
+
+    @Override
     public List<Captacion> listarPorBroker(Long idBroker) {
         Broker broker = validarBroker(idBroker);
         if (broker.isEsAdministrador()) {

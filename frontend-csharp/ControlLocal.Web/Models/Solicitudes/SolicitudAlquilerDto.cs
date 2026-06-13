@@ -12,6 +12,8 @@ public class SolicitudAlquilerDto
 
     public string CodigoOperacion { get; set; } = string.Empty;
 
+    public long OportunidadId { get; set; }
+
     public string ClienteNombre { get; set; } = string.Empty;
 
     public string DireccionLocal { get; set; } = string.Empty;
@@ -24,6 +26,10 @@ public class SolicitudAlquilerDto
     public string MontoMensualTexto { get; set; } = string.Empty;
 
     public int PlazoMeses { get; set; }
+
+    public string PlazoTentativo { get; set; } = string.Empty;
+
+    public string Observaciones { get; set; } = string.Empty;
 
     // Documentos completados listos para mostrar (ej. "6/6").
     public string DocumentosTexto { get; set; } = string.Empty;

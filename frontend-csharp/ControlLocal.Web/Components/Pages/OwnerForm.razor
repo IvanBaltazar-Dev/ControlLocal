@@ -64,6 +64,10 @@
                     <Field Label="Teléfono" Required="true"><input @bind="_telefono" placeholder="+51 ___ ___ ___" @oninput="@(() => _err = null)" /></Field>
                     <Field Label="Correo electrónico" Required="true"><input @bind="_correo" placeholder="propietario@@correo.com" @oninput="@(() => _err = null)" /></Field>
                 </div>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;">
+                    <input type="checkbox" @bind="_consentimientoUsoDato" style="width:auto;" />
+                    Autoriza el uso de sus datos para la gestión inmobiliaria.
+                </label>
             </FormSection>
 
             @if (_isEdit)
@@ -115,6 +119,7 @@
     private string _telefono = "";
     private string _correo = "";
     private string _estado = "Activo";
+    private bool _consentimientoUsoDato = true;
     private bool _confirm;
     private bool _toast;
     private string? _err;
@@ -160,6 +165,7 @@
             _telefono = owner.Telefono;
             _correo = owner.Correo;
             _estado = string.IsNullOrEmpty(owner.Estado) ? "Activo" : owner.Estado;
+            _consentimientoUsoDato = owner.ConsentimientoUsoDato ?? false;
             _tipo = owner.TipoPersona.Contains("jurídica", StringComparison.OrdinalIgnoreCase) ? "juridica" : "natural";
             _tipoDocumento = ResolveTipoDocumento(owner);
         }
@@ -204,9 +210,31 @@
     private async Task OnConfirm()
     {
         _confirm = false;
-        _toast = true;
-        StateHasChanged();
-        await Task.Delay(900);
-        App.Navigate("owners");
+        try
+        {
+            var propietario = new Models.Propietarios.PropietarioDto
+            {
+                Id = _isEdit && long.TryParse(IdParam, out var id) ? id : 0,
+                Nombre = _nombre.Trim(),
+                TipoPersona = _tipo == "juridica" ? "Persona juridica" : "Persona natural",
+                TipoDocumento = _tipo == "juridica" ? "R" : _tipoDocumento,
+                NumeroDocumento = _numeroDocumento.Trim(),
+                Telefono = _telefono.Trim(),
+                Correo = _correo.Trim(),
+                Estado = _estado,
+                ConsentimientoUsoDato = _consentimientoUsoDato,
+            };
+            if (_isEdit) OwnerSvc.Actualizar(propietario);
+            else OwnerSvc.Agregar(propietario);
+
+            _toast = true;
+            StateHasChanged();
+            await Task.Delay(900);
+            App.Navigate("owners");
+        }
+        catch (Exception error)
+        {
+            _err = error.Message;
+        }
     }
 }

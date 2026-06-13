@@ -21,19 +21,20 @@ public class InteraccionComercialDAOImpl implements InteraccionComercialDAO {
     private static final String INSERT_SQL = """
             INSERT INTO interaccion_comercial (
                 fecha_hora, canal_contacto, observaciones, resultado,
-                id_oportunidad, id_agente
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                id_oportunidad, id_agente, transcripcion_nota
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
             SELECT id_interaccion, fecha_hora, canal_contacto, observaciones, resultado,
-                   i.id_oportunidad, o.id_cliente, o.id_captacion, i.id_agente, i.fecha_creacion
+                   i.id_oportunidad, o.id_cliente, o.id_captacion, i.id_agente,
+                   i.transcripcion_nota, i.fecha_creacion
             FROM interaccion_comercial i
             INNER JOIN oportunidad_comercial o ON i.id_oportunidad = o.id_oportunidad
             """;
     private static final String UPDATE_SQL = """
             UPDATE interaccion_comercial
             SET fecha_hora = ?, canal_contacto = ?, observaciones = ?, resultado = ?,
-                id_oportunidad = ?, id_agente = ?
+                id_oportunidad = ?, id_agente = ?, transcripcion_nota = ?
             WHERE id_interaccion = ?
             """;
     private static final String DELETE_SQL = "DELETE FROM interaccion_comercial WHERE id_interaccion = ?";
@@ -49,6 +50,7 @@ public class InteraccionComercialDAOImpl implements InteraccionComercialDAO {
             JdbcSupport.setEnum(ps, 4, interaccion.getResultado());
             ps.setLong(5, interaccion.getOportunidadComercial().getIdOportunidad());
             ps.setLong(6, interaccion.getAgenteResponsable().getIdAgente());
+            ps.setString(7, interaccion.getTranscripcionNota());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -103,7 +105,8 @@ public class InteraccionComercialDAOImpl implements InteraccionComercialDAO {
             JdbcSupport.setEnum(ps, 4, interaccion.getResultado());
             ps.setLong(5, interaccion.getOportunidadComercial().getIdOportunidad());
             ps.setLong(6, interaccion.getAgenteResponsable().getIdAgente());
-            ps.setLong(7, interaccion.getIdInteraccion());
+            ps.setString(7, interaccion.getTranscripcionNota());
+            ps.setLong(8, interaccion.getIdInteraccion());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar interaccion comercial con id " + interaccion.getIdInteraccion() + ".", e);
@@ -133,6 +136,7 @@ public class InteraccionComercialDAOImpl implements InteraccionComercialDAO {
         interaccion.setClienteInteresado(JdbcSupport.cliente(rs.getLong("id_cliente")));
         interaccion.setCaptacion(JdbcSupport.captacion(rs.getLong("id_captacion")));
         interaccion.setAgenteResponsable(JdbcSupport.agente(rs.getLong("id_agente")));
+        interaccion.setTranscripcionNota(rs.getString("transcripcion_nota"));
         interaccion.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_creacion")));
         return interaccion;
     }

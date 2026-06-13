@@ -20,6 +20,12 @@ public class InteraccionComercial {
     private AgenteInmobiliario agenteResponsable;
     private LocalDateTime fechaCreacion;
 
+    // Transcripcion o resumen de la conversacion, registrado con consentimiento.
+    private String transcripcionNota;
+
+    public String getTranscripcionNota() { return transcripcionNota; }
+    public void setTranscripcionNota(String transcripcionNota) { this.transcripcionNota = transcripcionNota; }
+
     public Long getIdInteraccion() { return idInteraccion; }
     public void setIdInteraccion(Long idInteraccion) { this.idInteraccion = idInteraccion; }
     public LocalDateTime getFechaHora() { return fechaHora; }

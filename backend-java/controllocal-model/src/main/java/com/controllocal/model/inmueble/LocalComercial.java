@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
+import com.controllocal.model.inmueble.enums.EstadoPublicacion;
+import com.controllocal.model.inmueble.enums.TipoInmueble;
+import com.controllocal.model.inmueble.enums.UsoInmueble;
 import com.controllocal.model.persona.Propietario;
 
 /**
@@ -25,6 +28,16 @@ public class LocalComercial {
     private Propietario propietario;
     private LocalDateTime fechaRegistro;
     private LocalDateTime fechaActualizacion;
+
+    // Atributos del inmueble (Diccionario v2 P1). Opcionales para no romper datos previos.
+    private TipoInmueble tipoInmueble;
+    private UsoInmueble uso;
+    private Integer ambientes;
+    private Integer antiguedadAnios;
+    private String zonaUrbanizacion;
+    private BigDecimal geoLat;
+    private BigDecimal geoLong;
+    private EstadoPublicacion estadoPublicacion;
 
     public LocalComercial() {
     }
@@ -177,6 +190,70 @@ public class LocalComercial {
     public void setPropietario(Propietario propietario) {
         this.propietario = propietario;
         this.idPropietario = propietario != null ? propietario.getIdPropietario() : null;
+    }
+
+    public TipoInmueble getTipoInmueble() {
+        return tipoInmueble;
+    }
+
+    public void setTipoInmueble(TipoInmueble tipoInmueble) {
+        this.tipoInmueble = tipoInmueble;
+    }
+
+    public UsoInmueble getUso() {
+        return uso;
+    }
+
+    public void setUso(UsoInmueble uso) {
+        this.uso = uso;
+    }
+
+    public Integer getAmbientes() {
+        return ambientes;
+    }
+
+    public void setAmbientes(Integer ambientes) {
+        this.ambientes = ambientes;
+    }
+
+    public Integer getAntiguedadAnios() {
+        return antiguedadAnios;
+    }
+
+    public void setAntiguedadAnios(Integer antiguedadAnios) {
+        this.antiguedadAnios = antiguedadAnios;
+    }
+
+    public String getZonaUrbanizacion() {
+        return zonaUrbanizacion;
+    }
+
+    public void setZonaUrbanizacion(String zonaUrbanizacion) {
+        this.zonaUrbanizacion = zonaUrbanizacion;
+    }
+
+    public BigDecimal getGeoLat() {
+        return geoLat;
+    }
+
+    public void setGeoLat(BigDecimal geoLat) {
+        this.geoLat = geoLat;
+    }
+
+    public BigDecimal getGeoLong() {
+        return geoLong;
+    }
+
+    public void setGeoLong(BigDecimal geoLong) {
+        this.geoLong = geoLong;
+    }
+
+    public EstadoPublicacion getEstadoPublicacion() {
+        return estadoPublicacion;
+    }
+
+    public void setEstadoPublicacion(EstadoPublicacion estadoPublicacion) {
+        this.estadoPublicacion = estadoPublicacion;
     }
 
     public void cambiarEstado(EstadoLocalComercial estado) {

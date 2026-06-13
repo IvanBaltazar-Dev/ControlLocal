@@ -1,97 +1,124 @@
 @page "/cierre"
+@page "/cierre/{CaptacionId:long}"
+@inherits SafeComponentBase
 @inject AppState App
+@inject ICaptacionService CaptacionSvc
 
-<PageTitle>Cierre de operación · ControlLocal</PageTitle>
+<PageTitle>Cerrar captacion · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Mis captaciones", "OP-1094 · Cierre" })"
-          Title="Cierre de operación · OP-1094"
-          Subtitle="Solicitud aprobada · registra el contrato para marcar el local como alquilado">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Captaciones", "Cerrar captacion" })"
+          Title="Cerrar captacion"
+          Subtitle="Registra el motivo y cambia una captacion activa al estado Cerrada">
     <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("oportunidades"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
-        <div class="cl-alert green" style="margin-bottom:14px;">
-            <Icon Name="check" Size="15" />
-            <span>La solicitud <b>SOL-0425</b> fue aprobada por el broker. Completa los datos del contrato para cerrar la operación.</span>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
-            <div>
-                <FormSection Num="1" Title="Datos del contrato" Sub="Información del contrato de alquiler firmado entre las partes">
-                    <div class="cl-grid c2">
-                        <Field Label="N.° de contrato" Required="true"><input placeholder="CT-2026-0094" /></Field>
-                        <Field Label="Fecha de firma" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
-                        <Field Label="Inicio de vigencia" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
-                        <Field Label="Fin de vigencia" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
-                        <Field Label="Monto mensual (USD)"><input value="1 850" disabled /></Field>
-                        <Field Label="Plazo"><input value="24 meses" disabled /></Field>
-                    </div>
-                </FormSection>
-
-                <FormSection Num="2" Title="Comisión y pagos" Sub="Liquidación de la comisión acordada con el propietario">
-                    <div class="cl-grid c3">
-                        <Field Label="Comisión (%)"><input value="4.5%" disabled /></Field>
-                        <Field Label="Monto de comisión (USD)"><input value="1 998" disabled /></Field>
-                        <Field Label="Estado del pago"><select><option>Pendiente</option><option>Parcial</option><option>Pagado</option></select></Field>
-                    </div>
-                </FormSection>
-
-                <FormSection Num="3" Title="Documentos del cierre" Sub="Contrato firmado y respaldo de la operación">
-                    <div class="cl-ph" style="height:100px;">
-                        <Icon Name="upload" Size="20" /> <span style="margin-left:8px;">Adjunta el contrato firmado y anexos</span>
-                    </div>
-                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid #C9CED6;border-radius:8px;background:#fff;">
-                            <div class="cl-flex"><Icon Name="fileText" Size="15" /> <span style="font-size:12.5px;">Contrato_de_alquiler_firmado.pdf</span></div>
-                            <StatusBadge Label="Cargado" />
-                        </div>
-                    </div>
-                </FormSection>
-
-                <FormFooterBar OnCancel="@(() => App.Navigate("oportunidades"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar alquiler cerrado" />
+        @if (!PuedeCerrar)
+        {
+            <div class="cl-alert red">
+                <Icon Name="alert" Size="15" />
+                <span>Solo un broker supervisor o administrador puede cerrar captaciones.</span>
             </div>
-
-            <div class="cl-stack">
-                <div class="cl-card" style="position:sticky;top:14px;">
-                    <div class="cl-card-head"><div class="cl-card-title">Resumen de la operación</div></div>
-                    <div class="cl-card-body">
-                        <dl class="cl-kv">
-                            <dt>Operación</dt><dd><span class="mono">OP-1094</span></dd>
-                            <dt>Captación</dt><dd><span class="mono">CAP-0226</span></dd>
-                            <dt>Cliente</dt><dd>Boutique Lila</dd>
-                            <dt>Local</dt><dd>Calle Schell 412</dd>
-                            <dt>Propietario</dt><dd>Carlos Mendoza Rivera</dd>
-                            <dt>Agente</dt><dd>Valentina Mora</dd>
-                        </dl>
-                    </div>
-                </div>
-                <div class="cl-alert blue">
+        }
+        else
+        {
+            <div style="max-width:760px;">
+                <div class="cl-alert blue" style="margin-bottom:14px;">
                     <Icon Name="info" Size="15" />
-                    <span>Al registrar el cierre, el local pasa a estado <b>Alquilada</b> y la operación se marca como completada en la auditoría.</span>
+                    <span>Esta interfaz corresponde a <b>POST /Api/captaciones/{id}/cierre</b>. El backend solo recibe el motivo; no registra contratos, pagos ni archivos de cierre.</span>
                 </div>
-            </div>
-        </div>
 
-        <ConfirmDialog Open="_confirm" Tone="green" Icon="check"
-                       Title="¿Registrar el alquiler como cerrado?"
-                       Desc="El local quedará marcado como alquilado y la operación se completará. Esta acción cierra el expediente comercial."
-                       ConfirmLabel="Registrar cierre" CancelLabel="Revisar datos"
-                       OnClose="@(() => _confirm = false)"
-                       OnConfirm="@OnConfirm" />
-        <Toast Show="_toast">Operación cerrada · local alquilado</Toast>
+                <FormSection Num="1" Title="Captacion activa" Sub="Selecciona el expediente que se cerrara">
+                    <Field Label="Captacion" Required="true">
+                        <select @bind="_captacionId">
+                            <option value="0">— Seleccionar —</option>
+                            @foreach (var captacion in CaptacionesActivas)
+                            {
+                                <option value="@captacion.Id">@captacion.CodigoCaptacion · @captacion.DireccionLocal · @captacion.PropietarioNombre</option>
+                            }
+                        </select>
+                    </Field>
+                </FormSection>
+
+                <FormSection Num="2" Title="Motivo de cierre" Sub="Texto obligatorio persistido como observacion de revision">
+                    <Field Label="Motivo" Required="true">
+                        <textarea rows="4" @bind="_motivo" placeholder="Explica por que se cierra la captacion..."></textarea>
+                    </Field>
+                </FormSection>
+
+                @if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin-bottom:14px;">
+                        <Icon Name="alert" Size="15" />
+                        <span>@_error</span>
+                    </div>
+                }
+
+                <FormFooterBar OnCancel="@(() => App.Navigate("captaciones"))"
+                               OnSave="PrepararCierre"
+                               SaveLabel="Cerrar captacion" />
+            </div>
+
+            <ConfirmDialog Open="_confirm" Tone="red" Icon="alert"
+                           Title="¿Cerrar la captacion?"
+                           Desc="El expediente cambiara al estado Cerrada y dejara de admitir operaciones activas."
+                           ConfirmLabel="Cerrar captacion" CancelLabel="Cancelar"
+                           OnClose="@(() => _confirm = false)"
+                           OnConfirm="ConfirmarCierreAsync" />
+            <Toast Show="@(_toast is not null)">@_toast</Toast>
+        }
     </ChildContent>
 </AppShell>
 
 @code {
-    private bool _confirm;
-    private bool _toast;
+    [Parameter] public long? CaptacionId { get; set; }
 
-    private async Task OnConfirm()
+    private long _captacionId;
+    private string _motivo = "";
+    private string? _error;
+    private string? _toast;
+    private bool _confirm;
+
+    private bool PuedeCerrar => App.Role is Roles.Broker or Roles.Admin;
+    private IReadOnlyList<CaptacionDto> CaptacionesActivas =>
+        CaptacionSvc.All().Where(item => item.Estado == "Activa").ToList();
+
+    protected override void OnParametersSet()
+    {
+        if (CaptacionId is > 0)
+            _captacionId = CaptacionId.Value;
+    }
+
+    private void PrepararCierre()
+    {
+        _error = null;
+        if (_captacionId <= 0)
+        {
+            _error = "Selecciona una captacion activa.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_motivo))
+        {
+            _error = "El motivo de cierre es obligatorio.";
+            return;
+        }
+        _confirm = true;
+    }
+
+    private async Task ConfirmarCierreAsync()
     {
         _confirm = false;
-        _toast = true;
-        StateHasChanged();
-        await Task.Delay(900);
-        App.Navigate("oportunidades");
+        try
+        {
+            await CaptacionSvc.CerrarAsync(_captacionId, _motivo);
+            _toast = "Captacion cerrada correctamente";
+            await RenderIfAliveAsync();
+            await Task.Delay(700);
+            App.Navigate("captaciones");
+        }
+        catch (Exception error)
+        {
+            _error = error.Message;
+        }
     }
 }

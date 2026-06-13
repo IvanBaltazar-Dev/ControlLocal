@@ -13,6 +13,9 @@ import com.controllocal.config.DBManager;
 import com.controllocal.dao.DAOException;
 import com.controllocal.dao.VisitaDAO;
 import com.controllocal.model.comercial.enums.EstadoVisita;
+import com.controllocal.model.comercial.enums.ObjecionVisita;
+import com.controllocal.model.comercial.enums.OpinionPrecio;
+import com.controllocal.model.comercial.enums.ProximaAccionVisita;
 import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.comercial.Visita;
 
@@ -21,19 +24,23 @@ public class VisitaDAOImpl implements VisitaDAO {
     private static final String INSERT_SQL = """
             INSERT INTO visita (
                 fecha_visita, hora_visita, observaciones, estado, resultado,
-                id_oportunidad, id_agente
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                id_oportunidad, id_agente,
+                nivel_interes, objecion_principal, opinion_precio, proxima_accion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
             SELECT id_visita, fecha_visita, hora_visita, observaciones, estado, resultado,
-                   v.id_oportunidad, o.id_cliente, o.id_captacion, v.id_agente, v.fecha_creacion, v.fecha_actualizacion
+                   v.id_oportunidad, o.id_cliente, o.id_captacion, v.id_agente,
+                   v.nivel_interes, v.objecion_principal, v.opinion_precio, v.proxima_accion,
+                   v.fecha_creacion, v.fecha_actualizacion
             FROM visita v
             INNER JOIN oportunidad_comercial o ON v.id_oportunidad = o.id_oportunidad
             """;
     private static final String UPDATE_SQL = """
             UPDATE visita
             SET fecha_visita = ?, hora_visita = ?, observaciones = ?, estado = ?, resultado = ?,
-                id_oportunidad = ?, id_agente = ?
+                id_oportunidad = ?, id_agente = ?,
+                nivel_interes = ?, objecion_principal = ?, opinion_precio = ?, proxima_accion = ?
             WHERE id_visita = ?
             """;
     private static final String DELETE_SQL = "UPDATE visita SET estado = 'C' WHERE id_visita = ?";
@@ -50,6 +57,10 @@ public class VisitaDAOImpl implements VisitaDAO {
             JdbcSupport.setEnum(ps, 5, visita.getResultado());
             ps.setLong(6, visita.getOportunidadComercial().getIdOportunidad());
             ps.setLong(7, visita.getAgenteResponsable().getIdAgente());
+            JdbcSupport.setInteger(ps, 8, visita.getNivelInteres());
+            JdbcSupport.setEnum(ps, 9, visita.getObjecionPrincipal());
+            JdbcSupport.setEnum(ps, 10, visita.getOpinionPrecio());
+            JdbcSupport.setEnum(ps, 11, visita.getProximaAccion());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -105,7 +116,11 @@ public class VisitaDAOImpl implements VisitaDAO {
             JdbcSupport.setEnum(ps, 5, visita.getResultado());
             ps.setLong(6, visita.getOportunidadComercial().getIdOportunidad());
             ps.setLong(7, visita.getAgenteResponsable().getIdAgente());
-            ps.setLong(8, visita.getIdVisita());
+            JdbcSupport.setInteger(ps, 8, visita.getNivelInteres());
+            JdbcSupport.setEnum(ps, 9, visita.getObjecionPrincipal());
+            JdbcSupport.setEnum(ps, 10, visita.getOpinionPrecio());
+            JdbcSupport.setEnum(ps, 11, visita.getProximaAccion());
+            ps.setLong(12, visita.getIdVisita());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar visita con id " + visita.getIdVisita() + ".", e);
@@ -136,6 +151,10 @@ public class VisitaDAOImpl implements VisitaDAO {
         visita.setClienteInteresado(JdbcSupport.cliente(rs.getLong("id_cliente")));
         visita.setCaptacion(JdbcSupport.captacion(rs.getLong("id_captacion")));
         visita.setAgenteResponsable(JdbcSupport.agente(rs.getLong("id_agente")));
+        visita.setNivelInteres(JdbcSupport.getNullableInt(rs, "nivel_interes"));
+        visita.setObjecionPrincipal(JdbcSupport.getNullableEnum(rs, "objecion_principal", ObjecionVisita.class));
+        visita.setOpinionPrecio(JdbcSupport.getNullableEnum(rs, "opinion_precio", OpinionPrecio.class));
+        visita.setProximaAccion(JdbcSupport.getNullableEnum(rs, "proxima_accion", ProximaAccionVisita.class));
         visita.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_creacion")));
         visita.setFechaActualizacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_actualizacion")));
         return visita;

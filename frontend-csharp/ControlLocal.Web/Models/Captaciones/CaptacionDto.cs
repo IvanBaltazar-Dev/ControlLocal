@@ -18,7 +18,11 @@ public class CaptacionDto
 
     public int AreaM2 { get; set; }
 
+    public string Rubro { get; set; } = string.Empty;
+
     public string PropietarioNombre { get; set; } = string.Empty;
+
+    public long LocalId { get; set; }
 
     public long? AgenteResponsableId { get; set; }
 
@@ -45,6 +49,12 @@ public class CaptacionDto
     public string Estado { get; set; } = string.Empty;
 
     public string Observaciones { get; set; } = string.Empty;
+
+    public string MotivoOperacion { get; set; } = string.Empty;
+
+    public int? Urgencia { get; set; }
+
+    public bool? Exclusividad { get; set; }
 
     public long? BrokerRevisorId { get; set; }
 

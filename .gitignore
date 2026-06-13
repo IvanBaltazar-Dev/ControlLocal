@@ -22,6 +22,8 @@ appsettings.*.json
 # ========================
 **/db.properties
 !**/db.example.properties
+**/api.properties
+!**/api.example.properties
 
 # ========================
 # ASP.NET SECURITY KEYS

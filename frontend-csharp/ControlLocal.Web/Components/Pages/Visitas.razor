@@ -2,6 +2,7 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject IVisitaService VisitaSvc
+@inject ExportacionService Exportar
 
 <PageTitle>Visitas · ControlLocal</PageTitle>
 
@@ -9,8 +10,7 @@
           Title="Agenda de visitas"
           Subtitle="Visitas a locales coordinadas con tus clientes interesados">
     <Actions>
-        @*IMPLEMENTACION PROXIMAMENTE*@
-        @*<button class="cl-btn"><Icon Name="download" Size="13" /> Exportar agenda</button>*@
+        <button class="cl-btn" @onclick="ExportarAgenda"><Icon Name="download" Size="13" /> Exportar agenda</button>
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("visita-form"))"><Icon Name="plus" Size="13" /> Programar visita</button>
     </Actions>
     <ChildContent>
@@ -28,10 +28,10 @@
         <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px;">
             <div class="cl-card">
                 <div class="cl-card-head">
-                    <div class="cl-card-title">Mayo 2026</div>
+                    <div class="cl-card-title">@TituloMes</div>
                     <div class="cl-flex" style="gap:6px;">
-                        <button class="cl-btn sm ghost"><Icon Name="chevronLeft" Size="13" /></button>
-                        <button class="cl-btn sm ghost"><Icon Name="arrowRight" Size="13" /></button>
+                        <button class="cl-btn sm ghost" @onclick="@(() => CambiarMes(-1))" title="Mes anterior"><Icon Name="chevronLeft" Size="13" /></button>
+                        <button class="cl-btn sm ghost" @onclick="@(() => CambiarMes(1))" title="Mes siguiente"><Icon Name="chevronRight" Size="13" /></button>
                     </div>
                 </div>
                 <div class="cl-card-body">
@@ -40,14 +40,14 @@
                         {
                             <div style="text-align:center;font-size:10px;font-weight:600;color:#7E8794;padding:4px 0;">@d</div>
                         }
-                        @for (var i = 0; i < _offset; i++)
+                        @for (var i = 0; i < OffsetMes; i++)
                         {
                             <div></div>
                         }
-                        @for (var day = 1; day <= 31; day++)
+                        @for (var day = 1; day <= DiasDelMes; day++)
                         {
                             var hasVisit = _visitDays.Contains(day);
-                            var isToday = day == 28;
+                            var isToday = EsHoy(day);
                             var bg = isToday ? "background:var(--c-primary-50);border-color:var(--c-primary);" : "";
                             <div style="aspect-ratio:1;border:1px solid #E2E6EC;border-radius:7px;padding:5px;display:flex;flex-direction:column;@bg">
                                 <span style="font-size:11px;@(isToday ? "font-weight:700;color:var(--c-primary);" : "color:#515B6B;")">@day</span>
@@ -188,12 +188,50 @@
                 <Field Label="Resultado" Required="true">
                     <select @bind="_resultadoTmp">
                         <option value="">— Seleccionar resultado —</option>
-                        <option value="I">Interesado</option>
-                        <option value="S">Seguimiento</option>
-                        <option value="N">No interesado</option>
-                        <option value="D">Descartado</option>
+                        @foreach (var opcion in EnumCatalog.ResultadosInteraccion)
+                        {
+                            <option value="@opcion.Code">@opcion.Label</option>
+                        }
                     </select>
                 </Field>
+                <div class="cl-grid c2" style="margin-top:12px;">
+                    <Field Label="Nivel de interés">
+                        <select @bind="_nivelInteresTmp">
+                            <option value="">— Sin registrar —</option>
+                            @for (var nivel = 1; nivel <= 5; nivel++)
+                            {
+                                <option value="@nivel">@nivel</option>
+                            }
+                        </select>
+                    </Field>
+                    <Field Label="Objeción principal">
+                        <select @bind="_objecionTmp">
+                            <option value="">— Sin registrar —</option>
+                            @foreach (var opcion in EnumCatalog.ObjecionesVisita)
+                            {
+                                <option value="@opcion.Code">@opcion.Label</option>
+                            }
+                        </select>
+                    </Field>
+                    <Field Label="Opinión sobre el precio">
+                        <select @bind="_opinionPrecioTmp">
+                            <option value="">— Sin registrar —</option>
+                            @foreach (var opcion in EnumCatalog.OpinionesPrecio)
+                            {
+                                <option value="@opcion.Code">@opcion.Label</option>
+                            }
+                        </select>
+                    </Field>
+                    <Field Label="Próxima acción">
+                        <select @bind="_proximaAccionTmp">
+                            <option value="">— Sin registrar —</option>
+                            @foreach (var opcion in EnumCatalog.ProximasAccionesVisita)
+                            {
+                                <option value="@opcion.Code">@opcion.Label</option>
+                            }
+                        </select>
+                    </Field>
+                </div>
                 <div style="margin-top:12px;">
                     <Field Label="Observaciones"><textarea rows="2" placeholder="Detalle de lo conversado en la visita…" @bind="_obsTmp"></textarea></Field>
                 </div>
@@ -239,9 +277,29 @@
 
 @code {
     private readonly string[] _dow = { "L", "M", "M", "J", "V", "S", "D" };
-    private const int _offset = 4; // 01/05/2026 cae viernes (lunes = 0)
+    private DateOnly _mes = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private int[] _visitDays = Array.Empty<int>();
     private Timeline.TimelineItem[] _proximas = Array.Empty<Timeline.TimelineItem>();
+
+    private static readonly string[] _meses =
+    {
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    };
+
+    private string TituloMes => $"{_meses[_mes.Month - 1]} {_mes.Year}";
+    private int DiasDelMes => DateTime.DaysInMonth(_mes.Year, _mes.Month);
+    // Columna inicial del día 1 (lunes = 0).
+    private int OffsetMes => ((int)new DateTime(_mes.Year, _mes.Month, 1).DayOfWeek + 6) % 7;
+
+    private bool EsHoy(int dia) =>
+        _mes.Year == DateTime.Today.Year && _mes.Month == DateTime.Today.Month && dia == DateTime.Today.Day;
+
+    private void CambiarMes(int delta)
+    {
+        _mes = _mes.AddMonths(delta);
+        Recalcular();
+    }
 
     // Estado de modales y acción en curso. Programar una visita vive en su propia
     // página (visita-form); aquí solo quedan las acciones por fila de la agenda.
@@ -250,6 +308,7 @@
     private DateOnly? _fechaPick;
     private TimeOnly? _horaPick;
     private string _motivoTmp = "", _resultadoTmp = "", _obsTmp = "", _razonTmp = "";
+    private string _nivelInteresTmp = "", _objecionTmp = "", _opinionPrecioTmp = "", _proximaAccionTmp = "";
     private string? _err;
 
     // El contrato REST viaja como texto; formateamos los selectores al confirmar.
@@ -305,20 +364,41 @@
                 $"{v.FechaTexto} · {v.HoraTexto}", v.ClienteNombre, $"{v.DireccionLocal} · {v.CodigoCaptacion}"))
             .ToArray();
         _visitDays = vivas
-            .Select(v => DiaDe(v.FechaTexto))
-            .Where(d => d > 0)
+            .Select(v => FechaDe(v.FechaTexto))
+            .Where(f => f is not null && f.Value.Year == _mes.Year && f.Value.Month == _mes.Month)
+            .Select(f => f!.Value.Day)
             .Distinct()
             .ToArray();
     }
 
-    // Extrae el día del mes de un texto "24 May 2026" o ISO "2026-05-24".
-    private static int DiaDe(string fechaTexto)
+    // Interpreta una fecha "24 May 2026" o ISO "2026-05-24".
+    private static DateOnly? FechaDe(string fechaTexto)
     {
-        if (string.IsNullOrWhiteSpace(fechaTexto)) return 0;
-        var iso = fechaTexto.Split('-');
-        if (iso.Length == 3 && iso[0].Length == 4 && int.TryParse(iso[2], out var dIso)) return dIso;
-        var token = fechaTexto.Split(' ', '/').FirstOrDefault();
-        return int.TryParse(token, out var d) ? d : 0;
+        if (string.IsNullOrWhiteSpace(fechaTexto)) return null;
+        if (DateOnly.TryParseExact(fechaTexto, "dd MMM yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var f))
+            return f;
+        if (DateOnly.TryParseExact(fechaTexto, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var iso))
+            return iso;
+        return null;
+    }
+
+    // Exporta la agenda visible (con los filtros aplicados) a CSV.
+    private async Task ExportarAgenda()
+    {
+        await Exportar.DescargarCsvAsync("agenda_visitas",
+            new[] { "Fecha", "Hora", "Captación", "Cliente", "Local", "Distrito", "Agente", "Estado", "Resultado", "Observaciones" },
+            VisitasFiltradas().Select(v => (IReadOnlyList<string?>)new[]
+            {
+                v.FechaTexto, v.HoraTexto, v.CodigoCaptacion, v.ClienteNombre, v.DireccionLocal,
+                v.DistritoLocal, v.NombreAgente,
+                EnumCatalog.LabelFor(EnumCatalog.EstadosVisita, v.Estado),
+                string.IsNullOrEmpty(v.Resultado) ? "" : EnumCatalog.LabelFor(EnumCatalog.ResultadosInteraccion, v.Resultado),
+                v.Observaciones,
+            }));
     }
 
     private void AbrirReprogramar(VisitaDto v)
@@ -338,7 +418,9 @@
     private void AbrirResultado(VisitaDto v)
     {
         _target = v;
-        _resultadoTmp = ""; _obsTmp = ""; _razonTmp = ""; _err = null;
+        _resultadoTmp = ""; _obsTmp = ""; _razonTmp = "";
+        _nivelInteresTmp = ""; _objecionTmp = ""; _opinionPrecioTmp = ""; _proximaAccionTmp = "";
+        _err = null;
         _modalResultado = true;
     }
 
@@ -373,7 +455,16 @@
         if (_target is null) return;
         try
         {
-            VisitaSvc.RegistrarResultado(_target.Id, _resultadoTmp, _obsTmp, _razonTmp);
+            VisitaSvc.RegistrarResultado(_target.Id, new VisitaResultadoRequest
+            {
+                Resultado = _resultadoTmp,
+                Observaciones = string.IsNullOrWhiteSpace(_obsTmp) ? null : _obsTmp.Trim(),
+                RazonNoContinuidad = string.IsNullOrWhiteSpace(_razonTmp) ? null : _razonTmp,
+                NivelInteres = int.TryParse(_nivelInteresTmp, out var nivel) ? nivel : null,
+                ObjecionPrincipal = string.IsNullOrWhiteSpace(_objecionTmp) ? null : _objecionTmp,
+                OpinionPrecio = string.IsNullOrWhiteSpace(_opinionPrecioTmp) ? null : _opinionPrecioTmp,
+                ProximaAccion = string.IsNullOrWhiteSpace(_proximaAccionTmp) ? null : _proximaAccionTmp,
+            });
             _modalResultado = false;
             Recalcular();
             var msg = ImplicaNoContinuidad(_resultadoTmp)

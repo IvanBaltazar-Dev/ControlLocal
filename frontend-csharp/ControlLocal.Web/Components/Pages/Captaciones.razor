@@ -1,6 +1,7 @@
 @page "/captaciones"
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
+@inject ExportacionService Exportar
 
 <PageTitle>Mis captaciones · ControlLocal</PageTitle>
 
@@ -8,10 +9,13 @@
           Title="Mis captaciones"
           Subtitle="Expedientes de captación que registré · seguimiento del proceso comercial">
     <Actions>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
+        <button class="cl-btn primary" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
     </Actions>
     <ChildContent>
-        @{ var filtradas = Filtradas().ToList(); }
+        @{
+            var filtradas = Filtradas().ToList();
+            var visibles = Paginador.Pagina(filtradas, ref _pagina);
+        }
         <div style="display:grid;grid-template-columns:repeat(@(_estados.Length + 1),1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="layers" Label="Total" Value="@Todas.Count.ToString()" Tone="gray"
                         Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
@@ -26,13 +30,14 @@
 
         <FilterBar Search="Buscar por código, dirección, propietario…"
                    @bind-Value="_query" ResultCount="filtradas.Count"
-                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros"
+                   OnExport="@(() => ExportarCsv(filtradas))">
             <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
             <FilterSelect Placeholder="Vigencia" Options="_vigencias" @bind-Value="_vigencia" />
         </FilterBar>
 
         <div class="cl-gallery-grid">
-            @foreach (var c in filtradas)
+            @foreach (var c in visibles)
             {
                 <div class="cl-prop-card">
                     <div class="cl-prop-photo">
@@ -61,7 +66,7 @@
                             {
                                 <button class="cl-btn sm primary cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate($"captacion-form/{c.CodigoCaptacion}"))">Subsanar</button>
                             }
-                            else if (c.Estado is "Pendiente" or "Borrador")
+                            else if (c.Estado is "Pendiente de revision" or "Borrador")
                             {
                                 <button class="cl-btn sm cl-grow" style="justify-content:center;" @onclick="@(() => App.Navigate($"captacion-form/{c.CodigoCaptacion}"))">Continuar</button>
                             }
@@ -85,7 +90,7 @@
         }
         else
         {
-            <Pagination Total="filtradas.Count" />
+            <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
         }
     </ChildContent>
 </AppShell>
@@ -95,6 +100,7 @@
     private string _query = "";
     private string _distrito = "";
     private string _vigencia = "";
+    private int _pagina = 1;
 
     private IReadOnlyList<CaptacionDto> Todas => CaptacionSvc.All();
 
@@ -114,7 +120,19 @@
 
     private void LimpiarFiltros()
     {
-        _tab = "Todas"; _query = ""; _distrito = ""; _vigencia = "";
+        _tab = "Todas"; _query = ""; _distrito = ""; _vigencia = ""; _pagina = 1;
+    }
+
+    private async Task ExportarCsv(IReadOnlyList<CaptacionDto> filtradas)
+    {
+        await Exportar.DescargarCsvAsync("captaciones",
+            new[] { "Código", "Dirección", "Distrito", "Área m²", "Propietario", "Agente", "Vigencia", "Comisión %", "Estado" },
+            filtradas.Select(c => (IReadOnlyList<string?>)new[]
+            {
+                c.CodigoCaptacion, c.DireccionLocal, c.DistritoLocal, c.AreaM2.ToString(),
+                c.PropietarioNombre, c.NombreAgenteResponsable, c.VigenciaTexto,
+                c.ComisionPactadaTexto, c.Estado,
+            }));
     }
 
     private IEnumerable<CaptacionDto> Filtradas() => Todas.Where(c =>

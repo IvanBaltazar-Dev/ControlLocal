@@ -1,5 +1,6 @@
 @page "/interacciones"
 @inject AppState App
+@inject IInteraccionService InteraccionSvc
 
 <PageTitle>Interacciones comerciales · ControlLocal</PageTitle>
 
@@ -16,11 +17,10 @@
                 <div style="display:flex;gap:8px;">
                     <select @bind="_filterResultado" style="flex:0 0 150px;">
                         <option value="">Todas</option>
-                        <option value="I">Interesado</option>
-                        <option value="N">No interesado</option>
-                        <option value="S">Seguimiento</option>
-                        <option value="D">Descartado</option>
-                        <option value="P">Pendiente</option>
+                        @foreach (var opcion in EnumCatalog.ResultadosInteraccion)
+                        {
+                            <option value="@opcion.Code">@opcion.Label</option>
+                        }
                     </select>
                 </div>
             </div>
@@ -37,7 +37,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var inter in _interacciones.Where(i => string.IsNullOrEmpty(_filterResultado) || i.Resultado == _filterResultado))
+                        @foreach (var inter in DatosInteracciones.Where(i => string.IsNullOrEmpty(_filterResultado) || i.Resultado == _filterResultado))
                         {
                             <tr @onclick="@(() => App.Navigate($"interaccion-detail/{inter.Id}"))">
                                 <td style="font-size:12px;color:#7E8794;">@inter.FechaHoraTexto</td>
@@ -50,7 +50,7 @@
                         }
                     </tbody>
                 </table>
-                @if (!_interacciones.Any())
+                @if (!DatosInteracciones.Any())
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="target" Size="28" style="margin-bottom:10px;" />
@@ -65,23 +65,5 @@
 
 @code {
     private string _filterResultado = "";
-
-    private List<InteraccionComercialDto> _interacciones = new()
-    {
-        new() { Id = 1, CaptacionCodigo = "CAP-0218", CanalContacto = "L", ClienteNombre = "Jorge Martinez", Resultado = "I", FechaHoraTexto = "29 May 2026 · 14:30" },
-        new() { Id = 2, CaptacionCodigo = "CAP-0226", CanalContacto = "W", ClienteNombre = "María Rodríguez", Resultado = "S", FechaHoraTexto = "28 May 2026 · 11:15" },
-        new() { Id = 3, CaptacionCodigo = "CAP-0234", CanalContacto = "E", ClienteNombre = "Carlos González", Resultado = "N", FechaHoraTexto = "27 May 2026 · 09:45" },
-        new() { Id = 4, CaptacionCodigo = "CAP-0237", CanalContacto = "P", ClienteNombre = "Ana López", Resultado = "I", FechaHoraTexto = "26 May 2026 · 16:20" },
-        new() { Id = 5, CaptacionCodigo = "CAP-0241", CanalContacto = "L", ClienteNombre = "Pedro Sánchez", Resultado = "P", FechaHoraTexto = "25 May 2026 · 13:00" },
-    };
-
-    public class InteraccionComercialDto
-    {
-        public long Id { get; set; }
-        public string CaptacionCodigo { get; set; } = string.Empty;
-        public string CanalContacto { get; set; } = string.Empty;
-        public string ClienteNombre { get; set; } = string.Empty;
-        public string Resultado { get; set; } = string.Empty;
-        public string FechaHoraTexto { get; set; } = string.Empty;
-    }
+    private IReadOnlyList<InteraccionComercialDto> DatosInteracciones => InteraccionSvc.All();
 }

@@ -30,4 +30,24 @@ public class LocalComercialDto
     public long? PropietarioId { get; set; }
 
     public string PropietarioNombre { get; set; } = string.Empty;
+
+    public string? TipoInmueble { get; set; }
+
+    public string? Uso { get; set; }
+
+    public int? Ambientes { get; set; }
+
+    public int? AntiguedadAnios { get; set; }
+
+    public string? ZonaUrbanizacion { get; set; }
+
+    public decimal? GeoLat { get; set; }
+
+    public decimal? GeoLong { get; set; }
+
+    public string? EstadoPublicacion { get; set; }
+
+    public string Descripcion { get; set; } = string.Empty;
+
+    public DateTime? FechaRegistro { get; set; }
 }

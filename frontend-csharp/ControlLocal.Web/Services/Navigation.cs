@@ -4,8 +4,7 @@ public record NavItem(string Icon, string Label, string Route, string? Pill = nu
 public record NavSection(string Section, NavItem[] Items);
 public record RoleUser(string Initials, string Name, string Short);
 
-// Role-scoped sidebar — single source of truth that mirrors the permission
-// matrix. No hidden items; each role gets a distinct menu.
+// Menú lateral derivado de la matriz de permisos.
 public static class Navigation
 {
     public static readonly Dictionary<string, NavSection[]> SideNavByRole = new()
@@ -68,8 +67,7 @@ public static class Navigation
         },
     };
 
-    // Maps detail/edit routes back to their parent sidebar route so the right
-    // item stays highlighted on inner screens.
+    // Relaciona rutas de detalle y edición con su opción principal.
     public static readonly Dictionary<string, string> RouteToNav = new()
     {
         ["profile"] = "dashboard",

@@ -14,6 +14,10 @@
         @if (_readOnly)
         {
             <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+            @if (_cap.Estado == "Activa")
+            {
+                <button class="cl-btn danger" @onclick="@(() => App.Navigate($"cierre/{_cap.Id}"))"><Icon Name="x" Size="13" /> Cerrar captacion</button>
+            }
         }
     </Actions>
     <ChildContent>
@@ -130,9 +134,10 @@
                             @for (var i = 0; i < _docs.Length; i++)
                             {
                                 var top = i == 0 ? "0" : "1px solid #E2E6EC";
+                                var doc = _docs[i];
                                 <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
-                                    <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@_docs[i]</span></div>
-                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
+                                    <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@doc</span></div>
+                                    <button class="cl-btn sm" @onclick="@(() => _docVer = doc)"><Icon Name="eye" Size="13" /> Ver</button>
                                 </div>
                             }
                         </div>
@@ -158,12 +163,17 @@
                 </div>
             </div>
         </div>
+
+        <DocViewerModal Open="@(_docVer is not null)" Nombre="@(_docVer ?? "")"
+                        Estado="Registrado" Expediente="@_cap.CodigoCaptacion" Actualizado="@_cap.VigenciaTexto"
+                        OnClose="@(() => _docVer = null)" />
     </ChildContent>
 </AppShell>
 
 @code {
     [Parameter] public string? CodigoParam { get; set; }
 
+    private string? _docVer;
     private CaptacionDto _cap = new();
     private IReadOnlyList<OportunidadComercialDto> _ops = new List<OportunidadComercialDto>();
     private IReadOnlyList<SolicitudAlquilerDto> _solicitudes = new List<SolicitudAlquilerDto>();
@@ -199,7 +209,7 @@
                 _ => 0,
             });
         }
-        if (_solicitudes.Any(s => s.Estado is "En revisión" or "Observada")) max = Math.Max(max, 3);
+        if (_solicitudes.Any(s => s.Estado is "En revision" or "Observada")) max = Math.Max(max, 3);
         if (_solicitudes.Any(s => s.Estado == "Aprobada")) max = 4;
         return max;
     }

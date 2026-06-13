@@ -57,21 +57,48 @@ public final class DatabaseConfig {
         return getConfigValue("DB_PASSWORD", "db.password", "");
     }
 
-    public static boolean isUseSsl() {
-        return Boolean.parseBoolean(getConfigValue("DB_USE_SSL", "db.useSSL", "false"));
+    public static String getSslMode() {
+        return getConfigValue("DB_SSL_MODE", "db.sslMode", "DISABLED").toUpperCase();
     }
 
     public static String getServerTimezone() {
         return getConfigValue("DB_SERVER_TIMEZONE", "db.serverTimezone", "UTC");
     }
 
+    public static boolean isAllowPublicKeyRetrieval() {
+        return Boolean.parseBoolean(getConfigValue(
+                "DB_ALLOW_PUBLIC_KEY_RETRIEVAL",
+                "db.allowPublicKeyRetrieval",
+                "true"));
+    }
+
+    public static int getPoolMaxSize() {
+        String value = getConfigValue("DB_POOL_MAX", "db.pool.max", "10");
+        try {
+            return Math.max(1, Integer.parseInt(value));
+        } catch (NumberFormatException e) {
+            return 10;
+        }
+    }
+
     public static String getJdbcUrl() {
         return "jdbc:mysql://" + getHost() + ":" + getPort() + "/" + getDatabaseName()
-                + "?useSSL=" + isUseSsl()
-                + "&serverTimezone=" + getServerTimezone();
+                + "?sslMode=" + getSslMode()
+                + "&serverTimezone=" + getServerTimezone()
+                + "&allowPublicKeyRetrieval=" + isAllowPublicKeyRetrieval()
+                // GlassFish define sus propios key/trust stores para HTTPS.
+                // La conexion MySQL no debe heredarlos: Aurora negocia TLS
+                // directamente y sslMode controla la validacion requerida.
+                + "&fallbackToSystemKeyStore=false"
+                + "&fallbackToSystemTrustStore=false";
     }
 
     private static String getConfigValue(String environmentKey, String propertyKey, String defaultValue) {
+        String systemValue = System.getProperty(propertyKey);
+        if (systemValue != null && !systemValue.isBlank()) {
+            return systemValue.trim();
+        }
+
         String environmentValue = System.getenv(environmentKey);
         if (environmentValue != null && !environmentValue.isBlank()) {
             return environmentValue;

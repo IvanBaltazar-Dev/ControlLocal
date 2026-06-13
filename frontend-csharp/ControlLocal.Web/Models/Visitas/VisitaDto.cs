@@ -35,4 +35,12 @@ public class VisitaDto
 
     // Notas de la visita / motivo de cancelación.
     public string? Observaciones { get; set; }
+
+    public int? NivelInteres { get; set; }
+
+    public string? ObjecionPrincipal { get; set; }
+
+    public string? OpinionPrecio { get; set; }
+
+    public string? ProximaAccion { get; set; }
 }

@@ -2,17 +2,16 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject IAssignmentService Assign
+@inject IJSRuntime JS
 
 <PageTitle>Reasignar agentes · ControlLocal</PageTitle>
 
 <AppShell Active="Reasignar agentes" Crumbs="@(new[] { "ControlLocal", "Administración", "Reasignar agentes" })"
           Title="Reasignar agente a broker supervisor"
           Subtitle="Selecciona un agente disponible y reasígnalo a un broker activo.">
-    @*Proximamente
     <Actions>
-        <button class="cl-btn"><Icon Name="history" Size="13" /> historial</button>
+        <button class="cl-btn" @onclick="IrAlHistorial"><Icon Name="clock" Size="13" /> Historial</button>
     </Actions>
-    *@
     <ChildContent>
         <div class="cl-alert blue" style="margin-bottom:14px;">
             <Icon Name="info" Size="15" />
@@ -114,7 +113,7 @@
                     <div class="cl-divider"></div>
                     <dl class="cl-kv" style="grid-template-columns:1fr auto;">
                         <dt>Agente</dt><dd>@(A?.Nombre ?? "—")</dd>
-                        <dt>Fecha de asignación</dt><dd>28 May 2026</dd>
+                        <dt>Fecha de asignación</dt><dd>@DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</dd>
                         <dt>Autoriza</dt><dd>Administración</dd>
                     </dl>
                     <button class="cl-btn primary" style="width:100%;margin-top:14px;justify-content:center;" @onclick="TryConfirm">
@@ -126,7 +125,7 @@
         </div>
 
         @* Historial *@
-        <div class="cl-card" style="margin-top:14px;">
+        <div class="cl-card" id="historial-asignaciones" style="margin-top:14px;">
             <div class="cl-card-head"><div class="cl-card-title">Asignaciones recientes</div></div>
             <div class="cl-card-body" style="padding:0;">
                 <table class="cl-table">
@@ -184,8 +183,20 @@
     private async Task OnConfirm()
     {
         _confirm = false;
-        _toast = true;
-        await RenderIfAliveAsync();
-        await DelayThenRenderAsync(2400, () => _toast = false);
+        try
+        {
+            Assign.ReasignarAgente(_agent, _broker, _motivo.Trim());
+            _motivo = "";
+            _toast = true;
+            await RenderIfAliveAsync();
+            await DelayThenRenderAsync(2400, () => _toast = false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _err = ex.Message;
+        }
     }
+
+    private async Task IrAlHistorial() =>
+        await JS.InvokeVoidAsync("controlLocal.irA", "historial-asignaciones");
 }

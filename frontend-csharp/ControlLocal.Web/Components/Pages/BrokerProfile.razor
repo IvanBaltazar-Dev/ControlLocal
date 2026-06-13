@@ -83,6 +83,12 @@
         b = (string.IsNullOrEmpty(CodigoParam) ? null : Brokers.ById(CodigoParam)) ?? Brokers.First();
     }
 
-    private static string DocLabel(string docType) =>
-        docType == "DNI" ? "DNI" : docType == "CE" ? "Carné de extranjería" : docType;
+    private static string DocLabel(string valor) => valor switch
+    {
+        "DNI" => "DNI",
+        "RUC" => "RUC",
+        "CE" => "Carnet de extranjeria",
+        "PAS" => "Pasaporte",
+        _ => EnumCatalog.LabelFor(EnumCatalog.TiposDocumentoIdentidad, valor),
+    };
 }

@@ -16,16 +16,27 @@ import com.controllocal.model.persona.ClienteInteresado;
 
 public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
 
-    private static final String INSERT_SQL = "INSERT INTO cliente_interesado (id_persona, rubro_comercial) VALUES (?, ?)";
+    private static final String INSERT_SQL = """
+            INSERT INTO cliente_interesado (id_persona, rubro_comercial,
+                consentimiento_contacto, consentimiento_uso_dato)
+            VALUES (?, ?, ?, ?)
+            """;
     private static final String SELECT_SQL = """
             SELECT c.id_cliente, c.rubro_comercial,
+                   c.consentimiento_contacto, c.consentimiento_uso_dato AS cliente_consentimiento_uso_dato,
                    p.id_persona, p.tipo_persona, p.tipo_documento, p.numero_documento,
                    p.nombres_o_razon_social, p.telefono, p.correo, p.estado,
+                   p.consentimiento_uso_dato,
                    p.fecha_creacion, p.fecha_actualizacion
             FROM cliente_interesado c
             INNER JOIN persona p ON c.id_persona = p.id_persona
             """;
-    private static final String UPDATE_SQL = "UPDATE cliente_interesado SET id_persona = ?, rubro_comercial = ? WHERE id_cliente = ?";
+    private static final String UPDATE_SQL = """
+            UPDATE cliente_interesado
+            SET id_persona = ?, rubro_comercial = ?,
+                consentimiento_contacto = ?, consentimiento_uso_dato = ?
+            WHERE id_cliente = ?
+            """;
     private static final String DELETE_SQL = """
             UPDATE persona p
             INNER JOIN cliente_interesado c ON c.id_persona = p.id_persona
@@ -40,6 +51,8 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
              PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, cliente.getPersona().getIdPersona());
             ps.setString(2, cliente.getRubroComercial());
+            JdbcSupport.setBoolean(ps, 3, cliente.getConsentimientoContacto());
+            JdbcSupport.setBoolean(ps, 4, cliente.getConsentimientoUsoDato());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -84,6 +97,35 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
     }
 
     @Override
+    public List<ClienteInteresado> listarPagina(int limite, int desplazamiento) {
+        List<ClienteInteresado> clientes = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY c.id_cliente LIMIT ? OFFSET ?")) {
+            ps.setInt(1, limite);
+            ps.setInt(2, desplazamiento);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    clientes.add(mapRow(rs));
+                }
+            }
+            return clientes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar la pagina de clientes interesados.", e);
+        }
+    }
+
+    @Override
+    public long contar() {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM cliente_interesado");
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar clientes interesados.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(ClienteInteresado cliente) {
         validar(cliente, true);
         new PersonaDAOImpl().actualizar(cliente.getPersona());
@@ -91,7 +133,9 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
              PreparedStatement ps = conn.prepareStatement(UPDATE_SQL)) {
             ps.setLong(1, cliente.getPersona().getIdPersona());
             ps.setString(2, cliente.getRubroComercial());
-            ps.setLong(3, cliente.getIdCliente());
+            JdbcSupport.setBoolean(ps, 3, cliente.getConsentimientoContacto());
+            JdbcSupport.setBoolean(ps, 4, cliente.getConsentimientoUsoDato());
+            ps.setLong(5, cliente.getIdCliente());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar cliente interesado con id " + cliente.getIdCliente() + ".", e);
@@ -114,6 +158,8 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
         ClienteInteresado cliente = new ClienteInteresado();
         cliente.setIdCliente(rs.getLong("id_cliente"));
         cliente.setRubroComercial(rs.getString("rubro_comercial"));
+        cliente.setConsentimientoContacto(JdbcSupport.getNullableBoolean(rs, "consentimiento_contacto"));
+        cliente.setConsentimientoUsoDato(JdbcSupport.getNullableBoolean(rs, "cliente_consentimiento_uso_dato"));
         cliente.setPersona(JdbcSupport.mapPersona(rs));
         return cliente;
     }

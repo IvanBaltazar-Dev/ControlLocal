@@ -32,6 +32,16 @@ public final class BusinessValidations {
         }
     }
 
+    // Limita el tamano de pagina para impedir consultas masivas a la base.
+    public static void pagina(int limite, int desplazamiento) {
+        if (limite < 1 || limite > 100) {
+            throw new BusinessException("El tamano de pagina debe estar entre 1 y 100.");
+        }
+        if (desplazamiento < 0) {
+            throw new BusinessException("El desplazamiento de pagina no puede ser negativo.");
+        }
+    }
+
     public static void persona(Persona persona) {
         if (persona == null) {
             throw new BusinessException("La persona es obligatoria.");

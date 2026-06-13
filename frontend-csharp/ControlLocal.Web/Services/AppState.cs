@@ -2,16 +2,14 @@ using Microsoft.AspNetCore.Components;
 
 namespace ControlLocal.Web.Services;
 
-// Mirrors the prototype's NavContext: holds the active role for the circuit and
-// centralizes navigation so screens can switch routes/roles the same way the
-// React prototype called navigate(route, { role }).
+// Mantiene la identidad y el rol activos durante el circuito de Blazor.
 public class AppState
 {
     private readonly NavigationManager _nav;
 
     public AppState(NavigationManager nav) => _nav = nav;
 
-    // Internal role key (stable, backend-facing). UI shows RoleLabel instead.
+    // Clave interna estable; la interfaz muestra RoleLabel.
     public string Role { get; private set; } = Roles.Agente;
 
     public string RoleLabel => Roles.Label(Role);

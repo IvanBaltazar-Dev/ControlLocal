@@ -19,6 +19,17 @@ public class Persona {
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
 
+    // Consentimiento de uso de datos personales (Diccionario v2 P1).
+    private Boolean consentimientoUsoDato;
+
+    public Boolean getConsentimientoUsoDato() {
+        return consentimientoUsoDato;
+    }
+
+    public void setConsentimientoUsoDato(Boolean consentimientoUsoDato) {
+        this.consentimientoUsoDato = consentimientoUsoDato;
+    }
+
     public Long getIdPersona() {
         return idPersona;
     }

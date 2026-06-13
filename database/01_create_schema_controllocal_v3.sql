@@ -22,6 +22,7 @@ CREATE TABLE persona (
     telefono VARCHAR(20),
     correo VARCHAR(150) UNIQUE,
     estado CHAR(1) NOT NULL,
+    consentimiento_uso_dato BOOLEAN NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT ck_persona_tipo_persona CHECK (
@@ -152,8 +153,21 @@ CREATE TABLE propietario (
 ) ENGINE=InnoDB;
 
 -- =========================================================
+-- 6-bis) Catalogo de distritos (Diccionario v2)
+-- Lista cerrada de distritos donde opera la corredora.
+-- =========================================================
+CREATE TABLE distrito (
+    id_distrito BIGINT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    provincia VARCHAR(100) NOT NULL DEFAULT 'Lima',
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- =========================================================
 -- 7) Tabla de locales comerciales
--- Cada local pertenece a un propietario.
+-- Cada local pertenece a un propietario. distrito (texto) se conserva por
+-- compatibilidad; id_distrito enlaza el catalogo cerrado.
 -- =========================================================
 CREATE TABLE local_comercial (
     id_local BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -166,10 +180,21 @@ CREATE TABLE local_comercial (
     descripcion TEXT,
     estado CHAR(1) NOT NULL,
     id_propietario BIGINT NOT NULL,
+    tipo_inmueble CHAR(1) NULL,
+    uso CHAR(1) NULL,
+    ambientes INT NULL,
+    antiguedad_anios INT NULL,
+    zona_urbanizacion VARCHAR(150) NULL,
+    geo_lat DECIMAL(10,7) NULL,
+    geo_long DECIMAL(10,7) NULL,
+    estado_publicacion CHAR(1) NULL,
+    id_distrito BIGINT NULL,
     fecha_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_local_propietario
         FOREIGN KEY (id_propietario) REFERENCES propietario(id_propietario),
+    CONSTRAINT fk_local_distrito
+        FOREIGN KEY (id_distrito) REFERENCES distrito(id_distrito),
     CONSTRAINT ck_local_estado CHECK (
         estado IN ('D', 'N', 'I')
     ),
@@ -178,7 +203,48 @@ CREATE TABLE local_comercial (
     ),
     CONSTRAINT ck_local_precio CHECK (
         precio_referencial >= 0
+    ),
+    CONSTRAINT ck_local_tipo_inmueble CHECK (
+        tipo_inmueble IS NULL OR tipo_inmueble IN ('L', 'O', 'D', 'C', 'T', 'X')
+    ),
+    CONSTRAINT ck_local_uso CHECK (
+        uso IS NULL OR uso IN ('C', 'V', 'I', 'M')
+    ),
+    CONSTRAINT ck_local_ambientes CHECK (
+        ambientes IS NULL OR ambientes > 0
+    ),
+    CONSTRAINT ck_local_antiguedad CHECK (
+        antiguedad_anios IS NULL OR antiguedad_anios >= 0
+    ),
+    CONSTRAINT ck_local_estado_publicacion CHECK (
+        estado_publicacion IS NULL OR estado_publicacion IN ('B', 'P', 'S', 'C')
     )
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 7-bis) Historico de precios del local (Diccionario v2)
+-- Una fila por hito o cambio; el precio CERRADO real vive aqui.
+-- =========================================================
+CREATE TABLE precio_local (
+    id_precio BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_local BIGINT NOT NULL,
+    hito CHAR(1) NOT NULL,
+    moneda CHAR(3) NOT NULL,
+    monto DECIMAL(12,2) NOT NULL,
+    fecha DATE NOT NULL,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_precio_local
+        FOREIGN KEY (id_local) REFERENCES local_comercial(id_local),
+    CONSTRAINT ck_precio_hito CHECK (
+        hito IN ('E', 'R', 'U', 'P', 'O', 'A', 'C')
+    ),
+    CONSTRAINT ck_precio_moneda CHECK (
+        moneda IN ('PEN', 'USD')
+    ),
+    CONSTRAINT ck_precio_monto CHECK (
+        monto >= 0
+    ),
+    INDEX ix_precio_local (id_local, fecha)
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -201,6 +267,9 @@ CREATE TABLE captacion (
     id_local BIGINT NOT NULL,
     id_agente BIGINT NOT NULL,
     id_broker_revisor BIGINT NULL,
+    motivo_operacion CHAR(1) NULL,
+    urgencia INT NULL,
+    exclusividad BOOLEAN NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     id_local_activo BIGINT GENERATED ALWAYS AS (
@@ -226,6 +295,12 @@ CREATE TABLE captacion (
         OR fecha_inicio_vigencia IS NULL
         OR fecha_fin_vigencia >= fecha_inicio_vigencia
     ),
+    CONSTRAINT ck_captacion_motivo_operacion CHECK (
+        motivo_operacion IS NULL OR motivo_operacion IN ('A', 'C')
+    ),
+    CONSTRAINT ck_captacion_urgencia CHECK (
+        urgencia IS NULL OR (urgencia BETWEEN 1 AND 5)
+    ),
     CONSTRAINT uq_captacion_activa_por_local UNIQUE (id_local_activo)
 ) ENGINE=InnoDB;
 
@@ -237,6 +312,8 @@ CREATE TABLE cliente_interesado (
     id_cliente BIGINT AUTO_INCREMENT PRIMARY KEY,
     id_persona BIGINT NOT NULL UNIQUE,
     rubro_comercial VARCHAR(120),
+    consentimiento_contacto BOOLEAN NULL,
+    consentimiento_uso_dato BOOLEAN NULL,
     CONSTRAINT fk_cliente_persona
         FOREIGN KEY (id_persona) REFERENCES persona(id_persona)
 ) ENGINE=InnoDB;
@@ -290,13 +367,14 @@ CREATE TABLE interaccion_comercial (
     resultado CHAR(1) NOT NULL,
     id_oportunidad BIGINT NOT NULL,
     id_agente BIGINT NOT NULL,
+    transcripcion_nota TEXT NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_interaccion_oportunidad
         FOREIGN KEY (id_oportunidad) REFERENCES oportunidad_comercial(id_oportunidad),
     CONSTRAINT fk_interaccion_agente
         FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
     CONSTRAINT ck_interaccion_canal CHECK (
-        canal_contacto IN ('L', 'W', 'E', 'P', 'O')
+        canal_contacto IN ('L', 'W', 'E', 'P', 'R', 'T', 'O')
     ),
     CONSTRAINT ck_interaccion_resultado CHECK (
         resultado IN ('P', 'I', 'N', 'S', 'D')
@@ -319,6 +397,10 @@ CREATE TABLE visita (
     resultado CHAR(1) NULL,
     id_oportunidad BIGINT NOT NULL,
     id_agente BIGINT NOT NULL,
+    nivel_interes INT NULL,
+    objecion_principal CHAR(1) NULL,
+    opinion_precio CHAR(1) NULL,
+    proxima_accion CHAR(1) NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_visita_oportunidad
@@ -330,6 +412,18 @@ CREATE TABLE visita (
     ),
     CONSTRAINT ck_visita_resultado CHECK (
         resultado IS NULL OR resultado IN ('P', 'I', 'N', 'S', 'D')
+    ),
+    CONSTRAINT ck_visita_nivel_interes CHECK (
+        nivel_interes IS NULL OR (nivel_interes BETWEEN 1 AND 5)
+    ),
+    CONSTRAINT ck_visita_objecion CHECK (
+        objecion_principal IS NULL OR objecion_principal IN ('P', 'U', 'E', 'C', 'O')
+    ),
+    CONSTRAINT ck_visita_opinion_precio CHECK (
+        opinion_precio IS NULL OR opinion_precio IN ('A', 'J', 'B')
+    ),
+    CONSTRAINT ck_visita_proxima_accion CHECK (
+        proxima_accion IS NULL OR proxima_accion IN ('V', 'O', 'S', 'D')
     )
 ) ENGINE=InnoDB;
 

@@ -14,6 +14,9 @@ public interface BrokerDAO extends CrudDAO<Broker> {
 
     Optional<Broker> buscarPorId(Long id);
 
+    // Resuelve el broker a partir de su usuario interno (login del API REST).
+    Optional<Broker> buscarPorUsuario(Long idUsuario);
+
     List<Broker> listarTodos();
 
     boolean actualizar(Broker broker);

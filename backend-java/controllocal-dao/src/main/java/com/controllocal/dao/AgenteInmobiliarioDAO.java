@@ -15,6 +15,9 @@ public interface AgenteInmobiliarioDAO extends CrudDAO<AgenteInmobiliario> {
 
     Optional<AgenteInmobiliario> buscarPorId(Long id);
 
+    // Resuelve el agente a partir de su usuario interno (login del API REST).
+    Optional<AgenteInmobiliario> buscarPorUsuario(Long idUsuario);
+
     List<AgenteInmobiliario> listarTodos();
 
     boolean actualizar(AgenteInmobiliario agente);

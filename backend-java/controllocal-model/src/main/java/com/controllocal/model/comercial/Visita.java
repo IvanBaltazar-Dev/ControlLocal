@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import com.controllocal.model.comercial.enums.EstadoVisita;
+import com.controllocal.model.comercial.enums.ObjecionVisita;
+import com.controllocal.model.comercial.enums.OpinionPrecio;
+import com.controllocal.model.comercial.enums.ProximaAccionVisita;
 import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
@@ -23,6 +26,30 @@ public class Visita {
     private AgenteInmobiliario agenteResponsable;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
+
+    // Desenlace cualitativo de la visita (Diccionario v2). Opcionales: solo se
+    // registran al marcar la visita como realizada.
+    private Integer nivelInteres;
+    private ObjecionVisita objecionPrincipal;
+    private OpinionPrecio opinionPrecio;
+    private ProximaAccionVisita proximaAccion;
+
+    public Integer getNivelInteres() { return nivelInteres; }
+
+    // Nivel de interes del cliente en escala 1 a 5.
+    public void setNivelInteres(Integer nivelInteres) {
+        if (nivelInteres != null && (nivelInteres < 1 || nivelInteres > 5)) {
+            throw new IllegalArgumentException("El nivel de interes debe estar entre 1 y 5.");
+        }
+        this.nivelInteres = nivelInteres;
+    }
+
+    public ObjecionVisita getObjecionPrincipal() { return objecionPrincipal; }
+    public void setObjecionPrincipal(ObjecionVisita objecionPrincipal) { this.objecionPrincipal = objecionPrincipal; }
+    public OpinionPrecio getOpinionPrecio() { return opinionPrecio; }
+    public void setOpinionPrecio(OpinionPrecio opinionPrecio) { this.opinionPrecio = opinionPrecio; }
+    public ProximaAccionVisita getProximaAccion() { return proximaAccion; }
+    public void setProximaAccion(ProximaAccionVisita proximaAccion) { this.proximaAccion = proximaAccion; }
 
     public Long getIdVisita() { return idVisita; }
     public void setIdVisita(Long idVisita) { this.idVisita = idVisita; }

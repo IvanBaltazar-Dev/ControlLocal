@@ -25,8 +25,16 @@
             <div style="max-width:760px;">
                 <div class="cl-alert blue" style="margin-bottom:14px;">
                     <Icon Name="info" Size="15" />
-                    <span>Esta interfaz corresponde a <b>POST /Api/captaciones/{id}/cierre</b>. El backend solo recibe el motivo; no registra contratos, pagos ni archivos de cierre.</span>
+                    <span>Cerrar una captacion la retira del seguimiento activo. Indica un motivo claro para dejar trazabilidad.</span>
                 </div>
+
+                @if (_cerrada)
+                {
+                    <div class="cl-alert green" style="margin-bottom:14px;">
+                        <Icon Name="check" Size="15" />
+                        <span>Captacion cerrada correctamente. Ya no admite operaciones activas.</span>
+                    </div>
+                }
 
                 <FormSection Num="1" Title="Captacion activa" Sub="Selecciona el expediente que se cerrara">
                     <Field Label="Captacion" Required="true">
@@ -56,13 +64,16 @@
 
                 <FormFooterBar OnCancel="@(() => App.Navigate("captaciones"))"
                                OnSave="PrepararCierre"
-                               SaveLabel="Cerrar captacion" />
+                               SaveLabel="Cerrar captacion"
+                               Busy="@_procesando"
+                               BusyLabel="Cerrando..." />
             </div>
 
             <ConfirmDialog Open="_confirm" Tone="red" Icon="alert"
                            Title="¿Cerrar la captacion?"
                            Desc="El expediente cambiara al estado Cerrada y dejara de admitir operaciones activas."
                            ConfirmLabel="Cerrar captacion" CancelLabel="Cancelar"
+                           Busy="@_procesando"
                            OnClose="@(() => _confirm = false)"
                            OnConfirm="ConfirmarCierreAsync" />
             <Toast Show="@(_toast is not null)">@_toast</Toast>
@@ -78,6 +89,8 @@
     private string? _error;
     private string? _toast;
     private bool _confirm;
+    private bool _procesando;
+    private bool _cerrada;
 
     private bool PuedeCerrar => App.Role is Roles.Broker or Roles.Admin;
     private IReadOnlyList<CaptacionDto> CaptacionesActivas = [];
@@ -108,7 +121,9 @@
 
     private void PrepararCierre()
     {
+        if (_procesando) return;
         _error = null;
+        _cerrada = false;
         if (_captacionId <= 0)
         {
             _error = "Selecciona una captacion activa.";
@@ -124,18 +139,29 @@
 
     private async Task ConfirmarCierreAsync()
     {
-        _confirm = false;
+        if (_procesando) return;
         try
         {
-            await CaptacionSvc.CerrarAsync(_captacionId, _motivo);
-            _toast = "Captacion cerrada correctamente";
+            _procesando = true;
             await RenderIfAliveAsync();
-            await Task.Delay(300);
-            App.Navigate("captaciones");
+            await CaptacionSvc.CerrarAsync(_captacionId, _motivo, DisposedToken);
+            _confirm = false;
+            var todas = await CaptacionSvc.RefrescarAsync(DisposedToken);
+            CaptacionesActivas = todas.Where(item => item.Estado == "Activa").ToList();
+            _toast = "Captacion cerrada correctamente.";
+            _cerrada = true;
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception error)
         {
             _error = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
         }
     }
 }

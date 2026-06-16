@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net;
+using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
 
@@ -40,6 +41,7 @@ public class ApiClient
     private readonly HttpClient _http;
     private readonly ApiSession _sesion;
     private readonly NavigationManager _navegacion;
+    private static readonly JsonSerializerOptions JsonOpciones = new(JsonSerializerDefaults.Web);
 
     public ApiClient(
         HttpClient http,
@@ -74,7 +76,7 @@ public class ApiClient
         using var solicitud = Solicitud(HttpMethod.Get, ruta);
         using var respuesta = await _http.SendAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
-        return await respuesta.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
+        return await LeerJsonAsync<T>(respuesta.Content, ct);
     }
 
     public Task<PaginaApi<T>?> GetPaginaAsync<T>(string ruta, int pagina, int tamano, CancellationToken ct = default)
@@ -89,7 +91,7 @@ public class ApiClient
         solicitud.Content = JsonContent.Create(cuerpo);
         using var respuesta = await _http.SendAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
-        return await respuesta.Content.ReadFromJsonAsync<TRespuesta>(cancellationToken: ct);
+        return await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
     }
 
     public async Task<TRespuesta?> PutAsync<TRespuesta>(string ruta, object cuerpo, CancellationToken ct = default)
@@ -98,7 +100,7 @@ public class ApiClient
         solicitud.Content = JsonContent.Create(cuerpo);
         using var respuesta = await _http.SendAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
-        return await respuesta.Content.ReadFromJsonAsync<TRespuesta>(cancellationToken: ct);
+        return await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
     }
 
     public async Task DeleteAsync(string ruta, CancellationToken ct = default)
@@ -125,7 +127,7 @@ public class ApiClient
         solicitud.Content = JsonContent.Create(cuerpo);
         using var respuesta = await _http.SendAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
-        return await respuesta.Content.ReadFromJsonAsync<TRespuesta>(cancellationToken: ct);
+        return await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
     }
 
     private HttpRequestMessage Solicitud(HttpMethod metodo, string ruta)
@@ -154,7 +156,7 @@ public class ApiClient
             string? mensaje = null;
             try
             {
-                mensaje = (await respuesta.Content.ReadFromJsonAsync<ErrorApi>(cancellationToken: ct))?.Error;
+                mensaje = (await LeerJsonAsync<ErrorApi>(respuesta.Content, ct))?.Error;
             }
             catch
             {
@@ -163,6 +165,17 @@ public class ApiClient
             throw new InvalidOperationException(
                 string.IsNullOrWhiteSpace(mensaje) ? "No se pudo completar la operacion." : mensaje);
         }
+    }
+
+    private static async Task<T?> LeerJsonAsync<T>(HttpContent contenido, CancellationToken ct)
+    {
+        if (contenido.Headers.ContentLength == 0)
+            return default;
+
+        var texto = await contenido.ReadAsStringAsync(ct);
+        return string.IsNullOrWhiteSpace(texto)
+            ? default
+            : JsonSerializer.Deserialize<T>(texto, JsonOpciones);
     }
 }
 
@@ -192,7 +205,7 @@ public class HttpAuthService(ApiClient api) : IAuthService
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)
                 .Take(2)
                 .Select(w => char.ToUpper(w[0])));
-            return new AuthResult(true, null, new AuthUser(sesion.Usuario, "", sesion.Nombre, iniciales, rol));
+            return new AuthResult(true, null, new AuthUser(sesion.Usuario, "", sesion.Nombre, iniciales, rol), sesion.Token);
         }
         catch (HttpRequestException)
         {

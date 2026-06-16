@@ -50,6 +50,8 @@ public interface IClienteService
 {
     IReadOnlyList<ClienteInteresadoDto> All();
     ClienteInteresadoDto? ById(long id);
+    Task<IReadOnlyList<ClienteInteresadoDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult(All());
     ClienteInteresadoDto Agregar(ClienteInteresadoDto cliente);
     ClienteInteresadoDto Actualizar(ClienteInteresadoDto cliente);
 }
@@ -107,8 +109,15 @@ public interface ISolicitudService
     Task<IReadOnlyList<SolicitudAlquilerDto>> RefrescarAsync(CancellationToken ct = default);
     SolicitudAlquilerDto? ByCodigo(string codigo);
     SolicitudAlquilerDto Agregar(SolicitudFormRequest request);
+    Task<SolicitudAlquilerDto> AgregarAsync(SolicitudFormRequest request, CancellationToken ct = default) =>
+        Task.FromResult(Agregar(request));
     SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud);
     EvaluacionSolicitudDto Evaluar(string codigoSolicitud, EvaluacionSolicitudDto evaluacion);
+    Task<EvaluacionSolicitudDto> EvaluarAsync(
+        string codigoSolicitud,
+        EvaluacionSolicitudDto evaluacion,
+        CancellationToken ct = default) =>
+        Task.FromResult(Evaluar(codigoSolicitud, evaluacion));
 }
 
 public interface IInteraccionService
@@ -131,8 +140,18 @@ public interface IOportunidadService
     Task<IReadOnlyList<OportunidadComercialDto>> RefrescarAsync(CancellationToken ct = default);
     // Todos los clientes interesados (oportunidades) de una captación.
     IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion);
+    OportunidadComercialDto Crear(OportunidadFormRequest request);
+    Task<OportunidadComercialDto> CrearAsync(OportunidadFormRequest request, CancellationToken ct = default) =>
+        Task.FromResult(Crear(request));
     OportunidadComercialDto MarcarSolicitudCreada(long id);
     OportunidadComercialDto CerrarNoContinua(long id, string razon, string? observaciones);
+    Task<OportunidadComercialDto> CerrarNoContinuaAsync(
+        long id,
+        string razon,
+        string? observaciones,
+        CancellationToken ct = default) =>
+        Task.FromResult(CerrarNoContinua(id, razon, observaciones));
+    Task<OportunidadComercialDto> CerrarExitosaAsync(long id, CancellationToken ct = default);
 }
 
 public interface IVisitaService
@@ -155,6 +174,18 @@ public interface IVisitaService
     // Si el resultado es de no continuidad (N/D), razonNoContinuidad es obligatorio:
     // registra el motivo ligado a la visita y cierra la oportunidad.
     VisitaDto RegistrarResultado(long id, VisitaResultadoRequest request);
+    Task<VisitaDto> ProgramarAsync(VisitaFormRequest request, CancellationToken ct = default) =>
+        Task.FromResult(Programar(request));
+    Task<VisitaDto> ReprogramarAsync(long id, string fechaTexto, string horaTexto, CancellationToken ct = default) =>
+        Task.FromResult(Reprogramar(id, fechaTexto, horaTexto));
+    Task<VisitaDto> CancelarAsync(long id, string motivo, CancellationToken ct = default) =>
+        Task.FromResult(Cancelar(id, motivo));
+    Task<VisitaDto> MarcarRealizadaAsync(long id, CancellationToken ct = default) =>
+        Task.FromResult(MarcarRealizada(id));
+    Task<VisitaDto> MarcarNoRealizadaAsync(long id, string motivo, CancellationToken ct = default) =>
+        Task.FromResult(MarcarNoRealizada(id, motivo));
+    Task<VisitaDto> RegistrarResultadoAsync(long id, VisitaResultadoRequest request, CancellationToken ct = default) =>
+        Task.FromResult(RegistrarResultado(id, request));
 }
 
 public interface IAssignmentService
@@ -914,6 +945,9 @@ public class MockOportunidadService : IOportunidadService
     public IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion) =>
         Data.Where(o => o.CaptacionCodigo == codigoCaptacion).ToList();
 
+    public OportunidadComercialDto Crear(OportunidadFormRequest request) =>
+        throw new InvalidOperationException("El registro de oportunidades requiere el servicio REST.");
+
     public OportunidadComercialDto MarcarSolicitudCreada(long id)
     {
         var oportunidad = Requerir(id);
@@ -932,6 +966,14 @@ public class MockOportunidadService : IOportunidadService
         oportunidad.Observaciones = observaciones?.Trim() ?? "";
         oportunidad.FechaCierreTexto = DateTime.Now.ToString("dd MMM yyyy HH:mm");
         return oportunidad;
+    }
+
+    public Task<OportunidadComercialDto> CerrarExitosaAsync(long id, CancellationToken ct = default)
+    {
+        var oportunidad = Requerir(id);
+        oportunidad.Estado = "Finalizada exitosa";
+        oportunidad.FechaCierreTexto = DateTime.Now.ToString("dd MMM yyyy HH:mm");
+        return Task.FromResult(oportunidad);
     }
 
     private static OportunidadComercialDto Requerir(long id) =>

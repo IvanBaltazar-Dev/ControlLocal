@@ -4,14 +4,21 @@
 @inject IOportunidadService OportunidadSvc
 @inject ISolicitudService SolicitudSvc
 
-<PageTitle>Operaciones del equipo · ControlLocal</PageTitle>
+<PageTitle>@_title - ControlLocal</PageTitle>
 
-<AppShell Active="Operaciones del equipo" Crumbs="@(new[] { "ControlLocal", "Seguimiento", "Operaciones del equipo" })"
-          Title="Operaciones del equipo"
-          Subtitle="Seguimiento de las operaciones comerciales de los agentes que supervisas">
+<AppShell Active="@_sideActive" Crumbs="@_crumbs"
+          Title="@_title"
+          Subtitle="@_subtitle">
     <Actions>
         <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
-        <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        @if (_isBroker)
+        {
+            <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
+        else
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("oportunidad-form"))"><Icon Name="plus" Size="13" /> Nueva oportunidad</button>
+        }
     </Actions>
     <ChildContent>
         @{
@@ -87,10 +94,13 @@
         </div>
         <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
 
-        <div class="cl-alert blue" style="margin-top:14px;">
-            <Icon Name="info" Size="15" />
-            <span>Como supervisor consultas las operaciones en <b>solo lectura</b>. El registro de interacciones, visitas y solicitudes lo realiza el agente a cargo.</span>
-        </div>
+        @if (_isBroker)
+        {
+            <div class="cl-alert blue" style="margin-top:14px;">
+                <Icon Name="info" Size="15" />
+                <span>Como supervisor consultas las operaciones en <b>solo lectura</b>. El registro de interacciones, visitas y solicitudes lo realiza el agente a cargo.</span>
+            </div>
+        }
     </ChildContent>
 </AppShell>
 
@@ -99,6 +109,15 @@
     private string _query = "";
     private string _agente = "";
     private int _pagina = 1;
+    private bool _isBroker => App.Role == Roles.Broker;
+    private string _title => _isBroker ? "Operaciones del equipo" : "Oportunidades comerciales";
+    private string _sideActive => _isBroker ? "Operaciones del equipo" : "Oportunidades comerciales";
+    private string _subtitle => _isBroker
+        ? "Seguimiento de las operaciones comerciales de los agentes que supervisas"
+        : "Clientes interesados vinculados a tus captaciones activas";
+    private string[] _crumbs => _isBroker
+        ? new[] { "ControlLocal", "Seguimiento", "Operaciones del equipo" }
+        : new[] { "ControlLocal", "Operacion", "Oportunidades comerciales" };
 
     // Dimensiones derivadas de los datos (sin valores hardcodeados).
     private string[] _etapas => _ops.Select(o => o.Stage).Distinct().OrderBy(x => x).ToArray();

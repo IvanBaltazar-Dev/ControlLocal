@@ -63,6 +63,7 @@ builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptio
 builder.Services.AddScoped<ApiSession>();
 builder.Services.AddHttpClient<ApiClient>();
 builder.Services.AddScoped<IAuthService, HttpAuthService>();
+builder.Services.AddScoped<HttpAgenteService>();
 builder.Services.AddScoped<IPropietarioService, HttpPropietarioService>();
 builder.Services.AddScoped<IClienteService, HttpClienteService>();
 builder.Services.AddScoped<ILocalService, HttpLocalService>();

@@ -28,7 +28,8 @@ public static class RouteAccess
         ["BandejaCaptaciones"] = [Roles.Broker],
         ["CaptacionReview"] = [Roles.Broker],
         ["Evaluacion"] = [Roles.Broker],
-        ["Oportunidades"] = [Roles.Broker],
+        ["Oportunidades"] = [Roles.Broker, Roles.Agente],
+        ["OportunidadForm"] = [Roles.Agente],
         ["Cierre"] = [Roles.Admin, Roles.Broker],
 
         ["Clientes"] = [Roles.Agente],

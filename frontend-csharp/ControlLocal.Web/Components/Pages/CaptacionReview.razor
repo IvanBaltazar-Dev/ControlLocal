@@ -1,7 +1,7 @@
 @page "/captacion-review/{CodigoParam?}"
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
-@inject IAgenteService AgenteSvc
+@inject ControlLocal.Web.Services.Api.HttpAgenteService AgenteSvc
 
 <PageTitle>Revisar captacion - ControlLocal</PageTitle>
 
@@ -25,12 +25,22 @@ else
               Subtitle="@($"Captacion enviada por {_captacion.NombreAgenteResponsable} - estado actual: {_captacion.Estado}")">
         <Actions>
             <button class="cl-btn ghost" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-            <button class="cl-btn" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar</button>
-            <button class="cl-btn danger" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
-            <button class="cl-btn primary" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar</button>
-            <button class="cl-btn success" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar</button>
+            @if (EstadoPermiteRevision)
+            {
+                <button class="cl-btn" disabled="@_procesando" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar</button>
+                <button class="cl-btn danger" disabled="@_procesando" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
+                <button class="cl-btn primary" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar</button>
+                <button class="cl-btn success" disabled="@_procesando" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar</button>
+            }
         </Actions>
         <ChildContent>
+            @if (_mensajeRevision is not null)
+            {
+                <div class="cl-alert @_mensajeRevision.Tone" style="margin-bottom:14px;">
+                    <Icon Name="@_mensajeRevision.Icon" Size="15" />
+                    <span>@_mensajeRevision.Text</span>
+                </div>
+            }
             @if (_error is not null)
             {
                 <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
@@ -59,9 +69,9 @@ else
                         <div class="cl-card-head"><div class="cl-card-title">Condiciones comerciales</div></div>
                         <div class="cl-card-body">
                             <dl class="cl-kv">
-                                <dt>Operacion</dt><dd>@Texto(_captacion.MotivoOperacion)</dd>
+                                <dt>Operacion</dt><dd>@OperacionTexto</dd>
                                 <dt>Exclusividad</dt><dd>@(_captacion.Exclusividad is null ? "No registrada" : _captacion.Exclusividad.Value ? "Si" : "No")</dd>
-                                <dt>Urgencia</dt><dd>@(_captacion.Urgencia?.ToString() ?? "No registrada")</dd>
+                                <dt>Urgencia</dt><dd>@UrgenciaTexto</dd>
                             </dl>
                         </div>
                     </div>
@@ -85,7 +95,7 @@ else
                 <div class="cl-stack">
                     <div class="cl-alert blue">
                         <Icon Name="info" Size="15" />
-                        <span>La decision y el usuario broker quedan registrados por el backend usando la identidad del JWT.</span>
+                        <span>Revisa el expediente y registra una decision. La captacion solo cambiara de estado cuando confirmes la accion.</span>
                     </div>
                     <div class="cl-card">
                         <div class="cl-card-head"><div class="cl-card-title">Datos de trazabilidad</div></div>
@@ -98,14 +108,25 @@ else
                         </div>
                     </div>
                     <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Acciones</div></div>
+                        <div class="cl-card-head"><div class="cl-card-title">Estado de revision</div></div>
                         <div class="cl-card-body">
-                            <div style="display:flex;flex-direction:column;gap:8px;">
-                                <button class="cl-btn success" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar captacion</button>
-                                <button class="cl-btn primary" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar y devolver</button>
-                                <button class="cl-btn danger" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
-                                <button class="cl-btn" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar agente</button>
-                            </div>
+                            @if (EstadoPermiteRevision)
+                            {
+                                <div style="display:flex;flex-direction:column;gap:8px;">
+                                    <button class="cl-btn success" disabled="@_procesando" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar captacion</button>
+                                    <button class="cl-btn primary" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar y devolver</button>
+                                    <button class="cl-btn danger" disabled="@_procesando" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
+                                    <button class="cl-btn" disabled="@_procesando" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar agente</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="cl-alert @PanelRevision.Tone">
+                                    <Icon Name="@PanelRevision.Icon" Size="15" />
+                                    <span>@PanelRevision.Text</span>
+                                </div>
+                                <button class="cl-btn ghost" style="width:100%;margin-top:10px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("bandeja-captaciones"))">Volver a la bandeja</button>
+                            }
                         </div>
                     </div>
                 </div>
@@ -115,6 +136,7 @@ else
                            Title="Aprobar esta captacion"
                            Desc="La captacion quedara activa y disponible para el proceso comercial."
                            ConfirmLabel="Aprobar captacion" CancelLabel="Cancelar"
+                           Busy="@_procesando"
                            OnClose="@CerrarModal"
                            OnConfirm="@(() => ResolverAsync("APROBAR", "Captacion aprobada"))">
                 <Field Label="Nota opcional">
@@ -126,6 +148,7 @@ else
                            Title="Observar y devolver al agente"
                            Desc="Indica que debe corregir el agente antes de reenviar."
                            ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"
+                           Busy="@_procesando"
                            OnClose="@CerrarModal"
                            OnConfirm="@(() => ResolverAsync("OBSERVAR", "Captacion observada"))">
                 <Field Label="Motivo de la observacion" Required="true">
@@ -137,6 +160,7 @@ else
                            Title="Rechazar esta captacion"
                            Desc="El expediente quedara rechazado y la causa se registrara en la trazabilidad."
                            ConfirmLabel="Rechazar captacion" CancelLabel="Cancelar"
+                           Busy="@_procesando"
                            OnClose="@CerrarModal"
                            OnConfirm="@(() => ResolverAsync("RECHAZAR", "Captacion rechazada"))">
                 <Field Label="Motivo del rechazo" Required="true">
@@ -148,12 +172,13 @@ else
                            Title="Reasignar captacion"
                            Desc="Selecciona al agente que continuara el expediente e indica el motivo."
                            ConfirmLabel="Reasignar" CancelLabel="Cancelar"
+                           Busy="@_procesando"
                            OnClose="@CerrarModal"
                            OnConfirm="@ReasignarAsync">
                 <Field Label="Nuevo agente" Required="true">
                     <select @bind="_nuevoAgenteId">
                         <option value="0">Selecciona un agente</option>
-                        @foreach (var agente in AgenteSvc.All().Where(a => a.Id != _captacion.AgenteResponsableId))
+                        @foreach (var agente in _agentes.Where(a => a.Id != _captacion.AgenteResponsableId))
                         {
                             <option value="@agente.Id">@agente.Nombre</option>
                         }
@@ -179,11 +204,39 @@ else
     private string? _error;
     private string _motivo = "";
     private long _nuevoAgenteId;
+    private bool _procesando;
+    private IReadOnlyList<AgenteDto> _agentes = [];
+    private RevisionMessage? _mensajeRevision;
 
     private string Vigencia => _captacion?.FechaInicioVigencia is { } inicio
         && _captacion.FechaFinVigencia is { } fin
         ? $"{inicio:dd/MM/yyyy} - {fin:dd/MM/yyyy}"
         : Texto(_captacion?.VigenciaTexto);
+
+    private bool EsEstadoFinal => _captacion?.Estado is "Activa" or "Rechazada" or "Cerrada" or "Vencida" or "A" or "R" or "C" or "V";
+
+    private bool EstadoPermiteRevision => _captacion?.Estado is "Pendiente de revision" or "Observada" or "P" or "O";
+
+    private bool PuedeRevisar => !_procesando && EstadoPermiteRevision;
+
+    private string OperacionTexto =>
+        string.IsNullOrWhiteSpace(_captacion?.MotivoOperacion)
+            ? "No registrada"
+            : EnumCatalog.LabelFor(EnumCatalog.OperacionesRequerimiento, _captacion.MotivoOperacion);
+
+    private string UrgenciaTexto => _captacion?.Urgencia switch
+    {
+        1 => "Muy baja (1/5)",
+        2 => "Baja (2/5)",
+        3 => "Media (3/5)",
+        4 => "Alta (4/5)",
+        5 => "Muy alta (5/5)",
+        _ => "No registrada",
+    };
+
+    private RevisionMessage PanelRevision =>
+        MensajeParaEstado(_captacion?.Estado)
+        ?? new RevisionMessage("blue", "info", "La revision de esta captacion ya fue registrada.");
 
     protected override async Task OnParametersSetAsync()
     {
@@ -191,11 +244,17 @@ else
         _error = null;
         try
         {
-            _captacion = string.IsNullOrWhiteSpace(CodigoParam)
-                ? null
-                : await CaptacionSvc.ObtenerPorCodigoAsync(CodigoParam);
+            var captacionTask = string.IsNullOrWhiteSpace(CodigoParam)
+                ? Task.FromResult<CaptacionDto?>(null)
+                : CaptacionSvc.ObtenerPorCodigoAsync(CodigoParam);
+            var agentesTask = AgenteSvc.RefrescarAsync();
+
+            _captacion = await captacionTask;
+            _agentes = await agentesTask;
             if (_captacion is null)
                 _error = "No se encontro la captacion solicitada.";
+            else if (EsEstadoFinal)
+                _mensajeRevision ??= MensajeParaEstado(_captacion.Estado);
         }
         catch (Exception error)
         {
@@ -219,26 +278,60 @@ else
 
     private async Task ResolverAsync(string decision, string mensaje)
     {
-        if (_captacion is null)
+        if (_captacion is null || _procesando)
             return;
+        if (!PuedeRevisar)
+        {
+            _error = "La captacion ya no esta pendiente de revision u observada. Recarga la bandeja para ver su estado actual.";
+            _modal = null;
+            return;
+        }
         try
         {
+            _procesando = true;
+            _error = null;
+            StateHasChanged();
             await CaptacionSvc.ResolverBandejaAsync(_captacion.CodigoCaptacion, decision, _motivo);
             await FinalizarAsync(mensaje);
         }
         catch (Exception error)
         {
+            if (await ConfirmarDecisionAplicadaAsync(decision, mensaje))
+                return;
+
             _error = error.Message;
-            _modal = null;
+        }
+        finally
+        {
+            _procesando = false;
         }
     }
 
     private async Task ReasignarAsync()
     {
-        if (_captacion is null)
+        if (_captacion is null || _procesando)
             return;
+        if (!PuedeRevisar)
+        {
+            _error = "La captacion ya no se puede reasignar porque su revision ya fue registrada.";
+            _modal = null;
+            return;
+        }
+        if (_nuevoAgenteId <= 0)
+        {
+            _error = "Selecciona el agente que recibira la captacion.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_motivo))
+        {
+            _error = "Ingresa el motivo de la reasignacion.";
+            return;
+        }
         try
         {
+            _procesando = true;
+            _error = null;
+            StateHasChanged();
             await CaptacionSvc.ReasignarBandejaAsync(
                 _captacion.CodigoCaptacion,
                 _nuevoAgenteId,
@@ -248,19 +341,69 @@ else
         catch (Exception error)
         {
             _error = error.Message;
-            _modal = null;
+        }
+        finally
+        {
+            _procesando = false;
         }
     }
 
     private async Task FinalizarAsync(string mensaje)
     {
         _modal = null;
-        _toast = mensaje;
+        await RefrescarCaptacionAsync();
+        _mensajeRevision = MensajeParaEstado(_captacion?.Estado, mensaje);
+        _toast = _mensajeRevision?.Text ?? mensaje;
         StateHasChanged();
-        await Task.Delay(300);
-        App.Navigate("bandeja-captaciones");
+        await Task.CompletedTask;
     }
+
+    private async Task<bool> ConfirmarDecisionAplicadaAsync(string decision, string mensaje)
+    {
+        try
+        {
+            await RefrescarCaptacionAsync();
+            if (_captacion is not null && EstadoCoincide(decision, _captacion.Estado))
+            {
+                await FinalizarAsync(mensaje);
+                return true;
+            }
+        }
+        catch
+        {
+            // Si tampoco se puede refrescar, dejamos visible el error original.
+        }
+        return false;
+    }
+
+    private async Task RefrescarCaptacionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CodigoParam)) return;
+        var actualizada = await CaptacionSvc.ObtenerPorCodigoAsync(CodigoParam);
+        if (actualizada is not null)
+            _captacion = actualizada;
+    }
+
+    private static bool EstadoCoincide(string decision, string estado) =>
+        decision.Trim().ToUpperInvariant() switch
+        {
+            "APROBAR" or "A" => estado is "Activa" or "A",
+            "OBSERVAR" or "O" => estado is "Observada" or "O",
+            "RECHAZAR" or "R" => estado is "Rechazada" or "R",
+            _ => false,
+        };
+
+    private static RevisionMessage? MensajeParaEstado(string? estado, string? fallback = null) => estado switch
+    {
+        "Activa" or "A" => new("green", "checkCircle", "Captacion aprobada. Ya esta activa y disponible para el proceso comercial."),
+        "Observada" or "O" => new("blue", "alert", "Captacion observada. El agente debe corregirla y reenviarla a revision."),
+        "Rechazada" or "R" => new("red", "x", "Captacion rechazada. La decision quedo registrada."),
+        _ when fallback is not null => new("green", "checkCircle", fallback),
+        _ => null,
+    };
 
     private static string Texto(string? valor) =>
         string.IsNullOrWhiteSpace(valor) ? "No registrado" : valor;
+
+    private sealed record RevisionMessage(string Tone, string Icon, string Text);
 }

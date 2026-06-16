@@ -1,5 +1,6 @@
 @page "/visita-form"
 @page "/visita-form/{OportunidadIdParam:long}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IVisitaService VisitaSvc
 @inject IOportunidadService OportunidadSvc
@@ -20,9 +21,9 @@
             <div>
                 <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad relaciona al cliente con la captación">
                     <Field Label="Oportunidad" Required="true">
-                        <select @bind="_oportunidadId">
+                        <select @bind="_oportunidadId" disabled="@(_cargando || _procesando)">
                             <option value="0">— Seleccionar —</option>
-                            @foreach (var oportunidad in OportunidadSvc.All()
+                            @foreach (var oportunidad in _oportunidades
                                 .Where(item => item.Estado is "Abierta" or "Solicitud creada"))
                             {
                                 <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
@@ -57,7 +58,11 @@
                     <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
                 }
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("visitas"))" OnSave="@TryConfirm" SaveLabel="Programar visita" />
+                <FormFooterBar OnCancel="@(() => App.Navigate("visitas"))"
+                               OnSave="@TryConfirm"
+                               SaveLabel="Programar visita"
+                               Busy="@_procesando"
+                               BusyLabel="Programando..." />
             </div>
 
             <div class="cl-stack">
@@ -73,6 +78,7 @@
                        Title="¿Programar la visita?"
                        Desc="@DescripcionConfirmacion"
                        ConfirmLabel="Programar" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">Visita programada correctamente</Toast>
@@ -88,9 +94,13 @@
     private string _observaciones = "";
     private bool _confirm;
     private bool _toast;
+    private bool _cargando = true;
+    private bool _procesando;
     private string? _err;
+    private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
 
-    private OportunidadComercialDto? OportunidadSeleccionada => OportunidadSvc.ById(_oportunidadId);
+    private OportunidadComercialDto? OportunidadSeleccionada =>
+        _oportunidades.FirstOrDefault(item => item.Id == _oportunidadId);
     private string DescripcionConfirmacion => OportunidadSeleccionada is null
         ? "Revisa los datos de la visita."
         : $"Se agendará la visita de {OportunidadSeleccionada.ClienteNombre} para el {FormatFecha(_fecha)} a las {FormatHora(_hora)}.";
@@ -102,10 +112,25 @@
         new FormStepsSidebar.Step("Notas", "Indicaciones opcionales", true),
     };
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (OportunidadIdParam > 0)
-            _oportunidadId = OportunidadIdParam;
+        try
+        {
+            _oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
+            if (OportunidadIdParam > 0)
+                _oportunidadId = OportunidadIdParam;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
     }
 
     private static string FormatFecha(DateOnly? fecha) =>
@@ -116,6 +141,7 @@
 
     private void TryConfirm()
     {
+        if (_cargando || _procesando) return;
         if (OportunidadSeleccionada is null) { _err = "Debes seleccionar una oportunidad comercial válida."; return; }
         if (_fecha is null || _hora is null) { _err = "La fecha y la hora de la visita son obligatorias."; return; }
         _err = null;
@@ -124,26 +150,36 @@
 
     private async Task OnConfirm()
     {
-        _confirm = false;
+        if (_procesando) return;
         try
         {
-            VisitaSvc.Programar(new VisitaFormRequest
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await VisitaSvc.ProgramarAsync(new VisitaFormRequest
             {
                 OportunidadId = _oportunidadId,
                 FechaTexto = FormatFecha(_fecha),
                 HoraTexto = FormatHora(_hora),
                 Observaciones = string.IsNullOrWhiteSpace(_observaciones) ? null : _observaciones.Trim(),
-            });
+            }, DisposedToken);
         }
-        catch (InvalidOperationException error)
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception error)
         {
             _err = error.Message;
             return;
         }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
 
+        _confirm = false;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(300);
         App.Navigate("visitas");
     }
 }

@@ -7,6 +7,7 @@
 @inject ICaptacionService CaptacionSvc
 @inject IProspeccionService ProspeccionSvc
 @inject ILocalService LocalSvc
+@inject INotificacionService Notificaciones
 
 <PageTitle>@_tituloPagina · ControlLocal</PageTitle>
 
@@ -14,8 +15,8 @@
           Title="@_titulo"
           Subtitle="@_subtitulo">
     <Actions>
-        <button class="cl-btn ghost" @onclick="OnCancelar">Cancelar</button>
-        <button class="cl-btn primary" @onclick="Guardar">
+        <button class="cl-btn ghost" disabled="@_procesando" @onclick="OnCancelar">Cancelar</button>
+        <button class="cl-btn primary" disabled="@_procesando" @onclick="Guardar">
             <Icon Name="arrowRight" Size="13" />
             @(_esEdicion ? "Guardar y reenviar a revisión" : "Crear y enviar a revisión")
         </button>
@@ -56,7 +57,7 @@
                     </div>
                 </FormSection>
 
-                <FormSection Num="2" Title="Condiciones del encargo" Sub="Datos persistidos en la captación">
+                <FormSection Num="2" Title="Condiciones del encargo" Sub="Datos comerciales de la captacion">
                     <div class="cl-grid c3">
                         <Field Label="Operación" Required="true">
                             <input value="Alquiler comercial" disabled />
@@ -127,6 +128,7 @@
     private string _toastMsg = "";
     private string? _err;
     private string? _claveCargada;
+    private bool _procesando;
 
     private bool _esCaptar => ProspeccionId > 0;
     private bool _esEdicion => !_esCaptar && !string.IsNullOrWhiteSpace(CodigoParam);
@@ -239,6 +241,7 @@
 
     private async Task Guardar()
     {
+        if (_procesando) return;
         if (_localId <= 0 || _local is null) { _err = "Selecciona un local comercial."; return; }
         if (_fechaCaptacion is null) { _err = "La fecha de captación es obligatoria."; return; }
         if (_inicioVigencia is null || _finVigencia is null) { _err = "La vigencia es obligatoria."; return; }
@@ -252,6 +255,8 @@
 
         try
         {
+            _procesando = true;
+            await RenderIfAliveAsync();
             var dto = new CaptacionDto
             {
                 Id = _captacion.Id,
@@ -279,11 +284,22 @@
             if (_esCaptar)
                 ProspeccionSvc.MarcarCaptado(ProspeccionId, guardada.CodigoCaptacion);
 
+            Notificaciones.Crear(new NotificacionDto
+            {
+                Tipo = _esEdicion ? "Captacion reenviada" : "Captacion por revisar",
+                Mensaje = $"{guardada.CodigoCaptacion} espera revision del broker.",
+                Severidad = "MEDIA",
+                Icono = "pin",
+                EntidadTipo = "Captacion",
+                EntidadRef = guardada.CodigoCaptacion,
+                Ruta = $"captacion-review/{guardada.CodigoCaptacion}",
+                DestinatarioRol = Roles.Broker,
+            });
+
             _err = null;
             _toastMsg = _esEdicion ? "Captación actualizada y reenviada a revisión." : "Captación creada y enviada a revisión.";
             _toast = true;
             await RenderIfAliveAsync();
-            await Task.Delay(300, DisposedToken);
             App.Navigate("captaciones");
         }
         catch (OperationCanceledException)
@@ -293,6 +309,11 @@
         catch (Exception error)
         {
             _err = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
         }
     }
 }

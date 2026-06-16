@@ -60,6 +60,7 @@ public static class Navigation
             new NavSection("Operación", new[]
             {
                 new NavItem("pin", "Captaciones", "captaciones", "14"),
+                new NavItem("target", "Oportunidades comerciales", "oportunidades"),
                 new NavItem("target", "Interacciones comerciales", "interacciones", "5"),
                 new NavItem("calendar", "Visitas", "visitas"),
                 new NavItem("fileText", "Solicitudes de alquiler", "solicitudes"),
@@ -80,7 +81,8 @@ public static class Navigation
         ["local-detail"] = "locales",
         ["captacion-form"] = "captaciones",
         ["captacion-detail"] = "captaciones",
-        ["oportunidad-detail"] = "captaciones",
+        ["oportunidad-detail"] = "oportunidades",
+        ["oportunidad-form"] = "oportunidades",
         ["captacion-review"] = "bandeja-captaciones",
         ["interaccion-form"] = "interacciones",
         ["interaccion-detail"] = "interacciones",

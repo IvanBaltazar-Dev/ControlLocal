@@ -5,14 +5,19 @@
 {
     <RouteView RouteData="RouteData" DefaultLayout="typeof(Layout.MainLayout)" />
 }
+else if (_esperandoSesion)
+{
+    <div style="padding:32px;color:#7E8794;font-size:13px;">Validando sesion...</div>
+}
 
 @code {
     [Parameter, EditorRequired]
     public RouteData RouteData { get; set; } = default!;
 
     private bool _permitido;
+    private bool _esperandoSesion;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (RouteAccess.IsPublic(RouteData.PageType))
         {
@@ -20,8 +25,31 @@
             return;
         }
 
+        await App.EnsureInitializedAsync();
+        ResolverAcceso(App.SessionInitialized);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_esperandoSesion) return;
+
+        await App.EnsureInitializedAsync();
+        ResolverAcceso(App.SessionInitialized);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ResolverAcceso(bool redirigirSiFalla)
+    {
+        if (!App.SessionInitialized)
+        {
+            _permitido = false;
+            _esperandoSesion = true;
+            return;
+        }
+
+        _esperandoSesion = false;
         _permitido = App.IsAuthenticated && RouteAccess.CanAccess(RouteData.PageType, App.Role);
-        if (!_permitido)
+        if (!_permitido && redirigirSiFalla)
             NavigationManager.NavigateTo(App.IsAuthenticated ? "/acceso-denegado" : "/login");
     }
 }

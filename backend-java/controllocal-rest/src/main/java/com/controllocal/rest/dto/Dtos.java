@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.Alerta;
@@ -53,6 +54,42 @@ public final class Dtos {
             String nombre,
             String usuario,
             LocalDateTime expiraEn) {
+    }
+
+    // ---------- Agentes inmobiliarios ----------
+
+    public record AgenteResponse(
+            Long id,
+            String codigoAgente,
+            String nombre,
+            String tipoPersona,
+            String tipoDocumento,
+            String numeroDocumento,
+            String telefono,
+            String correo,
+            String usuario,
+            String zona,
+            LocalDate fechaIngreso,
+            String estadoAdministrativo,
+            String estadoOperativo) {
+
+        public static AgenteResponse desde(AgenteInmobiliario a) {
+            Persona persona = a.getPersona();
+            return new AgenteResponse(
+                    a.getIdAgente(),
+                    a.getCodigoAgente(),
+                    persona != null ? persona.getNombresORazonSocial() : null,
+                    persona != null ? codigo(persona.getTipoPersona()) : null,
+                    persona != null ? codigo(persona.getTipoDocumento()) : null,
+                    persona != null ? persona.getNumeroDocumento() : null,
+                    persona != null ? persona.getTelefono() : null,
+                    persona != null ? persona.getCorreo() : null,
+                    a.getNombreUsuario(),
+                    a.getZonaAsignada(),
+                    a.getFechaIngreso(),
+                    codigo(a.getEstadoAdministrativo()),
+                    codigo(a.getEstadoOperativo()));
+        }
     }
 
     // ---------- Propietarios ----------
@@ -489,6 +526,35 @@ public final class Dtos {
     }
 
     public record NoContinuidadRequest(String razon, String observaciones) {
+    }
+
+    public record OportunidadRequest(
+            String codigoOportunidad,
+            Long idCliente,
+            Long idCaptacion,
+            String observaciones) {
+
+        public OportunidadComercial aEntidad(long idAgente) {
+            OportunidadComercial oportunidad = new OportunidadComercial();
+            oportunidad.setCodigoOportunidad(
+                    codigoOportunidad != null && !codigoOportunidad.isBlank()
+                            ? codigoOportunidad.trim()
+                            : "OP-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHHmmss")));
+            oportunidad.setObservaciones(observaciones);
+
+            ClienteInteresado cliente = new ClienteInteresado();
+            cliente.setIdCliente(idCliente);
+            oportunidad.setClienteInteresado(cliente);
+
+            Captacion captacion = new Captacion();
+            captacion.setIdCaptacion(idCaptacion);
+            oportunidad.setCaptacion(captacion);
+
+            AgenteInmobiliario agente = new AgenteInmobiliario();
+            agente.setIdAgente(idAgente);
+            oportunidad.setAgenteResponsable(agente);
+            return oportunidad;
+        }
     }
 
     // ---------- Solicitudes de alquiler ----------

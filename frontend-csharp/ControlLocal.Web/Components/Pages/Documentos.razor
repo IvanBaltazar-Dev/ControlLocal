@@ -9,7 +9,7 @@
 
 <AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", $"{CodigoExpediente} · Documentos" })"
           Title="@($"Documentos · {CodigoExpediente}")"
-          Subtitle="Carga documentos usando los tipos, estados y resultados de revision definidos por el backend">
+          Subtitle="Carga y revisa los documentos requeridos para la evaluacion">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate($"solicitud-detail/{CodigoExpediente}"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
         <button class="cl-btn primary" disabled="@(PendientesDeCarga > 0)"

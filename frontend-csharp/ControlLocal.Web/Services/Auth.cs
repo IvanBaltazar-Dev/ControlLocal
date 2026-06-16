@@ -8,7 +8,11 @@ public record AuthUser(
     string Iniciales,
     string Role);
 
-public record AuthResult(bool Success, string? Error = null, AuthUser? User = null);
+public record AuthResult(
+    bool Success,
+    string? Error = null,
+    AuthUser? User = null,
+    string? Token = null);
 
 public interface IAuthService
 {

@@ -16,5 +16,17 @@ window.controlLocal = {
     irA: function (id) {
         const el = document.getElementById(id);
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+
+    session: {
+        get: function () {
+            return localStorage.getItem("controlLocal.session");
+        },
+        set: function (value) {
+            localStorage.setItem("controlLocal.session", value);
+        },
+        clear: function () {
+            localStorage.removeItem("controlLocal.session");
+        }
     }
 };

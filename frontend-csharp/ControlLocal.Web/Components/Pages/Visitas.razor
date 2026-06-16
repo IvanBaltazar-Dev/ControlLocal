@@ -118,14 +118,14 @@
                                     <div class="cl-flex" style="gap:6px;justify-content:flex-end;">
                                         @if (EsModificable(v))
                                         {
-                                            <button class="cl-btn sm primary" @onclick="@(() => AbrirRealizada(v))"><Icon Name="check" Size="12" /> Realizada</button>
-                                            <button class="cl-btn sm" @onclick="@(() => AbrirNoRealizada(v))"><Icon Name="alert" Size="12" /> No se realizó</button>
-                                            <button class="cl-btn sm" @onclick="@(() => AbrirReprogramar(v))"><Icon Name="clock" Size="12" /> Reprogramar</button>
-                                            <button class="cl-btn sm ghost" @onclick="@(() => AbrirCancelar(v))"><Icon Name="x" Size="12" /> Cancelar</button>
+                                            <button class="cl-btn sm primary" disabled="@_procesando" @onclick="@(() => AbrirRealizada(v))"><Icon Name="check" Size="12" /> Realizada</button>
+                                            <button class="cl-btn sm" disabled="@_procesando" @onclick="@(() => AbrirNoRealizada(v))"><Icon Name="alert" Size="12" /> No se realizó</button>
+                                            <button class="cl-btn sm" disabled="@_procesando" @onclick="@(() => AbrirReprogramar(v))"><Icon Name="clock" Size="12" /> Reprogramar</button>
+                                            <button class="cl-btn sm ghost" disabled="@_procesando" @onclick="@(() => AbrirCancelar(v))"><Icon Name="x" Size="12" /> Cancelar</button>
                                         }
                                         else if (AdmiteResultado(v))
                                         {
-                                            <button class="cl-btn sm primary" @onclick="@(() => AbrirResultado(v))"><Icon Name="checkCircle" Size="12" /> Registrar resultado</button>
+                                            <button class="cl-btn sm primary" disabled="@_procesando" @onclick="@(() => AbrirResultado(v))"><Icon Name="checkCircle" Size="12" /> Registrar resultado</button>
                                         }
                                         <button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"oportunidad-detail/{v.OportunidadId}"))">Seguimiento</button>
                                     </div>
@@ -169,8 +169,10 @@
                 }
             </ChildContent>
             <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalReprogramar = false)">Cancelar</button>
-                <button class="cl-btn primary" @onclick="ConfirmarReprogramar">Reprogramar</button>
+                <button class="cl-btn ghost" disabled="@_procesando" @onclick="@(() => _modalReprogramar = false)">Cancelar</button>
+                <button class="cl-btn primary" disabled="@_procesando" @onclick="ConfirmarReprogramar">
+                    @(_procesando ? "Reprogramando..." : "Reprogramar")
+                </button>
             </Footer>
         </Modal>
 
@@ -190,8 +192,10 @@
                 }
             </ChildContent>
             <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalCancelar = false)">Volver</button>
-                <button class="cl-btn primary" @onclick="ConfirmarCancelar">Cancelar visita</button>
+                <button class="cl-btn ghost" disabled="@_procesando" @onclick="@(() => _modalCancelar = false)">Volver</button>
+                <button class="cl-btn primary" disabled="@_procesando" @onclick="ConfirmarCancelar">
+                    @(_procesando ? "Cancelando..." : "Cancelar visita")
+                </button>
             </Footer>
         </Modal>
 
@@ -203,6 +207,7 @@
                        Desc="@($"Confirma que la visita con {_target?.ClienteNombre} ocurrió. Después podrás registrar el resultado comercial.")"
                        ConfirmLabel="Sí, fue realizada"
                        CancelLabel="Volver"
+                       Busy="@_procesando"
                        OnClose="@(() => _modalRealizada = false)"
                        OnConfirm="ConfirmarRealizada" />
 
@@ -225,8 +230,10 @@
                 }
             </ChildContent>
             <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalNoRealizada = false)">Volver</button>
-                <button class="cl-btn primary" @onclick="ConfirmarNoRealizada">Confirmar</button>
+                <button class="cl-btn ghost" disabled="@_procesando" @onclick="@(() => _modalNoRealizada = false)">Volver</button>
+                <button class="cl-btn primary" disabled="@_procesando" @onclick="ConfirmarNoRealizada">
+                    @(_procesando ? "Confirmando..." : "Confirmar")
+                </button>
             </Footer>
         </Modal>
 
@@ -323,8 +330,10 @@
                 }
             </ChildContent>
             <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalResultado = false)">Cancelar</button>
-                <button class="cl-btn primary" @onclick="ConfirmarResultado">Registrar resultado</button>
+                <button class="cl-btn ghost" disabled="@_procesando" @onclick="@(() => _modalResultado = false)">Cancelar</button>
+                <button class="cl-btn primary" disabled="@_procesando" @onclick="ConfirmarResultado">
+                    @(_procesando ? "Registrando..." : "Registrar resultado")
+                </button>
             </Footer>
         </Modal>
 
@@ -377,6 +386,7 @@
 
     private bool _toast;
     private string _toastMsg = "";
+    private bool _procesando;
 
     private string _filtroEstado = "";
     private IReadOnlyList<VisitaDto> _visitas = [];
@@ -524,64 +534,98 @@
         _modalResultado = true;
     }
 
-    private void ConfirmarReprogramar()
+    private async Task ConfirmarReprogramar()
     {
-        if (_target is null) return;
+        if (_target is null || _procesando) return;
         try
         {
-            VisitaSvc.Reprogramar(_target.Id, FormatFecha(_fechaPick), FormatHora(_horaPick));
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await VisitaSvc.ReprogramarAsync(_target.Id, FormatFecha(_fechaPick), FormatHora(_horaPick), DisposedToken);
             _modalReprogramar = false;
             Recalcular();
             Notificar("Visita reprogramada correctamente.");
         }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _err = ex.Message; }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
     }
 
-    private void ConfirmarCancelar()
+    private async Task ConfirmarCancelar()
     {
-        if (_target is null) return;
+        if (_target is null || _procesando) return;
         try
         {
-            VisitaSvc.Cancelar(_target.Id, _motivoTmp);
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await VisitaSvc.CancelarAsync(_target.Id, _motivoTmp, DisposedToken);
             _modalCancelar = false;
             Recalcular();
             Notificar("Visita cancelada.");
         }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _err = ex.Message; }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
     }
 
-    private void ConfirmarRealizada()
+    private async Task ConfirmarRealizada()
     {
-        if (_target is null) return;
+        if (_target is null || _procesando) return;
         try
         {
-            VisitaSvc.MarcarRealizada(_target.Id);
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await VisitaSvc.MarcarRealizadaAsync(_target.Id, DisposedToken);
             _modalRealizada = false;
             Recalcular();
             Notificar("Visita marcada como realizada. Ya puedes registrar el resultado.");
         }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _err = ex.Message; }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
     }
 
-    private void ConfirmarNoRealizada()
+    private async Task ConfirmarNoRealizada()
     {
-        if (_target is null) return;
+        if (_target is null || _procesando) return;
         try
         {
-            VisitaSvc.MarcarNoRealizada(_target.Id, _motivoNoRealizadaTmp);
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await VisitaSvc.MarcarNoRealizadaAsync(_target.Id, _motivoNoRealizadaTmp, DisposedToken);
             _modalNoRealizada = false;
             Recalcular();
             Notificar("Visita marcada como no realizada.");
         }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _err = ex.Message; }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
     }
 
-    private void ConfirmarResultado()
+    private async Task ConfirmarResultado()
     {
-        if (_target is null) return;
+        if (_target is null || _procesando) return;
         try
         {
-            VisitaSvc.RegistrarResultado(_target.Id, new VisitaResultadoRequest
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await VisitaSvc.RegistrarResultadoAsync(_target.Id, new VisitaResultadoRequest
             {
                 Resultado = _resultadoTmp,
                 Observaciones = string.IsNullOrWhiteSpace(_obsTmp) ? null : _obsTmp.Trim(),
@@ -592,7 +636,7 @@
                 OpinionPrecio = string.IsNullOrWhiteSpace(_opinionPrecioTmp) ? null : _opinionPrecioTmp,
                 ProximaAccion = MantieneAbierta(_resultadoTmp)
                     && !string.IsNullOrWhiteSpace(_proximaAccionTmp) ? _proximaAccionTmp : null,
-            });
+            }, DisposedToken);
             _modalResultado = false;
             Recalcular();
             var msg = ImplicaNoContinuidad(_resultadoTmp)
@@ -600,7 +644,13 @@
                 : "Resultado registrado. La oportunidad sigue en seguimiento.";
             Notificar(msg);
         }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _err = ex.Message; }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
     }
 
     private void Notificar(string mensaje)

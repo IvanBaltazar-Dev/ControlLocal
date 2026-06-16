@@ -19,6 +19,10 @@
                 <button class="cl-btn danger" @onclick="@(() => App.Navigate($"cierre/{_cap.Id}"))"><Icon Name="x" Size="13" /> Cerrar captacion</button>
             }
         }
+        else if (_cap.Estado is "Activa" or "A")
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate($"oportunidad-form/{_cap.CodigoCaptacion}"))"><Icon Name="plus" Size="13" /> Nueva oportunidad</button>
+        }
     </Actions>
     <ChildContent>
         @* ----- Etapa de la PROPIEDAD (resumen del avance entre sus clientes) ----- *@

@@ -1,5 +1,6 @@
 @page "/interaccion-form"
 @page "/interaccion-form/{OportunidadIdParam:long}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IOportunidadService OportunidadSvc
 @inject IInteraccionService InteraccionSvc
@@ -20,7 +21,7 @@
                     <Field Label="Oportunidad" Required="true">
                         <select @bind="_oportunidadId">
                             <option value="0">— Seleccionar —</option>
-                            @foreach (var oportunidad in OportunidadSvc.All())
+                            @foreach (var oportunidad in _oportunidades)
                             {
                                 <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
                             }
@@ -74,15 +75,15 @@
                     <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
                 }
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("interacciones"))" OnSave="@TryConfirm" SaveLabel="Registrar interacción" />
+                <FormFooterBar OnCancel="@(() => App.Navigate("interacciones"))"
+                               OnSave="@TryConfirm"
+                               SaveLabel="Registrar interacción"
+                               Busy="@_procesando"
+                               BusyLabel="Registrando..." />
             </div>
 
             <div class="cl-stack">
                 <FormStepsSidebar Steps="_pasos" />
-                <div class="cl-alert blue">
-                    <Icon Name="info" Size="15" />
-                    <span>En el backend la interacción referencia una <b>oportunidad</b>; el cliente y la captación no se eligen por separado.</span>
-                </div>
             </div>
         </div>
 
@@ -90,6 +91,7 @@
                        Title="¿Registrar interacción comercial?"
                        Desc="Se guardará el contacto en el historial de la oportunidad seleccionada."
                        ConfirmLabel="Confirmar" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">Interacción registrada correctamente</Toast>
@@ -106,9 +108,12 @@
     private string _transcripcion = "";
     private bool _confirm;
     private bool _toast;
+    private bool _procesando;
     private string? _err;
+    private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
 
-    private OportunidadComercialDto? OportunidadSeleccionada => OportunidadSvc.ById(_oportunidadId);
+    private OportunidadComercialDto? OportunidadSeleccionada =>
+        _oportunidades.FirstOrDefault(item => item.Id == _oportunidadId);
 
     private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
     {
@@ -117,14 +122,27 @@
         new FormStepsSidebar.Step("Detalle", "Notas opcionales", true),
     };
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         if (OportunidadIdParam > 0)
             _oportunidadId = OportunidadIdParam;
+
+        try
+        {
+            _oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
     }
 
     private void TryConfirm()
     {
+        if (_procesando) return;
         if (OportunidadSeleccionada is null) { _err = "Debes seleccionar una oportunidad comercial válida."; return; }
         if (!EnumCatalog.CanalesContacto.Any(item => item.Code == _canalContacto)) { _err = "Debes seleccionar un canal de contacto válido."; return; }
         if (!EnumCatalog.ResultadosInteraccion.Any(item => item.Code == _resultado)) { _err = "Debes seleccionar un resultado válido."; return; }
@@ -134,9 +152,12 @@
 
     private async Task OnConfirm()
     {
+        if (_procesando) return;
         _confirm = false;
         try
         {
+            _procesando = true;
+            await RenderIfAliveAsync();
             InteraccionSvc.Agregar(new InteraccionFormRequest
             {
                 OportunidadId = _oportunidadId,
@@ -151,10 +172,12 @@
             _err = error.Message;
             return;
         }
+        finally
+        {
+            _procesando = false;
+        }
 
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(300);
         App.Navigate("interacciones");
     }
 }

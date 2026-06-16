@@ -1,5 +1,6 @@
 @page "/evaluacion"
 @page "/evaluacion/{CodigoParam}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
 
@@ -7,7 +8,7 @@
 
 <AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes por evaluar", _solicitud?.CodigoSolicitud ?? "Evaluación" })"
           Title="@(_solicitud is null ? "Evaluar solicitud" : $"{_solicitud.CodigoSolicitud} · {_solicitud.ClienteNombre}")"
-          Subtitle="Registra una evaluación alineada al modelo de solicitudes del backend">
+          Subtitle="Revisa la solicitud y registra una decisión clara para el agente">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
@@ -35,7 +36,7 @@
                         </div>
                     </div>
 
-                    <FormSection Num="1" Title="Evaluación" Sub="Tipo, resultado y observaciones persistidos por EvaluacionSolicitud">
+                    <FormSection Num="1" Title="Evaluación" Sub="Resultado y observaciones de la revisión">
                         <div class="cl-grid c2">
                             <Field Label="Tipo de evaluación" Required="true">
                                 <select @bind="_tipoEvaluacion">
@@ -66,7 +67,11 @@
                         <div class="cl-alert red"><Icon Name="alert" Size="15" /><span>@_err</span></div>
                     }
 
-                    <FormFooterBar OnCancel="@(() => App.Navigate("solicitudes"))" OnSave="@TryConfirm" SaveLabel="Registrar evaluación" />
+                    <FormFooterBar OnCancel="@(() => App.Navigate("solicitudes"))"
+                                   OnSave="@TryConfirm"
+                                   SaveLabel="Registrar evaluación"
+                                   Busy="@_procesando"
+                                   BusyLabel="Registrando..." />
                 </div>
 
                 <div class="cl-stack">
@@ -79,10 +84,6 @@
                             </div>
                         </div>
                     </div>
-                    <div class="cl-alert blue">
-                        <Icon Name="info" Size="15" />
-                        <span>La evaluación guarda únicamente campos existentes en Java y actualiza el estado de la solicitud.</span>
-                    </div>
                 </div>
             </div>
         }
@@ -91,6 +92,7 @@
                        Title="¿Registrar la evaluación?"
                        Desc="@($"Resultado: {EnumCatalog.LabelFor(EnumCatalog.ResultadosEvaluacionSolicitud, _resultado)}.")"
                        ConfirmLabel="Confirmar" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">Evaluación registrada correctamente.</Toast>
@@ -106,6 +108,7 @@
     private string _observaciones = "";
     private bool _confirm;
     private bool _toast;
+    private bool _procesando;
     private string? _err;
 
     protected override async Task OnParametersSetAsync()
@@ -125,6 +128,7 @@
 
     private void TryConfirm()
     {
+        if (_procesando) return;
         if (_solicitud is null) { _err = "No se encontró la solicitud seleccionada."; return; }
         if (!EnumCatalog.TiposEvaluacionSolicitud.Any(item => item.Code == _tipoEvaluacion)) { _err = "Selecciona un tipo de evaluación válido."; return; }
         if (!EnumCatalog.ResultadosEvaluacionSolicitud.Any(item => item.Code == _resultado)) { _err = "Selecciona un resultado válido."; return; }
@@ -139,29 +143,38 @@
 
     private async Task OnConfirm()
     {
+        if (_procesando) return;
         _confirm = false;
         if (_solicitud is null)
             return;
 
         try
         {
-            SolicitudSvc.Evaluar(_solicitud.CodigoSolicitud, new EvaluacionSolicitudDto
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await SolicitudSvc.EvaluarAsync(_solicitud.CodigoSolicitud, new EvaluacionSolicitudDto
             {
                 TipoEvaluacion = _tipoEvaluacion,
                 Resultado = _resultado,
                 Observaciones = _observaciones.Trim(),
                 ResponsableEvaluacion = App.CurrentUser?.Nombre ?? "Broker en sesión",
-            });
+            }, DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch (InvalidOperationException error)
         {
             _err = error.Message;
             return;
         }
+        finally
+        {
+            _procesando = false;
+        }
 
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(300);
         App.Navigate("solicitudes");
     }
 }

@@ -31,6 +31,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 @Path("oportunidades")
 @Produces(MediaType.APPLICATION_JSON)
@@ -69,6 +70,32 @@ public class OportunidadesRest {
     }
 
     @POST
+    public Response registrar(Dtos.OportunidadRequest dto) {
+        UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "AGENTE");
+        if (dto == null) {
+            throw ApiException.badRequest("Los datos de la oportunidad son obligatorios.");
+        }
+        if (dto.idCliente() == null || dto.idCliente() <= 0) {
+            throw ApiException.badRequest("Selecciona un cliente interesado.");
+        }
+        if (dto.idCaptacion() == null || dto.idCaptacion() <= 0) {
+            throw ApiException.badRequest("Selecciona una captacion activa.");
+        }
+        boolean captacionDelAgente = captaciones.listarPorAgente(usuario.idDominio()).stream()
+                .anyMatch(item -> item.getIdCaptacion().equals(dto.idCaptacion()));
+        if (!captacionDelAgente) {
+            throw ApiException.prohibido();
+        }
+
+        long id = oportunidades.registrar(dto.aEntidad(usuario.idDominio()));
+        return Response.status(Response.Status.CREATED)
+                .entity(Dtos.OportunidadResponse.desde(
+                        oportunidades.buscarPorId(id)
+                                .orElseThrow(() -> ApiException.noEncontrado("Oportunidad"))))
+                .build();
+    }
+
+    @POST
     @Path("{id}/no-continuidad")
     public Dtos.OportunidadResponse cerrarNoContinuidad(
             @PathParam("id") long id,
@@ -88,6 +115,17 @@ public class OportunidadesRest {
         motivo.setAgenteResponsable(agente);
         motivos.registrar(motivo);
 
+        return Dtos.OportunidadResponse.desde(
+                oportunidades.buscarPorId(id)
+                        .orElseThrow(() -> ApiException.noEncontrado("Oportunidad")));
+    }
+
+    @POST
+    @Path("{id}/cierre-exitoso")
+    public Dtos.OportunidadResponse cerrarExitoso(@PathParam("id") long id) {
+        UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "AGENTE");
+        obtenerConAcceso(id, usuario);
+        oportunidades.cerrarExitosa(id);
         return Dtos.OportunidadResponse.desde(
                 oportunidades.buscarPorId(id)
                         .orElseThrow(() -> ApiException.noEncontrado("Oportunidad")));

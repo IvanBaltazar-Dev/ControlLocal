@@ -83,9 +83,7 @@ public class CaptacionesRest {
         captacion.setFechaFinVigencia(dto.fechaFinVigencia());
         captacion.setComisionPactada(dto.comisionPactada());
         captacion.setObservaciones(dto.observaciones());
-        captacion.setMotivoOperacion(dto.motivoOperacion() == null || dto.motivoOperacion().isBlank()
-                ? null
-                : com.controllocal.model.comercial.enums.OperacionRequerimiento.fromCodigo(dto.motivoOperacion()));
+        captacion.setMotivoOperacion(operacionAlquiler(dto.motivoOperacion()));
         captacion.setUrgencia(dto.urgencia());
         captacion.setExclusividad(dto.exclusividad());
         captacion.setLocalComercial(local);
@@ -117,9 +115,7 @@ public class CaptacionesRest {
         captacion.setFechaFinVigencia(dto.fechaFinVigencia());
         captacion.setComisionPactada(dto.comisionPactada());
         captacion.setObservaciones(dto.observaciones());
-        captacion.setMotivoOperacion(dto.motivoOperacion() == null || dto.motivoOperacion().isBlank()
-                ? null
-                : com.controllocal.model.comercial.enums.OperacionRequerimiento.fromCodigo(dto.motivoOperacion()));
+        captacion.setMotivoOperacion(operacionAlquiler(dto.motivoOperacion()));
         captacion.setUrgencia(dto.urgencia());
         captacion.setExclusividad(dto.exclusividad());
         captaciones.actualizar(captacion);
@@ -210,5 +206,12 @@ public class CaptacionesRest {
         if (!LIMITADOR_SENSIBLE.permitir(clave)) {
             throw ApiException.demasiadasSolicitudes();
         }
+    }
+
+    private com.controllocal.model.comercial.enums.OperacionRequerimiento operacionAlquiler(String codigo) {
+        if (codigo != null && !codigo.isBlank() && !"A".equals(codigo)) {
+            throw ApiException.badRequest("ControlLocal solo admite operaciones de alquiler comercial.");
+        }
+        return com.controllocal.model.comercial.enums.OperacionRequerimiento.ALQUILER;
     }
 }

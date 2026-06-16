@@ -26,6 +26,7 @@ public class SolicitudAlquiler {
     private AgenteInmobiliario agenteResponsable;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
+    private LocalDate fechaVigenciaOferta;
     private List<DocumentoSolicitud> documentos = new ArrayList<>();
     private List<EvaluacionSolicitud> evaluaciones = new ArrayList<>();
 
@@ -57,6 +58,8 @@ public class SolicitudAlquiler {
     public void setFechaCreacion(LocalDateTime fechaCreacion) { this.fechaCreacion = fechaCreacion; }
     public LocalDateTime getFechaActualizacion() { return fechaActualizacion; }
     public void setFechaActualizacion(LocalDateTime fechaActualizacion) { this.fechaActualizacion = fechaActualizacion; }
+    public LocalDate getFechaVigenciaOferta() { return fechaVigenciaOferta; }
+    public void setFechaVigenciaOferta(LocalDate fechaVigenciaOferta) { this.fechaVigenciaOferta = fechaVigenciaOferta; }
     public List<DocumentoSolicitud> getDocumentos() { return documentos; }
     public void setDocumentos(List<DocumentoSolicitud> documentos) { this.documentos = documentos; }
     public List<EvaluacionSolicitud> getEvaluaciones() { return evaluaciones; }

@@ -1,75 +1,46 @@
-# Database
+# Base de datos
 
-Estructura recomendada para scripts SQL del proyecto:
+Los scripts `00` a `04` inicializan una base MySQL vacia. Los scripts `05` y
+`06` actualizan instalaciones que ya contienen datos.
 
-- `ddl/`: creacion y evolucion del esquema. No debe contener `INSERT`.
-- `dml/`: datos de apoyo, carga inicial o datos manuales de prueba. No debe contener `CREATE TABLE`.
-- `tx/`: plantillas de transacciones SQL para ejecutar cargas o procesos manuales.
-- `sp/`: procedimientos almacenados y funciones, solo si la capa DAO los usa con `CallableStatement`.
+## Orden de ejecucion
 
-Orden recomendado para una base limpia:
+1. `00_recreate_database_controllocal.sql`
+   Elimina y vuelve a crear la base `controllocal`.
+2. `01_create_schema_controllocal.sql`
+   Crea el esquema final completo, con tablas, claves, restricciones e indices.
+3. `02_seed_catalogs.sql`
+   Carga los distritos de Lima y los tipos de documento requeridos.
+4. `03_seed_initial_users.sql`
+   Crea un broker administrador, un broker y un agente. Requiere variables de
+   sesion privadas para los usuarios y hashes PBKDF2.
+5. `04_seed_demo_data.sql` (opcional)
+   Carga una muestra operativa completa para desarrollo y pruebas.
+6. `05_restrict_alquiler_comercial.sql` (solo base existente)
+   Normaliza operaciones anteriores y restringe captaciones y documentos a
+   alquiler comercial sin recrear la base.
+7. `06_visita_flujo_estados.sql` (solo base existente)
+   Incorpora el estado `No realizada` y separa la asistencia de la visita de
+   su resultado comercial.
 
-1. `ddl/00_recreate_database_controllocal.sql`
-2. `ddl/01_create_schema_controllocal_v3.sql`
-3. `dml/01_seed_initial_data.sql`
-4. `dml/02_test_data_local_comercial.sql`
+El archivo `00` es destructivo. Debe ejecutarse solo cuando se quiera empezar
+desde cero. Los archivos `02`, `03` y `04` son idempotentes.
 
-Si no quieres borrar datos, no ejecutes el archivo `00_recreate_database_controllocal.sql`.
-En ese caso selecciona/crea manualmente la base `controllocal` y luego ejecuta el archivo de esquema.
+## Usuarios iniciales
 
-Las transacciones principales de la aplicacion se manejan desde Java con `TransactionRunner`.
-Los scripts en `tx/` quedan para ejecuciones manuales en MySQL Workbench.
+Los nombres de usuario y los hashes de contrasena no se almacenan en el
+repositorio. Antes de ejecutar `03_seed_initial_users.sql`, define en la misma
+sesion las variables indicadas al inicio del archivo. Usa valores privados y
+hashes generados con `PasswordHasher`.
 
-## Cambio importante: oportunidad comercial
+## Ejecucion rapida en MySQL Workbench
 
-El flujo comercial ahora incluye `oportunidad_comercial` entre `cliente_interesado`
-y `solicitud_alquiler`.
+Abre y ejecuta cada archivo completo, respetando el orden numerico. Para una
+instalacion minima se ejecutan `00` a `03`; el archivo `04` es la carga demo.
 
-La oportunidad nace cuando un cliente se interesa por una captacion activa. Desde
-ese punto se registran interacciones, visitas y posibles motivos de no continuidad.
-Si el cliente continua, se crea una solicitud de alquiler asociada a la oportunidad.
+El esquema final contiene 30 entidades de dominio y la tabla puente fisica
+`requerimiento_distrito`. En una instalacion nueva no es necesario ejecutar los
+scripts `05` y `06`, porque sus restricciones ya forman parte del esquema final.
 
-Estados de `oportunidad_comercial`:
-
-- `A`: abierta
-- `S`: solicitud creada
-- `N`: no continua
-- `F`: finalizada exitosa
-- `X`: finalizada no favorable
-
-Tablas que dependen de la oportunidad:
-
-- `interaccion_comercial`
-- `visita`
-- `solicitud_alquiler`
-- `motivo_no_continuidad`
-
-Las tablas hijas no duplican cliente ni captacion. Esos datos se consultan desde
-`oportunidad_comercial`. El agente de una accion comercial puede ser distinto del
-agente responsable de la oportunidad, pero la capa de negocio debe validar que
-este activo y disponible.
-
-Si ya tienes una base creada con la version anterior, debes recrearla o migrarla
-antes de ejecutar los tests manuales, porque estas tablas ahora requieren
-`id_oportunidad`.
-
-## Cambio importante: supervision broker-agente
-
-El esquema incluye `broker_agente` para definir que agentes supervisa cada broker
-normal. El broker administrador mantiene alcance global por regla de negocio y no
-necesita registros en esa tabla para ver o revisar operaciones.
-
-Reglas de alcance:
-
-- Broker administrador: ve y supervisa todo el proceso.
-- Broker administrador: puede reasignar agentes entre brokers cuando exista una
-  intervencion administrativa.
-- Broker normal: registra sus propios agentes y el sistema crea su asignacion
-  activa en `broker_agente`.
-- Broker normal: ve y opera solo sobre agentes con asignacion activa en
-  `broker_agente`.
-- Agente inmobiliario: registra y consulta sus propios movimientos.
-
-La tabla `captacion.id_broker_revisor` no define supervision previa; solo guarda
-quien reviso la captacion. La supervision operativa se obtiene desde
-`broker_agente`.
+Las transacciones de la aplicacion se manejan desde Java con
+`TransactionRunner`.

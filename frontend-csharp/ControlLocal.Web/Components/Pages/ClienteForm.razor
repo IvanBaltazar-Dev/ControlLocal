@@ -71,14 +71,10 @@
                     <div class="cl-grid c2">
                         <Field Label="Rubro de interés" Required="true">
                             <select @bind="_rubro">
-                                <option>Restaurante / Café</option>
-                                <option>Moda / Boutique</option>
-                                <option>Servicios</option>
-                                <option>Retail</option>
-                                <option>Salud</option>
-                                <option>Café / Postres</option>
-                                <option>Retail / Almacén</option>
-                                <option>Servicios / Consultorio</option>
+                                @foreach (var rubro in Rubros)
+                                {
+                                    <option value="@rubro">@rubro</option>
+                                }
                             </select>
                         </Field>
                     </div>
@@ -147,13 +143,14 @@
     private string _documento = "";
     private string _telefono = "";
     private string _correo = "";
-    private string _rubro = "Restaurante / Café";
+    private string _rubro = EnumCatalog.RubrosComerciales[0];
     private bool _consentimientoContacto = true;
     private bool _consentimientoUsoDato = true;
     private string _estado = "Activo";
     private string? _err;
 
     private string _nombreMostrar => _tipo == "juridica" ? _razonSocial : _nombreNatural;
+    private IReadOnlyList<string> Rubros => OpcionConValorActual(EnumCatalog.RubrosComerciales, _rubro);
 
     private bool IsStep1Complete => !string.IsNullOrEmpty(_tipo);
     private bool IsStep2Complete => _tipo == "juridica"
@@ -270,7 +267,7 @@
 
             _toast = true;
             await RenderIfAliveAsync();
-            await Task.Delay(900, DisposedToken);
+            await Task.Delay(300, DisposedToken);
             App.Navigate("clientes");
         }
         catch (OperationCanceledException)
@@ -289,5 +286,12 @@
         if (tipoPersona.Contains("Carn", StringComparison.OrdinalIgnoreCase) || tipoPersona.Contains("extranjer", StringComparison.OrdinalIgnoreCase)) return "C";
         if (tipoPersona.Contains("Pasaporte", StringComparison.OrdinalIgnoreCase)) return "P";
         return "D";
+    }
+
+    private static IReadOnlyList<string> OpcionConValorActual(IReadOnlyList<string> opciones, string valorActual)
+    {
+        if (string.IsNullOrWhiteSpace(valorActual) || opciones.Contains(valorActual))
+            return opciones;
+        return opciones.Concat([valorActual]).ToList();
     }
 }

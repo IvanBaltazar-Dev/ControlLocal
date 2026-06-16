@@ -40,6 +40,10 @@ Incluye la gestión de:
 - Documentos
 - Evaluaciones
 - Reportes
+- Publicaciones por canal
+- Contratos de alquiler y liquidaciones de comision
+- Requerimientos de clientes por distrito
+- Tareas, alertas e historial de estados
 
 ---
 

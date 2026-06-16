@@ -19,33 +19,38 @@ public class PruebaConexionBD {
     );
 
     public static void main(String[] args) {
-        System.out.println("----- PRUEBA DE CONEXION A BASE DE DATOS -----");
-        System.out.println("JDBC URL: " + DatabaseConfig.getJdbcUrl());
-        System.out.println("Usuario: " + DatabaseConfig.getUsername());
+        try (Connection connection = DBManager.getConnection()) {
+            validarConexion(connection);
+            mostrarMotor(connection);
+            validarTablasParaCaptacion(connection);
+        } catch (Exception error) {
+            throw new IllegalStateException("Error de conexion: revisar configuracion local.", error);
+        }
 
-        try (Connection conn = DBManager.getConnection()) {
-            imprimirDatosConexion(conn);
-            validarTablasParaCaptacion(conn);
-        } catch (Exception e) {
-            System.err.println("No se pudo validar la base de datos.");
-            System.err.println("Host: " + DatabaseConfig.getHost());
-            System.err.println("Puerto: " + DatabaseConfig.getPort());
-            System.err.println("Base de datos: " + DatabaseConfig.getDatabaseName());
-            System.err.println("Usuario: " + DatabaseConfig.getUsername());
-            e.printStackTrace();
+        validarContextoTransaccional();
+    }
+
+    private static void validarConexion(Connection connection) throws SQLException {
+        try (
+                Statement statement = connection.createStatement();
+                ResultSet result = statement.executeQuery("SELECT 1")
+        ) {
+            if (result.next()) {
+                System.out.println("Conexion JDBC exitosa.");
+            }
         }
     }
 
-    private static void imprimirDatosConexion(Connection conn) throws SQLException {
+    private static void mostrarMotor(Connection connection) {
         try (
-                Statement st = conn.createStatement();
-                ResultSet rs = st.executeQuery("SELECT DATABASE(), NOW()")
+                Statement statement = connection.createStatement();
+                ResultSet result = statement.executeQuery("SELECT AURORA_VERSION()")
         ) {
-            if (rs.next()) {
-                System.out.println("Conexion OK.");
-                System.out.println("Base de datos actual: " + rs.getString(1));
-                System.out.println("Fecha servidor: " + rs.getString(2));
+            if (result.next()) {
+                System.out.println("Motor detectado: Amazon Aurora MySQL.");
             }
+        } catch (SQLException error) {
+            System.out.println("Motor detectado: Amazon RDS MySQL.");
         }
     }
 
@@ -61,17 +66,40 @@ public class PruebaConexionBD {
             }
         }
 
-        System.out.println("Tablas encontradas: " + tablasExistentes);
-
         Set<String> faltantes = new TreeSet<>(TABLAS_REQUERIDAS_PARA_CAPTACION);
         faltantes.removeAll(tablasExistentes);
 
         if (faltantes.isEmpty()) {
-            System.out.println("Esquema OK para PruebaCaptacion.");
+            System.out.println("Esquema minimo validado.");
         } else {
-            System.err.println("Faltan tablas para PruebaCaptacion: " + faltantes);
-            System.err.println("Ejecuta database/ddl/01_create_schema_controllocal_v3.sql en esta base,");
-            System.err.println("o cambia db.name a la base que ya tenga esas tablas creadas.");
+            System.err.println("El esquema no contiene todas las tablas requeridas.");
+        }
+    }
+
+    private static void validarContextoTransaccional() {
+        try {
+            Connection transactionConnection = TransactionContext.getConnection();
+
+            try (Connection daoConnection = DBManager.getConnection()) {
+                validarConexion(daoConnection);
+            }
+
+            if (transactionConnection.isClosed()) {
+                throw new IllegalStateException(
+                        "El cierre logico del DAO cerro la conexion transaccional.");
+            }
+
+            validarConexion(transactionConnection);
+            TransactionContext.rollback();
+            System.out.println("Contexto transaccional validado.");
+        } catch (SQLException error) {
+            throw new IllegalStateException("No se pudo validar el contexto transaccional.", error);
+        } finally {
+            try {
+                TransactionContext.close();
+            } catch (SQLException error) {
+                throw new IllegalStateException("No se pudo cerrar la prueba transaccional.", error);
+            }
         }
     }
 }

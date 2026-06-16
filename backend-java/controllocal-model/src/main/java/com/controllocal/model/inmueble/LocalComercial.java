@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
-import com.controllocal.model.inmueble.enums.EstadoPublicacion;
 import com.controllocal.model.inmueble.enums.TipoInmueble;
 import com.controllocal.model.inmueble.enums.UsoInmueble;
 import com.controllocal.model.persona.Propietario;
@@ -37,7 +36,12 @@ public class LocalComercial {
     private String zonaUrbanizacion;
     private BigDecimal geoLat;
     private BigDecimal geoLong;
-    private EstadoPublicacion estadoPublicacion;
+    private BigDecimal frente;
+    private String zonificacion;
+    private Boolean aptoLicenciaFuncionamiento;
+    private BigDecimal cargaElectricaKw;
+    private Integer numeroEstacionamientos;
+    private BigDecimal cuotaMantenimiento;
 
     public LocalComercial() {
     }
@@ -248,13 +252,22 @@ public class LocalComercial {
         this.geoLong = geoLong;
     }
 
-    public EstadoPublicacion getEstadoPublicacion() {
-        return estadoPublicacion;
+    public BigDecimal getFrente() { return frente; }
+    public void setFrente(BigDecimal frente) { this.frente = frente; }
+    public String getZonificacion() { return zonificacion; }
+    public void setZonificacion(String zonificacion) { this.zonificacion = zonificacion; }
+    public Boolean getAptoLicenciaFuncionamiento() { return aptoLicenciaFuncionamiento; }
+    public void setAptoLicenciaFuncionamiento(Boolean aptoLicenciaFuncionamiento) {
+        this.aptoLicenciaFuncionamiento = aptoLicenciaFuncionamiento;
     }
-
-    public void setEstadoPublicacion(EstadoPublicacion estadoPublicacion) {
-        this.estadoPublicacion = estadoPublicacion;
+    public BigDecimal getCargaElectricaKw() { return cargaElectricaKw; }
+    public void setCargaElectricaKw(BigDecimal cargaElectricaKw) { this.cargaElectricaKw = cargaElectricaKw; }
+    public Integer getNumeroEstacionamientos() { return numeroEstacionamientos; }
+    public void setNumeroEstacionamientos(Integer numeroEstacionamientos) {
+        this.numeroEstacionamientos = numeroEstacionamientos;
     }
+    public BigDecimal getCuotaMantenimiento() { return cuotaMantenimiento; }
+    public void setCuotaMantenimiento(BigDecimal cuotaMantenimiento) { this.cuotaMantenimiento = cuotaMantenimiento; }
 
     public void cambiarEstado(EstadoLocalComercial estado) {
         this.estado = estado;

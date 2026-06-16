@@ -38,6 +38,7 @@ public class PropietarioDAOImpl implements PropietarioDAO {
     @Override
     public Long crear(Propietario propietario) {
         validar(propietario, false);
+        asegurarPersonaCreada(propietario);
         try (Connection conn = DBManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, propietario.getPersona().getIdPersona());
@@ -154,7 +155,18 @@ public class PropietarioDAOImpl implements PropietarioDAO {
             JdbcSupport.validarId(propietario.getIdPropietario());
         }
         Persona persona = propietario.getPersona();
-        JdbcSupport.validarId(JdbcSupport.getIdPersona(persona));
+        if (persona == null) {
+            throw new IllegalArgumentException("El propietario debe estar asociado a una persona.");
+        }
+        if (requiereId) {
+            JdbcSupport.validarId(JdbcSupport.getIdPersona(persona));
+        }
+    }
+
+    private void asegurarPersonaCreada(Propietario propietario) {
+        if (propietario.getPersona().getIdPersona() == null
+                || propietario.getPersona().getIdPersona() <= 0) {
+            new PersonaDAOImpl().crear(propietario.getPersona());
+        }
     }
 }
-

@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import com.controllocal.model.comercial.enums.DesenlaceOportunidad;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
+import com.controllocal.model.comercial.enums.FuenteOrigen;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
@@ -22,6 +23,10 @@ public class OportunidadComercial {
     private LocalDateTime fechaCierre;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
+    private Publicacion publicacionOrigen;
+    private FuenteOrigen fuenteOrigen = FuenteOrigen.OTRO;
+    private String codigoOrigenCapturado;
+    private LocalDateTime fechaPrimeraConsulta;
 
     public Long getIdOportunidad() { return idOportunidad; }
     public void setIdOportunidad(Long idOportunidad) { this.idOportunidad = idOportunidad; }
@@ -52,10 +57,21 @@ public class OportunidadComercial {
     public void setFechaCreacion(LocalDateTime fechaCreacion) { this.fechaCreacion = fechaCreacion; }
     public LocalDateTime getFechaActualizacion() { return fechaActualizacion; }
     public void setFechaActualizacion(LocalDateTime fechaActualizacion) { this.fechaActualizacion = fechaActualizacion; }
+    public Publicacion getPublicacionOrigen() { return publicacionOrigen; }
+    public void setPublicacionOrigen(Publicacion publicacionOrigen) { this.publicacionOrigen = publicacionOrigen; }
+    public FuenteOrigen getFuenteOrigen() { return fuenteOrigen; }
+    public void setFuenteOrigen(FuenteOrigen fuenteOrigen) { this.fuenteOrigen = fuenteOrigen; }
+    public String getCodigoOrigenCapturado() { return codigoOrigenCapturado; }
+    public void setCodigoOrigenCapturado(String codigoOrigenCapturado) { this.codigoOrigenCapturado = codigoOrigenCapturado; }
+    public LocalDateTime getFechaPrimeraConsulta() { return fechaPrimeraConsulta; }
+    public void setFechaPrimeraConsulta(LocalDateTime fechaPrimeraConsulta) { this.fechaPrimeraConsulta = fechaPrimeraConsulta; }
 
     public void abrir() {
         if (fechaRegistro == null) {
             fechaRegistro = LocalDateTime.now();
+        }
+        if (fechaPrimeraConsulta == null) {
+            fechaPrimeraConsulta = fechaRegistro;
         }
         actualizarEstado(EstadoOportunidadComercial.ABIERTA);
     }

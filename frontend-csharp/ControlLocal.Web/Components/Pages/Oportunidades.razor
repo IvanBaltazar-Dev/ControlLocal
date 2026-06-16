@@ -67,7 +67,15 @@
                         }
                     </tbody>
                 </table>
-                @if (filtradas.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando operaciones…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (filtradas.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="target" Size="28" style="margin-bottom:10px;" />
@@ -138,7 +146,31 @@
 
     private record OpRow(long Id, string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated);
 
-    private IReadOnlyList<OpRow> _ops => OportunidadSvc.All().Select(o =>
+    private IReadOnlyList<OpRow> _ops = [];
+    private bool _cargando = true;
+    private string? _error;
+
+    // Recarga oportunidades y solicitudes frescas del backend, luego construye las
+    // filas combinadas (no bloquea el circuito).
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await OportunidadSvc.RefrescarAsync();
+            await SolicitudSvc.RefrescarAsync();
+            _ops = Construir();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private IReadOnlyList<OpRow> Construir() => OportunidadSvc.All().Select(o =>
     {
         var solicitud = SolicitudSvc.All().FirstOrDefault(s =>
             s.OportunidadId == o.Id

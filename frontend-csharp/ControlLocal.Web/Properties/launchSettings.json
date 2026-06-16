@@ -1,16 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "ControlLocal Mock": {
-      "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "applicationUrl": "http://localhost:5231",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "Api__Enabled": "false"
-      }
-    },
     "ControlLocal API": {
       "commandName": "Project",
       "dotnetRunMessages": true,
@@ -19,7 +9,6 @@
       "applicationUrl": "http://localhost:5232",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "Api__Enabled": "true",
         "Api__BaseUrl": "http://localhost:8080/controllocal/Api"
       }
     },
@@ -30,7 +19,6 @@
       "applicationUrl": "https://localhost:7151;http://localhost:5232",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "Api__Enabled": "true",
         "Api__BaseUrl": "http://localhost:8080/controllocal/Api"
       }
     }

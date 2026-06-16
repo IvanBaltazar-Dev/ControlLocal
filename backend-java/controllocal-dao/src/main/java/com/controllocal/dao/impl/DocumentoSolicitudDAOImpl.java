@@ -13,26 +13,32 @@ import com.controllocal.config.DBManager;
 import com.controllocal.dao.DAOException;
 import com.controllocal.dao.DocumentoSolicitudDAO;
 import com.controllocal.model.comercial.DocumentoSolicitud;
+import com.controllocal.model.comercial.TipoDocumentoRequerido;
 import com.controllocal.model.comercial.enums.EstadoDocumentoSolicitud;
+import com.controllocal.model.comercial.enums.OperacionRequerimiento;
 import com.controllocal.model.comercial.enums.ResultadoRevisionDocumento;
-import com.controllocal.model.comercial.enums.TipoDocumentoSolicitud;
 
 public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
 
     private static final String INSERT_SQL = """
             INSERT INTO documento_solicitud (
-                tipo_documento, nombre_archivo, ruta_archivo, fecha_entrega,
+                id_tipo_documento_requerido, nombre_archivo, ruta_archivo, fecha_entrega,
                 resultado_revision, observaciones, estado, id_solicitud
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
-            SELECT id_documento, tipo_documento, nombre_archivo, ruta_archivo,
-                   fecha_entrega, resultado_revision, observaciones, estado, id_solicitud
-            FROM documento_solicitud
+            SELECT d.id_documento, d.id_tipo_documento_requerido,
+                   t.tipo_operacion, t.tipo_documento, t.obligatorio, t.activo,
+                   t.descripcion AS tipo_documento_descripcion,
+                   d.nombre_archivo, d.ruta_archivo, d.fecha_entrega,
+                   d.resultado_revision, d.observaciones, d.estado, d.id_solicitud
+            FROM documento_solicitud d
+            INNER JOIN tipo_documento_requerido t
+                ON t.id_tipo_documento_requerido = d.id_tipo_documento_requerido
             """;
     private static final String UPDATE_SQL = """
             UPDATE documento_solicitud
-            SET tipo_documento = ?, nombre_archivo = ?, ruta_archivo = ?,
+            SET id_tipo_documento_requerido = ?, nombre_archivo = ?, ruta_archivo = ?,
                 fecha_entrega = ?, resultado_revision = ?, observaciones = ?,
                 estado = ?, id_solicitud = ?
             WHERE id_documento = ?
@@ -63,7 +69,7 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
     public Optional<DocumentoSolicitud> buscarPorId(Long id) {
         JdbcSupport.validarId(id);
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE id_documento = ?")) {
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE d.id_documento = ?")) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
@@ -77,7 +83,7 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
     public List<DocumentoSolicitud> listarTodos() {
         List<DocumentoSolicitud> documentos = new ArrayList<>();
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY id_documento");
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY d.id_documento");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 documentos.add(mapRow(rs));
@@ -114,7 +120,7 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
     }
 
     private void bind(DocumentoSolicitud documento, PreparedStatement ps) throws SQLException {
-        JdbcSupport.setEnum(ps, 1, documento.getTipoDocumento());
+        ps.setLong(1, documento.getTipoDocumentoRequerido().getIdTipoDocumentoRequerido());
         ps.setString(2, documento.getNombreArchivo());
         ps.setString(3, documento.getRutaArchivo());
         JdbcSupport.setTimestamp(ps, 4, documento.getFechaEntrega());
@@ -127,7 +133,14 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
     private DocumentoSolicitud mapRow(ResultSet rs) throws SQLException {
         DocumentoSolicitud documento = new DocumentoSolicitud();
         documento.setIdDocumento(rs.getLong("id_documento"));
-        documento.setTipoDocumento(JdbcSupport.getEnum(rs, "tipo_documento", TipoDocumentoSolicitud.class));
+        TipoDocumentoRequerido tipo = new TipoDocumentoRequerido();
+        tipo.setIdTipoDocumentoRequerido(rs.getLong("id_tipo_documento_requerido"));
+        tipo.setTipoOperacion(JdbcSupport.getEnum(rs, "tipo_operacion", OperacionRequerimiento.class));
+        tipo.setTipoDocumento(rs.getString("tipo_documento"));
+        tipo.setObligatorio(rs.getBoolean("obligatorio"));
+        tipo.setActivo(rs.getBoolean("activo"));
+        tipo.setDescripcion(rs.getString("tipo_documento_descripcion"));
+        documento.setTipoDocumentoRequerido(tipo);
         documento.setNombreArchivo(rs.getString("nombre_archivo"));
         documento.setRutaArchivo(rs.getString("ruta_archivo"));
         documento.setFechaEntrega(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_entrega")));
@@ -146,11 +159,12 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
         if (requiereId) {
             JdbcSupport.validarId(documento.getIdDocumento());
         }
-        if (documento.getTipoDocumento() == null
+        if (documento.getTipoDocumentoRequerido() == null
                 || documento.getNombreArchivo() == null || documento.getNombreArchivo().isBlank()
                 || documento.getFechaEntrega() == null || documento.getEstado() == null) {
             throw new IllegalArgumentException("El documento de solicitud tiene campos obligatorios incompletos.");
         }
+        JdbcSupport.validarId(documento.getTipoDocumentoRequerido().getIdTipoDocumentoRequerido());
         JdbcSupport.validarId(JdbcSupport.getIdSolicitud(documento.getSolicitudAlquiler()));
     }
 }

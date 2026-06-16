@@ -30,7 +30,7 @@ public class Captacion {
 
     // Condiciones del encargo (Diccionario v2): operacion solicitada,
     // urgencia del propietario (1 a 5) y exclusividad pactada.
-    private OperacionRequerimiento motivoOperacion;
+    private OperacionRequerimiento motivoOperacion = OperacionRequerimiento.ALQUILER;
     private Integer urgencia;
     private Boolean exclusividad;
 
@@ -39,7 +39,10 @@ public class Captacion {
     }
 
     public void setMotivoOperacion(OperacionRequerimiento motivoOperacion) {
-        this.motivoOperacion = motivoOperacion;
+        if (motivoOperacion != null && motivoOperacion != OperacionRequerimiento.ALQUILER) {
+            throw new IllegalArgumentException("ControlLocal solo admite operaciones de alquiler comercial.");
+        }
+        this.motivoOperacion = OperacionRequerimiento.ALQUILER;
     }
 
     public Integer getUrgencia() {

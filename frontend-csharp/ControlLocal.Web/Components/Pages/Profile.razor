@@ -1,102 +1,255 @@
 @page "/profile"
+@inherits SafeComponentBase
 @inject AppState App
-
-@* InputFile oculto activado por la etiqueta "Cambiar foto". *@
 
 <PageTitle>Mi perfil · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Mi perfil" })" Title="Mi perfil"
-          Subtitle="Datos de tu cuenta de usuario en ControlLocal">
-    <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;">
-        <div class="cl-card" style="text-align:center;padding:22px;">
-            <div class="cl-avatar" style="width:88px;height:88px;font-size:28px;margin:0 auto;">@User.Initials</div>
-            <div style="font-size:16px;font-weight:600;margin-top:12px;">@User.Name</div>
-            <div style="font-size:12px;color:#7E8794;">@App.Role</div>
-            <div style="margin-top:10px;"><StatusBadge Label="Activo" /></div>
-            <label for="foto-perfil" class="cl-btn" style="width:100%;margin-top:18px;justify-content:center;cursor:pointer;">
-                <Icon Name="upload" Size="13" /> Cambiar foto
-            </label>
-            <div style="display:none;"><InputFile id="foto-perfil" OnChange="CambiarFoto" accept=".png,.jpg,.jpeg" /></div>
-            @if (_fotoErr is not null)
-            {
-                <div class="cl-alert red" style="margin-top:10px;text-align:left;"><Icon Name="alert" Size="15" /><span>@_fotoErr</span></div>
-            }
-            <div class="cl-divider"></div>
-            <div style="text-align:left;">
-                <div style="font-size:11px;color:#7E8794;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Resumen</div>
-                <dl class="cl-kv">
-                    @if (IsAdmin)
-                    {
-                        <dt>Alcance</dt><dd>Global — todos los brokers</dd>
-                        <dt>Brokers a cargo</dt><dd>8</dd>
-                        <dt>Ingreso</dt><dd>01 Oct 2023</dd>
-                        <dt>Último acceso</dt><dd>Hoy 07:48</dd>
-                    }
-                    else if (IsBroker)
-                    {
-                        <dt>Agentes a cargo</dt><dd>7 activos</dd>
-                        <dt>Zona</dt><dd>Lima Centro / Sur</dd>
-                        <dt>Ingreso</dt><dd>11 Ene 2024</dd>
-                        <dt>Último acceso</dt><dd>Hoy 07:55</dd>
-                    }
-                    else
-                    {
-                        <dt>Broker</dt><dd>Ricardo Salas</dd>
-                        <dt>Zona</dt><dd>Lima Centro / Sur</dd>
-                        <dt>Ingreso</dt><dd>14 Feb 2024</dd>
-                        <dt>Último acceso</dt><dd>Hoy 08:12</dd>
-                    }
-                </dl>
+<AppShell Crumbs="@(new[] { "ControlLocal", "Mi perfil" })"
+          Title="Mi perfil"
+          Subtitle="Administra tu identidad, datos de contacto y seguridad de acceso.">
+    <section class="profile-hero">
+        <div class="profile-hero-glow one"></div>
+        <div class="profile-hero-glow two"></div>
+
+        <div class="profile-identity">
+            <div class="profile-avatar-wrap">
+                @if (!string.IsNullOrWhiteSpace(_fotoUrl))
+                {
+                    <img class="profile-avatar-image" src="@_fotoUrl" alt="Foto de perfil de @User.Nombre" />
+                }
+                else
+                {
+                    <div class="profile-avatar">@User.Iniciales</div>
+                }
+                <span class="profile-presence" title="Cuenta activa"></span>
+            </div>
+
+            <div class="profile-heading">
+                <div class="profile-eyebrow">
+                    <span class="profile-status-dot"></span>
+                    Cuenta activa
+                </div>
+                <h2>@User.Nombre</h2>
+                <div class="profile-meta">
+                    <span class="profile-role">@Roles.Label(User.Role)</span>
+                    <span class="profile-meta-separator"></span>
+                    <span>@($"@{User.Usuario}")</span>
+                </div>
             </div>
         </div>
-        <div class="cl-stack">
-            @if (IsAdmin)
-            {
-                <div class="cl-alert blue">
-                    <Icon Name="info" Size="15" />
-                    <span>Como administrador global, solo tienes acceso de lectura a tu perfil. Contacta al equipo de soporte para cambios.</span>
-                </div>
-            }
-            else
-            {
-                <FormSection Num="1" Title="Datos personales" Sub="Solo puedes editar tu teléfono. Otros datos se editan mediante el broker">
-                    <div class="cl-grid c2">
-                        <Field Label="Nombres"><input value="Valentina" disabled="true" /></Field>
-                        <Field Label="Apellidos"><input value="Mora Quispe" disabled="true" /></Field>
-                        <Field Label="Documento (DNI)"><input value="45 893 211" disabled="true" /></Field>
-                        <Field Label="Teléfono" Hint="El único campo que puedes editar"><input @bind="_telefono" style="border-color:#005BFF;" /></Field>
-                        <Field Label="Correo corporativo"><input value="vmora@@controllocal.pe" disabled="true" /></Field>
-                        <Field Label="Zona asignada"><select disabled="true"><option>Lima Centro / Sur</option></select></Field>
+
+        <div class="profile-hero-actions">
+            <label for="foto-perfil" class="cl-btn on-dark profile-upload">
+                <Icon Name="upload" Size="14" />
+                Cambiar foto
+            </label>
+            <div class="profile-file-input">
+                <InputFile id="foto-perfil" OnChange="CambiarFoto" accept=".png,.jpg,.jpeg" />
+            </div>
+            <button type="button" class="cl-btn on-light" @onclick="@(() => App.Navigate("cambiar-contrasena"))">
+                <Icon Name="lock" Size="14" />
+                Seguridad
+            </button>
+        </div>
+    </section>
+
+    @if (_fotoErr is not null)
+    {
+        <div class="cl-alert red profile-feedback">
+            <Icon Name="alert" Size="15" />
+            <span>@_fotoErr</span>
+        </div>
+    }
+
+    <div class="profile-layout">
+        <main class="profile-main">
+            <section class="profile-card">
+                <header class="profile-card-header">
+                    <div class="profile-card-icon"><Icon Name="user" Size="18" /></div>
+                    <div>
+                        <h3>Información de cuenta</h3>
+                        <p>Datos asociados a tu acceso en ControlLocal.</p>
                     </div>
+                </header>
+
+                <div class="profile-info-grid">
+                    <div class="profile-info-item">
+                        <span class="profile-info-icon"><Icon Name="user" Size="16" /></span>
+                        <div>
+                            <span class="profile-info-label">Nombre completo</span>
+                            <strong>@User.Nombre</strong>
+                        </div>
+                    </div>
+                    <div class="profile-info-item">
+                        <span class="profile-info-icon"><Icon Name="briefcase" Size="16" /></span>
+                        <div>
+                            <span class="profile-info-label">Rol de acceso</span>
+                            <strong>@Roles.Label(User.Role)</strong>
+                        </div>
+                    </div>
+                    <div class="profile-info-item">
+                        <span class="profile-info-icon"><Icon Name="mail" Size="16" /></span>
+                        <div>
+                            <span class="profile-info-label">Correo corporativo</span>
+                            <strong>@EmailVisible</strong>
+                        </div>
+                    </div>
+                    <div class="profile-info-item">
+                        <span class="profile-info-icon"><Icon Name="checkCircle" Size="16" /></span>
+                        <div>
+                            <span class="profile-info-label">Estado</span>
+                            <strong class="profile-active-text">Activo y verificado</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="profile-card">
+                <header class="profile-card-header">
+                    <div class="profile-card-icon"><Icon Name="phone" Size="18" /></div>
+                    <div>
+                        <h3>Datos de contacto</h3>
+                        <p>Actualiza el teléfono utilizado para coordinaciones comerciales.</p>
+                    </div>
+                </header>
+
+                <div class="profile-contact-form">
+                    <label for="telefono">Teléfono de contacto</label>
+                    <div class="profile-phone-row">
+                        <div class="profile-phone-input">
+                            <span>+51</span>
+                            <input id="telefono"
+                                   @bind="_telefono"
+                                   inputmode="tel"
+                                   autocomplete="tel"
+                                   placeholder="999 999 999" />
+                        </div>
+                        <button type="button" class="cl-btn primary" @onclick="GuardarTelefono">
+                            <Icon Name="save" Size="14" />
+                            Guardar cambios
+                        </button>
+                    </div>
+                    <p class="profile-help">Usaremos este número únicamente para coordinaciones de la operación comercial.</p>
                     @if (_telefonoErr is not null)
                     {
-                        <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_telefonoErr</span></div>
-                    }
-                    <button class="cl-btn primary" style="margin-top:16px;" @onclick="GuardarTelefono">Guardar teléfono</button>
-                </FormSection>
-
-                <FormSection Num="2" Title="Seguridad" Sub="Gestión de contraseña">
-                    <div class="cl-stack" style="gap:14px;">
-                        <div style="padding:12px;background:#F7F8FA;border-radius:8px;border-left:3px solid #005BFF;">
-                            <div style="font-size:13px;color:#515B6B;">Tu contraseña se cambió por última vez hace 45 días. Recomendamos cambiarla regularmente por seguridad.</div>
+                        <div class="cl-alert red profile-inline-error">
+                            <Icon Name="alert" Size="15" />
+                            <span>@_telefonoErr</span>
                         </div>
-                        <button class="cl-btn primary" @onclick="@(() => App.Navigate("cambiar-contrasena"))"><Icon Name="lock" Size="13" /> Cambiar contraseña</button>
+                    }
+                </div>
+            </section>
+
+            <section class="profile-card security-card">
+                <header class="profile-card-header">
+                    <div class="profile-card-icon"><Icon Name="lock" Size="18" /></div>
+                    <div>
+                        <h3>Seguridad y acceso</h3>
+                        <p>Protege tu cuenta y revisa el estado de tu sesión.</p>
                     </div>
-                </FormSection>
-            }
-        </div>
+                </header>
+
+                <div class="security-content">
+                    <div class="security-copy">
+                        <span class="security-check"><Icon Name="check" Size="16" /></span>
+                        <div>
+                            <strong>Sesión protegida</strong>
+                            <p>Tu identidad y permisos corresponden al rol @Roles.Label(User.Role).</p>
+                        </div>
+                    </div>
+                    <button type="button" class="cl-btn" @onclick="@(() => App.Navigate("cambiar-contrasena"))">
+                        Cambiar contraseña
+                        <Icon Name="arrowRight" Size="14" />
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <aside class="profile-side">
+            <section class="profile-card scope-card">
+                <span class="scope-kicker">Perfil operativo</span>
+                <div class="scope-icon"><Icon Name="@ScopeIcon" Size="22" /></div>
+                <h3>@ScopeTitle</h3>
+                <p>@ScopeDescription</p>
+
+                <div class="scope-divider"></div>
+
+                <div class="scope-detail">
+                    <span>Tipo de operación</span>
+                    <strong>Alquiler comercial</strong>
+                </div>
+                <div class="scope-detail">
+                    <span>Cobertura</span>
+                    <strong>@ScopeCoverage</strong>
+                </div>
+                <div class="scope-detail">
+                    <span>Último acceso</span>
+                    <strong>Sesión actual</strong>
+                </div>
+            </section>
+
+            <section class="profile-card support-card">
+                <div class="support-icon"><Icon Name="info" Size="18" /></div>
+                <div>
+                    <h3>¿Necesitas cambiar otro dato?</h3>
+                    <p>Los nombres, el correo y el rol se gestionan desde la administración para proteger la trazabilidad.</p>
+                </div>
+            </section>
+        </aside>
     </div>
+
     <Toast Show="_toast">@_toastMsg</Toast>
 </AppShell>
 
 @code {
-    private bool IsAdmin => App.Role == Roles.Admin;
-    private bool IsBroker => App.Role == Roles.Broker;
-    private RoleUser User => Navigation.UserFor(App.Role);
+    private AuthUser User
+    {
+        get
+        {
+            if (App.CurrentUser is { } current)
+                return current;
 
-    private string _telefono = "+51 987 412 008";
+            return new AuthUser("", "", "Usuario sin sesion", "--", App.Role);
+        }
+    }
+
+    private string EmailVisible =>
+        !string.IsNullOrWhiteSpace(User.Email)
+            ? User.Email
+            : User.Usuario.Contains('@') ? User.Usuario : "No registrado";
+
+    private string ScopeIcon => App.Role switch
+    {
+        Roles.Admin => "settings",
+        Roles.Broker => "users",
+        _ => "briefcase",
+    };
+
+    private string ScopeTitle => App.Role switch
+    {
+        Roles.Admin => "Gestión global",
+        Roles.Broker => "Supervisión comercial",
+        _ => "Operación comercial",
+    };
+
+    private string ScopeDescription => App.Role switch
+    {
+        Roles.Admin => "Administración de brokers, asignaciones y configuración general.",
+        Roles.Broker => "Seguimiento del equipo y de las operaciones comerciales asignadas.",
+        _ => "Gestión de alquileres comerciales, clientes, inmuebles y visitas.",
+    };
+
+    private string ScopeCoverage => App.Role switch
+    {
+        Roles.Admin => "Toda la organización",
+        Roles.Broker => "Equipo asignado",
+        _ => "Cartera asignada",
+    };
+
+    private string _telefono = "";
     private string? _telefonoErr;
     private string? _fotoErr;
+    private string? _fotoUrl;
     private bool _toast;
     private string _toastMsg = "";
 
@@ -106,9 +259,10 @@
         var digitos = _telefono.Count(char.IsDigit);
         if (digitos is < 6 or > 15)
         {
-            _telefonoErr = "Ingresa un teléfono válido (entre 6 y 15 dígitos).";
+            _telefonoErr = "Ingresa un teléfono válido de entre 6 y 15 dígitos.";
             return;
         }
+
         Notificar("Teléfono actualizado correctamente.");
     }
 
@@ -116,11 +270,14 @@
     {
         _fotoErr = null;
         var archivo = e.File;
-        var buffer = new byte[8];
+        byte[] contenido;
+
         try
         {
             await using var stream = archivo.OpenReadStream(ValidadorArchivos.TamanoMaximo);
-            _ = await stream.ReadAtLeastAsync(buffer, 1, throwOnEndOfStream: false);
+            using var memoria = new MemoryStream();
+            await stream.CopyToAsync(memoria, DisposedToken);
+            contenido = memoria.ToArray();
         }
         catch (IOException)
         {
@@ -128,13 +285,23 @@
             return;
         }
 
-        var validacion = ValidadorArchivos.Validar(archivo.Name, archivo.ContentType, archivo.Size,
-            buffer, ".png", ".jpg", ".jpeg");
+        var cabecera = contenido.Take(8).ToArray();
+        var validacion = ValidadorArchivos.Validar(
+            archivo.Name,
+            archivo.ContentType,
+            archivo.Size,
+            cabecera,
+            ".png",
+            ".jpg",
+            ".jpeg");
+
         if (!validacion.EsValido)
         {
             _fotoErr = validacion.Error;
             return;
         }
+
+        _fotoUrl = $"data:{archivo.ContentType};base64,{Convert.ToBase64String(contenido)}";
         Notificar("Foto de perfil actualizada.");
     }
 
@@ -142,13 +309,6 @@
     {
         _toastMsg = mensaje;
         _toast = true;
-        _ = OcultarToast();
-    }
-
-    private async Task OcultarToast()
-    {
-        await Task.Delay(2600);
-        _toast = false;
-        await InvokeAsync(StateHasChanged);
+        _ = DelayThenRenderAsync(2600, () => _toast = false);
     }
 }

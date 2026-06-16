@@ -2,12 +2,8 @@ package com.controllocal.model.comercial.enums;
 
 import com.controllocal.model.CodigoEnum;
 
-/**
- * Operacion solicitada por el cliente (la venta es una extension futura).
- */
 public enum OperacionRequerimiento implements CodigoEnum {
-    ALQUILER("A", "Alquiler"),
-    COMPRA("C", "Compra");
+    ALQUILER("A", "Alquiler");
 
     private final String codigo;
     private final String descripcion;

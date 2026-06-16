@@ -14,7 +14,7 @@
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("visita-form"))"><Icon Name="plus" Size="13" /> Programar visita</button>
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">
             <MetricCard Icon="calendar" Label="Programadas" Value="@Contar("P").ToString()" Tone="blue"
                         Active="@(_filtroEstado == "P")" OnClick="@(() => ToggleEstado("P"))" />
             <MetricCard Icon="check" Label="Realizadas" Value="@Contar("R").ToString()" Tone="green"
@@ -23,6 +23,8 @@
                         Active="@(_filtroEstado == "G")" OnClick="@(() => ToggleEstado("G"))" />
             <MetricCard Icon="x" Label="Canceladas" Value="@Contar("C").ToString()" Tone="red"
                         Active="@(_filtroEstado == "C")" OnClick="@(() => ToggleEstado("C"))" />
+            <MetricCard Icon="alert" Label="No realizadas" Value="@Contar("N").ToString()" Tone="red"
+                        Active="@(_filtroEstado == "N")" OnClick="@(() => ToggleEstado("N"))" />
         </div>
 
         <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px;">
@@ -116,9 +118,14 @@
                                     <div class="cl-flex" style="gap:6px;justify-content:flex-end;">
                                         @if (EsModificable(v))
                                         {
-                                            <button class="cl-btn sm primary" @onclick="@(() => AbrirResultado(v))"><Icon Name="check" Size="12" /> Resultado</button>
+                                            <button class="cl-btn sm primary" @onclick="@(() => AbrirRealizada(v))"><Icon Name="check" Size="12" /> Realizada</button>
+                                            <button class="cl-btn sm" @onclick="@(() => AbrirNoRealizada(v))"><Icon Name="alert" Size="12" /> No se realizó</button>
                                             <button class="cl-btn sm" @onclick="@(() => AbrirReprogramar(v))"><Icon Name="clock" Size="12" /> Reprogramar</button>
                                             <button class="cl-btn sm ghost" @onclick="@(() => AbrirCancelar(v))"><Icon Name="x" Size="12" /> Cancelar</button>
+                                        }
+                                        else if (AdmiteResultado(v))
+                                        {
+                                            <button class="cl-btn sm primary" @onclick="@(() => AbrirResultado(v))"><Icon Name="checkCircle" Size="12" /> Registrar resultado</button>
                                         }
                                         <button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"oportunidad-detail/{v.OportunidadId}"))">Seguimiento</button>
                                     </div>
@@ -127,7 +134,15 @@
                         }
                     </tbody>
                 </table>
-                @if (!VisitasFiltradas().Any())
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando agenda…</div>
+                }
+                else if (_loadError is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_loadError</span></div>
+                }
+                else if (!VisitasFiltradas().Any())
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="calendar" Size="28" style="margin-bottom:10px;" />
@@ -166,7 +181,8 @@
                OnClose="@(() => _modalCancelar = false)">
             <ChildContent>
                 <Field Label="Motivo de la cancelación" Required="true">
-                    <textarea rows="3" placeholder="Ej. El cliente no podrá asistir…" @bind="_motivoTmp"></textarea>
+                    <textarea rows="3" placeholder="Ej. El cliente no podrá asistir…"
+                              @bind="_motivoTmp" @bind:event="oninput"></textarea>
                 </Field>
                 @if (_err is not null)
                 {
@@ -179,10 +195,45 @@
             </Footer>
         </Modal>
 
+        <ConfirmDialog Open="_modalRealizada"
+                       Tone="green"
+                       Icon="check"
+                       Size="sm"
+                       Title="¿La visita se realizó?"
+                       Desc="@($"Confirma que la visita con {_target?.ClienteNombre} ocurrió. Después podrás registrar el resultado comercial.")"
+                       ConfirmLabel="Sí, fue realizada"
+                       CancelLabel="Volver"
+                       OnClose="@(() => _modalRealizada = false)"
+                       OnConfirm="ConfirmarRealizada" />
+
+        <Modal Open="_modalNoRealizada" Tone="red" Icon="alert"
+               Title="Marcar visita como no realizada"
+               Desc="@($"Registra por qué la visita con {_target?.ClienteNombre} no llegó a ocurrir.")"
+               OnClose="@(() => _modalNoRealizada = false)">
+            <ChildContent>
+                <Field Label="Motivo" Required="true">
+                    <textarea rows="3" placeholder="Ej. El cliente no asistió o no se pudo ingresar al local…"
+                              @bind="_motivoNoRealizadaTmp" @bind:event="oninput"></textarea>
+                </Field>
+                <div class="cl-alert blue" style="margin-top:12px;">
+                    <Icon Name="info" Size="15" />
+                    <span>Una visita no realizada no admite resultado ni nivel de interés.</span>
+                </div>
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                }
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="@(() => _modalNoRealizada = false)">Volver</button>
+                <button class="cl-btn primary" @onclick="ConfirmarNoRealizada">Confirmar</button>
+            </Footer>
+        </Modal>
+
         @* ---------- Modal: Registrar resultado ---------- *@
         <Modal Open="_modalResultado" Tone="green" Icon="check"
                Title="Registrar resultado de la visita"
-               Desc="@($"Marca la visita con {_target?.ClienteNombre} como realizada y registra su desenlace.")"
+               Desc="@($"La visita con {_target?.ClienteNombre} ya fue marcada como realizada. Registra ahora su desenlace comercial.")"
                OnClose="@(() => _modalResultado = false)">
             <ChildContent>
                 <Field Label="Resultado" Required="true">
@@ -195,15 +246,18 @@
                     </select>
                 </Field>
                 <div class="cl-grid c2" style="margin-top:12px;">
-                    <Field Label="Nivel de interés">
-                        <select @bind="_nivelInteresTmp">
-                            <option value="">— Sin registrar —</option>
-                            @for (var nivel = 1; nivel <= 5; nivel++)
-                            {
-                                <option value="@nivel">@nivel</option>
-                            }
-                        </select>
-                    </Field>
+                    @if (PermiteNivelInteres(_resultadoTmp))
+                    {
+                        <Field Label="Nivel de interés">
+                            <select @bind="_nivelInteresTmp">
+                                <option value="">— Sin registrar —</option>
+                                @for (var nivel = 1; nivel <= 5; nivel++)
+                                {
+                                    <option value="@nivel">@nivel</option>
+                                }
+                            </select>
+                        </Field>
+                    }
                     <Field Label="Objeción principal">
                         <select @bind="_objecionTmp">
                             <option value="">— Sin registrar —</option>
@@ -222,15 +276,18 @@
                             }
                         </select>
                     </Field>
-                    <Field Label="Próxima acción">
-                        <select @bind="_proximaAccionTmp">
-                            <option value="">— Sin registrar —</option>
-                            @foreach (var opcion in EnumCatalog.ProximasAccionesVisita)
-                            {
-                                <option value="@opcion.Code">@opcion.Label</option>
-                            }
-                        </select>
-                    </Field>
+                    @if (MantieneAbierta(_resultadoTmp))
+                    {
+                        <Field Label="Próxima acción">
+                            <select @bind="_proximaAccionTmp">
+                                <option value="">— Sin registrar —</option>
+                                @foreach (var opcion in EnumCatalog.ProximasAccionesVisita.Where(item => item.Code != "D"))
+                                {
+                                    <option value="@opcion.Code">@opcion.Label</option>
+                                }
+                            </select>
+                        </Field>
+                    }
                 </div>
                 <div style="margin-top:12px;">
                     <Field Label="Observaciones"><textarea rows="2" placeholder="Detalle de lo conversado en la visita…" @bind="_obsTmp"></textarea></Field>
@@ -303,11 +360,12 @@
 
     // Estado de modales y acción en curso. Programar una visita vive en su propia
     // página (visita-form); aquí solo quedan las acciones por fila de la agenda.
-    private bool _modalReprogramar, _modalCancelar, _modalResultado;
+    private bool _modalReprogramar, _modalCancelar, _modalRealizada, _modalNoRealizada, _modalResultado;
     private VisitaDto? _target;
     private DateOnly? _fechaPick;
     private TimeOnly? _horaPick;
     private string _motivoTmp = "", _resultadoTmp = "", _obsTmp = "", _razonTmp = "";
+    private string _motivoNoRealizadaTmp = "";
     private string _nivelInteresTmp = "", _objecionTmp = "", _opinionPrecioTmp = "", _proximaAccionTmp = "";
     private string? _err;
 
@@ -321,20 +379,47 @@
     private string _toastMsg = "";
 
     private string _filtroEstado = "";
+    private IReadOnlyList<VisitaDto> _visitas = [];
+    private bool _cargando = true;
+    private string? _loadError;
 
-    protected override void OnInitialized() => Recalcular();
+    // Recarga fresca desde el backend en cada navegacion (no bloquea el circuito).
+    // _visitas referencia la cache del servicio, asi las mutaciones por fila
+    // (realizar / reprogramar / resultado) se reflejan sin volver a pedir la lista.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _visitas = await VisitaSvc.RefrescarAsync(DisposedToken);
+            Recalcular();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
-    private int Contar(string estado) => VisitaSvc.All().Count(v => v.Estado == estado);
+    private int Contar(string estado) => _visitas.Count(v => v.Estado == estado);
 
     private static bool EsModificable(VisitaDto v) => v.Estado is "P" or "G";
+    private static bool AdmiteResultado(VisitaDto v) =>
+        v.Estado == "R" && string.IsNullOrWhiteSpace(v.Resultado);
 
     private static bool ImplicaNoContinuidad(string codigo) => codigo is "N" or "D";
     private static bool MantieneAbierta(string codigo) => codigo is "I" or "S" or "P";
+    private static bool PermiteNivelInteres(string codigo) => MantieneAbierta(codigo);
 
     private string _query = "";
     private string _distrito = "";
 
-    private IReadOnlyList<string> _distritos => VisitaSvc.All().Select(v => v.DistritoLocal)
+    private IReadOnlyList<string> _distritos => _visitas.Select(v => v.DistritoLocal)
         .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
 
     private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
@@ -344,7 +429,7 @@
     private void ToggleEstado(string code) => _filtroEstado = _filtroEstado == code ? "" : code;
 
     private IEnumerable<VisitaDto> VisitasFiltradas() =>
-        VisitaSvc.All().Where(v =>
+        _visitas.Where(v =>
             (string.IsNullOrEmpty(_filtroEstado) || v.Estado == _filtroEstado) &&
             (string.IsNullOrEmpty(_distrito) || v.DistritoLocal == _distrito) &&
             (string.IsNullOrEmpty(_query) || Coincide(v, _query)));
@@ -358,7 +443,7 @@
     // Recalcula la agenda (calendario + próximas) a partir de las visitas vivas.
     private void Recalcular()
     {
-        var vivas = VisitaSvc.All().Where(EsModificable).ToList();
+        var vivas = _visitas.Where(EsModificable).ToList();
         _proximas = vivas
             .Select(v => new Timeline.TimelineItem(
                 $"{v.FechaTexto} · {v.HoraTexto}", v.ClienteNombre, $"{v.DireccionLocal} · {v.CodigoCaptacion}"))
@@ -415,6 +500,21 @@
         _modalCancelar = true;
     }
 
+    private void AbrirRealizada(VisitaDto v)
+    {
+        _target = v;
+        _err = null;
+        _modalRealizada = true;
+    }
+
+    private void AbrirNoRealizada(VisitaDto v)
+    {
+        _target = v;
+        _motivoNoRealizadaTmp = "";
+        _err = null;
+        _modalNoRealizada = true;
+    }
+
     private void AbrirResultado(VisitaDto v)
     {
         _target = v;
@@ -450,6 +550,32 @@
         catch (InvalidOperationException ex) { _err = ex.Message; }
     }
 
+    private void ConfirmarRealizada()
+    {
+        if (_target is null) return;
+        try
+        {
+            VisitaSvc.MarcarRealizada(_target.Id);
+            _modalRealizada = false;
+            Recalcular();
+            Notificar("Visita marcada como realizada. Ya puedes registrar el resultado.");
+        }
+        catch (InvalidOperationException ex) { _err = ex.Message; }
+    }
+
+    private void ConfirmarNoRealizada()
+    {
+        if (_target is null) return;
+        try
+        {
+            VisitaSvc.MarcarNoRealizada(_target.Id, _motivoNoRealizadaTmp);
+            _modalNoRealizada = false;
+            Recalcular();
+            Notificar("Visita marcada como no realizada.");
+        }
+        catch (InvalidOperationException ex) { _err = ex.Message; }
+    }
+
     private void ConfirmarResultado()
     {
         if (_target is null) return;
@@ -460,10 +586,12 @@
                 Resultado = _resultadoTmp,
                 Observaciones = string.IsNullOrWhiteSpace(_obsTmp) ? null : _obsTmp.Trim(),
                 RazonNoContinuidad = string.IsNullOrWhiteSpace(_razonTmp) ? null : _razonTmp,
-                NivelInteres = int.TryParse(_nivelInteresTmp, out var nivel) ? nivel : null,
+                NivelInteres = PermiteNivelInteres(_resultadoTmp)
+                    && int.TryParse(_nivelInteresTmp, out var nivel) ? nivel : null,
                 ObjecionPrincipal = string.IsNullOrWhiteSpace(_objecionTmp) ? null : _objecionTmp,
                 OpinionPrecio = string.IsNullOrWhiteSpace(_opinionPrecioTmp) ? null : _opinionPrecioTmp,
-                ProximaAccion = string.IsNullOrWhiteSpace(_proximaAccionTmp) ? null : _proximaAccionTmp,
+                ProximaAccion = MantieneAbierta(_resultadoTmp)
+                    && !string.IsNullOrWhiteSpace(_proximaAccionTmp) ? _proximaAccionTmp : null,
             });
             _modalResultado = false;
             Recalcular();

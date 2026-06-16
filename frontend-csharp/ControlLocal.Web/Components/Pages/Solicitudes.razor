@@ -87,7 +87,15 @@
                         }
                     </tbody>
                 </table>
-                @if (filtradas.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando solicitudes…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (filtradas.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="fileText" Size="28" style="margin-bottom:10px;" />
@@ -107,10 +115,29 @@
     private string _query = "", _distrito = "";
     private int _pagina = 1;
 
-    // El broker arranca viendo lo que debe evaluar.
-    protected override void OnInitialized() => _tab = _isBroker ? "En revision" : "Todas";
+    private bool _cargando = true;
+    private string? _error;
 
-    private IReadOnlyList<SolicitudAlquilerDto> Todas => SolicitudSvc.All();
+    // El broker arranca viendo lo que debe evaluar, con datos frescos del backend:
+    // asi ve de inmediato lo que el agente acaba de enviar y el agente ve el resultado.
+    protected override async Task OnInitializedAsync()
+    {
+        _tab = _isBroker ? "En revision" : "Todas";
+        try
+        {
+            Todas = await SolicitudSvc.RefrescarAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private IReadOnlyList<SolicitudAlquilerDto> Todas = [];
 
     private string[] _estados => Todas.Select(s => s.Estado).Distinct().OrderBy(x => x).ToArray();
     private IReadOnlyList<string> _distritos => Todas.Select(s => s.DistritoLocal)

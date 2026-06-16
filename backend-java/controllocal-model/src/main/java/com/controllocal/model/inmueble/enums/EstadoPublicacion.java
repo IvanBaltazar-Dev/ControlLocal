@@ -6,7 +6,7 @@ import com.controllocal.model.CodigoEnum;
  * Estado de publicacion del inmueble (independiente de su disponibilidad).
  */
 public enum EstadoPublicacion implements CodigoEnum {
-    BORRADOR("B", "Borrador"),
+    BORRADOR("B", "Sin publicar"),
     PUBLICADO("P", "Publicado"),
     PAUSADO("S", "Pausado"),
     CERRADO("C", "Cerrado");

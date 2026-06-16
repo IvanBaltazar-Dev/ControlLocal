@@ -68,7 +68,15 @@
                         }
                     </tbody>
                 </table>
-                @if (filtradas.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando bandeja…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (filtradas.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="pin" Size="28" style="margin-bottom:10px;" />
@@ -91,8 +99,28 @@
     private string _tab = "Todas";
     private string _query = "", _agente = "", _distrito = "";
     private int _pagina = 1;
+    private bool _cargando = true;
+    private string? _error;
 
-    private IReadOnlyList<BandejaCaptacionDto> Todas => CaptacionSvc.Bandeja();
+    private IReadOnlyList<BandejaCaptacionDto> Todas = [];
+
+    // Recarga la bandeja fresca en cada navegacion: el broker ve de inmediato las
+    // captaciones que el agente acaba de enviar a revision.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Todas = await CaptacionSvc.RefrescarBandejaAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
     private string[] _estados => Todas.Select(c => c.Estado).Distinct().OrderBy(x => x).ToArray();
     private IReadOnlyList<string> _agentes => Todas.Select(c => c.NombreAgenteResponsable)

@@ -21,6 +21,9 @@ import com.controllocal.model.comercial.MotivoNoContinuidad;
 import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.Visita;
 import com.controllocal.model.comercial.enums.MotivoNoContinuidadTipo;
+import com.controllocal.model.comercial.enums.ObjecionVisita;
+import com.controllocal.model.comercial.enums.OpinionPrecio;
+import com.controllocal.model.comercial.enums.ProximaAccionVisita;
 import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
@@ -107,22 +110,51 @@ public class VisitaBusinessLogicImpl implements VisitaBusinessLogic {
 
     public boolean cancelar(Long idVisita, String motivo) {
         return TransactionRunner.write(conn -> {
+            if (motivo == null || motivo.isBlank()) {
+                throw new BusinessException("El motivo de cancelacion es obligatorio.");
+            }
             Visita visita = visitaModificable(idVisita, "cancelar");
-            visita.cancelar(motivo);
+            visita.cancelar(motivo.trim());
+            return visitaDAO.actualizar(visita);
+        });
+    }
+
+    public boolean marcarRealizada(Long idVisita) {
+        return TransactionRunner.write(conn -> {
+            Visita visita = visitaModificable(idVisita, "marcar como realizada");
+            visita.marcarRealizada();
+            return visitaDAO.actualizar(visita);
+        });
+    }
+
+    public boolean marcarNoRealizada(Long idVisita, String motivo) {
+        return TransactionRunner.write(conn -> {
+            Visita visita = visitaModificable(idVisita, "marcar como no realizada");
+            visita.marcarNoRealizada(motivo);
             return visitaDAO.actualizar(visita);
         });
     }
 
     public boolean registrarResultado(Long idVisita, ResultadoInteraccion resultado,
-            String observaciones, MotivoNoContinuidadTipo razonNoContinuidad) {
+            String observaciones, MotivoNoContinuidadTipo razonNoContinuidad,
+            Integer nivelInteres, ObjecionVisita objecionPrincipal,
+            OpinionPrecio opinionPrecio, ProximaAccionVisita proximaAccion) {
         return TransactionRunner.write(conn -> {
             if (resultado == null) {
                 throw new BusinessException("El resultado de la visita es obligatorio.");
             }
-            Visita visita = visitaModificable(idVisita, "registrar el resultado de");
+            Visita visita = visitaRealizadaSinResultado(idVisita);
+            if (resultado.implicaNoContinuidad() && nivelInteres != null) {
+                throw new BusinessException(
+                        "No se debe registrar nivel de interes cuando el resultado es de no continuidad.");
+            }
             if (observaciones != null && !observaciones.isBlank()) {
                 visita.setObservaciones(observaciones);
             }
+            visita.setNivelInteres(nivelInteres);
+            visita.setObjecionPrincipal(objecionPrincipal);
+            visita.setOpinionPrecio(opinionPrecio);
+            visita.setProximaAccion(proximaAccion);
             visita.registrarResultado(resultado);
             boolean actualizada = visitaDAO.actualizar(visita);
 
@@ -133,6 +165,17 @@ public class VisitaBusinessLogicImpl implements VisitaBusinessLogic {
             }
             return actualizada;
         });
+    }
+
+    private Visita visitaRealizadaSinResultado(Long idVisita) {
+        BusinessValidations.id(idVisita, "El id de visita");
+        Visita visita = visitaDAO.buscarPorId(idVisita)
+                .orElseThrow(() -> new BusinessException("Visita no encontrada."));
+        if (!visita.admiteResultado()) {
+            throw new BusinessException(
+                    "Solo una visita realizada y sin resultado admite registrar el desenlace.");
+        }
+        return visita;
     }
 
     private void cerrarPorNoContinuidad(Visita visita, MotivoNoContinuidadTipo razon, String observaciones) {

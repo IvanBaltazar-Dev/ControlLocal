@@ -2,8 +2,7 @@
 -- Script SQL de esquema del sistema ControlLocal
 -- Motor de base de datos: MySQL 8.0.36
 -- Contiene solo tablas, restricciones e indices.
--- Los INSERT estan en database/dml.
--- Las plantillas de transacciones estan en database/tx.
+-- No contiene migraciones ni datos: representa el modelo final vigente.
 -- =========================================================
 
 USE controllocal;
@@ -153,7 +152,7 @@ CREATE TABLE propietario (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 6-bis) Catalogo de distritos (Diccionario v2)
+-- 6-bis) Catalogo de distritos
 -- Lista cerrada de distritos donde opera la corredora.
 -- =========================================================
 CREATE TABLE distrito (
@@ -166,8 +165,8 @@ CREATE TABLE distrito (
 
 -- =========================================================
 -- 7) Tabla de locales comerciales
--- Cada local pertenece a un propietario. distrito (texto) se conserva por
--- compatibilidad; id_distrito enlaza el catalogo cerrado.
+-- Cada local pertenece a un propietario. distrito conserva el nombre visible
+-- e id_distrito enlaza el catalogo cerrado.
 -- =========================================================
 CREATE TABLE local_comercial (
     id_local BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -187,7 +186,12 @@ CREATE TABLE local_comercial (
     zona_urbanizacion VARCHAR(150) NULL,
     geo_lat DECIMAL(10,7) NULL,
     geo_long DECIMAL(10,7) NULL,
-    estado_publicacion CHAR(1) NULL,
+    frente DECIMAL(8,2) NULL,
+    zonificacion VARCHAR(40) NULL,
+    apto_licencia_funcionamiento BOOLEAN NULL,
+    carga_electrica_kw DECIMAL(8,2) NULL,
+    numero_estacionamientos INT NULL,
+    cuota_mantenimiento DECIMAL(10,2) NULL,
     id_distrito BIGINT NULL,
     fecha_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -216,13 +220,57 @@ CREATE TABLE local_comercial (
     CONSTRAINT ck_local_antiguedad CHECK (
         antiguedad_anios IS NULL OR antiguedad_anios >= 0
     ),
-    CONSTRAINT ck_local_estado_publicacion CHECK (
-        estado_publicacion IS NULL OR estado_publicacion IN ('B', 'P', 'S', 'C')
+    CONSTRAINT ck_local_frente CHECK (frente IS NULL OR frente >= 0),
+    CONSTRAINT ck_local_carga_electrica CHECK (
+        carga_electrica_kw IS NULL OR carga_electrica_kw >= 0
+    ),
+    CONSTRAINT ck_local_estacionamientos CHECK (
+        numero_estacionamientos IS NULL OR numero_estacionamientos >= 0
+    ),
+    CONSTRAINT ck_local_mantenimiento CHECK (
+        cuota_mantenimiento IS NULL OR cuota_mantenimiento >= 0
     )
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 7-bis) Historico de precios del local (Diccionario v2)
+-- 7-bis) Publicaciones del local
+-- Una publicacion representa una version concreta de un anuncio.
+-- =========================================================
+CREATE TABLE publicacion (
+    id_publicacion BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_local BIGINT NOT NULL,
+    canal VARCHAR(30) NOT NULL,
+    url_publicacion VARCHAR(500) NULL,
+    version_anuncio INT NOT NULL DEFAULT 1,
+    titulo_anuncio VARCHAR(200) NOT NULL,
+    renta_publicada DECIMAL(12,2) NOT NULL,
+    moneda VARCHAR(10) NOT NULL,
+    inversion_pauta DECIMAL(12,2) NULL,
+    codigo_origen VARCHAR(50) NOT NULL,
+    fecha_publicacion DATETIME NOT NULL,
+    fecha_baja DATETIME NULL,
+    estado VARCHAR(20) NOT NULL,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_publicacion_local
+        FOREIGN KEY (id_local) REFERENCES local_comercial(id_local),
+    CONSTRAINT ck_publicacion_canal CHECK (
+        canal IN ('URBANIA', 'ADONDEVIVIR', 'PROPERATI', 'NEXO_INMOBILIARIO',
+                  'FACEBOOK', 'MARKETPLACE', 'INSTAGRAM', 'WHATSAPP',
+                  'WEB_PROPIA', 'REFERIDO', 'OTRO')
+    ),
+    CONSTRAINT ck_publicacion_moneda CHECK (moneda IN ('PEN', 'USD')),
+    CONSTRAINT ck_publicacion_estado CHECK (estado IN ('B', 'P', 'S', 'C')),
+    CONSTRAINT ck_publicacion_montos CHECK (
+        renta_publicada >= 0 AND (inversion_pauta IS NULL OR inversion_pauta >= 0)
+    ),
+    INDEX idx_publicacion_local (id_local),
+    INDEX idx_publicacion_estado (estado),
+    INDEX idx_publicacion_codigo_origen (codigo_origen)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 7-ter) Historico de precios del local
 -- Una fila por hito o cambio; el precio CERRADO real vive aqui.
 -- =========================================================
 CREATE TABLE precio_local (
@@ -267,7 +315,7 @@ CREATE TABLE captacion (
     id_local BIGINT NOT NULL,
     id_agente BIGINT NOT NULL,
     id_broker_revisor BIGINT NULL,
-    motivo_operacion CHAR(1) NULL,
+    motivo_operacion CHAR(1) NOT NULL DEFAULT 'A',
     urgencia INT NULL,
     exclusividad BOOLEAN NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -296,7 +344,7 @@ CREATE TABLE captacion (
         OR fecha_fin_vigencia >= fecha_inicio_vigencia
     ),
     CONSTRAINT ck_captacion_motivo_operacion CHECK (
-        motivo_operacion IS NULL OR motivo_operacion IN ('A', 'C')
+        motivo_operacion = 'A'
     ),
     CONSTRAINT ck_captacion_urgencia CHECK (
         urgencia IS NULL OR (urgencia BETWEEN 1 AND 5)
@@ -334,6 +382,10 @@ CREATE TABLE oportunidad_comercial (
     id_cliente BIGINT NOT NULL,
     id_captacion BIGINT NOT NULL,
     id_agente BIGINT NOT NULL,
+    id_publicacion_origen BIGINT NULL,
+    fuente_origen VARCHAR(30) NOT NULL DEFAULT 'OTRO',
+    codigo_origen_capturado VARCHAR(50) NULL,
+    fecha_primera_consulta DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     clave_oportunidad_abierta VARCHAR(60) GENERATED ALWAYS AS (
         CASE
             WHEN estado = 'A' THEN CONCAT(id_cliente, '-', id_captacion)
@@ -349,10 +401,18 @@ CREATE TABLE oportunidad_comercial (
         FOREIGN KEY (id_captacion) REFERENCES captacion(id_captacion),
     CONSTRAINT fk_oportunidad_agente
         FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    CONSTRAINT fk_oportunidad_publicacion
+        FOREIGN KEY (id_publicacion_origen) REFERENCES publicacion(id_publicacion),
     CONSTRAINT ck_oportunidad_estado CHECK (
         estado IN ('A', 'S', 'N', 'F', 'X')
     ),
-    CONSTRAINT uq_oportunidad_abierta_cliente_captacion UNIQUE (clave_oportunidad_abierta)
+    CONSTRAINT ck_oportunidad_fuente CHECK (
+        fuente_origen IN ('PORTAL', 'REDES_SOCIALES', 'WHATSAPP', 'LLAMADA_DIRECTA',
+                          'REFERIDO', 'CARTERA_PROPIA', 'WEB_PROPIA', 'OTRO')
+    ),
+    CONSTRAINT uq_oportunidad_abierta_cliente_captacion UNIQUE (clave_oportunidad_abierta),
+    INDEX idx_oportunidad_publicacion (id_publicacion_origen),
+    INDEX idx_oportunidad_fuente (fuente_origen)
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -408,7 +468,7 @@ CREATE TABLE visita (
     CONSTRAINT fk_visita_agente
         FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
     CONSTRAINT ck_visita_estado CHECK (
-        estado IN ('P', 'G', 'C', 'R')
+        estado IN ('P', 'G', 'C', 'N', 'R')
     ),
     CONSTRAINT ck_visita_resultado CHECK (
         resultado IS NULL OR resultado IN ('P', 'I', 'N', 'S', 'D')
@@ -481,6 +541,7 @@ CREATE TABLE solicitud_alquiler (
     observaciones TEXT,
     estado CHAR(1) NOT NULL,
     fecha_actualizacion_estado DATETIME NULL,
+    fecha_vigencia_oferta DATE NULL,
     id_oportunidad BIGINT NOT NULL UNIQUE,
     id_agente BIGINT NOT NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -498,12 +559,26 @@ CREATE TABLE solicitud_alquiler (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 14) Tabla de documentos de solicitud
+-- 14) Catalogo de documentos requeridos
+-- =========================================================
+CREATE TABLE tipo_documento_requerido (
+    id_tipo_documento_requerido BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tipo_operacion CHAR(1) NOT NULL,
+    tipo_documento VARCHAR(60) NOT NULL,
+    obligatorio BOOLEAN NOT NULL,
+    activo BOOLEAN NOT NULL,
+    descripcion VARCHAR(200) NULL,
+    CONSTRAINT ck_tipo_documento_operacion CHECK (tipo_operacion = 'A'),
+    CONSTRAINT uq_tipo_documento_operacion UNIQUE (tipo_operacion, tipo_documento)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 14-bis) Tabla de documentos de solicitud
 -- Cada documento pertenece a una solicitud.
 -- =========================================================
 CREATE TABLE documento_solicitud (
     id_documento BIGINT AUTO_INCREMENT PRIMARY KEY,
-    tipo_documento CHAR(1) NOT NULL,
+    id_tipo_documento_requerido BIGINT NOT NULL,
     nombre_archivo VARCHAR(255) NOT NULL,
     ruta_archivo VARCHAR(255),
     fecha_entrega DATETIME NOT NULL,
@@ -511,19 +586,20 @@ CREATE TABLE documento_solicitud (
     observaciones TEXT,
     estado CHAR(1) NOT NULL,
     id_solicitud BIGINT NOT NULL,
+    CONSTRAINT fk_documento_tipo_requerido
+        FOREIGN KEY (id_tipo_documento_requerido)
+        REFERENCES tipo_documento_requerido(id_tipo_documento_requerido),
     CONSTRAINT fk_documento_solicitud
         FOREIGN KEY (id_solicitud) REFERENCES solicitud_alquiler(id_solicitud)
         ON DELETE CASCADE,
     CONSTRAINT ck_documento_estado CHECK (
         estado IN ('R', 'O', 'V')
     ),
-    CONSTRAINT ck_documento_tipo CHECK (
-        tipo_documento IN ('I', 'R', 'V', 'P', 'E', 'G', 'D', 'O')
-    ),
     CONSTRAINT ck_documento_revision CHECK (
         resultado_revision IS NULL
         OR resultado_revision IN ('P', 'C', 'O')
-    )
+    ),
+    INDEX idx_documento_tipo_requerido (id_tipo_documento_requerido)
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -716,3 +792,212 @@ CREATE INDEX idx_motivo_oportunidad ON motivo_no_continuidad(id_oportunidad);
 CREATE INDEX idx_motivo_interaccion ON motivo_no_continuidad(id_interaccion);
 CREATE INDEX idx_motivo_visita ON motivo_no_continuidad(id_visita);
 CREATE INDEX idx_motivo_solicitud ON motivo_no_continuidad(id_solicitud);
+
+-- =========================================================
+-- 19) Cierre, seguimiento y gestion operativa
+-- =========================================================
+
+CREATE TABLE contrato_alquiler (
+    id_contrato_alquiler BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_oportunidad BIGINT NOT NULL UNIQUE,
+    id_solicitud BIGINT NULL UNIQUE,
+    renta_mensual DECIMAL(12,2) NOT NULL,
+    moneda VARCHAR(10) NOT NULL,
+    plazo_contrato_meses INT NOT NULL,
+    fecha_inicio_contrato DATE NOT NULL,
+    fecha_fin_contrato DATE NOT NULL,
+    meses_garantia INT NULL,
+    monto_garantia DECIMAL(12,2) NULL,
+    meses_adelanto INT NULL,
+    cuota_mantenimiento DECIMAL(10,2) NULL,
+    tipo_reajuste VARCHAR(20) NOT NULL,
+    porcentaje_reajuste DECIMAL(5,2) NULL,
+    forma_pago VARCHAR(20) NOT NULL,
+    fecha_cierre DATE NOT NULL,
+    comision_generada DECIMAL(12,2) NOT NULL,
+    estado_contrato VARCHAR(20) NOT NULL,
+    incidencias TEXT NULL,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_contrato_oportunidad FOREIGN KEY (id_oportunidad) REFERENCES oportunidad_comercial(id_oportunidad),
+    CONSTRAINT fk_contrato_solicitud FOREIGN KEY (id_solicitud) REFERENCES solicitud_alquiler(id_solicitud),
+    CONSTRAINT ck_contrato_moneda CHECK (moneda IN ('PEN', 'USD')),
+    CONSTRAINT ck_contrato_reajuste CHECK (tipo_reajuste IN ('NINGUNO', 'ANUAL_FIJO', 'INDEXADO_IPC', 'OTRO')),
+    CONSTRAINT ck_contrato_forma_pago CHECK (forma_pago IN ('TRANSFERENCIA', 'DEPOSITO_BANCARIO', 'EFECTIVO', 'CHEQUE', 'OTRO')),
+    CONSTRAINT ck_contrato_estado CHECK (
+        estado_contrato IN ('EN_PROCESO', 'FIRMADO', 'VIGENTE', 'RENOVADO',
+                            'FINALIZADO', 'RESCINDIDO', 'ANULADO')
+    ),
+    CONSTRAINT ck_contrato_fechas CHECK (fecha_fin_contrato >= fecha_inicio_contrato),
+    CONSTRAINT ck_contrato_montos CHECK (
+        renta_mensual >= 0 AND comision_generada >= 0
+        AND (monto_garantia IS NULL OR monto_garantia >= 0)
+        AND (cuota_mantenimiento IS NULL OR cuota_mantenimiento >= 0)
+    )
+) ENGINE=InnoDB;
+
+CREATE TABLE historial_estado (
+    id_historial_estado BIGINT AUTO_INCREMENT PRIMARY KEY,
+    entidad_tipo VARCHAR(30) NOT NULL,
+    entidad_id BIGINT NOT NULL,
+    estado_anterior VARCHAR(40) NULL,
+    estado_nuevo VARCHAR(40) NOT NULL,
+    id_usuario BIGINT NOT NULL,
+    fecha_evento DATETIME NOT NULL,
+    observacion VARCHAR(500) NULL,
+    CONSTRAINT fk_historial_usuario FOREIGN KEY (id_usuario) REFERENCES usuario_interno(id_usuario),
+    CONSTRAINT ck_historial_tipo_entidad CHECK (
+        entidad_tipo IN ('PROSPECCION', 'CAPTACION', 'OPORTUNIDAD', 'INTERACCION',
+                         'VISITA', 'SOLICITUD_ALQUILER', 'INMUEBLE', 'PUBLICACION',
+                         'CONTRATO_ALQUILER')
+    ),
+    INDEX idx_historial_entidad (entidad_tipo, entidad_id),
+    INDEX idx_historial_fecha (fecha_evento)
+) ENGINE=InnoDB;
+
+CREATE TABLE requerimiento_cliente (
+    id_requerimiento BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente BIGINT NOT NULL,
+    rubro VARCHAR(80) NOT NULL,
+    tipo_inmueble VARCHAR(30) NULL,
+    renta_min DECIMAL(12,2) NULL,
+    renta_max DECIMAL(12,2) NULL,
+    moneda VARCHAR(10) NOT NULL,
+    metraje_min DECIMAL(10,2) NULL,
+    metraje_max DECIMAL(10,2) NULL,
+    frente_minimo DECIMAL(8,2) NULL,
+    estado VARCHAR(20) NOT NULL,
+    observaciones VARCHAR(500) NULL,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_requerimiento_cliente FOREIGN KEY (id_cliente) REFERENCES cliente_interesado(id_cliente),
+    CONSTRAINT ck_requerimiento_tipo CHECK (
+        tipo_inmueble IS NULL OR tipo_inmueble IN ('LOCAL_COMERCIAL', 'OFICINA',
+            'DEPOSITO_ALMACEN', 'STAND_MODULO', 'TERRENO_COMERCIAL', 'OTRO')
+    ),
+    CONSTRAINT ck_requerimiento_moneda CHECK (moneda IN ('PEN', 'USD')),
+    CONSTRAINT ck_requerimiento_estado CHECK (estado IN ('ACTIVO', 'PAUSADO', 'CERRADO')),
+    CONSTRAINT ck_requerimiento_renta CHECK (
+        (renta_min IS NULL OR renta_min >= 0)
+        AND (renta_max IS NULL OR renta_max >= 0)
+        AND (renta_min IS NULL OR renta_max IS NULL OR renta_max >= renta_min)
+    ),
+    CONSTRAINT ck_requerimiento_metraje CHECK (
+        (metraje_min IS NULL OR metraje_min >= 0)
+        AND (metraje_max IS NULL OR metraje_max >= 0)
+        AND (metraje_min IS NULL OR metraje_max IS NULL OR metraje_max >= metraje_min)
+    ),
+    INDEX idx_requerimiento_cliente (id_cliente),
+    INDEX idx_requerimiento_estado (estado)
+) ENGINE=InnoDB;
+
+CREATE TABLE requerimiento_distrito (
+    id_requerimiento BIGINT NOT NULL,
+    id_distrito BIGINT NOT NULL,
+    PRIMARY KEY (id_requerimiento, id_distrito),
+    CONSTRAINT fk_requerimiento_distrito_requerimiento
+        FOREIGN KEY (id_requerimiento) REFERENCES requerimiento_cliente(id_requerimiento) ON DELETE CASCADE,
+    CONSTRAINT fk_requerimiento_distrito_distrito
+        FOREIGN KEY (id_distrito) REFERENCES distrito(id_distrito)
+) ENGINE=InnoDB;
+
+CREATE TABLE tarea (
+    id_tarea BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tipo VARCHAR(30) NOT NULL,
+    entidad_tipo VARCHAR(30) NOT NULL,
+    entidad_id BIGINT NOT NULL,
+    id_agente BIGINT NOT NULL,
+    descripcion VARCHAR(300) NOT NULL,
+    fecha_programada DATETIME NOT NULL,
+    fecha_recordatorio DATETIME NULL,
+    fecha_completada DATETIME NULL,
+    estado VARCHAR(20) NOT NULL,
+    prioridad VARCHAR(10) NOT NULL,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tarea_agente FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    CONSTRAINT ck_tarea_tipo CHECK (
+        tipo IN ('SEGUIMIENTO', 'LLAMADA', 'VISITA', 'ENVIO_INFO', 'RECONTACTO',
+                 'REPORTE_PROPIETARIO', 'ENVIAR_REVISION', 'SUBIR_DOCUMENTOS',
+                 'REGISTRAR_CAPTACION', 'REGISTRAR_INTERACCION', 'OTRO')
+    ),
+    CONSTRAINT ck_tarea_tipo_entidad CHECK (
+        entidad_tipo IN ('PROSPECCION', 'CAPTACION', 'OPORTUNIDAD', 'INTERACCION',
+                         'VISITA', 'SOLICITUD_ALQUILER', 'INMUEBLE', 'PUBLICACION',
+                         'CONTRATO_ALQUILER')
+    ),
+    CONSTRAINT ck_tarea_estado CHECK (estado IN ('PENDIENTE', 'EN_PROCESO', 'COMPLETADA', 'VENCIDA', 'CANCELADA')),
+    CONSTRAINT ck_tarea_prioridad CHECK (prioridad IN ('BAJA', 'MEDIA', 'ALTA')),
+    INDEX idx_tarea_agente_estado (id_agente, estado),
+    INDEX idx_tarea_programada (fecha_programada),
+    INDEX idx_tarea_entidad (entidad_tipo, entidad_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE comision_liquidacion (
+    id_comision_liquidacion BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_contrato_alquiler BIGINT NOT NULL,
+    monto DECIMAL(12,2) NOT NULL,
+    moneda VARCHAR(10) NOT NULL,
+    monto_agente DECIMAL(12,2) NULL,
+    monto_empresa DECIMAL(12,2) NULL,
+    fecha_cobro DATE NULL,
+    estado VARCHAR(20) NOT NULL,
+    CONSTRAINT fk_comision_contrato FOREIGN KEY (id_contrato_alquiler) REFERENCES contrato_alquiler(id_contrato_alquiler),
+    CONSTRAINT ck_comision_moneda CHECK (moneda IN ('PEN', 'USD')),
+    CONSTRAINT ck_comision_estado CHECK (estado IN ('PENDIENTE', 'PARCIAL', 'COBRADA', 'ANULADA')),
+    CONSTRAINT ck_comision_montos CHECK (
+        monto >= 0 AND (monto_agente IS NULL OR monto_agente >= 0)
+        AND (monto_empresa IS NULL OR monto_empresa >= 0)
+    ),
+    INDEX idx_comision_contrato (id_contrato_alquiler),
+    INDEX idx_comision_estado (estado)
+) ENGINE=InnoDB;
+
+CREATE TABLE reporte_propietario (
+    id_reporte_propietario BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_captacion BIGINT NOT NULL,
+    id_agente BIGINT NOT NULL,
+    fecha_reporte DATE NOT NULL,
+    periodo_inicio DATE NULL,
+    periodo_fin DATE NULL,
+    consultas_reportadas INT NOT NULL,
+    visitas_reportadas INT NOT NULL,
+    objeciones_frecuentes VARCHAR(500) NULL,
+    ajustes_recomendados VARCHAR(500) NULL,
+    canal_envio CHAR(1) NOT NULL,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reporte_captacion FOREIGN KEY (id_captacion) REFERENCES captacion(id_captacion),
+    CONSTRAINT fk_reporte_agente FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    CONSTRAINT ck_reporte_canal CHECK (canal_envio IN ('L', 'W', 'E', 'P', 'R', 'T', 'O')),
+    CONSTRAINT ck_reporte_cantidades CHECK (consultas_reportadas >= 0 AND visitas_reportadas >= 0),
+    CONSTRAINT ck_reporte_periodo CHECK (periodo_fin IS NULL OR periodo_inicio IS NULL OR periodo_fin >= periodo_inicio),
+    INDEX idx_reporte_captacion_fecha (id_captacion, fecha_reporte)
+) ENGINE=InnoDB;
+
+CREATE TABLE alerta (
+    id_alerta BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tipo VARCHAR(30) NOT NULL,
+    severidad VARCHAR(10) NOT NULL,
+    entidad_tipo VARCHAR(30) NOT NULL,
+    entidad_id BIGINT NOT NULL,
+    id_agente BIGINT NOT NULL,
+    mensaje VARCHAR(300) NOT NULL,
+    estado VARCHAR(15) NOT NULL,
+    fecha_generacion DATETIME NOT NULL,
+    fecha_resolucion DATETIME NULL,
+    CONSTRAINT fk_alerta_agente FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    CONSTRAINT ck_alerta_tipo CHECK (
+        tipo IN ('SIN_RESPUESTA', 'SIN_AVANCE', 'OFERTA_POR_VENCER',
+                 'CONTRATO_POR_VENCER', 'VISITA_PROXIMA', 'CAPTACION_VENCIDA',
+                 'SOLICITUD_REENVIADA', 'SOLICITUD_EVALUADA')
+    ),
+    CONSTRAINT ck_alerta_severidad CHECK (severidad IN ('INFO', 'MEDIA', 'ALTA')),
+    CONSTRAINT ck_alerta_tipo_entidad CHECK (
+        entidad_tipo IN ('PROSPECCION', 'CAPTACION', 'OPORTUNIDAD', 'INTERACCION',
+                         'VISITA', 'SOLICITUD_ALQUILER', 'INMUEBLE', 'PUBLICACION',
+                         'CONTRATO_ALQUILER')
+    ),
+    CONSTRAINT ck_alerta_estado CHECK (estado IN ('ACTIVA', 'ATENDIDA', 'DESCARTADA')),
+    INDEX idx_alerta_agente_estado (id_agente, estado),
+    INDEX idx_alerta_entidad (entidad_tipo, entidad_id)
+) ENGINE=InnoDB;

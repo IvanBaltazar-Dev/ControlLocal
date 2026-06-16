@@ -14,7 +14,6 @@ import com.controllocal.config.DBManager;
 import com.controllocal.dao.DAOException;
 import com.controllocal.dao.LocalComercialDAO;
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
-import com.controllocal.model.inmueble.enums.EstadoPublicacion;
 import com.controllocal.model.inmueble.enums.TipoInmueble;
 import com.controllocal.model.inmueble.enums.UsoInmueble;
 import com.controllocal.model.inmueble.LocalComercial;
@@ -43,7 +42,12 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 l.zona_urbanizacion,
                 l.geo_lat,
                 l.geo_long,
-                l.estado_publicacion,
+                l.frente,
+                l.zonificacion,
+                l.apto_licencia_funcionamiento,
+                l.carga_electrica_kw,
+                l.numero_estacionamientos,
+                l.cuota_mantenimiento,
                 pp.nombres_o_razon_social AS propietario_nombre,
                 l.fecha_registro,
                 l.fecha_actualizacion
@@ -70,8 +74,13 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 zona_urbanizacion,
                 geo_lat,
                 geo_long,
-                estado_publicacion
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                frente,
+                zonificacion,
+                apto_licencia_funcionamiento,
+                carga_electrica_kw,
+                numero_estacionamientos,
+                cuota_mantenimiento
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_BY_ID_SQL =
@@ -103,7 +112,12 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 zona_urbanizacion = ?,
                 geo_lat = ?,
                 geo_long = ?,
-                estado_publicacion = ?
+                frente = ?,
+                zonificacion = ?,
+                apto_licencia_funcionamiento = ?,
+                carga_electrica_kw = ?,
+                numero_estacionamientos = ?,
+                cuota_mantenimiento = ?
             WHERE id_local = ?
             """;
 
@@ -136,7 +150,12 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setString(14, local.getZonaUrbanizacion());
             statement.setBigDecimal(15, local.getGeoLat());
             statement.setBigDecimal(16, local.getGeoLong());
-            JdbcSupport.setEnum(statement, 17, local.getEstadoPublicacion());
+            statement.setBigDecimal(17, local.getFrente());
+            statement.setString(18, local.getZonificacion());
+            JdbcSupport.setBoolean(statement, 19, local.getAptoLicenciaFuncionamiento());
+            statement.setBigDecimal(20, local.getCargaElectricaKw());
+            JdbcSupport.setInteger(statement, 21, local.getNumeroEstacionamientos());
+            statement.setBigDecimal(22, local.getCuotaMantenimiento());
 
             int affectedRows = statement.executeUpdate();
             if (affectedRows == 0) {
@@ -251,8 +270,13 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setString(14, local.getZonaUrbanizacion());
             statement.setBigDecimal(15, local.getGeoLat());
             statement.setBigDecimal(16, local.getGeoLong());
-            JdbcSupport.setEnum(statement, 17, local.getEstadoPublicacion());
-            statement.setLong(18, local.getIdLocal());
+            statement.setBigDecimal(17, local.getFrente());
+            statement.setString(18, local.getZonificacion());
+            JdbcSupport.setBoolean(statement, 19, local.getAptoLicenciaFuncionamiento());
+            statement.setBigDecimal(20, local.getCargaElectricaKw());
+            JdbcSupport.setInteger(statement, 21, local.getNumeroEstacionamientos());
+            statement.setBigDecimal(22, local.getCuotaMantenimiento());
+            statement.setLong(23, local.getIdLocal());
 
             return statement.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -301,7 +325,12 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
         local.setZonaUrbanizacion(rs.getString("zona_urbanizacion"));
         local.setGeoLat(rs.getBigDecimal("geo_lat"));
         local.setGeoLong(rs.getBigDecimal("geo_long"));
-        local.setEstadoPublicacion(JdbcSupport.getNullableEnum(rs, "estado_publicacion", EstadoPublicacion.class));
+        local.setFrente(rs.getBigDecimal("frente"));
+        local.setZonificacion(rs.getString("zonificacion"));
+        local.setAptoLicenciaFuncionamiento(JdbcSupport.getNullableBoolean(rs, "apto_licencia_funcionamiento"));
+        local.setCargaElectricaKw(rs.getBigDecimal("carga_electrica_kw"));
+        local.setNumeroEstacionamientos(JdbcSupport.getNullableInt(rs, "numero_estacionamientos"));
+        local.setCuotaMantenimiento(rs.getBigDecimal("cuota_mantenimiento"));
 
         Propietario propietario = new Propietario();
         propietario.setIdPropietario(idPropietario);

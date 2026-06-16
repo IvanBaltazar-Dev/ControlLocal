@@ -243,8 +243,17 @@
             _error = "Solicitud no encontrada.";
             return;
         }
-        SolicitudSvc.ReenviarAEvaluacion(_solicitud.CodigoSolicitud);
-        _toast = "Solicitud reenviada a evaluacion";
+        try
+        {
+            SolicitudSvc.ReenviarAEvaluacion(_solicitud.CodigoSolicitud);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _error = ex.Message;
+            await RenderIfAliveAsync();
+            return;
+        }
+        _toast = "Solicitud reenviada a evaluación. Se notificó al broker.";
         await RenderIfAliveAsync();
         await Task.Delay(700);
         App.Navigate("solicitudes");

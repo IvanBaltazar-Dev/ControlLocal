@@ -6,6 +6,7 @@ public enum EstadoVisita implements CodigoEnum {
     PROGRAMADA("P", "Programada"),
     REPROGRAMADA("G", "Reprogramada"),
     CANCELADA("C", "Cancelada"),
+    NO_REALIZADA("N", "No realizada"),
     REALIZADA("R", "Realizada");
 
     private final String codigo;

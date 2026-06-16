@@ -11,7 +11,7 @@ public enum ResultadoPropuesta implements CodigoEnum {
     PENDIENTE("P", "Pendiente"),
     ACEPTADA("A", "Aceptada"),
     RECHAZADA("R", "Rechazada"),
-    POSPUESTA("S", "Pospuesta");
+    POSPUESTA("S", "Recontactar");
 
     private final String codigo;
     private final String descripcion;

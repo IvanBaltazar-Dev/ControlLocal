@@ -9,6 +9,7 @@ using ControlLocal.Web.Models.Propietarios;
 using ControlLocal.Web.Models.Shared;
 using ControlLocal.Web.Models.Solicitudes;
 using ControlLocal.Web.Models.Visitas;
+using ControlLocal.Web.Services;
 
 namespace ControlLocal.Web.Data;
 
@@ -38,6 +39,8 @@ public interface IPropietarioService
 {
     IReadOnlyList<PropietarioDto> All();
     PropietarioDto? ById(long id);
+    // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
+    Task<IReadOnlyList<PropietarioDto>> RefrescarAsync(CancellationToken ct = default);
     // Alta individual o desde la bandeja de importación; asigna el id y devuelve el registro.
     PropietarioDto Agregar(PropietarioDto propietario);
     PropietarioDto Actualizar(PropietarioDto propietario);
@@ -66,6 +69,8 @@ public interface IProspeccionService
 {
     IReadOnlyList<ProspeccionDto> All();
     ProspeccionDto? ById(long id);
+    // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
+    Task<IReadOnlyList<ProspeccionDto>> RefrescarAsync(CancellationToken ct = default);
     // En seguimiento cuyo recontacto vence dentro de diasAviso (o ya venció).
     IReadOnlyList<ProspeccionDto> PorRecontactar(int diasAviso);
     ProspeccionDto Contactar(long id);
@@ -86,6 +91,9 @@ public interface ICaptacionService
     CaptacionDto? ByCodigo(string codigo);
     CaptacionDto Agregar(CaptacionDto captacion);
     CaptacionDto Actualizar(CaptacionDto captacion);
+    // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
+    Task<IReadOnlyList<CaptacionDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<BandejaCaptacionDto>> RefrescarBandejaAsync(CancellationToken ct = default);
     Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default);
     Task ResolverBandejaAsync(string codigo, string decision, string? observacion, CancellationToken ct = default);
     Task ReasignarBandejaAsync(string codigo, long idNuevoAgente, string motivo, CancellationToken ct = default);
@@ -95,6 +103,8 @@ public interface ICaptacionService
 public interface ISolicitudService
 {
     IReadOnlyList<SolicitudAlquilerDto> All();
+    // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
+    Task<IReadOnlyList<SolicitudAlquilerDto>> RefrescarAsync(CancellationToken ct = default);
     SolicitudAlquilerDto? ByCodigo(string codigo);
     SolicitudAlquilerDto Agregar(SolicitudFormRequest request);
     SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud);
@@ -117,6 +127,8 @@ public interface IOportunidadService
 {
     IReadOnlyList<OportunidadComercialDto> All();
     OportunidadComercialDto? ById(long id);
+    // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
+    Task<IReadOnlyList<OportunidadComercialDto>> RefrescarAsync(CancellationToken ct = default);
     // Todos los clientes interesados (oportunidades) de una captación.
     IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion);
     OportunidadComercialDto MarcarSolicitudCreada(long id);
@@ -127,13 +139,19 @@ public interface IVisitaService
 {
     IReadOnlyList<VisitaDto> All();
     VisitaDto? ById(long id);
+    // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
+    Task<IReadOnlyList<VisitaDto>> RefrescarAsync(CancellationToken ct = default);
     // POST /visitas — programa una nueva visita (estado inicial PROGRAMADA).
     VisitaDto Programar(VisitaFormRequest request);
     // PATCH /visitas/{id}/reprogramar — mueve fecha/hora (estado REPROGRAMADA).
     VisitaDto Reprogramar(long id, string fechaTexto, string horaTexto);
     // PATCH /visitas/{id}/cancelar — cancela con motivo (estado CANCELADA).
     VisitaDto Cancelar(long id, string motivo);
-    // PATCH /visitas/{id}/resultado — marca REALIZADA y registra el desenlace.
+    // PATCH /visitas/{id}/realizar — confirma que la visita ocurrio.
+    VisitaDto MarcarRealizada(long id);
+    // PATCH /visitas/{id}/no-realizada — confirma que la cita no llego a ocurrir.
+    VisitaDto MarcarNoRealizada(long id, string motivo);
+    // PATCH /visitas/{id}/resultado — registra el desenlace de una visita REALIZADA.
     // Si el resultado es de no continuidad (N/D), razonNoContinuidad es obligatorio:
     // registra el motivo ligado a la visita y cierra la oportunidad.
     VisitaDto RegistrarResultado(long id, VisitaResultadoRequest request);
@@ -275,6 +293,8 @@ public class MockPropietarioService : IPropietarioService
     };
 
     public IReadOnlyList<PropietarioDto> All() => _data;
+    public Task<IReadOnlyList<PropietarioDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PropietarioDto>>(_data);
     public PropietarioDto? ById(long id) => _data.FirstOrDefault(p => p.Id == id);
 
     public PropietarioDto Agregar(PropietarioDto propietario)
@@ -379,6 +399,9 @@ public class MockProspeccionService : IProspeccionService
     };
 
     public IReadOnlyList<ProspeccionDto> All() => _data;
+
+    public Task<IReadOnlyList<ProspeccionDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<ProspeccionDto>>(_data);
 
     public ProspeccionDto? ById(long id) => _data.FirstOrDefault(p => p.Id == id);
 
@@ -519,6 +542,12 @@ public class MockCaptacionService : ICaptacionService
     public IReadOnlyList<BandejaCaptacionDto> Bandeja() => BandejaData;
     public CaptacionDto? ByCodigo(string codigo) => Data.FirstOrDefault(c => c.CodigoCaptacion == codigo);
 
+    public Task<IReadOnlyList<CaptacionDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<CaptacionDto>>(Data);
+
+    public Task<IReadOnlyList<BandejaCaptacionDto>> RefrescarBandejaAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<BandejaCaptacionDto>>(BandejaData);
+
     public CaptacionDto Agregar(CaptacionDto captacion)
     {
         captacion.Id = Data.Count == 0 ? 1 : Data.Max(item => item.Id) + 1;
@@ -641,8 +670,14 @@ public class MockCaptacionService : ICaptacionService
     }
 }
 
-public class MockSolicitudService(IOportunidadService oportunidades) : ISolicitudService
+// Almacen compartido (Singleton) de solicitudes. A diferencia de un servicio
+// Scoped, conserva el estado entre navegaciones y reinicios de circuito de Blazor
+// Server: esa era la causa de "no se llega a cerrar" (el mock Scoped se re-sembraba
+// en cada request y perdia la transicion de estado). El backend REST real lo
+// reemplazara por persistencia en MySQL via HttpSolicitudService.
+public class SolicitudStore
 {
+    private readonly object _lock = new();
     private readonly List<SolicitudAlquilerDto> _data = new()
     {
         new() { Id = 1, OportunidadId = 4, CodigoSolicitud = "SOL-0425", CodigoOperacion = "OP-1094", ClienteNombre = "Boutique Lila", DireccionLocal = "Calle Schell 412", DistritoLocal = "Miraflores", MontoMensual = 1850, MontoMensualTexto = "1 850", PlazoMeses = 24, PlazoTentativo = "24 meses", DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "23 May", Estado = "En revision" },
@@ -653,8 +688,40 @@ public class MockSolicitudService(IOportunidadService oportunidades) : ISolicitu
         new() { Id = 6, CodigoSolicitud = "SOL-0418", CodigoOperacion = "OP-1068", ClienteNombre = "Restaurantes Bocca", DireccionLocal = "Av. Brasil 2890", DistritoLocal = "Magdalena", MontoMensual = 1950, MontoMensualTexto = "1 950", PlazoMeses = 24, PlazoTentativo = "24 meses", DocumentosTexto = "6/6", PorcentajeDocumentos = 100, FechaRegistroTexto = "14 May", Estado = "Aprobada" },
     };
 
-    public IReadOnlyList<SolicitudAlquilerDto> All() => _data;
-    public SolicitudAlquilerDto? ByCodigo(string codigo) => _data.FirstOrDefault(s => s.CodigoSolicitud == codigo);
+    public IReadOnlyList<SolicitudAlquilerDto> All()
+    {
+        lock (_lock) return _data.ToList();
+    }
+
+    public SolicitudAlquilerDto? ByCodigo(string codigo)
+    {
+        lock (_lock) return _data.FirstOrDefault(s => s.CodigoSolicitud == codigo);
+    }
+
+    public void Insertar(SolicitudAlquilerDto solicitud)
+    {
+        lock (_lock) _data.Insert(0, solicitud);
+    }
+
+    public long SiguienteId()
+    {
+        lock (_lock) return _data.Count == 0 ? 1 : _data.Max(item => item.Id) + 1;
+    }
+}
+
+// Implementacion de pantallas (demostrable sin backend): orquesta el SolicitudStore
+// compartido y, en cada transicion, emite la notificacion al destinatario que
+// corresponde (broker al reenviar a evaluacion; agente al cerrar la evaluacion).
+public class MockSolicitudService(
+    SolicitudStore store,
+    IOportunidadService oportunidades,
+    INotificacionService notificaciones,
+    AppState app) : ISolicitudService
+{
+    public IReadOnlyList<SolicitudAlquilerDto> All() => store.All();
+    public Task<IReadOnlyList<SolicitudAlquilerDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult(store.All());
+    public SolicitudAlquilerDto? ByCodigo(string codigo) => store.ByCodigo(codigo);
 
     public SolicitudAlquilerDto Agregar(SolicitudFormRequest request)
     {
@@ -665,7 +732,7 @@ public class MockSolicitudService(IOportunidadService oportunidades) : ISolicitu
         if (string.IsNullOrWhiteSpace(request.PlazoTentativo))
             throw new InvalidOperationException("El plazo tentativo es obligatorio.");
 
-        var id = _data.Count == 0 ? 1 : _data.Max(item => item.Id) + 1;
+        var id = store.SiguienteId();
         var digitosPlazo = new string(request.PlazoTentativo.TakeWhile(char.IsDigit).ToArray());
         var plazoMeses = int.TryParse(digitosPlazo, out var meses) ? meses : 0;
         var solicitud = new SolicitudAlquilerDto
@@ -685,22 +752,28 @@ public class MockSolicitudService(IOportunidadService oportunidades) : ISolicitu
             Estado = request.EnviarAEvaluacion ? "En revision" : "Registrada",
             DocumentosTexto = "0/0",
         };
-        _data.Insert(0, solicitud);
+        store.Insertar(solicitud);
         oportunidades.MarcarSolicitudCreada(oportunidad.Id);
+        if (request.EnviarAEvaluacion)
+            NotificarReenvio(solicitud);
         return solicitud;
     }
 
     public SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud)
     {
-        var solicitud = ByCodigo(codigoSolicitud)
+        var solicitud = store.ByCodigo(codigoSolicitud)
             ?? throw new InvalidOperationException("Solicitud no encontrada.");
+        // Guard de transicion: una solicitud ya cerrada no vuelve a evaluacion.
+        if (solicitud.Estado is "Aprobada" or "Rechazada")
+            throw new InvalidOperationException("La solicitud ya esta cerrada y no puede reenviarse a evaluacion.");
         solicitud.Estado = "En revision";
+        NotificarReenvio(solicitud);
         return solicitud;
     }
 
     public EvaluacionSolicitudDto Evaluar(string codigoSolicitud, EvaluacionSolicitudDto evaluacion)
     {
-        var solicitud = ByCodigo(codigoSolicitud)
+        var solicitud = store.ByCodigo(codigoSolicitud)
             ?? throw new InvalidOperationException("Solicitud no encontrada.");
         if (!EnumCatalog.TiposEvaluacionSolicitud.Any(item => item.Code == evaluacion.TipoEvaluacion))
             throw new InvalidOperationException("El tipo de evaluacion no es valido.");
@@ -718,7 +791,50 @@ public class MockSolicitudService(IOportunidadService oportunidades) : ISolicitu
             "R" => "Rechazada",
             _ => "Observada",
         };
+        NotificarEvaluacion(solicitud, evaluacion);
         return evaluacion;
+    }
+
+    // Aviso al broker supervisor de que una solicitud llego (o volvio) a evaluacion.
+    private void NotificarReenvio(SolicitudAlquilerDto solicitud)
+    {
+        var agente = app.CurrentUser?.Nombre ?? "Un agente";
+        notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Solicitud por evaluar",
+            Mensaje = $"{agente} reenvio la solicitud {solicitud.CodigoSolicitud} ({solicitud.ClienteNombre}) a evaluacion.",
+            Severidad = "MEDIA",
+            Icono = "arrowRight",
+            EntidadTipo = "Solicitud",
+            EntidadRef = solicitud.CodigoSolicitud,
+            Ruta = $"evaluacion/{solicitud.CodigoSolicitud}",
+            DestinatarioRol = Roles.Broker,
+        });
+    }
+
+    // Aviso al agente con el resultado de la evaluacion del broker.
+    private void NotificarEvaluacion(SolicitudAlquilerDto solicitud, EvaluacionSolicitudDto evaluacion)
+    {
+        var (tipo, icono, severidad) = evaluacion.Resultado switch
+        {
+            "A" => ("Solicitud aprobada", "check", "INFO"),
+            "R" => ("Solicitud rechazada", "alert", "ALTA"),
+            _ => ("Solicitud observada", "alert", "MEDIA"),
+        };
+        var detalle = string.IsNullOrWhiteSpace(evaluacion.Observaciones)
+            ? ""
+            : $" Observacion: {evaluacion.Observaciones}";
+        notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = tipo,
+            Mensaje = $"La solicitud {solicitud.CodigoSolicitud} ({solicitud.ClienteNombre}) fue {solicitud.Estado.ToLowerInvariant()}.{detalle}",
+            Severidad = severidad,
+            Icono = icono,
+            EntidadTipo = "Solicitud",
+            EntidadRef = solicitud.CodigoSolicitud,
+            Ruta = $"solicitud-detail/{solicitud.CodigoSolicitud}",
+            DestinatarioRol = Roles.Agente,
+        });
     }
 }
 
@@ -792,6 +908,8 @@ public class MockOportunidadService : IOportunidadService
     };
 
     public IReadOnlyList<OportunidadComercialDto> All() => Data;
+    public Task<IReadOnlyList<OportunidadComercialDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<OportunidadComercialDto>>(Data);
     public OportunidadComercialDto? ById(long id) => Data.FirstOrDefault(o => o.Id == id);
     public IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion) =>
         Data.Where(o => o.CaptacionCodigo == codigoCaptacion).ToList();
@@ -839,6 +957,9 @@ public class MockVisitaService(IOportunidadService oportunidades) : IVisitaServi
     private long _nextId = 6;
 
     public IReadOnlyList<VisitaDto> All() => _data;
+
+    public Task<IReadOnlyList<VisitaDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<VisitaDto>>(_data);
 
     public VisitaDto? ById(long id) => _data.FirstOrDefault(v => v.Id == id);
 
@@ -889,12 +1010,42 @@ public class MockVisitaService(IOportunidadService oportunidades) : IVisitaServi
         return visita;
     }
 
+    public VisitaDto MarcarRealizada(long id)
+    {
+        var visita = Requerir(id);
+        AsegurarModificable(visita, "marcar como realizada");
+        visita.Estado = "R";
+        visita.Resultado = null;
+        return visita;
+    }
+
+    public VisitaDto MarcarNoRealizada(long id, string motivo)
+    {
+        var visita = Requerir(id);
+        AsegurarModificable(visita, "marcar como no realizada");
+        if (string.IsNullOrWhiteSpace(motivo))
+            throw new InvalidOperationException("Debes indicar por que la visita no se realizo.");
+        visita.Estado = "N";
+        visita.Observaciones = motivo.Trim();
+        visita.Resultado = null;
+        visita.NivelInteres = null;
+        visita.ObjecionPrincipal = null;
+        visita.OpinionPrecio = null;
+        visita.ProximaAccion = null;
+        return visita;
+    }
+
     public VisitaDto RegistrarResultado(long id, VisitaResultadoRequest request)
     {
         var visita = Requerir(id);
-        AsegurarModificable(visita, "registrar el resultado de");
+        if (visita.Estado != "R" || !string.IsNullOrWhiteSpace(visita.Resultado))
+            throw new InvalidOperationException(
+                "Solo una visita realizada y sin resultado admite registrar el desenlace.");
         if (!EnumCatalog.ResultadosInteraccion.Any(item => item.Code == request.Resultado))
             throw new InvalidOperationException("El resultado de la visita es obligatorio.");
+        if ((request.Resultado is "N" or "D") && request.NivelInteres is not null)
+            throw new InvalidOperationException(
+                "No se debe registrar nivel de interes cuando el cliente no continua.");
         if (request.NivelInteres is < 1 or > 5)
             throw new InvalidOperationException("El nivel de interes debe estar entre 1 y 5.");
         if (!CodigoOpcionalValido(EnumCatalog.ObjecionesVisita, request.ObjecionPrincipal)
@@ -902,9 +1053,8 @@ public class MockVisitaService(IOportunidadService oportunidades) : IVisitaServi
             || !CodigoOpcionalValido(EnumCatalog.ProximasAccionesVisita, request.ProximaAccion))
             throw new InvalidOperationException("El desenlace cualitativo contiene un valor invalido.");
 
-        visita.Estado = "R";
         visita.Resultado = request.Resultado;
-        visita.NivelInteres = request.NivelInteres;
+        visita.NivelInteres = (request.Resultado is "N" or "D") ? null : request.NivelInteres;
         visita.ObjecionPrincipal = request.ObjecionPrincipal;
         visita.OpinionPrecio = request.OpinionPrecio;
         visita.ProximaAccion = request.ProximaAccion;

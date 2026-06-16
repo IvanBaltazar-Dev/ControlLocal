@@ -2,7 +2,6 @@ package com.controllocal.rest.seguridad;
 
 import java.io.IOException;
 
-import com.controllocal.rest.http.ErrorResponse;
 import com.controllocal.rest.util.JsonUtils;
 
 import jakarta.servlet.Filter;
@@ -31,23 +30,23 @@ public class JwtAuthFilter implements Filter {
             return;
         }
         if (Entorno.esProduccion() && !esHttps(request)) {
-            JsonUtils.responder(response, 400, new ErrorResponse("HTTPS es obligatorio."));
+            JsonUtils.responderError(response, 400, "HTTPS es obligatorio.");
             return;
         }
 
         String autorizacion = request.getHeader("Authorization");
         if (autorizacion == null || !autorizacion.startsWith("Bearer ")) {
-            JsonUtils.responder(response, 401, new ErrorResponse("Token requerido."));
+            JsonUtils.responderError(response, 401, "Token requerido.");
             return;
         }
 
         TokenService.Sesion sesion = tokens.validar(autorizacion.substring(7).trim()).orElse(null);
         if (sesion == null) {
-            JsonUtils.responder(response, 401, new ErrorResponse("Token invalido o expirado."));
+            JsonUtils.responderError(response, 401, "Token invalido o expirado.");
             return;
         }
         if (requiereBroker(ruta) && !("BROKER".equals(sesion.rol()) || "ADMIN".equals(sesion.rol()))) {
-            JsonUtils.responder(response, 403, new ErrorResponse("No tienes permisos para esta operacion."));
+            JsonUtils.responderError(response, 403, "No tienes permisos para esta operacion.");
             return;
         }
 

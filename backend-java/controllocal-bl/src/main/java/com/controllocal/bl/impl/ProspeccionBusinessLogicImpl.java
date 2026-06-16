@@ -116,7 +116,7 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
                 throw new BusinessException("El recontacto no puede superar los "
                         + Prospeccion.DIAS_MAX_RECONTACTO + " dias.");
             }
-            Prospeccion p = prospeccionEnProceso(idProspeccion, "posponer");
+            Prospeccion p = prospeccionEnProceso(idProspeccion, "recontactar");
             p.posponer(fechaRecontacto);
             return prospeccionDAO.actualizar(p);
         });

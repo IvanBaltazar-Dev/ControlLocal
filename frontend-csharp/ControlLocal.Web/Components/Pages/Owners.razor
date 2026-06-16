@@ -53,7 +53,15 @@
                         }
                     </tbody>
                 </table>
-                @if (filtrados.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando propietarios…</div>
+                }
+                else if (_loadError is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_loadError</span></div>
+                }
+                else if (filtrados.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="user" Size="28" style="margin-bottom:10px;" />
@@ -124,8 +132,27 @@
 
     private bool _toast;
     private string _toastMsg = "";
+    private bool _cargando = true;
+    private string? _loadError;
 
-    private IReadOnlyList<PropietarioDto> Todos => OwnerSvc.All();
+    private IReadOnlyList<PropietarioDto> Todos = [];
+
+    // Recarga fresca desde el backend en cada navegacion (no bloquea el circuito).
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Todos = await OwnerSvc.RefrescarAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
     private readonly IReadOnlyList<string> _tipos = new[] { "Natural", "Jurídica" };
     private readonly IReadOnlyList<string> _estados = new[] { "Activo", "Inactivo" };
@@ -199,6 +226,7 @@
         if (_resultado is null || _resultado.TotalValidas == 0) return;
         foreach (var p in _resultado.Validos)
             OwnerSvc.Agregar(p);
+        Todos = OwnerSvc.All();
 
         _toastMsg = $"Se importaron {_resultado.TotalValidas} propietarios correctamente.";
         _toast = true;

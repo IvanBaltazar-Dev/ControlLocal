@@ -2,7 +2,6 @@ package com.controllocal.rest.seguridad;
 
 import java.io.IOException;
 
-import com.controllocal.rest.http.ErrorResponse;
 import com.controllocal.rest.util.JsonUtils;
 
 import jakarta.servlet.Filter;
@@ -27,7 +26,7 @@ public class CorsFilter implements Filter {
         String origen = request.getHeader("Origin");
 
         if (origen != null && !origenPermitido.equalsIgnoreCase(origen)) {
-            JsonUtils.responder(response, 403, new ErrorResponse("Origen no permitido."));
+            JsonUtils.responderError(response, 403, "Origen no permitido.");
             return;
         }
         if (origen != null) {

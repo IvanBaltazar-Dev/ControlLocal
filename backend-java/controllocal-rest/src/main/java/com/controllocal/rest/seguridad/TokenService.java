@@ -1,5 +1,6 @@
 package com.controllocal.rest.seguridad;
 
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -11,9 +12,9 @@ import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.controllocal.rest.util.JsonUtils;
+import jakarta.json.Json;
+import jakarta.json.JsonObject;
+import jakarta.json.JsonReader;
 
 public final class TokenService {
 
@@ -22,7 +23,11 @@ public final class TokenService {
 
     public static final long DURACION_SEGUNDOS = 30 * 60;
     private static final Set<String> ROLES = Set.of("AGENTE", "BROKER", "ADMIN");
-    private static final String CABECERA = codificar("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
+    private static final String CABECERA = codificar(Json.createObjectBuilder()
+            .add("alg", "HS256")
+            .add("typ", "JWT")
+            .build()
+            .toString());
     private static final byte[] SECRETO = cargarSecreto();
 
     public Sesion emitir(String usuario, String rol, long idUsuario, long idDominio) {
@@ -35,13 +40,14 @@ public final class TokenService {
     }
 
     public String firmar(Sesion sesion) {
-        ObjectNode carga = JsonUtils.mapper().createObjectNode();
-        carga.put("sub", sesion.usuario());
-        carga.put("rol", sesion.rol());
-        carga.put("idUsuario", sesion.idUsuario());
-        carga.put("idDominio", sesion.idDominio());
-        carga.put("iat", Instant.now().getEpochSecond());
-        carga.put("exp", sesion.expiraEn().getEpochSecond());
+        JsonObject carga = Json.createObjectBuilder()
+                .add("sub", sesion.usuario())
+                .add("rol", sesion.rol())
+                .add("idUsuario", sesion.idUsuario())
+                .add("idDominio", sesion.idDominio())
+                .add("iat", Instant.now().getEpochSecond())
+                .add("exp", sesion.expiraEn().getEpochSecond())
+                .build();
 
         String cargaCodificada = codificar(carga.toString());
         String contenidoFirmado = CABECERA + "." + cargaCodificada;
@@ -59,9 +65,9 @@ public final class TokenService {
         }
 
         try {
-            JsonNode cabecera = JsonUtils.mapper().readTree(decodificar(partes[0]));
-            if (!"HS256".equals(cabecera.path("alg").asText())
-                    || !"JWT".equals(cabecera.path("typ").asText())) {
+            JsonObject cabecera = leerJson(partes[0]);
+            if (!"HS256".equals(cabecera.getString("alg", ""))
+                    || !"JWT".equals(cabecera.getString("typ", ""))) {
                 return Optional.empty();
             }
 
@@ -72,17 +78,17 @@ public final class TokenService {
                 return Optional.empty();
             }
 
-            JsonNode carga = JsonUtils.mapper().readTree(decodificar(partes[1]));
-            if (!carga.hasNonNull("exp") || !carga.hasNonNull("rol")
-                    || !carga.hasNonNull("idUsuario") || !carga.hasNonNull("idDominio")) {
+            JsonObject carga = leerJson(partes[1]);
+            if (!tieneValor(carga, "exp") || !tieneValor(carga, "rol")
+                    || !tieneValor(carga, "idUsuario") || !tieneValor(carga, "idDominio")) {
                 return Optional.empty();
             }
 
-            String usuario = carga.path("sub").asText();
-            String rol = carga.path("rol").asText();
-            long idUsuario = carga.path("idUsuario").asLong();
-            long idDominio = carga.path("idDominio").asLong();
-            Instant expira = Instant.ofEpochSecond(carga.path("exp").asLong());
+            String usuario = carga.getString("sub", "");
+            String rol = carga.getString("rol");
+            long idUsuario = carga.getJsonNumber("idUsuario").longValue();
+            long idDominio = carga.getJsonNumber("idDominio").longValue();
+            Instant expira = Instant.ofEpochSecond(carga.getJsonNumber("exp").longValue());
 
             if (usuario.isBlank() || !ROLES.contains(rol) || idUsuario <= 0 || idDominio <= 0
                     || !Instant.now().isBefore(expira)) {
@@ -92,6 +98,16 @@ public final class TokenService {
         } catch (Exception error) {
             return Optional.empty();
         }
+    }
+
+    private static JsonObject leerJson(String valorCodificado) {
+        try (JsonReader reader = Json.createReader(new StringReader(decodificar(valorCodificado)))) {
+            return reader.readObject();
+        }
+    }
+
+    private static boolean tieneValor(JsonObject objeto, String nombre) {
+        return objeto.containsKey(nombre) && !objeto.isNull(nombre);
     }
 
     private static byte[] cargarSecreto() {

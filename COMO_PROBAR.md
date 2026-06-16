@@ -11,70 +11,87 @@ API Jakarta REST en GlassFish
         |
         | JDBC/MySQL con TLS
         v
-Amazon Aurora MySQL (RDS)
+AWS RDS MySQL o Aurora MySQL
 ```
 
 Durante el desarrollo, Visual Studio y GlassFish se ejecutan localmente. La base
-de datos puede estar en Aurora. Cuando se configure EC2, el WAR de Jakarta se
-desplegara alli y el frontend solo cambiara la URL base del API.
+de datos configurada actualmente usa un endpoint de AWS RDS compatible con
+MySQL. El mismo acceso JDBC funciona con Aurora MySQL.
 
-## 1. Configurar Aurora MySQL
+## 1. Configurar AWS RDS MySQL o Aurora MySQL
 
-Aurora debe tener:
+La instancia o el cluster debe tener:
 
 - una base de datos llamada `controllocal`;
 - un usuario propio para la aplicacion, no el usuario maestro;
-- el esquema de `database/01_create_schema_controllocal_v3.sql`;
-- los datos iniciales de `database/02_seed_initial_data.sql`;
+- el esquema de `database/01_create_schema_controllocal.sql`;
+- los catalogos de `database/02_seed_catalogs.sql`;
+- los usuarios de `database/03_seed_initial_users.sql`;
 - acceso al puerto 3306 limitado por Security Groups.
 
-Para desarrollo desde una PC local, Aurora debe ser alcanzable mediante la red
+Como la base inicial esta vacia, ejecuta los scripts `00` a `03` en orden. Para
+contar con informacion de prueba, ejecuta tambien
+`database/04_seed_demo_data.sql`.
+
+Si la base ya existia antes de restringir el sistema a alquiler comercial,
+ejecuta una vez `database/05_restrict_alquiler_comercial.sql`.
+
+Para habilitar el flujo separado de visitas en una base ya creada, ejecuta
+tambien una vez `database/06_visita_flujo_estados.sql`.
+
+Para desarrollo desde una PC local, AWS debe ser alcanzable mediante la red
 autorizada por el docente o la institucion. No se debe abrir el puerto 3306 a
 todo Internet.
 
-## 2. Configurar la conexion desde `controllocal-db-manager`
+## 2. Configurar JDBC directo
 
-La conexion se configura en el archivo privado:
+La aplicacion abre conexiones exclusivamente con `DriverManager`. No usa JNDI,
+`DataSource` ni recursos JDBC administrados por GlassFish.
+
+La configuracion privada se edita desde el modulo `db-manager`, pero Maven la
+excluye expresamente del JAR y del WAR:
 
 ```text
 backend-java/controllocal-db-manager/src/main/resources/db.properties
 ```
 
-Contenido esperado:
-
 ```properties
-db.host=ENDPOINT-DE-AURORA
+db.host=your-rds-endpoint.rds.amazonaws.com
 db.port=3306
-db.name=controllocal
-db.username=USUARIO_DE_APLICACION
-db.password=CONTRASENA
-db.sslMode=REQUIRED
-db.serverTimezone=UTC
-db.allowPublicKeyRetrieval=false
-db.pool.max=10
+db.name=your_database
+db.user=your_user
+db.password=your_password
+db.ssl=true
 ```
 
-`db.allowPublicKeyRetrieval` debe terminar en `false`. La configuracion CORS no
-va pegada en esa linea.
+Para usar otra ubicacion, inicia Java o GlassFish con:
+
+```text
+-Ddb.config.path=D:/ruta/privada/db.properties
+```
 
 ## 3. Configurar CORS y JWT
 
-La configuracion privada del API esta en:
+La configuracion privada del API tambien esta fuera del WAR:
 
 ```text
-backend-java/controllocal-rest/src/main/resources/api.properties
+config/api.properties
 ```
 
 ```properties
 api.environment=development
 api.cors.origin=http://localhost:5232
-api.token.secret=SECRETO_DE_AL_MENOS_32_CARACTERES
+api.token.secret=your_secret_with_at_least_32_characters
 ```
 
-`db.properties` y `api.properties` estan ignorados por Git. Los archivos
-`*.example.properties` documentan el formato sin publicar credenciales.
+Su ruta puede cambiarse con:
 
-No es necesario ingresar a `http://localhost:4848` ni agregar opciones JVM.
+```text
+-Dapi.config.path=D:/ruta/privada/api.properties
+```
+
+Ambos archivos privados estan ignorados por Git. El archivo
+`config/db.properties.example` documenta el formato sin publicar credenciales.
 
 ## 4. Compilar y desplegar Jakarta
 
@@ -82,7 +99,9 @@ Desde IntelliJ:
 
 1. Abrir `backend-java/pom.xml` como proyecto Maven.
 2. En la configuracion GlassFish mantener `controllocal-rest:war exploded`.
-3. Ejecutar GlassFish con `Run`.
+3. Agregar `-Ddb.config.path` y `-Dapi.config.path` a las opciones de la JVM
+   cuando GlassFish no se inicie desde la raiz del repositorio.
+4. Ejecutar GlassFish con `Run`.
 
 El archivo `WEB-INF/glassfish-web.xml` fija el context root `controllocal`, por
 lo que no es necesario marcar `Use custom context root` en IntelliJ.
@@ -104,12 +123,20 @@ No se usa `/webresources/*`. La raiz REST es `/controllocal/Api`.
 
 La barra lateral debe indicar `MODO: API REST`.
 
-Credenciales de los datos iniciales:
+Las credenciales iniciales se provisionan de forma privada antes de ejecutar
+`database/03_seed_initial_users.sql`. No se publican en el repositorio.
 
-```text
-Usuario: admin@controllocal.test
-Contrasena: Admin123*
-```
+### Validar alquiler comercial y cierre de visitas
+
+1. Ingresa como agente y abre `Nueva captacion`.
+2. Confirma que la operacion se muestra fija como `Alquiler comercial`.
+3. Programa una visita sobre una oportunidad abierta.
+4. Registra un resultado `Interesado` o `Seguimiento`: la visita debe quedar
+   `Realizada` y la oportunidad debe seguir abierta.
+5. Registra otra visita con resultado `No interesado` o `Descartado`, indicando
+   el motivo: la visita debe quedar `Realizada` y la oportunidad `No continua`.
+6. Recarga el navegador. Ambos estados deben conservarse porque oportunidades
+   y visitas se leen y actualizan mediante el API REST.
 
 ## 6. Cambio futuro a EC2
 

@@ -9,8 +9,6 @@ public class ApiOptions
 {
     public const string Seccion = "Api";
 
-    // Activa los servicios respaldados por el API REST del backend Java.
-    public bool Enabled { get; set; }
     public string BaseUrl { get; set; } = "http://localhost:8080/controllocal/Api";
     public int TimeoutSeconds { get; set; } = 15;
 }
@@ -28,6 +26,7 @@ public sealed record SesionApi(
     string Nombre,
     string Usuario,
     DateTime ExpiraEn);
+internal sealed record ErrorApi(string Error);
 
 public class ApiSession
 {
@@ -74,7 +73,7 @@ public class ApiClient
     {
         using var solicitud = Solicitud(HttpMethod.Get, ruta);
         using var respuesta = await _http.SendAsync(solicitud, ct);
-        ValidarRespuesta(respuesta);
+        await ValidarRespuestaAsync(respuesta, ct);
         return await respuesta.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
     }
 
@@ -89,7 +88,7 @@ public class ApiClient
         using var solicitud = Solicitud(HttpMethod.Post, ruta);
         solicitud.Content = JsonContent.Create(cuerpo);
         using var respuesta = await _http.SendAsync(solicitud, ct);
-        ValidarRespuesta(respuesta);
+        await ValidarRespuestaAsync(respuesta, ct);
         return await respuesta.Content.ReadFromJsonAsync<TRespuesta>(cancellationToken: ct);
     }
 
@@ -98,7 +97,7 @@ public class ApiClient
         using var solicitud = Solicitud(HttpMethod.Put, ruta);
         solicitud.Content = JsonContent.Create(cuerpo);
         using var respuesta = await _http.SendAsync(solicitud, ct);
-        ValidarRespuesta(respuesta);
+        await ValidarRespuestaAsync(respuesta, ct);
         return await respuesta.Content.ReadFromJsonAsync<TRespuesta>(cancellationToken: ct);
     }
 
@@ -106,7 +105,7 @@ public class ApiClient
     {
         using var solicitud = Solicitud(HttpMethod.Delete, ruta);
         using var respuesta = await _http.SendAsync(solicitud, ct);
-        ValidarRespuesta(respuesta);
+        await ValidarRespuestaAsync(respuesta, ct);
     }
 
     public async Task PatchAsync(string ruta, object cuerpo, CancellationToken ct = default)
@@ -114,7 +113,19 @@ public class ApiClient
         using var solicitud = Solicitud(HttpMethod.Patch, ruta);
         solicitud.Content = JsonContent.Create(cuerpo);
         using var respuesta = await _http.SendAsync(solicitud, ct);
-        ValidarRespuesta(respuesta);
+        await ValidarRespuestaAsync(respuesta, ct);
+    }
+
+    public async Task<TRespuesta?> PatchAsync<TRespuesta>(
+        string ruta,
+        object cuerpo,
+        CancellationToken ct = default)
+    {
+        using var solicitud = Solicitud(HttpMethod.Patch, ruta);
+        solicitud.Content = JsonContent.Create(cuerpo);
+        using var respuesta = await _http.SendAsync(solicitud, ct);
+        await ValidarRespuestaAsync(respuesta, ct);
+        return await respuesta.Content.ReadFromJsonAsync<TRespuesta>(cancellationToken: ct);
     }
 
     private HttpRequestMessage Solicitud(HttpMethod metodo, string ruta)
@@ -125,25 +136,37 @@ public class ApiClient
         return solicitud;
     }
 
-    private void ValidarRespuesta(HttpResponseMessage respuesta)
+    private async Task ValidarRespuestaAsync(HttpResponseMessage respuesta, CancellationToken ct)
     {
         if (respuesta.StatusCode == HttpStatusCode.Unauthorized)
         {
             _sesion.Token = null;
             _navegacion.NavigateTo("/login");
-            throw new HttpRequestException("La sesion expiro. Inicia sesion nuevamente.", null, respuesta.StatusCode);
+            throw new InvalidOperationException("La sesion expiro. Inicia sesion nuevamente.");
         }
         if (respuesta.StatusCode == HttpStatusCode.Forbidden)
         {
             _navegacion.NavigateTo("/acceso-denegado");
-            throw new HttpRequestException("No tienes permisos para realizar esta operacion.", null, respuesta.StatusCode);
+            throw new InvalidOperationException("No tienes permisos para realizar esta operacion.");
         }
-        respuesta.EnsureSuccessStatusCode();
+        if (!respuesta.IsSuccessStatusCode)
+        {
+            string? mensaje = null;
+            try
+            {
+                mensaje = (await respuesta.Content.ReadFromJsonAsync<ErrorApi>(cancellationToken: ct))?.Error;
+            }
+            catch
+            {
+                // La respuesta puede venir vacia o no ser JSON.
+            }
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(mensaje) ? "No se pudo completar la operacion." : mensaje);
+        }
     }
 }
 
-// Autenticación contra el backend Java (POST /Api/auth/login). Se activa con
-// Api:Enabled=true en appsettings; con false la app usa MockAuthService.
+// Autenticacion contra el backend Java mediante POST /Api/auth/login.
 public class HttpAuthService(ApiClient api) : IAuthService
 {
     public async Task<AuthResult> LoginAsync(string usuarioOEmail, string password, CancellationToken ct = default)

@@ -59,12 +59,7 @@
                 <FormSection Num="2" Title="Condiciones del encargo" Sub="Datos persistidos en la captación">
                     <div class="cl-grid c3">
                         <Field Label="Operación" Required="true">
-                            <select @bind="_motivoOperacion">
-                                @foreach (var opcion in EnumCatalog.OperacionesRequerimiento)
-                                {
-                                    <option value="@opcion.Code">@opcion.Label</option>
-                                }
-                            </select>
+                            <input value="Alquiler comercial" disabled />
                         </Field>
                         <Field Label="Urgencia" Hint="Escala de 1 a 5">
                             <select @bind="_urgencia">
@@ -220,7 +215,7 @@
             _inicioVigencia = _captacion.FechaInicioVigencia;
             _finVigencia = _captacion.FechaFinVigencia;
             _comision = _captacion.ComisionPactada;
-            _motivoOperacion = string.IsNullOrWhiteSpace(_captacion.MotivoOperacion) ? "A" : _captacion.MotivoOperacion;
+            _motivoOperacion = "A";
             _urgencia = _captacion.Urgencia ?? 3;
             _exclusividad = _captacion.Exclusividad ?? false;
             _observaciones = _captacion.Observaciones;
@@ -249,9 +244,9 @@
         if (_inicioVigencia is null || _finVigencia is null) { _err = "La vigencia es obligatoria."; return; }
         if (_finVigencia < _inicioVigencia) { _err = "El fin de vigencia no puede ser anterior al inicio."; return; }
         if (_comision is null || _comision < 0) { _err = "La comisión debe ser un número no negativo."; return; }
-        if (!EnumCatalog.OperacionesRequerimiento.Any(item => item.Code == _motivoOperacion))
+        if (_motivoOperacion != "A")
         {
-            _err = "Selecciona una operación válida.";
+            _err = "ControlLocal solo admite operaciones de alquiler comercial.";
             return;
         }
 
@@ -288,7 +283,7 @@
             _toastMsg = _esEdicion ? "Captación actualizada y reenviada a revisión." : "Captación creada y enviada a revisión.";
             _toast = true;
             await RenderIfAliveAsync();
-            await Task.Delay(900, DisposedToken);
+            await Task.Delay(300, DisposedToken);
             App.Navigate("captaciones");
         }
         catch (OperationCanceledException)

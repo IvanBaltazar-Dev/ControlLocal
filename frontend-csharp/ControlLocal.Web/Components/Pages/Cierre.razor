@@ -80,8 +80,25 @@
     private bool _confirm;
 
     private bool PuedeCerrar => App.Role is Roles.Broker or Roles.Admin;
-    private IReadOnlyList<CaptacionDto> CaptacionesActivas =>
-        CaptacionSvc.All().Where(item => item.Estado == "Activa").ToList();
+    private IReadOnlyList<CaptacionDto> CaptacionesActivas = [];
+
+    // Recarga las captaciones frescas para que el desplegable muestre solo las que
+    // realmente estan Activas tras la revision del broker.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var todas = await CaptacionSvc.RefrescarAsync(DisposedToken);
+            CaptacionesActivas = todas.Where(item => item.Estado == "Activa").ToList();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
 
     protected override void OnParametersSet()
     {
@@ -113,7 +130,7 @@
             await CaptacionSvc.CerrarAsync(_captacionId, _motivo);
             _toast = "Captacion cerrada correctamente";
             await RenderIfAliveAsync();
-            await Task.Delay(700);
+            await Task.Delay(300);
             App.Navigate("captaciones");
         }
         catch (Exception error)

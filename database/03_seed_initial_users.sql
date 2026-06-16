@@ -1,12 +1,36 @@
 USE controllocal;
 
--- Datos iniciales idempotentes del sistema.
--- Crea el broker administrador base sin duplicarlo si ya existe.
+-- Usuarios iniciales idempotentes.
+-- Crea exactamente un usuario de referencia por perfil operativo:
+-- broker administrador, broker y agente inmobiliario.
 --
--- Usuario demo:
--- usuario: admin@controllocal.test
--- contrasena: Admin123*
--- Hash generado con PBKDF2-HMAC-SHA256, 100000 iteraciones y salt.
+-- Antes de ejecutar este archivo, define en la misma sesion valores privados:
+-- SET @seed_admin_user = 'your_admin_user';
+-- SET @seed_admin_password_hash = 'your_admin_pbkdf2_hash';
+-- SET @seed_broker_user = 'your_broker_user';
+-- SET @seed_broker_password_hash = 'your_broker_pbkdf2_hash';
+-- SET @seed_agent_user = 'your_agent_user';
+-- SET @seed_agent_password_hash = 'your_agent_pbkdf2_hash';
+
+DROP PROCEDURE IF EXISTS validar_credenciales_iniciales;
+
+DELIMITER //
+CREATE PROCEDURE validar_credenciales_iniciales()
+BEGIN
+    IF COALESCE(TRIM(@seed_admin_user), '') = ''
+       OR COALESCE(TRIM(@seed_admin_password_hash), '') = ''
+       OR COALESCE(TRIM(@seed_broker_user), '') = ''
+       OR COALESCE(TRIM(@seed_broker_password_hash), '') = ''
+       OR COALESCE(TRIM(@seed_agent_user), '') = ''
+       OR COALESCE(TRIM(@seed_agent_password_hash), '') = '' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Define las variables privadas de usuarios y hashes antes de ejecutar el script.';
+    END IF;
+END//
+DELIMITER ;
+
+CALL validar_credenciales_iniciales();
+DROP PROCEDURE validar_credenciales_iniciales;
 
 INSERT INTO persona (
     tipo_persona,
@@ -23,20 +47,20 @@ SELECT
     '00000000',
     'Broker Principal',
     '999999999',
-    'admin@controllocal.test',
+    @seed_admin_user,
     'A'
 WHERE NOT EXISTS (
     SELECT 1
     FROM persona
     WHERE numero_documento = '00000000'
-       OR correo = 'admin@controllocal.test'
+       OR correo = @seed_admin_user
 );
 
 SET @id_persona_broker_admin = (
     SELECT id_persona
     FROM persona
     WHERE numero_documento = '00000000'
-       OR correo = 'admin@controllocal.test'
+       OR correo = @seed_admin_user
     ORDER BY id_persona
     LIMIT 1
 );
@@ -50,8 +74,8 @@ INSERT INTO usuario_interno (
 )
 SELECT
     @id_persona_broker_admin,
-    'admin@controllocal.test',
-    'pbkdf2$100000$Q29udHJvbExvY2FsMjAyNg==$Dsnkk3849fOs8l7u/0XAkCpMzK7XlUIfhawJG6KKtu4=',
+    @seed_admin_user,
+    @seed_admin_password_hash,
     'A',
     'B'
 WHERE @id_persona_broker_admin IS NOT NULL
@@ -59,16 +83,16 @@ WHERE @id_persona_broker_admin IS NOT NULL
       SELECT 1
       FROM usuario_interno
       WHERE id_persona = @id_persona_broker_admin
-         OR nombre_usuario = 'admin@controllocal.test'
+         OR nombre_usuario = @seed_admin_user
   );
 
 UPDATE persona
-SET correo = 'admin@controllocal.test'
+SET correo = @seed_admin_user
 WHERE id_persona = @id_persona_broker_admin;
 
 UPDATE usuario_interno
-SET nombre_usuario = 'admin@controllocal.test',
-    contrasena_hash = 'pbkdf2$100000$Q29udHJvbExvY2FsMjAyNg==$Dsnkk3849fOs8l7u/0XAkCpMzK7XlUIfhawJG6KKtu4=',
+SET nombre_usuario = @seed_admin_user,
+    contrasena_hash = @seed_admin_password_hash,
     estado_administrativo = 'A',
     rol = 'B'
 WHERE id_persona = @id_persona_broker_admin;
@@ -77,7 +101,7 @@ SET @id_usuario_broker_admin = (
     SELECT id_usuario
     FROM usuario_interno
     WHERE id_persona = @id_persona_broker_admin
-       OR nombre_usuario = 'admin@controllocal.test'
+       OR nombre_usuario = @seed_admin_user
     ORDER BY id_usuario
     LIMIT 1
 );
@@ -104,30 +128,24 @@ WHERE @id_usuario_broker_admin IS NOT NULL
          OR es_administrador = TRUE
   );
 
--- =========================================================
--- Perfiles demo para probar autorizacion y navegacion
--- Broker: rsalas / Broker2026
--- Agente: vmora / Agente2026
--- =========================================================
-
 INSERT INTO persona (
     tipo_persona, tipo_documento, numero_documento,
     nombres_o_razon_social, telefono, correo, estado
 )
 SELECT
     'N', 'D', '08412991',
-    'Ricardo Salas', '998110220', 'rsalas@controllocal.pe', 'A'
+    'Broker de referencia', '999999998', 'broker.profile@example.invalid', 'A'
 WHERE NOT EXISTS (
     SELECT 1 FROM persona
     WHERE numero_documento = '08412991'
-       OR correo = 'rsalas@controllocal.pe'
+       OR correo = 'broker.profile@example.invalid'
 );
 
 SET @id_persona_broker_demo = (
     SELECT id_persona
     FROM persona
     WHERE numero_documento = '08412991'
-       OR correo = 'rsalas@controllocal.pe'
+       OR correo = 'broker.profile@example.invalid'
     ORDER BY id_persona
     LIMIT 1
 );
@@ -138,20 +156,20 @@ INSERT INTO usuario_interno (
 )
 SELECT
     @id_persona_broker_demo,
-    'rsalas',
-    'pbkdf2$100000$Qc8f+w62/Ea1Y4HvtUxWeg==$IW5Cj8M+m6MNBX7JXhRpTVrdrhNcDHtjwqyrYOIICqM=',
+    @seed_broker_user,
+    @seed_broker_password_hash,
     'A',
     'B'
 WHERE @id_persona_broker_demo IS NOT NULL
   AND NOT EXISTS (
       SELECT 1 FROM usuario_interno
       WHERE id_persona = @id_persona_broker_demo
-         OR nombre_usuario = 'rsalas'
+         OR nombre_usuario = @seed_broker_user
   );
 
 UPDATE usuario_interno
-SET nombre_usuario = 'rsalas',
-    contrasena_hash = 'pbkdf2$100000$Qc8f+w62/Ea1Y4HvtUxWeg==$IW5Cj8M+m6MNBX7JXhRpTVrdrhNcDHtjwqyrYOIICqM=',
+SET nombre_usuario = @seed_broker_user,
+    contrasena_hash = @seed_broker_password_hash,
     estado_administrativo = 'A',
     rol = 'B'
 WHERE id_persona = @id_persona_broker_demo;
@@ -195,18 +213,18 @@ INSERT INTO persona (
 )
 SELECT
     'N', 'D', '45893211',
-    'Valentina Mora', '998110311', 'vmora@controllocal.pe', 'A'
+    'Agente de referencia', '999999997', 'agent.profile@example.invalid', 'A'
 WHERE NOT EXISTS (
     SELECT 1 FROM persona
     WHERE numero_documento = '45893211'
-       OR correo = 'vmora@controllocal.pe'
+       OR correo = 'agent.profile@example.invalid'
 );
 
 SET @id_persona_agente_demo = (
     SELECT id_persona
     FROM persona
     WHERE numero_documento = '45893211'
-       OR correo = 'vmora@controllocal.pe'
+       OR correo = 'agent.profile@example.invalid'
     ORDER BY id_persona
     LIMIT 1
 );
@@ -217,20 +235,20 @@ INSERT INTO usuario_interno (
 )
 SELECT
     @id_persona_agente_demo,
-    'vmora',
-    'pbkdf2$100000$Kkq+kPkIbXKml6MTc9VseQ==$+YC4SbPJmSjGNDZ8qOUILQE8+Z5LYAMPnub87Xe/2lA=',
+    @seed_agent_user,
+    @seed_agent_password_hash,
     'A',
     'A'
 WHERE @id_persona_agente_demo IS NOT NULL
   AND NOT EXISTS (
       SELECT 1 FROM usuario_interno
       WHERE id_persona = @id_persona_agente_demo
-         OR nombre_usuario = 'vmora'
+         OR nombre_usuario = @seed_agent_user
   );
 
 UPDATE usuario_interno
-SET nombre_usuario = 'vmora',
-    contrasena_hash = 'pbkdf2$100000$Kkq+kPkIbXKml6MTc9VseQ==$+YC4SbPJmSjGNDZ8qOUILQE8+Z5LYAMPnub87Xe/2lA=',
+SET nombre_usuario = @seed_agent_user,
+    contrasena_hash = @seed_agent_password_hash,
     estado_administrativo = 'A',
     rol = 'A'
 WHERE id_persona = @id_persona_agente_demo;

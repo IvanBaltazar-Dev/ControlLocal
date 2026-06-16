@@ -16,8 +16,11 @@ import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.InteraccionComercial;
 import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.SolicitudAlquiler;
+import com.controllocal.model.comercial.ContratoAlquiler;
+import com.controllocal.model.comercial.Publicacion;
 import com.controllocal.model.comercial.Visita;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.inmueble.Distrito;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.persona.enums.EstadoActivoInactivo;
 import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
@@ -214,6 +217,31 @@ final class JdbcSupport {
         return oportunidad;
     }
 
+    static Publicacion publicacion(Long id) {
+        Publicacion publicacion = new Publicacion();
+        publicacion.setIdPublicacion(id);
+        return publicacion;
+    }
+
+    static ContratoAlquiler contrato(Long id) {
+        ContratoAlquiler contrato = new ContratoAlquiler();
+        contrato.setIdContratoAlquiler(id);
+        return contrato;
+    }
+
+    static Distrito distrito(Long id) {
+        Distrito distrito = new Distrito();
+        distrito.setIdDistrito(id);
+        return distrito;
+    }
+
+    static com.controllocal.model.usuario.UsuarioInterno usuario(Long id) {
+        com.controllocal.model.usuario.UsuarioInterno usuario =
+                new com.controllocal.model.usuario.UsuarioInterno();
+        usuario.setIdUsuarioInterno(id);
+        return usuario;
+    }
+
     static Long getIdPropietario(Propietario propietario) {
         return propietario != null ? propietario.getIdPropietario() : null;
     }
@@ -262,4 +290,3 @@ final class JdbcSupport {
         return visita != null ? visita.getIdVisita() : null;
     }
 }
-

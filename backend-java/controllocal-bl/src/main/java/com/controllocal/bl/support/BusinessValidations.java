@@ -194,6 +194,10 @@ public final class BusinessValidations {
         noNegativo(captacion.getComisionPactada(), "La comision pactada");
         id(idLocal(captacion), "El local de la captacion");
         id(idAgente(captacion.getAgenteResponsable()), "El agente responsable");
+        if (captacion.getMotivoOperacion()
+                != com.controllocal.model.comercial.enums.OperacionRequerimiento.ALQUILER) {
+            throw new BusinessException("ControlLocal solo admite captaciones para alquiler comercial.");
+        }
     }
 
     public static void captacionPendienteRevision(Captacion captacion) {
@@ -280,7 +284,8 @@ public final class BusinessValidations {
         if (documento == null) {
             throw new BusinessException("El documento de solicitud es obligatorio.");
         }
-        if (documento.getTipoDocumento() == null) {
+        if (documento.getTipoDocumentoRequerido() == null
+                || documento.getTipoDocumentoRequerido().getIdTipoDocumentoRequerido() == null) {
             throw new BusinessException("El tipo de documento es obligatorio.");
         }
         texto(documento.getNombreArchivo(), "El nombre de archivo");

@@ -80,7 +80,15 @@
                 </div>
             }
         </div>
-        @if (filtradas.Count == 0)
+        @if (_cargando)
+        {
+            <div class="cl-card"><div style="padding:40px;text-align:center;color:#7E8794;">Actualizando captaciones…</div></div>
+        }
+        else if (_error is not null)
+        {
+            <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+        }
+        else if (filtradas.Count == 0)
         {
             <div class="cl-card"><div style="padding:40px;text-align:center;color:#7E8794;">
                 <Icon Name="pin" Size="28" style="margin-bottom:10px;" />
@@ -101,8 +109,28 @@
     private string _distrito = "";
     private string _vigencia = "";
     private int _pagina = 1;
+    private bool _cargando = true;
+    private string? _error;
 
-    private IReadOnlyList<CaptacionDto> Todas => CaptacionSvc.All();
+    private IReadOnlyList<CaptacionDto> Todas = [];
+
+    // Recarga fresca desde el backend en cada navegacion: asi el agente ve el
+    // estado real (aprobada/observada/rechazada por el broker) sin reconectar.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Todas = await CaptacionSvc.RefrescarAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
     // Dimensiones derivadas de los datos (sin valores hardcodeados).
     private string[] _estados => Todas.Select(c => c.Estado).Distinct().OrderBy(x => x).ToArray();

@@ -301,7 +301,7 @@
         await RenderIfAliveAsync();
         try
         {
-            await Task.Delay(900, DisposedToken);
+            await Task.Delay(300, DisposedToken);
         }
         catch (OperationCanceledException)
         {

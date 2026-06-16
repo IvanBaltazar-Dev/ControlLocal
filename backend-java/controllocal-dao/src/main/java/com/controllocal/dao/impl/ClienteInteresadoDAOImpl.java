@@ -47,6 +47,7 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
     @Override
     public Long crear(ClienteInteresado cliente) {
         validar(cliente, false);
+        asegurarPersonaCreada(cliente);
         try (Connection conn = DBManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, cliente.getPersona().getIdPersona());
@@ -171,7 +172,17 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
         if (requiereId) {
             JdbcSupport.validarId(cliente.getIdCliente());
         }
-        JdbcSupport.validarId(JdbcSupport.getIdPersona(cliente.getPersona()));
+        if (cliente.getPersona() == null) {
+            throw new IllegalArgumentException("El cliente interesado debe estar asociado a una persona.");
+        }
+        if (requiereId) {
+            JdbcSupport.validarId(JdbcSupport.getIdPersona(cliente.getPersona()));
+        }
+    }
+
+    private void asegurarPersonaCreada(ClienteInteresado cliente) {
+        if (cliente.getPersona().getIdPersona() == null || cliente.getPersona().getIdPersona() <= 0) {
+            new PersonaDAOImpl().crear(cliente.getPersona());
+        }
     }
 }
-

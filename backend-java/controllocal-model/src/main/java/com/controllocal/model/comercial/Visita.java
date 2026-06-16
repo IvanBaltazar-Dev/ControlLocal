@@ -93,9 +93,40 @@ public class Visita {
         this.fechaActualizacion = LocalDateTime.now();
     }
 
-    public void registrarResultado(ResultadoInteraccion resultado) {
-        this.resultado = resultado;
+    public void marcarRealizada() {
+        if (!esModificable()) {
+            throw new IllegalStateException("Solo una visita programada o reprogramada puede marcarse como realizada.");
+        }
         this.estado = EstadoVisita.REALIZADA;
+        this.fechaActualizacion = LocalDateTime.now();
+    }
+
+    public void marcarNoRealizada(String motivo) {
+        if (!esModificable()) {
+            throw new IllegalStateException("Solo una visita programada o reprogramada puede marcarse como no realizada.");
+        }
+        if (motivo == null || motivo.isBlank()) {
+            throw new IllegalArgumentException("El motivo de la visita no realizada es obligatorio.");
+        }
+        this.estado = EstadoVisita.NO_REALIZADA;
+        this.observaciones = motivo.trim();
+        this.fechaActualizacion = LocalDateTime.now();
+    }
+
+    public void registrarResultado(ResultadoInteraccion resultado) {
+        if (estado != EstadoVisita.REALIZADA) {
+            throw new IllegalStateException("Primero debe marcar la visita como realizada.");
+        }
+        if (this.resultado != null) {
+            throw new IllegalStateException("La visita ya tiene un resultado registrado.");
+        }
+        if (resultado == null) {
+            throw new IllegalArgumentException("El resultado de la visita es obligatorio.");
+        }
+        this.resultado = resultado;
+        if (resultado.implicaNoContinuidad()) {
+            this.nivelInteres = null;
+        }
         this.fechaActualizacion = LocalDateTime.now();
     }
 
@@ -106,5 +137,9 @@ public class Visita {
      */
     public boolean esModificable() {
         return estado == EstadoVisita.PROGRAMADA || estado == EstadoVisita.REPROGRAMADA;
+    }
+
+    public boolean admiteResultado() {
+        return estado == EstadoVisita.REALIZADA && resultado == null;
     }
 }

@@ -108,8 +108,16 @@
     private bool _toast;
     private string? _err;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
+        try
+        {
+            await SolicitudSvc.RefrescarAsync();
+        }
+        catch
+        {
+            // Si el backend no responde, se evalua con la ultima copia en cache.
+        }
         _solicitud = string.IsNullOrWhiteSpace(CodigoParam)
             ? SolicitudSvc.All().FirstOrDefault()
             : SolicitudSvc.ByCodigo(CodigoParam);
@@ -153,7 +161,7 @@
 
         _toast = true;
         StateHasChanged();
-        await Task.Delay(900);
+        await Task.Delay(300);
         App.Navigate("solicitudes");
     }
 }

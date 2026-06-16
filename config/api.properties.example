@@ -1,3 +1,0 @@
-api.environment=development
-api.cors.origin=http://localhost:5232
-api.token.secret=your_secret_with_at_least_32_characters

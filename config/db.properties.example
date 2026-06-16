@@ -1,6 +1,0 @@
-db.host=your-rds-endpoint.rds.amazonaws.com
-db.port=3306
-db.name=your_database
-db.user=your_user
-db.password=your_password
-db.ssl=true

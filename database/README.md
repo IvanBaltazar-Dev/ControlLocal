@@ -1,46 +1,50 @@
 # Base de datos
 
-Los scripts `00` a `04` inicializan una base MySQL vacia. Los scripts `05` y
-`06` actualizan instalaciones que ya contienen datos.
+La carpeta `database` queda reducida a cuatro scripts SQL principales. El
+flujo normal para una base nueva es ejecutar `00`, `01`, `02` y, si se quiere
+data de prueba completa, `03`.
 
 ## Orden de ejecucion
 
 1. `00_recreate_database_controllocal.sql`
-   Elimina y vuelve a crear la base `controllocal`.
+   Elimina y vuelve a crear la base `controllocal`. Es destructivo.
 2. `01_create_schema_controllocal.sql`
    Crea el esquema final completo, con tablas, claves, restricciones e indices.
-3. `02_seed_catalogs.sql`
-   Carga los distritos de Lima y los tipos de documento requeridos.
-4. `03_seed_initial_users.sql`
-   Crea un broker administrador, un broker y un agente. Requiere variables de
-   sesion privadas para los usuarios y hashes PBKDF2.
-5. `04_seed_demo_data.sql` (opcional)
-   Carga una muestra operativa completa para desarrollo y pruebas.
-6. `05_restrict_alquiler_comercial.sql` (solo base existente)
-   Normaliza operaciones anteriores y restringe captaciones y documentos a
-   alquiler comercial sin recrear la base.
-7. `06_visita_flujo_estados.sql` (solo base existente)
-   Incorpora el estado `No realizada` y separa la asistencia de la visita de
-   su resultado comercial.
+3. `02_seed_base_data.sql`
+   Carga catalogos obligatorios y usuarios internos de prueba.
+4. `03_seed_demo_data.sql` (opcional)
+   Carga una muestra operativa amplia para desarrollo y pruebas.
 
-El archivo `00` es destructivo. Debe ejecutarse solo cuando se quiera empezar
-desde cero. Los archivos `02`, `03` y `04` son idempotentes.
+Los scripts `02` y `03` son idempotentes: pueden ejecutarse nuevamente sin
+duplicar filas demo.
 
-## Usuarios iniciales
+## Usuarios de prueba
 
-Los nombres de usuario y los hashes de contrasena no se almacenan en el
-repositorio. Antes de ejecutar `03_seed_initial_users.sql`, define en la misma
-sesion las variables indicadas al inicio del archivo. Usa valores privados y
-hashes generados con `PasswordHasher`.
+`02_seed_base_data.sql` deja creados estos accesos:
 
-## Ejecucion rapida en MySQL Workbench
+| Rol | Usuario | Contrasena |
+| --- | --- | --- |
+| Admin | `admin@controllocal.test` | `Admin2026` |
+| Broker supervisor | `rsalas` | `Broker2026` |
+| Broker supervisor | `psoto` | `Broker2026` |
+| Agente | `vmora` | `Agente2026` |
+| Agente | `jruiz` | `Agente2026` |
+| Agente | `ltorres` | `Agente2026` |
+| Agente | `creyes` | `Agente2026` |
 
-Abre y ejecuta cada archivo completo, respetando el orden numerico. Para una
-instalacion minima se ejecutan `00` a `03`; el archivo `04` es la carga demo.
+Las contrasenas no se guardan en texto plano. El seed almacena hashes PBKDF2
+precalculados para estos usuarios demo.
 
-El esquema final contiene 30 entidades de dominio y la tabla puente fisica
-`requerimiento_distrito`. En una instalacion nueva no es necesario ejecutar los
-scripts `05` y `06`, porque sus restricciones ya forman parte del esquema final.
+## Datos demo
 
-Las transacciones de la aplicacion se manejan desde Java con
-`TransactionRunner`.
+`03_seed_demo_data.sql` agrega propietarios, locales, captaciones, clientes,
+requerimientos, oportunidades, interacciones, visitas, solicitudes, documentos,
+evaluaciones, contrato, comision, reportes, tareas, alertas e historial.
+
+Tambien deja dos escenarios utiles para probar pantallas de administracion:
+
+- `AGE-004` queda reasignada de `BRK-001` a `BRK-002`.
+- `CAP-DEMO-003` queda reasignada de `AGE-001` a `AGE-002`.
+
+El esquema `01` ya contiene las restricciones finales de alquiler comercial,
+visitas y alertas, por lo que no hay migraciones sueltas para una base nueva.

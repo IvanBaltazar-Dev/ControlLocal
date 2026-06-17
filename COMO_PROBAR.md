@@ -25,19 +25,15 @@ La instancia o el cluster debe tener:
 - una base de datos llamada `controllocal`;
 - un usuario propio para la aplicacion, no el usuario maestro;
 - el esquema de `database/01_create_schema_controllocal.sql`;
-- los catalogos de `database/02_seed_catalogs.sql`;
-- los usuarios de `database/03_seed_initial_users.sql`;
+- los catalogos y usuarios demo de `database/02_seed_base_data.sql`;
 - acceso al puerto 3306 limitado por Security Groups.
 
-Como la base inicial esta vacia, ejecuta los scripts `00` a `03` en orden. Para
-contar con informacion de prueba, ejecuta tambien
-`database/04_seed_demo_data.sql`.
+Como la base inicial esta vacia, ejecuta los scripts `00`, `01` y `02` en
+orden. Para contar con informacion de prueba amplia, ejecuta tambien
+`database/03_seed_demo_data.sql`.
 
-Si la base ya existia antes de restringir el sistema a alquiler comercial,
-ejecuta una vez `database/05_restrict_alquiler_comercial.sql`.
-
-Para habilitar el flujo separado de visitas en una base ya creada, ejecuta
-tambien una vez `database/06_visita_flujo_estados.sql`.
+El esquema `01` ya contiene las restricciones finales de alquiler comercial,
+visitas y alertas; no hay migraciones sueltas para instalaciones nuevas.
 
 Para desarrollo desde una PC local, AWS debe ser alcanzable mediante la red
 autorizada por el docente o la institucion. No se debe abrir el puerto 3306 a
@@ -123,8 +119,12 @@ No se usa `/webresources/*`. La raiz REST es `/controllocal/Api`.
 
 La barra lateral debe indicar `MODO: API REST`.
 
-Las credenciales iniciales se provisionan de forma privada antes de ejecutar
-`database/03_seed_initial_users.sql`. No se publican en el repositorio.
+Credenciales demo cargadas por `database/02_seed_base_data.sql`:
+
+- Admin: `admin@controllocal.test` / `Admin2026`
+- Broker: `rsalas` / `Broker2026`
+- Broker: `psoto` / `Broker2026`
+- Agentes: `vmora`, `jruiz`, `ltorres`, `creyes` / `Agente2026`
 
 ### Validar alquiler comercial y cierre de visitas
 

@@ -7,11 +7,15 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 /**
- * Configuracion privada del API cargada desde un archivo externo al WAR.
+ * Configuracion privada del API. Se busca en este orden:
+ *   1. Ruta absoluta indicada por -Dapi.config.path=...
+ *   2. Recurso "api.properties" empaquetado en el classpath del WAR.
+ *   3. Archivo "config/api.properties" buscando hacia arriba desde el cwd.
  */
 public final class ApiConfig {
 
     private static final String CONFIG_PATH_PROPERTY = "api.config.path";
+    private static final String CLASSPATH_RESOURCE = "api.properties";
     private static final Path DEFAULT_CONFIG_PATH = Path.of("config", "api.properties");
     private static final Properties PROPERTIES = loadProperties();
 
@@ -38,28 +42,51 @@ public final class ApiConfig {
     }
 
     private static Properties loadProperties() {
-        Path configPath = resolveConfigPath();
         Properties properties = new Properties();
 
-        if (!Files.isRegularFile(configPath)) {
-            return properties;
+        String configuredPath = System.getProperty(CONFIG_PATH_PROPERTY);
+        if (configuredPath != null && !configuredPath.isBlank()) {
+            Path path = Path.of(configuredPath.trim()).toAbsolutePath().normalize();
+            return cargarDesde(path, properties, true);
         }
 
-        try (InputStream input = Files.newInputStream(configPath)) {
+        try (InputStream classpathInput = ApiConfig.class.getClassLoader()
+                .getResourceAsStream(CLASSPATH_RESOURCE)) {
+            if (classpathInput != null) {
+                properties.load(classpathInput);
+                return properties;
+            }
+        } catch (IOException error) {
+            throw new IllegalStateException(
+                    "No se pudo cargar " + CLASSPATH_RESOURCE + " desde el classpath.", error);
+        }
+
+        Path fallback = resolveAncestorPath();
+        if (fallback != null) {
+            return cargarDesde(fallback, properties, false);
+        }
+
+        return properties;
+    }
+
+    private static Properties cargarDesde(Path path, Properties properties, boolean obligatorio) {
+        if (!Files.isRegularFile(path)) {
+            if (obligatorio) {
+                throw new IllegalStateException("No existe el archivo configurado en -D"
+                        + CONFIG_PATH_PROPERTY + ": " + path);
+            }
+            return properties;
+        }
+        try (InputStream input = Files.newInputStream(path)) {
             properties.load(input);
             return properties;
         } catch (IOException error) {
             throw new IllegalStateException(
-                    "No se pudo cargar la configuracion externa del API.", error);
+                    "No se pudo cargar la configuracion externa del API en " + path + ".", error);
         }
     }
 
-    private static Path resolveConfigPath() {
-        String configuredPath = System.getProperty(CONFIG_PATH_PROPERTY);
-        if (configuredPath != null && !configuredPath.isBlank()) {
-            return Path.of(configuredPath.trim()).toAbsolutePath().normalize();
-        }
-
+    private static Path resolveAncestorPath() {
         Path current = Path.of("").toAbsolutePath().normalize();
         while (current != null) {
             Path candidate = current.resolve(DEFAULT_CONFIG_PATH).normalize();
@@ -68,7 +95,6 @@ public final class ApiConfig {
             }
             current = current.getParent();
         }
-
-        return Path.of("").toAbsolutePath().resolve(DEFAULT_CONFIG_PATH).normalize();
+        return null;
     }
 }

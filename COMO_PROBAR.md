@@ -1,78 +1,66 @@
-# Como ejecutar ControlLocal desde los IDE
+# Como Probar ControlLocal
 
-## Arquitectura
+Esta guia sirve para levantar el proyecto desde cero y comprobar que backend, base de datos y frontend trabajan juntos.
+
+## Mapa De Ejecucion
 
 ```text
-Frontend Blazor en Visual Studio
+Frontend Blazor
+http://localhost:5232
         |
-        | HTTP/JSON
+        | HTTP/JSON + JWT
         v
 API Jakarta REST en GlassFish
+http://localhost:8080/controllocal/Api
         |
-        | JDBC/MySQL con TLS
+        | JDBC directo
         v
-AWS RDS MySQL o Aurora MySQL
+MySQL / AWS RDS / Aurora MySQL
+base: controllocal
 ```
 
-Durante el desarrollo, Visual Studio y GlassFish se ejecutan localmente. La base
-de datos configurada actualmente usa un endpoint de AWS RDS compatible con
-MySQL. El mismo acceso JDBC funciona con Aurora MySQL.
+## Prerrequisitos
 
-## 1. Configurar AWS RDS MySQL o Aurora MySQL
+| Herramienta | Uso |
+| --- | --- |
+| Java 21 o superior | Compilar y ejecutar los modulos Maven. |
+| Maven 3.9 o superior | Construir el backend Java. |
+| GlassFish compatible con Jakarta EE | Desplegar el WAR `controllocal-rest`. |
+| MySQL 8, AWS RDS MySQL o Aurora MySQL | Persistencia de datos. |
+| .NET SDK compatible con `net10.0` | Ejecutar el frontend Blazor. |
+| Visual Studio, IntelliJ o IDE similar | Opcional, pero recomendado para desarrollo. |
 
-La instancia o el cluster debe tener:
+## 1. Preparar La Base De Datos
 
-- una base de datos llamada `controllocal`;
-- un usuario propio para la aplicacion, no el usuario maestro;
-- el esquema de `database/01_create_schema_controllocal.sql`;
-- los catalogos y usuarios demo de `database/02_seed_base_data.sql`;
-- acceso al puerto 3306 limitado por Security Groups.
+Ejecuta los scripts SQL en este orden:
 
-Como la base inicial esta vacia, ejecuta los scripts `00`, `01` y `02` en
-orden. Para contar con informacion de prueba amplia, ejecuta tambien
-`database/03_seed_demo_data.sql`.
+1. `database/00_recreate_database_controllocal.sql`
+2. `database/01_create_schema_controllocal.sql`
+3. `database/02_seed_base_data.sql`
+4. `database/03_seed_demo_data.sql` si quieres datos amplios para probar pantallas.
 
-El esquema `01` ya contiene las restricciones finales de alquiler comercial,
-visitas y alertas; no hay migraciones sueltas para instalaciones nuevas.
+Notas importantes:
 
-Para desarrollo desde una PC local, AWS debe ser alcanzable mediante la red
-autorizada por el docente o la institucion. No se debe abrir el puerto 3306 a
-todo Internet.
+- El script `00` es destructivo: elimina y vuelve a crear la base `controllocal`.
+- El script `01` crea el esquema completo con claves, restricciones e indices.
+- El script `02` carga catalogos obligatorios y usuarios demo.
+- El script `03` carga escenarios operativos completos para navegar el sistema.
 
-## 2. Configurar JDBC directo
+La documentacion especifica de base de datos esta en [database/README.md](database/README.md).
 
-La aplicacion abre conexiones exclusivamente con `DriverManager`. No usa JNDI,
-`DataSource` ni recursos JDBC administrados por GlassFish.
+## 2. Crear Configuracion Privada
 
-La configuracion privada se edita desde el modulo `db-manager`, pero Maven la
-excluye expresamente del JAR y del WAR:
+Los archivos reales de configuracion no deben subirse a Git. Crea copias locales desde los ejemplos.
 
-```text
-backend-java/controllocal-db-manager/src/main/resources/db.properties
-```
+### API
 
-```properties
-db.host=your-rds-endpoint.rds.amazonaws.com
-db.port=3306
-db.name=your_database
-db.user=your_user
-db.password=your_password
-db.ssl=true
-```
-
-Para usar otra ubicacion, inicia Java o GlassFish con:
-
-```text
--Ddb.config.path=D:/ruta/privada/db.properties
-```
-
-## 3. Configurar CORS y JWT
-
-La configuracion privada del API tambien esta fuera del WAR:
+Archivo esperado:
 
 ```text
 config/api.properties
 ```
+
+Ejemplo:
 
 ```properties
 api.environment=development
@@ -80,79 +68,284 @@ api.cors.origin=http://localhost:5232
 api.token.secret=your_secret_with_at_least_32_characters
 ```
 
-Su ruta puede cambiarse con:
+Si GlassFish no se inicia desde la raiz del repo, pasa la ruta con:
 
 ```text
 -Dapi.config.path=D:/ruta/privada/api.properties
 ```
 
-Ambos archivos privados estan ignorados por Git. El archivo
-`config/db.properties.example` documenta el formato sin publicar credenciales.
+### Base De Datos
 
-## 4. Compilar y desplegar Jakarta
-
-Desde IntelliJ:
-
-1. Abrir `backend-java/pom.xml` como proyecto Maven.
-2. En la configuracion GlassFish mantener `controllocal-rest:war exploded`.
-3. Agregar `-Ddb.config.path` y `-Dapi.config.path` a las opciones de la JVM
-   cuando GlassFish no se inicie desde la raiz del repositorio.
-4. Ejecutar GlassFish con `Run`.
-
-El archivo `WEB-INF/glassfish-web.xml` fija el context root `controllocal`, por
-lo que no es necesario marcar `Use custom context root` en IntelliJ.
-
-Comprobar en el navegador:
+Archivo esperado:
 
 ```text
-http://localhost:8080/controllocal/Api/salud
+backend-java/controllocal-db-manager/src/main/resources/db.properties
 ```
 
-No se usa `/webresources/*`. La raiz REST es `/controllocal/Api`.
+Ejemplo:
 
-## 5. Ejecutar el frontend en Visual Studio
+```properties
+db.host=your-rds-endpoint.rds.amazonaws.com
+db.port=3306
+db.name=controllocal
+db.user=your_user
+db.password=your_password
+db.ssl=true
+```
 
-1. Abrir `frontend-csharp/ControlLocal.Web/ControlLocal.Web.csproj`.
-2. Seleccionar el perfil `ControlLocal API`.
-3. Ejecutar con `F5`.
-4. Abrir `http://localhost:5232/login`.
+Tambien puedes usar una ruta externa:
 
-La barra lateral debe indicar `MODO: API REST`.
+```text
+-Ddb.config.path=D:/ruta/privada/db.properties
+```
 
-Credenciales demo cargadas por `database/02_seed_base_data.sql`:
+### Frontend
 
-- Admin: `admin@controllocal.test` / `Admin2026`
-- Broker: `rsalas` / `Broker2026`
-- Broker: `psoto` / `Broker2026`
-- Agentes: `vmora`, `jruiz`, `ltorres`, `creyes` / `Agente2026`
+Archivo recomendado:
 
-### Validar alquiler comercial y cierre de visitas
+```text
+frontend-csharp/ControlLocal.Web/appsettings.json
+```
 
-1. Ingresa como agente y abre `Nueva captacion`.
-2. Confirma que la operacion se muestra fija como `Alquiler comercial`.
-3. Programa una visita sobre una oportunidad abierta.
-4. Registra un resultado `Interesado` o `Seguimiento`: la visita debe quedar
-   `Realizada` y la oportunidad debe seguir abierta.
-5. Registra otra visita con resultado `No interesado` o `Descartado`, indicando
-   el motivo: la visita debe quedar `Realizada` y la oportunidad `No continua`.
-6. Recarga el navegador. Ambos estados deben conservarse porque oportunidades
-   y visitas se leen y actualizan mediante el API REST.
-
-## 6. Cambio futuro a EC2
-
-Cuando Jakarta se despliegue en EC2, cambiar `Api:BaseUrl` en la configuracion
-del frontend:
+Puedes partir de `appsettings.example.json`:
 
 ```json
 {
   "Api": {
-    "Enabled": true,
-    "BaseUrl": "https://api.dominio.example/controllocal/Api",
+    "BaseUrl": "http://localhost:8080/controllocal/Api",
     "TimeoutSeconds": 15
   }
 }
 ```
 
-En EC2, el Security Group de Aurora debe aceptar 3306 solamente desde el
-Security Group de EC2. El API debe publicarse por HTTPS mediante un balanceador
-o proxy inverso; GlassFish no debe exponerse directamente a Internet.
+## 3. Compilar El Backend Java
+
+Desde `backend-java/`:
+
+```bash
+mvn clean install
+```
+
+Para construir solo el WAR REST con sus dependencias:
+
+```bash
+mvn -pl controllocal-rest -am package
+```
+
+Artefacto esperado:
+
+```text
+backend-java/controllocal-rest/target/controllocal.war
+```
+
+## 4. Desplegar La API En GlassFish
+
+En IntelliJ o el IDE que uses:
+
+1. Abre `backend-java/pom.xml` como proyecto Maven.
+2. Configura GlassFish con el artefacto `controllocal-rest:war exploded` o despliega `controllocal.war`.
+3. Agrega en las opciones de VM las rutas de configuracion si corresponde:
+
+```text
+-Ddb.config.path=D:/ruta/privada/db.properties
+-Dapi.config.path=D:/ruta/privada/api.properties
+```
+
+4. Inicia GlassFish.
+
+El context root esta definido como `controllocal`, y la raiz JAX-RS es `Api`. Por eso la URL base es:
+
+```text
+http://localhost:8080/controllocal/Api
+```
+
+No uses `/webresources/*`; este proyecto expone REST bajo `/controllocal/Api`.
+
+## 5. Probar Salud Del API
+
+En navegador o PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri "http://localhost:8080/controllocal/Api/salud"
+```
+
+Resultado esperado: respuesta JSON de salud sin requerir token.
+
+Si falla:
+
+- Revisa que GlassFish este iniciado.
+- Revisa que el context root sea `controllocal`.
+- Revisa que `RestApplication` este activo bajo `Api`.
+- Revisa logs de GlassFish por errores de configuracion.
+
+## 6. Probar Login REST
+
+Credenciales cargadas por `database/02_seed_base_data.sql`:
+
+| Rol | Usuario | Contrasena |
+| --- | --- | --- |
+| Admin | `admin@controllocal.test` | `Admin2026` |
+| Broker | `rsalas` | `Broker2026` |
+| Broker | `psoto` | `Broker2026` |
+| Agente | `vmora` | `Agente2026` |
+| Agente | `jruiz` | `Agente2026` |
+| Agente | `ltorres` | `Agente2026` |
+| Agente | `creyes` | `Agente2026` |
+
+Ejemplo PowerShell:
+
+```powershell
+$body = @{
+  usuario = "admin@controllocal.test"
+  contrasena = "Admin2026"
+} | ConvertTo-Json
+
+$login = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8080/controllocal/Api/auth/login" `
+  -ContentType "application/json" `
+  -Body $body
+
+$login
+```
+
+La respuesta debe incluir:
+
+- `token`
+- `expiraEnSegundos`
+- `rol`
+- `idUsuario`
+- `idDominio`
+- `nombre`
+- `usuario`
+- `expiraEn`
+
+El token dura 30 minutos. Para llamar endpoints privados:
+
+```powershell
+$headers = @{ Authorization = "Bearer $($login.token)" }
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "http://localhost:8080/controllocal/Api/captaciones" `
+  -Headers $headers
+```
+
+## 7. Ejecutar El Frontend Blazor
+
+Desde `frontend-csharp/ControlLocal.Web/`:
+
+```bash
+dotnet run --launch-profile "ControlLocal API"
+```
+
+URL esperada:
+
+```text
+http://localhost:5232/login
+```
+
+Tambien puedes abrir el proyecto en Visual Studio:
+
+1. Abre `frontend-csharp/ControlLocal.Web/ControlLocal.Web.csproj`.
+2. Selecciona el perfil `ControlLocal API`.
+3. Ejecuta con `F5`.
+4. Inicia sesion con un usuario demo.
+
+La aplicacion debe consumir:
+
+```text
+http://localhost:8080/controllocal/Api
+```
+
+## 8. Prueba Funcional Minima
+
+### Como Agente
+
+1. Inicia sesion con `vmora` / `Agente2026`.
+2. Abre `Propietarios` y confirma que se listan datos.
+3. Abre `Locales comerciales` y registra o revisa un local.
+4. Abre `Captaciones` y crea una captacion.
+5. Confirma que la operacion se maneja como alquiler.
+6. Abre `Clientes interesados` y registra o revisa un cliente.
+7. Crea una `Oportunidad comercial` vinculando cliente y captacion activa.
+8. Programa una visita sobre la oportunidad.
+
+### Como Broker
+
+1. Inicia sesion con `rsalas` / `Broker2026`.
+2. Abre `Captaciones por revisar`.
+3. Aprueba, observa o rechaza una captacion.
+4. Abre `Solicitudes por evaluar`.
+5. Evalua una solicitud como aprobada, observada o rechazada.
+
+### Validar Cierre De Visitas
+
+1. Ingresa como agente.
+2. Programa una visita sobre una oportunidad abierta.
+3. Registra resultado `INTERESADO` o `SEGUIMIENTO`.
+4. La visita debe quedar `REALIZADA` y la oportunidad debe seguir abierta.
+5. Registra otra visita con resultado `NO_INTERESADO` o `DESCARTADO`.
+6. Indica el motivo de no continuidad.
+7. La visita debe quedar `REALIZADA` y la oportunidad debe quedar `NO_CONTINUA`.
+
+## 9. Pruebas De Compilacion Y Tests
+
+Prueba rapida de compilacion Java:
+
+```bash
+cd backend-java
+mvn clean test-compile
+```
+
+Pruebas unitarias del modelo:
+
+```bash
+cd backend-java
+mvn -pl controllocal-model test
+```
+
+Pruebas DAO o de integracion:
+
+```bash
+cd backend-java
+mvn -pl controllocal-dao test
+```
+
+Estas pruebas requieren que la configuracion de BD apunte a una base accesible y preparada.
+
+Compilacion frontend:
+
+```bash
+cd frontend-csharp/ControlLocal.Web
+dotnet build
+```
+
+## 10. Fallas Comunes
+
+| Sintoma | Causa probable | Que revisar |
+| --- | --- | --- |
+| `404` en `/controllocal/Api/salud` | Context root o raiz REST incorrecta | GlassFish, `glassfish-web.xml`, `RestApplication`. |
+| `401 Token requerido` | Endpoint privado sin JWT | Hacer login y enviar `Authorization: Bearer <token>`. |
+| `401 Token invalido o expirado` | Token vencido o secreto distinto tras reinicio | Hacer login otra vez; configurar `api.token.secret`. |
+| Error de CORS | Origen frontend no autorizado | `api.cors.origin=http://localhost:5232`. |
+| Error JDBC | Credenciales, host o SSL incorrectos | `db.properties`, Security Group, puerto 3306. |
+| Blazor no carga datos | API apagada o `Api:BaseUrl` incorrecto | `appsettings.json` o perfil `ControlLocal API`. |
+
+## 11. Cambio Futuro A EC2
+
+Cuando el API se despliegue fuera de local:
+
+1. Publica la API por HTTPS.
+2. No expongas GlassFish directamente a Internet.
+3. Usa un balanceador o proxy inverso.
+4. Permite 3306 en Aurora/RDS solo desde el Security Group de EC2.
+5. Cambia `Api:BaseUrl` en el frontend:
+
+```json
+{
+  "Api": {
+    "BaseUrl": "https://api.dominio.example/controllocal/Api",
+    "TimeoutSeconds": 15
+  }
+}
+```

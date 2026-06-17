@@ -15,4 +15,6 @@ public interface CaptacionDAO extends CrudDAO<Captacion> {
     boolean actualizar(Captacion captacion);
 
     boolean eliminar(Long id);
+
+    public boolean perteneceAlAgente(Long idLocal, Long idAgente);
 }

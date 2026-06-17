@@ -19,4 +19,5 @@ public interface LocalComercialDAO extends CrudDAO<LocalComercial> {
     boolean actualizar(LocalComercial local);
 
     boolean eliminar(Long id);
+    List<LocalComercial> listarPorAgente(long idAgente, int limite, int desplazamiento);
 }

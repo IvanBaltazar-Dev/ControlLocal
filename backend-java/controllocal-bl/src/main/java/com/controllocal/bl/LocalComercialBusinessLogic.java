@@ -12,7 +12,11 @@ public interface LocalComercialBusinessLogic {
     public List<LocalComercial> listarTodos();
     public List<LocalComercial> listarPagina(int limite, int desplazamiento);
     public long contar();
-    public boolean actualizar(LocalComercial local);
-    public boolean desactivar(Long idLocal);
+    // ACTUALIZADO: Le pasamos el agente para validar propiedad y registrar historial
+    public boolean actualizar(LocalComercial local, long idAgente);
+
+    // ACTUALIZADO: Le pasamos el agente para saber quién lo desactivó
+    public boolean desactivar(Long idLocal, long idAgente);
+    public List<LocalComercial> listarPaginaPorAgente(long idAgente, int limite, int desplazamiento);
 }
 

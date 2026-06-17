@@ -35,7 +35,12 @@ public class AlertaDAOImpl extends AbstractJdbcCrudDAO<Alerta> implements Alerta
             """;
     private static final String DELETE =
             "UPDATE alerta SET estado = 'DESCARTADA', fecha_resolucion = CURRENT_TIMESTAMP WHERE id_alerta = ?";
-
+    private static final String INSERT_ALERTA_SQL = """
+            INSERT INTO alerta (
+                tipo, severidad, entidad_tipo, entidad_id, 
+                id_agente, mensaje, estado, fecha_generacion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """;
     @Override public List<Alerta> listarActivasPorAgente(Long idAgente) {
         JdbcSupport.validarId(idAgente);
         return query(SELECT + " WHERE id_agente = ? AND estado = 'ACTIVA' ORDER BY fecha_generacion DESC",
@@ -68,6 +73,27 @@ public class AlertaDAOImpl extends AbstractJdbcCrudDAO<Alerta> implements Alerta
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al marcar la alerta como atendida.", e);
+        }
+    }
+
+    @Override
+    public void crearAlertaSensible(Long idLocal, Long idAgente, String mensaje) {
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(INSERT_ALERTA_SQL)) {
+
+            // Se utiliza 'SOLICITUD_EVALUADA' por las restricciones del CHECK ck_alerta_tipo en la BD
+            statement.setString(1, "SOLICITUD_EVALUADA");
+            statement.setString(2, "MEDIA");
+            statement.setString(3, "INMUEBLE");
+            statement.setLong(4, idLocal);
+            statement.setLong(5, idAgente);
+            statement.setString(6, mensaje);
+            statement.setString(7, "ACTIVA");
+            statement.setTimestamp(8, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
+
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new DAOException("Error al registrar la alerta comercial", e);
         }
     }
 

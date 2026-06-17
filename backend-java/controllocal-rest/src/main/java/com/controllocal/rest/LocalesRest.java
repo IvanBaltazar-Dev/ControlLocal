@@ -16,9 +16,11 @@ import com.controllocal.model.comercial.enums.Moneda;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.inmueble.enums.EstadoPublicacion;
 import com.controllocal.model.usuario.AgenteInmobiliario;
+
 import com.controllocal.rest.dto.Dtos;
 import com.controllocal.rest.http.ApiException;
 import com.controllocal.rest.http.PageResponse;
+
 import com.controllocal.rest.seguridad.UsuarioAutenticado;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,10 +50,14 @@ public class LocalesRest {
     @Context
     private HttpServletRequest request;
 
+    // =========================================================
+    // ENDPOINT GLOBAL (Para Administradores)
+    // =========================================================
     @GET
     public PageResponse<Dtos.LocalResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("10") int tamano) {
+        // Podrías agregar SeguridadRest.exigirRol(request, "ADMIN") si lo necesitas
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
         List<Dtos.LocalResponse> items = locales
@@ -59,6 +65,30 @@ public class LocalesRest {
                 .stream()
                 .map(this::respuesta)
                 .toList();
+        return new PageResponse<>(items, locales.contar(), paginaValida, tamanoValido);
+    }
+
+    // =========================================================
+    // NUEVO ENDPOINT RF-004: Solo mis captaciones
+    // =========================================================
+    @GET
+    @Path("mis-locales")
+    public PageResponse<Dtos.LocalResponse> listarMisLocales(
+            @QueryParam("pagina") @DefaultValue("1") int pagina,
+            @QueryParam("tamano") @DefaultValue("10") int tamano) {
+
+        // Exigir rol de Agente y extraer su ID
+        UsuarioAutenticado agente = SeguridadRest.exigirRol(request, "AGENTE");
+
+        int paginaValida = SeguridadRest.pagina(pagina);
+        int tamanoValido = SeguridadRest.tamano(tamano);
+
+        List<Dtos.LocalResponse> items = locales
+                .listarPaginaPorAgente(agente.idDominio(), tamanoValido, (paginaValida - 1) * tamanoValido)
+                .stream()
+                .map(this::respuesta)
+                .toList();
+        
         return new PageResponse<>(items, locales.contar(), paginaValida, tamanoValido);
     }
 
@@ -83,46 +113,53 @@ public class LocalesRest {
                 .build();
     }
 
+    // =========================================================
+    // ACTUALIZADO RF-004: Actualización con trazabilidad
+    // =========================================================
     @PUT
     @Path("{id}")
     public Dtos.LocalResponse actualizar(@PathParam("id") long id, Dtos.LocalRequest dto) {
+        // Exigimos que sea un agente para validar su propiedad
+        UsuarioAutenticado agente = SeguridadRest.exigirRol(request, "AGENTE");
         validarDto(dto);
-        LocalComercial actual = locales.buscarPorId(id)
-                .orElseThrow(() -> ApiException.noEncontrado("Local"));
+
+        // Mapeamos los datos del DTO a la entidad
         LocalComercial cambios = dto.aEntidad();
-        actual.setCodigoLocal(cambios.getCodigoLocal());
-        actual.setDireccion(cambios.getDireccion());
-        actual.setDistrito(cambios.getDistrito());
-        actual.setMetraje(cambios.getMetraje());
-        actual.setPrecioReferencial(cambios.getPrecioReferencial());
-        actual.setRubroPermitido(cambios.getRubroPermitido());
-        actual.setDescripcion(cambios.getDescripcion());
-        actual.setIdPropietario(cambios.getIdPropietario());
-        actual.setEstado(cambios.getEstado());
-        actual.setTipoInmueble(cambios.getTipoInmueble());
-        actual.setUso(cambios.getUso());
-        actual.setAmbientes(cambios.getAmbientes());
-        actual.setAntiguedadAnios(cambios.getAntiguedadAnios());
-        actual.setZonaUrbanizacion(cambios.getZonaUrbanizacion());
-        actual.setGeoLat(cambios.getGeoLat());
-        actual.setGeoLong(cambios.getGeoLong());
-        actual.setFrente(cambios.getFrente());
-        actual.setZonificacion(cambios.getZonificacion());
-        actual.setAptoLicenciaFuncionamiento(cambios.getAptoLicenciaFuncionamiento());
-        actual.setCargaElectricaKw(cambios.getCargaElectricaKw());
-        actual.setNumeroEstacionamientos(cambios.getNumeroEstacionamientos());
-        actual.setCuotaMantenimiento(cambios.getCuotaMantenimiento());
-        locales.actualizar(actual);
-        sincronizarPublicacion(actual, dto.estadoPublicacion());
-        return respuesta(actual);
+        cambios.setIdLocal(id); // Importante asegurar que el ID coincida
+
+        // Llamamos al método nuevo que incluye la lógica RF-004 (Trazabilidad y validación de propiedad)
+        try {
+            locales.actualizar(cambios, agente.idDominio());
+        } catch (Exception e) {
+            // Capturamos la BusinessException (ej. No es dueño, o validaciones) y la convertimos en ApiException para HTTP
+            throw new ApiException(400, e.getMessage());
+        }
+
+        sincronizarPublicacion(cambios, dto.estadoPublicacion());
+
+        // Para devolver la respuesta actualizada, volvemos a buscar el local
+        LocalComercial actualizado = locales.buscarPorId(id)
+                .orElseThrow(() -> ApiException.noEncontrado("Local"));
+
+        return respuesta(actualizado);
     }
 
+    // =========================================================
+    // ACTUALIZADO RF-004: Desactivación segura
+    // =========================================================
     @DELETE
     @Path("{id}")
     public Response eliminar(@PathParam("id") long id) {
-        if (!locales.desactivar(id)) {
-            throw ApiException.noEncontrado("Local");
+        UsuarioAutenticado agente = SeguridadRest.exigirRol(request, "AGENTE");
+
+        try {
+            if (!locales.desactivar(id, agente.idDominio())) {
+                throw ApiException.noEncontrado("Local");
+            }
+        } catch (Exception e) {
+            throw new ApiException(403, e.getMessage());
         }
+
         return Response.noContent().build();
     }
 

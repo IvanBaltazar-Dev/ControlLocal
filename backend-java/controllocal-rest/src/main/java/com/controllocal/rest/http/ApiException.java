@@ -1,9 +1,6 @@
 package com.controllocal.rest.http;
 
-/**
- * Error de API con codigo HTTP explicito. El mensaje es seguro para el cliente
- * (sin trazas internas ni detalles de infraestructura).
- */
+
 public class ApiException extends RuntimeException {
 
     private final int status;

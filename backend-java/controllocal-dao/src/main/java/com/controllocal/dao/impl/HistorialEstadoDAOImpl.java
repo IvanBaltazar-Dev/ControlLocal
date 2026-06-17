@@ -1,10 +1,14 @@
 package com.controllocal.dao.impl;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.List;
 
+import com.controllocal.config.DBManager;
+import com.controllocal.dao.DAOException;
 import com.controllocal.dao.HistorialEstadoDAO;
 import com.controllocal.model.comercial.HistorialEstado;
 import com.controllocal.model.comercial.enums.TipoEntidad;
@@ -29,7 +33,8 @@ public class HistorialEstadoDAOImpl extends AbstractJdbcCrudDAO<HistorialEstado>
             WHERE id_historial_estado = ?
             """;
     private static final String DELETE = "DELETE FROM historial_estado WHERE id_historial_estado = ?";
-
+    private static final String INSERT_HISTORIAL_SQL =
+            "INSERT INTO historial_estado (entidad_tipo, entidad_id, estado_anterior, estado_nuevo, id_usuario, fecha_evento, observacion) VALUES (?, ?, ?, ?, ?, ?, ?)";
     @Override public List<HistorialEstado> listarPorEntidad(TipoEntidad tipo, Long entidadId) {
         if (tipo == null) throw new IllegalArgumentException("El tipo de entidad es obligatorio.");
         JdbcSupport.validarId(entidadId);
@@ -38,6 +43,25 @@ public class HistorialEstadoDAOImpl extends AbstractJdbcCrudDAO<HistorialEstado>
                     JdbcSupport.setEnum(ps, 1, tipo);
                     ps.setLong(2, entidadId);
                 });
+    }
+
+    @Override
+    public void registrar(String entidadTipo, Long entidadId, String estadoAnterior, String estadoNuevo, Long idUsuario, LocalDateTime fechaEvento, String observacion) {
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(INSERT_HISTORIAL_SQL)) {
+
+            statement.setString(1, entidadTipo);
+            statement.setLong(2, entidadId);
+            statement.setString(3, estadoAnterior);
+            statement.setString(4, estadoNuevo);
+            statement.setLong(5, idUsuario);
+            statement.setTimestamp(6, java.sql.Timestamp.valueOf(fechaEvento));
+            statement.setString(7, observacion);
+
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new DAOException("Error al registrar historial de estado", e);
+        }
     }
 
     @Override protected String insertSql() { return INSERT; }

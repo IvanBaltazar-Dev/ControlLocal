@@ -381,4 +381,39 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             throw new IllegalArgumentException("El id debe ser mayor que cero.");
         }
     }
+    // METODO LISTAR POR AGENTE
+    private static final String SELECT_POR_AGENTE_SQL = """
+            SELECT l.id_local, l.codigo_local, l.direccion, l.distrito, l.metraje,
+                   l.precio_referencial, l.rubro_permitido, l.descripcion, l.estado,
+                   l.id_propietario, l.tipo_inmueble, l.uso, l.ambientes, l.antiguedad_anios,
+                   l.zona_urbanizacion, l.geo_lat, l.geo_long, l.frente, l.zonificacion,
+                   l.apto_licencia_funcionamiento, l.carga_electrica_kw, l.numero_estacionamientos,
+                   l.cuota_mantenimiento, pp.nombres_o_razon_social AS propietario_nombre,
+                   l.fecha_registro, l.fecha_actualizacion
+            FROM local_comercial l
+            INNER JOIN propietario p ON p.id_propietario = l.id_propietario
+            INNER JOIN persona pp ON pp.id_persona = p.id_persona
+            INNER JOIN captacion c ON c.id_local = l.id_local
+            WHERE c.id_agente = ? AND c.estado != 'C' -- Asumiendo que no se muestran cerradas
+            ORDER BY l.id_local LIMIT ? OFFSET ?
+            """;
+
+    // Nuevo método en el DAO
+    public List<LocalComercial> listarPorAgente(long idAgente, int limite, int desplazamiento) {
+        List<LocalComercial> locales = new ArrayList<>();
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_POR_AGENTE_SQL)) {
+            statement.setLong(1, idAgente);
+            statement.setInt(2, limite);
+            statement.setInt(3, desplazamiento);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    locales.add(mapRow(resultSet));
+                }
+            }
+            return locales;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar locales del agente " + idAgente, e);
+        }
+    }
 }

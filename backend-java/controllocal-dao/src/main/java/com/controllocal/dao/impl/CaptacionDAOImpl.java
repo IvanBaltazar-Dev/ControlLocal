@@ -86,7 +86,8 @@ public class CaptacionDAOImpl implements CaptacionDAO {
                 fecha_revision = COALESCE(fecha_revision, CURRENT_TIMESTAMP)
             WHERE id_captacion = ?
             """;
-
+    private static final String CHECK_PERTENECE_SQL =
+            "SELECT COUNT(*) FROM captacion WHERE id_local = ? AND id_agente = ?";
     @Override
     public Long crear(Captacion captacion) {
         validarCaptacionParaPersistencia(captacion, false);
@@ -235,6 +236,29 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             throw new DAOException("Error al cerrar la captacion con id " + id + ".", e);
         }
     }
+    //
+
+
+    @Override
+    public boolean perteneceAlAgente(Long idLocal, Long idAgente) {
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(CHECK_PERTENECE_SQL)) {
+
+            statement.setLong(1, idLocal);
+            statement.setLong(2, idAgente);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getInt(1) > 0;
+                }
+            }
+            return false;
+        } catch (SQLException e) {
+            throw new DAOException("Error al verificar pertenencia de captacion", e);
+        }
+    }
+
+
 
     // --- Metodos privados de apoyo (mapRow, validaciones, setters) ---
 

@@ -15,4 +15,5 @@ public interface AlertaDAO extends CrudDAO<Alerta> {
 
     // Marca una alerta activa como atendida (leida) sin descartarla.
     boolean marcarAtendida(Long idAlerta);
+    void crearAlertaSensible(Long idLocal, Long idAgente, String mensaje);
 }

@@ -441,6 +441,13 @@ public class BusinessLogicManualTest {
         public List<Captacion> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(Captacion captacion) { items.put(captacion.getIdCaptacion(), captacion); return true; }
         public boolean eliminar(Long id) { items.get(id).setEstado(EstadoCaptacion.CERRADA); return true; }
+        @Override
+        public boolean perteneceAlAgente(Long idLocal, Long idAgente) {
+            // Implementación simulada (mock) para que el test compile.
+            // Si necesitas que valide de verdad en tus tests en memoria,
+            // se debe iterar sobre el mapa 'items'. Por ahora, devolvemos true o false.
+            return true; //true pq solo queremos ver el codigo
+        }
     }
 
     private static class InMemoryAgenteDAO implements AgenteInmobiliarioDAO {

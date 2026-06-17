@@ -38,7 +38,7 @@ builder.Services.AddScoped<ExportacionService>();
 // Espeja la entidad Alerta del backend; el AlertasRest real lo sustituira luego.
 builder.Services.AddSingleton<NotificacionStore>();
 builder.Services.AddScoped<INotificacionService, HttpAlertaService>();
-
+builder.Services.AddHttpClient<ControlLocal.Web.Services.Api.LocalesApiService>();
 // Estado de solicitudes compartido en sesion (Singleton) para que las transiciones
 // del flujo (reenviar a evaluacion / evaluacion del broker) persistan de verdad.
 builder.Services.AddSingleton<SolicitudStore>();

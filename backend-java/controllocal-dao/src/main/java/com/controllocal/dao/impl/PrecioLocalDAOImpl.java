@@ -32,7 +32,8 @@ public class PrecioLocalDAOImpl implements PrecioLocalDAO {
             WHERE id_precio = ?
             """;
     private static final String DELETE_SQL = "DELETE FROM precio_local WHERE id_precio = ?";
-
+    private static final String INSERT_PRECIO_SQL =
+            "INSERT INTO precio_local (id_local, hito, moneda, monto, fecha) VALUES (?, ?, ?, ?, ?)";
     @Override
     public Long crear(PrecioLocal precio) {
         validar(precio, false);
@@ -109,6 +110,22 @@ public class PrecioLocalDAOImpl implements PrecioLocalDAO {
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al eliminar el precio con id " + id + ".", e);
+        }
+    }
+    @Override
+    public void registrar(Long idLocal, String hito, String moneda, java.math.BigDecimal monto, java.time.LocalDate fecha) {
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(INSERT_PRECIO_SQL)) {
+
+            statement.setLong(1, idLocal);
+            statement.setString(2, hito);
+            statement.setString(3, moneda);
+            statement.setBigDecimal(4, monto);
+            statement.setDate(5, java.sql.Date.valueOf(fecha));
+
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new DAOException("Error al registrar historial de precio", e);
         }
     }
 

@@ -14,9 +14,14 @@ import java.util.Optional;
 import com.controllocal.config.DBManager;
 import com.controllocal.dao.DAOException;
 import com.controllocal.dao.ProspeccionDAO;
+import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.Prospeccion;
 import com.controllocal.model.comercial.enums.EstadoProspeccion;
 import com.controllocal.model.comercial.enums.ResultadoPropuesta;
+import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.Persona;
+import com.controllocal.model.persona.Propietario;
+import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class ProspeccionDAOImpl implements ProspeccionDAO {
 
@@ -28,11 +33,24 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
-            SELECT id_prospeccion, codigo_prospeccion, fecha_registro, estado, resultado_propuesta,
-                   fecha_contacto, fecha_reunion, fecha_propuesta, fecha_recontacto,
-                   observaciones, id_local, id_agente, id_captacion,
-                   fecha_creacion, fecha_actualizacion
-            FROM prospeccion
+            SELECT p.id_prospeccion, p.codigo_prospeccion, p.fecha_registro, p.estado, p.resultado_propuesta,
+                   p.fecha_contacto, p.fecha_reunion, p.fecha_propuesta, p.fecha_recontacto,
+                   p.observaciones, p.id_local, p.id_agente, p.id_captacion,
+                   p.fecha_creacion, p.fecha_actualizacion,
+                   l.codigo_local, l.direccion AS local_direccion, l.distrito AS local_distrito,
+                   l.metraje AS local_metraje, l.rubro_permitido AS local_rubro,
+                   l.precio_referencial AS local_precio,
+                   pr.id_propietario, pp.nombres_o_razon_social AS propietario_nombre,
+                   ap.nombres_o_razon_social AS agente_nombre,
+                   c.codigo_captacion
+            FROM prospeccion p
+            INNER JOIN local_comercial l ON l.id_local = p.id_local
+            INNER JOIN propietario pr ON pr.id_propietario = l.id_propietario
+            INNER JOIN persona pp ON pp.id_persona = pr.id_persona
+            INNER JOIN agente_inmobiliario a ON a.id_agente = p.id_agente
+            INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
+            INNER JOIN persona ap ON ap.id_persona = au.id_persona
+            LEFT JOIN captacion c ON c.id_captacion = p.id_captacion
             """;
     private static final String UPDATE_SQL = """
             UPDATE prospeccion
@@ -67,7 +85,7 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
     public Optional<Prospeccion> buscarPorId(Long id) {
         JdbcSupport.validarId(id);
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE id_prospeccion = ?")) {
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE p.id_prospeccion = ?")) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
@@ -81,7 +99,7 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
     public List<Prospeccion> listarTodos() {
         List<Prospeccion> prospecciones = new ArrayList<>();
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY id_prospeccion");
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY p.id_prospeccion DESC");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 prospecciones.add(mapRow(rs));
@@ -97,7 +115,8 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
         List<Prospeccion> prospecciones = new ArrayList<>();
         try (Connection conn = DBManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(
-                     SELECT_SQL + " WHERE estado = 'S' AND fecha_recontacto IS NOT NULL AND fecha_recontacto <= ? ORDER BY fecha_recontacto")) {
+                     SELECT_SQL + " WHERE p.estado = 'S' AND p.fecha_recontacto IS NOT NULL"
+                             + " AND p.fecha_recontacto <= ? ORDER BY p.fecha_recontacto")) {
             ps.setDate(1, Date.valueOf(limite));
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -162,10 +181,33 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
         p.setFechaPropuesta(JdbcSupport.toLocalDate(rs.getDate("fecha_propuesta")));
         p.setFechaRecontacto(JdbcSupport.toLocalDate(rs.getDate("fecha_recontacto")));
         p.setObservaciones(rs.getString("observaciones"));
-        p.setLocalComercial(JdbcSupport.local(rs.getLong("id_local")));
-        p.setAgenteResponsable(JdbcSupport.agente(rs.getLong("id_agente")));
+
+        LocalComercial local = JdbcSupport.local(rs.getLong("id_local"));
+        local.setCodigoLocal(rs.getString("codigo_local"));
+        local.setDireccion(rs.getString("local_direccion"));
+        local.setDistrito(rs.getString("local_distrito"));
+        local.setMetraje(rs.getBigDecimal("local_metraje"));
+        local.setRubroPermitido(rs.getString("local_rubro"));
+        local.setPrecioReferencial(rs.getBigDecimal("local_precio"));
+        Propietario propietario = JdbcSupport.propietario(rs.getLong("id_propietario"));
+        propietario.setNombresORazonSocial(rs.getString("propietario_nombre"));
+        local.setPropietario(propietario);
+        p.setLocalComercial(local);
+
+        AgenteInmobiliario agente = JdbcSupport.agente(rs.getLong("id_agente"));
+        Persona personaAgente = new Persona();
+        personaAgente.setNombresORazonSocial(rs.getString("agente_nombre"));
+        agente.setPersona(personaAgente);
+        p.setAgenteResponsable(agente);
+
         long idCaptacion = rs.getLong("id_captacion");
-        p.setCaptacion(rs.wasNull() ? null : JdbcSupport.captacion(idCaptacion));
+        if (rs.wasNull()) {
+            p.setCaptacion(null);
+        } else {
+            Captacion captacion = JdbcSupport.captacion(idCaptacion);
+            captacion.setCodigoCaptacion(rs.getString("codigo_captacion"));
+            p.setCaptacion(captacion);
+        }
         p.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_creacion")));
         p.setFechaActualizacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_actualizacion")));
         return p;

@@ -7,7 +7,7 @@
           Subtitle="Consulta de los valores maestros que utiliza el sistema en sus distintos módulos.">
     <div class="cl-alert blue" style="margin-bottom:16px;">
         <Icon Name="info" Size="15" />
-        <span>Los catálogos del sistema son administrados desde backend. Esta pantalla permite consultar los valores utilizados por el sistema.</span>
+        <span>Los catálogos del sistema centralizan los valores usados en las operaciones y revisiones.</span>
     </div>
     <div class="cl-tabs">
         @foreach (var t in _data.Keys)
@@ -55,7 +55,7 @@
     {
         ["Estados de captación"] = new[]
         {
-            new CatRow("Pendiente", "blue", "Captación registrada, aún no enviada a revisión", "Listado y bandeja de captaciones"),
+            new CatRow("Pendiente de revision", "blue", "Captación registrada y enviada a revisión", "Listado y bandeja de captaciones"),
             new CatRow("Activa", "green", "Aprobada por el broker, en proceso comercial", "Expediente de captación"),
             new CatRow("Observada", "blue", "Devuelta al agente para subsanar", "Revisión de captación"),
             new CatRow("Rechazada", "red", "No procede como captación", "Revisión de captación"),
@@ -73,6 +73,9 @@
             new CatRow("WhatsApp", null, "Mensajería instantánea", "Registro de interacciones"),
             new CatRow("Correo", null, "Comunicación por correo electrónico", "Registro de interacciones"),
             new CatRow("Presencial", null, "Reunión o visita en persona", "Registro de interacciones / visitas"),
+            new CatRow("Reunion", null, "Reunión comercial programada", "Registro de interacciones"),
+            new CatRow("Portal", null, "Contacto originado en portal digital", "Registro de interacciones"),
+            new CatRow("Otro", null, "Otro canal de contacto", "Registro de interacciones"),
         },
         ["Tipos de documento"] = new[]
         {

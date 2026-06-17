@@ -1,9 +1,68 @@
 @* Topbar — fecha, notificaciones y perfil *@
 @inject AppState App
+@inject ApiClient Api
+@inject INotificacionService Notif
+@inject NotificacionStore Store
+@inject NavigationManager Nav
+@implements IDisposable
 
 <header class="cl-topbar">
     <div class="cl-topbar-right">
         <span class="cl-date">@FechaHoy</span>
+
+        <div class="cl-notif-wrap">
+            <button class="cl-icon-btn" type="button" @onclick="ToggleNotifs"
+                    aria-label="Notificaciones" title="Notificaciones">
+                <Icon Name="bell" Size="18" Color="#515B6B" />
+                @if (NoLeidas > 0)
+                {
+                    <span class="cl-notif-badge">@(NoLeidas > 9 ? "9+" : NoLeidas.ToString())</span>
+                }
+            </button>
+
+            @if (_notifOpen)
+            {
+                <div class="cl-notif-menu">
+                    <div class="cl-notif-menu-head">
+                        <span>Notificaciones</span>
+                        @if (NoLeidas > 0)
+                        {
+                            <button type="button" class="cl-notif-readall" @onclick="MarcarTodas">Marcar todas leídas</button>
+                        }
+                    </div>
+                    <div class="cl-notif-list">
+                        @if (_items.Count == 0)
+                        {
+                            <div class="cl-notif-empty">
+                                <Icon Name="bell" Size="22" Color="#A6AEBC" />
+                                <span>No tienes notificaciones</span>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var n in _items)
+                            {
+                                <button type="button" class="cl-notif-item @(n.Leida ? "" : "is-unread")"
+                                        @onclick="@(() => Abrir(n))">
+                                    <span class="cl-notif-ic sev-@n.Severidad.ToLowerInvariant()">
+                                        <Icon Name="@n.Icono" Size="14" />
+                                    </span>
+                                    <span class="cl-notif-text">
+                                        <span class="cl-notif-tipo">@n.Tipo</span>
+                                        <span class="cl-notif-msg">@n.Mensaje</span>
+                                        <span class="cl-notif-time">@n.FechaTexto</span>
+                                    </span>
+                                    @if (!n.Leida)
+                                    {
+                                        <span class="cl-notif-dot"></span>
+                                    }
+                                </button>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
 
         <div class="cl-profile-wrap">
             <button class="cl-profile" type="button" @onclick="ToggleMenu">
@@ -53,27 +112,83 @@
 
 @code {
     [Parameter] public string Role { get; set; } = Roles.Agente;
-    [Parameter] public int Notifs { get; set; } = 3;
 
     private bool _menuOpen;
     private bool _logoutOpen;
+    private bool _notifOpen;
+    private List<NotificacionDto> _items = new();
 
-    private RoleUser User => Navigation.UserFor(Role);
+    private int NoLeidas => _items.Count(n => !n.Leida);
+
+    private RoleUser User => App.CurrentUser is { } current
+        ? new RoleUser(current.Iniciales, current.Nombre, Roles.Label(current.Role))
+        : Navigation.UserFor(Role);
 
     private bool IsAdmin => Role == Roles.Admin;
 
     private string FechaHoy =>
         DateTime.Today.ToString("dddd · dd MMMM yyyy", new System.Globalization.CultureInfo("es-PE"));
 
+    protected override void OnInitialized()
+    {
+        Recargar();
+        // Bus reactivo: cualquier Crear()/marcar-leida (incluso de otro rol, porque
+        // el store es Singleton) refresca la campana al instante. Además, en cada
+        // navegación revalidamos por si llegaron alertas del backend.
+        Store.Cambiado += OnNotificacionesCambiaron;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnNotificacionesCambiaron() =>
+        _ = InvokeAsync(() => { Recargar(); StateHasChanged(); });
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(() => { Recargar(); StateHasChanged(); });
+
+    private void Recargar() => _items = Notif.MisNotificaciones().ToList();
+
+    public void Dispose()
+    {
+        Store.Cambiado -= OnNotificacionesCambiaron;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+
+    private void ToggleNotifs()
+    {
+        _notifOpen = !_notifOpen;
+        if (_notifOpen)
+        {
+            _menuOpen = false;
+            Recargar();
+        }
+    }
+
+    private void MarcarTodas()
+    {
+        Notif.MarcarTodasLeidas();
+        Recargar();
+    }
+
+    private void Abrir(NotificacionDto notificacion)
+    {
+        Notif.MarcarLeida(notificacion.Id);
+        _notifOpen = false;
+        if (!string.IsNullOrWhiteSpace(notificacion.Ruta))
+            App.Navigate(notificacion.Ruta);
+        else
+            Recargar();
+    }
+
     private void ToggleMenu()
     {
         _menuOpen = !_menuOpen;
+        if (_menuOpen) _notifOpen = false;
     }
 
     private void VerPerfil()
     {
         _menuOpen = false;
-        App.Navigate("broker-profile");
+        App.Navigate("profile");
     }
 
     private void CambiarContrasena()
@@ -85,7 +200,8 @@
     private void Salir()
     {
         _menuOpen = false;
-        
+        Api.CerrarSesion();
+        App.SignOut();
         App.Navigate("login");
     }
 }

@@ -17,7 +17,6 @@ import com.controllocal.model.comercial.enums.MotivoNoContinuidadTipo;
 import com.controllocal.model.comercial.enums.ResultadoEvaluacionSolicitud;
 import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.comercial.enums.ResultadoRevisionDocumento;
-import com.controllocal.model.comercial.enums.TipoDocumentoSolicitud;
 import com.controllocal.model.comercial.enums.TipoEvaluacionSolicitud;
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
 import com.controllocal.model.inmueble.LocalComercial;
@@ -155,7 +154,9 @@ public class ControlLocalCrudManualIntegrationTest {
         System.out.println("11. Solicitud de alquiler creada: " + solicitud.getIdSolicitud());
 
         DocumentoSolicitud documento = new DocumentoSolicitud();
-        documento.setTipoDocumento(TipoDocumentoSolicitud.DOCUMENTO_IDENTIDAD);
+        TipoDocumentoRequerido tipoDocumento = new TipoDocumentoRequerido();
+        tipoDocumento.setIdTipoDocumentoRequerido(1L);
+        documento.setTipoDocumentoRequerido(tipoDocumento);
         documento.setNombreArchivo("dni-" + sufijo + ".pdf");
         documento.setRutaArchivo("/tmp/dni-" + sufijo + ".pdf");
         documento.setFechaEntrega(LocalDateTime.now());

@@ -23,6 +23,10 @@ public class AgenteDto
 
     public string TipoDocumento { get; set; } = "D";
 
+    public string Usuario { get; set; } = string.Empty;
+
+    public string ContrasenaTemporal { get; set; } = string.Empty;
+
     [EmailAddress(ErrorMessage = "Ingrese un correo válido.")]
     public string Email { get; set; } = string.Empty;
 

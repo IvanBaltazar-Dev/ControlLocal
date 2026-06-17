@@ -30,6 +30,7 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
                    u.fecha_actualizacion AS usuario_fecha_actualizacion,
                    p.id_persona, p.tipo_persona, p.tipo_documento, p.numero_documento,
                    p.nombres_o_razon_social, p.telefono, p.correo, p.estado,
+                   p.consentimiento_uso_dato,
                    p.fecha_creacion, p.fecha_actualizacion
             FROM usuario_interno u
             INNER JOIN persona p ON u.id_persona = p.id_persona
@@ -79,6 +80,22 @@ public class UsuarioInternoDAOImpl implements UsuarioInternoDAO {
             }
         } catch (SQLException e) {
             throw new DAOException("Error al buscar usuario interno con id " + id + ".", e);
+        }
+    }
+
+    @Override
+    public Optional<UsuarioInterno> buscarPorNombreUsuario(String nombreUsuario) {
+        if (nombreUsuario == null || nombreUsuario.isBlank()) {
+            return Optional.empty();
+        }
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE u.nombre_usuario = ?")) {
+            ps.setString(1, nombreUsuario.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al buscar el usuario " + nombreUsuario + ".", e);
         }
     }
 

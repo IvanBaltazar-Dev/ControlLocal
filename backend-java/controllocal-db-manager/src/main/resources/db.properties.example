@@ -1,0 +1,6 @@
+db.host=tu-instancia-rds.us-east-1.rds.amazonaws.com
+db.port=3306
+db.name=controllocal
+db.user=admin
+db.password=CAMBIAR_POR_PASSWORD_REAL
+db.ssl=true

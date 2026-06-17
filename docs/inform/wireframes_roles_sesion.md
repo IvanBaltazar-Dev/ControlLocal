@@ -1,195 +1,195 @@
-# ControlLocal - Wireframes, roles y sesion
+# Wireframes, Roles Y Sesion
 
-Este documento alinea los wireframes con lo que el backend actual soporta y con las reglas de negocio esperadas para Broker y Agente Inmobiliario.
+Este documento alinea la interfaz objetivo con el estado actual del proyecto. Sirve para revisar pantallas, permisos y comportamiento de sesion sin tener que leer todo el codigo.
 
-## Estado actual del programa
+## Estado Actual Del Proyecto
 
-El proyecto actual es principalmente backend Java por capas:
+ControlLocal ya cuenta con:
 
-- `controllocal-model`: entidades de dominio y enums.
-- `controllocal-dao`: persistencia JDBC.
-- `controllocal-bl`: reglas de negocio.
-- `controllocal-app`: entrada minima por consola.
+- Backend Java por capas: `model`, `db-manager`, `dao`, `bl`, `rest`.
+- API Jakarta REST bajo `/controllocal/Api`.
+- Autenticacion con `POST /auth/login`.
+- Token JWT firmado con HS256.
+- Filtro `JwtAuthFilter` para proteger endpoints privados.
+- Frontend Blazor en `frontend-csharp/ControlLocal.Web`.
+- Menu lateral por rol en `Services/Navigation.cs`.
 
-No hay todavia controladores web, vistas HTML, frontend, login real, manejo de cookies, tokens, sesiones HTTP ni Spring Security. Por eso los wireframes pueden representar el producto objetivo, pero el programa actual todavia no puede ejecutar una interfaz con permisos de pantalla o mantener una sesion activa desde navegador.
-
-## Logo
-
-El logo existente esta en:
+La sesion actual no implementa `remember me`. El token dura 30 minutos y debe enviarse como:
 
 ```text
-docs/commercial/logo/logo_v1.png
+Authorization: Bearer <token>
 ```
 
-Debe integrarse en todos los wireframes en estos puntos:
+## Roles Del Producto
 
-- Login: logo centrado arriba del formulario.
-- Layout interno: logo pequeno en la esquina superior izquierda del sidebar o header.
-- Pantalla de carga/splash: logo centrado con nombre ControlLocal.
-- Documentos o reportes exportables: logo en cabecera.
+| Rol | Enfoque | Sustento |
+| --- | --- | --- |
+| Broker administrador | Gobierno global | Administra brokers, audita y puede intervenir reasignaciones. |
+| Broker supervisor | Control de equipo | Revisa captaciones, evalua solicitudes y gestiona agentes propios. |
+| Agente inmobiliario | Operacion diaria | Registra propietarios, locales, captaciones, clientes, oportunidades, visitas y solicitudes. |
 
-## Pantallas faltantes recomendadas
+Regla conceptual: el agente genera la operacion; el broker la supervisa. Esta separacion sostiene la trazabilidad del sistema.
 
-### Autenticacion
+## Navegacion Esperada Por Rol
 
-- Login.
-- Cerrar sesion.
-- Cambio de contrasena desde perfil, como mejora posterior.
-- Mantener sesion activa, como mejora futura cuando exista autenticacion web.
+### Broker Administrador
 
-No es obligatorio incluir "Recuperar contrasena" en el MVP porque ControlLocal
-es un sistema interno y los usuarios internos son administrados por el broker
-administrador. Para la primera version, la recuperacion puede resolverse como
-restablecimiento de contrasena desde Gestion de usuarios internos.
+- Dashboard global.
+- Reportes globales.
+- Brokers.
+- Reasignar agentes.
+- Catalogos del sistema.
 
-### Panel Broker
+### Broker Supervisor
 
-- Dashboard de supervision.
-- Registro y administracion de sus agentes inmobiliarios, si es broker normal.
-- Bandeja de captaciones pendientes de revision segun alcance.
-- Detalle de captacion.
-- Aprobar captacion.
-- Observar captacion.
-- Rechazar captacion.
-- Reasignar captacion a otro agente.
-- Cerrar captacion activa.
-- Evaluar solicitud de alquiler.
-- Gestion de brokers normales, solo si es broker administrador.
-- Reasignacion o intervencion de agentes entre brokers, solo si es broker administrador.
-- Reportes y trazabilidad.
+- Dashboard de equipo.
+- Reportes de equipo.
+- Mis agentes.
+- Reasignar captaciones.
+- Captaciones por revisar.
+- Solicitudes por evaluar.
+- Operaciones del equipo.
 
-### Panel Agente Inmobiliario
+### Agente Inmobiliario
 
-- Dashboard operativo.
-- Registro de propietarios.
-- Registro de locales comerciales.
-- Registro de captaciones.
-- Correccion de captaciones observadas.
-- Registro de clientes interesados.
-- Creacion de oportunidades comerciales.
-- Registro de interacciones.
-- Programacion y actualizacion de visitas.
-- Registro de solicitud de alquiler.
-- Carga de documentos de solicitud.
-- Registro de motivo de no continuidad.
+- Dashboard.
+- Clientes interesados.
+- Propietarios.
+- Locales comerciales.
+- Captaciones.
+- Oportunidades comerciales.
+- Interacciones comerciales.
+- Visitas.
+- Solicitudes de alquiler.
 
-### Pantallas compartidas
+## Matriz De Permisos
 
-- Perfil de usuario.
-- Notificaciones.
-- Historial de actividad.
-- Buscador global.
-- Vista de detalle de oportunidad comercial.
-
-## Uso de showModal
-
-Para wireframes frontend, `showModal()` conviene en formularios cortos o decisiones puntuales. No conviene para flujos largos con muchas secciones.
-
-Usar modal para:
-
-- Registro rapido de usuario interno.
-- Confirmar aprobar, observar o rechazar captacion.
-- Reasignar captacion.
-- Cerrar captacion.
-- Registrar interaccion breve.
-- Registrar motivo de no continuidad.
-- Confirmar cierre de sesion.
-
-Usar pantalla completa o pagina dedicada para:
-
-- Registro completo de local comercial.
-- Registro completo de captacion.
-- Registro completo de cliente interesado si incluye datos extensos.
-- Solicitud de alquiler.
-- Evaluacion de solicitud.
-- Detalle de oportunidad comercial.
-
-## Matriz correcta de permisos
-
-| Modulo / accion | Broker administrador | Broker no administrador | Agente inmobiliario |
+| Modulo / accion | Admin | Broker | Agente |
 | --- | --- | --- | --- |
-| Ver dashboard de supervision | Si, global | Si, solo agentes supervisados | No |
-| Registrar usuarios internos | Si | No | No |
+| Ver dashboard global | Si | No | No |
+| Ver dashboard de equipo | Si | Si, solo equipo | No |
+| Ver dashboard operativo | No | No | Si |
 | Registrar brokers | Si | No | No |
-| Registrar agentes | No, salvo intervencion administrativa | Si, agentes propios | No |
-| Asignar o reasignar agentes entre brokers | Si | No | No |
+| Registrar agentes | No | Si, agentes propios | No |
+| Reasignar agentes entre brokers | Si | No | No |
 | Registrar propietarios | No | No | Si |
 | Registrar locales comerciales | No | No | Si |
 | Registrar captaciones | No | No | Si |
 | Corregir captaciones observadas | No | No | Si |
+| Revisar captaciones | Si, global | Si, equipo | No |
+| Aprobar, observar o rechazar captaciones | Si, global | Si, equipo | No |
+| Reasignar captaciones | Si, global | Si, equipo | No |
+| Cerrar captaciones | Si, global | Si, equipo | No |
 | Registrar clientes interesados | No | No | Si |
-| Crear oportunidades comerciales | No | No | Si |
+| Crear oportunidades | No | No | Si |
 | Registrar interacciones | No | No | Si |
 | Programar visitas | No | No | Si |
+| Registrar resultado de visita | No | No | Si |
 | Registrar solicitud de alquiler | No | No | Si |
-| Cargar documentos de solicitud | No | No | Si |
-| Revisar captaciones | Si, global | Si, solo agentes supervisados | No |
-| Aprobar / observar / rechazar captaciones | Si, global | Si, solo agentes supervisados | No |
-| Reasignar captaciones | Si, global | Si, solo agentes supervisados | No |
-| Cerrar captaciones | Si, global | Si, solo agentes supervisados | No |
-| Evaluar solicitudes | Si, global | Si, solo agentes supervisados | No |
+| Cargar documentos | No | No | Si |
+| Evaluar solicitudes | Si, global | Si, equipo | No |
 | Ver reportes globales | Si | No | No |
-| Ver reportes de equipo | Si | Si, solo agentes supervisados | No |
+| Ver reportes de equipo | Si | Si, equipo | No |
 | Ver reportes propios | No | No | Si |
 
-Regla clave: el broker administrador administra brokers, audita el proceso global y puede intervenir reasignando agentes cuando sea necesario, pero no debe registrar captaciones, locales ni clientes. El broker normal registra y administra sus propios agentes inmobiliarios; desde esa alta se crea la supervision activa en `broker_agente`. El broker normal solo puede revisar, reasignar, cerrar y evaluar operaciones de los agentes bajo su responsabilidad. Las operaciones comerciales de registro pertenecen al agente inmobiliario.
+## Sustento De Pantallas
 
-## Vinculaciones correctas del flujo
+| Pantalla | Por que existe | Rol principal |
+| --- | --- | --- |
+| Login | Abre una sesion autenticada y entrega token JWT. | Todos |
+| Dashboard | Resume trabajo pendiente y estado comercial. | Todos, con distinta vista |
+| Propietarios | Permite registrar titulares de locales. | Agente |
+| Locales comerciales | Guarda informacion fisica, legal y comercial del inmueble. | Agente |
+| Captaciones | Formaliza que un local puede ser comercializado. | Agente |
+| Bandeja de captaciones | Permite control del broker antes de activar una captacion. | Broker |
+| Clientes interesados | Registra demanda potencial. | Agente |
+| Oportunidades | Une cliente y captacion para seguimiento trazable. | Agente / Broker lectura |
+| Interacciones | Documenta contactos y respuestas. | Agente |
+| Visitas | Agenda y registra reaccion del cliente frente al local. | Agente |
+| Solicitudes | Formaliza condiciones propuestas por el cliente. | Agente |
+| Documentos | Guarda evidencia para evaluar la solicitud. | Agente |
+| Evaluacion | Registra decision del broker. | Broker |
+| Reportes | Supervisa desempeno y trazabilidad. | Broker / Admin |
+| Perfil | Muestra identidad activa y permite cerrar sesion. | Todos |
 
-El flujo objetivo debe quedar asi:
+## Uso De Modales
 
-1. Agente registra propietario.
-2. Agente registra local comercial vinculado al propietario.
-3. Agente registra captacion vinculada al local y al agente responsable.
-4. Broker administrador o broker supervisor del agente revisa captacion.
-5. Si el broker observa, el agente corrige y reenvia.
-6. Si el broker rechaza, la captacion termina.
-7. Si el broker aprueba, la captacion queda activa.
-8. Agente registra cliente interesado.
-9. Agente crea oportunidad comercial vinculando cliente + captacion activa + agente.
-10. Agente registra interacciones y visitas sobre la oportunidad.
-11. Si el cliente continua, agente registra solicitud de alquiler.
-12. Agente carga documentos.
-13. Broker administrador o broker supervisor del agente evalua solicitud.
-14. Si el cliente no continua, agente registra motivo de no continuidad y se cierra la oportunidad.
+Usar modal para decisiones breves:
 
-## Mantener sesion activa
+- Confirmar aprobacion, observacion o rechazo.
+- Reasignar captacion.
+- Cerrar captacion.
+- Registrar una interaccion corta.
+- Confirmar cierre de sesion.
+- Atender o descartar alerta.
 
-El programa actual no soporta todavia "mantener sesion activa" porque no existe una capa de autenticacion ni gestion de sesion.
+Usar pagina dedicada para flujos largos:
 
-Para soportarlo se necesita agregar:
+- Registro de local comercial.
+- Registro de captacion.
+- Registro de cliente interesado con datos completos.
+- Solicitud de alquiler.
+- Carga documental.
+- Evaluacion de solicitud.
+- Detalle de oportunidad.
 
-- Endpoint de login.
-- Hash real de contrasenas.
-- Sesion HTTP o token JWT.
-- Opcion `rememberMe`, solo si se decide implementar "mantener sesion activa".
-- Cookie persistente segura o refresh token.
-- Fecha de expiracion.
-- Endpoint de logout.
-- Invalidacion de sesion/token.
-- Middleware o filtro que valide permisos por rol en cada endpoint.
-- Restablecimiento de contrasena administrado por broker administrador, antes que recuperacion publica por correo.
+## Sesion Y Seguridad
 
-### Recomendacion tecnica
+### Comportamiento Actual
 
-Cuando se agregue frontend/API, usar Spring Boot + Spring Security. Para "mantener sesion activa", la opcion mas simple es cookie HTTP-only con remember-me. Si se separa frontend y backend, usar access token corto + refresh token persistente.
+- Login: `POST /controllocal/Api/auth/login`.
+- Roles devueltos al frontend: `ADMIN`, `BROKER`, `AGENTE`.
+- Duracion del token: 30 minutos.
+- Endpoints publicos: `/Api/salud` y `/Api/auth/login`.
+- Endpoints privados: requieren encabezado `Authorization`.
+- Algunas rutas de decision de captacion exigen rol `BROKER` o `ADMIN`.
+- En produccion, el filtro exige HTTPS o `X-Forwarded-Proto: https`.
 
-Reglas minimas:
+### Mantener Sesion Activa
 
-- Sin `rememberMe`: sesion corta, por ejemplo 30 minutos de inactividad.
-- Con `rememberMe`: persistencia de 7 a 30 dias, revocable en logout.
-- Cookie `HttpOnly`, `Secure` en produccion y `SameSite=Lax` o `Strict`.
-- No guardar contrasena ni hashes en localStorage.
+No forma parte del MVP actual. Para implementarlo despues se necesita:
 
-## Ajustes que deben reflejarse en el wireframe
+- Refresh token o cookie persistente HTTP-only.
+- Expiracion mas larga y revocable.
+- Logout que invalide sesion persistente.
+- Registro de dispositivos o sesiones si se requiere auditoria.
+- Proteccion `Secure` y `SameSite` en cookies de produccion.
 
-- Ocultar del menu del broker las opciones: `Registrar captacion`, `Registrar local`, `Registrar cliente`.
-- Mostrar esas opciones solo en el menu del agente.
-- Separar el menu del broker en supervision, revision, reasignacion, evaluacion y reportes.
-- Separar el menu del agente en registros, oportunidades, visitas, solicitudes y documentos.
-- Agregar logo en login y layout interno.
-- Cambiar formularios largos a pantallas dedicadas.
-- Usar modales solo para acciones breves o confirmaciones.
-- No agregar checkbox "Mantener sesion activa" al MVP; queda como mejora futura.
-- Agregar vista de perfil con accion "Cerrar sesion en este dispositivo".
-- No agregar "Recuperar contrasena" como flujo publico en el MVP; usar restablecimiento por broker administrador.
+No se recomienda guardar tokens largos ni contrasenas en `localStorage`.
+
+## Ajustes Que Deben Reflejar Los Wireframes
+
+- El broker no debe ver accesos de registro operativo como propietario, local o cliente.
+- El agente no debe ver bandejas de aprobacion ni evaluacion.
+- El admin debe ver administracion y reportes globales, no formularios operativos.
+- Las pantallas de detalle deben mostrar historial y estado actual.
+- Todo cambio de estado debe pedir motivo u observacion cuando sea una decision humana.
+- El logo debe aparecer en login, sidebar y reportes exportables.
+- Formularios largos deben ser paginas con secciones, no modales.
+- El flujo de no continuidad debe estar cerca de visitas e interacciones, porque normalmente nace ahi.
+
+## Logo Y Material Visual
+
+Logos disponibles:
+
+```text
+docs/commercial/logo/logo_v1.png
+docs/commercial/logo/logo_v2.png
+```
+
+Uso recomendado:
+
+- Login: logo centrado sobre el formulario.
+- Layout interno: logo pequeno en sidebar.
+- Reportes: logo en cabecera.
+- Pantalla de carga: logo con nombre ControlLocal.
+
+## Checklist De Revision De Wireframes
+
+- Cada pantalla tiene un rol propietario claro.
+- Cada boton de decision registra motivo cuando corresponde.
+- Los estados visibles coinciden con los enums documentados.
+- La navegacion no muestra acciones fuera del rol.
+- El usuario siempre puede volver al dashboard.
+- Los formularios largos tienen guardado claro y validaciones visibles.
+- La sesion expirada lleva a login sin perder contexto de forma confusa.

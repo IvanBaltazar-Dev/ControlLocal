@@ -13,6 +13,8 @@ public class ClienteInteresadoDto
     // Descripción del tipo de persona y documento (ej. "Persona natural · DNI").
     public string TipoPersona { get; set; } = string.Empty;
 
+    public string TipoDocumento { get; set; } = string.Empty;
+
     [Required(ErrorMessage = "El número de documento es obligatorio.")]
     public string NumeroDocumento { get; set; } = string.Empty;
 
@@ -24,9 +26,11 @@ public class ClienteInteresadoDto
 
     public string RubroInteres { get; set; } = string.Empty;
 
-    public string InteresComercial { get; set; } = string.Empty;
-
-    public int CaptacionesVinculadas { get; set; }
-
     public string Estado { get; set; } = string.Empty;
+
+    public bool? ConsentimientoContacto { get; set; }
+
+    public bool? ConsentimientoUsoDato { get; set; }
+
+    public DateTime? FechaCreacion { get; set; }
 }

@@ -2,8 +2,10 @@
 <Modal Open="Open" OnClose="OnClose" Tone="@Tone" Icon="@Icon" Title="@Title" Desc="@Desc"
        Size="@(Size ?? "")" ChildContent="ChildContent">
     <Footer>
-        <button class="cl-btn" @onclick="OnClose">@CancelLabel</button>
-        <button class="cl-btn @BtnClass" @onclick="OnConfirmClick">@ConfirmLabel</button>
+        <button class="cl-btn" @onclick="OnClose" disabled="@Busy">@CancelLabel</button>
+        <button class="cl-btn @BtnClass" @onclick="OnConfirmClick" disabled="@Busy">
+            @(Busy ? "Procesando..." : ConfirmLabel)
+        </button>
     </Footer>
 </Modal>
 
@@ -19,6 +21,7 @@
     [Parameter] public string CancelLabel { get; set; } = "Cancelar";
     [Parameter] public string? ConfirmClass { get; set; }
     [Parameter] public string? Size { get; set; }
+    [Parameter] public bool Busy { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private static readonly Dictionary<string, string> ToneToBtn = new()
@@ -30,6 +33,7 @@
 
     private async Task OnConfirmClick()
     {
+        if (Busy) return;
         if (OnConfirm.HasDelegate) await OnConfirm.InvokeAsync();
         else if (OnClose.HasDelegate) await OnClose.InvokeAsync();
     }

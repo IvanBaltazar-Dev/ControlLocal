@@ -1,9 +1,13 @@
 @page "/captacion-form"
 @page "/captacion-form/{CodigoParam}"
+@page "/captacion-form/local/{LocalId:long}"
 @page "/captacion-form/captar/{ProspeccionId:long}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
 @inject IProspeccionService ProspeccionSvc
+@inject ILocalService LocalSvc
+@inject INotificacionService Notificaciones
 
 <PageTitle>@_tituloPagina · ControlLocal</PageTitle>
 
@@ -11,12 +15,11 @@
           Title="@_titulo"
           Subtitle="@_subtitulo">
     <Actions>
-        <button class="cl-btn ghost" @onclick="OnCancelar">Cancelar</button>
-        @if (!_esCaptar)
-        {
-            <button class="cl-btn" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="save" Size="13" /> Guardar borrador</button>
-        }
-        <button class="cl-btn primary" @onclick="OnPrimary"><Icon Name="arrowRight" Size="13" /> @(_esCaptar ? "Captar y enviar a revisión" : "Enviar a revisión")</button>
+        <button class="cl-btn ghost" disabled="@_procesando" @onclick="OnCancelar">Cancelar</button>
+        <button class="cl-btn primary" disabled="@_procesando" @onclick="Guardar">
+            <Icon Name="arrowRight" Size="13" />
+            @(_esEdicion ? "Guardar y reenviar a revisión" : "Crear y enviar a revisión")
+        </button>
     </Actions>
     <ChildContent>
         @if (_err is not null)
@@ -25,52 +28,70 @@
                 <Icon Name="alert" Size="15" /><span>@_err</span>
             </div>
         }
+
         <div style="display:grid;grid-template-columns:1fr 280px;gap:14px;">
             <div>
-                <FormSection Num="1" Title="Datos del local" Sub="@(_esNuevo ? "Local comercial sobre el que se crea la captación" : "Datos del inmueble ya registrados · no editables")">
+                <FormSection Num="1" Title="Local comercial" Sub="Inmueble asociado a la captación">
                     <div class="cl-grid c2">
                         <Field Label="Local" Required="true">
-                            <div style="position:relative;">
-                                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#7E8794;"><Icon Name="search" Size="14" /></span>
-                                <input @bind="_local" @bind:event="oninput" disabled="@(!_esNuevo)" placeholder="Busca el local por dirección o código" style="padding-left:30px;" />
-                            </div>
+                            @if (_esNuevoLibre)
+                            {
+                                <select @bind="_localId" @bind:after="CargarLocalSeleccionado">
+                                    <option value="0">— Seleccionar local —</option>
+                                    @foreach (var local in LocalSvc.All().Where(item => item.Estado == "Disponible"))
+                                    {
+                                        <option value="@local.Id">@local.CodigoLocal · @local.Direccion (@local.Distrito)</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input value="@DescripcionLocal" disabled />
+                            }
                         </Field>
-                        <Field Label="Código del local"><input value="@_codigoLocal" placeholder="—" disabled /></Field>
-                        <Field Label="Propietario"><input value="@_propietario" placeholder="—" disabled /></Field>
-                        <Field Label="Área registrada"><input value="@_area" placeholder="—" disabled /></Field>
+                        <Field Label="Código del local"><input value="@(_local?.CodigoLocal ?? "")" disabled /></Field>
+                        <Field Label="Propietario"><input value="@(_local?.PropietarioNombre ?? "")" disabled /></Field>
+                        <Field Label="Área registrada"><input value="@AreaLocal" disabled /></Field>
+                        <Field Label="Precio referencial"><input value="@PrecioLocal" disabled /></Field>
+                        <Field Label="Rubro permitido"><input value="@(_local?.Rubro ?? "")" disabled /></Field>
                     </div>
                 </FormSection>
 
-                <FormSection Num="2" Title="Condiciones comerciales" Sub="Precio y términos que se ofrecerán a los clientes">
+                <FormSection Num="2" Title="Condiciones del encargo" Sub="Datos comerciales de la captacion">
                     <div class="cl-grid c3">
-                        <Field Label="Precio de alquiler (USD/mes)" Required="true"><input placeholder="1 800" @bind="_precioAlquiler" @bind:event="oninput" /></Field>
-                        <Field Label="Garantía (meses)"><input placeholder="2" @bind="_garantia" /></Field>
-                        <Field Label="Adelanto (meses)"><input placeholder="1" @bind="_adelanto" /></Field>
-                        <Field Label="Rubro objetivo"><select @bind="_rubro"><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option></select></Field>
-                        <Field Label="Plazo de contrato"><select @bind="_plazo"><option>12 meses</option><option>24 meses</option><option>36 meses</option></select></Field>
-                        <Field Label="Disponibilidad"><input placeholder="Inmediata" @bind="_disponibilidad" /></Field>
+                        <Field Label="Operación" Required="true">
+                            <input value="Alquiler comercial" disabled />
+                        </Field>
+                        <Field Label="Urgencia" Hint="Escala de 1 a 5">
+                            <select @bind="_urgencia">
+                                @for (var nivel = 1; nivel <= 5; nivel++)
+                                {
+                                    <option value="@nivel">@nivel</option>
+                                }
+                            </select>
+                        </Field>
+                        <Field Label="Exclusividad">
+                            <label style="display:flex;align-items:center;gap:8px;min-height:38px;">
+                                <input type="checkbox" @bind="_exclusividad" style="width:auto;" />
+                                Encargo exclusivo
+                            </label>
+                        </Field>
                     </div>
                 </FormSection>
 
-                <FormSection Num="3" Title="Vigencia y comisión" Sub="Periodo de la captación y comisión acordada con el propietario">
-                    <div class="cl-grid c3">
-                        <Field Label="Inicio de vigencia" Required="true"><input placeholder="dd/mm/aaaa" @bind="_inicioVigencia" @bind:event="oninput" /></Field>
-                        <Field Label="Fin de vigencia" Required="true"><input placeholder="dd/mm/aaaa" @bind="_finVigencia" @bind:event="oninput" /></Field>
-                        <Field Label="Comisión (%)" Required="true"><input placeholder="5" @bind="_comision" @bind:event="oninput" /></Field>
+                <FormSection Num="3" Title="Vigencia y comisión" Sub="Periodo y comisión pactada con el propietario">
+                    <div class="cl-grid c2">
+                        <Field Label="Fecha de captación" Required="true"><input type="date" @bind="_fechaCaptacion" /></Field>
+                        <Field Label="Comisión (%)" Required="true"><input type="number" min="0" step="0.1" @bind="_comision" /></Field>
+                        <Field Label="Inicio de vigencia" Required="true"><input type="date" @bind="_inicioVigencia" /></Field>
+                        <Field Label="Fin de vigencia" Required="true"><input type="date" @bind="_finVigencia" /></Field>
                     </div>
                 </FormSection>
 
-                <FormSection Num="4" Title="Observaciones y documentos" Sub="Notas para el broker y respaldo documental de la captación">
-                    <Field Label="Observaciones" Hint="Contexto, condiciones especiales, acuerdos con el propietario">
-                        <textarea rows="3" placeholder="Notas para el broker que revisará la captación…" @bind="_observaciones" @bind:event="oninput"></textarea>
+                <FormSection Num="4" Title="Observaciones" Sub="Notas que revisará el broker">
+                    <Field Label="Observaciones">
+                        <textarea rows="4" @bind="_observaciones" @bind:event="oninput"></textarea>
                     </Field>
-                    <div style="margin-top:14px;">
-                        <Field Label="Documentos de respaldo">
-                            <div class="cl-ph" style="height:90px;">
-                                <Icon Name="upload" Size="18" /> <span style="margin-left:8px;">Arrastra archivos aquí o haz clic para seleccionar</span>
-                            </div>
-                        </Field>
-                    </div>
                 </FormSection>
             </div>
 
@@ -78,7 +99,7 @@
                 <FormStepsSidebar Steps="_pasos" />
                 <div class="cl-alert blue">
                     <Icon Name="info" Size="15" />
-                    <span>Al enviar a revisión, la captación pasa a la <b>bandeja del broker</b>. Podrá aprobarla, observarla o rechazarla.</span>
+                    <span>La captación se registra en estado <b>Pendiente de revisión</b>. El broker podrá aprobarla, observarla o rechazarla.</span>
                 </div>
             </div>
         </div>
@@ -88,147 +109,211 @@
 </AppShell>
 
 @code {
-    // Sin parámetro          = captación nueva (formulario en blanco).
-    // {CodigoParam}           = edición de una captación existente (precarga su expediente).
-    // captar/{ProspeccionId}  = captar un local prospectado: datos del local bloqueados,
-    //                           solo se completan las condiciones comerciales faltantes.
     [Parameter] public string? CodigoParam { get; set; }
     [Parameter] public long ProspeccionId { get; set; }
+    [Parameter] public long LocalId { get; set; }
 
-    private bool _esCaptar => ProspeccionId > 0;
-    private bool _esEdicion => !_esCaptar && !string.IsNullOrWhiteSpace(CodigoParam);
-    private bool _esNuevo => !_esCaptar && !_esEdicion;
-
-    // Datos del local (solo lectura: provienen del local captado).
-    private string _codigo = "";
-    private string _local = "";
-    private string _codigoLocal = "";
-    private string _propietario = "";
-    private string _area = "";
-
-    // Condiciones comerciales.
-    private string _precioAlquiler = "";
-    private string _garantia = "";
-    private string _adelanto = "";
-    private string _rubro = "Restaurante / Café";
-    private string _plazo = "12 meses";
-    private string _disponibilidad = "";
-
-    // Vigencia, comisión y notas.
-    private string _inicioVigencia = "";
-    private string _finVigencia = "";
-    private string _comision = "";
+    private CaptacionDto _captacion = new();
+    private LocalComercialDto? _local;
+    private long _localId;
+    private DateOnly? _fechaCaptacion = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _inicioVigencia = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _finVigencia = DateOnly.FromDateTime(DateTime.Today.AddMonths(6));
+    private decimal? _comision;
+    private string _motivoOperacion = "A";
+    private int _urgencia = 3;
+    private bool _exclusividad;
     private string _observaciones = "";
-
     private bool _toast;
     private string _toastMsg = "";
     private string? _err;
+    private string? _claveCargada;
+    private bool _procesando;
+
+    private bool _esCaptar => ProspeccionId > 0;
+    private bool _esEdicion => !_esCaptar && !string.IsNullOrWhiteSpace(CodigoParam);
+    private bool _esNuevoLibre => !_esCaptar && !_esEdicion && LocalId <= 0;
+
+    private string DescripcionLocal => _local is null
+        ? ""
+        : $"{_local.CodigoLocal} · {_local.Direccion} ({_local.Distrito})";
+    private string AreaLocal => _local is { AreaM2: > 0 } ? $"{_local.AreaM2} m²" : "";
+    private string PrecioLocal => _local is null ? "" : $"USD {_local.PrecioReferencial:N0} / mes";
+
+    private string _tituloPagina => _esCaptar ? "Captar local" : _esEdicion ? "Editar captación" : "Nueva captación";
+    private string _titulo => _esCaptar ? $"Captar local · {_local?.CodigoLocal}"
+                            : _esEdicion ? $"Editar captación · {_captacion.CodigoCaptacion}"
+                            : "Nueva captación";
+    private string _crumbFinal => _esCaptar ? $"Captar {_local?.CodigoLocal}"
+                                : _esEdicion ? $"{_captacion.CodigoCaptacion} · Editar"
+                                : "Nueva captación";
+    private string _subtitulo => _esEdicion
+        ? "Actualiza las condiciones observadas y reenvía el expediente al broker"
+        : "Registra las condiciones del encargo para enviarlas a revisión";
+
+    private bool IsStep1Complete => _localId > 0;
+    private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_motivoOperacion) && _urgencia is >= 1 and <= 5;
+    private bool IsStep3Complete => _fechaCaptacion is not null && _inicioVigencia is not null
+        && _finVigencia is not null && _comision is >= 0;
+    private bool IsStep4Complete => true;
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
+    {
+        new FormStepsSidebar.Step("Local", "Inmueble asociado", IsStep1Complete),
+        new FormStepsSidebar.Step("Condiciones", "Operación y urgencia", IsStep2Complete),
+        new FormStepsSidebar.Step("Vigencia y comisión", "Periodo del encargo", IsStep3Complete),
+        new FormStepsSidebar.Step("Observaciones", "Notas para revisión", IsStep4Complete),
+    };
 
     protected override void OnParametersSet()
     {
+        var clave = $"{CodigoParam}|{ProspeccionId}|{LocalId}";
+        if (_claveCargada == clave) return;
+        _claveCargada = clave;
+
         if (_esCaptar)
         {
-            var pros = ProspeccionSvc.ById(ProspeccionId);
-            if (pros is null) { _err = "No se encontró el local en prospección."; return; }
-            if (pros.Estado is not ("E" or "S"))
-                _err = "Este local no está en una etapa donde se pueda captar.";
-
-            _codigoLocal = pros.LocalCodigo;
-            _local = string.IsNullOrWhiteSpace(pros.Distrito) ? pros.Direccion : $"{pros.Direccion}, {pros.Distrito}";
-            _propietario = pros.PropietarioNombre;
-            _area = pros.AreaM2 > 0 ? $"{pros.AreaM2} m²" : "";
+            var prospeccion = ProspeccionSvc.ById(ProspeccionId);
+            if (prospeccion is null)
+            {
+                _err = "No se encontró la prospección seleccionada.";
+                return;
+            }
+            if (prospeccion.Estado is not ("E" or "S"))
+                _err = "La prospección debe tener propuesta entregada o estar en seguimiento.";
+            _localId = prospeccion.LocalId;
+            _local = LocalSvc.ById(_localId) ?? new LocalComercialDto
+            {
+                Id = prospeccion.LocalId,
+                CodigoLocal = prospeccion.LocalCodigo,
+                Direccion = prospeccion.Direccion,
+                Distrito = prospeccion.Distrito,
+                AreaM2 = prospeccion.AreaM2,
+                Rubro = prospeccion.Rubro,
+                PropietarioNombre = prospeccion.PropietarioNombre,
+            };
             return;
         }
 
         if (_esEdicion)
         {
-            var cap = CaptacionSvc.ByCodigo(CodigoParam!);
-            if (cap is null) return;
-
-            _codigo = cap.CodigoCaptacion;
-            _local = string.IsNullOrWhiteSpace(cap.DistritoLocal) ? cap.DireccionLocal : $"{cap.DireccionLocal}, {cap.DistritoLocal}";
-            _propietario = cap.PropietarioNombre;
-            _area = cap.AreaM2 > 0 ? $"{cap.AreaM2} m²" : "";
-            _comision = cap.ComisionPactadaTexto is { Length: > 0 } t && t != "—" ? t : "";
-            _inicioVigencia = cap.FechaInicioVigencia?.ToString("dd/MM/yyyy") ?? "";
-            _finVigencia = cap.FechaFinVigencia?.ToString("dd/MM/yyyy") ?? "";
-            _observaciones = cap.Observaciones ?? "";
-        }
-        // _esNuevo: el formulario permanece en blanco.
-    }
-
-    // ---- Encabezado dependiente del modo ----
-    private string _tituloPagina => _esCaptar ? "Captar local" : _esEdicion ? "Editar captación" : "Nueva captación";
-    private string _titulo => _esCaptar ? $"Captar local · {_codigoLocal}"
-                            : _esEdicion ? $"Editar captación · {_codigo}"
-                            : "Nueva captación";
-    private string _crumbFinal => _esCaptar ? $"Captar {_codigoLocal}"
-                                : _esEdicion ? $"{_codigo} · Editar"
-                                : "Nueva captación";
-    private string _subtitulo => _esCaptar
-        ? "Completa las condiciones comerciales para captar el local · los datos del inmueble ya están registrados"
-        : _esEdicion
-            ? "Actualiza las condiciones comerciales de la captación · al enviarla, el broker la revisará"
-            : "Condiciones comerciales del local · al enviarla, el broker la revisará para activarla";
-
-    // ---- Acciones del encabezado ----
-    private void OnCancelar() => App.Navigate(_esCaptar ? "locales" : "captaciones");
-
-    private async Task OnPrimary()
-    {
-        if (_esCaptar)
-        {
-            await CaptarLocal();
+            _captacion = CaptacionSvc.ByCodigo(CodigoParam!) ?? new CaptacionDto();
+            if (_captacion.Id <= 0)
+            {
+                _err = "No se encontró la captación seleccionada.";
+                return;
+            }
+            _localId = _captacion.LocalId;
+            _local = LocalSvc.ById(_localId) ?? new LocalComercialDto
+            {
+                Id = _localId,
+                Direccion = _captacion.DireccionLocal,
+                Distrito = _captacion.DistritoLocal,
+                AreaM2 = _captacion.AreaM2,
+                Rubro = _captacion.Rubro,
+                PropietarioNombre = _captacion.PropietarioNombre,
+            };
+            _fechaCaptacion = _captacion.FechaCaptacion;
+            _inicioVigencia = _captacion.FechaInicioVigencia;
+            _finVigencia = _captacion.FechaFinVigencia;
+            _comision = _captacion.ComisionPactada;
+            _motivoOperacion = "A";
+            _urgencia = _captacion.Urgencia ?? 3;
+            _exclusividad = _captacion.Exclusividad ?? false;
+            _observaciones = _captacion.Observaciones;
             return;
         }
-        App.Navigate("captaciones");
+
+        if (LocalId > 0)
+        {
+            _localId = LocalId;
+            CargarLocalSeleccionado();
+        }
     }
 
-    // Captar = crear la captación a partir de la prospección. Espeja la regla de
-    // negocio: la captación nace en estado Pendiente de revisión del broker.
-    private async Task CaptarLocal()
+    private void CargarLocalSeleccionado()
     {
-        var comision = ParseComision(_comision);
-        if (comision is null) { _err = "Indica una comisión válida (porcentaje)."; return; }
+        _local = _localId > 0 ? LocalSvc.ById(_localId) : null;
+        _err = _localId > 0 && _local is null ? "No se encontró el local seleccionado." : null;
+    }
+
+    private void OnCancelar() => App.Navigate(_esCaptar ? "locales" : "captaciones");
+
+    private async Task Guardar()
+    {
+        if (_procesando) return;
+        if (_localId <= 0 || _local is null) { _err = "Selecciona un local comercial."; return; }
+        if (_fechaCaptacion is null) { _err = "La fecha de captación es obligatoria."; return; }
+        if (_inicioVigencia is null || _finVigencia is null) { _err = "La vigencia es obligatoria."; return; }
+        if (_finVigencia < _inicioVigencia) { _err = "El fin de vigencia no puede ser anterior al inicio."; return; }
+        if (_comision is null || _comision < 0) { _err = "La comisión debe ser un número no negativo."; return; }
+        if (_motivoOperacion != "A")
+        {
+            _err = "ControlLocal solo admite operaciones de alquiler comercial.";
+            return;
+        }
 
         try
         {
-            var p = ProspeccionSvc.Captar(ProspeccionId, comision.Value);
+            _procesando = true;
+            await RenderIfAliveAsync();
+            var dto = new CaptacionDto
+            {
+                Id = _captacion.Id,
+                CodigoCaptacion = _esEdicion
+                    ? _captacion.CodigoCaptacion
+                    : $"CAP-{DateTime.UtcNow:yyMMddHHmmss}",
+                LocalId = _localId,
+                DireccionLocal = _local.Direccion,
+                DistritoLocal = _local.Distrito,
+                AreaM2 = _local.AreaM2,
+                Rubro = _local.Rubro,
+                PropietarioNombre = _local.PropietarioNombre,
+                NombreAgenteResponsable = App.CurrentUser?.Nombre ?? "Agente en sesion",
+                FechaCaptacion = _fechaCaptacion,
+                FechaInicioVigencia = _inicioVigencia,
+                FechaFinVigencia = _finVigencia,
+                ComisionPactada = _comision.Value,
+                Estado = "Pendiente de revision",
+                MotivoOperacion = _motivoOperacion,
+                Urgencia = _urgencia,
+                Exclusividad = _exclusividad,
+                Observaciones = _observaciones.Trim(),
+            };
+            var guardada = _esEdicion ? CaptacionSvc.Actualizar(dto) : CaptacionSvc.Agregar(dto);
+            if (_esCaptar)
+                ProspeccionSvc.MarcarCaptado(ProspeccionId, guardada.CodigoCaptacion);
+
+            Notificaciones.Crear(new NotificacionDto
+            {
+                Tipo = _esEdicion ? "Captacion reenviada" : "Captacion por revisar",
+                Mensaje = $"{guardada.CodigoCaptacion} espera revision del broker.",
+                Severidad = "MEDIA",
+                Icono = "pin",
+                EntidadTipo = "Captacion",
+                EntidadRef = guardada.CodigoCaptacion,
+                Ruta = $"captacion-review/{guardada.CodigoCaptacion}",
+                DestinatarioRol = Roles.Broker,
+            });
+
             _err = null;
-            _toastMsg = $"¡Local captado! Se creó la captación {p.CaptacionCodigo} (pendiente de revisión).";
+            _toastMsg = _esEdicion ? "Captación actualizada y reenviada a revisión." : "Captación creada y enviada a revisión.";
             _toast = true;
-            StateHasChanged();
-            await Task.Delay(1100);
+            await RenderIfAliveAsync();
             App.Navigate("captaciones");
         }
-        catch (InvalidOperationException ex)
+        catch (OperationCanceledException)
         {
-            _err = ex.Message;
+            return;
+        }
+        catch (Exception error)
+        {
+            _err = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
         }
     }
-
-    private static decimal? ParseComision(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        var limpio = raw.Replace("%", "").Trim();
-        return decimal.TryParse(limpio, System.Globalization.NumberStyles.Any,
-                   System.Globalization.CultureInfo.InvariantCulture, out var v) && v >= 0
-            ? v : null;
-    }
-
-    // ---- Progreso interactivo de las secciones del formulario ----
-    private bool IsStep1Complete => !string.IsNullOrWhiteSpace(_local);
-    private bool IsStep2Complete => !string.IsNullOrWhiteSpace(_precioAlquiler);
-    private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_inicioVigencia)
-                                    && !string.IsNullOrWhiteSpace(_finVigencia)
-                                    && !string.IsNullOrWhiteSpace(_comision);
-    private bool IsStep4Complete => !string.IsNullOrWhiteSpace(_observaciones);
-
-    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
-    {
-        new FormStepsSidebar.Step("Datos del local", "Local de la captación", IsStep1Complete),
-        new FormStepsSidebar.Step("Condiciones", "Precio y términos", IsStep2Complete),
-        new FormStepsSidebar.Step("Vigencia y comisión", "Periodo y comisión", IsStep3Complete),
-        new FormStepsSidebar.Step("Observaciones", "Notas y documentos", IsStep4Complete),
-    };
 }

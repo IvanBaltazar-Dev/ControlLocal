@@ -14,17 +14,4 @@
     <artifactId>controllocal-app</artifactId>
     <name>ControlLocal App</name>
     <packaging>jar</packaging>
-
-    <dependencies>
-        <dependency>
-            <groupId>com.controllocal</groupId>
-            <artifactId>controllocal-model</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.controllocal</groupId>
-            <artifactId>controllocal-dao</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-    </dependencies>
 </project>

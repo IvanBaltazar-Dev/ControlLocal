@@ -3,13 +3,14 @@ package com.controllocal.model.comercial;
 import java.time.LocalDateTime;
 
 import com.controllocal.model.comercial.enums.EstadoDocumentoSolicitud;
+import com.controllocal.model.comercial.enums.OperacionRequerimiento;
 import com.controllocal.model.comercial.enums.ResultadoRevisionDocumento;
 import com.controllocal.model.comercial.enums.TipoDocumentoSolicitud;
 
 public class DocumentoSolicitud {
 
     private Long idDocumento;
-    private TipoDocumentoSolicitud tipoDocumento;
+    private TipoDocumentoRequerido tipoDocumentoRequerido;
     private String nombreArchivo;
     private String rutaArchivo;
     private LocalDateTime fechaEntrega;
@@ -20,8 +21,35 @@ public class DocumentoSolicitud {
 
     public Long getIdDocumento() { return idDocumento; }
     public void setIdDocumento(Long idDocumento) { this.idDocumento = idDocumento; }
-    public TipoDocumentoSolicitud getTipoDocumento() { return tipoDocumento; }
-    public void setTipoDocumento(TipoDocumentoSolicitud tipoDocumento) { this.tipoDocumento = tipoDocumento; }
+    public TipoDocumentoRequerido getTipoDocumentoRequerido() { return tipoDocumentoRequerido; }
+    public void setTipoDocumentoRequerido(TipoDocumentoRequerido tipoDocumentoRequerido) {
+        this.tipoDocumentoRequerido = tipoDocumentoRequerido;
+    }
+
+    /**
+     * Adaptador temporal para consumidores anteriores al catalogo.
+     */
+    @Deprecated
+    public TipoDocumentoSolicitud getTipoDocumento() {
+        return tipoDocumentoRequerido != null
+                ? TipoDocumentoSolicitud.porIdCatalogo(tipoDocumentoRequerido.getIdTipoDocumentoRequerido())
+                : null;
+    }
+
+    @Deprecated
+    public void setTipoDocumento(TipoDocumentoSolicitud tipoDocumento) {
+        if (tipoDocumento == null) {
+            tipoDocumentoRequerido = null;
+            return;
+        }
+        TipoDocumentoRequerido catalogo = new TipoDocumentoRequerido();
+        catalogo.setIdTipoDocumentoRequerido(tipoDocumento.getIdCatalogo());
+        catalogo.setTipoOperacion(OperacionRequerimiento.ALQUILER);
+        catalogo.setTipoDocumento(tipoDocumento.getDescripcion());
+        catalogo.setObligatorio(true);
+        catalogo.setActivo(true);
+        tipoDocumentoRequerido = catalogo;
+    }
     public String getNombreArchivo() { return nombreArchivo; }
     public void setNombreArchivo(String nombreArchivo) { this.nombreArchivo = nombreArchivo; }
     public String getRutaArchivo() { return rutaArchivo; }

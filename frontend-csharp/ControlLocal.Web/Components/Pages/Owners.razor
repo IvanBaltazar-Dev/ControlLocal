@@ -1,6 +1,7 @@
 @page "/owners"
 @inject AppState App
 @inject IPropietarioService OwnerSvc
+@inject ExportacionService Exportar
 
 <PageTitle>Propietarios · ControlLocal</PageTitle>
 
@@ -8,15 +9,18 @@
           Title="Propietarios"
           Subtitle="Propietarios que registré para vincular a captaciones">
     <Actions>
-        @*Implementacion proximamente*@
-        @*<button class="cl-btn"><Icon Name="upload" Size="13" /> Importar</button>*@
+        <button class="cl-btn" @onclick="AbrirImportacion"><Icon Name="upload" Size="13" /> Importar</button>
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Registrar propietario</button>
     </Actions>
     <ChildContent>
-        @{ var filtrados = Filtrados().ToList(); }
+        @{
+            var filtrados = Filtrados().ToList();
+            var visibles = Paginador.Pagina(filtrados, ref _pagina);
+        }
         <FilterBar Search="Buscar por nombre, razón social, documento…"
                    @bind-Value="_query" ResultCount="filtrados.Count"
-                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros"
+                   OnExport="@(() => ExportarCsv(filtrados))">
             <FilterSelect Placeholder="Tipo de persona" Options="_tipos" @bind-Value="_tipo" />
             <FilterSelect Placeholder="Estado" Options="_estados" @bind-Value="_estado" />
         </FilterBar>
@@ -30,7 +34,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var o in filtrados)
+                        @foreach (var o in visibles)
                         {
                             <tr>
                                 <td>
@@ -49,7 +53,15 @@
                         }
                     </tbody>
                 </table>
-                @if (filtrados.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando propietarios…</div>
+                }
+                else if (_loadError is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_loadError</span></div>
+                }
+                else if (filtrados.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="user" Size="28" style="margin-bottom:10px;" />
@@ -59,21 +71,95 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtrados.Count" />
+        <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
+
+        @* ---------- Modal: bandeja de importación ---------- *@
+        <Modal Open="_modalImportar" Tone="blue" Icon="upload"
+               Title="Importar propietarios"
+               Desc="Sube un CSV con las columnas: Nombre, Tipo de persona (Natural/Juridica), Tipo de documento (DNI/RUC/CE/Pasaporte), Número, Teléfono y Correo."
+               OnClose="CerrarImportacion">
+            <ChildContent>
+                <InputFile OnChange="ArchivoSeleccionado" accept=".csv" class="cl-input" />
+                <div class="cl-help" style="margin-top:6px;">
+                    Solo archivos .csv de hasta @(ValidadorArchivos.TamanoMaximo / 1024 / 1024) MB y @ImportacionPropietarios.MaxFilas filas.
+                    El contenido se valida y sanitiza antes de registrarse.
+                </div>
+
+                @if (_importErr is not null)
+                {
+                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_importErr</span></div>
+                }
+
+                @if (_resultado is not null)
+                {
+                    <div style="display:flex;gap:10px;margin-top:14px;">
+                        <span class="cl-badge green">@_resultado.TotalValidas válidas</span>
+                        <span class="cl-badge red">@_resultado.TotalConError con errores</span>
+                    </div>
+                    @if (_resultado.TotalConError > 0)
+                    {
+                        <div style="max-height:160px;overflow:auto;margin-top:10px;border:1px solid var(--c-border);border-radius:8px;padding:10px;">
+                            @foreach (var f in _resultado.Filas.Where(f => !f.EsValida))
+                            {
+                                <div style="font-size:11.5px;color:var(--c-text-2);padding:2px 0;">
+                                    <b>Línea @f.Linea:</b> @f.Error
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" @onclick="CerrarImportacion">Cancelar</button>
+                <button class="cl-btn primary" disabled="@(_resultado is null || _resultado.TotalValidas == 0)"
+                        @onclick="ConfirmarImportacion">
+                    Importar @(_resultado?.TotalValidas ?? 0) propietario@((_resultado?.TotalValidas ?? 0) == 1 ? "" : "s")
+                </button>
+            </Footer>
+        </Modal>
+
+        <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
     private string _query = "", _tipo = "", _estado = "";
+    private int _pagina = 1;
 
-    private IReadOnlyList<PropietarioDto> Todos => OwnerSvc.All();
+    private bool _modalImportar;
+    private string? _importErr;
+    private ResultadoImportacion? _resultado;
+
+    private bool _toast;
+    private string _toastMsg = "";
+    private bool _cargando = true;
+    private string? _loadError;
+
+    private IReadOnlyList<PropietarioDto> Todos = [];
+
+    // Recarga fresca desde el backend en cada navegacion (no bloquea el circuito).
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Todos = await OwnerSvc.RefrescarAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
     private readonly IReadOnlyList<string> _tipos = new[] { "Natural", "Jurídica" };
     private readonly IReadOnlyList<string> _estados = new[] { "Activo", "Inactivo" };
 
     private bool HayFiltros => new[] { _query, _tipo, _estado }.Any(s => !string.IsNullOrEmpty(s));
 
-    private void LimpiarFiltros() { _query = _tipo = _estado = ""; }
+    private void LimpiarFiltros() { _query = _tipo = _estado = ""; _pagina = 1; }
 
     private IEnumerable<PropietarioDto> Filtrados() => Todos.Where(o =>
         (string.IsNullOrEmpty(_tipo) || (o.TipoPersona?.Contains(_tipo, StringComparison.OrdinalIgnoreCase) ?? false)) &&
@@ -83,4 +169,76 @@
     private static bool Coincide(PropietarioDto o, string q) =>
         (o.Nombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
         || (o.NumeroDocumento?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private async Task ExportarCsv(IReadOnlyList<PropietarioDto> filtrados)
+    {
+        await Exportar.DescargarCsvAsync("propietarios",
+            new[] { "Nombre", "Tipo de persona", "Documento", "Teléfono", "Correo", "Locales", "Estado" },
+            filtrados.Select(o => (IReadOnlyList<string?>)new[]
+            {
+                o.Nombre, o.TipoPersona, o.NumeroDocumento, o.Telefono, o.Correo,
+                o.CantidadLocales.ToString(), o.Estado,
+            }));
+    }
+
+    private void AbrirImportacion()
+    {
+        _importErr = null;
+        _resultado = null;
+        _modalImportar = true;
+    }
+
+    private void CerrarImportacion() => _modalImportar = false;
+
+    private async Task ArchivoSeleccionado(InputFileChangeEventArgs e)
+    {
+        _importErr = null;
+        _resultado = null;
+
+        var archivo = e.File;
+        using var memoria = new MemoryStream();
+        try
+        {
+            await using var stream = archivo.OpenReadStream(ValidadorArchivos.TamanoMaximo);
+            await stream.CopyToAsync(memoria);
+        }
+        catch (IOException)
+        {
+            _importErr = $"El archivo supera el máximo de {ValidadorArchivos.TamanoMaximo / 1024 / 1024} MB.";
+            return;
+        }
+        memoria.Position = 0;
+
+        var primeros = memoria.GetBuffer().AsSpan(0, (int)Math.Min(8, memoria.Length));
+        var validacion = ValidadorArchivos.Validar(archivo.Name, archivo.ContentType, memoria.Length, primeros, ".csv");
+        if (!validacion.EsValido)
+        {
+            _importErr = validacion.Error;
+            return;
+        }
+
+        memoria.Position = 0;
+        _resultado = ImportacionPropietarios.Procesar(memoria, Todos);
+    }
+
+    private void ConfirmarImportacion()
+    {
+        if (_resultado is null || _resultado.TotalValidas == 0) return;
+        foreach (var p in _resultado.Validos)
+            OwnerSvc.Agregar(p);
+        Todos = OwnerSvc.All();
+
+        _toastMsg = $"Se importaron {_resultado.TotalValidas} propietarios correctamente.";
+        _toast = true;
+        _modalImportar = false;
+        _resultado = null;
+        _ = OcultarToast();
+    }
+
+    private async Task OcultarToast()
+    {
+        await Task.Delay(2600);
+        _toast = false;
+        await InvokeAsync(StateHasChanged);
+    }
 }

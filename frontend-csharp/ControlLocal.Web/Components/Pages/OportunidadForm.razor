@@ -1,0 +1,181 @@
+@page "/oportunidad-form"
+@page "/oportunidad-form/{CaptacionCodigo}"
+@inherits SafeComponentBase
+@inject AppState App
+@inject IOportunidadService OportunidadSvc
+@inject IClienteService ClienteSvc
+@inject ICaptacionService CaptacionSvc
+
+<PageTitle>Nueva oportunidad - ControlLocal</PageTitle>
+
+<AppShell Crumbs="@(new[] { "ControlLocal", "Oportunidades comerciales", "Nueva oportunidad" })"
+          Title="Nueva oportunidad comercial"
+          Subtitle="Vincula un cliente interesado con una captacion activa para iniciar el seguimiento">
+    <Actions>
+        <button class="cl-btn ghost" disabled="@_procesando" @onclick="@(() => App.Navigate("oportunidades"))">
+            <Icon Name="chevronLeft" Size="13" /> Volver
+        </button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+            <div>
+                <FormSection Num="1" Title="Cliente interesado" Sub="Persona o empresa que quiere evaluar el local">
+                    <Field Label="Cliente" Required="true">
+                        <select @bind="_clienteId" disabled="@(_cargando || _procesando)">
+                            <option value="0">Seleccionar cliente</option>
+                            @foreach (var cliente in ClientesDisponibles)
+                            {
+                                <option value="@cliente.Id">@cliente.Nombre - @cliente.RubroInteres</option>
+                            }
+                        </select>
+                    </Field>
+                </FormSection>
+
+                <FormSection Num="2" Title="Captacion activa" Sub="Propiedad disponible para seguimiento comercial">
+                    <Field Label="Captacion" Required="true">
+                        <select @bind="_captacionId" disabled="@(_cargando || _procesando)">
+                            <option value="0">Seleccionar captacion</option>
+                            @foreach (var captacion in CaptacionesActivas)
+                            {
+                                <option value="@captacion.Id">@captacion.CodigoCaptacion - @captacion.DireccionLocal, @captacion.DistritoLocal</option>
+                            }
+                        </select>
+                    </Field>
+                </FormSection>
+
+                <FormSection Num="3" Title="Primer contexto" Sub="Notas iniciales del interes del cliente">
+                    <Field Label="Observaciones">
+                        <textarea rows="4" @bind="_observaciones" @bind:event="oninput"
+                                  placeholder="Ej. Cliente interesado en visitar el local esta semana."></textarea>
+                    </Field>
+                </FormSection>
+
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                }
+
+                <FormFooterBar OnCancel="@(() => App.Navigate("oportunidades"))"
+                               OnSave="@GuardarAsync"
+                               SaveLabel="Crear oportunidad"
+                               Busy="@_procesando"
+                               BusyLabel="Creando..." />
+            </div>
+
+            <div class="cl-stack">
+                <FormStepsSidebar Steps="_pasos" />
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Resumen</div></div>
+                    <div class="cl-card-body">
+                        <dl class="cl-kv">
+                            <dt>Cliente</dt><dd>@(ClienteSeleccionado?.Nombre ?? "-")</dd>
+                            <dt>Captacion</dt><dd>@(CaptacionSeleccionada?.CodigoCaptacion ?? "-")</dd>
+                            <dt>Local</dt><dd>@(CaptacionSeleccionada?.DireccionLocal ?? "-")</dd>
+                        </dl>
+                    </div>
+                </div>
+                <div class="cl-alert blue">
+                    <Icon Name="info" Size="15" />
+                    <span>La oportunidad abre el seguimiento comercial del cliente. Desde ahi podras registrar interacciones, visitas, solicitud y cierre.</span>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AppShell>
+
+@code {
+    [Parameter] public string? CaptacionCodigo { get; set; }
+
+    private IReadOnlyList<ClienteInteresadoDto> _clientes = [];
+    private IReadOnlyList<CaptacionDto> _captaciones = [];
+    private long _clienteId;
+    private long _captacionId;
+    private string _observaciones = "";
+    private bool _cargando = true;
+    private bool _procesando;
+    private string? _err;
+
+    private IEnumerable<ClienteInteresadoDto> ClientesDisponibles =>
+        _clientes.Where(item => item.Estado is "Activo" or "A")
+            .OrderBy(item => item.Nombre);
+
+    private IEnumerable<CaptacionDto> CaptacionesActivas =>
+        _captaciones.Where(item => item.Estado is "Activa" or "A")
+            .OrderByDescending(item => item.FechaCaptacion);
+
+    private ClienteInteresadoDto? ClienteSeleccionado =>
+        _clientes.FirstOrDefault(item => item.Id == _clienteId);
+
+    private CaptacionDto? CaptacionSeleccionada =>
+        _captaciones.FirstOrDefault(item => item.Id == _captacionId);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
+    {
+        new FormStepsSidebar.Step("Cliente", "Interesado", _clienteId > 0),
+        new FormStepsSidebar.Step("Captacion", "Propiedad activa", _captacionId > 0),
+        new FormStepsSidebar.Step("Contexto", "Notas iniciales", true),
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _cargando = true;
+        _err = null;
+        try
+        {
+            var clientesTask = ClienteSvc.RefrescarAsync(DisposedToken);
+            var captacionesTask = CaptacionSvc.RefrescarAsync(DisposedToken);
+            _clientes = await clientesTask;
+            _captaciones = await captacionesTask;
+
+            if (!string.IsNullOrWhiteSpace(CaptacionCodigo))
+            {
+                _captacionId = _captaciones.FirstOrDefault(item =>
+                    item.CodigoCaptacion.Equals(CaptacionCodigo, StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_procesando) return;
+        if (_clienteId <= 0) { _err = "Selecciona un cliente interesado."; return; }
+        if (_captacionId <= 0) { _err = "Selecciona una captacion activa."; return; }
+
+        try
+        {
+            _procesando = true;
+            _err = null;
+            await RenderIfAliveAsync();
+            var oportunidad = await OportunidadSvc.CrearAsync(new OportunidadFormRequest
+            {
+                ClienteId = _clienteId,
+                CaptacionId = _captacionId,
+                Observaciones = _observaciones,
+            }, DisposedToken);
+            App.Navigate($"oportunidad-detail/{oportunidad.Id}");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
+    }
+}

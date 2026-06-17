@@ -39,6 +39,15 @@ public class PropietarioBusinessLogicImpl implements PropietarioBusinessLogic {
         return propietarioDAO.listarTodos();
     }
 
+    public List<Propietario> listarPagina(int limite, int desplazamiento) {
+        BusinessValidations.pagina(limite, desplazamiento);
+        return propietarioDAO.listarPagina(limite, desplazamiento);
+    }
+
+    public long contar() {
+        return propietarioDAO.contar();
+    }
+
     public boolean actualizar(Propietario propietario) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(propietario != null ? propietario.getIdPropietario() : null, "El id de propietario");

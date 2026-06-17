@@ -1,192 +1,198 @@
-# 🏢 ControlLocal
+# ControlLocal
 
-Sistema backend para la **gestión, trazabilidad y control del proceso comercial de alquiler de locales comerciales** en una corredora inmobiliaria.
+ControlLocal es un sistema para gestionar, controlar y auditar el proceso comercial de alquiler de locales comerciales en una corredora inmobiliaria.
 
----
+El proyecto busca resolver tres problemas frecuentes del corretaje:
 
-## 📌 Descripción
+- Informacion repartida entre Excel, llamadas, WhatsApp y correos.
+- Poca trazabilidad sobre quien hizo cada accion y por que cambio un estado.
+- Dificultad para supervisar captaciones, visitas, solicitudes y cierres.
 
-**ControlLocal** centraliza la información del proceso de corretaje, permitiendo registrar, consultar y dar seguimiento a captaciones, interesados, visitas, solicitudes y evaluaciones.
+La idea central es sencilla: cada operacion comercial debe quedar conectada desde el propietario y el local hasta la oportunidad, la visita, la solicitud, la evaluacion y el cierre.
 
-El sistema resuelve problemas como:
+## Guia Rapida
 
-- Información dispersa (Excel, llamadas, mensajes)
-- Falta de trazabilidad de decisiones
-- Dificultad de supervisión del proceso comercial
+| Necesitas... | Lee... |
+| --- | --- |
+| Levantar backend, frontend y probar credenciales | [COMO_PROBAR.md](COMO_PROBAR.md) |
+| Crear o recrear la base de datos | [database/README.md](database/README.md) |
+| Entender entidades, atributos y enums | [database/README.md](database/README.md#modelo-de-dominio) |
+| Entender roles, permisos y sesion | [docs/inform/wireframes_roles_sesion.md](docs/inform/wireframes_roles_sesion.md) |
+| Entender el flujo comercial completo | [docs/inform/flujo_proceso_comercial_oportunidad.md](docs/inform/flujo_proceso_comercial_oportunidad.md) |
 
-👉 Enfoque principal: **control + trazabilidad operativa**
+## Alcance Funcional
 
----
+ControlLocal cubre el ciclo operativo de alquiler comercial:
 
-## 🎯 Objetivo
+1. Registro de propietarios.
+2. Registro de locales comerciales.
+3. Captacion del local por un agente inmobiliario.
+4. Revision de la captacion por broker.
+5. Registro de clientes interesados.
+6. Creacion de oportunidades comerciales.
+7. Seguimiento mediante interacciones y visitas.
+8. Solicitud formal de alquiler.
+9. Carga y revision de documentos.
+10. Evaluacion de la solicitud.
+11. Contrato, comision, reportes, tareas, alertas e historial.
 
-Gestionar de forma estructurada el proceso comercial de alquiler, desde la captación del local hasta la evaluación de la solicitud.
+## Arquitectura
 
----
-
-## 🧩 Alcance
-
-Incluye la gestión de:
-
-- Usuarios internos (Broker / Agente)
-- Propietarios
-- Locales comerciales
-- Captaciones
-- Clientes interesados
-- Oportunidades comerciales
-- Interacciones
-- Visitas
-- Solicitudes de alquiler
-- Documentos
-- Evaluaciones
-- Reportes
-
----
-
-## 🔄 Flujo del sistema
-
-1. Registro de locales y propietarios  
-2. Captación de propiedades  
-3. Asignación de agente  
-4. Registro de interesados  
-5. Oportunidades comerciales  
-6. Interacciones comerciales  
-7. Visitas  
-8. Solicitudes  
-9. Evaluación final  
-
----
-
-## 👥 Roles
-
-- **Broker administrador:** administración de brokers, auditoría global y reasignación excepcional de agentes  
-- **Broker:** registro y supervisión de sus propios agentes inmobiliarios  
-- **Agente:** ejecución operativa del proceso comercial  
-
----
-
-## 🧠 Modelo de dominio
-
-Principales entidades:
-
-- UsuarioInterno
-- Broker
-- AgenteInmobiliario
-- Propietario
-- LocalComercial
-- Captacion (eje del sistema)
-- ClienteInteresado
-- OportunidadComercial
-- InteraccionComercial
-- Visita
-- SolicitudAlquiler
-- DocumentoSolicitud
-- EvaluacionSolicitud
-- ReasignacionCaptacion
-
----
-
-## 🏗️ Arquitectura
-
-El proyecto está organizado como un sistema **multi-módulo Maven**, separando responsabilidades por capas:
+El repositorio combina un backend Java por capas, una API Jakarta REST, una base MySQL y un frontend Blazor.
 
 ```text
 ControlLocal/
-│
-├── controllocal-app/          # 🚀 Capa de aplicación (main)
-├── controllocal-dao/          # 🗄️ Acceso a datos (DAO + JDBC)
-├── controllocal-db-manager/   # 🔌 Configuración y conexión a BD
-├── controllocal-model/        # 🧠 Modelo de dominio (entidades)
-│
-├── database/
-│   ├── ddl/                   # Scripts de creación de BD
-│   ├── dml/                   # Scripts de datos (incluye pruebas)
-│   └── sp/                    # Stored procedures (futuro)
-│
-├── docs/                      # 📊 Diagramas y documentación
-└── pom.xml                    # Parent Maven
+|
+|-- backend-java/
+|   |-- controllocal-model/       Entidades y enums del dominio.
+|   |-- controllocal-db-manager/  Conexion JDBC y configuracion de BD.
+|   |-- controllocal-dao/         Persistencia JDBC.
+|   |-- controllocal-bl/          Reglas de negocio.
+|   |-- controllocal-rest/        API Jakarta REST desplegable como WAR.
+|   `-- controllocal-app/         Entrada Java auxiliar.
+|
+|-- frontend-csharp/
+|   `-- ControlLocal.Web/         Frontend Blazor.
+|
+|-- database/                     Scripts SQL, seeds y diagrama.
+|-- docs/                         Documentacion funcional y visual.
+`-- config/                       Ejemplos de configuracion privada.
 ```
 
-## 🛠️ Cómo empezar
+### Responsabilidad Por Capa
 
-### 1. Clonar el repositorio
+| Capa | Que contiene | Por que existe |
+| --- | --- | --- |
+| `model` | Entidades, enums y objetos de dominio | Define el vocabulario comun del negocio. |
+| `db-manager` | Configuracion y apertura de conexiones JDBC | Centraliza el acceso a MySQL sin mezclarlo con reglas de negocio. |
+| `dao` | Consultas, inserts, updates y mapeo SQL | Aisla la persistencia para que la capa de negocio no dependa de SQL directo. |
+| `bl` | Validaciones, transiciones de estado y reglas | Evita que la API o la UI decidan reglas criticas por su cuenta. |
+| `rest` | Endpoints HTTP/JSON, autenticacion JWT y filtros | Expone el dominio al frontend y a pruebas externas. |
+| `frontend-csharp` | Pantallas Blazor, navegacion por rol y consumo del API | Permite operar el proceso desde una interfaz web. |
+| `database` | DDL, seeds, datos demo y diagrama | Hace reproducible el esquema y los escenarios de prueba. |
 
-```bash
-git clone https://github.com/IvanBaltazar-Dev/ControlLocal.git
-```
-#### Ingresar al directorio
-```bash
-cd ControlLocal
-```
+## Flujo Principal
 
----
-
-### 2. Compilar el proyecto
-
-```bash
-mvn clean install
-```
-
-> Maven gestionará automáticamente las dependencias y generará los artefactos del proyecto en la carpeta `target/`.
-
----
-
-### 3. Abrir en un IDE
-
-Se recomienda utilizar un IDE con soporte para proyectos Maven:
-
-- IntelliJ IDEA (recomendado)
-- NetBeans
-- Eclipse
-
-> Al abrir el proyecto, el IDE detectará automáticamente el `pom.xml` y configurará las dependencias.
-
----
-
-## 🤝 Cómo contribuir
-
-### Flujo de trabajo
-
-1. Realiza un fork del repositorio  
-2. Crea una nueva rama:
-
-```bash
-git checkout -b feature/nombre-de-tu-feature
+```mermaid
+flowchart LR
+    A["Propietario"] --> B["Local comercial"]
+    B --> C["Captacion"]
+    C --> D{"Revision broker"}
+    D -->|"Observa"| C
+    D -->|"Rechaza"| X["Fin de captacion"]
+    D -->|"Aprueba"| E["Captacion activa"]
+    E --> F["Cliente interesado"]
+    F --> G["Oportunidad comercial"]
+    G --> H["Interacciones y visitas"]
+    H --> I{"Cliente continua?"}
+    I -->|"No"| J["Motivo de no continuidad"]
+    J --> K["Oportunidad no continua"]
+    I -->|"Si"| L["Solicitud de alquiler"]
+    L --> M["Documentos"]
+    M --> N{"Evaluacion broker"}
+    N -->|"Observa"| L
+    N -->|"Rechaza"| O["Cierre no favorable"]
+    N -->|"Aprueba"| P["Cierre exitoso"]
 ```
 
-3. Implementa tus cambios  
-4. Realiza commits siguiendo la convención:
+La entidad que une casi todo el proceso comercial es `OportunidadComercial`: permite conservar trazabilidad aunque el cliente nunca llegue a presentar una solicitud formal.
 
-```bash
-git commit -m "feat: descripción clara de la funcionalidad"
+## Roles
+
+| Rol | Responsabilidad principal | Puede hacer |
+| --- | --- | --- |
+| Broker administrador | Gobierno global del sistema | Gestionar brokers, auditar, reasignar agentes y ver reportes globales. |
+| Broker supervisor | Supervision de su equipo | Registrar agentes propios, revisar captaciones, reasignar captaciones y evaluar solicitudes de sus agentes. |
+| Agente inmobiliario | Operacion comercial diaria | Registrar propietarios, locales, captaciones, clientes, oportunidades, visitas, solicitudes y documentos. |
+
+Regla clave: el broker supervisa y decide; el agente registra y opera. Separar esas funciones da trazabilidad y evita que una misma persona registre y apruebe sin control.
+
+## Modelo De Dominio
+
+Las entidades existen para responder preguntas operativas concretas:
+
+| Pregunta de negocio | Entidades que la responden |
+| --- | --- |
+| Quien participa? | `Persona`, `UsuarioInterno`, `Broker`, `AgenteInmobiliario`, `Propietario`, `ClienteInteresado`. |
+| Que inmueble se ofrece? | `Distrito`, `LocalComercial`, `PrecioLocal`, `Publicacion`. |
+| Como se capta y supervisa? | `Captacion`, `Prospeccion`, `ReasignacionCaptacion`, `BrokerAgente`, `ReasignacionAgenteBroker`. |
+| Como avanza el interesado? | `OportunidadComercial`, `InteraccionComercial`, `Visita`, `MotivoNoContinuidad`. |
+| Cuando se formaliza? | `SolicitudAlquiler`, `DocumentoSolicitud`, `TipoDocumentoRequerido`, `EvaluacionSolicitud`. |
+| Como se cierra y controla? | `ContratoAlquiler`, `ComisionLiquidacion`, `ReportePropietario`, `Tarea`, `Alerta`, `HistorialEstado`. |
+
+El sustento detallado de cada entidad, sus atributos y sus enums esta en [database/README.md](database/README.md#modelo-de-dominio).
+
+## API Y Frontend
+
+La API corre bajo:
+
+```text
+http://localhost:8080/controllocal/Api
 ```
 
-5. Sube tu rama:
+Endpoints publicos principales:
 
-```bash
-git push origin feature/nombre-de-tu-feature
+- `GET /salud`
+- `POST /auth/login`
+
+Modulos REST principales:
+
+- `/propietarios`
+- `/locales`
+- `/captaciones`
+- `/clientes`
+- `/oportunidades`
+- `/visitas`
+- `/solicitudes`
+- `/evaluaciones`
+- `/alertas`
+- `/agentes`
+- `/prospecciones`
+
+El frontend Blazor se ejecuta por defecto en:
+
+```text
+http://localhost:5232/login
 ```
 
-6. Abre un Pull Request hacia la rama principal  
+## Como Probar
 
----
+La guia completa esta en [COMO_PROBAR.md](COMO_PROBAR.md). El resumen es:
 
-## 🧠 Convención de Commits
+1. Preparar MySQL con los scripts de `database/`.
+2. Crear archivos privados de configuracion desde los `.example`.
+3. Compilar backend Java con Maven.
+4. Desplegar `controllocal-rest` en GlassFish.
+5. Ejecutar el frontend Blazor.
+6. Iniciar sesion con los usuarios demo del seed.
+7. Validar un flujo minimo: captacion, oportunidad, visita, solicitud y evaluacion.
 
-Este proyecto utiliza **Conventional Commits**:
+## Configuracion Privada
 
-- `feat:` nueva funcionalidad  
-- `fix:` corrección de errores  
-- `refactor:` mejora interna del código  
-- `docs:` documentación  
-- `chore:` mantenimiento o configuración  
+No se deben versionar credenciales. Los archivos privados esperados son:
 
----
+```text
+config/api.properties
+backend-java/controllocal-db-manager/src/main/resources/db.properties
+frontend-csharp/ControlLocal.Web/appsettings.json
+```
 
-## 🔐 Seguridad
+Usa como base:
 
-- No subir credenciales, contraseñas ni información sensible  
-- Usar variables de entorno para configuraciones críticas  
-- Mantener archivos sensibles fuera del control de versiones  
+```text
+config/api.properties.example
+config/db.properties.example
+frontend-csharp/ControlLocal.Web/appsettings.example.json
+```
 
----
+## Convenciones
+
+Este proyecto usa Conventional Commits:
+
+- `feat:` nueva funcionalidad.
+- `fix:` correccion de errores.
+- `docs:` documentacion.
+- `refactor:` mejora interna sin cambiar comportamiento.
+- `chore:` mantenimiento.
+
+Para documentacion, prioriza claridad operativa: que una persona pueda entender que hace el sistema, por que existe cada pieza y como probarla sin pedir contexto adicional.

@@ -17,6 +17,19 @@ public interface CrudDAO<T> {
 
     boolean eliminar(Long id);
 
+    // Paginacion. Las implementaciones con tablas grandes la resuelven con
+    // LIMIT/OFFSET en SQL; este respaldo en memoria cubre al resto.
+    default List<T> listarPagina(int limite, int desplazamiento) {
+        return listarTodos().stream()
+                .skip(Math.max(0, desplazamiento))
+                .limit(Math.max(0, limite))
+                .toList();
+    }
+
+    default long contar() {
+        return listarTodos().size();
+    }
+
     default Long crear(T entidad, Connection conn) throws SQLException {
         return crear(entidad);
     }

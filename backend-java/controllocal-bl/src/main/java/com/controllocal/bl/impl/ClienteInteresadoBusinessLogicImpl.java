@@ -39,6 +39,15 @@ public class ClienteInteresadoBusinessLogicImpl implements ClienteInteresadoBusi
         return clienteDAO.listarTodos();
     }
 
+    public List<ClienteInteresado> listarPagina(int limite, int desplazamiento) {
+        BusinessValidations.pagina(limite, desplazamiento);
+        return clienteDAO.listarPagina(limite, desplazamiento);
+    }
+
+    public long contar() {
+        return clienteDAO.contar();
+    }
+
     public boolean actualizar(ClienteInteresado cliente) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(cliente != null ? cliente.getIdCliente() : null, "El id de cliente interesado");

@@ -12,8 +12,14 @@ import java.util.Optional;
 import com.controllocal.config.DBManager;
 import com.controllocal.dao.DAOException;
 import com.controllocal.dao.SolicitudAlquilerDAO;
+import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.enums.EstadoSolicitudAlquiler;
+import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.comercial.SolicitudAlquiler;
+import com.controllocal.model.persona.ClienteInteresado;
+import com.controllocal.model.persona.Persona;
+import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
 
@@ -21,21 +27,37 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             INSERT INTO solicitud_alquiler (
                 codigo_solicitud, fecha_registro, monto_propuesto, plazo_tentativo,
                 observaciones, estado, fecha_actualizacion_estado,
-                id_oportunidad, id_agente
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fecha_vigencia_oferta, id_oportunidad, id_agente
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
-            SELECT id_solicitud, codigo_solicitud, fecha_registro, monto_propuesto,
-                   plazo_tentativo, observaciones, estado, fecha_actualizacion_estado,
-                   s.id_oportunidad, o.id_cliente, o.id_captacion, s.id_agente, s.fecha_creacion, s.fecha_actualizacion
+            SELECT s.id_solicitud, s.codigo_solicitud, s.fecha_registro, s.monto_propuesto,
+                   s.plazo_tentativo, s.observaciones, s.estado, s.fecha_actualizacion_estado,
+                   s.fecha_vigencia_oferta,
+                   s.id_oportunidad, o.codigo_oportunidad, o.id_cliente, o.id_captacion,
+                   s.id_agente, s.fecha_creacion AS solicitud_fecha_creacion,
+                   s.fecha_actualizacion AS solicitud_fecha_actualizacion,
+                   cp.nombres_o_razon_social AS cliente_nombre,
+                   c.codigo_captacion,
+                   l.id_local, l.codigo_local, l.direccion AS local_direccion,
+                   l.distrito AS local_distrito,
+                   ap.nombres_o_razon_social AS agente_nombre
             FROM solicitud_alquiler s
             INNER JOIN oportunidad_comercial o ON s.id_oportunidad = o.id_oportunidad
+            INNER JOIN cliente_interesado ci ON ci.id_cliente = o.id_cliente
+            INNER JOIN persona cp ON cp.id_persona = ci.id_persona
+            INNER JOIN captacion c ON c.id_captacion = o.id_captacion
+            INNER JOIN local_comercial l ON l.id_local = c.id_local
+            INNER JOIN agente_inmobiliario a ON a.id_agente = s.id_agente
+            INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
+            INNER JOIN persona ap ON ap.id_persona = au.id_persona
             """;
     private static final String UPDATE_SQL = """
             UPDATE solicitud_alquiler
             SET codigo_solicitud = ?, fecha_registro = ?, monto_propuesto = ?,
                 plazo_tentativo = ?, observaciones = ?, estado = ?,
-                fecha_actualizacion_estado = ?, id_oportunidad = ?, id_agente = ?
+                fecha_actualizacion_estado = ?, fecha_vigencia_oferta = ?,
+                id_oportunidad = ?, id_agente = ?
             WHERE id_solicitud = ?
             """;
     private static final String DELETE_SQL = """
@@ -56,8 +78,9 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             ps.setString(5, solicitud.getObservaciones());
             JdbcSupport.setEnum(ps, 6, solicitud.getEstado());
             JdbcSupport.setTimestamp(ps, 7, solicitud.getFechaActualizacionEstado());
-            ps.setLong(8, solicitud.getOportunidadComercial().getIdOportunidad());
-            ps.setLong(9, solicitud.getAgenteResponsable().getIdAgente());
+            JdbcSupport.setDate(ps, 8, solicitud.getFechaVigenciaOferta());
+            ps.setLong(9, solicitud.getOportunidadComercial().getIdOportunidad());
+            ps.setLong(10, solicitud.getAgenteResponsable().getIdAgente());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -113,9 +136,10 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             ps.setString(5, solicitud.getObservaciones());
             JdbcSupport.setEnum(ps, 6, solicitud.getEstado());
             JdbcSupport.setTimestamp(ps, 7, solicitud.getFechaActualizacionEstado());
-            ps.setLong(8, solicitud.getOportunidadComercial().getIdOportunidad());
-            ps.setLong(9, solicitud.getAgenteResponsable().getIdAgente());
-            ps.setLong(10, solicitud.getIdSolicitud());
+            JdbcSupport.setDate(ps, 8, solicitud.getFechaVigenciaOferta());
+            ps.setLong(9, solicitud.getOportunidadComercial().getIdOportunidad());
+            ps.setLong(10, solicitud.getAgenteResponsable().getIdAgente());
+            ps.setLong(11, solicitud.getIdSolicitud());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar solicitud de alquiler con id " + solicitud.getIdSolicitud() + ".", e);
@@ -144,12 +168,37 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
         solicitud.setObservaciones(rs.getString("observaciones"));
         solicitud.setEstado(JdbcSupport.getEnum(rs, "estado", EstadoSolicitudAlquiler.class));
         solicitud.setFechaActualizacionEstado(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_actualizacion_estado")));
-        solicitud.setOportunidadComercial(JdbcSupport.oportunidad(rs.getLong("id_oportunidad")));
-        solicitud.setClienteInteresado(JdbcSupport.cliente(rs.getLong("id_cliente")));
-        solicitud.setCaptacion(JdbcSupport.captacion(rs.getLong("id_captacion")));
-        solicitud.setAgenteResponsable(JdbcSupport.agente(rs.getLong("id_agente")));
-        solicitud.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_creacion")));
-        solicitud.setFechaActualizacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_actualizacion")));
+        solicitud.setFechaVigenciaOferta(JdbcSupport.toLocalDate(rs.getDate("fecha_vigencia_oferta")));
+        Persona personaCliente = new Persona();
+        personaCliente.setNombresORazonSocial(rs.getString("cliente_nombre"));
+        ClienteInteresado cliente = JdbcSupport.cliente(rs.getLong("id_cliente"));
+        cliente.setPersona(personaCliente);
+
+        LocalComercial local = JdbcSupport.local(rs.getLong("id_local"));
+        local.setCodigoLocal(rs.getString("codigo_local"));
+        local.setDireccion(rs.getString("local_direccion"));
+        local.setDistrito(rs.getString("local_distrito"));
+        Captacion captacion = JdbcSupport.captacion(rs.getLong("id_captacion"));
+        captacion.setCodigoCaptacion(rs.getString("codigo_captacion"));
+        captacion.setLocalComercial(local);
+
+        Persona personaAgente = new Persona();
+        personaAgente.setNombresORazonSocial(rs.getString("agente_nombre"));
+        AgenteInmobiliario agente = JdbcSupport.agente(rs.getLong("id_agente"));
+        agente.setPersona(personaAgente);
+
+        OportunidadComercial oportunidad = JdbcSupport.oportunidad(rs.getLong("id_oportunidad"));
+        oportunidad.setCodigoOportunidad(rs.getString("codigo_oportunidad"));
+        oportunidad.setClienteInteresado(cliente);
+        oportunidad.setCaptacion(captacion);
+        oportunidad.setAgenteResponsable(agente);
+
+        solicitud.setOportunidadComercial(oportunidad);
+        solicitud.setClienteInteresado(cliente);
+        solicitud.setCaptacion(captacion);
+        solicitud.setAgenteResponsable(agente);
+        solicitud.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("solicitud_fecha_creacion")));
+        solicitud.setFechaActualizacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("solicitud_fecha_actualizacion")));
         return solicitud;
     }
 

@@ -1,87 +1,84 @@
 @page "/visita-form"
+@page "/visita-form/{OportunidadIdParam:long}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IVisitaService VisitaSvc
-@inject ICaptacionService CaptacionSvc
-@inject IClienteService ClienteSvc
+@inject IOportunidadService OportunidadSvc
 @using System.Globalization
+@using ControlLocal.Web.Models.Oportunidades
 @using ControlLocal.Web.Models.Visitas
 
 <PageTitle>Programar visita · ControlLocal</PageTitle>
 
 <AppShell Active="Visitas" Crumbs="@(new[] { "ControlLocal", "Operación", "Visitas", "Programar visita" })"
           Title="Programar visita"
-          Subtitle="Coordina la visita de un cliente interesado a un local de tus captaciones activas">
+          Subtitle="Agenda la visita de una oportunidad comercial existente">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("visitas"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;">
             <div>
-                <FormSection Num="1" Title="Captación y cliente" Sub="Qué local se visita y quién es el cliente interesado">
-                    <div class="cl-grid c2">
-                        <Field Label="Captación / local" Required="true">
-                            <select @bind="_captacionCodigo">
-                                <option value="">— Seleccionar captación —</option>
-                                @foreach (var c in CaptacionSvc.All().Where(c => c.Estado == "Activa"))
-                                {
-                                    <option value="@c.CodigoCaptacion">@c.CodigoCaptacion · @c.DireccionLocal (@c.DistritoLocal)</option>
-                                }
-                            </select>
-                        </Field>
-                        <Field Label="Cliente interesado" Required="true">
-                            <div style="display:flex;gap:8px;">
-                                <select @bind="_clienteNombre" style="flex:1;">
-                                    <option value="">— Seleccionar cliente —</option>
-                                    @foreach (var cli in ClienteSvc.All().Where(c => c.Estado == "Activo"))
-                                    {
-                                        <option value="@cli.Nombre">@cli.Nombre</option>
-                                    }
-                                </select>
-                                <button class="cl-btn ghost" style="flex:0 0 auto;" title="Registrar nuevo cliente" @onclick="@(() => App.Navigate("cliente-form"))">
-                                    <Icon Name="plus" Size="14" />
-                                </button>
-                            </div>
-                        </Field>
-                    </div>
+                <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad relaciona al cliente con la captación">
+                    <Field Label="Oportunidad" Required="true">
+                        <select @bind="_oportunidadId" disabled="@(_cargando || _procesando)">
+                            <option value="0">— Seleccionar —</option>
+                            @foreach (var oportunidad in _oportunidades
+                                .Where(item => item.Estado is "Abierta" or "Solicitud creada"))
+                            {
+                                <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
+                            }
+                        </select>
+                    </Field>
+                    @if (OportunidadSeleccionada is not null)
+                    {
+                        <div class="cl-grid c2" style="margin-top:12px;">
+                            <Field Label="Local"><input value="@OportunidadSeleccionada.DireccionLocal" disabled /></Field>
+                            <Field Label="Cliente"><input value="@OportunidadSeleccionada.ClienteNombre" disabled /></Field>
+                        </div>
+                    }
                 </FormSection>
 
                 <FormSection Num="2" Title="Fecha y hora" Sub="Cuándo se realizará la visita al local">
                     <div class="cl-grid c2">
                         <Field Label="Fecha" Required="true"><input type="date" @bind="_fecha" /></Field>
                         <Field Label="Hora" Required="true"><input type="time" @bind="_hora" /></Field>
-                        <Field Label="Acompaña" Hint="El agente en sesión acompaña la visita"><input value="Valentina Mora (tú)" disabled /></Field>
+                        <Field Label="Acompaña"><input value="@(App.CurrentUser?.Nombre ?? "Agente en sesión")" disabled /></Field>
                     </div>
                 </FormSection>
 
-                <FormSection Num="3" Title="Notas" Sub="Indicaciones para la visita (opcional)">
+                <FormSection Num="3" Title="Notas" Sub="Indicaciones opcionales para la visita">
                     <Field Label="Observaciones">
-                        <textarea rows="3" placeholder="Indicaciones para la visita…" @bind="_observaciones" @bind:event="oninput"></textarea>
+                        <textarea rows="3" placeholder="Indicaciones para la visita..." @bind="_observaciones"></textarea>
                     </Field>
                 </FormSection>
 
                 @if (_err is not null)
                 {
-                    <div class="cl-alert red" style="margin-bottom:14px;">
-                        <Icon Name="alert" Size="15" /><span>@_err</span>
-                    </div>
+                    <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
                 }
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("visitas"))" OnSave="@TryConfirm" SaveLabel="Programar visita" />
+                <FormFooterBar OnCancel="@(() => App.Navigate("visitas"))"
+                               OnSave="@TryConfirm"
+                               SaveLabel="Programar visita"
+                               Busy="@_procesando"
+                               BusyLabel="Programando..." />
             </div>
 
             <div class="cl-stack">
                 <FormStepsSidebar Steps="_pasos" />
                 <div class="cl-alert blue">
                     <Icon Name="info" Size="15" />
-                    <span>La visita queda en estado <b>Programada</b>. Desde la agenda podrás reprogramarla, cancelarla o registrar su resultado.</span>
+                    <span>La visita queda en estado <b>Programada</b> y conserva la misma oportunidad, cliente y captación.</span>
                 </div>
             </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="calendar"
                        Title="¿Programar la visita?"
-                       Desc="@($"Se agendará la visita de {_clienteNombre} para el {FormatFecha(_fecha)} a las {FormatHora(_hora)}.")"
+                       Desc="@DescripcionConfirmacion"
                        ConfirmLabel="Programar" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">Visita programada correctamente</Toast>
@@ -89,68 +86,100 @@
 </AppShell>
 
 @code {
-    private string _captacionCodigo = "";
-    private string _clienteNombre = "";
+    [Parameter] public long OportunidadIdParam { get; set; }
+
+    private long _oportunidadId;
     private DateOnly? _fecha;
     private TimeOnly? _hora;
     private string _observaciones = "";
-
     private bool _confirm;
     private bool _toast;
+    private bool _cargando = true;
+    private bool _procesando;
     private string? _err;
+    private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
 
-    // Progreso interactivo de las secciones del formulario.
-    private bool IsStep1Complete => !string.IsNullOrWhiteSpace(_captacionCodigo) && !string.IsNullOrWhiteSpace(_clienteNombre);
-    private bool IsStep2Complete => _fecha is not null && _hora is not null;
-    private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_observaciones);
+    private OportunidadComercialDto? OportunidadSeleccionada =>
+        _oportunidades.FirstOrDefault(item => item.Id == _oportunidadId);
+    private string DescripcionConfirmacion => OportunidadSeleccionada is null
+        ? "Revisa los datos de la visita."
+        : $"Se agendará la visita de {OportunidadSeleccionada.ClienteNombre} para el {FormatFecha(_fecha)} a las {FormatHora(_hora)}.";
 
     private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
     {
-        new FormStepsSidebar.Step("Captación y cliente", "Local y cliente", IsStep1Complete),
-        new FormStepsSidebar.Step("Fecha y hora", "Cuándo se visita", IsStep2Complete),
-        new FormStepsSidebar.Step("Notas", "Indicaciones (opcional)", IsStep3Complete),
+        new FormStepsSidebar.Step("Oportunidad", "Cliente y captación", _oportunidadId > 0),
+        new FormStepsSidebar.Step("Fecha y hora", "Cuándo se visita", _fecha is not null && _hora is not null),
+        new FormStepsSidebar.Step("Notas", "Indicaciones opcionales", true),
     };
 
-    // El contrato REST viaja como texto; formateamos los selectores al confirmar
-    // (espeja Visitas.razor para mantener un único formato de fecha/hora).
-    private static string FormatFecha(DateOnly? f) =>
-        f?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "";
-    private static string FormatHora(TimeOnly? h) =>
-        h?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
+            if (OportunidadIdParam > 0)
+                _oportunidadId = OportunidadIdParam;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private static string FormatFecha(DateOnly? fecha) =>
+        fecha?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "";
+
+    private static string FormatHora(TimeOnly? hora) =>
+        hora?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
 
     private void TryConfirm()
     {
-        if (string.IsNullOrWhiteSpace(_captacionCodigo)) { _err = "Debes seleccionar una captación."; return; }
-        if (string.IsNullOrWhiteSpace(_clienteNombre)) { _err = "Debes seleccionar un cliente interesado."; return; }
+        if (_cargando || _procesando) return;
+        if (OportunidadSeleccionada is null) { _err = "Debes seleccionar una oportunidad comercial válida."; return; }
         if (_fecha is null || _hora is null) { _err = "La fecha y la hora de la visita son obligatorias."; return; }
-
         _err = null;
         _confirm = true;
     }
 
     private async Task OnConfirm()
     {
-        _confirm = false;
+        if (_procesando) return;
         try
         {
-            VisitaSvc.Programar(new VisitaFormRequest
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await VisitaSvc.ProgramarAsync(new VisitaFormRequest
             {
-                CaptacionCodigo = _captacionCodigo,
-                ClienteNombre = _clienteNombre,
+                OportunidadId = _oportunidadId,
                 FechaTexto = FormatFecha(_fecha),
                 HoraTexto = FormatHora(_hora),
-                Observaciones = string.IsNullOrWhiteSpace(_observaciones) ? null : _observaciones,
-            });
+                Observaciones = string.IsNullOrWhiteSpace(_observaciones) ? null : _observaciones.Trim(),
+            }, DisposedToken);
         }
-        catch (InvalidOperationException ex)
+        catch (OperationCanceledException)
         {
-            _err = ex.Message;
             return;
         }
+        catch (Exception error)
+        {
+            _err = error.Message;
+            return;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
 
+        _confirm = false;
         _toast = true;
-        StateHasChanged();
-        await Task.Delay(900);
         App.Navigate("visitas");
     }
 }

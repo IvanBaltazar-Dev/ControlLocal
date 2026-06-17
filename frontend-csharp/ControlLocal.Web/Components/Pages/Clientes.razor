@@ -1,6 +1,7 @@
 @page "/clientes"
 @inject AppState App
 @inject IClienteService ClienteSvc
+@inject ExportacionService Exportar
 
 <PageTitle>Clientes interesados · ControlLocal</PageTitle>
 
@@ -11,19 +12,21 @@
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("cliente-form"))"><Icon Name="plus" Size="13" /> Registrar cliente</button>
     </Actions>
     <ChildContent>
-        @{ var filtrados = Filtrados().ToList(); }
+        @{
+            var filtrados = Filtrados().ToList();
+            var visibles = Paginador.Pagina(filtrados, ref _pagina);
+        }
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="users" Label="Clientes registrados" Value="@Todos.Count.ToString()" Tone="blue"
-                        Active="@(_vinculo == "")" OnClick="@(() => _vinculo = "")" />
-            <MetricCard Icon="pin" Label="Vinculados a captación" Value="@Vinculados.ToString()" Tone="info"
-                        Active="@(_vinculo == "Vinculado")" OnClick="@(() => _vinculo = "Vinculado")" />
-            <MetricCard Icon="clock" Label="Sin vincular" Value="@SinVincular.ToString()" Tone="blue" Footer="esperan una captación"
-                        Active="@(_vinculo == "Sin vincular")" OnClick="@(() => _vinculo = "Sin vincular")" />
+                        Active="true" />
+            <MetricCard Icon="phone" Label="Contacto autorizado" Value="@ContactoAutorizado.ToString()" Tone="info" />
+            <MetricCard Icon="lock" Label="Uso de datos autorizado" Value="@UsoDatoAutorizado.ToString()" Tone="blue" />
             <MetricCard Icon="check" Label="Activos" Value="@Activos.ToString()" Tone="green" />
         </div>
         <FilterBar Search="Buscar por nombre, razón social, documento, rubro…"
                    @bind-Value="_query" ResultCount="filtrados.Count"
-                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros"
+                   OnExport="@(() => ExportarCsv(filtrados))">
             <FilterSelect Placeholder="Tipo de persona" Options="_tipos" @bind-Value="_tipo" />
             <FilterSelect Placeholder="Rubro comercial" Options="_rubros" @bind-Value="_rubro" />
             <FilterSelect Placeholder="Estado" Options="_estadosCli" @bind-Value="_estado" />
@@ -33,12 +36,12 @@
                 <table class="cl-table">
                     <thead>
                         <tr>
-                            <th>Cliente</th><th>Documento</th><th>Teléfono</th><th>Rubro de interés</th>
-                            <th>Interés comercial</th><th>Captaciones</th><th>Estado</th><th></th>
+                            <th>Cliente</th><th>Documento</th><th>Teléfono</th><th>Correo</th>
+                            <th>Rubro de interés</th><th>Contacto autorizado</th><th>Estado</th><th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var c in filtrados)
+                        @foreach (var c in visibles)
                         {
                             <tr>
                                 <td>
@@ -47,9 +50,9 @@
                                 </td>
                                 <td><span class="mono">@c.NumeroDocumento</span></td>
                                 <td><span class="mono" style="font-size:12px;">@c.Telefono</span></td>
+                                <td style="font-size:12px;color:var(--c-text-2);">@c.Correo</td>
                                 <td><StatusBadge Label="@c.RubroInteres" ToneOverride="blue" Plain="true" /></td>
-                                <td style="font-size:12px;color:var(--c-text-2);">@c.InteresComercial</td>
-                                <td><span><b>@c.CaptacionesVinculadas</b></span></td>
+                                <td>@(c.ConsentimientoContacto == true ? "Sí" : "No")</td>
                                 <td><StatusBadge Label="@c.Estado" /></td>
                                 <td><RowActions Items="@(new[] { "view", "edit" })"
                                                 OnView="@(() => App.Navigate($"cliente-detail/{c.Id}"))"
@@ -68,17 +71,18 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtrados.Count" />
+        <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
     </ChildContent>
 </AppShell>
 
 @code {
-    private string _query = "", _tipo = "", _rubro = "", _estado = "", _vinculo = "";
+    private string _query = "", _tipo = "", _rubro = "", _estado = "";
+    private int _pagina = 1;
 
     private IReadOnlyList<ClienteInteresadoDto> Todos => ClienteSvc.All();
 
-    private int Vinculados => Todos.Count(c => c.CaptacionesVinculadas > 0);
-    private int SinVincular => Todos.Count(c => c.CaptacionesVinculadas == 0);
+    private int ContactoAutorizado => Todos.Count(c => c.ConsentimientoContacto == true);
+    private int UsoDatoAutorizado => Todos.Count(c => c.ConsentimientoUsoDato == true);
     private int Activos => Todos.Count(c => c.Estado == "Activo");
 
     private readonly IReadOnlyList<string> _tipos = new[] { "Natural", "Jurídica" };
@@ -86,15 +90,26 @@
     private IReadOnlyList<string> _rubros => Todos.Select(c => c.RubroInteres)
         .Where(r => !string.IsNullOrWhiteSpace(r)).Distinct().OrderBy(x => x).ToList();
 
-    private bool HayFiltros => new[] { _query, _tipo, _rubro, _estado, _vinculo }.Any(s => !string.IsNullOrEmpty(s));
+    private bool HayFiltros => new[] { _query, _tipo, _rubro, _estado }.Any(s => !string.IsNullOrEmpty(s));
 
-    private void LimpiarFiltros() { _query = _tipo = _rubro = _estado = _vinculo = ""; }
+    private void LimpiarFiltros() { _query = _tipo = _rubro = _estado = ""; _pagina = 1; }
+
+    private async Task ExportarCsv(IReadOnlyList<ClienteInteresadoDto> filtrados)
+    {
+        await Exportar.DescargarCsvAsync("clientes_interesados",
+            new[] { "Cliente", "Tipo de persona", "Documento", "Teléfono", "Correo", "Rubro de interés", "Contacto autorizado", "Uso de datos autorizado", "Estado" },
+            filtrados.Select(c => (IReadOnlyList<string?>)new[]
+            {
+                c.Nombre, c.TipoPersona, c.NumeroDocumento, c.Telefono, c.Correo, c.RubroInteres,
+                c.ConsentimientoContacto == true ? "Sí" : "No",
+                c.ConsentimientoUsoDato == true ? "Sí" : "No", c.Estado,
+            }));
+    }
 
     private IEnumerable<ClienteInteresadoDto> Filtrados() => Todos.Where(c =>
         (string.IsNullOrEmpty(_tipo) || (c.TipoPersona?.Contains(_tipo, StringComparison.OrdinalIgnoreCase) ?? false)) &&
         (string.IsNullOrEmpty(_rubro) || c.RubroInteres == _rubro) &&
         (string.IsNullOrEmpty(_estado) || c.Estado == _estado) &&
-        (string.IsNullOrEmpty(_vinculo) || (_vinculo == "Vinculado" ? c.CaptacionesVinculadas > 0 : c.CaptacionesVinculadas == 0)) &&
         (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
 
     private static bool Coincide(ClienteInteresadoDto c, string q) =>

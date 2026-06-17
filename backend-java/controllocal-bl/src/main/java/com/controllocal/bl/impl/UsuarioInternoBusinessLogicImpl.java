@@ -35,6 +35,11 @@ public class UsuarioInternoBusinessLogicImpl implements UsuarioInternoBusinessLo
         return usuarioDAO.buscarPorId(idUsuario);
     }
 
+    public Optional<UsuarioInterno> buscarPorNombreUsuario(String nombreUsuario) {
+        BusinessValidations.texto(nombreUsuario, "El nombre de usuario");
+        return usuarioDAO.buscarPorNombreUsuario(nombreUsuario);
+    }
+
     public List<UsuarioInterno> listarTodos() {
         return usuarioDAO.listarTodos();
     }

@@ -28,4 +28,8 @@ public class PropietarioDto
     public int CantidadLocales { get; set; }
 
     public string Estado { get; set; } = string.Empty;
+
+    public bool? ConsentimientoUsoDato { get; set; }
+
+    public DateTime? FechaCreacion { get; set; }
 }

@@ -441,12 +441,24 @@ public class BusinessLogicManualTest {
         public List<Captacion> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(Captacion captacion) { items.put(captacion.getIdCaptacion(), captacion); return true; }
         public boolean eliminar(Long id) { items.get(id).setEstado(EstadoCaptacion.CERRADA); return true; }
+        @Override
+        public boolean perteneceAlAgente(Long idLocal, Long idAgente) {
+            // Implementación simulada (mock) para que el test compile.
+            // Si necesitas que valide de verdad en tus tests en memoria,
+            // se debe iterar sobre el mapa 'items'. Por ahora, devolvemos true o false.
+            return true; //true pq solo queremos ver el codigo
+        }
     }
 
     private static class InMemoryAgenteDAO implements AgenteInmobiliarioDAO {
         final Map<Long, AgenteInmobiliario> items = new LinkedHashMap<>();
         public Long crear(AgenteInmobiliario agente) { items.put(agente.getIdAgente(), agente); return agente.getIdAgente(); }
         public Optional<AgenteInmobiliario> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
+        public Optional<AgenteInmobiliario> buscarPorUsuario(Long idUsuario) {
+            return items.values().stream()
+                    .filter(item -> idUsuario.equals(item.getIdUsuarioInterno()))
+                    .findFirst();
+        }
         public List<AgenteInmobiliario> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(AgenteInmobiliario agente) { items.put(agente.getIdAgente(), agente); return true; }
         public boolean eliminar(Long id) { return items.remove(id) != null; }
@@ -457,6 +469,11 @@ public class BusinessLogicManualTest {
         long sequence = 10;
         public Long crear(Broker broker) { broker.setIdBroker(sequence++); items.put(broker.getIdBroker(), broker); return broker.getIdBroker(); }
         public Optional<Broker> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
+        public Optional<Broker> buscarPorUsuario(Long idUsuario) {
+            return items.values().stream()
+                    .filter(item -> idUsuario.equals(item.getIdUsuarioInterno()))
+                    .findFirst();
+        }
         public List<Broker> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(Broker broker) { items.put(broker.getIdBroker(), broker); return true; }
         public boolean eliminar(Long id) { return items.remove(id) != null; }
@@ -595,4 +612,3 @@ public class BusinessLogicManualTest {
         }
     }
 }
-

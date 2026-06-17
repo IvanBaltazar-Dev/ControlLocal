@@ -16,6 +16,8 @@ public class BrokerDto
     [Required(ErrorMessage = "El nombre es obligatorio.")]
     public string Nombre { get; set; } = string.Empty;
 
+    public string TipoPersona { get; set; } = "Persona natural";
+
     [EmailAddress(ErrorMessage = "Ingrese un correo válido.")]
     public string Email { get; set; } = string.Empty;
 
@@ -29,6 +31,8 @@ public class BrokerDto
     public string Telefono { get; set; } = string.Empty;
 
     public string Usuario { get; set; } = string.Empty;
+
+    public string ContrasenaTemporal { get; set; } = string.Empty;
 
     public string Zona { get; set; } = string.Empty;
 

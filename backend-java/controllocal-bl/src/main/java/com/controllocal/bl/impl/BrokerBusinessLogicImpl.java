@@ -74,6 +74,11 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
         return brokerDAO.buscarPorId(idBroker);
     }
 
+    public Optional<Broker> buscarPorUsuario(Long idUsuario) {
+        BusinessValidations.id(idUsuario, "El id de usuario");
+        return brokerDAO.buscarPorUsuario(idUsuario);
+    }
+
     public List<Broker> listarTodos() {
         return brokerDAO.listarTodos();
     }

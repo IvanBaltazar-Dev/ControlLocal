@@ -27,8 +27,15 @@
             <div class="cl-alert @(vencidos > 0 ? "red" : "blue")" style="margin-bottom:16px;">
                 <Icon Name="clock" Size="15" />
                 <span>
-                    Tienes <b>@_porRecontactar.Count</b> local(es) en seguimiento por recontactar@(vencidos > 0 ? $" · {vencidos} vencido(s)" : "").
-                    No dejes vencer la ventana de 15 días: cada recontacto a tiempo es una captación que no pierdes.
+                    Hay <b>@_porRecontactar.Count</b> local(es) en seguimiento por recontactar@(vencidos > 0 ? $" · {vencidos} vencido(s)" : "").
+                    @if (vencidos > 0)
+                    {
+                        <text> Atiende primero los recontactos vencidos.</text>
+                    }
+                    else
+                    {
+                        <text> Próximo recontacto: <b>@ProximoRecontacto</b>.</text>
+                    }
                 </span>
             </div>
         }
@@ -92,7 +99,7 @@
                                         else if (p.Estado is "E" or "S")
                                         {
                                             <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"captacion-form/captar/{p.Id}"))"><Icon Name="pin" Size="12" /> Captar</button>
-                                            <button class="cl-btn sm" @onclick="@(() => AbrirPosponer(p))"><Icon Name="clock" Size="12" /> Posponer</button>
+                                            <button class="cl-btn sm" @onclick="@(() => AbrirPosponer(p))"><Icon Name="clock" Size="12" /> Recontactar</button>
                                             <button class="cl-btn sm ghost" @onclick="@(() => AbrirRechazar(p))"><Icon Name="x" Size="12" /> Rechazar</button>
                                         }
                                         else if (p.Estado == "T")
@@ -106,7 +113,15 @@
                         }
                     </tbody>
                 </table>
-                @if (!Filtradas().Any())
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando prospecciones…</div>
+                }
+                else if (_loadError is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_loadError</span></div>
+                }
+                else if (!Filtradas().Any())
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="store" Size="28" style="margin-bottom:10px;" />
@@ -117,9 +132,9 @@
             </div>
         </div>
 
-        @* ---------- Modal: Posponer (recontactar ≤15 días) ---------- *@
+        @* ---------- Modal: Recontactar (≤15 días) ---------- *@
         <Modal Open="_modalPosponer" Tone="blue" Icon="clock"
-               Title="Posponer · por ahora no"
+               Title="Recontactar propietario"
                Desc="@($"El propietario de {_target?.Direccion} pidió tiempo. Agenda el recontacto (máx. 15 días).")"
                OnClose="@(() => _modalPosponer = false)">
             <ChildContent>
@@ -164,9 +179,10 @@
     private string _filtroEstado = "";
     private string _query = "";
     private string _distrito = "";
+    private IReadOnlyList<ProspeccionDto> _prospecciones = [];
     private IReadOnlyList<ProspeccionDto> _porRecontactar = new List<ProspeccionDto>();
 
-    private IReadOnlyList<string> _distritos => ProspeccionSvc.All().Select(p => p.Distrito)
+    private IReadOnlyList<string> _distritos => _prospecciones.Select(p => p.Distrito)
         .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
 
     private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
@@ -178,16 +194,23 @@
     private DateOnly? _fechaRecontactoPick;
     private string _motivoTmp = "", _toastMsg = "";
     private string? _err;
+    private bool _cargando = true;
+    private string? _loadError;
 
     private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+    private string ProximoRecontacto => _porRecontactar
+        .Where(item => item.FechaRecontacto is not null)
+        .OrderBy(item => item.FechaRecontacto)
+        .Select(item => item.FechaRecontactoTexto ?? item.FechaRecontacto!.Value.ToString("dd MMM yyyy"))
+        .FirstOrDefault() ?? "sin fecha";
 
-    protected override void OnInitialized() => Recalcular();
+    protected override async Task OnInitializedAsync() => await CargarAsync();
 
-    private int EnProspeccion => ProspeccionSvc.All().Count(p => p.Estado is "P" or "C" or "R" or "E" or "S");
-    private int Contar(string estado) => ProspeccionSvc.All().Count(p => p.Estado == estado);
+    private int EnProspeccion => _prospecciones.Count(p => p.Estado is "P" or "C" or "R" or "E" or "S");
+    private int Contar(string estado) => _prospecciones.Count(p => p.Estado == estado);
 
     private IEnumerable<ProspeccionDto> Filtradas() =>
-        ProspeccionSvc.All().Where(p =>
+        _prospecciones.Where(p =>
             (string.IsNullOrEmpty(_filtroEstado) || p.Estado == _filtroEstado) &&
             (string.IsNullOrEmpty(_distrito) || p.Distrito == _distrito) &&
             (string.IsNullOrEmpty(_query) || Coincide(p, _query)));
@@ -200,7 +223,35 @@
     private static bool EsVencido(ProspeccionDto p) =>
         p.Estado == "S" && p.FechaRecontacto is { } f && f < Hoy;
 
-    private void Recalcular() => _porRecontactar = ProspeccionSvc.PorRecontactar(15);
+    // Recarga fresca desde el backend en cada navegacion (no bloquea el circuito).
+    private async Task CargarAsync()
+    {
+        try
+        {
+            _prospecciones = (await ProspeccionSvc.RefrescarAsync(DisposedToken)).ToList();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+        Recalcular();
+    }
+
+    private void Recalcular()
+    {
+        var limite = Hoy.AddDays(15);
+        _porRecontactar = _prospecciones
+            .Where(p => p.Estado == "S" && p.FechaRecontacto is { } fecha && fecha <= limite)
+            .OrderBy(p => p.FechaRecontacto)
+            .ToList();
+    }
 
     private static string UltimoHito(ProspeccionDto p) => p.Estado switch
     {
@@ -221,7 +272,7 @@
     {
         try
         {
-            accion(p.Id);
+            ActualizarProspeccion(accion(p.Id));
             Recalcular();
             Notificar(mensaje);
         }
@@ -234,7 +285,7 @@
         if (_fechaRecontactoPick is null) { _err = "Indica la fecha de recontacto."; return; }
         try
         {
-            ProspeccionSvc.Posponer(_target.Id, _fechaRecontactoPick.Value);
+            ActualizarProspeccion(ProspeccionSvc.Posponer(_target.Id, _fechaRecontactoPick.Value));
             _modalPosponer = false;
             Recalcular();
             Notificar("Recontacto agendado. Quedó en seguimiento.");
@@ -247,7 +298,7 @@
         if (_target is null) return;
         try
         {
-            ProspeccionSvc.Rechazar(_target.Id, _motivoTmp);
+            ActualizarProspeccion(ProspeccionSvc.Rechazar(_target.Id, _motivoTmp));
             _modalRechazar = false;
             Recalcular();
             Notificar("Prospección descartada por rechazo del propietario.");
@@ -260,5 +311,14 @@
         _toastMsg = mensaje;
         _toast = true;
         _ = DelayThenRenderAsync(2600, () => _toast = false);
+    }
+
+    private void ActualizarProspeccion(ProspeccionDto actualizada)
+    {
+        var datos = _prospecciones.ToList();
+        var indice = datos.FindIndex(item => item.Id == actualizada.Id);
+        if (indice >= 0) datos[indice] = actualizada;
+        else datos.Insert(0, actualizada);
+        _prospecciones = datos;
     }
 }

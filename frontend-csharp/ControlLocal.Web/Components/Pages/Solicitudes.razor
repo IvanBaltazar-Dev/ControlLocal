@@ -1,6 +1,7 @@
 @page "/solicitudes"
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
+@inject ExportacionService Exportar
 
 <PageTitle>@_title · ControlLocal</PageTitle>
 
@@ -8,7 +9,7 @@
     <Actions>
         @if (_isBroker)
         {
-            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
         }
         else
         {
@@ -16,7 +17,10 @@
         }
     </Actions>
     <ChildContent>
-        @{ var filtradas = Filtradas().ToList(); }
+        @{
+            var filtradas = Filtradas().ToList();
+            var visibles = Paginador.Pagina(filtradas, ref _pagina);
+        }
         <div style="display:grid;grid-template-columns:repeat(@(_estados.Length + 1),1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="fileText" Label="Total" Value="@Todas.Count.ToString()" Tone="gray"
                         Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
@@ -45,7 +49,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var s in filtradas)
+                        @foreach (var s in visibles)
                         {
                             <tr>
                                 <td><span class="mono">@s.CodigoSolicitud</span></td>
@@ -68,7 +72,7 @@
                                 <td>
                                     @if (_isBroker)
                                     {
-                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate("evaluacion"))">Evaluar</button>
+                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"evaluacion/{s.CodigoSolicitud}"))">Evaluar</button>
                                     }
                                     else if (s.Estado == "Observada")
                                     {
@@ -83,7 +87,15 @@
                         }
                     </tbody>
                 </table>
-                @if (filtradas.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando solicitudes…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (filtradas.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="fileText" Size="28" style="margin-bottom:10px;" />
@@ -93,7 +105,7 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtradas.Count" />
+        <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
     </ChildContent>
 </AppShell>
 
@@ -101,11 +113,31 @@
     private bool _isBroker => App.Role == Roles.Broker || App.Role == Roles.Admin;
     private string _tab = "Todas";
     private string _query = "", _distrito = "";
+    private int _pagina = 1;
 
-    // El broker arranca viendo lo que debe evaluar.
-    protected override void OnInitialized() => _tab = _isBroker ? "En revisión" : "Todas";
+    private bool _cargando = true;
+    private string? _error;
 
-    private IReadOnlyList<SolicitudAlquilerDto> Todas => SolicitudSvc.All();
+    // El broker arranca viendo lo que debe evaluar, con datos frescos del backend:
+    // asi ve de inmediato lo que el agente acaba de enviar y el agente ve el resultado.
+    protected override async Task OnInitializedAsync()
+    {
+        _tab = _isBroker ? "En revision" : "Todas";
+        try
+        {
+            Todas = await SolicitudSvc.RefrescarAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private IReadOnlyList<SolicitudAlquilerDto> Todas = [];
 
     private string[] _estados => Todas.Select(s => s.Estado).Distinct().OrderBy(x => x).ToArray();
     private IReadOnlyList<string> _distritos => Todas.Select(s => s.DistritoLocal)
@@ -113,10 +145,21 @@
 
     private int CuentaEstado(string e) => Todas.Count(s => s.Estado == e);
 
-    private bool HayFiltros => _tab != (_isBroker ? "En revisión" : "Todas")
+    private bool HayFiltros => _tab != (_isBroker ? "En revision" : "Todas")
                                || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
 
-    private void LimpiarFiltros() { _tab = _isBroker ? "En revisión" : "Todas"; _query = ""; _distrito = ""; }
+    private void LimpiarFiltros() { _tab = _isBroker ? "En revision" : "Todas"; _query = ""; _distrito = ""; _pagina = 1; }
+
+    private async Task ExportarCsv()
+    {
+        await Exportar.DescargarCsvAsync("solicitudes",
+            new[] { "Solicitud", "Operación", "Cliente", "Local", "Distrito", "Monto mensual USD", "Plazo (meses)", "Documentos", "Fecha", "Estado" },
+            Filtradas().Select(s => (IReadOnlyList<string?>)new[]
+            {
+                s.CodigoSolicitud, s.CodigoOperacion, s.ClienteNombre, s.DireccionLocal, s.DistritoLocal,
+                s.MontoMensualTexto, s.PlazoMeses.ToString(), s.DocumentosTexto, s.FechaRegistroTexto, s.Estado,
+            }));
+    }
 
     private IEnumerable<SolicitudAlquilerDto> Filtradas() => Todas.Where(s =>
         (_tab == "Todas" || s.Estado == _tab) &&
@@ -142,7 +185,7 @@
         "Aprobada" => "check",
         "Rechazada" => "x",
         "Observada" => "alert",
-        "En revisión" => "clock",
+        "En revision" => "clock",
         _ => "fileText",
     };
 

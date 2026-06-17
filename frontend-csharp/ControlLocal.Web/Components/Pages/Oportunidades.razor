@@ -1,19 +1,32 @@
 @page "/oportunidades"
 @inject AppState App
+@inject ExportacionService Exportar
+@inject IOportunidadService OportunidadSvc
+@inject ISolicitudService SolicitudSvc
 
-<PageTitle>Operaciones del equipo · ControlLocal</PageTitle>
+<PageTitle>@_title - ControlLocal</PageTitle>
 
-<AppShell Active="Operaciones del equipo" Crumbs="@(new[] { "ControlLocal", "Seguimiento", "Operaciones del equipo" })"
-          Title="Operaciones del equipo"
-          Subtitle="Seguimiento de las operaciones comerciales de los agentes que supervisas">
+<AppShell Active="@_sideActive" Crumbs="@_crumbs"
+          Title="@_title"
+          Subtitle="@_subtitle">
     <Actions>
-        <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
-        <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
+        @if (_isBroker)
+        {
+            <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
+        else
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("oportunidad-form"))"><Icon Name="plus" Size="13" /> Nueva oportunidad</button>
+        }
     </Actions>
     <ChildContent>
-        @{ var filtradas = Filtradas().ToList(); }
+        @{
+            var filtradas = Filtradas().ToList();
+            var visibles = Paginador.Pagina(filtradas, ref _pagina);
+        }
         <div style="display:grid;grid-template-columns:repeat(@(_etapas.Length + 1),1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="target" Label="Total" Value="@_ops.Length.ToString()" Tone="gray"
+            <MetricCard Icon="target" Label="Total" Value="@_ops.Count.ToString()" Tone="gray"
                         Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
             @foreach (var e in _etapas)
             {
@@ -40,7 +53,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var o in filtradas)
+                        @foreach (var o in visibles)
                         {
                             <tr>
                                 <td><span class="mono">@o.Op</span></td>
@@ -56,12 +69,20 @@
                                 <td><StatusBadge Label="@o.Stage" /></td>
                                 <td>@(o.Amount == "—" ? "—" : $"USD {o.Amount}")</td>
                                 <td><span class="cl-muted" style="font-size:12px;">@o.Updated</span></td>
-                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"captacion-detail/{o.Cap}"))">Ver expediente</button></td>
+                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"oportunidad-detail/{o.Id}"))">Ver seguimiento</button></td>
                             </tr>
                         }
                     </tbody>
                 </table>
-                @if (filtradas.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando operaciones…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (filtradas.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="target" Size="28" style="margin-bottom:10px;" />
@@ -71,12 +92,15 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtradas.Count" />
+        <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
 
-        <div class="cl-alert blue" style="margin-top:14px;">
-            <Icon Name="info" Size="15" />
-            <span>Como supervisor consultas las operaciones en <b>solo lectura</b>. El registro de interacciones, visitas y solicitudes lo realiza el agente a cargo.</span>
-        </div>
+        @if (_isBroker)
+        {
+            <div class="cl-alert blue" style="margin-top:14px;">
+                <Icon Name="info" Size="15" />
+                <span>Como supervisor consultas las operaciones en <b>solo lectura</b>. El registro de interacciones, visitas y solicitudes lo realiza el agente a cargo.</span>
+            </div>
+        }
     </ChildContent>
 </AppShell>
 
@@ -84,6 +108,16 @@
     private string _tab = "Todas";
     private string _query = "";
     private string _agente = "";
+    private int _pagina = 1;
+    private bool _isBroker => App.Role == Roles.Broker;
+    private string _title => _isBroker ? "Operaciones del equipo" : "Oportunidades comerciales";
+    private string _sideActive => _isBroker ? "Operaciones del equipo" : "Oportunidades comerciales";
+    private string _subtitle => _isBroker
+        ? "Seguimiento de las operaciones comerciales de los agentes que supervisas"
+        : "Clientes interesados vinculados a tus captaciones activas";
+    private string[] _crumbs => _isBroker
+        ? new[] { "ControlLocal", "Seguimiento", "Operaciones del equipo" }
+        : new[] { "ControlLocal", "Operacion", "Oportunidades comerciales" };
 
     // Dimensiones derivadas de los datos (sin valores hardcodeados).
     private string[] _etapas => _ops.Select(o => o.Stage).Distinct().OrderBy(x => x).ToArray();
@@ -91,13 +125,23 @@
 
     private int CuentaEtapa(string e) => _ops.Count(o => o.Stage == e);
 
-    private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", _ops.Length) }
+    private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", _ops.Count) }
         .Concat(_etapas.Select(e => new Tabs.TabItem(e, CuentaEtapa(e))))
         .ToArray();
 
     private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_agente);
 
-    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _agente = ""; }
+    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _agente = ""; _pagina = 1; }
+
+    private async Task ExportarCsv()
+    {
+        await Exportar.DescargarCsvAsync("operaciones_equipo",
+            new[] { "Operación", "Captación", "Cliente", "Local", "Agente", "Etapa", "Monto mensual USD", "Actualizada" },
+            Filtradas().Select(o => (IReadOnlyList<string?>)new[]
+            {
+                o.Op, o.Cap, o.Client, o.Local, o.Agent, o.Stage, o.Amount, o.Updated,
+            }));
+    }
 
     private IEnumerable<OpRow> Filtradas() => _ops.Where(o =>
         (_tab == "Todas" || o.Stage == _tab) &&
@@ -119,15 +163,61 @@
         _ => "blue",
     };
 
-    private record OpRow(string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated);
+    private record OpRow(long Id, string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated);
 
-    private readonly OpRow[] _ops = new[]
+    private IReadOnlyList<OpRow> _ops = [];
+    private bool _cargando = true;
+    private string? _error;
+
+    // Recarga oportunidades y solicitudes frescas del backend, luego construye las
+    // filas combinadas (no bloquea el circuito).
+    protected override async Task OnInitializedAsync()
     {
-        new OpRow("OP-1094", "CAP-0226", "Boutique Lila", "Calle Schell 412", "VM", "#3A6BB5", "V. Mora", "En evaluación", "1 850", "Hoy 11:40"),
-        new OpRow("OP-1083", "CAP-0218", "Inversiones Trébol", "Av. La Marina 245", "VM", "#3A6BB5", "V. Mora", "Con interacciones", "2 750", "Hoy 09:14"),
-        new OpRow("OP-1085", "CAP-0234", "Café Lima", "Jr. Berlín 230", "CV", "#2F7D52", "C. Vega", "Con solicitud", "1 400", "Ayer"),
-        new OpRow("OP-1077", "CAP-0242", "Carla Espinoza", "Av. Salaverry 2120", "AT", "#D64550", "A. Torres", "Alquilada", "2 100", "18 May"),
-        new OpRow("OP-1090", "CAP-0231", "Bodegas del Norte", "Av. Petit Thouars 1875", "CV", "#2F7D52", "C. Vega", "Captada", "—", "16 May"),
-        new OpRow("OP-1071", "CAP-0238", "Plásticos del Sur", "Av. Aviación 4012", "PR", "#00AEEF", "P. Reyes", "Con interacciones", "3 500", "15 May"),
-    };
+        try
+        {
+            await OportunidadSvc.RefrescarAsync();
+            await SolicitudSvc.RefrescarAsync();
+            _ops = Construir();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private IReadOnlyList<OpRow> Construir() => OportunidadSvc.All().Select(o =>
+    {
+        var solicitud = SolicitudSvc.All().FirstOrDefault(s =>
+            s.OportunidadId == o.Id
+            || s.CodigoOperacion == o.CodigoOportunidad
+            || o.ClienteNombre.Contains(s.ClienteNombre)
+            || s.ClienteNombre.Contains(o.ClienteNombre));
+        var nombre = string.IsNullOrWhiteSpace(o.NombreAgenteResponsable) ? "Sin asignar" : o.NombreAgenteResponsable;
+        var iniciales = string.Concat(nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2).Select(parte => char.ToUpperInvariant(parte[0])));
+        var etapa = solicitud?.Estado switch
+        {
+            "En revision" => "En evaluación",
+            "Observada" => "Solicitud observada",
+            "Aprobada" => "Solicitud aprobada",
+            "Rechazada" => "Solicitud rechazada",
+            _ => o.Estado,
+        };
+        return new OpRow(
+            o.Id,
+            o.CodigoOportunidad,
+            o.CaptacionCodigo,
+            o.ClienteNombre,
+            o.DireccionLocal,
+            iniciales,
+            "#3A6BB5",
+            nombre,
+            etapa,
+            solicitud?.MontoMensualTexto ?? "—",
+            o.FechaRegistroTexto);
+    }).ToList();
 }

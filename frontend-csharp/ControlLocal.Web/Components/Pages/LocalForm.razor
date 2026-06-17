@@ -3,6 +3,7 @@
 @inject AppState App
 @inject ILocalService LocalSvc
 @inject IPropietarioService PropSvc
+@inject IProspeccionService ProspeccionSvc
 
 <PageTitle>@(_isEdit ? "Editar local" : "Registrar local") · ControlLocal</PageTitle>
 
@@ -39,39 +40,63 @@
                 <FormSection Num="2" Title="Ubicación" Sub="Dirección exacta y distrito del local comercial">
                     <div class="cl-grid c2">
                         <Field Label="Dirección" Required="true"><input placeholder="Av. / Calle, número" @bind="_direccion" @bind:event="oninput" /></Field>
-                        <Field Label="Referencia"><input placeholder="Entre calles, esquina, hito cercano" @bind="_referencia" /></Field>
-                        <Field Label="Distrito" Required="true"><select @bind="_distrito"><option>Miraflores</option><option>San Isidro</option><option>Surco</option><option>Jesús María</option><option>Barranco</option></select></Field>
+                        <Field Label="Zona o urbanización"><input placeholder="Urbanización, sector o referencia" @bind="_zonaUrbanizacion" /></Field>
+                        <Field Label="Distrito" Required="true">
+                            <select @bind="_distrito">
+                                @foreach (var distrito in Distritos)
+                                {
+                                    <option value="@distrito">@distrito</option>
+                                }
+                            </select>
+                        </Field>
                         <Field Label="Provincia"><input value="Lima" disabled="true" /></Field>
+                        <Field Label="Latitud"><input type="number" step="0.0000001" @bind="_geoLat" placeholder="-12.1234567" /></Field>
+                        <Field Label="Longitud"><input type="number" step="0.0000001" @bind="_geoLong" placeholder="-77.1234567" /></Field>
                     </div>
                 </FormSection>
 
                 <FormSection Num="3" Title="Características del local" Sub="Datos que verán los clientes interesados en la ficha">
                     <div class="cl-grid c3">
                         <Field Label="Área (m²)" Required="true"><input placeholder="Ej. 80" @bind="_areaMts" @bind:event="oninput" type="number" /></Field>
-                        <Field Label="Rubro sugerido"><select @bind="_rubro"><option>Restaurante / Café</option><option>Moda / Boutique</option><option>Servicios</option><option>Retail</option><option>Salud</option></select></Field>
+                        <Field Label="Rubro sugerido">
+                            <select @bind="_rubro">
+                                @foreach (var rubro in Rubros)
+                                {
+                                    <option value="@rubro">@rubro</option>
+                                }
+                            </select>
+                        </Field>
                         <Field Label="Precio referencial (USD/mes)" Required="true"><input placeholder="1 500" @bind="_precioRef" @bind:event="oninput" type="number" /></Field>
                         <Field Label="Disponibilidad"><select @bind="_estado"><option>Disponible</option><option>No disponible</option><option>Inactivo</option></select></Field>
+                        <Field Label="Tipo de inmueble"><select @bind="_tipoInmueble">@foreach (var opcion in EnumCatalog.TiposInmueble) { <option value="@opcion.Code">@opcion.Label</option> }</select></Field>
+                        <Field Label="Uso"><input value="Comercial" disabled /></Field>
+                        <Field Label="Estado de publicación"><select @bind="_estadoPublicacion">@foreach (var opcion in EnumCatalog.EstadosPublicacion) { <option value="@opcion.Code">@opcion.Label</option> }</select></Field>
                         <Field Label="Antigüedad"><input placeholder="Ej. 5 años" @bind="_antiguedad" /></Field>
                         <Field Label="N.° de ambientes"><input placeholder="Ej. 3" @bind="_ambientes" /></Field>
                     </div>
                     <div style="margin-top:14px;">
-                        <Field Label="Fotos del local" Hint="Sube hasta 8 imágenes en formato JPG o PNG">
-                            <div class="cl-ph" style="height:120px;">
-                                <Icon Name="upload" Size="20" /> <span style="margin-left:8px;">Arrastra las fotos aquí o haz clic para seleccionar</span>
-                            </div>
+                        <Field Label="Descripción y referencias" Hint="Características adicionales y referencias para ubicar el inmueble">
+                            <textarea rows="3" @bind="_descripcion" @bind:event="oninput"></textarea>
                         </Field>
                     </div>
                 </FormSection>
 
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-bottom:14px;">
+                        <Icon Name="alert" Size="15" /><span>@_err</span>
+                    </div>
+                }
+
                 @if (_isEdit)
                 {
-                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Guardar cambios" />
+                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@GuardarEdicion" SaveLabel="Guardar cambios" />
                 }
                 else
                 {
                     <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar local">
                         <Extra>
-                            <button class="cl-btn ghost"><Icon Name="save" Size="13" /> Guardar borrador</button>
+                            <button class="cl-btn ghost" @onclick="GuardarBorrador"><Icon Name="save" Size="13" /> Guardar sin publicar</button>
                         </Extra>
                     </FormFooterBar>
                 }
@@ -86,13 +111,16 @@
             </div>
         </div>
 
-        <ConfirmDialog Open="_confirm" Tone="blue" Icon="store"
-                       Title="¿Registrar local comercial?"
-                       Desc="El local quedará registrado. Puedes crear su captación ahora para iniciar el proceso comercial, o solo guardarlo."
-                       ConfirmLabel="Registrar y crear captación" CancelLabel="Solo registrar"
-                       OnClose="@OnOnlyRegister"
-                       OnConfirm="@OnRegisterAndCreate" />
-        <Toast Show="_toast">Local registrado correctamente</Toast>
+        @if (!_isEdit)
+        {
+            <ConfirmDialog Open="_confirm" Tone="blue" Icon="store"
+                           Title="¿Registrar local comercial?"
+                           Desc="El local quedará registrado. Puedes crear su captación ahora para iniciar el proceso comercial, o solo guardarlo."
+                           ConfirmLabel="Registrar y crear captación" CancelLabel="Solo registrar"
+                           OnClose="@OnOnlyRegister"
+                           OnConfirm="@OnRegisterAndCreate" />
+        }
+        <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
 
@@ -104,17 +132,28 @@
 
     private long _propietarioId;
     private string _direccion = "";
-    private string _referencia = "";
+    private string _descripcion = "";
     private string _distrito = "Miraflores";
+    private string _zonaUrbanizacion = "";
+    private string _geoLat = "";
+    private string _geoLong = "";
     private string _areaMts = "";
-    private string _rubro = "Restaurante / Café";
+    private string _rubro = EnumCatalog.RubrosComerciales[0];
     private string _precioRef = "";
     private string _estado = "Disponible";
     private string _antiguedad = "";
     private string _ambientes = "";
+    private string _tipoInmueble = "L";
+    private string _uso = "C";
+    private string _estadoPublicacion = "B";
+
+    private IReadOnlyList<string> Distritos => OpcionConValorActual(EnumCatalog.DistritosLima, _distrito);
+    private IReadOnlyList<string> Rubros => OpcionConValorActual(EnumCatalog.RubrosComerciales, _rubro);
 
     private bool _confirm;
     private bool _toast;
+    private string _toastMsg = "Local registrado correctamente";
+    private string? _err;
 
     protected override void OnParametersSet()
     {
@@ -132,6 +171,15 @@
                 _rubro = _l.Rubro;
                 _precioRef = _l.PrecioReferencial.ToString();
                 _estado = _l.Estado;
+                _descripcion = _l.Descripcion;
+                _antiguedad = _l.AntiguedadAnios?.ToString() ?? "";
+                _ambientes = _l.Ambientes?.ToString() ?? "";
+                _tipoInmueble = _l.TipoInmueble ?? "L";
+                _uso = "C";
+                _estadoPublicacion = _l.EstadoPublicacion ?? "B";
+                _zonaUrbanizacion = _l.ZonaUrbanizacion ?? "";
+                _geoLat = _l.GeoLat?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                _geoLong = _l.GeoLong?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
             }
         }
     }
@@ -151,15 +199,170 @@
     private async Task OnOnlyRegister()
     {
         _confirm = false;
+        if (!GuardarLocal()) return;
+        _toastMsg = "Local registrado correctamente";
         _toast = true;
         StateHasChanged();
-        await Task.Delay(900);
+        await Task.Delay(300);
         App.Navigate("locales");
     }
 
-    private void OnRegisterAndCreate()
+    private async Task GuardarEdicion()
+    {
+        if (!GuardarLocal()) return;
+        _toastMsg = "Cambios guardados correctamente";
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(300);
+        App.Navigate("locales");
+    }
+
+    private async Task GuardarBorrador()
+    {
+        _estadoPublicacion = "B";
+        if (!GuardarLocal()) return;
+        _toastMsg = "Local guardado sin publicar.";
+        _toast = true;
+        StateHasChanged();
+        await Task.Delay(300);
+        App.Navigate("locales");
+    }
+
+    private async Task OnRegisterAndCreate()
     {
         _confirm = false;
-        App.Navigate("captacion-form");
+        if (!GuardarLocal()) return;
+        await Task.Yield();
+        var prospeccion = ProspeccionSvc.All().FirstOrDefault(item => item.LocalId == _l.Id);
+        App.Navigate(prospeccion is null ? $"captacion-form/local/{_l.Id}" : $"captacion-form/captar/{prospeccion.Id}");
+    }
+
+    private bool GuardarLocal()
+    {
+        if (_propietarioId <= 0)
+        {
+            _err = "Selecciona un propietario.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(_direccion) || string.IsNullOrWhiteSpace(_distrito))
+        {
+            _err = "La direccion y el distrito son obligatorios.";
+            return false;
+        }
+        if (!int.TryParse(_areaMts, out var area) || area <= 0)
+        {
+            _err = "Ingresa un area valida.";
+            return false;
+        }
+        if (!decimal.TryParse(_precioRef, out var precio) || precio < 0)
+        {
+            _err = "Ingresa un precio referencial valido.";
+            return false;
+        }
+        if (_uso != "C")
+        {
+            _err = "ControlLocal solo admite inmuebles de uso comercial.";
+            return false;
+        }
+        if (!EnumCatalog.TiposInmueble.Any(opcion => opcion.Code == _tipoInmueble))
+        {
+            _err = "Selecciona un tipo de inmueble comercial valido.";
+            return false;
+        }
+        if (!EnteroOpcional(_ambientes, out var ambientes) || ambientes is <= 0)
+        {
+            _err = "El numero de ambientes debe ser mayor que cero.";
+            return false;
+        }
+        if (!EnteroOpcional(_antiguedad, out var antiguedad) || antiguedad is < 0)
+        {
+            _err = "La antiguedad no puede ser negativa.";
+            return false;
+        }
+        if (!DecimalOpcional(_geoLat, out var geoLat) || geoLat is < -90 or > 90)
+        {
+            _err = "La latitud debe estar entre -90 y 90.";
+            return false;
+        }
+        if (!DecimalOpcional(_geoLong, out var geoLong) || geoLong is < -180 or > 180)
+        {
+            _err = "La longitud debe estar entre -180 y 180.";
+            return false;
+        }
+
+        try
+        {
+            var local = new LocalComercialDto
+            {
+                Id = _l.Id,
+                CodigoLocal = _isEdit ? _l.CodigoLocal : $"LC-{DateTime.UtcNow:yyMMddHHmmss}",
+                Direccion = _direccion.Trim(),
+                Distrito = _distrito,
+                AreaM2 = area,
+                Rubro = _rubro,
+                PrecioReferencial = precio,
+                Estado = _estado,
+                PropietarioId = _propietarioId,
+                PropietarioNombre = PropSvc.ById(_propietarioId)?.Nombre ?? "",
+                TipoInmueble = _tipoInmueble,
+                Uso = _uso,
+                Ambientes = ambientes,
+                AntiguedadAnios = antiguedad,
+                ZonaUrbanizacion = string.IsNullOrWhiteSpace(_zonaUrbanizacion) ? null : _zonaUrbanizacion.Trim(),
+                GeoLat = geoLat,
+                GeoLong = geoLong,
+                EstadoPublicacion = _estadoPublicacion,
+                Descripcion = _descripcion.Trim(),
+            };
+            _l = _isEdit ? LocalSvc.Actualizar(local) : LocalSvc.Agregar(local);
+            _isEdit = true;
+            _err = null;
+            return true;
+        }
+        catch (Exception error)
+        {
+            _err = error.Message;
+            return false;
+        }
+    }
+
+    private static bool EnteroOpcional(string valor, out int? resultado)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            resultado = null;
+            return true;
+        }
+        if (int.TryParse(valor, out var numero))
+        {
+            resultado = numero;
+            return true;
+        }
+        resultado = null;
+        return false;
+    }
+
+    private static bool DecimalOpcional(string valor, out decimal? resultado)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            resultado = null;
+            return true;
+        }
+        if (decimal.TryParse(valor, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var numero))
+        {
+            resultado = numero;
+            return true;
+        }
+        resultado = null;
+        return false;
+    }
+
+    private static IReadOnlyList<string> OpcionConValorActual(IReadOnlyList<string> opciones, string valorActual)
+    {
+        if (string.IsNullOrWhiteSpace(valorActual) || opciones.Contains(valorActual))
+            return opciones;
+        return opciones.Concat([valorActual]).ToList();
     }
 }

@@ -6,6 +6,26 @@ public class ClienteInteresado {
     private Persona persona;
     private String rubroComercial;
 
+    // Consentimientos del interesado (Diccionario v2 P1).
+    private Boolean consentimientoContacto;
+    private Boolean consentimientoUsoDato;
+
+    public Boolean getConsentimientoContacto() {
+        return consentimientoContacto;
+    }
+
+    public void setConsentimientoContacto(Boolean consentimientoContacto) {
+        this.consentimientoContacto = consentimientoContacto;
+    }
+
+    public Boolean getConsentimientoUsoDato() {
+        return consentimientoUsoDato;
+    }
+
+    public void setConsentimientoUsoDato(Boolean consentimientoUsoDato) {
+        this.consentimientoUsoDato = consentimientoUsoDato;
+    }
+
     public Long getIdCliente() {
         return idCliente;
     }

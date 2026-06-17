@@ -1,5 +1,6 @@
 @page "/broker-nuevo"
 @inject AppState App
+@inject IBrokerService BrokerSvc
 @using System.Text.RegularExpressions
 
 <PageTitle>Registrar broker · ControlLocal</PageTitle>
@@ -17,15 +18,17 @@
                     <div class="cl-grid c2">
                         <Field Label="Tipo de persona" Required="true">
                             <select value="@_tipoPersona" @onchange="OnTipoPersonaChange">
-                                <option value="natural">Natural</option>
-                                <option value="juridica">Jurídica</option>
+                                @foreach (var opcion in EnumCatalog.TiposPersona)
+                                {
+                                    <option value="@opcion.Code">@opcion.Label</option>
+                                }
                             </select>
                         </Field>
                         <Field Label="Tipo de documento" Required="true">
                             <select value="@_tipoDoc" @onchange="OnTipoDocChange">
                                 @foreach (var opt in TipoDocOptions)
                                 {
-                                    <option value="@opt.Value">@opt.Label</option>
+                                    <option value="@opt.Code">@opt.Label</option>
                                 }
                             </select>
                         </Field>
@@ -36,18 +39,18 @@
                     </div>
                 </FormSection>
 
-                <FormSection Num="2" Title="Identificación" Sub="@(_tipoPersona == "natural" ? "Datos de la persona física" : "Datos de la empresa")">
+                <FormSection Num="2" Title="Identificación" Sub="@(_tipoPersona == "N" ? "Datos de la persona física" : "Datos de la empresa")">
                     <div class="cl-grid c2">
                         <Field Label="Número de documento" Required="true">
-                            <input placeholder="@(_tipoDoc == "RUC" ? "20 ___ ___ ___" : "__ ___ ___")"
+                            <input placeholder="@(_tipoDoc == "R" ? "20 ___ ___ ___" : "__ ___ ___")"
                                    value="@_numDoc" @oninput="@(e => { _numDoc = e.Value?.ToString() ?? ""; _errors.Remove("numDoc"); })" />
                             @if (Err("numDoc") is { } e2)
                             {
                                 <div class="cl-help" style="color:#D64550;">@e2</div>
                             }
                         </Field>
-                        <Field Label="@(_tipoPersona == "natural" ? "Nombre completo" : "Razón social")" Required="true">
-                            <input placeholder="@(_tipoPersona == "natural" ? "Nombres y apellidos" : "Razón social de la empresa")"
+                        <Field Label="@(_tipoPersona == "N" ? "Nombre completo" : "Razón social")" Required="true">
+                            <input placeholder="@(_tipoPersona == "N" ? "Nombres y apellidos" : "Razón social de la empresa")"
                                    value="@_nombre" @oninput="@(e => { _nombre = e.Value?.ToString() ?? ""; _errors.Remove("nombre"); })" />
                             @if (Err("nombre") is { } e3)
                             {
@@ -113,8 +116,10 @@
                         </Field>
                         <Field Label="Estado" Required="true">
                             <select value="@_estado" @onchange="@(e => { _estado = e.Value?.ToString() ?? ""; _errors.Remove("estado"); })">
-                                <option value="Activo">Activo</option>
-                                <option value="Inactivo">Inactivo</option>
+                                @foreach (var opcion in EnumCatalog.EstadosActivoInactivo)
+                                {
+                                    <option value="@opcion.Label">@opcion.Label</option>
+                                }
                             </select>
                             @if (Err("estado") is { } e9)
                             {
@@ -147,8 +152,8 @@
 </AppShell>
 
 @code {
-    private string _tipoPersona = "natural";
-    private string _tipoDoc = "DNI";
+    private string _tipoPersona = "N";
+    private string _tipoDoc = "D";
     private string _numDoc = "";
     private string _nombre = "";
     private string _telefono = "";
@@ -180,16 +185,14 @@
         new FormStepsSidebar.Step("Asignación", "Zona y estado", IsStep5Complete),
     };
 
-    private record DocOption(string Value, string Label);
-
-    private DocOption[] TipoDocOptions => _tipoPersona == "natural"
-        ? new[] { new DocOption("DNI", "DNI"), new DocOption("CE", "Carné de extranjería"), new DocOption("PAS", "Pasaporte") }
-        : new[] { new DocOption("RUC", "RUC") };
+    private IReadOnlyList<EnumOption> TipoDocOptions => _tipoPersona == "N"
+        ? EnumCatalog.TiposDocumentoIdentidad.Where(item => item.Code != "R").ToList()
+        : EnumCatalog.TiposDocumentoIdentidad.Where(item => item.Code == "R").ToList();
 
     private void OnTipoPersonaChange(ChangeEventArgs e)
     {
-        _tipoPersona = e.Value?.ToString() ?? "natural";
-        _tipoDoc = _tipoPersona == "natural" ? "DNI" : "RUC";
+        _tipoPersona = e.Value?.ToString() ?? "N";
+        _tipoDoc = _tipoPersona == "N" ? "D" : "R";
         _errors.Clear();
     }
 
@@ -197,7 +200,7 @@
     {
         var val = e.Value?.ToString() ?? "";
         // Silent reject of incoherent combinations.
-        if ((_tipoPersona == "natural" && val == "RUC") || (_tipoPersona == "juridica" && val != "RUC")) return;
+        if ((_tipoPersona == "N" && val == "R") || (_tipoPersona == "J" && val != "R")) return;
         _tipoDoc = val;
         _errors.Remove("tipoDoc");
     }
@@ -208,17 +211,17 @@
         if (string.IsNullOrEmpty(_tipoPersona)) _errors["tipoPersona"] = "Requerido";
         if (string.IsNullOrEmpty(_tipoDoc)) _errors["tipoDoc"] = "Requerido";
         if (string.IsNullOrWhiteSpace(_numDoc)) _errors["numDoc"] = "Requerido";
-        if (string.IsNullOrWhiteSpace(_nombre)) _errors["nombre"] = _tipoPersona == "natural" ? "Nombre completo requerido" : "Razón social requerida";
+        if (string.IsNullOrWhiteSpace(_nombre)) _errors["nombre"] = _tipoPersona == "N" ? "Nombre completo requerido" : "Razón social requerida";
         if (string.IsNullOrWhiteSpace(_telefono)) _errors["telefono"] = "Requerido";
         if (string.IsNullOrWhiteSpace(_correo)) _errors["correo"] = "Requerido";
         else if (!Regex.IsMatch(_correo, @"^[^\s@]+@[^\s@]+\.[^\s@]+$")) _errors["correo"] = "Formato de correo inválido";
         if (string.IsNullOrWhiteSpace(_usuario)) _errors["usuario"] = "Requerido";
-        if (string.IsNullOrWhiteSpace(_passwd)) _errors["passwd"] = "Requerido";
+        if (_passwd.Length < 8) _errors["passwd"] = "Debe tener al menos 8 caracteres";
         if (string.IsNullOrWhiteSpace(_zona)) _errors["zona"] = "Requerido";
         if (string.IsNullOrEmpty(_estado)) _errors["estado"] = "Requerido";
 
-        if (_tipoPersona == "natural" && _tipoDoc == "RUC") _errors["tipoDoc"] = "Natural no puede usar RUC";
-        if (_tipoPersona == "juridica" && _tipoDoc != "RUC") _errors["tipoDoc"] = "Jurídica debe usar RUC";
+        if (_tipoPersona == "N" && _tipoDoc == "R") _errors["tipoDoc"] = "Natural no puede usar RUC";
+        if (_tipoPersona == "J" && _tipoDoc != "R") _errors["tipoDoc"] = "Jurídica debe usar RUC";
 
         return _errors.Count == 0;
     }
@@ -231,9 +234,24 @@
     private async Task OnConfirm()
     {
         _confirm = false;
+        BrokerSvc.Agregar(new BrokerDto
+        {
+            Nombre = _nombre.Trim(),
+            TipoPersona = _tipoPersona == "J" ? "Persona juridica" : "Persona natural",
+            TipoDocumento = _tipoDoc,
+            NumeroDocumento = _numDoc.Trim(),
+            Telefono = _telefono.Trim(),
+            Email = _correo.Trim(),
+            Usuario = _usuario.Trim(),
+            ContrasenaTemporal = _passwd,
+            Zona = _zona,
+            EstadoAdministrativo = _estado,
+            TipoBroker = "Broker supervisor",
+            EsAdministrador = false,
+        });
         _toast = true;
         StateHasChanged();
-        await Task.Delay(1500);
+        await Task.Delay(300);
         App.Navigate("brokers");
     }
 }

@@ -28,10 +28,10 @@
 
                         <Field Label="Tipo de documento" Required="true">
                             <select @bind="_tipoDocumento" disabled>
-                                <option value="DNI">DNI</option>
-                                <option value="RUC">RUC</option>
-                                <option value="CE">Carné de extranjería</option>
-                                <option value="PAS">Pasaporte</option>
+                                @foreach (var opcion in EnumCatalog.TiposDocumentoIdentidad)
+                                {
+                                    <option value="@opcion.Code">@opcion.Label</option>
+                                }
                             </select>
                         </Field>
 
@@ -49,8 +49,10 @@
                         <Field Label="Zona o ámbito" Required="true"><input @bind="_zona" @bind:event="oninput" /></Field>
                         <Field Label="Estado" Required="true">
                             <select @bind="_estado">
-                                <option>Activo</option>
-                                <option>Inactivo</option>
+                                @foreach (var opcion in EnumCatalog.EstadosActivoInactivo)
+                                {
+                                    <option value="@opcion.Label">@opcion.Label</option>
+                                }
                             </select>
                         </Field>
                     </div>
@@ -134,7 +136,7 @@
         _codigoBroker = broker.CodigoBroker;
         _nombre = broker.Nombre;
         _usuario = broker.Usuario;
-        _tipoDocumento = broker.TipoDocumento;
+        _tipoDocumento = NormalizarTipoDocumento(broker.TipoDocumento);
         _numeroDocumento = broker.NumeroDocumento;
         _telefono = broker.Telefono;
         _correo = broker.Email;
@@ -158,11 +160,35 @@
     private async Task OnConfirm()
     {
         _confirm = false;
+        var anterior = Brokers.ById(_codigoBroker)
+            ?? throw new InvalidOperationException("Broker no encontrado.");
+        Brokers.Actualizar(new BrokerDto
+        {
+            Id = anterior.Id,
+            CodigoBroker = anterior.CodigoBroker,
+            Iniciales = anterior.Iniciales,
+            Nombre = anterior.Nombre,
+            TipoPersona = anterior.TipoPersona,
+            TipoDocumento = _tipoDocumento,
+            NumeroDocumento = anterior.NumeroDocumento,
+            Telefono = _telefono.Trim(),
+            Email = _correo.Trim(),
+            Usuario = anterior.Usuario,
+            ContrasenaTemporal = anterior.ContrasenaTemporal,
+            Zona = _zona.Trim(),
+            TipoBroker = anterior.TipoBroker,
+            FechaDesignacion = anterior.FechaDesignacion,
+            FechaDesignacionTexto = anterior.FechaDesignacionTexto,
+            AgentesACargo = anterior.AgentesACargo,
+            CaptacionesActivas = anterior.CaptacionesActivas,
+            EstadoAdministrativo = _estado,
+            EsAdministrador = anterior.EsAdministrador,
+        });
         _toast = true;
         await RenderIfAliveAsync();
         try
         {
-            await Task.Delay(1000, DisposedToken);
+            await Task.Delay(300, DisposedToken);
         }
         catch (OperationCanceledException)
         {
@@ -170,4 +196,13 @@
         }
         App.Navigate("brokers");
     }
+
+    private static string NormalizarTipoDocumento(string valor) => valor switch
+    {
+        "DNI" => "D",
+        "RUC" => "R",
+        "CE" => "C",
+        "PAS" => "P",
+        _ => valor,
+    };
 }

@@ -10,6 +10,8 @@ public interface ClienteInteresadoBusinessLogic {
     public Long registrar(ClienteInteresado cliente);
     public Optional<ClienteInteresado> buscarPorId(Long idCliente);
     public List<ClienteInteresado> listarTodos();
+    public List<ClienteInteresado> listarPagina(int limite, int desplazamiento);
+    public long contar();
     public boolean actualizar(ClienteInteresado cliente);
     public boolean desactivar(Long idCliente);
 }

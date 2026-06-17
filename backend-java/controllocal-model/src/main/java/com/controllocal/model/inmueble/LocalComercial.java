@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
+import com.controllocal.model.inmueble.enums.TipoInmueble;
+import com.controllocal.model.inmueble.enums.UsoInmueble;
 import com.controllocal.model.persona.Propietario;
 
 /**
@@ -25,6 +27,21 @@ public class LocalComercial {
     private Propietario propietario;
     private LocalDateTime fechaRegistro;
     private LocalDateTime fechaActualizacion;
+
+    // Atributos del inmueble (Diccionario v2 P1). Opcionales para no romper datos previos.
+    private TipoInmueble tipoInmueble;
+    private UsoInmueble uso;
+    private Integer ambientes;
+    private Integer antiguedadAnios;
+    private String zonaUrbanizacion;
+    private BigDecimal geoLat;
+    private BigDecimal geoLong;
+    private BigDecimal frente;
+    private String zonificacion;
+    private Boolean aptoLicenciaFuncionamiento;
+    private BigDecimal cargaElectricaKw;
+    private Integer numeroEstacionamientos;
+    private BigDecimal cuotaMantenimiento;
 
     public LocalComercial() {
     }
@@ -178,6 +195,79 @@ public class LocalComercial {
         this.propietario = propietario;
         this.idPropietario = propietario != null ? propietario.getIdPropietario() : null;
     }
+
+    public TipoInmueble getTipoInmueble() {
+        return tipoInmueble;
+    }
+
+    public void setTipoInmueble(TipoInmueble tipoInmueble) {
+        this.tipoInmueble = tipoInmueble;
+    }
+
+    public UsoInmueble getUso() {
+        return uso;
+    }
+
+    public void setUso(UsoInmueble uso) {
+        this.uso = uso;
+    }
+
+    public Integer getAmbientes() {
+        return ambientes;
+    }
+
+    public void setAmbientes(Integer ambientes) {
+        this.ambientes = ambientes;
+    }
+
+    public Integer getAntiguedadAnios() {
+        return antiguedadAnios;
+    }
+
+    public void setAntiguedadAnios(Integer antiguedadAnios) {
+        this.antiguedadAnios = antiguedadAnios;
+    }
+
+    public String getZonaUrbanizacion() {
+        return zonaUrbanizacion;
+    }
+
+    public void setZonaUrbanizacion(String zonaUrbanizacion) {
+        this.zonaUrbanizacion = zonaUrbanizacion;
+    }
+
+    public BigDecimal getGeoLat() {
+        return geoLat;
+    }
+
+    public void setGeoLat(BigDecimal geoLat) {
+        this.geoLat = geoLat;
+    }
+
+    public BigDecimal getGeoLong() {
+        return geoLong;
+    }
+
+    public void setGeoLong(BigDecimal geoLong) {
+        this.geoLong = geoLong;
+    }
+
+    public BigDecimal getFrente() { return frente; }
+    public void setFrente(BigDecimal frente) { this.frente = frente; }
+    public String getZonificacion() { return zonificacion; }
+    public void setZonificacion(String zonificacion) { this.zonificacion = zonificacion; }
+    public Boolean getAptoLicenciaFuncionamiento() { return aptoLicenciaFuncionamiento; }
+    public void setAptoLicenciaFuncionamiento(Boolean aptoLicenciaFuncionamiento) {
+        this.aptoLicenciaFuncionamiento = aptoLicenciaFuncionamiento;
+    }
+    public BigDecimal getCargaElectricaKw() { return cargaElectricaKw; }
+    public void setCargaElectricaKw(BigDecimal cargaElectricaKw) { this.cargaElectricaKw = cargaElectricaKw; }
+    public Integer getNumeroEstacionamientos() { return numeroEstacionamientos; }
+    public void setNumeroEstacionamientos(Integer numeroEstacionamientos) {
+        this.numeroEstacionamientos = numeroEstacionamientos;
+    }
+    public BigDecimal getCuotaMantenimiento() { return cuotaMantenimiento; }
+    public void setCuotaMantenimiento(BigDecimal cuotaMantenimiento) { this.cuotaMantenimiento = cuotaMantenimiento; }
 
     public void cambiarEstado(EstadoLocalComercial estado) {
         this.estado = estado;

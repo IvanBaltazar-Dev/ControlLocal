@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.controllocal.model.comercial.enums.EstadoCaptacion;
+import com.controllocal.model.comercial.enums.OperacionRequerimiento;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
@@ -26,6 +27,42 @@ public class Captacion {
     private Broker brokerRevisor;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
+
+    // Condiciones del encargo (Diccionario v2): operacion solicitada,
+    // urgencia del propietario (1 a 5) y exclusividad pactada.
+    private OperacionRequerimiento motivoOperacion = OperacionRequerimiento.ALQUILER;
+    private Integer urgencia;
+    private Boolean exclusividad;
+
+    public OperacionRequerimiento getMotivoOperacion() {
+        return motivoOperacion;
+    }
+
+    public void setMotivoOperacion(OperacionRequerimiento motivoOperacion) {
+        if (motivoOperacion != null && motivoOperacion != OperacionRequerimiento.ALQUILER) {
+            throw new IllegalArgumentException("ControlLocal solo admite operaciones de alquiler comercial.");
+        }
+        this.motivoOperacion = OperacionRequerimiento.ALQUILER;
+    }
+
+    public Integer getUrgencia() {
+        return urgencia;
+    }
+
+    public void setUrgencia(Integer urgencia) {
+        if (urgencia != null && (urgencia < 1 || urgencia > 5)) {
+            throw new IllegalArgumentException("La urgencia debe estar entre 1 y 5.");
+        }
+        this.urgencia = urgencia;
+    }
+
+    public Boolean getExclusividad() {
+        return exclusividad;
+    }
+
+    public void setExclusividad(Boolean exclusividad) {
+        this.exclusividad = exclusividad;
+    }
 
     public Captacion() {
     }

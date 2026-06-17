@@ -32,6 +32,7 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
                    u.fecha_actualizacion AS usuario_fecha_actualizacion,
                    p.id_persona, p.tipo_persona, p.tipo_documento, p.numero_documento,
                    p.nombres_o_razon_social, p.telefono, p.correo, p.estado,
+                   p.consentimiento_uso_dato,
                    p.fecha_creacion, p.fecha_actualizacion
             FROM agente_inmobiliario a
             INNER JOIN usuario_interno u ON a.id_usuario = u.id_usuario
@@ -96,6 +97,20 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
             }
         } catch (SQLException e) {
             throw new DAOException("Error al buscar agente inmobiliario con id " + id + ".", e);
+        }
+    }
+
+    @Override
+    public Optional<AgenteInmobiliario> buscarPorUsuario(Long idUsuario) {
+        JdbcSupport.validarId(idUsuario);
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE a.id_usuario = ?")) {
+            ps.setLong(1, idUsuario);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al buscar agente por usuario " + idUsuario + ".", e);
         }
     }
 

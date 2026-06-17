@@ -1,184 +1,439 @@
-@page "/captacion-review"
+@page "/captacion-review/{CodigoParam?}"
 @inject AppState App
+@inject ICaptacionService CaptacionSvc
+@inject ControlLocal.Web.Services.Api.HttpAgenteService AgenteSvc
+@inject INotificacionService Notificaciones
 
-<PageTitle>Revisar captación · ControlLocal</PageTitle>
+<PageTitle>Revisar captacion - ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Captaciones por revisar", "CAP-0226 · Revisión" })"
-          Title="CAP-0226 · Calle Schell 412"
-          Subtitle="Captación enviada por Lucía Ferreyra · revisa el expediente para aprobar, observar o rechazar">
-    <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn" @onclick="@(() => _modal = "reasignar")"><Icon Name="swap" Size="13" /> Reasignar</button>
-        <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
-        <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
-        <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar</button>
-    </Actions>
-    <ChildContent>
-        <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
-            <div class="cl-stack">
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Resumen de la captación</div></div>
-                    <div class="cl-card-body">
-                        <div class="cl-ph" style="height:160px;margin-bottom:14px;">foto del local</div>
-                        <dl class="cl-kv">
-                            <dt>Código</dt><dd><span class="mono">CAP-0226</span></dd>
-                            <dt>Dirección</dt><dd>Calle Schell 412, Miraflores</dd>
-                            <dt>Propietario</dt><dd>Inversiones Trébol S.A.C.</dd>
-                            <dt>Área</dt><dd>95 m²</dd>
-                            <dt>Precio de alquiler</dt><dd>USD 1 950 / mes</dd>
-                            <dt>Rubro objetivo</dt><dd>Restaurante / Café</dd>
-                            <dt>Vigencia</dt><dd>01/05/2026 — 31/07/2026</dd>
-                            <dt>Comisión acordada</dt><dd>5%</dd>
-                            <dt>Agente</dt><dd>Lucía Ferreyra</dd>
-                        </dl>
+@if (_cargando)
+{
+    <div class="cl-card"><div class="cl-card-body">Cargando captacion...</div></div>
+}
+else if (_captacion is null)
+{
+    <div class="cl-card">
+        <div class="cl-card-body">
+            <div class="cl-alert red"><Icon Name="alert" Size="15" /><span>@(_error ?? "Captacion no encontrada.")</span></div>
+            <button class="cl-btn" style="margin-top:12px;" @onclick="@(() => App.Navigate("bandeja-captaciones"))">Volver a la bandeja</button>
+        </div>
+    </div>
+}
+else
+{
+    <AppShell Crumbs="@(new[] { "ControlLocal", "Captaciones por revisar", $"{_captacion.CodigoCaptacion} - Revision" })"
+              Title="@($"{_captacion.CodigoCaptacion} - {_captacion.DireccionLocal}")"
+              Subtitle="@($"Captacion enviada por {_captacion.NombreAgenteResponsable} - estado actual: {_captacion.Estado}")">
+        <Actions>
+            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+            @if (EstadoPermiteRevision)
+            {
+                <button class="cl-btn" disabled="@_procesando" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar</button>
+                <button class="cl-btn danger" disabled="@_procesando" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
+                <button class="cl-btn primary" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar</button>
+                <button class="cl-btn success" disabled="@_procesando" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar</button>
+            }
+        </Actions>
+        <ChildContent>
+            @if (_mensajeRevision is not null)
+            {
+                <div class="cl-alert @_mensajeRevision.Tone" style="margin-bottom:14px;">
+                    <Icon Name="@_mensajeRevision.Icon" Size="15" />
+                    <span>@_mensajeRevision.Text</span>
+                </div>
+            }
+            @if (_error is not null)
+            {
+                <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+            }
+
+            <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Resumen de la captacion</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv">
+                                <dt>Codigo</dt><dd><span class="mono">@_captacion.CodigoCaptacion</span></dd>
+                                <dt>Direccion</dt><dd>@_captacion.DireccionLocal, @_captacion.DistritoLocal</dd>
+                                <dt>Propietario</dt><dd>@Texto(_captacion.PropietarioNombre)</dd>
+                                <dt>Area</dt><dd>@_captacion.AreaM2 m2</dd>
+                                <dt>Rubro</dt><dd>@Texto(_captacion.Rubro)</dd>
+                                <dt>Vigencia</dt><dd>@Vigencia</dd>
+                                <dt>Comision acordada</dt><dd>@_captacion.ComisionPactadaTexto%</dd>
+                                <dt>Agente responsable</dt><dd>@Texto(_captacion.NombreAgenteResponsable)</dd>
+                                <dt>Estado</dt><dd><StatusBadge Label="@_captacion.Estado" /></dd>
+                            </dl>
+                        </div>
                     </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Condiciones comerciales</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv">
+                                <dt>Operacion</dt><dd>@OperacionTexto</dd>
+                                <dt>Exclusividad</dt><dd>@(_captacion.Exclusividad is null ? "No registrada" : _captacion.Exclusividad.Value ? "Si" : "No")</dd>
+                                <dt>Urgencia</dt><dd>@UrgenciaTexto</dd>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Observaciones del agente</div></div>
+                        <div class="cl-card-body">
+                            <p style="font-size:12.5px;color:var(--c-text-2);margin:0;">@Texto(_captacion.Observaciones)</p>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_captacion.ObservacionRevision))
+                    {
+                        <div class="cl-card">
+                            <div class="cl-card-head"><div class="cl-card-title">Ultima observacion del broker</div></div>
+                            <div class="cl-card-body">@_captacion.ObservacionRevision</div>
+                        </div>
+                    }
                 </div>
 
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Observaciones del agente</div></div>
-                    <div class="cl-card-body">
-                        <p style="font-size:12.5px;color:var(--c-text-2);margin:0;">El propietario otorga exclusividad por 90 días. El local cuenta con licencia de funcionamiento vigente para giro de restaurante. Se adjunta partida registral y contrato de exclusividad firmado.</p>
+                <div class="cl-stack">
+                    <div class="cl-alert blue">
+                        <Icon Name="info" Size="15" />
+                        <span>Revisa el expediente y registra una decision. La captacion solo cambiara de estado cuando confirmes la accion.</span>
                     </div>
-                </div>
-
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Documentos adjuntos</div></div>
-                    <div class="cl-card-body" style="padding:0;">
-                        @for (var i = 0; i < _docs.Length; i++)
-                        {
-                            var d = _docs[i];
-                            var top = i == 0 ? "0" : "1px solid #E2E6EC";
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
-                                <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@d.Name</span></div>
-                                <div class="cl-flex" style="gap:10px;">
-                                    <StatusBadge Label="@d.Status" />
-                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Datos de trazabilidad</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv">
+                                <dt>Registrada</dt><dd>@(_captacion.FechaCaptacion?.ToString("dd/MM/yyyy") ?? "Sin fecha")</dd>
+                                <dt>Revisada</dt><dd>@(_captacion.FechaRevision?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</dd>
+                                <dt>ID interno</dt><dd><span class="mono">@_captacion.Id</span></dd>
+                            </dl>
+                        </div>
+                    </div>
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Estado de revision</div></div>
+                        <div class="cl-card-body">
+                            @if (EstadoPermiteRevision)
+                            {
+                                <div style="display:flex;flex-direction:column;gap:8px;">
+                                    <button class="cl-btn success" disabled="@_procesando" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar captacion</button>
+                                    <button class="cl-btn primary" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar y devolver</button>
+                                    <button class="cl-btn danger" disabled="@_procesando" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
+                                    <button class="cl-btn" disabled="@_procesando" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar agente</button>
                                 </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Observaciones del broker</div></div>
-                    <div class="cl-card-body">
-                        <Field Label="Observaciones">
-                            <textarea rows="3"
-                                      value="@_motivo"
-                                      @oninput="@(e => _motivo = e.Value?.ToString() ?? "")"
-                                      placeholder="Ej. Documentación conforme; ajustar la vigencia al contrato de exclusividad…"></textarea>
-                        </Field>
-                        <div class="cl-help" style="margin-top:8px;">Estas notas quedan registradas en la auditoría del expediente y son visibles para el agente.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="cl-stack">
-                <div class="cl-alert blue">
-                    <Icon Name="alert" Size="15" />
-                    <span>Esta captación lleva <b>2 días</b> en tu bandeja. Resuélvela para que el agente continúe el proceso comercial.</span>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Historial del expediente</div></div>
-                    <div class="cl-card-body">
-                        <Timeline Items="_timeline" />
-                    </div>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Acciones rápidas</div></div>
-                    <div class="cl-card-body">
-                        <div style="display:flex;flex-direction:column;gap:8px;">
-                            <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar captación</button>
-                            <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar y devolver</button>
-                            <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
-                            <button class="cl-btn" @onclick="@(() => _modal = "reasignar")"><Icon Name="swap" Size="13" /> Reasignar a otro agente</button>
+                            }
+                            else
+                            {
+                                <div class="cl-alert @PanelRevision.Tone">
+                                    <Icon Name="@PanelRevision.Icon" Size="15" />
+                                    <span>@PanelRevision.Text</span>
+                                </div>
+                                <button class="cl-btn ghost" style="width:100%;margin-top:10px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("bandeja-captaciones"))">Volver a la bandeja</button>
+                            }
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <ConfirmDialog Open="@(_modal == "aprobar")" Tone="green" Icon="check"
-                       Title="¿Aprobar esta captación?"
-                       Desc="La captación quedará activa y disponible para el proceso comercial. El agente podrá vincular clientes y registrar visitas."
-                       ConfirmLabel="Aprobar captación" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@(() => Resolve("Captación aprobada · ahora está activa"))" />
+            <ConfirmDialog Open="@(_modal == "aprobar")" Tone="green" Icon="check"
+                           Title="Aprobar esta captacion"
+                           Desc="La captacion quedara activa y disponible para el proceso comercial."
+                           ConfirmLabel="Aprobar captacion" CancelLabel="Cancelar"
+                           Busy="@_procesando"
+                           OnClose="@CerrarModal"
+                           OnConfirm="@(() => ResolverAsync("APROBAR", "Captacion aprobada"))">
+                <Field Label="Nota opcional">
+                    <textarea rows="3" @bind="_motivo"></textarea>
+                </Field>
+            </ConfirmDialog>
 
-        <ConfirmDialog Open="@(_modal == "observar")" Tone="blue" Icon="alert"
-                       Title="Observar y devolver al agente"
-                       Desc="El agente recibirá las observaciones y deberá subsanarlas antes de reenviar el expediente."
-                       ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@(() => Resolve("Captación observada · devuelta al agente"))">
-            <Field Label="Motivo de la observación" Required="true">
-                <textarea rows="3" placeholder="Indica qué debe corregir el agente…"></textarea>
-            </Field>
-        </ConfirmDialog>
+            <ConfirmDialog Open="@(_modal == "observar")" Tone="blue" Icon="alert"
+                           Title="Observar y devolver al agente"
+                           Desc="Indica que debe corregir el agente antes de reenviar."
+                           ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"
+                           Busy="@_procesando"
+                           OnClose="@CerrarModal"
+                           OnConfirm="@(() => ResolverAsync("OBSERVAR", "Captacion observada"))">
+                <Field Label="Motivo de la observacion" Required="true">
+                    <textarea rows="3" @bind="_motivo"></textarea>
+                </Field>
+            </ConfirmDialog>
 
-        <ConfirmDialog Open="@(_modal == "rechazar")" Tone="red" Icon="x"
-                       Title="¿Rechazar esta captación?"
-                       Desc="El expediente quedará cerrado como rechazado. Esta acción queda registrada en la auditoría global."
-                       ConfirmLabel="Rechazar captación" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@(() => Resolve("Captación rechazada"))">
-            <Field Label="Motivo del rechazo" Required="true">
-                <select>
-                    <option>Documentación insuficiente</option>
-                    <option>Precio fuera de mercado</option>
-                    <option>Propietario sin exclusividad</option>
-                    <option>Local no apto</option>
-                </select>
-            </Field>
-        </ConfirmDialog>
+            <ConfirmDialog Open="@(_modal == "rechazar")" Tone="red" Icon="x"
+                           Title="Rechazar esta captacion"
+                           Desc="El expediente quedara rechazado y la causa se registrara en la trazabilidad."
+                           ConfirmLabel="Rechazar captacion" CancelLabel="Cancelar"
+                           Busy="@_procesando"
+                           OnClose="@CerrarModal"
+                           OnConfirm="@(() => ResolverAsync("RECHAZAR", "Captacion rechazada"))">
+                <Field Label="Motivo del rechazo" Required="true">
+                    <textarea rows="3" @bind="_motivo"></textarea>
+                </Field>
+            </ConfirmDialog>
 
-        <ConfirmDialog Open="@(_modal == "reasignar")" Tone="blue" Icon="users"
-                       Title="Reasignar captación"
-                       Desc="Transfiere este expediente a otro agente bajo tu supervisión. El nuevo agente continuará el proceso."
-                       ConfirmLabel="Reasignar" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@(() => Resolve("Captación reasignada"))">
-            <Field Label="Nuevo agente" Required="true">
-                <select>
-                    <option>Diego Paredes</option>
-                    <option>Ana Torres</option>
-                    <option>Marco Ríos</option>
-                </select>
-            </Field>
-        </ConfirmDialog>
+            <ConfirmDialog Open="@(_modal == "reasignar")" Tone="blue" Icon="users"
+                           Title="Reasignar captacion"
+                           Desc="Selecciona al agente que continuara el expediente e indica el motivo."
+                           ConfirmLabel="Reasignar" CancelLabel="Cancelar"
+                           Busy="@_procesando"
+                           OnClose="@CerrarModal"
+                           OnConfirm="@ReasignarAsync">
+                <Field Label="Nuevo agente" Required="true">
+                    <select @bind="_nuevoAgenteId">
+                        <option value="0">Selecciona un agente</option>
+                        @foreach (var agente in _agentes.Where(a => a.Id != _captacion.AgenteResponsableId))
+                        {
+                            <option value="@agente.Id">@agente.Nombre</option>
+                        }
+                    </select>
+                </Field>
+                <Field Label="Motivo" Required="true">
+                    <textarea rows="3" @bind="_motivo"></textarea>
+                </Field>
+            </ConfirmDialog>
 
-        <Toast Show="@(_toast is not null)">@_toast</Toast>
-    </ChildContent>
-</AppShell>
+            <Toast Show="@(_toast is not null)">@_toast</Toast>
+        </ChildContent>
+    </AppShell>
+}
 
 @code {
+    [Parameter] public string? CodigoParam { get; set; }
+
+    private CaptacionDto? _captacion;
+    private bool _cargando;
     private string? _modal;
     private string? _toast;
+    private string? _error;
     private string _motivo = "";
+    private long _nuevoAgenteId;
+    private bool _procesando;
+    private IReadOnlyList<AgenteDto> _agentes = [];
+    private RevisionMessage? _mensajeRevision;
 
-    private record Doc(string Name, string Status);
+    private string Vigencia => _captacion?.FechaInicioVigencia is { } inicio
+        && _captacion.FechaFinVigencia is { } fin
+        ? $"{inicio:dd/MM/yyyy} - {fin:dd/MM/yyyy}"
+        : Texto(_captacion?.VigenciaTexto);
 
-    private readonly Doc[] _docs = new[]
+    private bool EsEstadoFinal => _captacion?.Estado is "Activa" or "Rechazada" or "Cerrada" or "Vencida" or "A" or "R" or "C" or "V";
+
+    private bool EstadoPermiteRevision => _captacion?.Estado is "Pendiente de revision" or "Observada" or "P" or "O";
+
+    private bool PuedeRevisar => !_procesando && EstadoPermiteRevision;
+
+    private string OperacionTexto =>
+        string.IsNullOrWhiteSpace(_captacion?.MotivoOperacion)
+            ? "No registrada"
+            : EnumCatalog.LabelFor(EnumCatalog.OperacionesRequerimiento, _captacion.MotivoOperacion);
+
+    private string UrgenciaTexto => _captacion?.Urgencia switch
     {
-        new Doc("Contrato_de_exclusividad.pdf", "Verificado"),
-        new Doc("Partida_registral.pdf", "Verificado"),
-        new Doc("Licencia_funcionamiento.pdf", "Pendiente"),
+        1 => "Muy baja (1/5)",
+        2 => "Baja (2/5)",
+        3 => "Media (3/5)",
+        4 => "Alta (4/5)",
+        5 => "Muy alta (5/5)",
+        _ => "No registrada",
     };
 
-    private readonly Timeline.TimelineItem[] _timeline = new[]
-    {
-        new Timeline.TimelineItem("Hace 2 días", "Captación enviada", "Lucía Ferreyra envió el expediente", "done"),
-        new Timeline.TimelineItem("Hace 2 días", "Documentos adjuntados", "3 archivos cargados", "done"),
-        new Timeline.TimelineItem("Ayer", "Revisión iniciada", "Asignada a tu bandeja", "done"),
-        new Timeline.TimelineItem("Hoy", "Pendiente de resolución", "Esperando tu decisión", "active"),
-    };
+    private RevisionMessage PanelRevision =>
+        MensajeParaEstado(_captacion?.Estado)
+        ?? new RevisionMessage("blue", "info", "La revision de esta captacion ya fue registrada.");
 
-    private async Task Resolve(string msg)
+    protected override async Task OnParametersSetAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            var captacionTask = string.IsNullOrWhiteSpace(CodigoParam)
+                ? Task.FromResult<CaptacionDto?>(null)
+                : CaptacionSvc.ObtenerPorCodigoAsync(CodigoParam);
+            var agentesTask = AgenteSvc.RefrescarAsync();
+
+            _captacion = await captacionTask;
+            _agentes = await agentesTask;
+            if (_captacion is null)
+                _error = "No se encontro la captacion solicitada.";
+            else if (EsEstadoFinal)
+                _mensajeRevision ??= MensajeParaEstado(_captacion.Estado);
+        }
+        catch (Exception error)
+        {
+            _error = error.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void AbrirModal(string modal)
+    {
+        _modal = modal;
+        _motivo = "";
+        _nuevoAgenteId = 0;
+        _error = null;
+    }
+
+    private void CerrarModal() => _modal = null;
+
+    private async Task ResolverAsync(string decision, string mensaje)
+    {
+        if (_captacion is null || _procesando)
+            return;
+        if (!PuedeRevisar)
+        {
+            _error = "La captacion ya no esta pendiente de revision u observada. Recarga la bandeja para ver su estado actual.";
+            _modal = null;
+            return;
+        }
+        try
+        {
+            _procesando = true;
+            _error = null;
+            StateHasChanged();
+            await CaptacionSvc.ResolverBandejaAsync(_captacion.CodigoCaptacion, decision, _motivo);
+            NotificarAgente(decision);
+            await FinalizarAsync(mensaje);
+        }
+        catch (Exception error)
+        {
+            if (await ConfirmarDecisionAplicadaAsync(decision, mensaje))
+                return;
+
+            _error = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+
+    private async Task ReasignarAsync()
+    {
+        if (_captacion is null || _procesando)
+            return;
+        if (!PuedeRevisar)
+        {
+            _error = "La captacion ya no se puede reasignar porque su revision ya fue registrada.";
+            _modal = null;
+            return;
+        }
+        if (_nuevoAgenteId <= 0)
+        {
+            _error = "Selecciona el agente que recibira la captacion.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_motivo))
+        {
+            _error = "Ingresa el motivo de la reasignacion.";
+            return;
+        }
+        try
+        {
+            _procesando = true;
+            _error = null;
+            StateHasChanged();
+            await CaptacionSvc.ReasignarBandejaAsync(
+                _captacion.CodigoCaptacion,
+                _nuevoAgenteId,
+                _motivo);
+            await FinalizarAsync("Captacion reasignada");
+        }
+        catch (Exception error)
+        {
+            _error = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+
+    // Avisa al agente captador el resultado de la revision de su captacion.
+    private void NotificarAgente(string decision)
+    {
+        if (_captacion is null) return;
+        var (estado, severidad, icono) = decision.Trim().ToUpperInvariant() switch
+        {
+            "APROBAR" => ("aprobada", "MEDIA", "check"),
+            "OBSERVAR" => ("observada", "ALTA", "alert"),
+            "RECHAZAR" => ("rechazada", "ALTA", "x"),
+            _ => ("revisada", "MEDIA", "fileText"),
+        };
+        var ruta = estado == "observada"
+            ? $"captacion-form/{_captacion.CodigoCaptacion}"
+            : $"captacion-detail/{_captacion.CodigoCaptacion}";
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = $"Captación {estado}",
+            Mensaje = $"Tu captación {_captacion.CodigoCaptacion} ({_captacion.DireccionLocal}) fue {estado} por el broker.",
+            Severidad = severidad,
+            Icono = icono,
+            EntidadTipo = "Captacion",
+            EntidadRef = _captacion.CodigoCaptacion,
+            Ruta = ruta,
+            DestinatarioRol = Roles.Agente,
+            Fecha = DateTime.Now,
+        });
+    }
+
+    private async Task FinalizarAsync(string mensaje)
     {
         _modal = null;
-        _toast = msg;
+        await RefrescarCaptacionAsync();
+        _mensajeRevision = MensajeParaEstado(_captacion?.Estado, mensaje);
+        _toast = _mensajeRevision?.Text ?? mensaje;
         StateHasChanged();
-        await Task.Delay(950);
-        App.Navigate("bandeja-captaciones");
+        await Task.CompletedTask;
     }
+
+    private async Task<bool> ConfirmarDecisionAplicadaAsync(string decision, string mensaje)
+    {
+        try
+        {
+            await RefrescarCaptacionAsync();
+            if (_captacion is not null && EstadoCoincide(decision, _captacion.Estado))
+            {
+                await FinalizarAsync(mensaje);
+                return true;
+            }
+        }
+        catch
+        {
+            // Si tampoco se puede refrescar, dejamos visible el error original.
+        }
+        return false;
+    }
+
+    private async Task RefrescarCaptacionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CodigoParam)) return;
+        var actualizada = await CaptacionSvc.ObtenerPorCodigoAsync(CodigoParam);
+        if (actualizada is not null)
+            _captacion = actualizada;
+    }
+
+    private static bool EstadoCoincide(string decision, string estado) =>
+        decision.Trim().ToUpperInvariant() switch
+        {
+            "APROBAR" or "A" => estado is "Activa" or "A",
+            "OBSERVAR" or "O" => estado is "Observada" or "O",
+            "RECHAZAR" or "R" => estado is "Rechazada" or "R",
+            _ => false,
+        };
+
+    private static RevisionMessage? MensajeParaEstado(string? estado, string? fallback = null) => estado switch
+    {
+        "Activa" or "A" => new("green", "checkCircle", "Captacion aprobada. Ya esta activa y disponible para el proceso comercial."),
+        "Observada" or "O" => new("blue", "alert", "Captacion observada. El agente debe corregirla y reenviarla a revision."),
+        "Rechazada" or "R" => new("red", "x", "Captacion rechazada. La decision quedo registrada."),
+        _ when fallback is not null => new("green", "checkCircle", fallback),
+        _ => null,
+    };
+
+    private static string Texto(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? "No registrado" : valor;
+
+    private sealed record RevisionMessage(string Tone, string Icon, string Text);
 }

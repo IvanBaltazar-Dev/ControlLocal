@@ -2,6 +2,7 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject IAgenteService AgenteSvc
+@inject ExportacionService Exportar
 
 <PageTitle>Mis agentes · ControlLocal</PageTitle>
 
@@ -16,10 +17,14 @@
             <Icon Name="info" Size="15" />
             <span>Al registrar un agente se crea automáticamente una <b>relación activa de supervisión</b> entre tú y el agente. Solo el broker administrador puede reasignar agentes a otro broker.</span>
         </div>
-        @{ var filtrados = Filtrados().ToList(); }
+        @{
+            var filtrados = Filtrados().ToList();
+            var visibles = Paginador.Pagina(filtrados, ref _pagina);
+        }
         <FilterBar Search="Buscar agente por nombre, DNI o correo…"
                    @bind-Value="_query" ResultCount="filtrados.Count"
-                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros"
+                   OnExport="@(() => ExportarCsv(filtrados))">
             <FilterSelect Placeholder="Todos los estados" Options="_estados" @bind-Value="_estado" />
             <FilterSelect Placeholder="Todas las zonas" Options="_zonas" @bind-Value="_zona" />
         </FilterBar>
@@ -33,7 +38,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var a in filtrados)
+                        @foreach (var a in visibles)
                         {
                             <tr>
                                 <td>
@@ -57,7 +62,7 @@
                                         <button title="Editar" @onclick="@(() => App.Navigate($"agente-form/{a.Id}"))"><Icon Name="edit" Size="13" /></button>
                                         @if (a.EstadoAdministrativo == "Activo")
                                         {
-                                            <button class="danger" title="Desactivar" @onclick="@(() => _deactivate = a.Nombre)"><Icon Name="x" Size="13" /></button>
+                                            <button class="danger" title="Desactivar" @onclick="@(() => PrepararDesactivacion(a))"><Icon Name="x" Size="13" /></button>
                                         }
                                     </div>
                                 </td>
@@ -75,7 +80,7 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtrados.Count" />
+        <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
 
         <ConfirmDialog Open="@(_deactivate is not null)" Tone="red" Icon="alert"
                        Title="¿Desactivar agente?"
@@ -89,9 +94,11 @@
 
 @code {
     private string? _deactivate;
+    private long? _deactivateId;
     private string? _toast;
 
     private string _query = "", _estado = "", _zona = "";
+    private int _pagina = 1;
 
     private IReadOnlyList<AgenteDto> Todos => AgenteSvc.All();
 
@@ -101,7 +108,18 @@
 
     private bool HayFiltros => new[] { _query, _estado, _zona }.Any(s => !string.IsNullOrEmpty(s));
 
-    private void LimpiarFiltros() { _query = _estado = _zona = ""; }
+    private void LimpiarFiltros() { _query = _estado = _zona = ""; _pagina = 1; }
+
+    private async Task ExportarCsv(IReadOnlyList<AgenteDto> filtrados)
+    {
+        await Exportar.DescargarCsvAsync("agentes",
+            new[] { "Agente", "Correo", "Documento", "Zona", "Supervisión desde", "Captaciones", "Operaciones activas", "Estado" },
+            filtrados.Select(a => (IReadOnlyList<string?>)new[]
+            {
+                a.Nombre, a.Email, a.NumeroDocumento, a.Zona, a.FechaIngresoTexto,
+                a.CaptacionesActivas.ToString(), a.OportunidadesActivas.ToString(), a.EstadoAdministrativo,
+            }));
+    }
 
     private IEnumerable<AgenteDto> Filtrados() => Todos.Where(a =>
         (string.IsNullOrEmpty(_estado) || a.EstadoAdministrativo == _estado) &&
@@ -116,9 +134,18 @@
     private async Task OnDeactivate()
     {
         var n = _deactivate;
+        if (_deactivateId is long id)
+            AgenteSvc.Desactivar(id);
         _deactivate = null;
+        _deactivateId = null;
         _toast = $"{n} fue desactivado";
         await RenderIfAliveAsync();
         await DelayThenRenderAsync(2200, () => _toast = null);
+    }
+
+    private void PrepararDesactivacion(AgenteDto agente)
+    {
+        _deactivateId = agente.Id;
+        _deactivate = agente.Nombre;
     }
 }

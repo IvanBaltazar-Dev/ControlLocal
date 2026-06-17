@@ -7,6 +7,8 @@ public enum CanalContacto implements CodigoEnum {
     WHATSAPP("W", "WhatsApp"),
     EMAIL("E", "Email"),
     PRESENCIAL("P", "Presencial"),
+    REUNION("R", "Reunion"),
+    PORTAL("T", "Portal"),
     OTRO("O", "Otro");
 
     private final String codigo;

@@ -12,6 +12,7 @@ public interface BrokerBusinessLogic {
     public Long registrarBroker(Long idBrokerAdministrador, Broker broker);
     public Long registrarPrimerBrokerAdministrador(Broker broker);
     public Optional<Broker> buscarPorId(Long idBroker);
+    public Optional<Broker> buscarPorUsuario(Long idUsuario);
     public List<Broker> listarTodos();
     public boolean actualizarBroker(Long idBrokerAdministrador, Broker broker);
     public boolean desactivarBroker(Long idBrokerAdministrador, Long idBroker);

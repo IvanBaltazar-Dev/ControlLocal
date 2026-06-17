@@ -1,0 +1,17 @@
+# ============================================================
+# Configuracion AWS S3 para la capa REST (controllocal-rest)
+# ------------------------------------------------------------
+# Copia este archivo a "aws.properties" (mismo directorio) y completa
+# tus credenciales. NUNCA subas aws.properties a git: esta ignorado
+# en .gitignore (**/aws.properties).
+#
+# Para credenciales temporales (STS, accessKeyId que empieza con "ASIA")
+# completa tambien aws.sessionToken. Para credenciales permanentes
+# (accessKeyId que empieza con "AKIA") deja aws.sessionToken vacio.
+# ============================================================
+
+aws.accessKeyId=TU_ACCESS_KEY_ID
+aws.secretAccessKey=TU_SECRET_ACCESS_KEY
+aws.sessionToken=
+aws.region=us-east-1
+aws.s3.bucket=controllocal-archivos

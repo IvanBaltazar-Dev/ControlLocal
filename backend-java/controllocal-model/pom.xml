@@ -14,4 +14,13 @@
     <artifactId>controllocal-model</artifactId>
     <name>ControlLocal Model</name>
     <packaging>jar</packaging>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

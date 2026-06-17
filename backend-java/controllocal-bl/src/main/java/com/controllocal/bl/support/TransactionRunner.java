@@ -4,8 +4,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 import com.controllocal.bl.BusinessException;
-import com.controllocal.config.DatabaseConfig;
-import com.controllocal.config.DBManager;
+import com.controllocal.config.TransactionContext;
 
 public final class TransactionRunner {
 
@@ -17,19 +16,44 @@ public final class TransactionRunner {
     }
 
     public static <T> T write(TransactionalConnectionSupplier<T> supplier) {
+        RuntimeException failure = null;
         try {
-            Connection conn = DBManager.beginTransaction();
+            Connection conn = TransactionContext.getConnection();
             T result = supplier.get(conn);
-            DatabaseConfig.commit();
+            TransactionContext.commit();
             return result;
         } catch (RuntimeException e) {
-            DatabaseConfig.rollback();
+            failure = e;
+            rollback(e);
             throw e;
         } catch (Exception e) {
-            DatabaseConfig.rollback();
-            throw new BusinessException("Error al ejecutar la operacion transaccional.", e);
+            BusinessException businessError =
+                    new BusinessException("Error al ejecutar la operacion transaccional.", e);
+            failure = businessError;
+            rollback(businessError);
+            throw businessError;
         } finally {
-            DatabaseConfig.close();
+            close(failure);
+        }
+    }
+
+    private static void rollback(Exception originalError) {
+        try {
+            TransactionContext.rollback();
+        } catch (SQLException rollbackError) {
+            originalError.addSuppressed(rollbackError);
+        }
+    }
+
+    private static void close(RuntimeException originalError) {
+        try {
+            TransactionContext.close();
+        } catch (SQLException closeError) {
+            if (originalError != null) {
+                originalError.addSuppressed(closeError);
+                return;
+            }
+            throw new BusinessException("No se pudo cerrar la conexion transaccional.", closeError);
         }
     }
 
@@ -45,14 +69,6 @@ public final class TransactionRunner {
             runnable.run(conn);
             return null;
         });
-    }
-
-    public static void commit() {
-        try {
-            DatabaseConfig.commit();
-        } catch (SQLException e) {
-            throw new BusinessException("No se pudo confirmar la transaccion.", e);
-        }
     }
 
     @FunctionalInterface

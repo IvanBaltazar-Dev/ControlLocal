@@ -1,28 +1,25 @@
 @page "/reportes"
+@using QuestPDF.Fluent
 @inject AppState App
+@inject ExportacionService Exportar
 
 <PageTitle>@_title · ControlLocal</PageTitle>
 
 <AppShell Active="@_sideActive" Crumbs="@(new[] { "ControlLocal", _title })" Title="@_title" Subtitle="@_subtitle">
     <Actions>
-        <select class="cl-select" style="width:150px;"><option>Últimos 6 meses</option><option>Este año</option><option>Último trimestre</option></select>
-        <button class="cl-btn primary"><Icon Name="download" Size="13" /> Exportar PDF</button>
+        <select class="cl-select" style="width:150px;" @bind="_periodo">
+            @foreach (var p in ReporteIndicadores.Periodos)
+            {
+                <option value="@p.Codigo">@p.Etiqueta</option>
+            }
+        </select>
+        <button class="cl-btn primary" @onclick="ExportarPdf"><Icon Name="download" Size="13" /> Exportar PDF</button>
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
-            @if (_isAdmin)
+            @foreach (var i in Datos.Indicadores)
             {
-                <MetricCard Icon="pin" Label="Captaciones totales" Value="186" Delta="+12%" Tone="navy" />
-                <MetricCard Icon="check" Label="Operaciones cerradas" Value="64" Delta="+8%" Tone="green" />
-                <MetricCard Icon="target" Label="Tasa de conversión" Value="22%" Delta="+2 pts" Tone="blue" />
-                <MetricCard Icon="briefcase" Label="Comisión generada" Value="USD 128 K" Delta="+15%" Tone="blue" />
-            }
-            else
-            {
-                <MetricCard Icon="pin" Label="Captaciones del equipo" Value="64" Delta="+6 este mes" Tone="navy" />
-                <MetricCard Icon="check" Label="Cierres del equipo" Value="14" Delta="+2 vs mes ant." Tone="green" />
-                <MetricCard Icon="target" Label="Conversión" Value="22%" Delta="+3 pts" Tone="blue" />
-                <MetricCard Icon="calendar" Label="Visitas realizadas" Value="98" Delta="+11" Tone="blue" />
+                <MetricCard Icon="@i.Icono" Label="@i.Etiqueta" Value="@i.Valor" Delta="@i.Delta" Tone="@i.Tono" />
             }
         </div>
 
@@ -35,7 +32,7 @@
                     </div>
                 </div>
                 <div class="cl-card-body">
-                    <BarChart Data="_bars" Height="200" Labels="_barLabels" />
+                    <BarChart Data="Datos.CierresPorMes.Valores" Height="200" Labels="Datos.CierresPorMes.Etiquetas" />
                 </div>
             </div>
             <div class="cl-card">
@@ -43,12 +40,12 @@
                 <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
                     <DonutChart Segments="_donut" />
                     <div style="flex:1;font-size:12px;">
-                        @foreach (var (c, n, v) in _legend)
+                        @foreach (var e in Datos.Etapas)
                         {
                             <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
-                                <span style="width:9px;height:9px;border-radius:2px;background:@c;"></span>
-                                <span style="flex:1;">@n</span>
-                                <b>@v</b>
+                                <span style="width:9px;height:9px;border-radius:2px;background:@e.Color;"></span>
+                                <span style="flex:1;">@e.Nombre</span>
+                                <b>@e.Valor</b>
                             </div>
                         }
                     </div>
@@ -60,7 +57,7 @@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">Embudo de conversión</div></div>
                 <div class="cl-card-body">
-                    @foreach (var r in _funnel)
+                    @foreach (var r in Datos.Embudo)
                     {
                         <div style="margin-bottom:12px;">
                             <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
@@ -79,14 +76,14 @@
                     <table class="cl-table">
                         <thead><tr><th>@(_isAdmin ? "Broker" : "Agente")</th><th>Captac.</th><th>Cierres</th><th>Conversión</th><th>Tendencia</th></tr></thead>
                         <tbody>
-                            @foreach (var r in _perf)
+                            @foreach (var r in Datos.Desempeno)
                             {
                                 <tr>
-                                    <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r.Name)</span>@r.Name</div></td>
-                                    <td>@r.Cap</td>
+                                    <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r.Nombre)</span>@r.Nombre</div></td>
+                                    <td>@r.Captaciones</td>
                                     <td><b>@r.Cierres</b></td>
-                                    <td><StatusBadge Label="@r.Conv" ToneOverride="@ConvTone(r.Conv)" Plain="true" /></td>
-                                    <td><Sparkline Data="@r.Trend" Height="28" Color="#2F7D52" /></td>
+                                    <td><StatusBadge Label="@r.Conversion" ToneOverride="@ConvTone(r.Conversion)" Plain="true" /></td>
+                                    <td><Sparkline Data="@r.Tendencia" Height="28" Color="#2F7D52" /></td>
                                 </tr>
                             }
                         </tbody>
@@ -99,12 +96,19 @@
 
 @code {
     private bool _isAdmin => App.Role == Roles.Admin;
+    private string _periodo = "6m";
 
     private string _title => _isAdmin ? "Reportes globales" : "Reportes de equipo";
     private string _sideActive => _isAdmin ? "Reportes globales" : "Reportes de equipo";
     private string _subtitle => _isAdmin
         ? "Indicadores de toda la corredora · desempeño por broker y conversión global"
         : "Indicadores de los agentes a tu cargo · captaciones, cierres y conversión";
+
+    private DatosReporte Datos => ReporteIndicadores.Para(_isAdmin, _periodo);
+
+    private DonutChart.Segment[] _donut => Datos.Etapas
+        .Select(e => new DonutChart.Segment(double.Parse(e.Valor), e.Color))
+        .ToArray();
 
     private static string Initials(string name) =>
         string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(w => w[0]));
@@ -115,46 +119,10 @@
         return n >= 22 ? "green" : n >= 18 ? "blue" : "red";
     }
 
-    private readonly double[] _bars = { 6, 8, 7, 11, 9, 14 };
-    private readonly string[] _barLabels = { "Dic", "Ene", "Feb", "Mar", "Abr", "May" };
-
-    private readonly DonutChart.Segment[] _donut =
+    private async Task ExportarPdf()
     {
-        new(22, "#005BFF"), new(18, "#00AEEF"), new(14, "#2F7D52"), new(6, "#D64550"), new(4, "#7E8794"),
-    };
-
-    private readonly (string Color, string Name, string Value)[] _legend =
-    {
-        ("#005BFF", "Captada", "22"),
-        ("#00AEEF", "Con interacciones", "18"),
-        ("#2F7D52", "Alquilada", "14"),
-        ("#D64550", "Rechazada", "6"),
-        ("#7E8794", "No continúa", "4"),
-    };
-
-    private readonly string[][] _funnel =
-    {
-        new[] { "Captaciones activas", "64", "100%", "#005BFF" },
-        new[] { "Con visita realizada", "41", "64%", "#00AEEF" },
-        new[] { "Con solicitud creada", "28", "44%", "#00AEEF" },
-        new[] { "Cerradas exitosas", "14", "22%", "#2F7D52" },
-    };
-
-    private record Perf(string Name, string Cap, string Cierres, string Conv, double[] Trend);
-
-    private Perf[] _perf => _isAdmin
-        ? new[]
-        {
-            new Perf("Ricardo Salas", "38", "9", "24%", new double[] { 4, 6, 5, 8, 7, 9 }),
-            new Perf("Mariana Quintero", "31", "8", "26%", new double[] { 3, 5, 6, 6, 8, 9 }),
-            new Perf("Felipe Andrade", "27", "5", "19%", new double[] { 4, 4, 5, 5, 6, 5 }),
-            new Perf("Sandra Ríos", "22", "4", "18%", new double[] { 2, 3, 4, 4, 5, 4 }),
-        }
-        : new[]
-        {
-            new Perf("Valentina Mora", "14", "5", "26%", new double[] { 2, 3, 4, 4, 5, 6 }),
-            new Perf("Carolina Vega", "9", "3", "22%", new double[] { 1, 2, 3, 3, 4, 4 }),
-            new Perf("Andrea Torres", "6", "2", "20%", new double[] { 1, 1, 2, 2, 3, 3 }),
-            new Perf("Paola Reyes", "7", "2", "18%", new double[] { 1, 2, 2, 2, 2, 3 }),
-        };
+        var etiqueta = ReporteIndicadores.Periodos.First(p => p.Codigo == _periodo).Etiqueta;
+        var pdf = new ReporteIndicadoresDocument(Datos, etiqueta).GeneratePdf();
+        await Exportar.DescargarPdfAsync(_isAdmin ? "reporte_global" : "reporte_equipo", pdf);
+    }
 }

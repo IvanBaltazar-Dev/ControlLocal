@@ -15,5 +15,9 @@ public interface SolicitudAlquilerBusinessLogic {
     public List<SolicitudAlquiler> listarTodos();
     public boolean actualizar(SolicitudAlquiler solicitud);
     public boolean eliminar(Long idSolicitud);
+
+    // Mueve la solicitud (Registrada u Observada) a En revision y notifica al broker
+    // supervisor del agente responsable. Devuelve true si se persistio el cambio.
+    public boolean reenviarAEvaluacion(Long idSolicitud);
 }
 

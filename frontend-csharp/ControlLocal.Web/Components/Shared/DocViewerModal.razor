@@ -1,0 +1,36 @@
+@* Visor de documentos del expediente: muestra la ficha del documento seleccionado. *@
+<Modal Open="Open" Tone="blue" Icon="fileText"
+       Title="@Nombre"
+       Desc="Documento del expediente."
+       OnClose="OnClose">
+    <ChildContent>
+        <dl class="cl-kv">
+            <dt>Documento</dt><dd style="font-weight:600;">@Nombre</dd>
+            @if (!string.IsNullOrEmpty(Estado))
+            {
+                <dt>Estado</dt><dd><StatusBadge Label="@Estado" /></dd>
+            }
+            <dt>Expediente</dt><dd>@(string.IsNullOrEmpty(Expediente) ? "—" : Expediente)</dd>
+            <dt>Última revisión</dt><dd>@(string.IsNullOrEmpty(Actualizado) ? "—" : Actualizado)</dd>
+        </dl>
+        @if (!string.IsNullOrEmpty(Nota))
+        {
+            <div class="cl-alert blue" style="margin-top:12px;">
+                <Icon Name="info" Size="15" /><span>@Nota</span>
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        <button class="cl-btn primary" @onclick="OnClose">Cerrar</button>
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public string Nombre { get; set; } = "";
+    [Parameter] public string Estado { get; set; } = "";
+    [Parameter] public string Expediente { get; set; } = "";
+    [Parameter] public string Actualizado { get; set; } = "";
+    [Parameter] public string? Nota { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

@@ -2,14 +2,16 @@
 <div style="position:sticky;bottom:0;background:rgba(252,251,248,0.92);backdrop-filter:blur(6px);border-top:1px solid var(--c-border);padding:14px 2px;display:flex;align-items:center;gap:8px;margin-top:14px;">
     @Extra
     <div style="flex:1;"></div>
-    <button class="cl-btn" @onclick="OnCancel">@CancelLabel</button>
-    <button class="cl-btn primary" @onclick="OnSave"><Icon Name="check" Size="14" /> @SaveLabel</button>
+    <button class="cl-btn" @onclick="OnCancel" disabled="@Busy">@CancelLabel</button>
+    <button class="cl-btn primary" @onclick="OnSave" disabled="@Busy"><Icon Name="check" Size="14" /> @(Busy ? BusyLabel : SaveLabel)</button>
 </div>
 
 @code {
     [Parameter] public EventCallback OnCancel { get; set; }
     [Parameter] public EventCallback OnSave { get; set; }
     [Parameter] public string SaveLabel { get; set; } = "Guardar";
+    [Parameter] public string BusyLabel { get; set; } = "Guardando...";
     [Parameter] public string CancelLabel { get; set; } = "Cancelar";
+    [Parameter] public bool Busy { get; set; }
     [Parameter] public RenderFragment? Extra { get; set; }
 }

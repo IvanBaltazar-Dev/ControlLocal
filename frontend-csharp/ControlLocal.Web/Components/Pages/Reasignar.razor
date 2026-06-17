@@ -1,12 +1,17 @@
 @page "/reasignar"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IAssignmentService Assign
+@inject IJSRuntime JS
 
 <PageTitle>Reasignar agentes · ControlLocal</PageTitle>
 
 <AppShell Active="Reasignar agentes" Crumbs="@(new[] { "ControlLocal", "Administración", "Reasignar agentes" })"
           Title="Reasignar agente a broker supervisor"
           Subtitle="Selecciona un agente disponible y reasígnalo a un broker activo.">
+    <Actions>
+        <button class="cl-btn" @onclick="IrAlHistorial"><Icon Name="clock" Size="13" /> Historial</button>
+    </Actions>
     <ChildContent>
         <div class="cl-alert blue" style="margin-bottom:14px;">
             <Icon Name="info" Size="15" />
@@ -16,81 +21,61 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             @* Selector de agente *@
             <div class="cl-card">
-                <div class="cl-card-head">
-                    <div class="cl-card-title">1 · Agente a reasignar</div>
-                </div>
-
+                <div class="cl-card-head"><div class="cl-card-title">1 · Agente a reasignar</div></div>
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
-                    <div style="display:flex;flex-direction:column;gap:8px;height:300px;overflow-y:scroll;scrollbar-gutter:stable;padding-right:6px;">
-                        @foreach (var a in Assign.Agents().Where(a => !a.EsAdministrador))
-                        {
-                            var border = _agent == a.Id && a.Seleccionable ? "#005BFF" : "var(--c-border)";
-                            var bg = !a.Seleccionable ? "var(--c-bg-2)" : _agent == a.Id ? "#EAF1FF" : "#fff";
-                            var cursor = a.Seleccionable ? "pointer" : "not-allowed";
-                            var opacity = a.Seleccionable ? "1" : "0.72";
-                            var style = $"display:flex;flex:0 0 auto;min-height:72px;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
-
-                            <label title="@(a.Seleccionable ? "" : a.MotivoNoDisponible)" style="@style">
-                                <input type="radio" name="assign-agent" disabled="@(!a.Seleccionable)" checked="@(_agent == a.Id)"
-                                       @onchange="@(() => { _agent = a.Id; _err = null; })" />
-
-                                <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;">@a.Iniciales</span>
-
-                                <div style="flex:1;min-width:0;">
-                                    <div style="font-weight:600;font-size:13px;">@a.Nombre</div>
-                                    <div class="cl-muted" style="font-size:11px;">DNI: @a.NumeroDocumento<br />Broker actual: @a.BrokerActual</div>
-                                </div>
-
-                                <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-                                    <StatusBadge Label="@a.EstadoAdministrativo" />
-                                    <StatusBadge Label="@a.EstadoOperativo" />
-                                </div>
-                            </label>
-                        }
-                    </div>
-
+                    @foreach (var a in Assign.Agents().Where(a => !a.EsAdministrador))
+                    {
+                        var border = _agent == a.Id && a.Seleccionable ? "#005BFF" : "var(--c-border)";
+                        var bg = !a.Seleccionable ? "var(--c-bg-2)" : _agent == a.Id ? "#EAF1FF" : "#fff";
+                        var cursor = a.Seleccionable ? "pointer" : "not-allowed";
+                        var opacity = a.Seleccionable ? "1" : "0.72";
+                        var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
+                        <label title="@(a.Seleccionable ? "" : a.MotivoNoDisponible)" style="@style">
+                            <input type="radio" name="assign-agent" disabled="@(!a.Seleccionable)" checked="@(_agent == a.Id)"
+                                   @onchange="@(() => { _agent = a.Id; _err = null; })" />
+                            <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;">@a.Iniciales</span>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-weight:600;font-size:13px;">@a.Nombre</div>
+                                <div class="cl-muted" style="font-size:11px;">@a.NumeroDocumento<br />Broker actual: @a.BrokerActual</div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+                                <StatusBadge Label="@a.EstadoAdministrativo" />
+                                <StatusBadge Label="@a.EstadoOperativo" />
+                            </div>
+                        </label>
+                    }
                     <div class="cl-help">Los agentes inactivos o en licencia se muestran como no disponibles para selección.</div>
                 </div>
             </div>
 
             @* Selector de broker destino *@
             <div class="cl-card">
-                <div class="cl-card-head">
-                    <div class="cl-card-title">2 · Nuevo Broker asignado</div>
-                </div>
-
+                <div class="cl-card-head"><div class="cl-card-title">2 · Nuevo Broker asignado</div></div>
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
-                    <div style="display:flex;flex-direction:column;gap:8px;height:300px;overflow-y:scroll;scrollbar-gutter:stable;padding-right:6px;">
-                        @foreach (var b in Assign.Brokers().Where(b => !b.EsAdministrador))
-                        {
-                            var dup = A is not null && A.BrokerActual == b.Nombre;
-                            var selectable = b.Seleccionable && !dup;
-                            var border = _broker == b.Id && selectable ? "#005BFF" : "var(--c-border)";
-                            var bg = !selectable ? "var(--c-bg-2)" : _broker == b.Id ? "#EAF1FF" : "#fff";
-                            var cursor = selectable ? "pointer" : "not-allowed";
-                            var opacity = selectable ? "1" : "0.72";
-                            var style = $"display:flex;flex:0 0 auto;min-height:72px;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
-                            var title = !b.Seleccionable ? b.MotivoNoDisponible : dup ? "El agente ya pertenece a este broker" : "";
-
-                            <label title="@title" style="@style">
-                                <input type="radio" name="assign-broker" disabled="@(!selectable)" checked="@(_broker == b.Id)"
-                                       @onchange="@(() => { _broker = b.Id; _err = null; })" />
-
-                                <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:linear-gradient(135deg,#8C8377,#515B6B);">@b.Iniciales</span>
-
-                                <div style="flex:1;min-width:0;">
-                                    <div style="font-weight:600;font-size:13px;">@b.Nombre</div>
-                                    <div class="cl-muted" style="font-size:11px;">@b.Zona@(b.TipoBroker == "supervisor" ? $" · {b.AgentesACargo} agentes" : " · administrador")</div>
-                                </div>
-
-                                <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-                                    <StatusBadge Label="Broker supervisor" />
-                                    <StatusBadge Label="@b.EstadoAdministrativo" />
-                                </div>
-                            </label>
-                        }
-                    </div>
-
+                    @foreach (var b in Assign.Brokers().Where(b => !b.EsAdministrador))
+                    {
+                        var dup = A is not null && A.BrokerActual == b.Nombre;
+                        var selectable = b.Seleccionable && !dup;
+                        var border = _broker == b.Id && selectable ? "#005BFF" : "var(--c-border)";
+                        var bg = !selectable ? "var(--c-bg-2)" : _broker == b.Id ? "#EAF1FF" : "#fff";
+                        var cursor = selectable ? "pointer" : "not-allowed";
+                        var opacity = selectable ? "1" : "0.72";
+                        var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
+                        var title = !b.Seleccionable ? b.MotivoNoDisponible : dup ? "El agente ya pertenece a este broker" : "";
+                        <label title="@title" style="@style">
+                            <input type="radio" name="assign-broker" disabled="@(!selectable)" checked="@(_broker == b.Id)"
+                                   @onchange="@(() => { _broker = b.Id; _err = null; })" />
+                            <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:linear-gradient(135deg,#8C8377,#515B6B);">@b.Iniciales</span>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-weight:600;font-size:13px;">@b.Nombre</div>
+                                <div class="cl-muted" style="font-size:11px;">@b.Zona@(b.TipoBroker == "supervisor" ? $" · {b.AgentesACargo} agentes" : " · administrador")</div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+                                <StatusBadge Label="Broker supervisor" />
+                                <StatusBadge Label="@b.EstadoAdministrativo" />
+                            </div>
+                        </label>
+                    }
                     <div class="cl-help">No se permite asignar a brokers inactivos ni a un broker administrador.</div>
                 </div>
             </div>
@@ -103,80 +88,48 @@
                     <textarea rows="3" value="@_motivo" @oninput="@(e => { _motivo = e.Value?.ToString() ?? ""; _err = null; })"
                               placeholder="Ej. Redistribución de zona tras el cese del broker anterior…"></textarea>
                 </Field>
-
                 @if (_err is not null)
                 {
                     <div class="cl-alert red" style="margin-top:12px;">
-                        <Icon Name="alert" Size="15" />
-                        <span>@_err</span>
+                        <Icon Name="alert" Size="15" /><span>@_err</span>
                     </div>
                 }
             </FormSection>
 
             <div class="cl-card" style="align-self:start;">
-                <div class="cl-card-head">
-                    <div class="cl-card-title">Comparación</div>
-                </div>
-
+                <div class="cl-card-head"><div class="cl-card-title">Comparación</div></div>
                 <div class="cl-card-body">
                     <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;">
                         <div style="flex:1;">
                             <div class="cl-def-k">Broker actual</div>
                             <div style="font-size:13px;font-weight:600;margin-top:4px;">@(A?.BrokerActual ?? "—")</div>
                         </div>
-
                         <Icon Name="arrowRight" Size="18" Color="#005BFF" />
-
                         <div style="flex:1;text-align:right;">
                             <div class="cl-def-k">Broker destino</div>
                             <div style="font-size:13px;font-weight:600;margin-top:4px;color:#005BFF;">@(B?.Nombre ?? "—")</div>
                         </div>
                     </div>
-
                     <div class="cl-divider"></div>
-
                     <dl class="cl-kv" style="grid-template-columns:1fr auto;">
-                        <dt>Agente</dt>
-                        <dd>@(A?.Nombre ?? "—")</dd>
-
-                        <dt>Fecha de asignación</dt>
-                        <dd>28 May 2026</dd>
-
-                        <dt>Autoriza</dt>
-                        <dd>Administración</dd>
+                        <dt>Agente</dt><dd>@(A?.Nombre ?? "—")</dd>
+                        <dt>Fecha de asignación</dt><dd>@DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</dd>
+                        <dt>Autoriza</dt><dd>Administración</dd>
                     </dl>
-
                     <button class="cl-btn primary" style="width:100%;margin-top:14px;justify-content:center;" @onclick="TryConfirm">
                         <Icon Name="swap" Size="14" /> Confirmar asignación
                     </button>
-
-                    <button class="cl-btn ghost" style="width:100%;margin-top:6px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("brokers"))">
-                        Cancelar
-                    </button>
+                    <button class="cl-btn ghost" style="width:100%;margin-top:6px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("brokers"))">Cancelar</button>
                 </div>
             </div>
         </div>
 
-        @* Historial interno *@
-        <div class="cl-card" style="margin-top:14px;">
-            <div class="cl-card-head">
-                <div class="cl-card-title">Asignaciones recientes</div>
-            </div>
-
+        @* Historial *@
+        <div class="cl-card" id="historial-asignaciones" style="margin-top:14px;">
+            <div class="cl-card-head"><div class="cl-card-title">Asignaciones recientes</div></div>
             <div class="cl-card-body" style="padding:0;">
                 <table class="cl-table">
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Agente</th>
-                            <th>Broker anterior</th>
-                            <th>Broker nuevo</th>
-                            <th>Responsable</th>
-                            <th>Motivo</th>
-                            <th>Estado</th>
-                        </tr>
-                    </thead>
-
+                    <thead><tr><th>Fecha</th><th>Agente</th><th>Broker anterior</th><th>Broker nuevo</th><th>Responsable</th><th>Motivo</th><th>Estado</th></tr></thead>
                     <tbody>
                         @foreach (var h in Assign.Historial())
                         {
@@ -187,9 +140,7 @@
                                 <td>@h.BrokerNuevoNombre</td>
                                 <td class="muted">@h.BrokerAdministradorNombre</td>
                                 <td style="color:var(--c-text-2);">@h.Motivo</td>
-                                <td>
-                                    <StatusBadge Label="@(h.Estado == "Activa" ? "Asignación activa" : "Supervisión cerrada")" />
-                                </td>
+                                <td><StatusBadge Label="@(h.Estado == "Activa" ? "Asignación activa" : "Supervisión cerrada")" /></td>
                             </tr>
                         }
                     </tbody>
@@ -203,7 +154,6 @@
                        ConfirmLabel="Confirmar asignación" CancelLabel="Cancelar"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
-
         <Toast Show="_toast">El agente fue asignado correctamente al broker supervisor.</Toast>
     </ChildContent>
 </AppShell>
@@ -221,36 +171,11 @@
 
     private void TryConfirm()
     {
-        if (A is null || !A.Seleccionable)
-        {
-            _err = "El agente seleccionado no está disponible para asignación.";
-            return;
-        }
-
-        if (B is null || B.TipoBroker == "admin")
-        {
-            _err = "No puedes asignar agentes a un broker administrador.";
-            return;
-        }
-
-        if (!B.Seleccionable)
-        {
-            _err = "El broker destino no está activo.";
-            return;
-        }
-
-        if (A.BrokerActual == B.Nombre)
-        {
-            _err = "Este agente ya pertenece al broker seleccionado.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_motivo))
-        {
-            _err = "Debes ingresar un motivo para continuar.";
-            return;
-        }
-
+        if (A is null || !A.Seleccionable) { _err = "El agente seleccionado no está disponible para asignación."; return; }
+        if (B is null || B.TipoBroker == "admin") { _err = "No puedes asignar agentes a un broker administrador."; return; }
+        if (!B.Seleccionable) { _err = "El broker destino no está activo."; return; }
+        if (A.BrokerActual == B.Nombre) { _err = "Este agente ya pertenece al broker seleccionado."; return; }
+        if (string.IsNullOrWhiteSpace(_motivo)) { _err = "Debes ingresar un motivo para continuar."; return; }
         _err = null;
         _confirm = true;
     }
@@ -258,12 +183,20 @@
     private async Task OnConfirm()
     {
         _confirm = false;
-        _toast = true;
-        StateHasChanged();
-
-        await Task.Delay(2400);
-
-        _toast = false;
-        StateHasChanged();
+        try
+        {
+            Assign.ReasignarAgente(_agent, _broker, _motivo.Trim());
+            _motivo = "";
+            _toast = true;
+            await RenderIfAliveAsync();
+            await DelayThenRenderAsync(2400, () => _toast = false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _err = ex.Message;
+        }
     }
+
+    private async Task IrAlHistorial() =>
+        await JS.InvokeVoidAsync("controlLocal.irA", "historial-asignaciones");
 }

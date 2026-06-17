@@ -116,11 +116,10 @@
                                 <div class="cl-def-k" style="margin-bottom:10px;">Cambiar resultado</div>
                                 <select @bind="_nuevoResultado" style="width:100%;padding:10px;border:1px solid #E2E6EC;border-radius:6px;font-size:13px;margin-bottom:10px;">
                                     <option value="">— Seleccionar —</option>
-                                    <option value="I">Interesado</option>
-                                    <option value="N">No interesado</option>
-                                    <option value="S">Seguimiento</option>
-                                    <option value="D">Descartado</option>
-                                    <option value="P">Pendiente</option>
+                                    @foreach (var resultado in EnumCatalog.ResultadosInteraccion)
+                                    {
+                                        <option value="@resultado.Code">@resultado.Label</option>
+                                    }
                                 </select>
                                 <button class="cl-btn primary" style="width:100%;justify-content:center;" @onclick="ActualizarResultado">
                                     <Icon Name="check" Size="13" /> Actualizar
@@ -215,7 +214,8 @@
         if (string.IsNullOrEmpty(_nuevoResultado))
             return;
 
-        _resultado = _nuevoResultado;
+        var interaccion = InteraccionSvc.Actualizar(_id, resultado: _nuevoResultado);
+        _resultado = interaccion.Resultado;
         _nuevoResultado = "";
         _toastMsg = "Resultado actualizado correctamente";
 
@@ -224,7 +224,8 @@
 
     private void GuardarObservaciones()
     {
-        _observaciones = _obsEditTemp;
+        var interaccion = InteraccionSvc.Actualizar(_id, observaciones: _obsEditTemp);
+        _observaciones = interaccion.Observaciones;
         _editModal = false;
         _toastMsg = "Observaciones guardadas correctamente";
 
@@ -236,13 +237,6 @@
         await DelayThenRenderAsync(2000, () => _toastMsg = null);
     }
 
-    private string GetCanalLabel(string canal) => canal switch
-    {
-        "L" => "Llamada",
-        "W" => "WhatsApp",
-        "E" => "Email",
-        "P" => "Presencial",
-        "O" => "Otro",
-        _ => "—"
-    };
+    private static string GetCanalLabel(string canal) =>
+        EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, canal);
 }

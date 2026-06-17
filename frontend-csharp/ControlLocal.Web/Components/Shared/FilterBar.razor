@@ -1,5 +1,5 @@
 @* Barra de filtros — búsqueda (two-way), filtros secundarios (ChildContent),
-   contador de resultados y acción de limpiar. *@
+   contador de resultados, limpiar y exportar (cuando la pantalla lo provee). *@
 <div class="cl-filterbar">
     <input class="cl-input search" placeholder="@Search" style="width:280px;"
            value="@Value" @oninput="OnInput" />
@@ -17,9 +17,9 @@
         {
             @Tail
         }
-        else if (ShowTail)
+        else if (OnExport.HasDelegate)
         {
-            <button class="cl-btn sm"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn sm" @onclick="OnExport"><Icon Name="download" Size="13" /> Exportar</button>
         }
     </div>
 </div>
@@ -36,7 +36,9 @@
     [Parameter] public bool HasActiveFilters { get; set; }
     [Parameter] public EventCallback OnClear { get; set; }
 
-    [Parameter] public bool ShowTail { get; set; } = true;
+    // Exporta el resultado filtrado actual; el botón solo aparece si hay handler.
+    [Parameter] public EventCallback OnExport { get; set; }
+
     [Parameter] public RenderFragment? Tail { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 

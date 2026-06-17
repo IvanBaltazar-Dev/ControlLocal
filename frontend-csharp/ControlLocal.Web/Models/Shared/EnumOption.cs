@@ -69,7 +69,156 @@ public static class EnumCatalog
         new("W", "WhatsApp"),
         new("E", "Email"),
         new("P", "Presencial"),
+        new("R", "Reunion"),
+        new("T", "Portal"),
         new("O", "Otro")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> OperacionesRequerimiento =
+    [
+        new("A", "Alquiler")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> TiposInmueble =
+    [
+        new("L", "Local"),
+        new("O", "Oficina")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> UsosInmueble =
+    [
+        new("C", "Comercial")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> EstadosPublicacion =
+    [
+        new("B", "Sin publicar"),
+        new("P", "Publicado"),
+        new("S", "Pausado"),
+        new("C", "Cerrado")
+    ];
+
+    public static readonly IReadOnlyList<string> DistritosLima =
+    [
+        "Ancon",
+        "Ate",
+        "Barranco",
+        "Breña",
+        "Carabayllo",
+        "Chaclacayo",
+        "Chorrillos",
+        "Cieneguilla",
+        "Comas",
+        "El Agustino",
+        "Independencia",
+        "Jesus Maria",
+        "La Molina",
+        "La Victoria",
+        "Lima",
+        "Lince",
+        "Los Olivos",
+        "Lurigancho",
+        "Lurin",
+        "Magdalena del Mar",
+        "Miraflores",
+        "Pachacamac",
+        "Pucusana",
+        "Pueblo Libre",
+        "Puente Piedra",
+        "Punta Hermosa",
+        "Punta Negra",
+        "Rimac",
+        "San Bartolo",
+        "San Borja",
+        "San Isidro",
+        "San Juan de Lurigancho",
+        "San Juan de Miraflores",
+        "San Luis",
+        "San Martin de Porres",
+        "San Miguel",
+        "Santa Anita",
+        "Santa Maria del Mar",
+        "Santa Rosa",
+        "Santiago de Surco",
+        "Surquillo",
+        "Villa El Salvador",
+        "Villa Maria del Triunfo"
+    ];
+
+    public static readonly IReadOnlyList<string> RubrosComerciales =
+    [
+        "Restaurante / Cafe",
+        "Cafeteria / Postres",
+        "Moda / Boutique",
+        "Retail",
+        "Minimarket / Bodega",
+        "Panaderia / Pasteleria",
+        "Farmacia / Botica",
+        "Salud / Consultorio",
+        "Belleza / Barberia",
+        "Gimnasio / Fitness",
+        "Educacion / Academia",
+        "Oficina administrativa",
+        "Servicios profesionales",
+        "Ferreteria",
+        "Veterinaria",
+        "Tecnologia / Electronica",
+        "Muebles / Decoracion",
+        "Almacen / Deposito",
+        "Logistica ligera",
+        "Automotriz",
+        "Mascotas",
+        "Entretenimiento",
+        "Comida rapida",
+        "Dark kitchen",
+        "Otro rubro comercial"
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> Monedas =
+    [
+        new("PEN", "Soles"),
+        new("USD", "Dolares")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> HitosPrecio =
+    [
+        new("E", "Esperado"),
+        new("R", "Recomendado"),
+        new("U", "Autorizado"),
+        new("P", "Publicado"),
+        new("O", "Ofertado"),
+        new("A", "Aceptado"),
+        new("C", "Cerrado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ObjecionesVisita =
+    [
+        new("P", "Precio"),
+        new("U", "Ubicacion"),
+        new("E", "Estado del inmueble"),
+        new("C", "Condiciones"),
+        new("O", "Otra")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> OpinionesPrecio =
+    [
+        new("A", "Alto"),
+        new("J", "Justo"),
+        new("B", "Bajo")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ProximasAccionesVisita =
+    [
+        new("V", "Nueva visita"),
+        new("O", "Oferta"),
+        new("S", "Seguimiento"),
+        new("D", "Descartado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> DesenlacesOportunidad =
+    [
+        new("F", "Cerrada favorable"),
+        new("X", "Caida")
     ];
 
     public static readonly IReadOnlyList<EnumOption> ResultadosInteraccion =
@@ -97,7 +246,7 @@ public static class EnumCatalog
         new("P", "Pendiente"),
         new("A", "Aceptada"),
         new("R", "Rechazada"),
-        new("S", "Pospuesta")
+        new("S", "Recontactar")
     ];
 
     public static readonly IReadOnlyList<EnumOption> EstadosVisita =
@@ -105,6 +254,7 @@ public static class EnumCatalog
         new("P", "Programada"),
         new("G", "Reprogramada"),
         new("C", "Cancelada"),
+        new("N", "No realizada"),
         new("R", "Realizada")
     ];
 

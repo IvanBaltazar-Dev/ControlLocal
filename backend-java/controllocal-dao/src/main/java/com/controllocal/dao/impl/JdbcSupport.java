@@ -16,8 +16,11 @@ import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.InteraccionComercial;
 import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.SolicitudAlquiler;
+import com.controllocal.model.comercial.ContratoAlquiler;
+import com.controllocal.model.comercial.Publicacion;
 import com.controllocal.model.comercial.Visita;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.inmueble.Distrito;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.persona.enums.EstadoActivoInactivo;
 import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
@@ -100,6 +103,32 @@ final class JdbcSupport {
         return timestamp != null ? timestamp.toLocalDateTime() : null;
     }
 
+    static void setBoolean(PreparedStatement ps, int index, Boolean value) throws SQLException {
+        if (value == null) {
+            ps.setNull(index, Types.BOOLEAN);
+        } else {
+            ps.setBoolean(index, value);
+        }
+    }
+
+    static Boolean getNullableBoolean(ResultSet rs, String column) throws SQLException {
+        boolean valor = rs.getBoolean(column);
+        return rs.wasNull() ? null : valor;
+    }
+
+    static void setInteger(PreparedStatement ps, int index, Integer value) throws SQLException {
+        if (value == null) {
+            ps.setNull(index, Types.INTEGER);
+        } else {
+            ps.setInt(index, value);
+        }
+    }
+
+    static Integer getNullableInt(ResultSet rs, String column) throws SQLException {
+        int valor = rs.getInt(column);
+        return rs.wasNull() ? null : valor;
+    }
+
     static Persona mapPersona(ResultSet rs) throws SQLException {
         Persona persona = new Persona();
         persona.setIdPersona(rs.getLong("id_persona"));
@@ -110,6 +139,7 @@ final class JdbcSupport {
         persona.setTelefono(rs.getString("telefono"));
         persona.setCorreo(rs.getString("correo"));
         persona.setEstado(getEnum(rs, "estado", EstadoActivoInactivo.class));
+        persona.setConsentimientoUsoDato(getNullableBoolean(rs, "consentimiento_uso_dato"));
         persona.setFechaCreacion(toLocalDateTime(rs.getTimestamp("fecha_creacion")));
         persona.setFechaActualizacion(toLocalDateTime(rs.getTimestamp("fecha_actualizacion")));
         return persona;
@@ -187,6 +217,31 @@ final class JdbcSupport {
         return oportunidad;
     }
 
+    static Publicacion publicacion(Long id) {
+        Publicacion publicacion = new Publicacion();
+        publicacion.setIdPublicacion(id);
+        return publicacion;
+    }
+
+    static ContratoAlquiler contrato(Long id) {
+        ContratoAlquiler contrato = new ContratoAlquiler();
+        contrato.setIdContratoAlquiler(id);
+        return contrato;
+    }
+
+    static Distrito distrito(Long id) {
+        Distrito distrito = new Distrito();
+        distrito.setIdDistrito(id);
+        return distrito;
+    }
+
+    static com.controllocal.model.usuario.UsuarioInterno usuario(Long id) {
+        com.controllocal.model.usuario.UsuarioInterno usuario =
+                new com.controllocal.model.usuario.UsuarioInterno();
+        usuario.setIdUsuarioInterno(id);
+        return usuario;
+    }
+
     static Long getIdPropietario(Propietario propietario) {
         return propietario != null ? propietario.getIdPropietario() : null;
     }
@@ -235,4 +290,3 @@ final class JdbcSupport {
         return visita != null ? visita.getIdVisita() : null;
     }
 }
-

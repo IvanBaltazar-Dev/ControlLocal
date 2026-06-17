@@ -7,6 +7,9 @@ import java.util.Optional;
 
 import com.controllocal.model.comercial.Visita;
 import com.controllocal.model.comercial.enums.MotivoNoContinuidadTipo;
+import com.controllocal.model.comercial.enums.ObjecionVisita;
+import com.controllocal.model.comercial.enums.OpinionPrecio;
+import com.controllocal.model.comercial.enums.ProximaAccionVisita;
 import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 
 public interface VisitaBusinessLogic {
@@ -22,9 +25,11 @@ public interface VisitaBusinessLogic {
     // los metodos de dominio de Visita.
     public boolean reprogramar(Long idVisita, LocalDate nuevaFecha, LocalTime nuevaHora);
     public boolean cancelar(Long idVisita, String motivo);
+    public boolean marcarRealizada(Long idVisita);
+    public boolean marcarNoRealizada(Long idVisita, String motivo);
 
     /**
-     * Marca la visita como REALIZADA y registra su desenlace comercial.
+     * Registra el desenlace comercial de una visita previamente REALIZADA.
      * Cuando {@code resultado.implicaNoContinuidad()} (NO_INTERESADO/DESCARTADO)
      * la razon es obligatoria: en la misma transaccion se crea el
      * {@code MotivoNoContinuidad} ligado a esta visita y se cierra la oportunidad.
@@ -32,5 +37,7 @@ public interface VisitaBusinessLogic {
      * se ignora y la oportunidad permanece abierta.
      */
     public boolean registrarResultado(Long idVisita, ResultadoInteraccion resultado,
-            String observaciones, MotivoNoContinuidadTipo razonNoContinuidad);
+            String observaciones, MotivoNoContinuidadTipo razonNoContinuidad,
+            Integer nivelInteres, ObjecionVisita objecionPrincipal,
+            OpinionPrecio opinionPrecio, ProximaAccionVisita proximaAccion);
 }

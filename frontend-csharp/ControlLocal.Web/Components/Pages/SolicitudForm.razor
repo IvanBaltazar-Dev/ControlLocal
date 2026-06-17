@@ -1,61 +1,76 @@
 @page "/solicitud-form"
+@page "/solicitud-form/{OportunidadIdParam:long}"
+@inherits SafeComponentBase
 @inject AppState App
+@inject ISolicitudService SolicitudSvc
+@inject IOportunidadService OportunidadSvc
+@inject INotificacionService Notificaciones
+@using ControlLocal.Web.Models.Oportunidades
+@using ControlLocal.Web.Models.Solicitudes
 
 <PageTitle>Crear solicitud · ControlLocal</PageTitle>
 
 <AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", "Nueva solicitud" })"
           Title="Crear solicitud de alquiler"
-          Subtitle="Genera la solicitud a partir de una captación con cliente vinculado · el broker la evaluará">
+          Subtitle="Genera la solicitud desde una oportunidad comercial">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
             <div>
-                <FormSection Num="1" Title="Cliente y captación" Sub="Selecciona la captación activa con el cliente que desea alquilar">
+                <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad determina el cliente y la captación">
+                    <Field Label="Oportunidad" Required="true">
+                        <select @bind="_oportunidadId" disabled="@_cargando">
+                            <option value="0">@(_cargando ? "Cargando oportunidades…" : "— Seleccionar —")</option>
+                            @foreach (var oportunidad in _oportunidades)
+                            {
+                                <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
+                            }
+                        </select>
+                    </Field>
+                    @if (OportunidadSeleccionada is not null)
+                    {
+                        <div class="cl-grid c2" style="margin-top:12px;">
+                            <Field Label="Cliente"><input value="@OportunidadSeleccionada.ClienteNombre" disabled /></Field>
+                            <Field Label="Local"><input value="@OportunidadSeleccionada.DireccionLocal" disabled /></Field>
+                        </div>
+                    }
+                </FormSection>
+
+                <FormSection Num="2" Title="Propuesta" Sub="Condiciones iniciales de la solicitud de alquiler">
                     <div class="cl-grid c2">
-                        <Field Label="Captación" Required="true">
-                            <select>
-                                <option>CAP-0218 · Av. La Marina 245</option>
-                                <option>CAP-0226 · Calle Schell 412</option>
-                                <option>CAP-0234 · Jr. Berlín 230</option>
+                        <Field Label="Monto propuesto" Required="true"><input type="number" min="0.01" step="0.01" @bind="_montoPropuesto" /></Field>
+                        <Field Label="Plazo tentativo" Required="true">
+                            <select @bind="_plazoTentativo">
+                                <option value="">— Seleccionar —</option>
+                                <option value="12 meses">12 meses</option>
+                                <option value="24 meses">24 meses</option>
+                                <option value="36 meses">36 meses</option>
+                                <option value="48 meses">48 meses</option>
+                                <option value="60 meses">60 meses</option>
                             </select>
                         </Field>
-                        <Field Label="Cliente interesado" Required="true"><input value="Café del Puerto S.A.C." disabled /></Field>
-                        <Field Label="Local"><input value="Av. La Marina 245, San Miguel" disabled /></Field>
-                        <Field Label="Propietario"><input value="Inmobiliaria Pacífico S.A.C." disabled /></Field>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <Field Label="Observaciones">
+                            <textarea rows="4" @bind="_observaciones" placeholder="Condiciones o comentarios de la propuesta..."></textarea>
+                        </Field>
                     </div>
                 </FormSection>
 
-                <FormSection Num="2" Title="Condiciones del alquiler" Sub="Términos acordados que se elevarán al broker para su evaluación">
-                    <div class="cl-grid c3">
-                        <Field Label="Monto mensual (USD)" Required="true"><input placeholder="2 100" /></Field>
-                        <Field Label="Plazo (meses)" Required="true"><select><option>12</option><option>24</option><option>36</option></select></Field>
-                        <Field Label="Inicio del contrato" Required="true"><input placeholder="dd/mm/aaaa" /></Field>
-                        <Field Label="Garantía (meses)"><input placeholder="2" /></Field>
-                        <Field Label="Adelanto (meses)"><input placeholder="1" /></Field>
-                        <Field Label="Comisión (%)"><input value="5%" disabled /></Field>
-                    </div>
-                </FormSection>
+                @if (_err is not null)
+                {
+                    <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                }
 
-                <FormSection Num="3" Title="Documentos del cliente" Sub="Adjunta el respaldo requerido para la evaluación del broker">
-                    <div class="cl-ph" style="height:100px;">
-                        <Icon Name="upload" Size="20" /> <span style="margin-left:8px;">Arrastra los documentos aquí o haz clic para seleccionar</span>
-                    </div>
-                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
-                        @foreach (var d in _docs)
-                        {
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid #C9CED6;border-radius:8px;background:#fff;">
-                                <div class="cl-flex"><Icon Name="fileText" Size="15" /> <span style="font-size:12.5px;">@d.Name</span></div>
-                                <StatusBadge Label="@d.Status" />
-                            </div>
-                        }
-                    </div>
-                </FormSection>
-
-                <FormFooterBar OnCancel="@(() => App.Navigate("solicitudes"))" OnSave="@(() => _confirm = true)" SaveLabel="Enviar a evaluación">
+                <FormFooterBar OnCancel="@(() => App.Navigate("solicitudes"))"
+                               OnSave="@EnviarAEvaluacion"
+                               SaveLabel="Enviar a evaluación"
+                               Busy="@_procesando"
+                               BusyLabel="Enviando...">
                     <Extra>
-                        <button class="cl-btn ghost"><Icon Name="save" Size="13" /> Guardar borrador</button>
+                        <button class="cl-btn ghost" disabled="@_procesando" @onclick="GuardarRegistro"><Icon Name="save" Size="13" /> Guardar registro</button>
                     </Extra>
                 </FormFooterBar>
             </div>
@@ -65,53 +80,157 @@
                     <div class="cl-card-head"><div class="cl-card-title">Resumen de la operación</div></div>
                     <div class="cl-card-body">
                         <dl class="cl-kv">
-                            <dt>Operación</dt><dd><span class="mono">OP-1094</span></dd>
-                            <dt>Cliente</dt><dd>Café del Puerto S.A.C.</dd>
-                            <dt>Local</dt><dd>Av. La Marina 245</dd>
-                            <dt>Monto</dt><dd>USD 2 100 / mes</dd>
-                            <dt>Documentos</dt><dd>4 / 6 cargados</dd>
+                            <dt>Operación</dt><dd>@(OportunidadSeleccionada?.CodigoOportunidad ?? "—")</dd>
+                            <dt>Cliente</dt><dd>@(OportunidadSeleccionada?.ClienteNombre ?? "—")</dd>
+                            <dt>Captación</dt><dd>@(OportunidadSeleccionada?.CaptacionCodigo ?? "—")</dd>
+                            <dt>Monto</dt><dd>@(_montoPropuesto > 0 ? _montoPropuesto.ToString("N2") : "—")</dd>
+                            <dt>Plazo</dt><dd>@(string.IsNullOrWhiteSpace(_plazoTentativo) ? "—" : _plazoTentativo)</dd>
                         </dl>
                     </div>
-                </div>
-                <div class="cl-alert blue">
-                    <Icon Name="info" Size="15" />
-                    <span>Al enviar, la solicitud pasa a la <b>bandeja del broker</b>. Podrá aprobarla, observarla o rechazarla según los documentos.</span>
                 </div>
             </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="fileText"
                        Title="¿Enviar la solicitud a evaluación?"
-                       Desc="La solicitud quedará registrada y pasará a la bandeja del broker para su evaluación. Recibirás una notificación con su resolución."
+                       Desc="La solicitud se registrará y pasará al estado En revision."
                        ConfirmLabel="Enviar solicitud" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
-        <Toast Show="_toast">Solicitud enviada a evaluación</Toast>
+        <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
+    [Parameter] public long OportunidadIdParam { get; set; }
+
+    private long _oportunidadId;
+    private decimal _montoPropuesto;
+    private string _plazoTentativo = "";
+    private string _observaciones = "";
     private bool _confirm;
     private bool _toast;
+    private bool _procesando;
+    private bool _cargando = true;
+    private string _toastMsg = "";
+    private string? _err;
+    private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
 
-    private record Doc(string Name, string Status);
+    private OportunidadComercialDto? OportunidadSeleccionada =>
+        _oportunidades.FirstOrDefault(item => item.Id == _oportunidadId);
 
-    private readonly Doc[] _docs = new[]
+    protected override async Task OnInitializedAsync()
     {
-        new Doc("DNI / RUC del cliente", "Cargado"),
-        new Doc("Vigencia de poder", "Cargado"),
-        new Doc("Estados financieros", "Cargado"),
-        new Doc("Referencias comerciales", "Cargado"),
-        new Doc("Carta de intención", "Pendiente"),
-        new Doc("Comprobante de garantía", "Pendiente"),
-    };
+        if (OportunidadIdParam > 0)
+            _oportunidadId = OportunidadIdParam;
+
+        try
+        {
+            _oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private bool Validar()
+    {
+        if (OportunidadSeleccionada is null) { _err = "Debes seleccionar una oportunidad comercial válida."; return false; }
+        if (_montoPropuesto <= 0) { _err = "El monto propuesto debe ser mayor que cero."; return false; }
+        if (string.IsNullOrWhiteSpace(_plazoTentativo)) { _err = "Debes seleccionar un plazo tentativo."; return false; }
+        _err = null;
+        return true;
+    }
+
+    private void EnviarAEvaluacion()
+    {
+        if (_procesando) return;
+        if (Validar())
+            _confirm = true;
+    }
+
+    private async Task GuardarRegistro()
+    {
+        if (_procesando) return;
+        if (!Validar())
+            return;
+        await GuardarYNavegarAsync(false, "Solicitud registrada correctamente.");
+    }
 
     private async Task OnConfirm()
     {
+        if (_procesando) return;
         _confirm = false;
-        _toast = true;
-        StateHasChanged();
-        await Task.Delay(900);
-        App.Navigate("solicitudes");
+        if (!Validar())
+            return;
+        await GuardarYNavegarAsync(true, "Solicitud enviada a evaluación.");
+    }
+
+    private async Task GuardarYNavegarAsync(bool enviarAEvaluacion, string mensaje)
+    {
+        try
+        {
+            _procesando = true;
+            _err = null;
+            await RenderIfAliveAsync();
+            await SolicitudSvc.AgregarAsync(new SolicitudFormRequest
+            {
+                OportunidadId = _oportunidadId,
+                MontoPropuesto = _montoPropuesto,
+                PlazoTentativo = _plazoTentativo,
+                Observaciones = string.IsNullOrWhiteSpace(_observaciones) ? null : _observaciones.Trim(),
+                EnviarAEvaluacion = enviarAEvaluacion,
+            }, DisposedToken);
+            if (enviarAEvaluacion)
+                NotificarBroker();
+            _toastMsg = mensaje;
+            _toast = true;
+            App.Navigate("solicitudes");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (InvalidOperationException error)
+        {
+            _err = error.Message;
+        }
+        catch (Exception error)
+        {
+            _err = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
+    }
+
+    // Avisa al broker supervisor que hay una solicitud nueva por evaluar.
+    private void NotificarBroker()
+    {
+        var op = OportunidadSeleccionada;
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Solicitud por evaluar",
+            Mensaje = op is null
+                ? "Una nueva solicitud de alquiler espera tu evaluación."
+                : $"Nueva solicitud de {op.ClienteNombre} ({op.CaptacionCodigo}) lista para evaluar.",
+            Severidad = "MEDIA",
+            Icono = "fileText",
+            EntidadTipo = "Oportunidad",
+            EntidadRef = op?.CodigoOportunidad,
+            Ruta = "solicitudes",
+            DestinatarioRol = Roles.Broker,
+            Fecha = DateTime.Now,
+        });
     }
 }

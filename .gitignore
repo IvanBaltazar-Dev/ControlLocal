@@ -21,7 +21,11 @@ appsettings.*.json
 # DATABASE CREDENTIALS
 # ========================
 **/db.properties
-!**/db.example.properties
+!**/db.properties.example
+**/api.properties
+!**/api.properties.example
+**/aws.properties
+!**/aws.properties.example
 
 # ========================
 # ASP.NET SECURITY KEYS
@@ -67,3 +71,9 @@ nbdist/
 # ========================
 .DS_Store
 Thumbs.db
+
+
+# ========================
+# MD PRUEBAS
+# ========================
+COMO_PROBAR.md

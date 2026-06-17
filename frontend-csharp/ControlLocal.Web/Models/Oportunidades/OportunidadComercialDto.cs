@@ -9,6 +9,8 @@ public class OportunidadComercialDto
 
     public string CodigoOportunidad { get; set; } = string.Empty;
 
+    public long ClienteId { get; set; }
+
     public string ClienteNombre { get; set; } = string.Empty;
 
     public long CaptacionId { get; set; }

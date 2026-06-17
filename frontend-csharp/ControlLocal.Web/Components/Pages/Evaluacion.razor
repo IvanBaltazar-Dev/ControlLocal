@@ -1,167 +1,208 @@
 @page "/evaluacion"
+@page "/evaluacion/{CodigoParam}"
+@inherits SafeComponentBase
 @inject AppState App
+@inject ISolicitudService SolicitudSvc
+@inject INotificacionService Notificaciones
 
 <PageTitle>Evaluar solicitud · ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes por evaluar", "SOL-0425 · Evaluación" })"
-          Title="SOL-0425 · Boutique Lila"
-          Subtitle="Solicitud enviada por Valentina Mora · evalúa documentos y condiciones para resolver">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes por evaluar", _solicitud?.CodigoSolicitud ?? "Evaluación" })"
+          Title="@(_solicitud is null ? "Evaluar solicitud" : $"{_solicitud.CodigoSolicitud} · {_solicitud.ClienteNombre}")"
+          Subtitle="Revisa la solicitud y registra una decisión clara para el agente">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar</button>
-        <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar</button>
-        <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar</button>
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
-            <div class="cl-stack">
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Condiciones de la operación</div></div>
-                    <div class="cl-card-body">
-                        <dl class="cl-kv">
-                            <dt>Operación</dt><dd><span class="mono">OP-1094</span></dd>
-                            <dt>Local</dt><dd>Calle Schell 412, Miraflores</dd>
-                            <dt>Cliente</dt><dd>Boutique Lila</dd>
-                            <dt>Monto mensual</dt><dd>USD 1 850</dd>
-                            <dt>Plazo</dt><dd>24 meses</dd>
-                            <dt>Garantía / adelanto</dt><dd>2 meses / 1 mes</dd>
-                            <dt>Comisión</dt><dd>4.5%</dd>
-                            <dt>Inicio del contrato</dt><dd>01/06/2026</dd>
-                        </dl>
+        @if (_cargando)
+        {
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando solicitud…</div></div>
+        }
+        else if (_solicitud is null)
+        {
+            <div class="cl-alert red"><Icon Name="alert" Size="15" /><span>No se encontró la solicitud seleccionada.</span></div>
+        }
+        else
+        {
+            <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Solicitud de alquiler</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv">
+                                <dt>Operación</dt><dd>@_solicitud.CodigoOperacion</dd>
+                                <dt>Cliente</dt><dd>@_solicitud.ClienteNombre</dd>
+                                <dt>Local</dt><dd>@_solicitud.DireccionLocal</dd>
+                                <dt>Monto propuesto</dt><dd>@_solicitud.MontoMensual.ToString("N2")</dd>
+                                <dt>Plazo tentativo</dt><dd>@(_solicitud.PlazoTentativo.Length > 0 ? _solicitud.PlazoTentativo : $"{_solicitud.PlazoMeses} meses")</dd>
+                                <dt>Observaciones</dt><dd>@(string.IsNullOrWhiteSpace(_solicitud.Observaciones) ? "—" : _solicitud.Observaciones)</dd>
+                                <dt>Estado</dt><dd><StatusBadge Label="@_solicitud.Estado" /></dd>
+                            </dl>
+                        </div>
                     </div>
+
+                    <FormSection Num="1" Title="Evaluación" Sub="Resultado y observaciones de la revisión">
+                        <div class="cl-grid c2">
+                            <Field Label="Tipo de evaluación" Required="true">
+                                <select @bind="_tipoEvaluacion">
+                                    @foreach (var opcion in EnumCatalog.TiposEvaluacionSolicitud)
+                                    {
+                                        <option value="@opcion.Code">@opcion.Label</option>
+                                    }
+                                </select>
+                            </Field>
+                            <Field Label="Resultado" Required="true">
+                                <select @bind="_resultado">
+                                    @foreach (var opcion in EnumCatalog.ResultadosEvaluacionSolicitud)
+                                    {
+                                        <option value="@opcion.Code">@opcion.Label</option>
+                                    }
+                                </select>
+                            </Field>
+                        </div>
+                        <div style="margin-top:12px;">
+                            <Field Label="Observaciones" Required="@(_resultado is "R" or "O")">
+                                <textarea rows="4" @bind="_observaciones" placeholder="Fundamento de la evaluación..."></textarea>
+                            </Field>
+                        </div>
+                    </FormSection>
+
+                    @if (_err is not null)
+                    {
+                        <div class="cl-alert red"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                    }
+
+                    <FormFooterBar OnCancel="@(() => App.Navigate("solicitudes"))"
+                                   OnSave="@TryConfirm"
+                                   SaveLabel="Registrar evaluación"
+                                   Busy="@_procesando"
+                                   BusyLabel="Registrando..." />
                 </div>
 
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Documentos a verificar</div><span class="cl-badge green">6 / 6 cargados</span></div>
-                    <div class="cl-card-body" style="padding:0;">
-                        @for (var i = 0; i < _docs.Length; i++)
-                        {
-                            var top = i == 0 ? "0" : "1px solid #E2E6EC";
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
-                                <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@_docs[i].Name</span></div>
-                                <div class="cl-flex" style="gap:10px;">
-                                    <StatusBadge Label="@_docs[i].Status" />
-                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Observaciones del broker</div></div>
-                    <div class="cl-card-body">
-                        <textarea rows="3" placeholder="Anota aquí cualquier observación antes de resolver…"></textarea>
-                        <div class="cl-help" style="margin-top:8px;">Estas notas se registran en la auditoría y son visibles para el agente.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="cl-stack">
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Cliente</div></div>
-                    <div class="cl-card-body">
-                        <div class="cl-flex" style="gap:10px;">
-                            <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2F7D52;">BL</span>
-                            <div>
-                                <div style="font-weight:600;font-size:13px;">Boutique Lila</div>
-                                <div class="cl-muted" style="font-size:11px;">DNI 45 220 118 · Moda</div>
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Resultado seleccionado</div></div>
+                        <div class="cl-card-body">
+                            <StatusBadge Label="@EnumCatalog.LabelFor(EnumCatalog.ResultadosEvaluacionSolicitud, _resultado)" />
+                            <div class="cl-muted" style="font-size:12px;margin-top:10px;">
+                                Responsable: @(App.CurrentUser?.Nombre ?? "Broker en sesión")
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Historial</div></div>
-                    <div class="cl-card-body">
-                        <Timeline Items="_timeline" />
-                    </div>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Resolución</div></div>
-                    <div class="cl-card-body">
-                        <div style="display:flex;flex-direction:column;gap:8px;">
-                            <button class="cl-btn success" @onclick="@(() => _modal = "aprobar")"><Icon Name="check" Size="13" /> Aprobar y generar contrato</button>
-                            <button class="cl-btn primary" @onclick="@(() => _modal = "observar")"><Icon Name="alert" Size="13" /> Observar documentos</button>
-                            <button class="cl-btn danger" @onclick="@(() => _modal = "rechazar")"><Icon Name="x" Size="13" /> Rechazar solicitud</button>
-                        </div>
-                    </div>
-                </div>
             </div>
-        </div>
+        }
 
-        <ConfirmDialog Open="@(_modal == "aprobar")" Tone="green" Icon="check"
-                       Title="¿Aprobar la solicitud?"
-                       Desc="Al aprobar, la operación pasa a la etapa de contrato y cierre. Se generará el expediente de alquiler."
-                       ConfirmLabel="Aprobar y continuar al cierre" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@OnApprove" />
-
-        <ConfirmDialog Open="@(_modal == "observar")" Tone="blue" Icon="alert"
-                       Title="Observar y devolver al agente"
-                       Desc="El agente recibirá las observaciones y deberá subsanar los documentos antes de reenviar."
-                       ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@(() => Resolve("Solicitud observada · devuelta al agente"))">
-            <Field Label="Documentos a corregir" Required="true">
-                <textarea rows="3" placeholder="Indica qué debe subsanar el agente…"></textarea>
-            </Field>
-        </ConfirmDialog>
-
-        <ConfirmDialog Open="@(_modal == "rechazar")" Tone="red" Icon="x"
-                       Title="¿Rechazar la solicitud?"
-                       Desc="La solicitud quedará cerrada como rechazada. Esta acción queda registrada en la auditoría global."
-                       ConfirmLabel="Rechazar solicitud" CancelLabel="Cancelar"
-                       OnClose="@(() => _modal = null)"
-                       OnConfirm="@(() => Resolve("Solicitud rechazada"))">
-            <Field Label="Motivo del rechazo" Required="true">
-                <select>
-                    <option>Capacidad de pago insuficiente</option>
-                    <option>Documentación no subsanada</option>
-                    <option>Condiciones fuera de política</option>
-                    <option>Cliente desistió</option>
-                </select>
-            </Field>
-        </ConfirmDialog>
-
-        <Toast Show="@(_toast is not null)">@_toast</Toast>
+        <ConfirmDialog Open="_confirm" Tone="blue" Icon="check"
+                       Title="¿Registrar la evaluación?"
+                       Desc="@($"Resultado: {EnumCatalog.LabelFor(EnumCatalog.ResultadosEvaluacionSolicitud, _resultado)}.")"
+                       ConfirmLabel="Confirmar" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
+                       OnClose="@(() => _confirm = false)"
+                       OnConfirm="@OnConfirm" />
+        <Toast Show="_toast">Evaluación registrada correctamente.</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
-    private string? _modal;
-    private string? _toast;
+    [Parameter] public string? CodigoParam { get; set; }
 
-    private record Doc(string Name, string Status);
+    private SolicitudAlquilerDto? _solicitud;
+    private string _tipoEvaluacion = "P";
+    private string _resultado = "O";
+    private string _observaciones = "";
+    private bool _confirm;
+    private bool _toast;
+    private bool _procesando;
+    private bool _cargando = true;
+    private string? _err;
 
-    private readonly Doc[] _docs = new[]
+    protected override async Task OnParametersSetAsync()
     {
-        new Doc("DNI del cliente", "Verificado"),
-        new Doc("Estados financieros", "Verificado"),
-        new Doc("Referencias comerciales", "Verificado"),
-        new Doc("Carta de intención", "Verificado"),
-        new Doc("Comprobante de garantía", "Pendiente"),
-        new Doc("Ficha de la operación", "Verificado"),
-    };
-
-    private readonly Timeline.TimelineItem[] _timeline = new[]
-    {
-        new Timeline.TimelineItem("23 May · 11:40", "Solicitud enviada", "Valentina Mora", "done"),
-        new Timeline.TimelineItem("23 May · 14:02", "Asignada a tu bandeja", "Pendiente de evaluación", "done"),
-        new Timeline.TimelineItem("Hoy", "En evaluación", "Esperando tu resolución", "active"),
-    };
-
-    private void OnApprove()
-    {
-        _modal = null;
-        App.Navigate("cierre");
+        _cargando = true;
+        try
+        {
+            await SolicitudSvc.RefrescarAsync();
+        }
+        catch
+        {
+            // Si el backend no responde, se evalua con la ultima copia en cache.
+        }
+        _solicitud = string.IsNullOrWhiteSpace(CodigoParam)
+            ? SolicitudSvc.All().FirstOrDefault()
+            : SolicitudSvc.ByCodigo(CodigoParam);
+        _cargando = false;
     }
 
-    private async Task Resolve(string msg)
+    private void TryConfirm()
     {
-        _modal = null;
-        _toast = msg;
-        StateHasChanged();
-        await Task.Delay(950);
+        if (_procesando) return;
+        if (_solicitud is null) { _err = "No se encontró la solicitud seleccionada."; return; }
+        if (!EnumCatalog.TiposEvaluacionSolicitud.Any(item => item.Code == _tipoEvaluacion)) { _err = "Selecciona un tipo de evaluación válido."; return; }
+        if (!EnumCatalog.ResultadosEvaluacionSolicitud.Any(item => item.Code == _resultado)) { _err = "Selecciona un resultado válido."; return; }
+        if (_resultado is "R" or "O" && string.IsNullOrWhiteSpace(_observaciones))
+        {
+            _err = "Las observaciones son obligatorias al observar o rechazar.";
+            return;
+        }
+        _err = null;
+        _confirm = true;
+    }
+
+    private async Task OnConfirm()
+    {
+        if (_procesando) return;
+        _confirm = false;
+        if (_solicitud is null)
+            return;
+
+        try
+        {
+            _procesando = true;
+            await RenderIfAliveAsync();
+            await SolicitudSvc.EvaluarAsync(_solicitud.CodigoSolicitud, new EvaluacionSolicitudDto
+            {
+                TipoEvaluacion = _tipoEvaluacion,
+                Resultado = _resultado,
+                Observaciones = _observaciones.Trim(),
+                ResponsableEvaluacion = App.CurrentUser?.Nombre ?? "Broker en sesión",
+            }, DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (InvalidOperationException error)
+        {
+            _err = error.Message;
+            return;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+
+        NotificarAgente();
+        _toast = true;
         App.Navigate("solicitudes");
+    }
+
+    // Avisa al agente el resultado de la evaluacion de su solicitud.
+    private void NotificarAgente()
+    {
+        if (_solicitud is null) return;
+        var resultado = EnumCatalog.LabelFor(EnumCatalog.ResultadosEvaluacionSolicitud, _resultado);
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Solicitud evaluada",
+            Mensaje = $"Tu solicitud {_solicitud.CodigoSolicitud} ({_solicitud.ClienteNombre}) fue evaluada: {resultado}.",
+            Severidad = _resultado is "R" ? "ALTA" : "MEDIA",
+            Icono = _resultado switch { "A" => "check", "R" => "x", "O" => "alert", _ => "fileText" },
+            EntidadTipo = "Solicitud",
+            EntidadRef = _solicitud.CodigoSolicitud,
+            Ruta = $"solicitud-detail/{_solicitud.CodigoSolicitud}",
+            DestinatarioRol = Roles.Agente,
+            Fecha = DateTime.Now,
+        });
     }
 }

@@ -1,5 +1,7 @@
 @page "/dashboard"
+@using QuestPDF.Fluent
 @inject AppState App
+@inject ExportacionService Exportar
 
 <PageTitle>@Title · ControlLocal</PageTitle>
 
@@ -7,17 +9,17 @@
     <Actions>
         @if (IsAdmin)
         {
-            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar PDF</button>
+            <button class="cl-btn" @onclick="ExportarPdfAdmin"><Icon Name="download" Size="13" /> Exportar PDF</button>
             <button class="cl-btn primary" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="briefcase" Size="13" /> Gestión de brokers</button>
         }
         else if (IsBroker)
         {
-            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn" @onclick="ExportarBroker"><Icon Name="download" Size="13" /> Exportar</button>
             <button class="cl-btn primary" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="pin" Size="13" /> Bandeja de captaciones</button>
         }
         else
         {
-            <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn" @onclick="ExportarAgente"><Icon Name="download" Size="13" /> Exportar</button>
             <button class="cl-btn primary" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
         }
     </Actions>
@@ -37,10 +39,14 @@
                             <div class="cl-card-title">Actividad comercial — últimos 30 días</div>
                             <div class="cl-card-sub">Volumen por etapa del proceso</div>
                         </div>
-                        <select class="cl-select" style="width:140px;"><option>Últimos 30 días</option></select>
+                        <select class="cl-select" style="width:140px;" @bind="_semanasVisibles">
+                            <option value="4">Últimos 30 días</option>
+                            <option value="8">Últimos 60 días</option>
+                            <option value="12">Últimos 90 días</option>
+                        </select>
                     </div>
                     <div class="cl-card-body">
-                        <BarChart Data="_adminBars" Height="180" Labels="_adminBarLabels" />
+                        <BarChart Data="BarsVisibles" Height="180" Labels="LabelsVisibles" />
                     </div>
                 </div>
                 <div class="cl-card">
@@ -80,7 +86,7 @@
                     </div>
                 </div>
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Actividad reciente</div><a class="cl-btn ghost sm" style="color:#005BFF;">Ver todo</a></div>
+                    <div class="cl-card-head"><div class="cl-card-title">Actividad reciente</div><a class="cl-btn ghost sm" style="color:#005BFF;cursor:pointer;" @onclick="@(() => App.Navigate("reportes"))">Ver todo</a></div>
                     <div class="cl-card-body">
                         <Timeline Items="_adminTimeline" />
                     </div>
@@ -109,7 +115,7 @@
                                         <td class="mono">@r[1]</td>
                                         <td>@r[2]</td>
                                         <td><StatusBadge Label="@r[3]" ToneOverride="@r[4]" Plain="true" /></td>
-                                        <td><button class="cl-btn sm">Revisar</button></td>
+                                        <td><button class="cl-btn sm" @onclick="@(() => RevisarPendiente(r[0]))">Revisar</button></td>
                                     </tr>
                                 }
                             </tbody>
@@ -230,6 +236,35 @@
     private readonly double[] _adminBars = { 18, 24, 21, 30, 27, 36, 32, 41, 38, 44, 39, 48 };
     private readonly string[] _adminBarLabels = { "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12" };
 
+    private int _semanasVisibles = 4;
+    private double[] BarsVisibles => _adminBars[^Math.Min(_semanasVisibles, _adminBars.Length)..];
+    private string[] LabelsVisibles => _adminBarLabels[^Math.Min(_semanasVisibles, _adminBarLabels.Length)..];
+
+    // El pendiente prioritario abre la bandeja que corresponde a su tipo.
+    private void RevisarPendiente(string tipo) =>
+        App.Navigate(tipo == "Captación" ? "bandeja-captaciones" : "solicitudes");
+
+    private async Task ExportarPdfAdmin()
+    {
+        var datos = ReporteIndicadores.Para(esAdmin: true, "6m");
+        var pdf = new ReporteIndicadoresDocument(datos, "Panel administrativo · últimos 6 meses").GeneratePdf();
+        await Exportar.DescargarPdfAsync("panel_administrativo", pdf);
+    }
+
+    private async Task ExportarBroker()
+    {
+        await Exportar.DescargarCsvAsync("pendientes_equipo",
+            new[] { "Tipo", "Referencia", "Agente", "Antigüedad" },
+            _brokerPend.Select(r => (IReadOnlyList<string?>)new[] { r[0], r[1], r[2], r[3] }));
+    }
+
+    private async Task ExportarAgente()
+    {
+        await Exportar.DescargarCsvAsync("captaciones_seguimiento",
+            new[] { "Captación", "Cliente", "Local", "Etapa", "Próxima acción" },
+            _agenteCaps.Select(r => (IReadOnlyList<string?>)new[] { r[0], r[1], r[2], r[3], r[4] }));
+    }
+
     private readonly DonutChart.Segment[] _adminDonut =
     {
         new(22, "#005BFF"), new(18, "#00AEEF"), new(14, "#2F7D52"), new(6, "#D64550"), new(4, "#7E8794"),
@@ -267,7 +302,7 @@
         new[] { "Solicitud", "SOL-0428", "C. Vega", "1d", "blue" },
         new[] { "Captación", "CAP-0229", "M. León", "1d", "blue" },
         new[] { "Solicitud", "SOL-0425", "V. Mora", "3h", "blue" },
-        new[] { "Captación", "CAP-0226", "A. Torres", "5h", "blue" },
+        new[] { "Captación", "CAP-0227", "A. Torres", "5h", "blue" },
     };
 
     private readonly string[][] _brokerFunnel =
@@ -281,7 +316,7 @@
     private readonly string[][] _brokerCierres =
     {
         new[] { "CAP-0205", "Inversiones Trébol S.A.C.", "Av. La Marina 245", "Alquilada", "V. Mora", "Hoy 09:14" },
-        new[] { "CAP-0226", "Carla Espinoza", "Calle Schell 412", "Alquilada", "C. Vega", "22 May" },
+        new[] { "CAP-0227", "Carla Espinoza", "Calle Schell 412", "Alquilada", "C. Vega", "22 May" },
         new[] { "CAP-0231", "Bodegas del Norte E.I.R.L.", "Av. Petit Thouars 1875", "No continúa", "D. Romero", "20 May" },
     };
 
@@ -289,7 +324,7 @@
     private readonly string[][] _agenteCaps =
     {
         new[] { "CAP-0218", "Inversiones Trébol", "Av. La Marina 245", "Con interacciones", "Visita · hoy 16:00" },
-        new[] { "CAP-0226", "Boutique Lila", "Calle Schell 412", "Con solicitud", "Esperar evaluación" },
+        new[] { "CAP-0227", "Boutique Lila", "Calle Schell 412", "Con solicitud", "Esperar evaluación" },
         new[] { "CAP-0231", "Bodegas del Norte", "Av. Petit Thouars 1875", "Captada", "Registrar interacción" },
         new[] { "CAP-0234", "Café Lima", "Jr. Berlín 230", "Con interacciones", "Programar visita" },
     };
@@ -298,7 +333,7 @@
     {
         new("09:30", "Visita · Café Lima", "Jr. Berlín 230, Miraflores · CAP-0234", "done"),
         new("11:00", "Llamada · Inversiones Trébol", "Confirmar contrato · CAP-0218", "done"),
-        new("14:30", "Visita · Boutique Lila", "Calle Schell 412 · CAP-0226", "active"),
+        new("14:30", "Visita · Boutique Lila", "Calle Schell 412 · CAP-0227", "active"),
         new("16:00", "Visita · Inversiones Trébol", "Av. La Marina 245 · CAP-0218"),
         new("18:00", "Registro de captación", "CAP-0233 pendiente de envío"),
     };

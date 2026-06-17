@@ -6,10 +6,19 @@
 @inject IInteraccionService InteraccionSvc
 @inject IVisitaService VisitaSvc
 @inject ISolicitudService SolicitudSvc
+@inject INotificacionService Notificaciones
 
 <PageTitle>Seguimiento · @(_op?.ClienteNombre ?? "Cliente") · ControlLocal</PageTitle>
 
-@if (_op is null)
+@if (_cargando)
+{
+    <AppShell Title="Seguimiento del cliente" Crumbs="@(new[] { "ControlLocal", "Seguimiento" })">
+        <ChildContent>
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando seguimiento...</div></div>
+        </ChildContent>
+    </AppShell>
+}
+else if (_op is null)
 {
     <AppShell Title="Seguimiento del cliente" Crumbs="@(new[] { "ControlLocal", "Seguimiento" })">
         <ChildContent>
@@ -40,6 +49,13 @@ else
             }
             else
             {
+                @if (EsCierreExitoso)
+                {
+                    <div class="cl-alert green" style="margin-bottom:14px;">
+                        <Icon Name="checkCircle" Size="15" />
+                        <span>Trato cerrado correctamente. La oportunidad quedo finalizada.</span>
+                    </div>
+                }
                 <div class="cl-stage" style="margin-bottom:14px;">
                     @for (var i = 0; i < _stages.Length; i++)
                     {
@@ -139,7 +155,7 @@ else
                                     <div class="cl-muted" style="font-size:12.5px;margin-bottom:12px;">Este cliente aún no tiene solicitud de alquiler.</div>
                                     @if (!_readOnly)
                                     {
-                                        <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"solicitud-form/{_op.Id}"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
                                     }
                                 </div>
                             }
@@ -149,16 +165,27 @@ else
 
                 @* ----- Acciones del seguimiento (por cliente) ----- *@
                 <div class="cl-stack">
-                    @if (!_readOnly && !_noContinua)
+                    @if (!_readOnly && !_noContinua && !EsCierreExitoso)
                     {
                         <div class="cl-card">
                             <div class="cl-card-head"><div class="cl-card-title">Acciones del seguimiento</div></div>
                             <div class="cl-card-body">
                                 <div style="display:flex;flex-direction:column;gap:8px;">
                                     <button class="cl-btn" @onclick="@(() => App.Navigate($"interaccion-form/{_op.Id}"))"><Icon Name="activity" Size="13" /> Registrar interacción</button>
-                                    <button class="cl-btn" @onclick="@(() => App.Navigate("visitas"))"><Icon Name="calendar" Size="13" /> Programar visita</button>
-                                    <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
-                                    <button class="cl-btn danger" @onclick="AbrirCierre"><Icon Name="flag" Size="13" /> Marcar sin continuidad</button>
+                                    <button class="cl-btn" @onclick="@(() => App.Navigate($"visita-form/{_op.Id}"))"><Icon Name="calendar" Size="13" /> Programar visita</button>
+                                    @if (_solicitud is null)
+                                    {
+                                        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"solicitud-form/{_op.Id}"))"><Icon Name="plus" Size="13" /> Crear solicitud</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"solicitud-detail/{_solicitud.CodigoSolicitud}"))"><Icon Name="eye" Size="13" /> Ver solicitud</button>
+                                    }
+                                    @if (PuedeCerrarExitoso)
+                                    {
+                                        <button class="cl-btn success" disabled="@_procesandoCierreExitoso" @onclick="@(() => _modalCierreExitoso = true)"><Icon Name="checkCircle" Size="13" /> Cerrar trato</button>
+                                    }
+                                    <button class="cl-btn danger" disabled="@_procesandoCierre" @onclick="AbrirCierre"><Icon Name="flag" Size="13" /> Marcar sin continuidad</button>
                                 </div>
                             </div>
                         </div>
@@ -194,12 +221,35 @@ else
                     }
                 </ChildContent>
                 <Footer>
-                    <button class="cl-btn ghost" @onclick="@(() => _modalCierre = false)">Cancelar</button>
-                    <button class="cl-btn primary" @onclick="ConfirmarCierre">Marcar sin continuidad</button>
+                    <button class="cl-btn ghost" disabled="@_procesandoCierre" @onclick="@(() => _modalCierre = false)">Cancelar</button>
+                    <button class="cl-btn primary" disabled="@_procesandoCierre" @onclick="ConfirmarCierre">
+                        @(_procesandoCierre ? "Cerrando..." : "Marcar sin continuidad")
+                    </button>
                 </Footer>
             </Modal>
 
+            <ConfirmDialog Open="_modalCierreExitoso" Tone="green" Icon="checkCircle"
+                           Title="Cerrar trato"
+                           Desc="La oportunidad quedara finalizada como trato cerrado."
+                           ConfirmLabel="Cerrar trato" CancelLabel="Cancelar"
+                           Busy="@_procesandoCierreExitoso"
+                           OnClose="@(() => _modalCierreExitoso = false)"
+                           OnConfirm="@ConfirmarCierreExitoso" />
+
             <Toast Show="_toast">@_toastMsg</Toast>
+
+            <CierreExitosoOverlay Open="_recienCerrada"
+                                  Icon="handshake"
+                                  Eyebrow="Operación finalizada"
+                                  Title="¡Trato cerrado!"
+                                  Subtitle="@_subtituloCierre"
+                                  Resumen="_resumenCierre">
+                <Acciones>
+                    <button class="cl-btn primary" @onclick="@(() => App.Navigate($"ficha-propiedad/{_op!.CaptacionCodigo}"))"><Icon Name="store" Size="13" /> Ver ficha</button>
+                    <button class="cl-btn" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="folder" Size="13" /> Mis captaciones</button>
+                    <button class="cl-btn ghost" @onclick="@(() => _recienCerrada = false)">Entendido</button>
+                </Acciones>
+            </CierreExitosoOverlay>
         </ChildContent>
     </AppShell>
 }
@@ -213,11 +263,24 @@ else
     private List<VisitaDto> _visitas = new();
     private SolicitudAlquilerDto? _solicitud;
 
-    private bool _modalCierre, _toast;
+    private bool _modalCierre, _modalCierreExitoso, _toast;
+    private bool _cargando = true;
+    private bool _procesandoCierre;
+    private bool _procesandoCierreExitoso;
     private string _razon = "", _obs = "", _toastMsg = "";
     private string? _err;
 
+    // Overlay premium de cierre: solo al cerrar AHORA (no al revisitar una cerrada).
+    private bool _recienCerrada;
+    private string _subtituloCierre = "";
+    private IReadOnlyList<CierreExitosoOverlay.Fila> _resumenCierre = [];
+
     private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private bool EsCierreExitoso => _op?.Estado is "Alquilada" or "Cerrada exitosa" or "Finalizada exitosa" or "F";
+    private bool PuedeCerrarExitoso => !_readOnly
+        && !_noContinua
+        && !EsCierreExitoso
+        && _solicitud?.Estado == "Aprobada";
 
     private readonly string[] _stages = { "Interesado", "En seguimiento", "Solicitud creada", "En evaluación", "Alquilada" };
     private int _current;
@@ -225,20 +288,46 @@ else
 
     private string[] _crumbs => new[] { "ControlLocal", "Seguimiento", _op?.CodigoOportunidad ?? "" };
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        _op = (long.TryParse(IdParam, out var id) ? OportunidadSvc.ById(id) : null)
-              ?? OportunidadSvc.All().FirstOrDefault();
-        if (_op is null) return;
+        _cargando = true;
+        _err = null;
+        try
+        {
+            var oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
+            _op = (long.TryParse(IdParam, out var id)
+                    ? oportunidades.FirstOrDefault(item => item.Id == id)
+                    : null)
+                  ?? oportunidades.FirstOrDefault();
+            if (_op is null)
+                return;
 
-        _cap = CaptacionSvc.ByCodigo(_op.CaptacionCodigo);
-        _interacciones = InteraccionSvc.All().Where(i => i.OportunidadId == _op.Id).ToList();
-        _visitas = VisitaSvc.All().Where(v => v.OportunidadId == _op.Id).ToList();
-        // Solicitud por nombre de cliente (tolerante a sufijos como "S.A.C.").
-        _solicitud = SolicitudSvc.All().FirstOrDefault(s =>
-            _op.ClienteNombre.Contains(s.ClienteNombre) || s.ClienteNombre.Contains(_op.ClienteNombre));
+            var captacionTask = CaptacionSvc.ObtenerPorCodigoAsync(_op.CaptacionCodigo, DisposedToken);
+            var visitasTask = VisitaSvc.RefrescarAsync(DisposedToken);
+            var solicitudesTask = SolicitudSvc.RefrescarAsync(DisposedToken);
 
-        (_current, _noContinua) = EtapaDe(_op.Estado);
+            _cap = await captacionTask;
+            _visitas = (await visitasTask).Where(v => v.OportunidadId == _op.Id).ToList();
+            // Prioriza el vínculo real con la oportunidad; el nombre queda como tolerancia para datos antiguos.
+            _solicitud = (await solicitudesTask).FirstOrDefault(s =>
+                s.OportunidadId == _op.Id
+                || _op.ClienteNombre.Contains(s.ClienteNombre)
+                || s.ClienteNombre.Contains(_op.ClienteNombre));
+            _interacciones = InteraccionSvc.All().Where(i => i.OportunidadId == _op.Id).ToList();
+
+            (_current, _noContinua) = EtapaDe(_op.Estado);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
     }
 
     // Mapea el estado de la oportunidad al índice de etapa del cliente.
@@ -248,8 +337,8 @@ else
         "En seguimiento" => (1, false),
         "Solicitud creada" => (2, false),
         "En evaluación" => (3, false),
-        "Alquilada" or "Cerrada exitosa" or "Finalizada exitosa" => (4, false),
-        "No continúa" or "Cerrada no favorable" or "Finalizada no favorable" => (0, true),
+        "Alquilada" or "Cerrada exitosa" or "Finalizada exitosa" or "F" => (4, false),
+        "No continua" or "No continúa" or "Cerrada no favorable" or "Finalizada no favorable" or "N" => (0, true),
         _ => (0, false),
     };
 
@@ -259,18 +348,112 @@ else
         _modalCierre = true;
     }
 
-    private void ConfirmarCierre()
+    private async Task ConfirmarCierre()
     {
+        if (_procesandoCierre) return;
         if (string.IsNullOrWhiteSpace(_razon))
         {
             _err = "Debes indicar el motivo de no continuidad.";
             return;
         }
-        _modalCierre = false;
-        _noContinua = true;
-        if (_op is not null) _op.Estado = "No continúa";
-        var motivoLabel = EnumCatalog.LabelFor(EnumCatalog.MotivosNoContinuidad, _razon);
-        Notificar($"Oportunidad cerrada · motivo: {motivoLabel}");
+        if (_op is null) return;
+        try
+        {
+            _procesandoCierre = true;
+            await RenderIfAliveAsync();
+            _op = await OportunidadSvc.CerrarNoContinuaAsync(_op.Id, _razon, _obs, DisposedToken);
+            _modalCierre = false;
+            _noContinua = true;
+            var motivoLabel = EnumCatalog.LabelFor(EnumCatalog.MotivosNoContinuidad, _razon);
+            Notificar($"Oportunidad cerrada. Motivo: {motivoLabel}");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _procesandoCierre = false;
+            await RenderIfAliveAsync();
+        }
+    }
+
+    private async Task ConfirmarCierreExitoso()
+    {
+        if (_op is null || _procesandoCierreExitoso)
+            return;
+
+        try
+        {
+            _procesandoCierreExitoso = true;
+            _err = null;
+            await RenderIfAliveAsync();
+            _op = await OportunidadSvc.CerrarExitosaAsync(_op.Id, DisposedToken);
+            _modalCierreExitoso = false;
+            _current = 4;
+            ConstruirResumenCierre();
+            NotificarBroker();
+            _recienCerrada = true;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _procesandoCierreExitoso = false;
+            await RenderIfAliveAsync();
+        }
+    }
+
+    // Resumen económico del trato cerrado (oportunidad + solicitud aprobada).
+    private void ConstruirResumenCierre()
+    {
+        if (_op is null) return;
+        var local = _cap?.DireccionLocal ?? _op.DireccionLocal;
+        _subtituloCierre =
+            $"Cerraste el alquiler de {local} con {_op.ClienteNombre}. ¡Felicidades por concretar la operación!";
+
+        var filas = new List<CierreExitosoOverlay.Fila>
+        {
+            new("Operación", _op.CodigoOportunidad, "target"),
+            new("Nuevo inquilino", _op.ClienteNombre, "user"),
+            new("Propiedad", $"{local} · {_op.CaptacionCodigo}", "mapPin"),
+        };
+        if (_solicitud is not null)
+        {
+            filas.Add(new("Renta mensual", $"USD {_solicitud.MontoMensualTexto}/mes", "activity", true));
+            if (_solicitud.PlazoMeses > 0)
+                filas.Add(new("Plazo", $"{_solicitud.PlazoMeses} meses", "calendar"));
+        }
+        if (!string.IsNullOrWhiteSpace(_op.NombreAgenteResponsable))
+            filas.Add(new("Agente responsable", _op.NombreAgenteResponsable, "briefcase"));
+        _resumenCierre = filas;
+    }
+
+    // Avisa al broker supervisor que el agente concretó el alquiler.
+    private void NotificarBroker()
+    {
+        if (_op is null) return;
+        var local = _cap?.DireccionLocal ?? _op.DireccionLocal;
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Trato cerrado",
+            Mensaje = $"{_op.NombreAgenteResponsable} concretó el alquiler de {local} con {_op.ClienteNombre} ({_op.CodigoOportunidad}).",
+            Severidad = "MEDIA",
+            Icono = "checkCircle",
+            EntidadTipo = "Oportunidad",
+            EntidadRef = _op.CodigoOportunidad,
+            Ruta = $"oportunidad-detail/{_op.Id}",
+            DestinatarioRol = Roles.Broker,
+            Fecha = DateTime.Now,
+        });
     }
 
     private void Notificar(string mensaje)

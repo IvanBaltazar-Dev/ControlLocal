@@ -1,15 +1,28 @@
 @page "/solicitud-detail/{CodigoParam?}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
+@inject IOportunidadService OportunidadSvc
+@inject ICaptacionService CaptacionSvc
 
 <PageTitle>Solicitud @_s.CodigoSolicitud · ControlLocal</PageTitle>
 
+@if (_cargando)
+{
+    <AppShell Title="Solicitud de alquiler" Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler" })">
+        <ChildContent>
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando solicitud…</div></div>
+        </ChildContent>
+    </AppShell>
+}
+else
+{
 <AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", _s.CodigoSolicitud })"
           Title="@($"{_s.CodigoSolicitud} · {_s.ClienteNombre}")"
           Subtitle="@($"Solicitud de alquiler · operación {_s.CodigoOperacion} · {_s.DireccionLocal}, {_s.DistritoLocal}")">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn" @onclick="@(() => App.Navigate("documentos"))"><Icon Name="folder" Size="13" /> Gestionar documentos</button>
+        <button class="cl-btn" @onclick="@(() => App.Navigate($"documentos/{_s.CodigoSolicitud}"))"><Icon Name="folder" Size="13" /> Gestionar documentos</button>
     </Actions>
     <ChildContent>
         <div class="cl-stage" style="margin-bottom:14px;">
@@ -31,10 +44,9 @@
                         <div class="cl-card-body">
                             <dl class="cl-kv">
                                 <dt>Monto mensual</dt><dd>USD @_s.MontoMensualTexto</dd>
-                                <dt>Plazo</dt><dd>@_s.PlazoMeses meses</dd>
-                                <dt>Garantía</dt><dd>2 meses</dd>
-                                <dt>Adelanto</dt><dd>1 mes</dd>
-                                <dt>Inicio</dt><dd>01/06/2026</dd>
+                                <dt>Plazo tentativo</dt><dd>@PlazoSolicitud</dd>
+                                <dt>Observaciones</dt><dd>@Texto(_s.Observaciones)</dd>
+                                <dt>Fecha de registro</dt><dd>@Texto(_s.FechaRegistroTexto)</dd>
                             </dl>
                         </div>
                     </div>
@@ -43,10 +55,11 @@
                         <div class="cl-card-body">
                             <dl class="cl-kv">
                                 <dt>Local</dt><dd>@_s.DireccionLocal</dd>
-                                <dt>Distrito</dt><dd>@_s.DistritoLocal</dd>
-                                <dt>Área</dt><dd>68 m²</dd>
-                                <dt>Propietario</dt><dd>Carlos Mendoza Rivera</dd>
-                                <dt>Comisión</dt><dd>4.5%</dd>
+                                <dt>Distrito</dt><dd>@Texto(_captacion?.DistritoLocal ?? _s.DistritoLocal)</dd>
+                                <dt>Área</dt><dd>@AreaLocal</dd>
+                                <dt>Propietario</dt><dd>@Texto(_captacion?.PropietarioNombre)</dd>
+                                <dt>Captación</dt><dd>@Texto(_oportunidad?.CaptacionCodigo)</dd>
+                                <dt>Comisión</dt><dd>@ComisionCaptacion</dd>
                             </dl>
                         </div>
                     </div>
@@ -58,23 +71,18 @@
                         @for (var i = 0; i < _docs.Length; i++)
                         {
                             var top = i == 0 ? "0" : "1px solid #E2E6EC";
+                            var doc = _docs[i];
                             <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:@top;">
-                                <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@_docs[i].Name</span></div>
+                                <div class="cl-flex"><Icon Name="fileText" Size="16" /> <span style="font-size:12.5px;">@doc.Name</span></div>
                                 <div class="cl-flex" style="gap:10px;">
-                                    <StatusBadge Label="@_docs[i].Status" />
-                                    <button class="cl-btn sm"><Icon Name="eye" Size="13" /> Ver</button>
+                                    <StatusBadge Label="@doc.Status" />
+                                    <button class="cl-btn sm" @onclick="@(() => _docVer = doc)"><Icon Name="eye" Size="13" /> Ver</button>
                                 </div>
                             </div>
                         }
                     </div>
                 </div>
 
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Historial de la solicitud</div></div>
-                    <div class="cl-card-body">
-                        <Timeline Items="_timeline" />
-                    </div>
-                </div>
             </div>
 
             <div class="cl-stack">
@@ -101,21 +109,53 @@
                 </div>
                 <div class="cl-alert blue">
                     <Icon Name="info" Size="15" />
-                    <span>Mientras la solicitud esté <b>en revisión</b> no puedes editar sus condiciones. Si el broker la observa, podrás subsanarla.</span>
+                    <span>La solicitud conserva únicamente oportunidad, monto propuesto, plazo tentativo, observaciones, documentos, evaluaciones y estado.</span>
                 </div>
             </div>
         </div>
+
+        <DocViewerModal Open="@(_docVer is not null)" Nombre="@(_docVer?.Name ?? "")"
+                        Estado="@(_docVer?.Status ?? "")" Expediente="@_s.CodigoSolicitud" Actualizado="23 May 2026"
+                        OnClose="@(() => _docVer = null)" />
     </ChildContent>
 </AppShell>
+}
 
 @code {
     [Parameter] public string? CodigoParam { get; set; }
 
-    private SolicitudAlquilerDto _s = new();
+    private Doc? _docVer;
+    private bool _cargando = true;
 
-    protected override void OnParametersSet()
+    private SolicitudAlquilerDto _s = new();
+    private OportunidadComercialDto? _oportunidad;
+    private CaptacionDto? _captacion;
+
+    // Refresca primero (evita el crash de .First() con cache fria al abrir desde
+    // una notificacion) y luego resuelve la solicitud, su oportunidad y captacion.
+    protected override async Task OnParametersSetAsync()
     {
-        _s = (string.IsNullOrEmpty(CodigoParam) ? null : SolicitudSvc.ByCodigo(CodigoParam)) ?? SolicitudSvc.All().First();
+        _cargando = true;
+        try
+        {
+            var solicitudes = await SolicitudSvc.RefrescarAsync(DisposedToken);
+            await OportunidadSvc.RefrescarAsync(DisposedToken);
+            await CaptacionSvc.RefrescarAsync(DisposedToken);
+
+            _s = (string.IsNullOrEmpty(CodigoParam) ? null : SolicitudSvc.ByCodigo(CodigoParam))
+                 ?? solicitudes.FirstOrDefault() ?? new();
+            _oportunidad = _s.OportunidadId > 0
+                ? OportunidadSvc.ById(_s.OportunidadId)
+                : OportunidadSvc.All().FirstOrDefault(item => item.CodigoOportunidad == _s.CodigoOperacion);
+            _captacion = _oportunidad is null ? null : CaptacionSvc.ByCodigo(_oportunidad.CaptacionCodigo);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _cargando = false;
+        }
     }
 
     private static string Initials(string name) =>
@@ -129,29 +169,34 @@
     private readonly Stage[] _stages =
     {
         new("Etapa 1", "Registrada"),
-        new("Etapa 2", "En evaluación"),
+        new("Etapa 2", "En revision"),
         new("Etapa 3", "Resuelta"),
-        new("Etapa 4", "Contrato / cierre"),
     };
-    private const int _current = 1;
+    private int _current => _s.Estado switch
+    {
+        "Registrada" => 0,
+        "En revision" or "Observada" => 1,
+        _ => 2,
+    };
 
     private record Doc(string Name, string Status);
 
     private readonly Doc[] _docs = new[]
     {
-        new Doc("DNI del cliente", "Verificado"),
-        new Doc("Estados financieros", "Verificado"),
-        new Doc("Referencias comerciales", "Verificado"),
-        new Doc("Carta de intención", "Verificado"),
-        new Doc("Comprobante de garantía", "Verificado"),
-        new Doc("Ficha de la operación", "Verificado"),
+        new Doc("Documento de identidad", "Validado"),
+        new Doc("Ficha o constancia RUC", "Validado"),
+        new Doc("Vigencia de poder", "Observado"),
+        new Doc("Sustento economico", "Validado"),
+        new Doc("Documento de garantia", "Registrado"),
+        new Doc("Declaracion jurada", "Validado"),
     };
 
-    private readonly Timeline.TimelineItem[] _timeline = new[]
-    {
-        new Timeline.TimelineItem("23 May · 11:20", "Solicitud creada", "Generada desde CAP-0226", "done"),
-        new Timeline.TimelineItem("23 May · 11:34", "Documentos cargados", "6 de 6 documentos", "done"),
-        new Timeline.TimelineItem("23 May · 11:40", "Enviada a evaluación", "Bandeja de Ricardo Salas", "done"),
-        new Timeline.TimelineItem("Hoy", "En revisión", "Esperando resolución del broker", "active"),
-    };
+    private string PlazoSolicitud => string.IsNullOrWhiteSpace(_s.PlazoTentativo)
+        ? $"{_s.PlazoMeses} meses"
+        : _s.PlazoTentativo;
+    private string AreaLocal => _captacion is null ? "No registrado" : $"{_captacion.AreaM2} m²";
+    private string ComisionCaptacion => string.IsNullOrWhiteSpace(_captacion?.ComisionPactadaTexto)
+        ? "No registrada"
+        : $"{_captacion.ComisionPactadaTexto}%";
+    private static string Texto(string? valor) => string.IsNullOrWhiteSpace(valor) ? "No registrado" : valor;
 }

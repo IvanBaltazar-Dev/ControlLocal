@@ -1,6 +1,7 @@
 @page "/bandeja-captaciones"
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
+@inject ExportacionService Exportar
 
 <PageTitle>Captaciones por revisar · ControlLocal</PageTitle>
 
@@ -8,11 +9,14 @@
           Title="Captaciones por revisar"
           Subtitle="Expedientes enviados por tus agentes · aprueba, observa o rechaza cada captación">
     <Actions>
-        <button class="cl-btn"><Icon Name="download" Size="13" /> Exportar</button>
+        <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
         <button class="cl-btn" @onclick="@(() => App.Navigate("oportunidades"))"><Icon Name="briefcase" Size="13" /> Operaciones del equipo</button>
     </Actions>
     <ChildContent>
-        @{ var filtradas = Filtradas().ToList(); }
+        @{
+            var filtradas = Filtradas().ToList();
+            var visibles = Paginador.Pagina(filtradas, ref _pagina);
+        }
         <div style="display:grid;grid-template-columns:repeat(@(_estados.Length + 2),1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="layers" Label="Total" Value="@Todas.Count.ToString()" Tone="gray"
                         Active="@(_tab == "Todas")" OnClick="@(() => _tab = "Todas")" />
@@ -43,7 +47,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var c in filtradas)
+                        @foreach (var c in visibles)
                         {
                             <tr>
                                 <td><span class="mono">@c.CodigoCaptacion</span></td>
@@ -59,12 +63,20 @@
                                 </td>
                                 <td><span class="mono">@c.ComisionPactadaTexto</span></td>
                                 <td><StatusBadge Label="@c.Estado" /></td>
-                                <td><button class="cl-btn sm primary" @onclick="@(() => App.Navigate("captacion-review"))">Revisar</button></td>
+                                <td><button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"captacion-review/{c.CodigoCaptacion}"))">Revisar</button></td>
                             </tr>
                         }
                     </tbody>
                 </table>
-                @if (filtradas.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando bandeja…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (filtradas.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="pin" Size="28" style="margin-bottom:10px;" />
@@ -74,7 +86,7 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtradas.Count" />
+        <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
 
         <div class="cl-alert blue" style="margin-top:14px;">
             <Icon Name="info" Size="15" />
@@ -86,8 +98,29 @@
 @code {
     private string _tab = "Todas";
     private string _query = "", _agente = "", _distrito = "";
+    private int _pagina = 1;
+    private bool _cargando = true;
+    private string? _error;
 
-    private IReadOnlyList<BandejaCaptacionDto> Todas => CaptacionSvc.Bandeja();
+    private IReadOnlyList<BandejaCaptacionDto> Todas = [];
+
+    // Recarga la bandeja fresca en cada navegacion: el broker ve de inmediato las
+    // captaciones que el agente acaba de enviar a revision.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Todas = await CaptacionSvc.RefrescarBandejaAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
     private string[] _estados => Todas.Select(c => c.Estado).Distinct().OrderBy(x => x).ToArray();
     private IReadOnlyList<string> _agentes => Todas.Select(c => c.NombreAgenteResponsable)
@@ -104,7 +137,18 @@
     private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query)
                                || !string.IsNullOrEmpty(_agente) || !string.IsNullOrEmpty(_distrito);
 
-    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _agente = ""; _distrito = ""; }
+    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _agente = ""; _distrito = ""; _pagina = 1; }
+
+    private async Task ExportarCsv()
+    {
+        await Exportar.DescargarCsvAsync("bandeja_captaciones",
+            new[] { "Código", "Local", "Distrito", "Área m²", "Rubro", "Propietario", "Agente", "Enviada", "Comisión %", "Estado" },
+            Filtradas().Select(c => (IReadOnlyList<string?>)new[]
+            {
+                c.CodigoCaptacion, c.DireccionLocal, c.DistritoLocal, c.AreaM2.ToString(), c.Rubro,
+                c.PropietarioNombre, c.NombreAgenteResponsable, c.FechaEnvioTexto, c.ComisionPactadaTexto, c.Estado,
+            }));
+    }
 
     private IEnumerable<BandejaCaptacionDto> Filtradas() => Todas.Where(c =>
         (_tab == "Todas" || c.Estado == _tab) &&

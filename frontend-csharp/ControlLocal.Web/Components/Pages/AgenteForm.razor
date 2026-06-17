@@ -71,6 +71,20 @@
                                 <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El usuario de acceso no se puede modificar.</div>
                             }
                         </Field>
+                        @if (!_isEdit)
+                        {
+                            <Field Label="Contraseña temporal" Required="true">
+                                <input type="password" @bind="_passwd" @bind:event="oninput" placeholder="Mínimo 8 caracteres" />
+                            </Field>
+                            <Field Label="Estado operativo inicial" Required="true">
+                                <select @bind="_estadoOperativo">
+                                    @foreach (var opcion in EnumCatalog.EstadosOperativoAgente)
+                                    {
+                                        <option value="@opcion.Label">@opcion.Label</option>
+                                    }
+                                </select>
+                            </Field>
+                        }
                         <Field Label="Zona asignada" Required="true"><select @bind="_zona"><option value="">— Seleccionar —</option><option>Lima Centro</option><option>Lima Sur</option><option>Lima Norte</option><option>Lima Este</option><option>Lima Moderna</option><option>Callao</option></select></Field>
                         <Field Label="Supervisión" Hint="Quien registra es el broker supervisor"><input value="@_supervision" disabled /></Field>
                     </div>
@@ -85,10 +99,20 @@
                     <FormSection Num="4" Title="Estado" Sub="Control administrativo y disponibilidad operativa">
                         <div class="cl-grid c2">
                             <Field Label="Estado administrativo" Required="true">
-                                <select @bind="_estadoAdministrativo"><option>Activo</option><option>Inactivo</option></select>
+                                <select @bind="_estadoAdministrativo">
+                                    @foreach (var opcion in EnumCatalog.EstadosActivoInactivo)
+                                    {
+                                        <option value="@opcion.Label">@opcion.Label</option>
+                                    }
+                                </select>
                             </Field>
                             <Field Label="Estado operativo">
-                                <select @bind="_estadoOperativo"><option value="">— Sin estado operativo —</option><option>Disponible</option><option>En licencia</option><option>No disponible</option></select>
+                                <select @bind="_estadoOperativo">
+                                    @foreach (var opcion in EnumCatalog.EstadosOperativoAgente)
+                                    {
+                                        <option value="@opcion.Label">@opcion.Label</option>
+                                    }
+                                </select>
                             </Field>
                         </div>
                     </FormSection>
@@ -134,10 +158,11 @@
     private string _telefono = "";
     private string _correo = "";
     private string _usuario = "";
+    private string _passwd = "";
     private string _zona = "";
     private string _supervision = "Ricardo Salas (tú)";
     private string _estadoAdministrativo = "Activo";
-    private string _estadoOperativo = "";
+    private string _estadoOperativo = "Disponible";
     private string? _err;
 
     private string _nombreMostrar => _tipo == "juridica" ? _razonSocial : _nombreNatural;
@@ -147,7 +172,8 @@
         ? !string.IsNullOrWhiteSpace(_razonSocial) && !string.IsNullOrWhiteSpace(_documento)
         : !string.IsNullOrWhiteSpace(_nombreNatural) && !string.IsNullOrWhiteSpace(_tipoDoc) && !string.IsNullOrWhiteSpace(_documento);
     private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_correo) && !string.IsNullOrWhiteSpace(_telefono)
-                                    && !string.IsNullOrWhiteSpace(_usuario) && !string.IsNullOrWhiteSpace(_zona);
+                                    && !string.IsNullOrWhiteSpace(_usuario) && !string.IsNullOrWhiteSpace(_zona)
+                                    && (_isEdit || _passwd.Length >= 8);
     private bool IsStep4Complete => !_isEdit || !string.IsNullOrWhiteSpace(_estadoAdministrativo);
 
     private IReadOnlyList<FormStepsSidebar.Step> _pasos
@@ -200,11 +226,13 @@
         _documento = agente.NumeroDocumento;
         _telefono = agente.Telefono;
         _correo = agente.Email;
-        _usuario = UserFromEmail(agente.Email);
+        _usuario = string.IsNullOrWhiteSpace(agente.Usuario) ? UserFromEmail(agente.Email) : agente.Usuario;
         _zona = agente.Zona;
         _supervision = string.IsNullOrWhiteSpace(agente.BrokerNombre) ? "Ricardo Salas (tú)" : agente.BrokerNombre;
         _estadoAdministrativo = string.IsNullOrWhiteSpace(agente.EstadoAdministrativo) ? "Activo" : agente.EstadoAdministrativo;
-        _estadoOperativo = agente.EstadoOperativo;
+        _estadoOperativo = string.IsNullOrWhiteSpace(agente.EstadoOperativo)
+            ? "Disponible"
+            : agente.EstadoOperativo == "En licencia" ? "Licencia" : agente.EstadoOperativo;
 
         if (_tipo == "juridica")
         {
@@ -227,7 +255,9 @@
         if (string.IsNullOrWhiteSpace(_telefono)) { _err = "El teléfono es obligatorio."; return; }
         if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo corporativo es obligatorio."; return; }
         if (string.IsNullOrWhiteSpace(_usuario)) { _err = "El usuario es obligatorio."; return; }
+        if (!_isEdit && _passwd.Length < 8) { _err = "La contraseña temporal debe tener al menos 8 caracteres."; return; }
         if (string.IsNullOrWhiteSpace(_zona)) { _err = "Selecciona una zona asignada."; return; }
+        if (!EnumCatalog.EstadosOperativoAgente.Any(item => item.Label == _estadoOperativo)) { _err = "Selecciona un estado operativo válido."; return; }
 
         _err = null;
         _confirm = true;
@@ -236,11 +266,42 @@
     private async Task OnConfirm()
     {
         _confirm = false;
+        var anterior = _isEdit ? AgenteSvc.ById(IdParam) : null;
+        var agente = new AgenteDto
+        {
+            Id = anterior?.Id ?? 0,
+            CodigoAgente = anterior?.CodigoAgente ?? "",
+            Iniciales = anterior?.Iniciales ?? "",
+            Color = anterior?.Color ?? "",
+            Nombre = _nombreMostrar.Trim(),
+            TipoPersona = _tipo == "juridica" ? "Persona juridica" : "Persona natural",
+            TipoDocumento = _tipo == "juridica" ? "R" : _tipoDoc,
+            NumeroDocumento = _documento.Trim(),
+            Telefono = _telefono.Trim(),
+            Email = _correo.Trim(),
+            Usuario = _usuario.Trim(),
+            ContrasenaTemporal = _isEdit ? anterior?.ContrasenaTemporal ?? "" : _passwd,
+            Zona = _zona,
+            FechaIngreso = anterior?.FechaIngreso,
+            FechaIngresoTexto = anterior?.FechaIngresoTexto ?? "",
+            CaptacionesActivas = anterior?.CaptacionesActivas ?? 0,
+            OportunidadesActivas = anterior?.OportunidadesActivas ?? 0,
+            EstadoAdministrativo = _estadoAdministrativo,
+            EstadoOperativo = _estadoOperativo,
+            BrokerId = anterior?.BrokerId ?? 1,
+            BrokerNombre = _supervision,
+        };
+
+        if (_isEdit)
+            AgenteSvc.Actualizar(agente);
+        else
+            AgenteSvc.Agregar(agente);
+
         _toast = true;
         await RenderIfAliveAsync();
         try
         {
-            await Task.Delay(900, DisposedToken);
+            await Task.Delay(300, DisposedToken);
         }
         catch (OperationCanceledException)
         {

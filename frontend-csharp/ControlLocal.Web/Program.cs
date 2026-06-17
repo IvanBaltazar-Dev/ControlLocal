@@ -78,9 +78,12 @@ builder.Services.AddScoped<IVisitaService, HttpVisitaService>();
 builder.Services.AddScoped<IAgenteService>(services =>
     services.GetRequiredService<HttpAgenteService>());
 
-// Servicios locales de pantallas que aun no tienen un endpoint REST equivalente.
-builder.Services.AddScoped<IBrokerService, MockBrokerService>();
 builder.Services.AddScoped<ISolicitudService, HttpSolicitudService>();
+
+// Servicios locales de pantallas que aun no tienen un endpoint REST equivalente
+// implementado en el backend Java. Cuando se agregue el endpoint REST y su
+// HttpXxxService, basta con reemplazar el Mock por la implementacion HTTP.
+builder.Services.AddScoped<IBrokerService, MockBrokerService>();
 builder.Services.AddScoped<IInteraccionService, MockInteraccionService>();
 builder.Services.AddScoped<IAssignmentService, MockAssignmentService>();
 builder.Services.AddScoped<IReasignacionCaptacionService, MockReasignacionCaptacionService>();

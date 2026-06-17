@@ -704,7 +704,7 @@ INSERT INTO seed_oportunidad_demo VALUES
     ('OPO-DEMO-004', '20610000045', 'CAP-DEMO-004', 'AGE-003', NULL, '2026-04-18 13:00:00', 'A', NULL, NULL, 'Cliente quiere visitar antes de oferta.', 'REFERIDO', 'REF-CAFE-01', '2026-04-18 13:00:00', NULL),
     ('OPO-DEMO-005', '20610000053', 'CAP-DEMO-007', 'AGE-002', 'PUB-DEMO-005', '2026-05-12 16:00:00', 'N', '2026-05-18 10:00:00', 'Precio fuera de rango', 'Cliente no continua por presupuesto.', 'WEB_PROPIA', 'PUB-DEMO-005', '2026-05-12 16:00:00', '2026-05-18 10:00:00'),
     ('OPO-DEMO-006', '20610000061', 'CAP-DEMO-006', 'AGE-004', 'PUB-DEMO-004', '2026-05-07 11:10:00', 'S', '2026-05-21 15:00:00', NULL, 'Solicitud registrada con documentos pendientes.', 'REDES_SOCIALES', 'PUB-DEMO-004', '2026-05-07 11:10:00', NULL),
-    ('OPO-DEMO-007', '76000001', 'CAP-DEMO-010', 'AGE-003', 'PUB-DEMO-006', '2026-05-22 17:40:00', 'A', NULL, NULL, 'Cliente natural evalua boutique.', 'INSTAGRAM', 'PUB-DEMO-006', '2026-05-22 17:40:00', NULL),
+    ('OPO-DEMO-007', '76000001', 'CAP-DEMO-010', 'AGE-003', 'PUB-DEMO-006', '2026-05-22 17:40:00', 'A', NULL, NULL, 'Cliente natural evalua boutique.', 'REDES_SOCIALES', 'PUB-DEMO-006', '2026-05-22 17:40:00', NULL),
     ('OPO-DEMO-008', '76000002', 'CAP-DEMO-001', 'AGE-001', 'PUB-DEMO-001', '2026-05-28 09:20:00', 'X', '2026-06-02 12:30:00', 'Desistio por inversion inicial', 'Cliente desistio antes de solicitud.', 'WHATSAPP', 'WA-76000002', '2026-05-28 09:20:00', '2026-06-02 12:30:00');
 
 INSERT INTO oportunidad_comercial (

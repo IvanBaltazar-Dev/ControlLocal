@@ -47,7 +47,9 @@
                         }
                         else
                         {
-                            <div class="cl-help">Las captaciones rechazadas, cerradas o vencidas no se pueden reasignar.</div>
+                              <div class="cl-help">
+                                  Solo se muestran captaciones activas. Las pendientes de revisión, observadas, rechazadas, cerradas o vencidas no deben reasignarse desde este flujo.
+                              </div>                       
                         }
                     </div>
                 </div>
@@ -186,7 +188,29 @@
     private readonly List<ReasignacionVista> _historial = [];
 
     private IEnumerable<CaptacionDto> Reasignables =>
-        _captaciones.Where(c => c.Estado is not ("Rechazada" or "Cerrada" or "Vencida" or "R" or "C" or "V"));
+    _captaciones
+        .Where(EsCaptacionListaParaReasignar)
+        .OrderBy(c => c.FechaFinVigencia ?? DateOnly.MaxValue)
+        .ThenBy(c => c.CodigoCaptacion);
+
+    private static bool EsCaptacionListaParaReasignar(CaptacionDto captacion)
+    {
+              var estado = NormalizarEstado(captacion.Estado);
+          
+              return estado is "ACTIVA" or "A";
+    }
+          
+    private static string NormalizarEstado(string? estado)
+    {
+              return (estado ?? "")
+                  .Trim()
+                  .ToUpperInvariant()
+                  .Replace("Á", "A")
+                  .Replace("É", "E")
+                  .Replace("Í", "I")
+                  .Replace("Ó", "O")
+                  .Replace("Ú", "U");
+    }
 
     private CaptacionDto? C => Reasignables.FirstOrDefault(x => x.Id == _captacion);
     private AgenteDto? A => _agentes.FirstOrDefault(x => x.Id == _agente);
@@ -223,14 +247,53 @@
 
     private void TryConfirm()
     {
-        if (C is null) { _err = "Selecciona una captacion para reasignar."; return; }
-        if (A is null) { _err = "Selecciona el agente destino."; return; }
-        if (A.EstadoAdministrativo != "Activo" || A.EstadoOperativo != "Disponible") { _err = "El agente seleccionado no esta disponible para asignacion."; return; }
-        if (A.Id == C.AgenteResponsableId) { _err = "La captacion ya esta asignada a ese agente."; return; }
-        if (string.IsNullOrWhiteSpace(_motivo)) { _err = "Debes ingresar un motivo para continuar."; return; }
-        _err = null;
-        _confirm = true;
-    }
+              if (C is null)
+              {
+                  _err = "Selecciona una captacion activa para reasignar.";
+                  return;
+              }
+          
+              if (!EsCaptacionListaParaReasignar(C))
+              {
+                  _err = "Solo puedes reasignar captaciones activas. Primero debe pasar por revision y aprobacion del broker.";
+                  return;
+              }
+          
+              if (A is null)
+              {
+                  _err = "Selecciona el agente que continuara la atencion de la captacion.";
+                  return;
+              }
+          
+              if (A.EstadoAdministrativo != "Activo" || A.EstadoOperativo != "Disponible")
+              {
+                  _err = "El agente seleccionado no esta disponible. Elige un agente activo y disponible.";
+                  return;
+              }
+          
+              if (A.Id == C.AgenteResponsableId)
+              {
+                  _err = "La captacion ya esta asignada a ese agente. Selecciona un agente distinto.";
+                  return;
+              }
+          
+              _motivo = _motivo.Trim();
+          
+              if (string.IsNullOrWhiteSpace(_motivo))
+              {
+                  _err = "Ingresa el motivo de la reasignacion para mantener trazabilidad.";
+                  return;
+              }
+          
+              if (_motivo.Length < 10)
+              {
+                  _err = "El motivo es muy corto. Indica brevemente por que se mueve esta captacion.";
+                  return;
+              }
+          
+              _err = null;
+              _confirm = true;
+      }
 
     private async Task OnConfirm()
     {

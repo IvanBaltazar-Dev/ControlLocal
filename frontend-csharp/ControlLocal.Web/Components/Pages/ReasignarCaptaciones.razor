@@ -2,7 +2,7 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject ICaptacionService Captaciones
-@inject HttpAgenteService Agentes
+@inject IAgenteService Agentes
 
 <PageTitle>Reasignar captaciones - ControlLocal</PageTitle>
 
@@ -193,17 +193,32 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await CargarAsync();
-        _captacion = Reasignables.FirstOrDefault()?.Id ?? 0;
-        _cargando = false;
+        try
+        {
+            await CargarAsync();
+            _captacion = Reasignables.FirstOrDefault()?.Id ?? 0;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+            _captaciones = Captaciones.All();
+            _agentes = Agentes.All();
+            _captacion = Reasignables.FirstOrDefault()?.Id ?? 0;
+        }
+        finally
+        {
+            _cargando = false;
+        }
     }
 
     private async Task CargarAsync()
     {
-        var captacionesTask = Captaciones.RefrescarAsync(DisposedToken);
-        var agentesTask = Agentes.RefrescarAsync(DisposedToken);
-        _captaciones = await captacionesTask;
-        _agentes = await agentesTask;
+        _captaciones = await Captaciones.RefrescarAsync(DisposedToken);
+        _agentes = await Agentes.RefrescarAsync(DisposedToken);
     }
 
     private void TryConfirm()
@@ -243,6 +258,10 @@
             _toast = true;
             await RenderIfAliveAsync();
             await DelayThenRenderAsync(2400, () => _toast = false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch (Exception ex)
         {

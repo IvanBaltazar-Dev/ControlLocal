@@ -6,6 +6,7 @@
 @inject IInteraccionService InteraccionSvc
 @inject IVisitaService VisitaSvc
 @inject ISolicitudService SolicitudSvc
+@inject INotificacionService Notificaciones
 
 <PageTitle>Seguimiento · @(_op?.ClienteNombre ?? "Cliente") · ControlLocal</PageTitle>
 
@@ -236,6 +237,19 @@ else
                            OnConfirm="@ConfirmarCierreExitoso" />
 
             <Toast Show="_toast">@_toastMsg</Toast>
+
+            <CierreExitosoOverlay Open="_recienCerrada"
+                                  Icon="handshake"
+                                  Eyebrow="Operación finalizada"
+                                  Title="¡Trato cerrado!"
+                                  Subtitle="@_subtituloCierre"
+                                  Resumen="_resumenCierre">
+                <Acciones>
+                    <button class="cl-btn primary" @onclick="@(() => App.Navigate($"ficha-propiedad/{_op!.CaptacionCodigo}"))"><Icon Name="store" Size="13" /> Ver ficha</button>
+                    <button class="cl-btn" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="folder" Size="13" /> Mis captaciones</button>
+                    <button class="cl-btn ghost" @onclick="@(() => _recienCerrada = false)">Entendido</button>
+                </Acciones>
+            </CierreExitosoOverlay>
         </ChildContent>
     </AppShell>
 }
@@ -255,6 +269,11 @@ else
     private bool _procesandoCierreExitoso;
     private string _razon = "", _obs = "", _toastMsg = "";
     private string? _err;
+
+    // Overlay premium de cierre: solo al cerrar AHORA (no al revisitar una cerrada).
+    private bool _recienCerrada;
+    private string _subtituloCierre = "";
+    private IReadOnlyList<CierreExitosoOverlay.Fila> _resumenCierre = [];
 
     private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
     private bool EsCierreExitoso => _op?.Estado is "Alquilada" or "Cerrada exitosa" or "Finalizada exitosa" or "F";
@@ -375,7 +394,9 @@ else
             _op = await OportunidadSvc.CerrarExitosaAsync(_op.Id, DisposedToken);
             _modalCierreExitoso = false;
             _current = 4;
-            Notificar("Trato cerrado correctamente.");
+            ConstruirResumenCierre();
+            NotificarBroker();
+            _recienCerrada = true;
         }
         catch (OperationCanceledException)
         {
@@ -389,6 +410,50 @@ else
             _procesandoCierreExitoso = false;
             await RenderIfAliveAsync();
         }
+    }
+
+    // Resumen económico del trato cerrado (oportunidad + solicitud aprobada).
+    private void ConstruirResumenCierre()
+    {
+        if (_op is null) return;
+        var local = _cap?.DireccionLocal ?? _op.DireccionLocal;
+        _subtituloCierre =
+            $"Cerraste el alquiler de {local} con {_op.ClienteNombre}. ¡Felicidades por concretar la operación!";
+
+        var filas = new List<CierreExitosoOverlay.Fila>
+        {
+            new("Operación", _op.CodigoOportunidad, "target"),
+            new("Nuevo inquilino", _op.ClienteNombre, "user"),
+            new("Propiedad", $"{local} · {_op.CaptacionCodigo}", "mapPin"),
+        };
+        if (_solicitud is not null)
+        {
+            filas.Add(new("Renta mensual", $"USD {_solicitud.MontoMensualTexto}/mes", "activity", true));
+            if (_solicitud.PlazoMeses > 0)
+                filas.Add(new("Plazo", $"{_solicitud.PlazoMeses} meses", "calendar"));
+        }
+        if (!string.IsNullOrWhiteSpace(_op.NombreAgenteResponsable))
+            filas.Add(new("Agente responsable", _op.NombreAgenteResponsable, "briefcase"));
+        _resumenCierre = filas;
+    }
+
+    // Avisa al broker supervisor que el agente concretó el alquiler.
+    private void NotificarBroker()
+    {
+        if (_op is null) return;
+        var local = _cap?.DireccionLocal ?? _op.DireccionLocal;
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Trato cerrado",
+            Mensaje = $"{_op.NombreAgenteResponsable} concretó el alquiler de {local} con {_op.ClienteNombre} ({_op.CodigoOportunidad}).",
+            Severidad = "MEDIA",
+            Icono = "checkCircle",
+            EntidadTipo = "Oportunidad",
+            EntidadRef = _op.CodigoOportunidad,
+            Ruta = $"oportunidad-detail/{_op.Id}",
+            DestinatarioRol = Roles.Broker,
+            Fecha = DateTime.Now,
+        });
     }
 
     private void Notificar(string mensaje)

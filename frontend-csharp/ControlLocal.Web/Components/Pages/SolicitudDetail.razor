@@ -1,4 +1,5 @@
 @page "/solicitud-detail/{CodigoParam?}"
+@inherits SafeComponentBase
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
 @inject IOportunidadService OportunidadSvc
@@ -6,6 +7,16 @@
 
 <PageTitle>Solicitud @_s.CodigoSolicitud · ControlLocal</PageTitle>
 
+@if (_cargando)
+{
+    <AppShell Title="Solicitud de alquiler" Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler" })">
+        <ChildContent>
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando solicitud…</div></div>
+        </ChildContent>
+    </AppShell>
+}
+else
+{
 <AppShell Crumbs="@(new[] { "ControlLocal", "Solicitudes de alquiler", _s.CodigoSolicitud })"
           Title="@($"{_s.CodigoSolicitud} · {_s.ClienteNombre}")"
           Subtitle="@($"Solicitud de alquiler · operación {_s.CodigoOperacion} · {_s.DireccionLocal}, {_s.DistritoLocal}")">
@@ -108,23 +119,43 @@
                         OnClose="@(() => _docVer = null)" />
     </ChildContent>
 </AppShell>
+}
 
 @code {
     [Parameter] public string? CodigoParam { get; set; }
 
     private Doc? _docVer;
+    private bool _cargando = true;
 
     private SolicitudAlquilerDto _s = new();
     private OportunidadComercialDto? _oportunidad;
     private CaptacionDto? _captacion;
 
-    protected override void OnParametersSet()
+    // Refresca primero (evita el crash de .First() con cache fria al abrir desde
+    // una notificacion) y luego resuelve la solicitud, su oportunidad y captacion.
+    protected override async Task OnParametersSetAsync()
     {
-        _s = (string.IsNullOrEmpty(CodigoParam) ? null : SolicitudSvc.ByCodigo(CodigoParam)) ?? SolicitudSvc.All().First();
-        _oportunidad = _s.OportunidadId > 0
-            ? OportunidadSvc.ById(_s.OportunidadId)
-            : OportunidadSvc.All().FirstOrDefault(item => item.CodigoOportunidad == _s.CodigoOperacion);
-        _captacion = _oportunidad is null ? null : CaptacionSvc.ByCodigo(_oportunidad.CaptacionCodigo);
+        _cargando = true;
+        try
+        {
+            var solicitudes = await SolicitudSvc.RefrescarAsync(DisposedToken);
+            await OportunidadSvc.RefrescarAsync(DisposedToken);
+            await CaptacionSvc.RefrescarAsync(DisposedToken);
+
+            _s = (string.IsNullOrEmpty(CodigoParam) ? null : SolicitudSvc.ByCodigo(CodigoParam))
+                 ?? solicitudes.FirstOrDefault() ?? new();
+            _oportunidad = _s.OportunidadId > 0
+                ? OportunidadSvc.ById(_s.OportunidadId)
+                : OportunidadSvc.All().FirstOrDefault(item => item.CodigoOportunidad == _s.CodigoOperacion);
+            _captacion = _oportunidad is null ? null : CaptacionSvc.ByCodigo(_oportunidad.CaptacionCodigo);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _cargando = false;
+        }
     }
 
     private static string Initials(string name) =>

@@ -822,24 +822,72 @@ public class HttpAgenteService(ApiClient api) : IAgenteService
     private List<AgenteDto>? _agentes;
 
     public IReadOnlyList<AgenteDto> All() =>
-        _agentes ??= Task.Run(() => CargarAgentes()).GetAwaiter().GetResult();
+        _agentes ??= CargarAgentesSinRomper();
 
     public async Task<IReadOnlyList<AgenteDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _agentes = await CargarAgentes(ct);
+        try
+        {
+            _agentes = await CargarAgentes(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            _agentes ??= [];
+        }
         return _agentes;
     }
 
     public AgenteDto? ById(long id) => All().FirstOrDefault(item => item.Id == id);
 
-    public AgenteDto Agregar(AgenteDto agente) =>
-        throw new InvalidOperationException("El registro de agentes aun usa el servicio local.");
+    public AgenteDto Agregar(AgenteDto agente)
+    {
+        _agentes ??= [];
+        agente.Id = _agentes.Count == 0 ? 1 : _agentes.Max(item => item.Id) + 1;
+        if (string.IsNullOrWhiteSpace(agente.CodigoAgente))
+            agente.CodigoAgente = $"AGE-{agente.Id:000}";
+        agente.FechaIngreso ??= DateOnly.FromDateTime(DateTime.Today);
+        agente.FechaIngresoTexto = agente.FechaIngreso.Value.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+        agente.Iniciales = Iniciales(agente.Nombre);
+        agente.Color = string.IsNullOrWhiteSpace(agente.Color) ? ColorPara(agente.Id) : agente.Color;
+        _agentes.Add(agente);
+        return agente;
+    }
 
-    public AgenteDto Actualizar(AgenteDto agente) =>
-        throw new InvalidOperationException("La edicion de agentes aun usa el servicio local.");
+    public AgenteDto Actualizar(AgenteDto agente)
+    {
+        _agentes ??= CargarAgentesSinRomper();
+        var indice = _agentes.FindIndex(item => item.Id == agente.Id);
+        if (indice < 0)
+            throw new InvalidOperationException("Agente no encontrado.");
+        agente.Iniciales = Iniciales(agente.Nombre);
+        agente.Color = string.IsNullOrWhiteSpace(agente.Color) ? ColorPara(agente.Id) : agente.Color;
+        _agentes[indice] = agente;
+        return agente;
+    }
 
-    public AgenteDto Desactivar(long id) =>
-        throw new InvalidOperationException("La desactivacion de agentes aun usa el servicio local.");
+    public AgenteDto Desactivar(long id)
+    {
+        var agente = ById(id) ?? throw new InvalidOperationException("Agente no encontrado.");
+        agente.EstadoAdministrativo = "Inactivo";
+        agente.EstadoOperativo = "No disponible";
+        return agente;
+    }
+
+    private List<AgenteDto> CargarAgentesSinRomper()
+    {
+        try
+        {
+            return Task.Run(() => CargarAgentes()).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            return [];
+        }
+    }
 
     private async Task<List<AgenteDto>> CargarAgentes(CancellationToken ct = default)
     {
@@ -1406,31 +1454,62 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
 
 public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore store) : INotificacionService
 {
+    private static readonly TimeSpan CacheBackendTtl = TimeSpan.FromSeconds(12);
     private List<NotificacionDto>? _cache;
+    private DateTime _cacheGeneradaUtc = DateTime.MinValue;
 
     private string RolActivo => app.CurrentUser?.Role ?? app.Role;
 
-    public IReadOnlyList<NotificacionDto> MisNotificaciones() =>
-        FiltrarPorRol(_cache ??= Task.Run(Cargar).GetAwaiter().GetResult());
+    public IReadOnlyList<NotificacionDto> MisNotificaciones()
+    {
+        RefrescarBackendSiHaceFalta();
+        // El backend se revalida con TTL corto; el bus in-app (store) se lee EN VIVO
+        // en cada llamada, asi un Crear() de otro circuito/rol se ve sin recargar.
+        return Combinar(_cache ?? [], store.ParaRol(RolActivo));
+    }
 
     public int NoLeidas() => MisNotificaciones().Count(item => !item.Leida);
 
+    private IReadOnlyList<NotificacionDto> Combinar(
+        IEnumerable<NotificacionDto> backend,
+        IEnumerable<NotificacionDto> locales)
+    {
+        var vistos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resultado = new List<NotificacionDto>();
+        foreach (var item in backend.Concat(locales)
+            .Where(EsParaRolActivo)
+            .OrderByDescending(item => item.Fecha))
+        {
+            // Deduplica backend vs in-app por entidad (evita la misma alerta dos veces).
+            if (!string.IsNullOrEmpty(item.EntidadRef)
+                && !vistos.Add($"{item.Tipo}|{item.EntidadRef}|{item.DestinatarioRol}"))
+                continue;
+            resultado.Add(item);
+        }
+        return resultado;
+    }
+
+    private bool EsParaRolActivo(NotificacionDto item) =>
+        item.DestinatarioRol == RolActivo
+        || (RolActivo == Roles.Admin && item.DestinatarioRol == Roles.Broker);
+
     public void MarcarLeida(long id)
     {
-        try
+        if (id < NotificacionStore.IdLocalMinimo)
         {
-            var respuesta = Task.Run(() => api.PostAsync<AtenderAlertaApi>($"alertas/{id}/atender", new { }))
-                .GetAwaiter().GetResult();
-            if (respuesta?.Atendida != true)
-                return;
+            try
+            {
+                // Solo aplica a alertas persistidas por el backend.
+                Task.Run(() => api.PostAsync<AtenderAlertaApi>($"alertas/{id}/atender", new { }))
+                    .GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Backend no disponible o alerta ya atendida en servidor.
+            }
         }
-        catch
-        {
-            store.MarcarLeida(id);
-        }
-
-        _cache ??= [];
-        var notificacion = _cache.FirstOrDefault(item => item.Id == id);
+        store.MarcarLeida(id);   // marca la in-app y dispara el refresco del Topbar
+        var notificacion = _cache?.FirstOrDefault(item => item.Id == id);
         if (notificacion is not null)
             notificacion.Leida = true;
     }
@@ -1443,12 +1522,20 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
 
     public NotificacionDto Crear(NotificacionDto notificacion)
     {
-        store.Agregar(notificacion);
-        _cache ??= [];
         if (notificacion.Fecha == default)
             notificacion.Fecha = DateTime.Now;
-        _cache.Insert(0, notificacion);
-        return notificacion;
+        // Solo al store Singleton: el merge en MisNotificaciones lo hace visible a
+        // todos los circuitos y el evento Cambiado refresca la campana en vivo.
+        return store.Agregar(notificacion);
+    }
+
+    private void RefrescarBackendSiHaceFalta()
+    {
+        if (_cache is not null && DateTime.UtcNow - _cacheGeneradaUtc < CacheBackendTtl)
+            return;
+
+        _cache = Task.Run(Cargar).GetAwaiter().GetResult();
+        _cacheGeneradaUtc = DateTime.UtcNow;
     }
 
     private async Task<List<NotificacionDto>> Cargar()
@@ -1456,20 +1543,13 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
         try
         {
             var pagina = await api.GetPaginaAsync<AlertaApi>("alertas", 1, 50);
-            var alertas = pagina?.Items.Select(Mapear).ToList() ?? [];
-            return alertas.Count > 0 ? alertas : store.ParaRol(RolActivo).ToList();
+            return pagina?.Items.Select(Mapear).ToList() ?? [];
         }
         catch
         {
-            return store.ParaRol(RolActivo).ToList();
+            return [];
         }
     }
-
-    private IReadOnlyList<NotificacionDto> FiltrarPorRol(IEnumerable<NotificacionDto> items) =>
-        items.Where(item => item.DestinatarioRol == RolActivo
-                || (RolActivo == Roles.Admin && item.DestinatarioRol == Roles.Broker))
-            .OrderByDescending(item => item.Fecha)
-            .ToList();
 
     private NotificacionDto Mapear(AlertaApi item) => new()
     {

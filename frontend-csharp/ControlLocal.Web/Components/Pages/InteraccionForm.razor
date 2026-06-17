@@ -19,8 +19,8 @@
             <div>
                 <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad determina la captación y el cliente relacionados">
                     <Field Label="Oportunidad" Required="true">
-                        <select @bind="_oportunidadId">
-                            <option value="0">— Seleccionar —</option>
+                        <select @bind="_oportunidadId" disabled="@_cargando">
+                            <option value="0">@(_cargando ? "Cargando oportunidades…" : "— Seleccionar —")</option>
                             @foreach (var oportunidad in _oportunidades)
                             {
                                 <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
@@ -109,6 +109,7 @@
     private bool _confirm;
     private bool _toast;
     private bool _procesando;
+    private bool _cargando = true;
     private string? _err;
     private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
 
@@ -137,6 +138,10 @@
         catch (Exception ex)
         {
             _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
         }
     }
 

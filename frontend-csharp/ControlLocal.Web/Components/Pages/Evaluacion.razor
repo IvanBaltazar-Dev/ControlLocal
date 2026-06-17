@@ -3,6 +3,7 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
+@inject INotificacionService Notificaciones
 
 <PageTitle>Evaluar solicitud · ControlLocal</PageTitle>
 
@@ -13,7 +14,11 @@
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
-        @if (_solicitud is null)
+        @if (_cargando)
+        {
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando solicitud…</div></div>
+        }
+        else if (_solicitud is null)
         {
             <div class="cl-alert red"><Icon Name="alert" Size="15" /><span>No se encontró la solicitud seleccionada.</span></div>
         }
@@ -109,10 +114,12 @@
     private bool _confirm;
     private bool _toast;
     private bool _procesando;
+    private bool _cargando = true;
     private string? _err;
 
     protected override async Task OnParametersSetAsync()
     {
+        _cargando = true;
         try
         {
             await SolicitudSvc.RefrescarAsync();
@@ -124,6 +131,7 @@
         _solicitud = string.IsNullOrWhiteSpace(CodigoParam)
             ? SolicitudSvc.All().FirstOrDefault()
             : SolicitudSvc.ByCodigo(CodigoParam);
+        _cargando = false;
     }
 
     private void TryConfirm()
@@ -174,7 +182,27 @@
             _procesando = false;
         }
 
+        NotificarAgente();
         _toast = true;
         App.Navigate("solicitudes");
+    }
+
+    // Avisa al agente el resultado de la evaluacion de su solicitud.
+    private void NotificarAgente()
+    {
+        if (_solicitud is null) return;
+        var resultado = EnumCatalog.LabelFor(EnumCatalog.ResultadosEvaluacionSolicitud, _resultado);
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Solicitud evaluada",
+            Mensaje = $"Tu solicitud {_solicitud.CodigoSolicitud} ({_solicitud.ClienteNombre}) fue evaluada: {resultado}.",
+            Severidad = _resultado is "R" ? "ALTA" : "MEDIA",
+            Icono = _resultado switch { "A" => "check", "R" => "x", "O" => "alert", _ => "fileText" },
+            EntidadTipo = "Solicitud",
+            EntidadRef = _solicitud.CodigoSolicitud,
+            Ruta = $"solicitud-detail/{_solicitud.CodigoSolicitud}",
+            DestinatarioRol = Roles.Agente,
+            Fecha = DateTime.Now,
+        });
     }
 }

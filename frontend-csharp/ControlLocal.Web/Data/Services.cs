@@ -29,6 +29,8 @@ public interface IBrokerService
 public interface IAgenteService
 {
     IReadOnlyList<AgenteDto> All();
+    Task<IReadOnlyList<AgenteDto>> RefrescarAsync(CancellationToken ct = default) =>
+        Task.FromResult(All());
     AgenteDto? ById(long id);
     AgenteDto Agregar(AgenteDto agente);
     AgenteDto Actualizar(AgenteDto agente);

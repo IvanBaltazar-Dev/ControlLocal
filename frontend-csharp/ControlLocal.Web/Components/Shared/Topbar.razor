@@ -2,6 +2,9 @@
 @inject AppState App
 @inject ApiClient Api
 @inject INotificacionService Notif
+@inject NotificacionStore Store
+@inject NavigationManager Nav
+@implements IDisposable
 
 <header class="cl-topbar">
     <div class="cl-topbar-right">
@@ -126,9 +129,29 @@
     private string FechaHoy =>
         DateTime.Today.ToString("dddd · dd MMMM yyyy", new System.Globalization.CultureInfo("es-PE"));
 
-    protected override void OnInitialized() => Recargar();
+    protected override void OnInitialized()
+    {
+        Recargar();
+        // Bus reactivo: cualquier Crear()/marcar-leida (incluso de otro rol, porque
+        // el store es Singleton) refresca la campana al instante. Además, en cada
+        // navegación revalidamos por si llegaron alertas del backend.
+        Store.Cambiado += OnNotificacionesCambiaron;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnNotificacionesCambiaron() =>
+        _ = InvokeAsync(() => { Recargar(); StateHasChanged(); });
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(() => { Recargar(); StateHasChanged(); });
 
     private void Recargar() => _items = Notif.MisNotificaciones().ToList();
+
+    public void Dispose()
+    {
+        Store.Cambiado -= OnNotificacionesCambiaron;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 
     private void ToggleNotifs()
     {

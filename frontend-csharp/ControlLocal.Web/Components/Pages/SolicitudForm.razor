@@ -4,6 +4,7 @@
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
 @inject IOportunidadService OportunidadSvc
+@inject INotificacionService Notificaciones
 @using ControlLocal.Web.Models.Oportunidades
 @using ControlLocal.Web.Models.Solicitudes
 
@@ -20,8 +21,8 @@
             <div>
                 <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad determina el cliente y la captación">
                     <Field Label="Oportunidad" Required="true">
-                        <select @bind="_oportunidadId">
-                            <option value="0">— Seleccionar —</option>
+                        <select @bind="_oportunidadId" disabled="@_cargando">
+                            <option value="0">@(_cargando ? "Cargando oportunidades…" : "— Seleccionar —")</option>
                             @foreach (var oportunidad in _oportunidades)
                             {
                                 <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
@@ -111,6 +112,7 @@
     private bool _confirm;
     private bool _toast;
     private bool _procesando;
+    private bool _cargando = true;
     private string _toastMsg = "";
     private string? _err;
     private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
@@ -133,6 +135,10 @@
         catch (Exception ex)
         {
             _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
         }
     }
 
@@ -184,6 +190,8 @@
                 Observaciones = string.IsNullOrWhiteSpace(_observaciones) ? null : _observaciones.Trim(),
                 EnviarAEvaluacion = enviarAEvaluacion,
             }, DisposedToken);
+            if (enviarAEvaluacion)
+                NotificarBroker();
             _toastMsg = mensaje;
             _toast = true;
             App.Navigate("solicitudes");
@@ -204,5 +212,25 @@
             _procesando = false;
             await RenderIfAliveAsync();
         }
+    }
+
+    // Avisa al broker supervisor que hay una solicitud nueva por evaluar.
+    private void NotificarBroker()
+    {
+        var op = OportunidadSeleccionada;
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Solicitud por evaluar",
+            Mensaje = op is null
+                ? "Una nueva solicitud de alquiler espera tu evaluación."
+                : $"Nueva solicitud de {op.ClienteNombre} ({op.CaptacionCodigo}) lista para evaluar.",
+            Severidad = "MEDIA",
+            Icono = "fileText",
+            EntidadTipo = "Oportunidad",
+            EntidadRef = op?.CodigoOportunidad,
+            Ruta = "solicitudes",
+            DestinatarioRol = Roles.Broker,
+            Fecha = DateTime.Now,
+        });
     }
 }

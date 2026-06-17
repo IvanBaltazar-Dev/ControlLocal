@@ -75,10 +75,11 @@ builder.Services.AddScoped<HttpOportunidadService>();
 builder.Services.AddScoped<IOportunidadService>(services =>
     services.GetRequiredService<HttpOportunidadService>());
 builder.Services.AddScoped<IVisitaService, HttpVisitaService>();
+builder.Services.AddScoped<IAgenteService>(services =>
+    services.GetRequiredService<HttpAgenteService>());
 
 // Servicios locales de pantallas que aun no tienen un endpoint REST equivalente.
 builder.Services.AddScoped<IBrokerService, MockBrokerService>();
-builder.Services.AddScoped<IAgenteService, MockAgenteService>();
 builder.Services.AddScoped<ISolicitudService, HttpSolicitudService>();
 builder.Services.AddScoped<IInteraccionService, MockInteraccionService>();
 builder.Services.AddScoped<IAssignmentService, MockAssignmentService>();

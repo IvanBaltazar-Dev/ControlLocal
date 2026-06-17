@@ -98,6 +98,7 @@
     protected override void OnParametersSet()
     {
         _a = (long.TryParse(IdParam, out var id) ? AgenteSvc.ById(id) : null)
-             ?? AgenteSvc.All().First();
+             ?? AgenteSvc.All().FirstOrDefault()
+             ?? new AgenteDto { Nombre = "Agente no encontrado" };
     }
 }

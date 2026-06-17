@@ -74,7 +74,7 @@ public class ApiClient
     public async Task<T?> GetAsync<T>(string ruta, CancellationToken ct = default)
     {
         using var solicitud = Solicitud(HttpMethod.Get, ruta);
-        using var respuesta = await _http.SendAsync(solicitud, ct);
+        using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
         return await LeerJsonAsync<T>(respuesta.Content, ct);
     }
@@ -89,7 +89,7 @@ public class ApiClient
     {
         using var solicitud = Solicitud(HttpMethod.Post, ruta);
         solicitud.Content = JsonContent.Create(cuerpo);
-        using var respuesta = await _http.SendAsync(solicitud, ct);
+        using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
         return await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
     }
@@ -98,7 +98,7 @@ public class ApiClient
     {
         using var solicitud = Solicitud(HttpMethod.Put, ruta);
         solicitud.Content = JsonContent.Create(cuerpo);
-        using var respuesta = await _http.SendAsync(solicitud, ct);
+        using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
         return await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
     }
@@ -106,7 +106,7 @@ public class ApiClient
     public async Task DeleteAsync(string ruta, CancellationToken ct = default)
     {
         using var solicitud = Solicitud(HttpMethod.Delete, ruta);
-        using var respuesta = await _http.SendAsync(solicitud, ct);
+        using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
     }
 
@@ -114,7 +114,7 @@ public class ApiClient
     {
         using var solicitud = Solicitud(HttpMethod.Patch, ruta);
         solicitud.Content = JsonContent.Create(cuerpo);
-        using var respuesta = await _http.SendAsync(solicitud, ct);
+        using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
     }
 
@@ -125,7 +125,7 @@ public class ApiClient
     {
         using var solicitud = Solicitud(HttpMethod.Patch, ruta);
         solicitud.Content = JsonContent.Create(cuerpo);
-        using var respuesta = await _http.SendAsync(solicitud, ct);
+        using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
         return await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
     }
@@ -136,6 +136,34 @@ public class ApiClient
         if (_sesion.Token is not null)
             solicitud.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _sesion.Token);
         return solicitud;
+    }
+
+    private async Task<HttpResponseMessage> EnviarAsync(HttpRequestMessage solicitud, CancellationToken ct)
+    {
+        var destino = solicitud.RequestUri?.IsAbsoluteUri == true
+            ? solicitud.RequestUri
+            : new Uri(_http.BaseAddress!, solicitud.RequestUri ?? new Uri("", UriKind.Relative));
+
+        try
+        {
+            return await _http.SendAsync(solicitud, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new InvalidOperationException(
+                $"El API REST no respondio a tiempo ({destino}). Verifica que el backend siga levantado.",
+                ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException(
+                $"No se pudo conectar al API REST ({destino}). Verifica Api:BaseUrl y que GlassFish este sirviendo /controllocal/Api.",
+                ex);
+        }
     }
 
     private async Task ValidarRespuestaAsync(HttpResponseMessage respuesta, CancellationToken ct)

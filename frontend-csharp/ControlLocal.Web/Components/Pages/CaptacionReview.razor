@@ -2,6 +2,7 @@
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
 @inject ControlLocal.Web.Services.Api.HttpAgenteService AgenteSvc
+@inject INotificacionService Notificaciones
 
 <PageTitle>Revisar captacion - ControlLocal</PageTitle>
 
@@ -292,6 +293,7 @@ else
             _error = null;
             StateHasChanged();
             await CaptacionSvc.ResolverBandejaAsync(_captacion.CodigoCaptacion, decision, _motivo);
+            NotificarAgente(decision);
             await FinalizarAsync(mensaje);
         }
         catch (Exception error)
@@ -346,6 +348,34 @@ else
         {
             _procesando = false;
         }
+    }
+
+    // Avisa al agente captador el resultado de la revision de su captacion.
+    private void NotificarAgente(string decision)
+    {
+        if (_captacion is null) return;
+        var (estado, severidad, icono) = decision.Trim().ToUpperInvariant() switch
+        {
+            "APROBAR" => ("aprobada", "MEDIA", "check"),
+            "OBSERVAR" => ("observada", "ALTA", "alert"),
+            "RECHAZAR" => ("rechazada", "ALTA", "x"),
+            _ => ("revisada", "MEDIA", "fileText"),
+        };
+        var ruta = estado == "observada"
+            ? $"captacion-form/{_captacion.CodigoCaptacion}"
+            : $"captacion-detail/{_captacion.CodigoCaptacion}";
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = $"Captación {estado}",
+            Mensaje = $"Tu captación {_captacion.CodigoCaptacion} ({_captacion.DireccionLocal}) fue {estado} por el broker.",
+            Severidad = severidad,
+            Icono = icono,
+            EntidadTipo = "Captacion",
+            EntidadRef = _captacion.CodigoCaptacion,
+            Ruta = ruta,
+            DestinatarioRol = Roles.Agente,
+            Fecha = DateTime.Now,
+        });
     }
 
     private async Task FinalizarAsync(string mensaje)

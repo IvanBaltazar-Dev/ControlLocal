@@ -1060,3 +1060,90 @@
         outline: none;
         box-shadow: none;
     }
+
+/* ============================================================
+   Cierre exitoso — overlay premium de fin de proceso
+   Reusa keyframes: cl-pop, cl-pulse, cl-box-in, cl-rise.
+   z-index > campana (1300).
+   ============================================================ */
+.cl-success {
+  position: fixed; inset: 0; z-index: 1400; overflow: hidden;
+  display: grid; place-items: center; padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(3,12,40,0.16), rgba(17,53,122,0.92)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 92px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 92px),
+    linear-gradient(135deg, var(--c-navy), var(--c-navy-3) 55%, #11357A);
+  animation: cl-login-fade .45s ease both;
+}
+
+.cl-success-card {
+  position: relative; z-index: 2; width: 480px; max-width: 100%;
+  background: rgba(255,255,255,0.97); border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 0 32px 70px rgba(3,12,40,0.55), inset 0 1px 0 rgba(255,255,255,0.6);
+  padding: 30px 30px 24px; text-align: center;
+  animation: cl-box-in .8s cubic-bezier(.2,.7,.2,1) both;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.cl-success-card > * { animation: cl-rise .5s ease both; }
+.cl-success-card > *:nth-child(1) { animation-delay: .18s; }
+.cl-success-card > *:nth-child(2) { animation-delay: .26s; }
+.cl-success-card > *:nth-child(3) { animation-delay: .34s; }
+.cl-success-card > *:nth-child(4) { animation-delay: .42s; }
+.cl-success-card > *:nth-child(5) { animation-delay: .50s; }
+.cl-success-card > *:nth-child(6) { animation-delay: .58s; }
+
+.cl-success-check {
+  width: 88px; height: 88px; margin: 4px auto 16px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; position: relative;
+  background: linear-gradient(160deg, #27B981, var(--c-green));
+  box-shadow: 0 14px 30px rgba(31,157,107,0.5), inset 0 1px 0 rgba(255,255,255,0.45);
+  animation: cl-pop .7s cubic-bezier(.2,.8,.2,1.25) .1s both;
+}
+.cl-success-check::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  animation: cl-pulse-green 2s ease-out .5s infinite;
+}
+@keyframes cl-pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(31,157,107,0.55); }
+  70%  { box-shadow: 0 0 0 18px rgba(31,157,107,0); }
+  100% { box-shadow: 0 0 0 0 rgba(31,157,107,0); }
+}
+.cl-success-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0; text-transform: uppercase; color: var(--c-green);
+  background: var(--c-green-50); padding: 5px 12px; border-radius: 8px;
+}
+.cl-success-title { font-size: 24px; font-weight: 750; letter-spacing: 0; color: var(--c-text); margin: 14px 0 6px; }
+.cl-success-sub { font-size: 13px; color: var(--c-text-2); line-height: 1.55; margin: 0 auto 18px; max-width: 380px; }
+
+.cl-success-summary {
+  display: grid; gap: 1px; background: var(--c-border-2); border: 1px solid var(--c-border-2);
+  border-radius: 8px; overflow: hidden; margin-bottom: 18px; text-align: left;
+}
+.cl-success-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--c-surface-2); padding: 11px 14px; }
+.cl-success-row .k { font-size: 11.5px; color: var(--c-text-3); display: inline-flex; align-items: center; gap: 7px; }
+.cl-success-row .v { font-size: 13px; font-weight: 650; color: var(--c-text); text-align: right; }
+.cl-success-row .v.big { font-size: 15px; color: var(--c-green); }
+
+.cl-success-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.cl-success-actions .cl-btn { min-width: 130px; justify-content: center; }
+
+/* Confeti CSS puro (sin librerías) */
+.cl-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.cl-confetti i {
+  position: absolute; top: -12vh; width: 9px; height: 14px; border-radius: 2px;
+  opacity: 0; animation: cl-confetti-fall 3s linear infinite;
+}
+@keyframes cl-confetti-fall {
+  0%   { transform: translateY(-12vh) rotateZ(0deg); opacity: 0; }
+  8%   { opacity: 1; }
+  100% { transform: translateY(112vh) rotateZ(720deg); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-success, .cl-success-card, .cl-success-card > *,
+  .cl-success-check, .cl-success-check::before, .cl-confetti i { animation: none; }
+  .cl-confetti { display: none; }
+}

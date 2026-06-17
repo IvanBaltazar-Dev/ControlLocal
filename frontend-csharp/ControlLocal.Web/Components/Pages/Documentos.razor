@@ -4,6 +4,7 @@
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
 @inject IDocumentoStorage Storage
+@inject INotificacionService Notificaciones
 
 <PageTitle>Documentos @CodigoExpediente · ControlLocal</PageTitle>
 
@@ -246,6 +247,18 @@
         try
         {
             SolicitudSvc.ReenviarAEvaluacion(_solicitud.CodigoSolicitud);
+            Notificaciones.Crear(new NotificacionDto
+            {
+                Tipo = "Solicitud por evaluar",
+                Mensaje = $"La solicitud {_solicitud.CodigoSolicitud} ({_solicitud.ClienteNombre}) volvió a evaluación.",
+                Severidad = "MEDIA",
+                Icono = "fileText",
+                EntidadTipo = "Solicitud",
+                EntidadRef = _solicitud.CodigoSolicitud,
+                Ruta = "solicitudes",
+                DestinatarioRol = Roles.Broker,
+                Fecha = DateTime.Now,
+            });
         }
         catch (InvalidOperationException ex)
         {
@@ -255,7 +268,7 @@
         }
         _toast = "Solicitud reenviada a evaluación. Se notificó al broker.";
         await RenderIfAliveAsync();
-        await Task.Delay(700);
+        await Task.Delay(300);
         App.Navigate("solicitudes");
     }
 

@@ -39,9 +39,17 @@ public class NotificacionDto
 // evaluacion -> aviso al broker -> evaluacion -> aviso al agente" es observable.
 public class NotificacionStore
 {
+    public const long IdLocalMinimo = 1_000_001;
+
     private readonly object _lock = new();
     private readonly List<NotificacionDto> _items = new();
-    private long _seq;
+    // Offset alto: los ids in-app no deben colisionar con los ids de Alerta del backend.
+    private long _seq = IdLocalMinimo - 1;
+
+    // Se dispara en cada cambio (alta / marcar leida). El Topbar se suscribe para
+    // refrescar la campana EN VIVO, incluso cuando el cambio viene de OTRO circuito
+    // (otro rol), porque el store es Singleton compartido.
+    public event Action? Cambiado;
 
     public NotificacionStore()
     {
@@ -79,8 +87,9 @@ public class NotificacionStore
             notificacion.Id = ++_seq;
             if (notificacion.Fecha == default) notificacion.Fecha = DateTime.Now;
             _items.Insert(0, notificacion);
-            return notificacion;
         }
+        Cambiado?.Invoke();   // fuera del lock: evita reentrancia con suscriptores
+        return notificacion;
     }
 
     // El admin general supervisa todo, por eso ve tambien las del broker.
@@ -96,13 +105,15 @@ public class NotificacionStore
 
     public bool MarcarLeida(long id)
     {
+        bool cambio;
         lock (_lock)
         {
             var notificacion = _items.FirstOrDefault(n => n.Id == id);
-            if (notificacion is null || notificacion.Leida) return false;
-            notificacion.Leida = true;
-            return true;
+            cambio = notificacion is { Leida: false };
+            if (cambio) notificacion!.Leida = true;
         }
+        if (cambio) Cambiado?.Invoke();
+        return cambio;
     }
 
     public void MarcarTodasLeidas(string rol)
@@ -111,6 +122,7 @@ public class NotificacionStore
             foreach (var notificacion in _items.Where(n => n.DestinatarioRol == rol
                 || (rol == Roles.Admin && n.DestinatarioRol == Roles.Broker)))
                 notificacion.Leida = true;
+        Cambiado?.Invoke();
     }
 }
 

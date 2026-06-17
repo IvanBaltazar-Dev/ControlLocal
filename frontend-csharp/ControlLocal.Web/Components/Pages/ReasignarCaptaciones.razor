@@ -197,7 +197,7 @@
     {
               var estado = NormalizarEstado(captacion.Estado);
           
-              return estado is "ACTIVA" or "A";
+              return estado is "ACTIVA" or "APROBADA" or "A";
     }
           
     private static string NormalizarEstado(string? estado)
@@ -302,20 +302,30 @@
         _confirm = false;
         _procesando = true;
         await RenderIfAliveAsync();
-        var anterior = C.NombreAgenteResponsable;
-        try
-        {
-            await Captaciones.ReasignarBandejaAsync(C.CodigoCaptacion, A.Id, _motivo, DisposedToken);
-            _historial.Insert(0, new ReasignacionVista(
-                $"Hoy - {DateTime.Now:HH:mm}",
-                C.CodigoCaptacion,
-                C.DireccionLocal,
-                anterior,
-                A.Nombre,
-                App.CurrentUser?.Nombre ?? "Broker en sesion",
-                _motivo.Trim()));
-            await CargarAsync();
-            _toastMsg = $"{C.CodigoCaptacion} reasignada a {A.Nombre}.";
+
+          var codigoCaptacion = C.CodigoCaptacion;
+          var direccionLocal = C.DireccionLocal;
+          var anterior = C.NombreAgenteResponsable;
+          var nuevoAgente = A.Nombre;
+          var motivo = _motivo.Trim();
+          
+          try
+          {
+              await Captaciones.ReasignarBandejaAsync(codigoCaptacion, A.Id, motivo, DisposedToken);
+          
+              _historial.Insert(0, new ReasignacionVista(
+                  $"Hoy - {DateTime.Now:HH:mm}",
+                  codigoCaptacion,
+                  direccionLocal,
+                  anterior,
+                  nuevoAgente,
+                  App.CurrentUser?.Nombre ?? "Broker en sesion",
+                  motivo));
+          
+              await CargarAsync();
+          
+              _toastMsg = $"{codigoCaptacion} reasignada a {nuevoAgente}.";
+                    
             _agente = 0;
             _motivo = "";
             _toast = true;

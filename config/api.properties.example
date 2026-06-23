@@ -1,4 +1,0 @@
-# Origen del frontend local (Blazor Server). Cambialo solo si usas otro puerto.
-api.cors.origin=http://localhost:5232
-# Secreto de firma del JWT (>=32 caracteres). Fijo para desarrollo local.
-api.token.secret=ControlLocal-development-token-secret-2026

@@ -28,9 +28,10 @@ aws.s3.prefix=documentos
 #   LOCAL -> siempre disco local (no requiere credenciales AWS).
 # ------------------------------------------------------------
 almacen.proveedor=AUTO
-# Carpeta del almacen local (respaldo). Si es relativa, se resuelve contra el home del
-# usuario. Vacio = <home del usuario>/controllocal/almacen-documentos.
-almacen.local.ruta=
+# Carpeta del almacen local (respaldo). RELATIVA = se resuelve contra el home del usuario
+# en cada equipo (portable, sin atar a un usuario). Absoluta = se usa tal cual. Vacio = igual
+# que la relativa de abajo. No se expanden variables (%USERPROFILE%/${...}).
+almacen.local.ruta=controllocal/almacen-documentos
 
 # El cliente S3 confia en el truststore del propio JDK (java.home/lib/security/cacerts),
 # no en el de GlassFish, para evitar "PKIX path building failed" con la CA de Amazon.

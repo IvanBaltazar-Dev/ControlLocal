@@ -14,11 +14,11 @@ La idea central es sencilla: cada operacion comercial debe quedar conectada desd
 
 | Necesitas... | Lee... |
 | --- | --- |
-| Levantar backend, frontend y probar credenciales | [COMO_PROBAR.md](COMO_PROBAR.md) |
-| Crear o recrear la base de datos | [database/README.md](database/README.md) |
-| Entender entidades, atributos y enums | [database/README.md](database/README.md#modelo-de-dominio) |
-| Entender roles, permisos y sesion | [docs/inform/wireframes_roles_sesion.md](docs/inform/wireframes_roles_sesion.md) |
-| Entender el flujo comercial completo | [docs/inform/flujo_proceso_comercial_oportunidad.md](docs/inform/flujo_proceso_comercial_oportunidad.md) |
+| Levantar backend, frontend y probar credenciales | [Como Probar](#como-probar) |
+| Crear o recrear la base de datos | Scripts SQL en [`database/`](database/) |
+| Entender entidades, atributos y enums | [Modelo De Dominio](#modelo-de-dominio) y [`database/01_create_schema_controllocal.sql`](database/01_create_schema_controllocal.sql) |
+| Entender roles, permisos y sesion | [Roles](#roles) |
+| Entender el flujo comercial completo | [Flujo Principal](#flujo-principal) |
 
 ## Alcance Funcional
 
@@ -54,9 +54,8 @@ ControlLocal/
 |-- frontend-csharp/
 |   `-- ControlLocal.Web/         Frontend Blazor.
 |
-|-- database/                     Scripts SQL, seeds y diagrama.
-|-- docs/                         Documentacion funcional y visual.
-`-- config/                       Ejemplos de configuracion privada.
+|-- database/                     Scripts SQL, seeds y diagramas.
+`-- docs/                         Diagramas e imagenes del proceso y logo.
 ```
 
 ### Responsabilidad Por Capa
@@ -120,7 +119,7 @@ Las entidades existen para responder preguntas operativas concretas:
 | Cuando se formaliza? | `SolicitudAlquiler`, `DocumentoSolicitud`, `TipoDocumentoRequerido`, `EvaluacionSolicitud`. |
 | Como se cierra y controla? | `ContratoAlquiler`, `ComisionLiquidacion`, `ReportePropietario`, `Tarea`, `Alerta`, `HistorialEstado`. |
 
-El sustento detallado de cada entidad, sus atributos y sus enums esta en [database/README.md](database/README.md#modelo-de-dominio).
+El sustento detallado de cada entidad, sus atributos y sus enums esta en el esquema [`database/01_create_schema_controllocal.sql`](database/01_create_schema_controllocal.sql).
 
 ## API Y Frontend
 
@@ -157,7 +156,7 @@ http://localhost:5232/login
 
 ## Como Probar
 
-La guia completa esta en [COMO_PROBAR.md](COMO_PROBAR.md). El resumen es:
+El procedimiento es:
 
 1. Preparar MySQL con los scripts de `database/`.
 2. Crear archivos privados de configuracion desde los `.example`.
@@ -172,7 +171,8 @@ La guia completa esta en [COMO_PROBAR.md](COMO_PROBAR.md). El resumen es:
 No se deben versionar credenciales. Los archivos privados esperados son:
 
 ```text
-config/api.properties
+backend-java/controllocal-rest/src/main/resources/api.properties
+backend-java/controllocal-rest/src/main/resources/aws.properties
 backend-java/controllocal-db-manager/src/main/resources/db.properties
 frontend-csharp/ControlLocal.Web/appsettings.json
 ```
@@ -180,8 +180,9 @@ frontend-csharp/ControlLocal.Web/appsettings.json
 Usa como base:
 
 ```text
-config/api.properties.example
-config/db.properties.example
+backend-java/controllocal-rest/src/main/resources/api.properties.example
+backend-java/controllocal-rest/src/main/resources/aws.properties.example
+backend-java/controllocal-db-manager/src/main/resources/db.properties.example
 frontend-csharp/ControlLocal.Web/appsettings.example.json
 ```
 

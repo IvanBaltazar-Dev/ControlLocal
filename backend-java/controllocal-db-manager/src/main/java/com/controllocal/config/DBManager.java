@@ -19,7 +19,6 @@ public final class DBManager {
     private static final String CREDENTIALS_FILE = "db.properties";
     private static final String MYSQL_DRIVER = "com.mysql.cj.jdbc.Driver";
     private static final List<Path> DEFAULT_CONFIG_PATHS = List.of(
-            Path.of("config", CREDENTIALS_FILE),
             Path.of("controllocal-db-manager", "src", "main", "resources", CREDENTIALS_FILE),
             Path.of("backend-java", "controllocal-db-manager", "src", "main", "resources", CREDENTIALS_FILE)
     );
@@ -123,7 +122,8 @@ public final class DBManager {
         }
 
         throw new IllegalStateException(
-                "No se encontro db.properties. Crea config/db.properties "
+                "No se encontro db.properties. Crea el archivo en "
+                        + "controllocal-db-manager/src/main/resources/db.properties "
                         + "o define -Ddb.config.path=/ruta/db.properties.");
     }
 

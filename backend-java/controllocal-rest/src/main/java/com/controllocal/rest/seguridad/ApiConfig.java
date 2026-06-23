@@ -10,13 +10,11 @@ import java.util.Properties;
  * Configuracion privada del API. Se busca en este orden:
  *   1. Ruta absoluta indicada por -Dapi.config.path=...
  *   2. Recurso "api.properties" empaquetado en el classpath del WAR.
- *   3. Archivo "config/api.properties" buscando hacia arriba desde el cwd.
  */
 public final class ApiConfig {
 
     private static final String CONFIG_PATH_PROPERTY = "api.config.path";
     private static final String CLASSPATH_RESOURCE = "api.properties";
-    private static final Path DEFAULT_CONFIG_PATH = Path.of("config", "api.properties");
     private static final Properties PROPERTIES = loadProperties();
 
     private ApiConfig() {
@@ -61,11 +59,6 @@ public final class ApiConfig {
                     "No se pudo cargar " + CLASSPATH_RESOURCE + " desde el classpath.", error);
         }
 
-        Path fallback = resolveAncestorPath();
-        if (fallback != null) {
-            return cargarDesde(fallback, properties, false);
-        }
-
         return properties;
     }
 
@@ -84,17 +77,5 @@ public final class ApiConfig {
             throw new IllegalStateException(
                     "No se pudo cargar la configuracion externa del API en " + path + ".", error);
         }
-    }
-
-    private static Path resolveAncestorPath() {
-        Path current = Path.of("").toAbsolutePath().normalize();
-        while (current != null) {
-            Path candidate = current.resolve(DEFAULT_CONFIG_PATH).normalize();
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
-            }
-            current = current.getParent();
-        }
-        return null;
     }
 }

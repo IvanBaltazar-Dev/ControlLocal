@@ -366,12 +366,14 @@ else
             : $"captacion-detail/{_captacion.CodigoCaptacion}";
         Notificaciones.Crear(new NotificacionDto
         {
-            Tipo = $"Captación {estado}",
+            // Tipo + EntidadRef (id numérico) alineados con la alerta real CAPTACION_REVISADA
+            // del backend para deduplicar en la campana; el resultado va en el mensaje.
+            Tipo = "Captación revisada",
             Mensaje = $"Tu captación {_captacion.CodigoCaptacion} ({_captacion.DireccionLocal}) fue {estado} por el broker.",
             Severidad = severidad,
             Icono = icono,
             EntidadTipo = "Captacion",
-            EntidadRef = _captacion.CodigoCaptacion,
+            EntidadRef = _captacion.Id.ToString(),
             Ruta = ruta,
             DestinatarioRol = Roles.Agente,
             Fecha = DateTime.Now,

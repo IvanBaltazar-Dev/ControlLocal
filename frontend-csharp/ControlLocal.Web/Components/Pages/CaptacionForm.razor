@@ -288,12 +288,14 @@
 
             Notificaciones.Crear(new NotificacionDto
             {
-                Tipo = _esEdicion ? "Captacion reenviada" : "Captacion por revisar",
-                Mensaje = $"{guardada.CodigoCaptacion} espera revision del broker.",
+                // Tipo + EntidadRef (id numérico) alineados con la alerta real CAPTACION_CREADA
+                // del backend para que la campana las deduplique en una sola.
+                Tipo = "Captación por revisar",
+                Mensaje = $"{guardada.CodigoCaptacion} espera revisión del broker.",
                 Severidad = "MEDIA",
                 Icono = "pin",
                 EntidadTipo = "Captacion",
-                EntidadRef = guardada.CodigoCaptacion,
+                EntidadRef = guardada.Id.ToString(),
                 Ruta = $"captacion-review/{guardada.CodigoCaptacion}",
                 DestinatarioRol = Roles.Broker,
             });

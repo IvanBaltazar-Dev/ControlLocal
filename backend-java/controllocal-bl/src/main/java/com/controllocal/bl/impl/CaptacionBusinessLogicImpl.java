@@ -10,10 +10,12 @@ import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.bl.support.BusinessValidations;
 import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
+import com.controllocal.dao.AlertaDAO;
 import com.controllocal.dao.BrokerAgenteDAO;
 import com.controllocal.dao.BrokerDAO;
 import com.controllocal.dao.CaptacionDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
+import com.controllocal.dao.impl.AlertaDAOImpl;
 import com.controllocal.dao.impl.BrokerAgenteDAOImpl;
 import com.controllocal.dao.impl.BrokerDAOImpl;
 import com.controllocal.dao.impl.CaptacionDAOImpl;
@@ -21,6 +23,9 @@ import com.controllocal.dao.impl.ReasignacionCaptacionDAOImpl;
 import com.controllocal.dao.ReasignacionCaptacionDAO;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.enums.EstadoCaptacion;
+import com.controllocal.model.comercial.enums.Severidad;
+import com.controllocal.model.comercial.enums.TipoAlerta;
+import com.controllocal.model.comercial.enums.TipoEntidad;
 import com.controllocal.model.comercial.ReasignacionCaptacion;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
@@ -32,6 +37,7 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
     private final ReasignacionCaptacionDAO reasignacionDAO;
     private final BrokerDAO brokerDAO;
     private final BrokerAgenteDAO brokerAgenteDAO;
+    private final AlertaDAO alertaDAO;
 
     public CaptacionBusinessLogicImpl() {
         this(new CaptacionDAOImpl(), new AgenteInmobiliarioDAOImpl(), new ReasignacionCaptacionDAOImpl(), new BrokerDAOImpl(), new BrokerAgenteDAOImpl());
@@ -53,11 +59,23 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
             BrokerDAO brokerDAO,
             BrokerAgenteDAO brokerAgenteDAO
     ) {
+        this(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO, brokerAgenteDAO, new AlertaDAOImpl());
+    }
+
+    public CaptacionBusinessLogicImpl(
+            CaptacionDAO captacionDAO,
+            AgenteInmobiliarioDAO agenteDAO,
+            ReasignacionCaptacionDAO reasignacionDAO,
+            BrokerDAO brokerDAO,
+            BrokerAgenteDAO brokerAgenteDAO,
+            AlertaDAO alertaDAO
+    ) {
         this.captacionDAO = captacionDAO;
         this.agenteDAO = agenteDAO;
         this.reasignacionDAO = reasignacionDAO;
         this.brokerDAO = brokerDAO;
         this.brokerAgenteDAO = brokerAgenteDAO;
+        this.alertaDAO = alertaDAO;
     }
 
     public Long registrar(Captacion captacion) {
@@ -74,7 +92,13 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
             if (acquisition.getFechaInicioVigencia() == null) {
                 acquisition.setFechaInicioVigencia(LocalDate.now());
             }
-            return captacionDAO.crear(acquisition);
+            Long idCaptacion = captacionDAO.crear(acquisition);
+            // Aviso real al broker supervisor: el agente registro/reenvio una captacion.
+            emitirAlerta(TipoAlerta.CAPTACION_CREADA, Severidad.MEDIA, idCaptacion,
+                    acquisition.getAgenteResponsable(),
+                    "El agente registro la captacion " + acquisition.getCodigoCaptacion()
+                            + " para tu revision.");
+            return idCaptacion;
         });
     }
 
@@ -112,6 +136,12 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
             captacion.setFechaRevision(LocalDateTime.now());
             captacion.setObservacionRevision(observacion);
             captacionDAO.actualizar(captacion);
+            // Aviso real al agente: el broker aprobo / observo / rechazo su captacion.
+            String detalle = observacion != null && !observacion.isBlank() ? ": " + observacion : ".";
+            emitirAlerta(TipoAlerta.CAPTACION_REVISADA, severidadRevision(estadoRevision),
+                    captacion.getIdCaptacion(), captacion.getAgenteResponsable(),
+                    "Tu captacion " + captacion.getCodigoCaptacion() + " fue "
+                            + descripcionRevision(estadoRevision) + detalle);
         });
     }
 
@@ -159,6 +189,10 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
             captacion.setObservacionRevision(motivo);
             captacion.cerrar();
             captacionDAO.actualizar(captacion);
+            // Aviso real al agente: el broker cerro su captacion.
+            emitirAlerta(TipoAlerta.CAPTACION_CERRADA, Severidad.MEDIA,
+                    captacion.getIdCaptacion(), captacion.getAgenteResponsable(),
+                    "Tu captacion " + captacion.getCodigoCaptacion() + " fue cerrada: " + motivo);
         });
     }
 
@@ -304,5 +338,34 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         BusinessValidations.id(idCaptacion, "El id de captacion");
         return captacionDAO.buscarPorId(idCaptacion)
                 .orElseThrow(() -> new BusinessException("Captacion no encontrada."));
+    }
+
+    // Persiste una alerta real del flujo de captacion (siempre atada al agente; el broker
+    // supervisor la ve via broker_agente). Best-effort sobre datos: sin agente valido no
+    // emite, para no romper la operacion principal por un aviso.
+    private void emitirAlerta(TipoAlerta tipo, Severidad severidad, Long idCaptacion,
+            AgenteInmobiliario agente, String mensaje) {
+        if (idCaptacion == null || agente == null || agente.getIdAgente() == null) {
+            return;
+        }
+        alertaDAO.crear(AlertaBusinessLogicImpl.construir(
+                tipo, severidad, TipoEntidad.CAPTACION, idCaptacion, agente, mensaje));
+    }
+
+    private static String descripcionRevision(EstadoCaptacion estado) {
+        return switch (estado) {
+            case ACTIVA -> "aprobada";
+            case OBSERVADA -> "observada";
+            case RECHAZADA -> "rechazada";
+            default -> estado.getDescripcion();
+        };
+    }
+
+    private static Severidad severidadRevision(EstadoCaptacion estado) {
+        return switch (estado) {
+            case RECHAZADA -> Severidad.ALTA;
+            case OBSERVADA -> Severidad.MEDIA;
+            default -> Severidad.INFO;
+        };
     }
 }

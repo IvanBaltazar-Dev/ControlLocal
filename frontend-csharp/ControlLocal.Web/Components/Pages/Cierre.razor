@@ -224,7 +224,8 @@
             Severidad = "MEDIA",
             Icono = "flag",
             EntidadTipo = "Captacion",
-            EntidadRef = codigo,
+            // Id numérico para deduplicar con la alerta real CAPTACION_CERRADA del backend.
+            EntidadRef = (cap?.Id ?? _captacionId).ToString(),
             Ruta = string.IsNullOrEmpty(codigo) ? null : $"captacion-detail/{codigo}",
             DestinatarioRol = Roles.Agente,
             Fecha = DateTime.Now,

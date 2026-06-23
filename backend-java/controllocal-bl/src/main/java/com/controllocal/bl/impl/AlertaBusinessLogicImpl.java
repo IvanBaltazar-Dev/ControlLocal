@@ -10,6 +10,10 @@ import com.controllocal.dao.AlertaDAO;
 import com.controllocal.dao.impl.AlertaDAOImpl;
 import com.controllocal.model.comercial.Alerta;
 import com.controllocal.model.comercial.enums.EstadoAlerta;
+import com.controllocal.model.comercial.enums.Severidad;
+import com.controllocal.model.comercial.enums.TipoAlerta;
+import com.controllocal.model.comercial.enums.TipoEntidad;
+import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class AlertaBusinessLogicImpl implements AlertaBusinessLogic {
 
@@ -65,5 +69,22 @@ public class AlertaBusinessLogicImpl implements AlertaBusinessLogic {
         if (alerta.getFechaGeneracion() == null) {
             alerta.setFechaGeneracion(LocalDateTime.now());
         }
+    }
+
+    // Construye una alerta lista para persistir. La alerta siempre se ata a un agente:
+    // ese agente la ve como propia y su broker supervisor la ve via broker_agente, asi
+    // que el "destinatario" (agente o broker) lo decide el tipo, no una columna nueva.
+    // Reutilizable por las BL del flujo comercial para emitir avisos reales y exactos.
+    public static Alerta construir(TipoAlerta tipo, Severidad severidad, TipoEntidad entidadTipo,
+            Long entidadId, AgenteInmobiliario agente, String mensaje) {
+        Alerta alerta = new Alerta();
+        alerta.setTipo(tipo);
+        alerta.setSeveridad(severidad);
+        alerta.setEntidadTipo(entidadTipo);
+        alerta.setEntidadId(entidadId);
+        alerta.setAgente(agente);
+        alerta.setMensaje(mensaje);
+        prepararNueva(alerta);
+        return alerta;
     }
 }

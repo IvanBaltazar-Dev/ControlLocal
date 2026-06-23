@@ -14,14 +14,47 @@
           Subtitle="Carga y revisa los documentos requeridos para la evaluacion">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate($"solicitud-detail/{CodigoExpediente}"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn primary" disabled="@(PendientesDeSubsanar > 0 || _reenviando)"
-                title="@(PendientesDeSubsanar > 0 ? "Completa o subsana los documentos pendientes u observados" : "")"
+        <button class="cl-btn primary" disabled="@(!PuedeReenviar)"
+                title="@MotivoBloqueoReenvio"
                 @onclick="@(() => _confirm = true)"><Icon Name="arrowRight" Size="13" /> Reenviar a evaluacion</button>
     </Actions>
     <ChildContent>
-        <div class="cl-alert blue" style="margin-bottom:14px;">
-            <Icon Name="info" Size="15" />
-            <span>Un archivo nuevo queda <b>Registrado</b> y con revision <b>Pendiente</b>. Solo la revision del broker puede dejarlo <b>Validado</b> o <b>Observado</b>.</span>
+        @* Banner segun el estado de la solicitud: deja claro si se puede reenviar o no. *@
+        @if (EstadoSolicitud == "En revision")
+        {
+            <div class="cl-alert blue" style="margin-bottom:14px;">
+                <Icon Name="clock" Size="15" />
+                <span>Esta solicitud está <b>En revisión</b> del broker. No puedes reenviarla mientras la evalúa. Si la devuelve <b>Observada</b>, podrás subsanar los documentos y reenviar a evaluación.</span>
+            </div>
+        }
+        else if (EstadoSolicitud == "Observada")
+        {
+            <div class="cl-alert amber" style="margin-bottom:14px;">
+                <Icon Name="alert" Size="15" />
+                <span>El broker <b>observó</b> esta solicitud. Subsana los documentos marcados como <b>Observado</b> (vuelve a cargarlos) y luego pulsa <b>Reenviar a evaluación</b>.</span>
+            </div>
+        }
+        else if (EstadoSolicitud is "Aprobada" or "Rechazada" or "Cerrada" or "Desistida")
+        {
+            <div class="cl-alert blue" style="margin-bottom:14px;">
+                <Icon Name="checkCircle" Size="15" />
+                <span>Esta solicitud está <b>@EstadoSolicitud</b>. Ya no se reenvía a evaluación; los documentos quedan como referencia.</span>
+            </div>
+        }
+        else
+        {
+            <div class="cl-alert blue" style="margin-bottom:14px;">
+                <Icon Name="info" Size="15" />
+                <span>Un archivo nuevo queda <b>Registrado</b> y con revisión <b>Pendiente</b>. Solo la revisión del broker puede dejarlo <b>Validado</b> u <b>Observado</b>. Cuando estén completos, pulsa <b>Reenviar a evaluación</b>.</span>
+            </div>
+        }
+
+        @* Leyenda de estados de cada documento, para que el agente los entienda de un vistazo. *@
+        <div class="cl-flex" style="gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:11.5px;color:var(--c-text-2);">
+            <span class="cl-flex" style="gap:5px;"><StatusBadge Label="Pendiente de carga" /> sin archivo subido</span>
+            <span class="cl-flex" style="gap:5px;"><StatusBadge Label="Registrado" /> subido, espera revisión del broker</span>
+            <span class="cl-flex" style="gap:5px;"><StatusBadge Label="Validado" /> aprobado por el broker</span>
+            <span class="cl-flex" style="gap:5px;"><StatusBadge Label="Observado" /> el broker pide subsanarlo</span>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
@@ -270,11 +303,46 @@
     // Bloquea el reenvío hasta que no quede ningún documento sin subir NI observado por el broker.
     private int PendientesDeSubsanar => _documentos.Count(RequiereCarga);
 
+    // Estado actual de la solicitud (texto del backend: Registrada / En revision / Observada / ...).
+    private string EstadoSolicitud => _solicitud?.Estado ?? "";
+
+    // Solo se (re)envía a evaluación una solicitud Registrada (primer envío) u Observada
+    // (el broker la devolvió para subsanar). En revisión queda bloqueada hasta que el
+    // broker responda; aprobada/rechazada/cerrada ya no se reenvía. Espeja la regla del backend.
+    private bool EstadoPermiteReenviar => EstadoSolicitud is "Registrada" or "Observada" or "";
+    private bool PuedeReenviar => EstadoPermiteReenviar && PendientesDeSubsanar == 0 && !_reenviando;
+
+    private string MotivoBloqueoReenvio =>
+        !EstadoPermiteReenviar
+            ? (EstadoSolicitud == "En revision"
+                ? "La solicitud ya está en evaluación. Espera la respuesta del broker."
+                : $"La solicitud está {EstadoSolicitud}: ya no se reenvía a evaluación.")
+            : PendientesDeSubsanar > 0
+                ? "Completa o subsana los documentos pendientes u observados."
+                : "";
+
+    // Documentos que el broker debe (re)revisar: tienen archivo y siguen Registrados (recién
+    // subidos o reemplazados, aún sin validar). Es lo que se le detalla al reenviar a evaluación.
+    private List<string> DocumentosModificados() => _documentos
+        .Where(d => !string.IsNullOrWhiteSpace(d.NombreArchivo) && d.Estado == "Registrado")
+        .Select(d => d.Nombre)
+        .ToList();
+
     protected override async Task OnParametersSetAsync()
     {
+        // Refresca primero: el bloqueo del botón "Reenviar" depende del estado real de la
+        // solicitud (Registrada/Observada habilitan; En revisión la bloquea), y al entrar
+        // desde una notificación la caché podría estar desactualizada.
+        try { await SolicitudSvc.RefrescarAsync(DisposedToken); }
+        catch (OperationCanceledException) { }
+        catch { /* se resuelve con la última copia en caché */ }
+        // El parámetro puede ser el código (SOL-...) o el id numérico (alerta del backend).
         _solicitud = string.IsNullOrWhiteSpace(CodigoSolicitud)
             ? SolicitudSvc.All().FirstOrDefault()
-            : SolicitudSvc.ByCodigo(CodigoSolicitud);
+            : SolicitudSvc.ByCodigo(CodigoSolicitud)
+                ?? (long.TryParse(CodigoSolicitud, out var id)
+                    ? SolicitudSvc.All().FirstOrDefault(s => s.Id == id)
+                    : null);
         await CargarDocumentosAsync();
     }
 
@@ -480,11 +548,17 @@
             _reenviando = true;
             _error = null;
             await RenderIfAliveAsync();
+            // Documentos modificados (subidos/reemplazados) que el broker debe revisar; se le
+            // detallan en la alerta para que sepa exactamente qué cambió en este reenvío.
+            var modificados = DocumentosModificados();
+            var detalleDocs = modificados.Count > 0
+                ? $" Documentos a revisar ({modificados.Count}): {string.Join(", ", modificados)}."
+                : "";
             await SolicitudSvc.ReenviarAEvaluacionAsync(_solicitud.CodigoSolicitud, DisposedToken);
             Notificaciones.Crear(new NotificacionDto
             {
                 Tipo = "Solicitud por evaluar",
-                Mensaje = $"La solicitud {_solicitud.CodigoSolicitud} ({_solicitud.ClienteNombre}) volvió a evaluación.",
+                Mensaje = $"La solicitud {_solicitud.CodigoSolicitud} ({_solicitud.ClienteNombre}) volvió a evaluación.{detalleDocs}",
                 Severidad = "MEDIA",
                 Icono = "fileText",
                 EntidadTipo = "Solicitud",

@@ -450,7 +450,8 @@ else
             Severidad = "MEDIA",
             Icono = "checkCircle",
             EntidadTipo = "Oportunidad",
-            EntidadRef = _op.CodigoOportunidad,
+            // Id numérico para deduplicar con la alerta real OPORTUNIDAD_CERRADA del backend.
+            EntidadRef = _op.Id.ToString(),
             Ruta = $"oportunidad-detail/{_op.Id}",
             DestinatarioRol = Roles.Broker,
             Fecha = DateTime.Now,

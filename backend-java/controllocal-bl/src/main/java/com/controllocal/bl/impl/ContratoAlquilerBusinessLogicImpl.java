@@ -10,6 +10,7 @@ import com.controllocal.bl.BusinessException;
 import com.controllocal.bl.ContratoAlquilerBusinessLogic;
 import com.controllocal.bl.support.BusinessValidations;
 import com.controllocal.bl.support.TransactionRunner;
+import com.controllocal.dao.AlertaDAO;
 import com.controllocal.dao.CaptacionDAO;
 import com.controllocal.dao.ComisionLiquidacionDAO;
 import com.controllocal.dao.ContratoAlquilerDAO;
@@ -17,6 +18,7 @@ import com.controllocal.dao.LocalComercialDAO;
 import com.controllocal.dao.OportunidadComercialDAO;
 import com.controllocal.dao.PrecioLocalDAO;
 import com.controllocal.dao.SolicitudAlquilerDAO;
+import com.controllocal.dao.impl.AlertaDAOImpl;
 import com.controllocal.dao.impl.CaptacionDAOImpl;
 import com.controllocal.dao.impl.ComisionLiquidacionDAOImpl;
 import com.controllocal.dao.impl.ContratoAlquilerDAOImpl;
@@ -34,6 +36,9 @@ import com.controllocal.model.comercial.enums.EstadoContrato;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.comercial.enums.EstadoSolicitudAlquiler;
 import com.controllocal.model.comercial.enums.Moneda;
+import com.controllocal.model.comercial.enums.Severidad;
+import com.controllocal.model.comercial.enums.TipoAlerta;
+import com.controllocal.model.comercial.enums.TipoEntidad;
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
 
 public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusinessLogic {
@@ -45,6 +50,7 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
     private final LocalComercialDAO localDAO;
     private final ComisionLiquidacionDAO comisionDAO;
     private final PrecioLocalDAO precioLocalDAO;
+    private final AlertaDAO alertaDAO;
 
     public ContratoAlquilerBusinessLogicImpl() {
         this(new ContratoAlquilerDAOImpl(), new SolicitudAlquilerDAOImpl(),
@@ -60,6 +66,19 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
             LocalComercialDAO localDAO,
             ComisionLiquidacionDAO comisionDAO,
             PrecioLocalDAO precioLocalDAO) {
+        this(contratoDAO, solicitudDAO, oportunidadDAO, captacionDAO, localDAO, comisionDAO,
+                precioLocalDAO, new AlertaDAOImpl());
+    }
+
+    public ContratoAlquilerBusinessLogicImpl(
+            ContratoAlquilerDAO contratoDAO,
+            SolicitudAlquilerDAO solicitudDAO,
+            OportunidadComercialDAO oportunidadDAO,
+            CaptacionDAO captacionDAO,
+            LocalComercialDAO localDAO,
+            ComisionLiquidacionDAO comisionDAO,
+            PrecioLocalDAO precioLocalDAO,
+            AlertaDAO alertaDAO) {
         this.contratoDAO = contratoDAO;
         this.solicitudDAO = solicitudDAO;
         this.oportunidadDAO = oportunidadDAO;
@@ -67,6 +86,7 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
         this.localDAO = localDAO;
         this.comisionDAO = comisionDAO;
         this.precioLocalDAO = precioLocalDAO;
+        this.alertaDAO = alertaDAO;
     }
 
     @Override
@@ -140,6 +160,17 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
                     localDAO.actualizar(local);
                 });
                 precioLocalDAO.registrar(idLocal, "C", Moneda.USD.getCodigo(), renta, LocalDate.now());
+            }
+
+            // Aviso real al broker supervisor: el agente concreto el alquiler (cierre exitoso).
+            // Se ata al agente de la solicitud (siempre poblado); el broker lo ve via broker_agente.
+            if (solicitud.getAgenteResponsable() != null
+                    && solicitud.getAgenteResponsable().getIdAgente() != null) {
+                alertaDAO.crear(AlertaBusinessLogicImpl.construir(
+                        TipoAlerta.OPORTUNIDAD_CERRADA, Severidad.INFO, TipoEntidad.OPORTUNIDAD,
+                        idOportunidad, solicitud.getAgenteResponsable(),
+                        "El agente concreto el alquiler de la oportunidad "
+                                + oportunidad.getCodigoOportunidad() + "."));
             }
             return idContrato;
         });

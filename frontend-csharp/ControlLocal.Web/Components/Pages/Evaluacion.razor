@@ -325,6 +325,29 @@
         });
     }
 
+    // Avisa al agente que el broker observó uno de sus documentos (debe subsanarlo).
+    private void NotificarDocumentoObservado(Doc doc, string nota)
+    {
+        if (_solicitud is null) return;
+        var detalle = string.IsNullOrWhiteSpace(nota) ? "" : $": {nota}";
+        Notificaciones.Crear(new NotificacionDto
+        {
+            Tipo = "Documento observado",
+            Mensaje = $"El broker observó «{doc.Name}» de la solicitud {_solicitud.CodigoSolicitud}{detalle}",
+            Severidad = "ALTA",
+            Icono = "alert",
+            EntidadTipo = "Solicitud",
+            // Id numérico de la solicitud, alineado con la alerta real SOLICITUD_DOCUMENTO_REVISADO
+            // del backend para que la campana las deduplique (Tipo|EntidadRef|Rol). Si el broker
+            // observa varios documentos, se consolidan en un aviso; el expediente los muestra todos.
+            EntidadRef = _solicitud.Id.ToString(),
+            // Lleva al agente al expediente de documentos para subsanar el observado.
+            Ruta = $"documentos/{_solicitud.CodigoSolicitud}",
+            DestinatarioRol = Roles.Agente,
+            Fecha = DateTime.Now,
+        });
+    }
+
     // --- Documentos de la solicitud (el broker puede validar/observar cada uno) ---
     private Doc? _docVer;
     private Doc? _docObservar;
@@ -350,11 +373,15 @@
             await RenderIfAliveAsync();
             await DocSvc.RevisarAsync(_solicitud.Id, doc.Id, resultado,
                 resultado == "O" ? _docNota.Trim() : null, DisposedToken);
+            // Al observar un documento se avisa al agente responsable para que lo subsane.
+            // (El backend ademas persiste la alerta real broker -> agente.)
+            if (resultado == "O")
+                NotificarDocumentoObservado(doc, _docNota.Trim());
             _docObservar = null;
             await CargarDocumentosAsync();
             _toastMsg = resultado == "C"
                 ? $"Documento «{doc.Name}» validado."
-                : $"Documento «{doc.Name}» observado.";
+                : $"Documento «{doc.Name}» observado. Se notificó al agente.";
             _toast = true;
             _ = DelayThenRenderAsync(2200, () => _toast = false);
         }

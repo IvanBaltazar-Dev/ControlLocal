@@ -1002,7 +1002,12 @@ CREATE TABLE alerta (
     CONSTRAINT ck_alerta_tipo CHECK (
         tipo IN ('SIN_RESPUESTA', 'SIN_AVANCE', 'OFERTA_POR_VENCER',
                  'CONTRATO_POR_VENCER', 'VISITA_PROXIMA', 'CAPTACION_VENCIDA',
-                 'SOLICITUD_REENVIADA', 'SOLICITUD_EVALUADA')
+                 'SOLICITUD_REENVIADA', 'SOLICITUD_EVALUADA',
+                 -- Avisos reales del flujo comercial (agente <-> broker): cambios de
+                 -- documento/captacion/oportunidad que el backend persiste como alerta.
+                 'SOLICITUD_DOCUMENTO', 'SOLICITUD_DOCUMENTO_REVISADO',
+                 'CAPTACION_CREADA', 'CAPTACION_REVISADA',
+                 'CAPTACION_CERRADA', 'OPORTUNIDAD_CERRADA')
     ),
     CONSTRAINT ck_alerta_severidad CHECK (severidad IN ('INFO', 'MEDIA', 'ALTA')),
     CONSTRAINT ck_alerta_tipo_entidad CHECK (

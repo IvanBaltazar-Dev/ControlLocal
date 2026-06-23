@@ -177,15 +177,10 @@ public class SolicitudesRest {
                 && (dto.observaciones() == null || dto.observaciones().isBlank())) {
             throw ApiException.badRequest("La observacion del documento es obligatoria.");
         }
-        DocumentoSolicitud documento = documentos.buscarPorId(idDoc)
-                .orElseThrow(() -> ApiException.noEncontrado("Documento"));
-        if (!perteneceA(documento, id)) {
-            throw ApiException.noEncontrado("Documento");
-        }
-        documento.actualizarRevision(resultado, dto.observaciones());
-        documentos.actualizar(documento);
-        return Dtos.DocumentoSolicitudResponse.desde(
-                documentos.buscarPorId(idDoc).orElseThrow(() -> ApiException.noEncontrado("Documento")));
+        // La BL deja el documento Validado/Observado y, al observarlo, emite la alerta real al
+        // agente responsable (broker -> agente). La pertenencia a la solicitud se valida alli.
+        DocumentoSolicitud revisado = documentos.revisar(id, idDoc, resultado, dto.observaciones());
+        return Dtos.DocumentoSolicitudResponse.desde(revisado);
     }
 
     // Historial de evaluaciones de la solicitud (trazabilidad). Accesible al agente

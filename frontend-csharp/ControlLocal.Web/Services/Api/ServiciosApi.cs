@@ -2493,6 +2493,16 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
         {
             "SOLICITUD_REENVIADA" => $"evaluacion/{id}",
             "SOLICITUD_EVALUADA" => $"solicitud-detail/{id}",
+            // El agente modificó un documento mientras el broker evalúa: lo lleva a evaluar.
+            "SOLICITUD_DOCUMENTO" => $"evaluacion/{id}",
+            // El broker observó un documento: lleva al agente al expediente a subsanarlo.
+            "SOLICITUD_DOCUMENTO_REVISADO" => $"documentos/{id}",
+            // Las páginas de captación resuelven por código, no por id: el fallback persistido
+            // (cuando ya no está la notificación in-app) va a la bandeja/lista, que siempre abre.
+            "CAPTACION_CREADA" => "bandeja-captaciones",
+            "CAPTACION_REVISADA" => "captaciones",
+            "CAPTACION_CERRADA" => "captaciones",
+            "OPORTUNIDAD_CERRADA" => $"oportunidad-detail/{id}",
             _ => item.Ruta,
         };
     }
@@ -2501,13 +2511,27 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
     {
         "SOLICITUD_REENVIADA" => Roles.Broker,
         "SOLICITUD_EVALUADA" => Roles.Agente,
+        "SOLICITUD_DOCUMENTO" => Roles.Broker,
+        "SOLICITUD_DOCUMENTO_REVISADO" => Roles.Agente,
+        "CAPTACION_CREADA" => Roles.Broker,
+        "CAPTACION_REVISADA" => Roles.Agente,
+        "CAPTACION_CERRADA" => Roles.Agente,
+        "OPORTUNIDAD_CERRADA" => Roles.Broker,
         _ => RolActivo,
     };
 
+    // El label debe coincidir EXACTO con el Tipo de la notificación in-app equivalente para
+    // que la campana las deduplique (clave Tipo|EntidadRef|Rol) y no se vean dos veces.
     private static string Tipo(string tipo) => tipo switch
     {
         "SOLICITUD_REENVIADA" => "Solicitud por evaluar",
         "SOLICITUD_EVALUADA" => "Solicitud evaluada",
+        "SOLICITUD_DOCUMENTO" => "Documentos actualizados",
+        "SOLICITUD_DOCUMENTO_REVISADO" => "Documento observado",
+        "CAPTACION_CREADA" => "Captación por revisar",
+        "CAPTACION_REVISADA" => "Captación revisada",
+        "CAPTACION_CERRADA" => "Captación cerrada",
+        "OPORTUNIDAD_CERRADA" => "Trato cerrado",
         _ => tipo.Replace('_', ' ').ToLowerInvariant(),
     };
 
@@ -2585,6 +2609,7 @@ internal static class Codigos
         "A" => "Aprobada",
         "R" => "Rechazada",
         "D" => "Desistida",
+        "C" => "Cerrada",
         _ => codigo,
     };
 

@@ -76,7 +76,7 @@
                                     }
                                     else if (s.Estado == "Observada")
                                     {
-                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate("documentos"))">Subsanar</button>
+                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"documentos/{s.CodigoSolicitud}"))">Subsanar</button>
                                     }
                                     else
                                     {

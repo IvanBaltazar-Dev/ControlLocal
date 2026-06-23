@@ -51,34 +51,8 @@ public class NotificacionStore
     // (otro rol), porque el store es Singleton compartido.
     public event Action? Cambiado;
 
-    public NotificacionStore()
-    {
-        // Semilla minima para que la campana no aparezca vacia en la demo.
-        Agregar(new NotificacionDto
-        {
-            Tipo = "Solicitud por evaluar",
-            Mensaje = "La solicitud SOL-0425 (Boutique Lila) espera tu evaluacion.",
-            Severidad = "MEDIA",
-            Icono = "fileText",
-            EntidadTipo = "Solicitud",
-            EntidadRef = "SOL-0425",
-            Ruta = "evaluacion/SOL-0425",
-            DestinatarioRol = Roles.Broker,
-            Fecha = DateTime.Now.AddHours(-3),
-        });
-        Agregar(new NotificacionDto
-        {
-            Tipo = "Documento observado",
-            Mensaje = "El sustento economico de SOL-0428 fue observado por el broker.",
-            Severidad = "ALTA",
-            Icono = "alert",
-            EntidadTipo = "Solicitud",
-            EntidadRef = "SOL-0428",
-            Ruta = "documentos/SOL-0428",
-            DestinatarioRol = Roles.Agente,
-            Fecha = DateTime.Now.AddHours(-20),
-        });
-    }
+    // Sin semillas de demo: la campana arranca vacia y solo refleja notificaciones reales
+    // generadas por acciones del flujo (reenviar a evaluacion, evaluar, observar documento).
 
     public NotificacionDto Agregar(NotificacionDto notificacion)
     {

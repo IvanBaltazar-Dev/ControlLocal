@@ -1,210 +1,194 @@
 @page "/dashboard"
+@inherits SafeComponentBase
 @using QuestPDF.Fluent
 @inject AppState App
+@inject IIndicadorService Indicadores
+@inject ICaptacionService CaptacionSvc
 @inject ExportacionService Exportar
 
 <PageTitle>@Title · ControlLocal</PageTitle>
 
-<AppShell Active="@SideActive" Crumbs="@(new[] { "ControlLocal", Title })" Title="@Title" Subtitle="@Subtitle">
-    <Actions>
-        @if (IsAdmin)
+<AppShell Active="@SideActive" Crumbs="@(new[] { "ControlLocal", Title })">
+    <ChildContent>
+        @* ---------- Hero premium diferenciado por rol ---------- *@
+        <div class="cl-hero cl-dash-hero @RoleClass">
+            <div class="cl-hero-top">
+                <div style="min-width:0;">
+                    <div class="cl-hero-eyebrow"><Icon Name="@HeroIcon" Size="13" /> @HeroEyebrow</div>
+                    <div class="cl-hero-title">@Title</div>
+                    <div class="cl-hero-sub">@Subtitle</div>
+                </div>
+                <div class="cl-hero-actions">
+                    <button class="cl-btn on-dark" disabled="@_exportando" @onclick="ExportarPdf">
+                        <Icon Name="download" Size="13" /> @(_exportando ? "Generando…" : "Exportar PDF")
+                    </button>
+                    @if (IsAdmin)
+                    {
+                        <button class="cl-btn on-light" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="briefcase" Size="13" /> Gestión de brokers</button>
+                    }
+                    else if (IsBroker)
+                    {
+                        <button class="cl-btn on-light" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="pin" Size="13" /> Bandeja de captaciones</button>
+                    }
+                    else
+                    {
+                        <button class="cl-btn on-light" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
+                    }
+                </div>
+            </div>
+
+            @if (!_cargando)
+            {
+                <div class="cl-hero-stats">
+                    @if (IsAdmin)
+                    {
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("brokers"))">
+                            <div class="cl-hero-stat-k">Brokers activos</div><div class="cl-hero-stat-v">@_ind.BrokersActivos</div>
+                        </div>
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("agents"))">
+                            <div class="cl-hero-stat-k">Agentes activos</div><div class="cl-hero-stat-v">@_ind.AgentesActivos</div>
+                        </div>
+                        <div class="cl-hero-stat">
+                            <div class="cl-hero-stat-k">Captaciones activas</div><div class="cl-hero-stat-v">@_ind.CaptacionesActivas</div>
+                        </div>
+                        <div class="cl-hero-stat">
+                            <div class="cl-hero-stat-k">Operaciones activas</div><div class="cl-hero-stat-v">@_ind.OportunidadesActivas</div>
+                        </div>
+                    }
+                    else if (IsBroker)
+                    {
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("bandeja-captaciones"))">
+                            <div class="cl-hero-stat-k">Captaciones por revisar</div><div class="cl-hero-stat-v">@_ind.CaptacionesPorRevisar</div>
+                        </div>
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("solicitudes"))">
+                            <div class="cl-hero-stat-k">Solicitudes por evaluar</div><div class="cl-hero-stat-v">@_ind.SolicitudesPorEvaluar</div>
+                        </div>
+                        <div class="cl-hero-stat">
+                            <div class="cl-hero-stat-k">Operaciones activas</div><div class="cl-hero-stat-v">@_ind.OportunidadesActivas</div>
+                        </div>
+                        <div class="cl-hero-stat">
+                            <div class="cl-hero-stat-k">Cierres del equipo</div><div class="cl-hero-stat-v">@_ind.Cierres</div>
+                        </div>
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("propiedades-equipo"))">
+                            <div class="cl-hero-stat-k">Propiedades del equipo</div><div class="cl-hero-stat-v">@_propiedadesEquipo</div>
+                            <div class="cl-hero-stat-foot">Inmuebles captados · ver detalle</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("captaciones"))">
+                            <div class="cl-hero-stat-k">Mis captaciones</div><div class="cl-hero-stat-v">@_ind.CaptacionesTotales</div>
+                            <div class="cl-hero-stat-foot">@_ind.CaptacionesActivas activas · @_ind.CaptacionesObservadas observadas</div>
+                        </div>
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("oportunidades"))">
+                            <div class="cl-hero-stat-k">Operaciones</div><div class="cl-hero-stat-v">@_ind.OportunidadesActivas</div>
+                        </div>
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("visitas"))">
+                            <div class="cl-hero-stat-k">Visitas</div><div class="cl-hero-stat-v">@_ind.Visitas</div>
+                        </div>
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("interacciones"))">
+                            <div class="cl-hero-stat-k">Interacciones</div><div class="cl-hero-stat-v">@_ind.Interacciones</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (_cargando)
         {
-            <button class="cl-btn" @onclick="ExportarPdfAdmin"><Icon Name="download" Size="13" /> Exportar PDF</button>
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="briefcase" Size="13" /> Gestión de brokers</button>
-        }
-        else if (IsBroker)
-        {
-            <button class="cl-btn" @onclick="ExportarBroker"><Icon Name="download" Size="13" /> Exportar</button>
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="pin" Size="13" /> Bandeja de captaciones</button>
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando indicadores…</div></div>
         }
         else
         {
-            <button class="cl-btn" @onclick="ExportarAgente"><Icon Name="download" Size="13" /> Exportar</button>
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("captacion-form"))"><Icon Name="plus" Size="13" /> Nueva captación</button>
-        }
-    </Actions>
-    <ChildContent>
-        @if (IsAdmin)
-        {
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
-                <MetricCard Icon="briefcase" Label="Brokers activos" Value="8" Delta="+1 vs mes anterior" Tone="navy" />
-                <MetricCard Icon="users" Label="Agentes activos" Value="42" Delta="+4 vs mes anterior" Tone="blue" />
-                <MetricCard Icon="pin" Label="Captaciones vigentes" Value="186" Delta="+12%" Tone="info" />
-                <MetricCard Icon="target" Label="Operaciones activas" Value="64" Delta="+8%" Tone="blue" />
-            </div>
+
+            @* ---------- Vista OPERATIVA ("ahora"): estado actual + acciones. Las
+               tendencias históricas, el embudo y los comparativos viven en Reportes. ---------- *@
             <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
                 <div class="cl-card">
                     <div class="cl-card-head">
                         <div>
-                            <div class="cl-card-title">Actividad comercial — últimos 30 días</div>
-                            <div class="cl-card-sub">Volumen por etapa del proceso</div>
+                            <div class="cl-card-title">Pipeline actual</div>
+                            <div class="cl-card-sub">Estado de las captaciones por etapa, ahora mismo</div>
                         </div>
-                        <select class="cl-select" style="width:140px;" @bind="_semanasVisibles">
-                            <option value="4">Últimos 30 días</option>
-                            <option value="8">Últimos 60 días</option>
-                            <option value="12">Últimos 90 días</option>
-                        </select>
                     </div>
-                    <div class="cl-card-body">
-                        <BarChart Data="BarsVisibles" Height="180" Labels="LabelsVisibles" />
-                    </div>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Etapas de captación</div></div>
                     <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
-                        <DonutChart Segments="_adminDonut" />
+                        <DonutChart Segments="_donut" />
                         <div style="flex:1;font-size:12px;">
-                            @foreach (var (c, n, v) in _adminLegend)
+                            @for (var i = 0; i < _ind.Etapas.Count; i++)
                             {
+                                var etapa = _ind.Etapas[i];
                                 <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
-                                    <span style="width:9px;height:9px;border-radius:2px;background:@c;"></span>
-                                    <span style="flex:1;">@n</span>
-                                    <b>@v</b>
+                                    <span style="width:9px;height:9px;border-radius:2px;background:@ColoresEstado.PorEtapa(etapa.Nombre, i);"></span>
+                                    <span style="flex:1;">@etapa.Nombre</span>
+                                    <b>@etapa.Valor</b>
                                 </div>
                             }
                         </div>
                     </div>
                 </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Desempeño por broker</div></div>
-                    <div class="cl-card-body" style="padding:0;">
-                        <table class="cl-table">
-                            <thead><tr><th>Broker</th><th>Agentes</th><th>Captac.</th><th>Cierres</th><th>Conversión</th></tr></thead>
-                            <tbody>
-                                @foreach (var r in _adminPerf)
-                                {
-                                    <tr>
-                                        <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r[0])</span>@r[0]</div></td>
-                                        <td>@r[1]</td><td>@r[2]</td><td><b>@r[3]</b></td>
-                                        <td><StatusBadge Label="@r[4]" ToneOverride="@ConvTone(r[4])" Plain="true" /></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Actividad reciente</div><a class="cl-btn ghost sm" style="color:#005BFF;cursor:pointer;" @onclick="@(() => App.Navigate("reportes"))">Ver todo</a></div>
-                    <div class="cl-card-body">
-                        <Timeline Items="_adminTimeline" />
-                    </div>
-                </div>
-            </div>
-        }
-        else if (IsBroker)
-        {
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
-                <MetricCard Icon="pin" Label="Captaciones por revisar" Value="9" Delta="3 nuevas hoy" Tone="blue" />
-                <MetricCard Icon="fileText" Label="Solicitudes por evaluar" Value="6" Delta="2 vencen hoy" Tone="red" />
-                <MetricCard Icon="target" Label="Operaciones activas" Value="22" Delta="+3 esta semana" Tone="blue" />
-                <MetricCard Icon="check" Label="Cierres recientes" Value="5" Delta="+2 vs semana ant." Tone="green" />
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Pendientes prioritarios</div><span class="cl-badge red">8 críticos</span></div>
-                    <div class="cl-card-body" style="padding:0;">
-                        <table class="cl-table">
-                            <thead><tr><th>Tipo</th><th>Referencia</th><th>Agente</th><th>Antigüedad</th><th></th></tr></thead>
-                            <tbody>
-                                @foreach (var r in _brokerPend)
-                                {
-                                    <tr>
-                                        <td>@r[0]</td>
-                                        <td class="mono">@r[1]</td>
-                                        <td>@r[2]</td>
-                                        <td><StatusBadge Label="@r[3]" ToneOverride="@r[4]" Plain="true" /></td>
-                                        <td><button class="cl-btn sm" @onclick="@(() => RevisarPendiente(r[0]))">Revisar</button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Conversión del embudo</div></div>
-                    <div class="cl-card-body">
-                        @foreach (var r in _brokerFunnel)
-                        {
-                            <div style="margin-bottom:12px;">
-                                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
-                                    <span>@r[0]</span><span><b>@r[1]</b> <span class="cl-muted">· @r[2]</span></span>
-                                </div>
-                                <div style="height:8px;background:#E2E6EC;border-radius:4px;overflow:hidden;">
-                                    <div style="width:@r[2];height:100%;background:@r[3];border-radius:4px;"></div>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-            <div class="cl-card" style="margin-top:14px;">
-                <div class="cl-card-head"><div class="cl-card-title">Cierres recientes</div></div>
-                <div class="cl-card-body" style="padding:0;">
-                    <table class="cl-table">
-                        <thead><tr><th>Captación</th><th>Cliente</th><th>Local</th><th>Resultado</th><th>Agente</th><th>Cerrado</th></tr></thead>
-                        <tbody>
-                            @foreach (var r in _brokerCierres)
-                            {
-                                <tr>
-                                    <td class="mono">@r[0]</td><td>@r[1]</td><td>@r[2]</td>
-                                    <td><StatusBadge Label="@r[3]" /></td><td>@r[4]</td><td class="muted">@r[5]</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
-                <MetricCard Icon="pin" Label="Mis captaciones" Value="14" Footer="9 activas · 3 pendientes · 2 observadas" Tone="info" />
-                <MetricCard Icon="activity" Label="En seguimiento" Value="8" Delta="+2 esta semana" Tone="blue" />
-                <MetricCard Icon="calendar" Label="Visitas programadas" Value="5" Footer="Próxima: hoy 16:00" Tone="blue" />
-                <MetricCard Icon="fileText" Label="Solicitudes pendientes" Value="3" Footer="2 en revisión · 1 observada" Tone="red" />
-            </div>
-            <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;">
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Mis captaciones en seguimiento</div>
-                    <a class="cl-btn ghost sm" style="color:#005BFF;" href="/captaciones">Ver todas</a>
-                </div>
-                    <div class="cl-card-body" style="padding:0;">
-                        <table class="cl-table">
-                            <thead><tr><th>Captación</th><th>Cliente</th><th>Local</th><th>Etapa</th><th>Próx. acción</th></tr></thead>
-                            <tbody>
-                                @foreach (var r in _agenteCaps)
-                                {
-                                    <tr>
-                                        <td class="mono">@r[0]</td><td>@r[1]</td><td>@r[2]</td>
-                                        <td><StatusBadge Label="@r[3]" /></td><td class="muted">@r[4]</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Agenda de hoy</div><span class="cl-badge blue">5 visitas</span></div>
-                    <div class="cl-card-body">
-                        <Timeline Items="_agenteAgenda" />
-                    </div>
-                </div>
-            </div>
-            <div class="cl-card" style="margin-top:14px;">
-                <div class="cl-card-head"><div class="cl-card-title">Tareas próximas</div></div>
-                <div class="cl-card-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
-                    @foreach (var r in _agenteTareas)
+                    <div class="cl-card-head"><div class="cl-card-title">@(IsAdmin || IsBroker ? "Carga del equipo" : "Mi rendimiento")</div></div>
+                    @if (IsAdmin || IsBroker)
                     {
-                        <div style="border:1px solid #C9CED6;border-radius:8px;padding:12px;background:#F8FAFD;">
-                            <div style="font-size:12px;font-weight:600;">@r[0]</div>
-                            <div style="font-size:11.5px;color:#515B6B;margin-top:4px;">@r[1]</div>
-                            <div style="margin-top:8px;"><StatusBadge Label="@r[2]" ToneOverride="@r[3]" Plain="true" /></div>
+                        @* Foto operativa: quién carga cuántas captaciones/cierres ahora (sin la
+                           conversión histórica, que se analiza en Reportes). *@
+                        <div class="cl-card-body" style="padding:0;">
+                            @if (_ind.Desempeno.Count == 0)
+                            {
+                                <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Sin actividad registrada todavía.</div>
+                            }
+                            else
+                            {
+                                <table class="cl-table">
+                                    <thead><tr><th>@(IsAdmin ? "Broker" : "Agente")</th><th>Captac.</th><th>Cierres</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var d in _ind.Desempeno)
+                                        {
+                                            <tr>
+                                                <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(d.Nombre)</span>@d.Nombre</div></td>
+                                                <td><b>@d.Captaciones</b></td><td>@d.Cierres</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        @* Panel personal del agente: su propia conversión + KPIs (la tabla comparativa
+                           no tiene sentido cuando solo se ve a sí mismo). *@
+                        <div class="cl-perf">
+                            <div>
+                                <div class="cl-perf-top">
+                                    <span class="cl-perf-big">@MiConversion%</span>
+                                    <span class="cl-perf-cap">de conversión<br />captación → cierre</span>
+                                </div>
+                                <div class="cl-perf-bar" style="margin-top:12px;"><i style="width:@(Math.Clamp(MiConversion, 0, 100))%;"></i></div>
+                            </div>
+                            <div class="cl-perf-grid">
+                                <div class="cl-perf-cell"><div class="k">Captaciones</div><div class="v">@_ind.CaptacionesTotales</div></div>
+                                <div class="cl-perf-cell"><div class="k">Cierres</div><div class="v">@_ind.Cierres</div></div>
+                                <div class="cl-perf-cell"><div class="k">Operaciones</div><div class="v">@_ind.OportunidadesActivas</div></div>
+                            </div>
+                            <div class="cl-muted" style="font-size:11.5px;">
+                                @(_ind.Cierres == 0
+                                    ? "Aún sin cierres registrados. Cada visita y solicitud te acerca al primero."
+                                    : $"Llevas {_ind.Cierres} cierre(s) sobre {_ind.CaptacionesTotales} captación(es).")
+                            </div>
                         </div>
                     }
                 </div>
             </div>
+
+            @if (IsAdmin || IsBroker)
+            {
+                <div class="cl-alert blue" style="margin-top:14px;">
+                    <Icon Name="activity" Size="15" />
+                    <span>Las <b>tendencias históricas</b>, el embudo de conversión y los comparativos de desempeño están en Reportes.</span>
+                    <button class="cl-btn sm" style="margin-left:auto;" @onclick="@(() => App.Navigate("reportes"))">Ver reportes <Icon Name="arrowRight" Size="12" /></button>
+                </div>
+            }
         }
     </ChildContent>
 </AppShell>
@@ -212,136 +196,84 @@
 @code {
     private bool IsAdmin => App.Role == Roles.Admin;
     private bool IsBroker => App.Role == Roles.Broker;
+    private bool _cargando = true;
+    private bool _exportando;
+    private IndicadoresDto _ind = IndicadoresDto.Vacio;
+    // Propiedades (inmuebles distintos) captadas por el equipo del broker.
+    private int _propiedadesEquipo;
 
-    private string Title => IsAdmin ? "Panel administrativo global" : IsBroker ? "Panel del broker" : "Buen día, Valentina";
+    // Identidad visual del hero por rol.
+    private string RoleClass => IsAdmin ? "admin" : IsBroker ? "broker" : "agente";
+    private string HeroIcon => IsAdmin ? "briefcase" : IsBroker ? "users" : "activity";
+    private string HeroEyebrow => IsAdmin ? "Corredora · visión global" : IsBroker ? "Equipo · supervisión" : "Mi actividad comercial";
+
+    // Conversión propia del agente (su fila de desempeño, o derivada de cierres/captaciones).
+    private int MiConversion => _ind.Desempeno.FirstOrDefault()?.Conversion
+        ?? (_ind.CaptacionesTotales > 0 ? (int)Math.Round(_ind.Cierres * 100.0 / _ind.CaptacionesTotales) : 0);
+
+    private string Title => IsAdmin ? "Panel administrativo global" : IsBroker ? "Panel del broker" : $"Buen día, {Nombre}";
+
+    private string Nombre => App.CurrentUser?.Nombre?.Split(' ').FirstOrDefault() ?? "agente";
 
     private string Subtitle => IsAdmin
         ? "Gestión de brokers, auditoría e indicadores de toda la corredora"
         : IsBroker
             ? "Supervisión de los agentes a tu cargo · revisión de captaciones y solicitudes"
-            : "Tu actividad comercial de hoy";
+            : "Tu actividad comercial real";
 
     private string SideActive => IsAdmin ? "Dashboard global" : IsBroker ? "Dashboard de equipo" : "Dashboard";
 
+    private double[] Cierres => _ind.CierresPorMes.Select(v => (double)v).ToArray();
+    private string[] Meses => _ind.MesesEtiquetas.ToArray();
+
+    private DonutChart.Segment[] _donut => _ind.Etapas
+        .Select((e, i) => new DonutChart.Segment(e.Valor, ColoresEstado.PorEtapa(e.Nombre, i)))
+        .ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _ind = await Indicadores.ObtenerAsync(DisposedToken);
+
+            // El broker ve el total de propiedades (inmuebles distintos) captadas por su equipo.
+            if (IsBroker)
+            {
+                var caps = await CaptacionSvc.RefrescarAsync(DisposedToken);
+                _propiedadesEquipo = caps
+                    .Select(c => c.LocalId > 0 ? c.LocalId : (long)(c.DireccionLocal ?? "").GetHashCode())
+                    .Distinct().Count();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
     private static string Initials(string name) =>
-        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(w => w[0]));
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
 
-    private static string ConvTone(string pct)
+    private static string ConvTone(int pct) => pct >= 22 ? "green" : pct >= 18 ? "blue" : "red";
+
+    private async Task ExportarPdf()
     {
-        var n = int.Parse(pct.TrimEnd('%'));
-        return n >= 22 ? "green" : n >= 18 ? "blue" : "red";
+        if (_exportando) return;
+        try
+        {
+            _exportando = true;
+            var datos = ReporteIndicadores.Desde(_ind, IsAdmin);
+            var titulo = IsAdmin ? "Panel administrativo · últimos 6 meses"
+                : IsBroker ? "Panel del broker · últimos 6 meses" : "Mi actividad · últimos 6 meses";
+            var pdf = new ReporteIndicadoresDocument(datos, titulo).GeneratePdf();
+            await Exportar.DescargarPdfAsync(IsAdmin ? "panel_administrativo" : IsBroker ? "panel_broker" : "panel_agente", pdf);
+        }
+        finally
+        {
+            _exportando = false;
+        }
     }
-
-    // --- Admin data ---
-    private readonly double[] _adminBars = { 18, 24, 21, 30, 27, 36, 32, 41, 38, 44, 39, 48 };
-    private readonly string[] _adminBarLabels = { "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12" };
-
-    private int _semanasVisibles = 4;
-    private double[] BarsVisibles => _adminBars[^Math.Min(_semanasVisibles, _adminBars.Length)..];
-    private string[] LabelsVisibles => _adminBarLabels[^Math.Min(_semanasVisibles, _adminBarLabels.Length)..];
-
-    // El pendiente prioritario abre la bandeja que corresponde a su tipo.
-    private void RevisarPendiente(string tipo) =>
-        App.Navigate(tipo == "Captación" ? "bandeja-captaciones" : "solicitudes");
-
-    private async Task ExportarPdfAdmin()
-    {
-        var datos = ReporteIndicadores.Para(esAdmin: true, "6m");
-        var pdf = new ReporteIndicadoresDocument(datos, "Panel administrativo · últimos 6 meses").GeneratePdf();
-        await Exportar.DescargarPdfAsync("panel_administrativo", pdf);
-    }
-
-    private async Task ExportarBroker()
-    {
-        await Exportar.DescargarCsvAsync("pendientes_equipo",
-            new[] { "Tipo", "Referencia", "Agente", "Antigüedad" },
-            _brokerPend.Select(r => (IReadOnlyList<string?>)new[] { r[0], r[1], r[2], r[3] }));
-    }
-
-    private async Task ExportarAgente()
-    {
-        await Exportar.DescargarCsvAsync("captaciones_seguimiento",
-            new[] { "Captación", "Cliente", "Local", "Etapa", "Próxima acción" },
-            _agenteCaps.Select(r => (IReadOnlyList<string?>)new[] { r[0], r[1], r[2], r[3], r[4] }));
-    }
-
-    private readonly DonutChart.Segment[] _adminDonut =
-    {
-        new(22, "#005BFF"), new(18, "#00AEEF"), new(14, "#2F7D52"), new(6, "#D64550"), new(4, "#7E8794"),
-    };
-
-    private readonly (string Color, string Name, string Value)[] _adminLegend =
-    {
-        ("#005BFF", "Captada", "22"),
-        ("#00AEEF", "Con interacciones", "18"),
-        ("#2F7D52", "Alquilada", "14"),
-        ("#D64550", "Rechazada", "6"),
-        ("#7E8794", "No continúa", "4"),
-    };
-
-    private readonly string[][] _adminPerf =
-    {
-        new[] { "Ricardo Salas", "7", "38", "9", "24%" },
-        new[] { "Mariana Quintero", "6", "31", "8", "26%" },
-        new[] { "Felipe Andrade", "5", "27", "5", "19%" },
-        new[] { "Sandra Ríos", "4", "22", "4", "18%" },
-    };
-
-    private readonly Timeline.TimelineItem[] _adminTimeline =
-    {
-        new("Hoy · 11:42", "Captación aprobada", "CAP-0218 · Local Av. La Marina 245 · Aprobada por R. Salas", "done"),
-        new("Hoy · 09:14", "Alquiler cerrado", "CAP-0205 · Cliente Inversiones Trébol S.A.C.", "done"),
-        new("Ayer · 17:30", "Nuevo agente registrado", "Daniel Romero asignado al broker M. Quintero"),
-        new("Ayer · 14:08", "Solicitud observada", "SOL-0421 · 3 documentos pendientes", "primary"),
-    };
-
-    // --- Broker data ---
-    private readonly string[][] _brokerPend =
-    {
-        new[] { "Captación", "CAP-0231", "D. Romero", "2d", "red" },
-        new[] { "Solicitud", "SOL-0428", "C. Vega", "1d", "blue" },
-        new[] { "Captación", "CAP-0229", "M. León", "1d", "blue" },
-        new[] { "Solicitud", "SOL-0425", "V. Mora", "3h", "blue" },
-        new[] { "Captación", "CAP-0227", "A. Torres", "5h", "blue" },
-    };
-
-    private readonly string[][] _brokerFunnel =
-    {
-        new[] { "Captaciones en seguimiento", "64", "100%", "#005BFF" },
-        new[] { "Con visita realizada", "41", "64%", "#00AEEF" },
-        new[] { "Con solicitud creada", "28", "44%", "#00AEEF" },
-        new[] { "Cerradas exitosas", "14", "22%", "#2F7D52" },
-    };
-
-    private readonly string[][] _brokerCierres =
-    {
-        new[] { "CAP-0205", "Inversiones Trébol S.A.C.", "Av. La Marina 245", "Alquilada", "V. Mora", "Hoy 09:14" },
-        new[] { "CAP-0227", "Carla Espinoza", "Calle Schell 412", "Alquilada", "C. Vega", "22 May" },
-        new[] { "CAP-0231", "Bodegas del Norte E.I.R.L.", "Av. Petit Thouars 1875", "No continúa", "D. Romero", "20 May" },
-    };
-
-    // --- Agente data ---
-    private readonly string[][] _agenteCaps =
-    {
-        new[] { "CAP-0218", "Inversiones Trébol", "Av. La Marina 245", "Con interacciones", "Visita · hoy 16:00" },
-        new[] { "CAP-0227", "Boutique Lila", "Calle Schell 412", "Con solicitud", "Esperar evaluación" },
-        new[] { "CAP-0231", "Bodegas del Norte", "Av. Petit Thouars 1875", "Captada", "Registrar interacción" },
-        new[] { "CAP-0234", "Café Lima", "Jr. Berlín 230", "Con interacciones", "Programar visita" },
-    };
-
-    private readonly Timeline.TimelineItem[] _agenteAgenda =
-    {
-        new("09:30", "Visita · Café Lima", "Jr. Berlín 230, Miraflores · CAP-0234", "done"),
-        new("11:00", "Llamada · Inversiones Trébol", "Confirmar contrato · CAP-0218", "done"),
-        new("14:30", "Visita · Boutique Lila", "Calle Schell 412 · CAP-0227", "active"),
-        new("16:00", "Visita · Inversiones Trébol", "Av. La Marina 245 · CAP-0218"),
-        new("18:00", "Registro de captación", "CAP-0233 pendiente de envío"),
-    };
-
-    private readonly string[][] _agenteTareas =
-    {
-        new[] { "Enviar a revisión", "CAP-0233 · Local Surco", "Vence mañana", "blue" },
-        new[] { "Subir documentos", "SOL-0425 · cliente Trébol", "3 documentos faltantes", "red" },
-        new[] { "Registrar interacción", "CAP-0231 · cliente sin contacto", "Hace 5 días", "blue" },
-    };
 }

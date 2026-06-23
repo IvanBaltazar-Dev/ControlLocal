@@ -37,10 +37,15 @@
 
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
-        <FilterBar Search="Buscar por operación, cliente, local, agente…"
+        <FilterBar Search="@(_isBroker ? "Buscar por operación, cliente, local, agente…" : "Buscar por operación, cliente, local…")"
                    @bind-Value="_query" ResultCount="filtradas.Count"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
-            <FilterSelect Placeholder="Todos los agentes" Options="_agentes" @bind-Value="_agente" />
+            @* El filtro por agente solo tiene sentido para el broker supervisor; el agente
+               solo ve sus propias oportunidades. *@
+            @if (_isBroker)
+            {
+                <FilterSelect Placeholder="Todos los agentes" Options="_agentes" @bind-Value="_agente" />
+            }
         </FilterBar>
 
         <div class="cl-card">
@@ -49,7 +54,7 @@
                     <thead>
                         <tr>
                             <th>Operación</th><th>Captación</th><th>Cliente</th><th>Local</th>
-                            <th>Agente</th><th>Etapa</th><th>Monto/mes</th><th>Actualizada</th><th></th>
+                            <th>Agente</th><th>Etapa</th><th>Monto/mes</th><th>Última operación</th><th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -68,7 +73,10 @@
                                 </td>
                                 <td><StatusBadge Label="@o.Stage" /></td>
                                 <td>@(o.Amount == "—" ? "—" : $"USD {o.Amount}")</td>
-                                <td><span class="cl-muted" style="font-size:12px;">@o.Updated</span></td>
+                                <td>
+                                    <div style="font-weight:600;font-size:12.5px;">@o.UltimaOp</div>
+                                    <span class="cl-muted" style="font-size:11.5px;">@o.Updated</span>
+                                </td>
                                 <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"oportunidad-detail/{o.Id}"))">Ver seguimiento</button></td>
                             </tr>
                         }
@@ -136,10 +144,10 @@
     private async Task ExportarCsv()
     {
         await Exportar.DescargarCsvAsync("operaciones_equipo",
-            new[] { "Operación", "Captación", "Cliente", "Local", "Agente", "Etapa", "Monto mensual USD", "Actualizada" },
+            new[] { "Operación", "Captación", "Cliente", "Local", "Agente", "Etapa", "Monto mensual USD", "Última operación", "Actualizada" },
             Filtradas().Select(o => (IReadOnlyList<string?>)new[]
             {
-                o.Op, o.Cap, o.Client, o.Local, o.Agent, o.Stage, o.Amount, o.Updated,
+                o.Op, o.Cap, o.Client, o.Local, o.Agent, o.Stage, o.Amount, o.UltimaOp, o.Updated,
             }));
     }
 
@@ -149,11 +157,11 @@
         (string.IsNullOrEmpty(_query) || Coincide(o, _query)));
 
     private static bool Coincide(OpRow o, string q) =>
-        o.Op.Contains(q, StringComparison.OrdinalIgnoreCase)
-        || o.Client.Contains(q, StringComparison.OrdinalIgnoreCase)
-        || o.Local.Contains(q, StringComparison.OrdinalIgnoreCase)
-        || o.Agent.Contains(q, StringComparison.OrdinalIgnoreCase)
-        || o.Cap.Contains(q, StringComparison.OrdinalIgnoreCase);
+        TextoFiltro.Contiene(o.Op, q)
+        || TextoFiltro.Contiene(o.Client, q)
+        || TextoFiltro.Contiene(o.Local, q)
+        || TextoFiltro.Contiene(o.Agent, q)
+        || TextoFiltro.Contiene(o.Cap, q);
 
     private static string TonoEtapa(string e) => e switch
     {
@@ -163,7 +171,7 @@
         _ => "blue",
     };
 
-    private record OpRow(long Id, string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated);
+    private record OpRow(long Id, string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated, string UltimaOp);
 
     private IReadOnlyList<OpRow> _ops = [];
     private bool _cargando = true;
@@ -207,6 +215,7 @@
             "Rechazada" => "Solicitud rechazada",
             _ => o.Estado,
         };
+        var (ultimaOp, fechaEvento) = UltimaOperacion(o, solicitud);
         return new OpRow(
             o.Id,
             o.CodigoOportunidad,
@@ -218,6 +227,38 @@
             nombre,
             etapa,
             solicitud?.MontoMensualTexto ?? "—",
-            o.FechaRegistroTexto);
+            FormatearFecha(fechaEvento, o.FechaRegistroTexto),
+            ultimaOp);
     }).ToList();
+
+    // Deriva la última operación real (acción + fecha) de la solicitud vinculada cuando existe,
+    // o de la propia oportunidad. Reemplaza la fecha de registro que se mostraba antes.
+    private static (string Label, DateTime? Fecha) UltimaOperacion(OportunidadComercialDto o, SolicitudAlquilerDto? solicitud)
+    {
+        if (solicitud is not null)
+        {
+            var label = solicitud.Estado switch
+            {
+                "Aprobada" => "Aprobación de solicitud",
+                "Rechazada" => "Rechazo de solicitud",
+                "Observada" => "Observación de solicitud",
+                "En revision" => "Solicitud en evaluación",
+                "Cerrada" => "Cierre de operación",
+                _ => "Solicitud registrada",
+            };
+            return (label, solicitud.FechaActualizacionEstado ?? o.FechaActualizacion);
+        }
+        var opLabel = o.Estado switch
+        {
+            "Alquilada" => "Operación cerrada",
+            "Captada" => "Oportunidad abierta",
+            "En evaluación" => "Oportunidad en evaluación",
+            _ => "Oportunidad actualizada",
+        };
+        return (opLabel, o.FechaActualizacion);
+    }
+
+    private static string FormatearFecha(DateTime? fecha, string fallback) =>
+        fecha?.ToString("dd MMM yyyy · HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+        ?? (string.IsNullOrWhiteSpace(fallback) ? "—" : fallback);
 }

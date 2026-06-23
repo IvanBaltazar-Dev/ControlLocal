@@ -14,7 +14,13 @@ public class DocumentoSolicitudDto
     [Required(ErrorMessage = "El tipo de documento es obligatorio.")]
     public string TipoDocumento { get; set; } = string.Empty;
 
+    // Nombre legible del tipo (del catalogo), p. ej. "Documento de identidad".
+    public string TipoNombre { get; set; } = string.Empty;
+
     public string NombreArchivo { get; set; } = string.Empty;
+
+    // Clave del archivo en el almacen (Local/S3); con ella el visor abre el contenido.
+    public string? RutaArchivo { get; set; }
 
     // Fecha de entrega lista para mostrar.
     public string FechaEntregaTexto { get; set; } = string.Empty;

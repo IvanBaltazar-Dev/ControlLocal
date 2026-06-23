@@ -48,6 +48,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 l.carga_electrica_kw,
                 l.numero_estacionamientos,
                 l.cuota_mantenimiento,
+                l.id_distrito,
                 pp.nombres_o_razon_social AS propietario_nombre,
                 l.fecha_registro,
                 l.fecha_actualizacion
@@ -79,8 +80,9 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 apto_licencia_funcionamiento,
                 carga_electrica_kw,
                 numero_estacionamientos,
-                cuota_mantenimiento
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                cuota_mantenimiento,
+                id_distrito
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_BY_ID_SQL =
@@ -117,7 +119,8 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                 apto_licencia_funcionamiento = ?,
                 carga_electrica_kw = ?,
                 numero_estacionamientos = ?,
-                cuota_mantenimiento = ?
+                cuota_mantenimiento = ?,
+                id_distrito = ?
             WHERE id_local = ?
             """;
 
@@ -156,6 +159,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setBigDecimal(20, local.getCargaElectricaKw());
             JdbcSupport.setInteger(statement, 21, local.getNumeroEstacionamientos());
             statement.setBigDecimal(22, local.getCuotaMantenimiento());
+            JdbcSupport.setLong(statement, 23, local.getIdDistrito());
 
             int affectedRows = statement.executeUpdate();
             if (affectedRows == 0) {
@@ -276,7 +280,8 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
             statement.setBigDecimal(20, local.getCargaElectricaKw());
             JdbcSupport.setInteger(statement, 21, local.getNumeroEstacionamientos());
             statement.setBigDecimal(22, local.getCuotaMantenimiento());
-            statement.setLong(23, local.getIdLocal());
+            JdbcSupport.setLong(statement, 23, local.getIdDistrito());
+            statement.setLong(24, local.getIdLocal());
 
             return statement.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -331,6 +336,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
         local.setCargaElectricaKw(rs.getBigDecimal("carga_electrica_kw"));
         local.setNumeroEstacionamientos(JdbcSupport.getNullableInt(rs, "numero_estacionamientos"));
         local.setCuotaMantenimiento(rs.getBigDecimal("cuota_mantenimiento"));
+        local.setIdDistrito(JdbcSupport.getNullableLong(rs, "id_distrito"));
 
         Propietario propietario = new Propietario();
         propietario.setIdPropietario(idPropietario);
@@ -388,7 +394,7 @@ public class LocalComercialDAOImpl implements LocalComercialDAO {
                    l.id_propietario, l.tipo_inmueble, l.uso, l.ambientes, l.antiguedad_anios,
                    l.zona_urbanizacion, l.geo_lat, l.geo_long, l.frente, l.zonificacion,
                    l.apto_licencia_funcionamiento, l.carga_electrica_kw, l.numero_estacionamientos,
-                   l.cuota_mantenimiento, pp.nombres_o_razon_social AS propietario_nombre,
+                   l.cuota_mantenimiento, l.id_distrito, pp.nombres_o_razon_social AS propietario_nombre,
                    l.fecha_registro, l.fecha_actualizacion
             FROM local_comercial l
             INNER JOIN propietario p ON p.id_propietario = l.id_propietario

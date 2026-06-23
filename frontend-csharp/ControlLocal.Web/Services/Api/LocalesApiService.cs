@@ -12,7 +12,7 @@ namespace ControlLocal.Web.Services.Api;
 public class LocalesApiService
 {
     private readonly HttpClient _httpClient;
-    // Ajusta el puerto si tu GlassFish usa uno diferente
+    // Ajusta el puerto si GlassFish usa uno diferente
     private readonly string _baseUrl = "http://localhost:8080/controllocal/Api/locales";
 
     public LocalesApiService(HttpClient httpClient)

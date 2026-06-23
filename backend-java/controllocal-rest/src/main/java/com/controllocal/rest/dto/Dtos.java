@@ -5,18 +5,30 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.Alerta;
+import com.controllocal.model.comercial.ComisionLiquidacion;
+import com.controllocal.model.comercial.ContratoAlquiler;
+import com.controllocal.model.comercial.DocumentoSolicitud;
 import com.controllocal.model.comercial.EvaluacionSolicitud;
+import com.controllocal.model.comercial.InteraccionComercial;
 import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.Prospeccion;
+import com.controllocal.model.comercial.ReasignacionCaptacion;
 import com.controllocal.model.comercial.SolicitudAlquiler;
+import com.controllocal.model.comercial.Publicacion;
 import com.controllocal.model.comercial.Visita;
+import com.controllocal.model.comercial.enums.FormaPago;
+import com.controllocal.model.comercial.enums.HitoPrecio;
+import com.controllocal.model.comercial.enums.Moneda;
 import com.controllocal.model.comercial.enums.ResultadoEvaluacionSolicitud;
+import com.controllocal.model.comercial.enums.TipoDocumentoSolicitud;
 import com.controllocal.model.comercial.enums.TipoEntidad;
 import com.controllocal.model.comercial.enums.TipoEvaluacionSolicitud;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.inmueble.PrecioLocal;
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
 import com.controllocal.model.inmueble.enums.TipoInmueble;
 import com.controllocal.model.inmueble.enums.UsoInmueble;
@@ -28,6 +40,7 @@ import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
 import com.controllocal.model.persona.enums.TipoPersona;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
+import com.controllocal.model.usuario.ReasignacionAgenteBroker;
 import com.controllocal.rest.http.ApiException;
 
 public final class Dtos {
@@ -48,11 +61,16 @@ public final class Dtos {
 
     public record AgenteResponse(Long id, String codigoAgente, String nombre, String tipoPersona, String tipoDocumento,
                                  String numeroDocumento, String telefono, String correo, String usuario, String zona,
-                                 LocalDate fechaIngreso, String estadoAdministrativo, String estadoOperativo) {
+                                 LocalDate fechaIngreso, String estadoAdministrativo, String estadoOperativo,
+                                 int captacionesActivas, int operacionesActivas) {
 
         public static AgenteResponse desde(AgenteInmobiliario a) {
+            return desde(a, 0, 0);
+        }
+
+        public static AgenteResponse desde(AgenteInmobiliario a, int captacionesActivas, int operacionesActivas) {
             Persona persona = a.getPersona();
-            return new AgenteResponse(a.getIdAgente(), a.getCodigoAgente(), persona != null ? persona.getNombresORazonSocial() : null, persona != null ? codigo(persona.getTipoPersona()) : null, persona != null ? codigo(persona.getTipoDocumento()) : null, persona != null ? persona.getNumeroDocumento() : null, persona != null ? persona.getTelefono() : null, persona != null ? persona.getCorreo() : null, a.getNombreUsuario(), a.getZonaAsignada(), a.getFechaIngreso(), codigo(a.getEstadoAdministrativo()), codigo(a.getEstadoOperativo()));
+            return new AgenteResponse(a.getIdAgente(), a.getCodigoAgente(), persona != null ? persona.getNombresORazonSocial() : null, persona != null ? codigo(persona.getTipoPersona()) : null, persona != null ? codigo(persona.getTipoDocumento()) : null, persona != null ? persona.getNumeroDocumento() : null, persona != null ? persona.getTelefono() : null, persona != null ? persona.getCorreo() : null, a.getNombreUsuario(), a.getZonaAsignada(), a.getFechaIngreso(), codigo(a.getEstadoAdministrativo()), codigo(a.getEstadoOperativo()), captacionesActivas, operacionesActivas);
         }
     }
 
@@ -159,14 +177,53 @@ public final class Dtos {
                                 BigDecimal geoLong, String estadoPublicacion, BigDecimal frente, String zonificacion,
                                 Boolean aptoLicenciaFuncionamiento, BigDecimal cargaElectricaKw,
                                 Integer numeroEstacionamientos, BigDecimal cuotaMantenimiento,
-                                LocalDateTime fechaRegistro) {
+                                Long idDistrito, LocalDateTime fechaRegistro) {
 
         public static LocalResponse desde(LocalComercial l) {
             return desde(l, null);
         }
 
         public static LocalResponse desde(LocalComercial l, String estadoPublicacion) {
-            return new LocalResponse(l.getIdLocal(), l.getCodigoLocal(), l.getDireccion(), l.getDistrito(), l.getMetraje(), l.getPrecioReferencial(), l.getRubroPermitido(), l.getDescripcion(), codigo(l.getEstado()), l.getIdPropietario(), l.getPropietario() != null ? l.getPropietario().getNombresORazonSocial() : null, codigo(l.getTipoInmueble()), codigo(l.getUso()), l.getAmbientes(), l.getAntiguedadAnios(), l.getZonaUrbanizacion(), l.getGeoLat(), l.getGeoLong(), estadoPublicacion, l.getFrente(), l.getZonificacion(), l.getAptoLicenciaFuncionamiento(), l.getCargaElectricaKw(), l.getNumeroEstacionamientos(), l.getCuotaMantenimiento(), l.getFechaRegistro());
+            return new LocalResponse(l.getIdLocal(), l.getCodigoLocal(), l.getDireccion(), l.getDistrito(), l.getMetraje(), l.getPrecioReferencial(), l.getRubroPermitido(), l.getDescripcion(), codigo(l.getEstado()), l.getIdPropietario(), l.getPropietario() != null ? l.getPropietario().getNombresORazonSocial() : null, codigo(l.getTipoInmueble()), codigo(l.getUso()), l.getAmbientes(), l.getAntiguedadAnios(), l.getZonaUrbanizacion(), l.getGeoLat(), l.getGeoLong(), estadoPublicacion, l.getFrente(), l.getZonificacion(), l.getAptoLicenciaFuncionamiento(), l.getCargaElectricaKw(), l.getNumeroEstacionamientos(), l.getCuotaMantenimiento(), l.getIdDistrito(), l.getFechaRegistro());
+        }
+    }
+
+    // ---------- Precios del local (historico) ----------
+
+    public record PrecioRequest(String hito, String moneda, BigDecimal monto, LocalDate fecha) {
+
+        public PrecioLocal aEntidad(long idLocal) {
+            PrecioLocal precio = new PrecioLocal();
+            precio.setIdLocal(idLocal);
+            precio.setHito(enumDesde(HitoPrecio.class, hito, "hito de precio"));
+            precio.setMoneda(moneda == null || moneda.isBlank()
+                    ? Moneda.PEN
+                    : enumDesde(Moneda.class, moneda, "moneda del precio"));
+            precio.setMonto(monto);
+            precio.setFecha(fecha != null ? fecha : LocalDate.now());
+            return precio;
+        }
+    }
+
+    public record PrecioResponse(Long id, Long idLocal, String hito, String moneda, BigDecimal monto,
+                                 LocalDate fecha, LocalDateTime fechaCreacion) {
+
+        public static PrecioResponse desde(PrecioLocal p) {
+            return new PrecioResponse(p.getIdPrecio(), p.getIdLocal(), codigo(p.getHito()), codigo(p.getMoneda()),
+                    p.getMonto(), p.getFecha(), p.getFechaCreacion());
+        }
+    }
+
+    // ---------- Publicaciones del local ----------
+
+    public record PublicacionResponse(Long id, String canal, String tituloAnuncio, BigDecimal rentaPublicada,
+                                      String moneda, String estado, LocalDateTime fechaPublicacion,
+                                      LocalDateTime fechaBaja, String urlPublicacion, String codigoOrigen) {
+
+        public static PublicacionResponse desde(Publicacion p) {
+            return new PublicacionResponse(p.getIdPublicacion(), codigo(p.getCanal()), p.getTituloAnuncio(),
+                    p.getRentaPublicada(), codigo(p.getMoneda()), codigo(p.getEstado()), p.getFechaPublicacion(),
+                    p.getFechaBaja(), p.getUrlPublicacion(), p.getCodigoOrigen());
         }
     }
 
@@ -242,14 +299,14 @@ public final class Dtos {
                                       Long idCaptacion, String codigoCaptacion, String direccionLocal,
                                       String distritoLocal, Long idAgente, String agenteNombre, String estado,
                                       LocalDateTime fechaRegistro, String motivoCierre, String observaciones,
-                                      LocalDateTime fechaCierre) {
+                                      LocalDateTime fechaCierre, LocalDateTime fechaActualizacion) {
 
         public static OportunidadResponse desde(OportunidadComercial o) {
             var cliente = o.getClienteInteresado();
             var captacion = o.getCaptacion();
             var local = captacion != null ? captacion.getLocalComercial() : null;
             var agente = o.getAgenteResponsable();
-            return new OportunidadResponse(o.getIdOportunidad(), o.getCodigoOportunidad(), cliente != null ? cliente.getIdCliente() : null, cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null, captacion != null ? captacion.getIdCaptacion() : null, captacion != null ? captacion.getCodigoCaptacion() : null, local != null ? local.getDireccion() : null, local != null ? local.getDistrito() : null, agente != null ? agente.getIdAgente() : null, agente != null && agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null, codigo(o.getEstado()), o.getFechaRegistro(), o.getMotivoCierre(), o.getObservaciones(), o.getFechaCierre());
+            return new OportunidadResponse(o.getIdOportunidad(), o.getCodigoOportunidad(), cliente != null ? cliente.getIdCliente() : null, cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null, captacion != null ? captacion.getIdCaptacion() : null, captacion != null ? captacion.getCodigoCaptacion() : null, local != null ? local.getDireccion() : null, local != null ? local.getDistrito() : null, agente != null ? agente.getIdAgente() : null, agente != null && agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null, codigo(o.getEstado()), o.getFechaRegistro(), o.getMotivoCierre(), o.getObservaciones(), o.getFechaCierre(), o.getFechaActualizacion());
         }
     }
 
@@ -282,16 +339,23 @@ public final class Dtos {
 
     public record SolicitudRequest(String codigoSolicitud, LocalDate fechaRegistro, BigDecimal montoPropuesto,
                                    String plazoTentativo, String observaciones, LocalDate fechaVigenciaOferta,
-                                   Long idOportunidad) {
+                                   Long idOportunidad, Integer plazoMeses, LocalDate fechaInicio, String formaPago,
+                                   Integer mesesGarantia, Integer mesesAdelanto) {
 
         public SolicitudAlquiler aEntidad(long idAgente) {
             SolicitudAlquiler solicitud = new SolicitudAlquiler();
             solicitud.setCodigoSolicitud(codigoSolicitud);
             solicitud.setFechaRegistro(fechaRegistro != null ? fechaRegistro : LocalDate.now());
             solicitud.setMontoPropuesto(montoPropuesto);
-            solicitud.setPlazoTentativo(plazoTentativo);
+            // El plazo del contrato (meses) es la fuente; plazoTentativo se deriva para mostrar.
+            solicitud.setPlazoContratoMeses(plazoMeses);
+            solicitud.setPlazoTentativo(plazoMeses != null && plazoMeses > 0 ? plazoMeses + " meses" : plazoTentativo);
             solicitud.setObservaciones(observaciones);
             solicitud.setFechaVigenciaOferta(fechaVigenciaOferta);
+            solicitud.setFechaInicioContrato(fechaInicio);
+            solicitud.setFormaPago(enumOpcional(FormaPago.class, formaPago, "forma de pago"));
+            solicitud.setMesesGarantia(mesesGarantia);
+            solicitud.setMesesAdelanto(mesesAdelanto);
 
             OportunidadComercial oportunidad = new OportunidadComercial();
             oportunidad.setIdOportunidad(idOportunidad);
@@ -309,15 +373,136 @@ public final class Dtos {
                                     LocalDateTime fechaActualizacionEstado, LocalDate fechaVigenciaOferta,
                                     Long idOportunidad, String codigoOportunidad, Long idCliente, String clienteNombre,
                                     Long idCaptacion, String codigoCaptacion, String direccionLocal,
-                                    String distritoLocal, Long idAgente, String agenteNombre) {
+                                    String distritoLocal, Long idAgente, String agenteNombre,
+                                    Integer plazoMeses, LocalDate fechaInicio, String formaPago,
+                                    Integer mesesGarantia, Integer mesesAdelanto,
+                                    int documentosEntregados, int documentosRequeridos) {
 
-        public static SolicitudResponse desde(SolicitudAlquiler s) {
+        public static SolicitudResponse desde(SolicitudAlquiler s, int documentosEntregados, int documentosRequeridos) {
             var oportunidad = s.getOportunidadComercial();
             var cliente = s.getClienteInteresado();
             var captacion = s.getCaptacion();
             var local = captacion != null ? captacion.getLocalComercial() : null;
             var agente = s.getAgenteResponsable();
-            return new SolicitudResponse(s.getIdSolicitud(), s.getCodigoSolicitud(), s.getFechaRegistro(), s.getMontoPropuesto(), s.getPlazoTentativo(), s.getObservaciones(), codigo(s.getEstado()), s.getFechaActualizacionEstado(), s.getFechaVigenciaOferta(), oportunidad != null ? oportunidad.getIdOportunidad() : null, oportunidad != null ? oportunidad.getCodigoOportunidad() : null, cliente != null ? cliente.getIdCliente() : null, cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null, captacion != null ? captacion.getIdCaptacion() : null, captacion != null ? captacion.getCodigoCaptacion() : null, local != null ? local.getDireccion() : null, local != null ? local.getDistrito() : null, agente != null ? agente.getIdAgente() : null, agente != null && agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null);
+            return new SolicitudResponse(s.getIdSolicitud(), s.getCodigoSolicitud(), s.getFechaRegistro(), s.getMontoPropuesto(), s.getPlazoTentativo(), s.getObservaciones(), codigo(s.getEstado()), s.getFechaActualizacionEstado(), s.getFechaVigenciaOferta(), oportunidad != null ? oportunidad.getIdOportunidad() : null, oportunidad != null ? oportunidad.getCodigoOportunidad() : null, cliente != null ? cliente.getIdCliente() : null, cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null, captacion != null ? captacion.getIdCaptacion() : null, captacion != null ? captacion.getCodigoCaptacion() : null, local != null ? local.getDireccion() : null, local != null ? local.getDistrito() : null, agente != null ? agente.getIdAgente() : null, agente != null && agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null, s.getPlazoContratoMeses(), s.getFechaInicioContrato(), codigo(s.getFormaPago()), s.getMesesGarantia(), s.getMesesAdelanto(), documentosEntregados, documentosRequeridos);
+        }
+    }
+
+    // ---------- Contrato de alquiler (cierre del trato) ----------
+
+    // El cierre solo necesita la solicitud aprobada: las condiciones (renta, plazo, forma de pago,
+    // garantia, adelanto) se leen de la solicitud y la comision se deriva en el backend.
+    public record ContratoRequest(Long idSolicitud) {
+    }
+
+    public record ContratoResponse(Long id, Long idSolicitud, String codigoSolicitud,
+                                   Long idOportunidad, String codigoOportunidad, String clienteNombre,
+                                   String direccionLocal, String distritoLocal, String codigoCaptacion,
+                                   String agenteNombre, BigDecimal rentaMensual, String moneda,
+                                   Integer plazoContratoMeses, BigDecimal comisionGenerada,
+                                   LocalDate fechaInicioContrato, LocalDate fechaFinContrato,
+                                   LocalDate fechaCierre, String estadoContrato, String comisionEstado) {
+
+        public static ContratoResponse desde(ContratoAlquiler c, SolicitudAlquiler s) {
+            return desde(c, s, null);
+        }
+
+        // El contrato es minimo: renta/plazo/fecha de inicio se leen de la solicitud (no se duplican);
+        // la comision (total + estado) viene de comision_liquidacion. La fecha fin se deriva (inicio + plazo).
+        public static ContratoResponse desde(ContratoAlquiler c, SolicitudAlquiler s, ComisionLiquidacion comision) {
+            var oportunidad = s != null ? s.getOportunidadComercial() : c.getOportunidad();
+            var cliente = s != null ? s.getClienteInteresado() : null;
+            var captacion = s != null ? s.getCaptacion() : null;
+            var local = captacion != null ? captacion.getLocalComercial() : null;
+            var agente = s != null ? s.getAgenteResponsable() : null;
+            Integer plazo = plazoMeses(s);
+            LocalDate inicio = s != null ? s.getFechaInicioContrato() : null;
+            LocalDate fin = (inicio != null && plazo != null) ? inicio.plusMonths(plazo) : null;
+            return new ContratoResponse(
+                    c.getIdContratoAlquiler(),
+                    s != null ? s.getIdSolicitud() : null,
+                    s != null ? s.getCodigoSolicitud() : null,
+                    oportunidad != null ? oportunidad.getIdOportunidad() : null,
+                    oportunidad != null ? oportunidad.getCodigoOportunidad() : null,
+                    cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null,
+                    local != null ? local.getDireccion() : null,
+                    local != null ? local.getDistrito() : null,
+                    captacion != null ? captacion.getCodigoCaptacion() : null,
+                    agente != null && agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null,
+                    s != null ? s.getMontoPropuesto() : null,
+                    "USD",
+                    plazo,
+                    comision != null ? comision.getMonto() : null,
+                    inicio,
+                    fin,
+                    c.getFechaCierre(),
+                    c.getEstadoContrato() != null ? c.getEstadoContrato().name() : null,
+                    comision != null ? codigo(comision.getEstado()) : null);
+        }
+
+        // Plazo en meses: de la solicitud; si falta, se parsea del plazo tentativo ("24 meses").
+        private static Integer plazoMeses(SolicitudAlquiler s) {
+            if (s == null) {
+                return null;
+            }
+            if (s.getPlazoContratoMeses() != null) {
+                return s.getPlazoContratoMeses();
+            }
+            String texto = s.getPlazoTentativo();
+            if (texto == null) {
+                return null;
+            }
+            String digitos = texto.replaceAll("\\D", "");
+            return digitos.isEmpty() ? null : Integer.valueOf(digitos);
+        }
+    }
+
+    // ---------- Documentos de solicitud ----------
+
+    public record DocumentoSolicitudRequest(String tipoDocumento, String nombreArchivo,
+                                            String rutaArchivo, String observaciones,
+                                            String contenidoBase64) {
+    }
+
+    // Un trozo de una subida por partes (el archivo viaja en varios POST JSON pequenos).
+    public record DocumentoChunkRequest(String uploadId, Integer indice, Integer total, Boolean ultimo,
+                                        String tipoDocumento, String nombreArchivo, String dataBase64) {
+    }
+
+    // Subida por handoff local: solo el nombre del archivo temporal que el frontend dejo en
+    // la carpeta compartida; el backend lo lee de ahi (POST chico, sin cuerpo grande).
+    public record DocumentoLocalRequest(String tipoDocumento, String nombreArchivo, String archivoTemporal) {
+    }
+
+    // Revision de un documento por el broker: resultado "C" (conforme/validar) u "O"
+    // (observado) con la observacion especifica para el agente.
+    public record RevisionDocumentoRequest(String resultado, String observaciones) {
+    }
+
+    public record DocumentoSolicitudResponse(Long id, Long idSolicitud, String tipoDocumento, String tipoNombre,
+                                             String nombreArchivo, String rutaArchivo, LocalDateTime fechaEntrega,
+                                             String estado, String resultadoRevision, String observaciones) {
+
+        // El tipo del catalogo se traduce a su codigo de negocio (I, R, V, ...) por
+        // id de catalogo; estado y revision viajan como codigo, igual que el resto del API.
+        public static DocumentoSolicitudResponse desde(DocumentoSolicitud d) {
+            var tipo = d.getTipoDocumentoRequerido();
+            TipoDocumentoSolicitud tipoEnum = tipo != null
+                    ? TipoDocumentoSolicitud.porIdCatalogo(tipo.getIdTipoDocumentoRequerido())
+                    : null;
+            return new DocumentoSolicitudResponse(
+                    d.getIdDocumento(),
+                    d.getSolicitudAlquiler() != null ? d.getSolicitudAlquiler().getIdSolicitud() : null,
+                    tipoEnum != null ? tipoEnum.getCodigo() : null,
+                    tipo != null && tipo.getTipoDocumento() != null
+                            ? tipo.getTipoDocumento()
+                            : (tipoEnum != null ? tipoEnum.getDescripcion() : null),
+                    d.getNombreArchivo(),
+                    d.getRutaArchivo(),
+                    d.getFechaEntrega(),
+                    codigo(d.getEstado()),
+                    codigo(d.getResultadoRevision()),
+                    d.getObservaciones());
         }
     }
 
@@ -401,6 +586,184 @@ public final class Dtos {
             var agente = v.getAgenteResponsable();
             return new VisitaResponse(v.getIdVisita(), oportunidad != null ? oportunidad.getIdOportunidad() : null, oportunidad != null ? oportunidad.getCodigoOportunidad() : null, v.getFechaVisita(), v.getHoraVisita(), v.getObservaciones(), codigo(v.getEstado()), codigo(v.getResultado()), cliente != null ? cliente.getIdCliente() : null, cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null, captacion != null ? captacion.getIdCaptacion() : null, captacion != null ? captacion.getCodigoCaptacion() : null, local != null ? local.getDireccion() : null, local != null ? local.getDistrito() : null, agente != null ? agente.getIdAgente() : null, agente != null && agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null, v.getNivelInteres(), codigo(v.getObjecionPrincipal()), codigo(v.getOpinionPrecio()), codigo(v.getProximaAccion()));
         }
+    }
+
+    // ---------- Interacciones comerciales ----------
+
+    public record InteraccionRequest(Long idOportunidad, String canalContacto, String resultado,
+                                     String observaciones, String transcripcionNota) {
+    }
+
+    public record InteraccionResponse(Long id, Long idOportunidad, LocalDateTime fechaHora, String canalContacto,
+                                      String resultado, String observaciones, String transcripcionNota,
+                                      String clienteNombre, String codigoCaptacion, String agenteNombre) {
+
+        // Los nombres se toman de la oportunidad (ya hidratada por OportunidadDAO);
+        // la interaccion del DAO solo trae ids en sus relaciones.
+        public static InteraccionResponse desde(InteraccionComercial i, OportunidadComercial oportunidad) {
+            var cliente = oportunidad != null ? oportunidad.getClienteInteresado() : null;
+            var captacion = oportunidad != null ? oportunidad.getCaptacion() : null;
+            var agente = oportunidad != null ? oportunidad.getAgenteResponsable() : null;
+            return new InteraccionResponse(
+                    i.getIdInteraccion(),
+                    i.getOportunidadComercial() != null ? i.getOportunidadComercial().getIdOportunidad() : null,
+                    i.getFechaHora(),
+                    codigo(i.getCanalContacto()),
+                    codigo(i.getResultado()),
+                    i.getObservaciones(),
+                    i.getTranscripcionNota(),
+                    cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null,
+                    captacion != null ? captacion.getCodigoCaptacion() : null,
+                    agente != null && agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null);
+        }
+    }
+
+    // ---------- Reasignaciones de captacion ----------
+
+    public record ReasignacionCaptacionResponse(Long idReasignacion, Long idCaptacion, String codigoCaptacion,
+                                                String direccionLocal, Long idAgenteAnterior, String agenteAnteriorNombre,
+                                                Long idAgenteNuevo, String agenteNuevoNombre, Long idBroker,
+                                                String brokerNombre, LocalDateTime fechaCambio, String motivo) {
+
+        // Los nombres/codigos se reciben ya resueltos (la fila del DAO solo trae ids).
+        public static ReasignacionCaptacionResponse desde(ReasignacionCaptacion r, String codigoCaptacion,
+                String direccionLocal, String agenteAnteriorNombre, String agenteNuevoNombre, String brokerNombre) {
+            return new ReasignacionCaptacionResponse(
+                    r.getIdReasignacion(),
+                    r.getCaptacion() != null ? r.getCaptacion().getIdCaptacion() : null,
+                    codigoCaptacion,
+                    direccionLocal,
+                    r.getAgenteAnterior() != null ? r.getAgenteAnterior().getIdAgente() : null,
+                    agenteAnteriorNombre,
+                    r.getAgenteNuevo() != null ? r.getAgenteNuevo().getIdAgente() : null,
+                    agenteNuevoNombre,
+                    r.getBrokerResponsable() != null ? r.getBrokerResponsable().getIdBroker() : null,
+                    brokerNombre,
+                    r.getFechaCambio(),
+                    r.getMotivo());
+        }
+    }
+
+    // ---------- Asignaciones agente-broker ----------
+
+    public record ReasignarAgenteRequest(Long idAgente, Long idBrokerDestino, String motivo) {
+    }
+
+    public record AsignacionAgenteResponse(Long idAgente, String nombre, String numeroDocumento,
+                                           String estadoAdministrativo, String estadoOperativo, String brokerActual) {
+
+        public static AsignacionAgenteResponse desde(AgenteInmobiliario a, String brokerActual) {
+            var persona = a.getPersona();
+            return new AsignacionAgenteResponse(
+                    a.getIdAgente(),
+                    persona != null ? persona.getNombresORazonSocial() : null,
+                    persona != null ? persona.getNumeroDocumento() : null,
+                    codigo(a.getEstadoAdministrativo()),
+                    codigo(a.getEstadoOperativo()),
+                    brokerActual);
+        }
+    }
+
+    public record AsignacionBrokerResponse(Long idBroker, String nombre, String zona, String estadoAdministrativo,
+                                           boolean esAdministrador, int agentesACargo) {
+
+        public static AsignacionBrokerResponse desde(Broker b, int agentesACargo) {
+            var persona = b.getPersona();
+            return new AsignacionBrokerResponse(
+                    b.getIdBroker(),
+                    persona != null ? persona.getNombresORazonSocial() : null,
+                    b.getZona(),
+                    codigo(b.getEstadoAdministrativo()),
+                    b.isEsAdministrador(),
+                    agentesACargo);
+        }
+    }
+
+    public record BrokerAgenteResponse(Long id, Long idAgente, String agenteNombre, Long idBrokerAnterior,
+                                       String brokerAnteriorNombre, Long idBrokerNuevo, String brokerNuevoNombre,
+                                       Long idBrokerAdministrador, String brokerAdministradorNombre,
+                                       LocalDateTime fechaCambio, String motivo) {
+
+        public static BrokerAgenteResponse desde(ReasignacionAgenteBroker r, String agenteNombre,
+                String brokerAnteriorNombre, String brokerNuevoNombre, String brokerAdministradorNombre) {
+            return new BrokerAgenteResponse(
+                    r.getIdReasignacion(),
+                    r.getAgente() != null ? r.getAgente().getIdAgente() : null, agenteNombre,
+                    r.getBrokerAnterior() != null ? r.getBrokerAnterior().getIdBroker() : null, brokerAnteriorNombre,
+                    r.getBrokerNuevo() != null ? r.getBrokerNuevo().getIdBroker() : null, brokerNuevoNombre,
+                    r.getBrokerAdministrador() != null ? r.getBrokerAdministrador().getIdBroker() : null, brokerAdministradorNombre,
+                    r.getFechaCambio(), r.getMotivo());
+        }
+    }
+
+    // ---------- Brokers ----------
+
+    public record BrokerRequest(String nombre, String tipoPersona, String tipoDocumento, String numeroDocumento,
+                                String telefono, String correo, String usuario, String contrasena, String zona,
+                                String codigoBroker, String estado, Boolean esAdministrador) {
+    }
+
+    // Alta/edición de agente inmobiliario (lo crea el broker supervisor en sesión).
+    public record AgenteRequest(String nombre, String tipoPersona, String tipoDocumento, String numeroDocumento,
+                                String telefono, String correo, String usuario, String contrasena, String zona,
+                                String codigoAgente, String estado, String estadoOperativo) {
+    }
+
+    public record BrokerResponse(Long id, String codigoBroker, String nombre, String tipoPersona, String tipoDocumento,
+                                 String numeroDocumento, String telefono, String correo, String usuario, String zona,
+                                 LocalDate fechaDesignacion, String estadoAdministrativo, boolean esAdministrador,
+                                 int agentesACargo) {
+
+        public static BrokerResponse desde(Broker b, int agentesACargo) {
+            var persona = b.getPersona();
+            return new BrokerResponse(
+                    b.getIdBroker(), b.getCodigoBroker(),
+                    persona != null ? persona.getNombresORazonSocial() : null,
+                    persona != null ? codigo(persona.getTipoPersona()) : null,
+                    persona != null ? codigo(persona.getTipoDocumento()) : null,
+                    persona != null ? persona.getNumeroDocumento() : null,
+                    persona != null ? persona.getTelefono() : null,
+                    persona != null ? persona.getCorreo() : null,
+                    b.getNombreUsuario(), b.getZona(), b.getFechaDesignacion(),
+                    codigo(b.getEstadoAdministrativo()), b.isEsAdministrador(), agentesACargo);
+        }
+    }
+
+    // ---------- Indicadores (dashboard / reportes) ----------
+
+    // Conteo simple etiqueta/valor (etapas del donut).
+    public record IndicadorConteo(String nombre, int valor) {
+    }
+
+    // Tramo del embudo de conversion (valor absoluto + porcentaje sobre la base).
+    public record IndicadorEmbudo(String etapa, int valor, int porcentaje) {
+    }
+
+    // Fila de desempeno por responsable (broker o agente, segun el rol que consulta).
+    public record IndicadorDesempeno(String nombre, int captaciones, int cierres, int conversion) {
+    }
+
+    // Resumen agregado para los paneles. Una sola lectura alimenta las tarjetas, las
+    // graficas, el embudo, la tabla de desempeno y los contadores del menu lateral.
+    public record IndicadoresResponse(
+            String ambito,
+            int captacionesPorRevisar,
+            int solicitudesPorEvaluar,
+            int captacionesTotales,
+            int captacionesActivas,
+            int captacionesPendientes,
+            int captacionesObservadas,
+            int oportunidadesActivas,
+            int interacciones,
+            int visitas,
+            int cierres,
+            int agentesActivos,
+            int brokersActivos,
+            List<String> mesesEtiquetas,
+            List<Integer> cierresPorMes,
+            List<IndicadorConteo> etapas,
+            List<IndicadorEmbudo> embudo,
+            List<IndicadorDesempeno> desempeno) {
     }
 
     // ---------- Soporte ----------

@@ -11,9 +11,13 @@ import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
 import com.controllocal.dao.BrokerAgenteDAO;
 import com.controllocal.dao.BrokerDAO;
+import com.controllocal.dao.PersonaDAO;
+import com.controllocal.dao.UsuarioInternoDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
 import com.controllocal.dao.impl.BrokerAgenteDAOImpl;
 import com.controllocal.dao.impl.BrokerDAOImpl;
+import com.controllocal.dao.impl.PersonaDAOImpl;
+import com.controllocal.dao.impl.UsuarioInternoDAOImpl;
 import com.controllocal.model.persona.enums.EstadoActivoInactivo;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
@@ -24,6 +28,9 @@ public class AgenteBusinessLogicImpl implements AgenteBusinessLogic {
     private final AgenteInmobiliarioDAO agenteDAO;
     private final BrokerDAO brokerDAO;
     private final BrokerAgenteDAO brokerAgenteDAO;
+    // Necesarios para el alta/edicion atomica del agente (persona + usuario interno).
+    private final PersonaDAO personaDAO;
+    private final UsuarioInternoDAO usuarioDAO;
 
     public AgenteBusinessLogicImpl() {
         this(new AgenteInmobiliarioDAOImpl(), new BrokerDAOImpl(), new BrokerAgenteDAOImpl());
@@ -34,9 +41,16 @@ public class AgenteBusinessLogicImpl implements AgenteBusinessLogic {
     }
 
     public AgenteBusinessLogicImpl(AgenteInmobiliarioDAO agenteDAO, BrokerDAO brokerDAO, BrokerAgenteDAO brokerAgenteDAO) {
+        this(agenteDAO, brokerDAO, brokerAgenteDAO, new PersonaDAOImpl(), new UsuarioInternoDAOImpl());
+    }
+
+    public AgenteBusinessLogicImpl(AgenteInmobiliarioDAO agenteDAO, BrokerDAO brokerDAO, BrokerAgenteDAO brokerAgenteDAO,
+                                   PersonaDAO personaDAO, UsuarioInternoDAO usuarioDAO) {
         this.agenteDAO = agenteDAO;
         this.brokerDAO = brokerDAO;
         this.brokerAgenteDAO = brokerAgenteDAO;
+        this.personaDAO = personaDAO;
+        this.usuarioDAO = usuarioDAO;
     }
 
     public Long registrar(AgenteInmobiliario agente) {
@@ -50,6 +64,38 @@ public class AgenteBusinessLogicImpl implements AgenteBusinessLogic {
             Long idAgente = agenteDAO.crear(agente);
             crearAsignacionSupervisor(broker, agente);
             return idAgente;
+        });
+    }
+
+    @Override
+    public Long registrarAgenteCompleto(Long idBrokerSupervisor, AgenteInmobiliario agente) {
+        return TransactionRunner.write(conn -> {
+            Broker broker = validarBrokerSupervisorOperativo(idBrokerSupervisor);
+            if (agente == null || agente.getPersona() == null) {
+                throw new BusinessException("El agente y su persona son obligatorios.");
+            }
+            // 1) persona  2) usuario_interno (el agente lo es)  3) agente  4) asignacion — atomico.
+            personaDAO.crear(agente.getPersona());
+            usuarioDAO.crear(agente);
+            BusinessValidations.agente(agente);
+            Long idAgente = agenteDAO.crear(agente);
+            crearAsignacionSupervisor(broker, agente);
+            return idAgente;
+        });
+    }
+
+    @Override
+    public boolean actualizarAgenteCompleto(Long idBrokerSupervisor, AgenteInmobiliario agente) {
+        return TransactionRunner.write(conn -> {
+            Broker broker = validarBroker(idBrokerSupervisor);
+            BusinessValidations.id(agente != null ? agente.getIdAgente() : null, "El id de agente");
+            validarAlcanceSobreAgente(broker, agente.getIdAgente());
+            if (agente.getPersona() != null) {
+                personaDAO.actualizar(agente.getPersona());
+            }
+            usuarioDAO.actualizar(agente);
+            BusinessValidations.agente(agente);
+            return agenteDAO.actualizar(agente);
         });
     }
 

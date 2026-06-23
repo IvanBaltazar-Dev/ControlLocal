@@ -1,0 +1,137 @@
+@page "/propiedades-equipo"
+@inherits SafeComponentBase
+@inject AppState App
+@inject ICaptacionService CaptacionSvc
+
+<PageTitle>Propiedades del equipo · ControlLocal</PageTitle>
+
+<AppShell Active="Propiedades del equipo" Crumbs="@(new[] { "ControlLocal", "Seguimiento", "Propiedades del equipo" })"
+          Title="Propiedades del equipo"
+          Subtitle="Inmuebles captados por los agentes que supervisas · solo lectura">
+    <ChildContent>
+        @{
+            var filtradas = Filtradas().ToList();
+            var visibles = Paginador.Pagina(filtradas, ref _pagina);
+        }
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="store" Label="Propiedades" Value="@_propiedades.Count.ToString()" Tone="navy" />
+            <MetricCard Icon="checkCircle" Label="Con captación activa" Value="@_propiedades.Count(p => CaptacionActiva(p.Estado)).ToString()" Tone="green" />
+            <MetricCard Icon="users" Label="Agentes con cartera" Value="@_propiedades.Select(p => p.Agente).Distinct().Count().ToString()" Tone="blue" />
+            <MetricCard Icon="mapPin" Label="Distritos" Value="@_distritos.Count.ToString()" Tone="info" />
+        </div>
+
+        <FilterBar Search="Buscar por dirección, distrito, agente o código…"
+                   @bind-Value="_query" ResultCount="filtradas.Count"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
+            <FilterSelect Placeholder="Todos los distritos" Options="_distritos" @bind-Value="_distrito" />
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                <table class="cl-table">
+                    <thead>
+                        <tr>
+                            <th>Captación</th><th>Dirección</th><th>Distrito</th><th>Rubro</th>
+                            <th>Área</th><th>Agente</th><th>Estado</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in visibles)
+                        {
+                            <tr>
+                                <td><span class="mono">@p.Codigo</span></td>
+                                <td style="font-weight:600;">@p.Direccion</td>
+                                <td>@p.Distrito</td>
+                                <td>@p.Rubro</td>
+                                <td>@(p.AreaM2 > 0 ? $"{p.AreaM2} m²" : "—")</td>
+                                <td>@p.Agente</td>
+                                <td><StatusBadge Label="@p.Estado" /></td>
+                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"ficha-propiedad/{p.Codigo}"))">Ver ficha</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Cargando propiedades del equipo…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (filtradas.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="store" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin propiedades en este filtro</div>
+                        <div style="font-size:12px;">Tu equipo aún no tiene inmuebles captados o ajusta los filtros.</div>
+                    </div>
+                }
+            </div>
+        </div>
+        <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
+    </ChildContent>
+</AppShell>
+
+@code {
+    private string _query = "", _distrito = "";
+    private int _pagina = 1;
+    private bool _cargando = true;
+    private string? _error;
+
+    private record Prop(long LocalId, string Codigo, string Direccion, string Distrito,
+        string Rubro, int AreaM2, string Agente, string Estado);
+
+    private IReadOnlyList<Prop> _propiedades = [];
+
+    // Una fila por inmueble distinto captado por el equipo del broker (las captaciones ya
+    // llegan filtradas a su equipo). Se queda con la captación más reciente de cada local.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var caps = await CaptacionSvc.RefrescarAsync(DisposedToken);
+            _propiedades = caps
+                .GroupBy(c => c.LocalId > 0 ? c.LocalId : (long)(c.DireccionLocal ?? "").GetHashCode())
+                .Select(g => g.OrderByDescending(c => c.FechaFinVigencia ?? DateOnly.MinValue).First())
+                .Select(c => new Prop(
+                    c.LocalId, c.CodigoCaptacion, c.DireccionLocal, c.DistritoLocal, c.Rubro, c.AreaM2,
+                    string.IsNullOrWhiteSpace(c.NombreAgenteResponsable) ? "Sin asignar" : c.NombreAgenteResponsable,
+                    c.Estado))
+                .OrderBy(p => p.Direccion)
+                .ToList();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private static bool CaptacionActiva(string estado)
+    {
+        var e = (estado ?? "").Trim().ToUpperInvariant();
+        return e is "ACTIVA" or "A";
+    }
+
+    private IReadOnlyList<string> _distritos => _propiedades.Select(p => p.Distrito)
+        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+
+    private bool HayFiltros => !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
+
+    private void LimpiarFiltros() { _query = ""; _distrito = ""; _pagina = 1; }
+
+    private IEnumerable<Prop> Filtradas() => _propiedades.Where(p =>
+        (string.IsNullOrEmpty(_distrito) || p.Distrito == _distrito) &&
+        (string.IsNullOrEmpty(_query)
+            || TextoFiltro.Contiene(p.Direccion, _query)
+            || TextoFiltro.Contiene(p.Distrito, _query)
+            || TextoFiltro.Contiene(p.Agente, _query)
+            || TextoFiltro.Contiene(p.Codigo, _query)));
+}

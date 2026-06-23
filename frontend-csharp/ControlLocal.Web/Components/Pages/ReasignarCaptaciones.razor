@@ -24,69 +24,85 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
                 <div class="cl-card">
                     <div class="cl-card-head"><div class="cl-card-title">1 - Captacion a reasignar</div></div>
-                    <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
-                        @foreach (var c in Reasignables)
-                        {
-                            var sel = _captacion == c.Id;
-                            var border = sel ? "#005BFF" : "var(--c-border)";
-                            var bg = sel ? "#EAF1FF" : "#fff";
-                            var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:pointer;";
-                            <label style="@style">
-                                <input type="radio" name="reasignar-captacion" checked="@sel"
-                                       @onchange="@(() => { _captacion = c.Id; _agente = 0; _err = null; })" />
-                                <div style="flex:1;min-width:0;">
-                                    <div style="font-weight:600;font-size:13px;">@c.CodigoCaptacion - @c.DireccionLocal</div>
-                                    <div class="cl-muted" style="font-size:11px;">@c.DistritoLocal - Agente actual: @c.NombreAgenteResponsable</div>
+                    <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                        <input class="cl-input search" type="search" placeholder="Buscar por código, dirección, distrito o agente…"
+                               value="@_buscarCaptacion" @oninput="@(e => _buscarCaptacion = e.Value?.ToString() ?? "")" />
+                        <div style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;">
+                            @foreach (var c in ReasignablesFiltradas)
+                            {
+                                var sel = _captacion == c.Id;
+                                var border = sel ? "#005BFF" : "var(--c-border)";
+                                var bg = sel ? "#EAF1FF" : "#fff";
+                                var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:pointer;";
+                                <label style="@style">
+                                    <input type="radio" name="reasignar-captacion" checked="@sel"
+                                           @onchange="@(() => { _captacion = c.Id; _agente = 0; _err = null; })" />
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@c.CodigoCaptacion - @c.DireccionLocal</div>
+                                        <div class="cl-muted" style="font-size:11px;">@c.DistritoLocal - Agente actual: @c.NombreAgenteResponsable</div>
+                                    </div>
+                                    <StatusBadge Label="@c.Estado" />
+                                </label>
+                            }
+                            @if (!Reasignables.Any())
+                            {
+                                <div class="cl-help">No hay captaciones disponibles para reasignar.</div>
+                            }
+                            else if (!ReasignablesFiltradas.Any())
+                            {
+                                <div class="cl-help">Ninguna captación coincide con la búsqueda.</div>
+                            }
+                            else
+                            {
+                                <div class="cl-help">
+                                    Solo se muestran captaciones activas. Las pendientes de revisión, observadas, rechazadas, cerradas o vencidas no deben reasignarse desde este flujo.
                                 </div>
-                                <StatusBadge Label="@c.Estado" />
-                            </label>
-                        }
-                        @if (!Reasignables.Any())
-                        {
-                            <div class="cl-help">No hay captaciones disponibles para reasignar.</div>
-                        }
-                        else
-                        {
-                              <div class="cl-help">
-                                  Solo se muestran captaciones activas. Las pendientes de revisión, observadas, rechazadas, cerradas o vencidas no deben reasignarse desde este flujo.
-                              </div>                       
-                        }
+                            }
+                        </div>
                     </div>
                 </div>
 
                 <div class="cl-card">
                     <div class="cl-card-head"><div class="cl-card-title">2 - Nuevo agente responsable</div></div>
-                    <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
-                        @foreach (var a in _agentes)
-                        {
-                            var esActual = C is not null && a.Id == C.AgenteResponsableId;
-                            var disponible = a.EstadoAdministrativo == "Activo" && a.EstadoOperativo == "Disponible";
-                            var selectable = disponible && !esActual;
-                            var sel = _agente == a.Id;
-                            var border = sel && selectable ? "#005BFF" : "var(--c-border)";
-                            var bg = !selectable ? "var(--c-bg-2)" : sel ? "#EAF1FF" : "#fff";
-                            var cursor = selectable ? "pointer" : "not-allowed";
-                            var opacity = selectable ? "1" : "0.72";
-                            var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
-                            var motivo = esActual ? "La captacion ya esta asignada a este agente" : !disponible ? "Agente no disponible para asignacion" : "";
-                            <label title="@motivo" style="@style">
-                                <input type="radio" name="reasignar-agente" disabled="@(!selectable)" checked="@sel"
-                                       @onchange="@(() => { _agente = a.Id; _err = null; })" />
-                                <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:@a.Color;">@a.Iniciales</span>
-                                <div style="flex:1;min-width:0;">
-                                    <div style="font-weight:600;font-size:13px;">@a.Nombre</div>
-                                    <div class="cl-muted" style="font-size:11px;">DNI: @a.NumeroDocumento<br />@a.Zona</div>
-                                </div>
-                                <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-                                    <StatusBadge Label="@a.EstadoAdministrativo" />
-                                    <StatusBadge Label="@a.EstadoOperativo" />
-                                </div>
-                            </label>
-                        }
-                        @if (!_agentes.Any())
-                        {
-                            <div class="cl-help">No se encontraron agentes del equipo para reasignar.</div>
-                        }
+                    <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                        <input class="cl-input search" type="search" placeholder="Buscar agente por nombre, DNI o zona…"
+                               value="@_buscarAgente" @oninput="@(e => _buscarAgente = e.Value?.ToString() ?? "")" />
+                        <div style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;">
+                            @foreach (var a in AgentesFiltrados)
+                            {
+                                var esActual = C is not null && a.Id == C.AgenteResponsableId;
+                                var disponible = a.EstadoAdministrativo == "Activo" && a.EstadoOperativo == "Disponible";
+                                var selectable = disponible && !esActual;
+                                var sel = _agente == a.Id;
+                                var border = sel && selectable ? "#005BFF" : "var(--c-border)";
+                                var bg = !selectable ? "var(--c-bg-2)" : sel ? "#EAF1FF" : "#fff";
+                                var cursor = selectable ? "pointer" : "not-allowed";
+                                var opacity = selectable ? "1" : "0.72";
+                                var style = $"display:flex;gap:11px;align-items:center;padding:11px 12px;border:1.5px solid {border};border-radius:11px;background:{bg};cursor:{cursor};opacity:{opacity};";
+                                var motivo = esActual ? "La captacion ya esta asignada a este agente" : !disponible ? "Agente no disponible para asignacion" : "";
+                                <label title="@motivo" style="@style">
+                                    <input type="radio" name="reasignar-agente" disabled="@(!selectable)" checked="@sel"
+                                           @onchange="@(() => { _agente = a.Id; _err = null; })" />
+                                    <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;flex:0 0 30px;background:@a.Color;">@a.Iniciales</span>
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@a.Nombre</div>
+                                        <div class="cl-muted" style="font-size:11px;">DNI: @a.NumeroDocumento<br />@a.Zona</div>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+                                        <StatusBadge Label="@a.EstadoAdministrativo" />
+                                        <StatusBadge Label="@a.EstadoOperativo" />
+                                    </div>
+                                </label>
+                            }
+                            @if (!_agentes.Any())
+                            {
+                                <div class="cl-help">No se encontraron agentes del equipo para reasignar.</div>
+                            }
+                            else if (!AgentesFiltrados.Any())
+                            {
+                                <div class="cl-help">Ningún agente coincide con la búsqueda.</div>
+                            }
+                        </div>
                     </div>
                 </div>
             </div>
@@ -177,6 +193,8 @@
     private long _captacion;
     private long _agente;
     private string _motivo = "";
+    private string _buscarCaptacion = "";
+    private string _buscarAgente = "";
     private bool _confirm;
     private bool _toast;
     private bool _cargando = true;
@@ -211,6 +229,20 @@
                   .Replace("Ó", "O")
                   .Replace("Ú", "U");
     }
+
+    // La lista se mantiene tal cual; el buscador solo la reduce (mixto: lista + búsqueda).
+    private IEnumerable<CaptacionDto> ReasignablesFiltradas =>
+        Reasignables.Where(c =>
+            TextoFiltro.Contiene(c.CodigoCaptacion, _buscarCaptacion)
+            || TextoFiltro.Contiene(c.DireccionLocal, _buscarCaptacion)
+            || TextoFiltro.Contiene(c.DistritoLocal, _buscarCaptacion)
+            || TextoFiltro.Contiene(c.NombreAgenteResponsable, _buscarCaptacion));
+
+    private IEnumerable<AgenteDto> AgentesFiltrados =>
+        _agentes.Where(a =>
+            TextoFiltro.Contiene(a.Nombre, _buscarAgente)
+            || TextoFiltro.Contiene(a.NumeroDocumento, _buscarAgente)
+            || TextoFiltro.Contiene(a.Zona, _buscarAgente));
 
     private CaptacionDto? C => Reasignables.FirstOrDefault(x => x.Id == _captacion);
     private AgenteDto? A => _agentes.FirstOrDefault(x => x.Id == _agente);

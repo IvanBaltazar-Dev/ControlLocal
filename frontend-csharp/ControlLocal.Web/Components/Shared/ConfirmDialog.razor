@@ -26,7 +26,7 @@
 
     private static readonly Dictionary<string, string> ToneToBtn = new()
     {
-        ["blue"] = "primary", ["green"] = "success", ["gray"] = "", ["red"] = "danger",
+        ["blue"] = "primary", ["green"] = "success", ["gray"] = "", ["red"] = "danger", ["amber"] = "amber",
     };
 
     private string BtnClass => ConfirmClass ?? (ToneToBtn.TryGetValue(Tone, out var b) ? b : "primary");

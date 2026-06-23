@@ -8,7 +8,8 @@ public enum EstadoSolicitudAlquiler implements CodigoEnum {
     OBSERVADA("O", "Observada"),
     APROBADA("A", "Aprobada"),
     RECHAZADA("R", "Rechazada"),
-    DESISTIDA("D", "Desistida");
+    DESISTIDA("D", "Desistida"),
+    CERRADA("C", "Cerrada");
 
     private final String codigo;
     private final String descripcion;

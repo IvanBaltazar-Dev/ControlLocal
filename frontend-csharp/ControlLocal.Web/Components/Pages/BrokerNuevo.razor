@@ -129,7 +129,12 @@
                     </div>
                 </FormSection>
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("brokers"))" OnSave="@OnGuardar" SaveLabel="Guardar" />
+                @if (!string.IsNullOrEmpty(_err))
+                {
+                    <div class="cl-alert red" style="margin-bottom:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
+                }
+                <FormFooterBar OnCancel="@(() => App.Navigate("brokers"))" OnSave="@OnGuardar" SaveLabel="Guardar"
+                               Busy="@_procesando" BusyLabel="Guardando..." />
             </div>
 
             <div class="cl-stack">
@@ -145,6 +150,7 @@
                        Title="Confirmar registro del broker"
                        Desc="@($"Se registrará el broker {_nombre} ({_tipoDoc} {_numDoc}). Recibirá las credenciales de acceso temporal.")"
                        ConfirmLabel="Registrar broker" CancelLabel="Cancelar"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">El broker fue registrado correctamente.</Toast>
@@ -164,6 +170,8 @@
     private string _estado = "Activo";
     private bool _confirm;
     private bool _toast;
+    private bool _procesando;
+    private string? _err;
 
     private readonly Dictionary<string, string> _errors = new();
 
@@ -233,25 +241,41 @@
 
     private async Task OnConfirm()
     {
+        if (_procesando) return;
         _confirm = false;
-        BrokerSvc.Agregar(new BrokerDto
+        try
         {
-            Nombre = _nombre.Trim(),
-            TipoPersona = _tipoPersona == "J" ? "Persona juridica" : "Persona natural",
-            TipoDocumento = _tipoDoc,
-            NumeroDocumento = _numDoc.Trim(),
-            Telefono = _telefono.Trim(),
-            Email = _correo.Trim(),
-            Usuario = _usuario.Trim(),
-            ContrasenaTemporal = _passwd,
-            Zona = _zona,
-            EstadoAdministrativo = _estado,
-            TipoBroker = "Broker supervisor",
-            EsAdministrador = false,
-        });
-        _toast = true;
-        StateHasChanged();
-        await Task.Delay(300);
-        App.Navigate("brokers");
+            _procesando = true;
+            _err = null;
+            StateHasChanged();
+            await BrokerSvc.AgregarAsync(new BrokerDto
+            {
+                Nombre = _nombre.Trim(),
+                TipoPersona = _tipoPersona == "J" ? "Persona juridica" : "Persona natural",
+                TipoDocumento = _tipoDoc,
+                NumeroDocumento = _numDoc.Trim(),
+                Telefono = _telefono.Trim(),
+                Email = _correo.Trim(),
+                Usuario = _usuario.Trim(),
+                ContrasenaTemporal = _passwd,
+                Zona = _zona,
+                EstadoAdministrativo = _estado,
+                TipoBroker = "Broker supervisor",
+                EsAdministrador = false,
+            });
+            _toast = true;
+            StateHasChanged();
+            await Task.Delay(300);
+            App.Navigate("brokers");
+        }
+        catch (Exception error)
+        {
+            _err = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            StateHasChanged();
+        }
     }
 }

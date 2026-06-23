@@ -4,12 +4,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.controllocal.bl.BrokerBusinessLogic;
 import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.bl.ProspeccionBusinessLogic;
+import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.ProspeccionBusinessLogicImpl;
-import com.controllocal.dao.BrokerAgenteDAO;
-import com.controllocal.dao.impl.BrokerAgenteDAOImpl;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.Prospeccion;
 import com.controllocal.model.inmueble.LocalComercial;
@@ -40,7 +40,7 @@ public class ProspeccionesRest {
 
     private final ProspeccionBusinessLogic prospecciones = new ProspeccionBusinessLogicImpl();
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
-    private final BrokerAgenteDAO brokerAgenteDAO = new BrokerAgenteDAOImpl();
+    private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
 
     @Context
     private HttpServletRequest request;
@@ -212,7 +212,7 @@ public class ProspeccionesRest {
             return todas;
         }
         if ("BROKER".equals(usuario.rol())) {
-            Set<Long> agentesSupervisados = brokerAgenteDAO.listarActivosPorBroker(usuario.idDominio()).stream()
+            Set<Long> agentesSupervisados = brokers.listarAgentesSupervisados(usuario.idDominio()).stream()
                     .map(BrokerAgente::getIdAgente)
                     .collect(Collectors.toSet());
             return todas.stream()

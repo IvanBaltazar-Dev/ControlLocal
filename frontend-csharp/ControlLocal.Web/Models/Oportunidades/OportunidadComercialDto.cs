@@ -19,12 +19,17 @@ public class OportunidadComercialDto
 
     public string DireccionLocal { get; set; } = string.Empty;
 
+    public long AgenteResponsableId { get; set; }
+
     public string NombreAgenteResponsable { get; set; } = string.Empty;
 
     public string Estado { get; set; } = "Abierta";
 
     // Fecha de registro lista para mostrar.
     public string FechaRegistroTexto { get; set; } = string.Empty;
+
+    // Última modificación real de la operación (ON UPDATE CURRENT_TIMESTAMP en MySQL).
+    public DateTime? FechaActualizacion { get; set; }
 
     public string MotivoCierre { get; set; } = string.Empty;
 

@@ -91,10 +91,20 @@ public class VisitasRest {
         visita.setAgenteResponsable(agente);
         visita.programar();
         long id = visitas.registrar(visita);
+        visita.setIdVisita(id);
+
+        // El alta ya quedo persistida. Si el refetch (SELECT con varios JOIN) fallara por
+        // datos opcionales faltantes, devolvemos la entidad recien creada en lugar de propagar
+        // un 500 que en el frontend se veria como un alta que "no persiste".
+        Visita persistida = visita;
+        try {
+            persistida = visitas.buscarPorId(id).orElse(visita);
+        } catch (RuntimeException refetchError) {
+            persistida = visita;
+        }
 
         return Response.status(Response.Status.CREATED)
-                .entity(Dtos.VisitaResponse.desde(
-                        visitas.buscarPorId(id).orElseThrow(() -> ApiException.noEncontrado("Visita"))))
+                .entity(Dtos.VisitaResponse.desde(persistida))
                 .build();
     }
 
@@ -205,7 +215,12 @@ public class VisitasRest {
                             && usuario.idDominio() == item.getAgenteResponsable().getIdAgente())
                     .toList();
         }
-        if (usuario.tieneRol("BROKER", "ADMIN")) {
+        // El administrador ve todas las visitas (para poder consultar el equipo de cualquier
+        // broker desde su ficha); el broker queda acotado a las captaciones que supervisa.
+        if (usuario.tieneRol("ADMIN")) {
+            return todas;
+        }
+        if (usuario.tieneRol("BROKER")) {
             Set<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
                     .map(Captacion::getIdCaptacion)
                     .collect(Collectors.toSet());

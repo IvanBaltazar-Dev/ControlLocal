@@ -1,6 +1,7 @@
 @* Menu definido por la matriz de permisos de cada rol. *@
 @inject AppState App
 @inject ApiClient Api
+@inject IIndicadorService Indicadores
 
 <aside class="cl-sidebar">
     <div class="cl-brand" style="cursor:pointer" @onclick="@(() => App.Navigate("dashboard"))">
@@ -23,9 +24,12 @@
                          @onclick="@(() => App.Navigate(it.Route))">
                         <Icon Name="@it.Icon" Size="15" Class="cl-ico" />
                         <span>@it.Label</span>
-                        @if (it.Pill is not null)
+                        @{
+                            var pill = PillFor(it);
+                        }
+                        @if (pill is not null)
                         {
-                            <span class="cl-pill">@it.Pill</span>
+                            <span class="cl-pill">@pill</span>
                         }
                     </div>
                 }
@@ -42,9 +46,6 @@
             <Icon Name="logout" Size="15" Color="#8C8377" />
         </span>
     </div>
-    <div style="padding:0 16px 12px;color:#8C8377;font-size:10px;font-weight:700;letter-spacing:.06em;">
-        MODO: API REST
-    </div>
     <ConfirmDialog Open="_logoutOpen" Tone="blue" Icon="logout" Size="sm"
                    Title="¿Cerrar sesión?"
                    Desc="Se cerrará tu sesión en ControlLocal y tendrás que volver a ingresar tus credenciales."
@@ -59,6 +60,35 @@
     [Parameter] public string? Route { get; set; }
 
     private bool _logoutOpen;
+    private IndicadoresDto? _ind;
+
+    // Carga los contadores reales para los pills del menu. Usa la cache del circuito si
+    // ya existe (evita pedir en cada navegacion) y, si no, la pide una vez. Best-effort:
+    // si el backend falla, los pills simplemente no se muestran.
+    protected override async Task OnInitializedAsync()
+    {
+        _ind = Indicadores.Cacheado;
+        if (_ind is null)
+        {
+            try { _ind = await Indicadores.ObtenerAsync(); }
+            catch { /* el menu se muestra aunque los contadores no carguen */ }
+        }
+    }
+
+    // Contador a mostrar junto a la opcion, segun rol + ruta. null = sin pill.
+    private string? PillFor(NavItem item)
+    {
+        if (_ind is null) return null;
+        var valor = item.Route switch
+        {
+            "bandeja-captaciones" => _ind.CaptacionesPorRevisar,
+            "solicitudes" when Role == Roles.Broker => _ind.SolicitudesPorEvaluar,
+            "captaciones" when Role == Roles.Agente => _ind.CaptacionesTotales,
+            "interacciones" when Role == Roles.Agente => _ind.Interacciones,
+            _ => 0,
+        };
+        return valor > 0 ? valor.ToString() : null;
+    }
 
     private NavSection[] Sections =>
         Navigation.SideNavByRole.TryGetValue(Role, out var s) ? s : Navigation.SideNavByRole[Roles.Agente];

@@ -3,7 +3,6 @@ package com.controllocal.rest.seguridad;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
@@ -110,20 +109,18 @@ public final class TokenService {
         return objeto.containsKey(nombre) && !objeto.isNull(nombre);
     }
 
+    // Secreto fijo de desarrollo: se usa cuando no hay api.token.secret /
+    // API_TOKEN_SECRET configurado. Es DETERMINISTA (no aleatorio por arranque) para
+    // que los tokens sobrevivan a los reinicios/redeploys de GlassFish.
+    private static final String SECRETO_DEV =
+            "ControlLocal-dev-fallback-token-secret-0001";
+
     private static byte[] cargarSecreto() {
         String configurado = ApiConfig.get("api.token.secret", "API_TOKEN_SECRET", "");
         if (configurado != null && configurado.length() >= 32) {
             return configurado.getBytes(StandardCharsets.UTF_8);
         }
-        if (Entorno.esProduccion()) {
-            throw new IllegalStateException(
-                    "API_TOKEN_SECRET es obligatorio en produccion y debe tener al menos 32 caracteres.");
-        }
-
-        byte[] temporal = new byte[32];
-        new SecureRandom().nextBytes(temporal);
-        System.err.println("[ControlLocal API] API_TOKEN_SECRET no configurado; se usa un secreto temporal de desarrollo.");
-        return temporal;
+        return SECRETO_DEV.getBytes(StandardCharsets.UTF_8);
     }
 
     private String firma(String contenido) {

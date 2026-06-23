@@ -216,9 +216,9 @@
             (string.IsNullOrEmpty(_query) || Coincide(p, _query)));
 
     private static bool Coincide(ProspeccionDto p, string q) =>
-        (p.Direccion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (p.LocalCodigo?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (p.PropietarioNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(p.Direccion, q)
+        || TextoFiltro.Contiene(p.LocalCodigo, q)
+        || TextoFiltro.Contiene(p.PropietarioNombre, q);
 
     private static bool EsVencido(ProspeccionDto p) =>
         p.Estado == "S" && p.FechaRecontacto is { } f && f < Hoy;

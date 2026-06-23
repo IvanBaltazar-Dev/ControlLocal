@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.controllocal.model.comercial.enums.EstadoSolicitudAlquiler;
+import com.controllocal.model.comercial.enums.FormaPago;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
@@ -27,6 +28,12 @@ public class SolicitudAlquiler {
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
     private LocalDate fechaVigenciaOferta;
+    // Condiciones del trato capturadas en la solicitud (el contrato las hereda al cerrar).
+    private Integer plazoContratoMeses;
+    private LocalDate fechaInicioContrato;
+    private FormaPago formaPago;
+    private Integer mesesGarantia;
+    private Integer mesesAdelanto;
     private List<DocumentoSolicitud> documentos = new ArrayList<>();
     private List<EvaluacionSolicitud> evaluaciones = new ArrayList<>();
 
@@ -60,6 +67,16 @@ public class SolicitudAlquiler {
     public void setFechaActualizacion(LocalDateTime fechaActualizacion) { this.fechaActualizacion = fechaActualizacion; }
     public LocalDate getFechaVigenciaOferta() { return fechaVigenciaOferta; }
     public void setFechaVigenciaOferta(LocalDate fechaVigenciaOferta) { this.fechaVigenciaOferta = fechaVigenciaOferta; }
+    public Integer getPlazoContratoMeses() { return plazoContratoMeses; }
+    public void setPlazoContratoMeses(Integer plazoContratoMeses) { this.plazoContratoMeses = plazoContratoMeses; }
+    public LocalDate getFechaInicioContrato() { return fechaInicioContrato; }
+    public void setFechaInicioContrato(LocalDate fechaInicioContrato) { this.fechaInicioContrato = fechaInicioContrato; }
+    public FormaPago getFormaPago() { return formaPago; }
+    public void setFormaPago(FormaPago formaPago) { this.formaPago = formaPago; }
+    public Integer getMesesGarantia() { return mesesGarantia; }
+    public void setMesesGarantia(Integer mesesGarantia) { this.mesesGarantia = mesesGarantia; }
+    public Integer getMesesAdelanto() { return mesesAdelanto; }
+    public void setMesesAdelanto(Integer mesesAdelanto) { this.mesesAdelanto = mesesAdelanto; }
     public List<DocumentoSolicitud> getDocumentos() { return documentos; }
     public void setDocumentos(List<DocumentoSolicitud> documentos) { this.documentos = documentos; }
     public List<EvaluacionSolicitud> getEvaluaciones() { return evaluaciones; }
@@ -76,6 +93,8 @@ public class SolicitudAlquiler {
     public void rechazar() { actualizarEstado(EstadoSolicitudAlquiler.RECHAZADA); }
     public void solicitarAjustes() { actualizarEstado(EstadoSolicitudAlquiler.OBSERVADA); }
     public void desistir() { actualizarEstado(EstadoSolicitudAlquiler.DESISTIDA); }
+    // Estado terminal: el trato se concreto en contrato y la solicitud no se reabre.
+    public void cerrar() { actualizarEstado(EstadoSolicitudAlquiler.CERRADA); }
 
     public void actualizarEstado(EstadoSolicitudAlquiler estado) {
         this.estado = estado;

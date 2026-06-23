@@ -1,8 +1,11 @@
 using System.Globalization;
 using ControlLocal.Web.Data;
 using ControlLocal.Web.Models.Agentes;
+using ControlLocal.Web.Models.Asignaciones;
+using ControlLocal.Web.Models.Brokers;
 using ControlLocal.Web.Models.Captaciones;
 using ControlLocal.Web.Models.Clientes;
+using ControlLocal.Web.Models.Contratos;
 using ControlLocal.Web.Models.Locales;
 using ControlLocal.Web.Models.Oportunidades;
 using ControlLocal.Web.Models.Propietarios;
@@ -59,7 +62,35 @@ internal sealed record LocalApi(
     decimal? GeoLat,
     decimal? GeoLong,
     string? EstadoPublicacion,
-    DateTime? FechaRegistro);
+    DateTime? FechaRegistro,
+    decimal? Frente,
+    string? Zonificacion,
+    bool? AptoLicenciaFuncionamiento,
+    decimal? CargaElectricaKw,
+    int? NumeroEstacionamientos,
+    decimal? CuotaMantenimiento,
+    long? IdDistrito);
+
+internal sealed record PrecioApi(
+    long Id,
+    long IdLocal,
+    string Hito,
+    string Moneda,
+    decimal Monto,
+    DateOnly? Fecha,
+    DateTime? FechaCreacion);
+
+internal sealed record PublicacionApi(
+    long Id,
+    string Canal,
+    string TituloAnuncio,
+    decimal RentaPublicada,
+    string Moneda,
+    string Estado,
+    DateTime? FechaPublicacion,
+    DateTime? FechaBaja,
+    string? UrlPublicacion,
+    string CodigoOrigen);
 
 internal sealed record ProspeccionApi(
     long Id,
@@ -121,7 +152,9 @@ internal sealed record AgenteApi(
     string? Zona,
     DateOnly? FechaIngreso,
     string? EstadoAdministrativo,
-    string? EstadoOperativo);
+    string? EstadoOperativo,
+    int CaptacionesActivas,
+    int OperacionesActivas);
 
 internal sealed record OportunidadApi(
     long Id,
@@ -138,7 +171,8 @@ internal sealed record OportunidadApi(
     DateTime FechaRegistro,
     string? MotivoCierre,
     string? Observaciones,
-    DateTime? FechaCierre);
+    DateTime? FechaCierre,
+    DateTime? FechaActualizacion);
 
 internal sealed record VisitaApi(
     long Id,
@@ -181,7 +215,47 @@ internal sealed record SolicitudApi(
     string? DireccionLocal,
     string? DistritoLocal,
     long IdAgente,
-    string? AgenteNombre);
+    string? AgenteNombre,
+    int DocumentosEntregados,
+    int DocumentosRequeridos,
+    int? PlazoMeses,
+    DateOnly? FechaInicio,
+    string? FormaPago,
+    int? MesesGarantia,
+    int? MesesAdelanto);
+
+internal sealed record ContratoApi(
+    long Id,
+    long? IdSolicitud,
+    string? CodigoSolicitud,
+    long? IdOportunidad,
+    string? CodigoOportunidad,
+    string? ClienteNombre,
+    string? DireccionLocal,
+    string? DistritoLocal,
+    string? CodigoCaptacion,
+    string? AgenteNombre,
+    decimal RentaMensual,
+    string? Moneda,
+    int? PlazoContratoMeses,
+    decimal ComisionGenerada,
+    DateOnly? FechaInicioContrato,
+    DateOnly? FechaFinContrato,
+    DateOnly? FechaCierre,
+    string? EstadoContrato,
+    string? ComisionEstado);
+
+internal sealed record DocumentoSolicitudApi(
+    long Id,
+    long? IdSolicitud,
+    string? TipoDocumento,
+    string? TipoNombre,
+    string? NombreArchivo,
+    string? RutaArchivo,
+    DateTime? FechaEntrega,
+    string? Estado,
+    string? ResultadoRevision,
+    string? Observaciones);
 
 internal sealed record EvaluacionApi(
     long Id,
@@ -208,6 +282,77 @@ internal sealed record AlertaApi(
     string? Ruta);
 
 internal sealed record AtenderAlertaApi(bool Atendida);
+
+internal sealed record InteraccionApi(
+    long Id,
+    long? IdOportunidad,
+    DateTime? FechaHora,
+    string? CanalContacto,
+    string? Resultado,
+    string? Observaciones,
+    string? TranscripcionNota,
+    string? ClienteNombre,
+    string? CodigoCaptacion,
+    string? AgenteNombre);
+
+internal sealed record ReasignacionCaptacionApi(
+    long IdReasignacion,
+    long? IdCaptacion,
+    string? CodigoCaptacion,
+    string? DireccionLocal,
+    long? IdAgenteAnterior,
+    string? AgenteAnteriorNombre,
+    long? IdAgenteNuevo,
+    string? AgenteNuevoNombre,
+    long? IdBroker,
+    string? BrokerNombre,
+    DateTime? FechaCambio,
+    string? Motivo);
+
+internal sealed record AsignacionAgenteApi(
+    long IdAgente,
+    string? Nombre,
+    string? NumeroDocumento,
+    string? EstadoAdministrativo,
+    string? EstadoOperativo,
+    string? BrokerActual);
+
+internal sealed record AsignacionBrokerApi(
+    long IdBroker,
+    string? Nombre,
+    string? Zona,
+    string? EstadoAdministrativo,
+    bool EsAdministrador,
+    int AgentesACargo);
+
+internal sealed record BrokerAgenteApi(
+    long Id,
+    long? IdAgente,
+    string? AgenteNombre,
+    long? IdBrokerAnterior,
+    string? BrokerAnteriorNombre,
+    long? IdBrokerNuevo,
+    string? BrokerNuevoNombre,
+    long? IdBrokerAdministrador,
+    string? BrokerAdministradorNombre,
+    DateTime? FechaCambio,
+    string? Motivo);
+
+internal sealed record BrokerApi(
+    long Id,
+    string? CodigoBroker,
+    string? Nombre,
+    string? TipoPersona,
+    string? TipoDocumento,
+    string? NumeroDocumento,
+    string? Telefono,
+    string? Correo,
+    string? Usuario,
+    string? Zona,
+    DateOnly? FechaDesignacion,
+    string? EstadoAdministrativo,
+    bool EsAdministrador,
+    int AgentesACargo);
 
 public class HttpPropietarioService(ApiClient api) : IPropietarioService
 {
@@ -240,6 +385,27 @@ public class HttpPropietarioService(ApiClient api) : IPropietarioService
         var actualizado = Task.Run(() =>
                 api.PutAsync<PropietarioApi>($"propietarios/{propietario.Id}", Request(propietario)))
             .GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException("El API no devolvio el propietario actualizado.");
+        var dto = Mapear(actualizado);
+        _cache ??= [];
+        var indice = _cache.FindIndex(item => item.Id == dto.Id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Add(dto);
+        return dto;
+    }
+
+    public async Task<PropietarioDto> AgregarAsync(PropietarioDto propietario, CancellationToken ct = default)
+    {
+        var creado = await api.PostAsync<PropietarioApi>("propietarios", Request(propietario), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el propietario registrado.");
+        var dto = Mapear(creado);
+        (_cache ??= []).Add(dto);
+        return dto;
+    }
+
+    public async Task<PropietarioDto> ActualizarAsync(PropietarioDto propietario, CancellationToken ct = default)
+    {
+        var actualizado = await api.PutAsync<PropietarioApi>($"propietarios/{propietario.Id}", Request(propietario), ct)
             ?? throw new InvalidOperationException("El API no devolvio el propietario actualizado.");
         var dto = Mapear(actualizado);
         _cache ??= [];
@@ -328,6 +494,27 @@ public class HttpClienteService(ApiClient api) : IClienteService
         return dto;
     }
 
+    public async Task<ClienteInteresadoDto> AgregarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default)
+    {
+        var creado = await api.PostAsync<ClienteApi>("clientes", Request(cliente), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el cliente registrado.");
+        var dto = Mapear(creado);
+        (_cache ??= []).Add(dto);
+        return dto;
+    }
+
+    public async Task<ClienteInteresadoDto> ActualizarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default)
+    {
+        var actualizado = await api.PutAsync<ClienteApi>($"clientes/{cliente.Id}", Request(cliente), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el cliente actualizado.");
+        var dto = Mapear(actualizado);
+        _cache ??= [];
+        var indice = _cache.FindIndex(item => item.Id == dto.Id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Add(dto);
+        return dto;
+    }
+
     private static ClienteInteresadoDto Mapear(ClienteApi item) => new()
     {
         Id = item.Id,
@@ -401,6 +588,29 @@ public class HttpLocalService(ApiClient api, HttpProspeccionService prospeccione
         return dto;
     }
 
+    public async Task<LocalComercialDto> AgregarAsync(LocalComercialDto local, CancellationToken ct = default)
+    {
+        var creado = await api.PostAsync<LocalApi>("locales", Request(local), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el local registrado.");
+        var dto = Mapear(creado);
+        (_cache ??= []).Add(dto);
+        prospecciones.Invalidar();
+        return dto;
+    }
+
+    public async Task<LocalComercialDto> ActualizarAsync(LocalComercialDto local, CancellationToken ct = default)
+    {
+        var actualizado = await api.PutAsync<LocalApi>($"locales/{local.Id}", Request(local), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el local actualizado.");
+        var dto = Mapear(actualizado);
+        _cache ??= [];
+        var indice = _cache.FindIndex(item => item.Id == dto.Id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Add(dto);
+        prospecciones.Invalidar();
+        return dto;
+    }
+
     private static LocalComercialDto Mapear(LocalApi item) => new()
     {
         Id = item.Id,
@@ -424,6 +634,13 @@ public class HttpLocalService(ApiClient api, HttpProspeccionService prospeccione
         EstadoPublicacion = item.EstadoPublicacion,
         Descripcion = item.Descripcion,
         FechaRegistro = item.FechaRegistro,
+        Frente = item.Frente,
+        Zonificacion = item.Zonificacion,
+        AptoLicenciaFuncionamiento = item.AptoLicenciaFuncionamiento,
+        CargaElectricaKw = item.CargaElectricaKw,
+        NumeroEstacionamientos = item.NumeroEstacionamientos,
+        CuotaMantenimiento = item.CuotaMantenimiento,
+        IdDistrito = item.IdDistrito,
     };
 
     private static object Request(LocalComercialDto local) => new
@@ -445,6 +662,72 @@ public class HttpLocalService(ApiClient api, HttpProspeccionService prospeccione
         local.GeoLat,
         local.GeoLong,
         local.EstadoPublicacion,
+        local.Frente,
+        local.Zonificacion,
+        local.AptoLicenciaFuncionamiento,
+        local.CargaElectricaKw,
+        local.NumeroEstacionamientos,
+        local.CuotaMantenimiento,
+    };
+}
+
+public class HttpPrecioLocalService(ApiClient api) : IPrecioLocalService
+{
+    public async Task<IReadOnlyList<PrecioLocalDto>> ListarPorLocalAsync(long idLocal, CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<PrecioApi>>($"locales/{idLocal}/precios", ct);
+        return lista?.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<PrecioLocalDto> RegistrarAsync(long idLocal, string hito, string moneda, decimal monto,
+        DateOnly fecha, CancellationToken ct = default)
+    {
+        var creado = await api.PostAsync<PrecioApi>(
+                $"locales/{idLocal}/precios",
+                new { hito, moneda, monto, fecha },
+                ct)
+            ?? throw new InvalidOperationException("El API no devolvio el precio registrado.");
+        return Mapear(creado);
+    }
+
+    private static PrecioLocalDto Mapear(PrecioApi item) => new()
+    {
+        Id = item.Id,
+        IdLocal = item.IdLocal,
+        Hito = item.Hito,
+        HitoTexto = EnumCatalog.HitosPrecio.FirstOrDefault(o => o.Code == item.Hito)?.Label ?? item.Hito,
+        Moneda = item.Moneda,
+        Monto = item.Monto,
+        MontoTexto = item.Monto.ToString("N0", CultureInfo.GetCultureInfo("es-PE")),
+        Fecha = item.Fecha,
+        FechaTexto = item.Fecha?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+    };
+}
+
+public class HttpPublicacionService(ApiClient api) : IPublicacionService
+{
+    public async Task<IReadOnlyList<PublicacionDto>> ListarPorLocalAsync(long idLocal, CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<PublicacionApi>>($"locales/{idLocal}/publicaciones", ct);
+        return lista?.Select(Mapear).ToList() ?? [];
+    }
+
+    private static PublicacionDto Mapear(PublicacionApi item) => new()
+    {
+        Id = item.Id,
+        Canal = item.Canal,
+        CanalTexto = EnumCatalog.CanalesPublicacion.FirstOrDefault(o => o.Code == item.Canal)?.Label ?? item.Canal,
+        TituloAnuncio = item.TituloAnuncio,
+        RentaPublicada = item.RentaPublicada,
+        RentaTexto = item.RentaPublicada.ToString("N0", CultureInfo.GetCultureInfo("es-PE")),
+        Moneda = item.Moneda,
+        Estado = item.Estado,
+        EstadoTexto = EnumCatalog.EstadosPublicacion.FirstOrDefault(o => o.Code == item.Estado)?.Label ?? item.Estado,
+        FechaPublicacion = item.FechaPublicacion,
+        FechaPublicacionTexto = item.FechaPublicacion?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+        FechaBaja = item.FechaBaja,
+        UrlPublicacion = item.UrlPublicacion,
+        CodigoOrigen = item.CodigoOrigen,
     };
 }
 
@@ -606,6 +889,28 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
         var actualizada = Task.Run(() =>
                 api.PutAsync<CaptacionApi>($"captaciones/{captacion.Id}", Request(captacion)))
             .GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException("El API no devolvio la captacion actualizada.");
+        var dto = Mapear(actualizada);
+        ActualizarCache(dto);
+        _bandeja = null;
+        return dto;
+    }
+
+    // Variantes async reales: el formulario las usa para no bloquear el circuito de
+    // Blazor Server (era lo que dejaba "colgado / sin cargar" el botón de guardar/reenviar).
+    public async Task<CaptacionDto> AgregarAsync(CaptacionDto captacion, CancellationToken ct = default)
+    {
+        var creada = await api.PostAsync<CaptacionApi>("captaciones", Request(captacion), ct)
+            ?? throw new InvalidOperationException("El API no devolvio la captacion registrada.");
+        var dto = Mapear(creada);
+        ActualizarCache(dto);
+        _bandeja = null;
+        return dto;
+    }
+
+    public async Task<CaptacionDto> ActualizarAsync(CaptacionDto captacion, CancellationToken ct = default)
+    {
+        var actualizada = await api.PutAsync<CaptacionApi>($"captaciones/{captacion.Id}", Request(captacion), ct)
             ?? throw new InvalidOperationException("El API no devolvio la captacion actualizada.");
         var dto = Mapear(actualizada);
         ActualizarCache(dto);
@@ -843,31 +1148,66 @@ public class HttpAgenteService(ApiClient api) : IAgenteService
 
     public AgenteDto? ById(long id) => All().FirstOrDefault(item => item.Id == id);
 
-    public AgenteDto Agregar(AgenteDto agente)
+    // Agentes supervisados por un broker concreto (GET /brokers/{id}/agentes). Sirve para
+    // acotar en la ficha del broker las solicitudes y la actividad de su equipo.
+    public async Task<IReadOnlyList<AgenteDto>> AgentesDelBrokerAsync(long idBroker, CancellationToken ct = default)
     {
-        _agentes ??= [];
-        agente.Id = _agentes.Count == 0 ? 1 : _agentes.Max(item => item.Id) + 1;
-        if (string.IsNullOrWhiteSpace(agente.CodigoAgente))
-            agente.CodigoAgente = $"AGE-{agente.Id:000}";
-        agente.FechaIngreso ??= DateOnly.FromDateTime(DateTime.Today);
-        agente.FechaIngresoTexto = agente.FechaIngreso.Value.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
-        agente.Iniciales = Iniciales(agente.Nombre);
-        agente.Color = string.IsNullOrWhiteSpace(agente.Color) ? ColorPara(agente.Id) : agente.Color;
-        _agentes.Add(agente);
-        return agente;
+        if (idBroker <= 0) return Array.Empty<AgenteDto>();
+        var lista = await api.GetAsync<List<AgenteApi>>($"brokers/{idBroker}/agentes", ct);
+        return lista?.Select(Mapear).ToList() ?? [];
     }
 
-    public AgenteDto Actualizar(AgenteDto agente)
+    // Alta/edición REST reales (antes eran solo memoria y no persistían). La BL del backend
+    // crea persona + usuario_interno + agente y lo asigna al broker supervisor en sesión.
+    public AgenteDto Agregar(AgenteDto agente) =>
+        Task.Run(() => AgregarAsync(agente)).GetAwaiter().GetResult();
+
+    public AgenteDto Actualizar(AgenteDto agente) =>
+        Task.Run(() => ActualizarAsync(agente)).GetAwaiter().GetResult();
+
+    public async Task<AgenteDto> AgregarAsync(AgenteDto agente, CancellationToken ct = default)
     {
-        _agentes ??= CargarAgentesSinRomper();
-        var indice = _agentes.FindIndex(item => item.Id == agente.Id);
-        if (indice < 0)
-            throw new InvalidOperationException("Agente no encontrado.");
-        agente.Iniciales = Iniciales(agente.Nombre);
-        agente.Color = string.IsNullOrWhiteSpace(agente.Color) ? ColorPara(agente.Id) : agente.Color;
-        _agentes[indice] = agente;
-        return agente;
+        var creado = await api.PostAsync<AgenteApi>("agentes", Request(agente), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el agente registrado.");
+        var dto = Mapear(creado);
+        (_agentes ??= []).Add(dto);
+        return dto;
     }
+
+    public async Task<AgenteDto> ActualizarAsync(AgenteDto agente, CancellationToken ct = default)
+    {
+        var actualizado = await api.PutAsync<AgenteApi>($"agentes/{agente.Id}", Request(agente), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el agente actualizado.");
+        var dto = Mapear(actualizado);
+        _agentes ??= [];
+        var indice = _agentes.FindIndex(item => item.Id == dto.Id);
+        if (indice >= 0) _agentes[indice] = dto;
+        else _agentes.Add(dto);
+        return dto;
+    }
+
+    private static object Request(AgenteDto a) => new
+    {
+        nombre = a.Nombre,
+        tipoPersona = a.TipoPersona.Contains("jur", StringComparison.OrdinalIgnoreCase) ? "J" : "N",
+        tipoDocumento = string.IsNullOrWhiteSpace(a.TipoDocumento) ? "D" : a.TipoDocumento,
+        a.NumeroDocumento,
+        a.Telefono,
+        correo = a.Email,
+        a.Usuario,
+        contrasena = a.ContrasenaTemporal,
+        a.Zona,
+        a.CodigoAgente,
+        estado = a.EstadoAdministrativo.Equals("Inactivo", StringComparison.OrdinalIgnoreCase) ? "I" : "A",
+        estadoOperativo = CodigoOperativo(a.EstadoOperativo),
+    };
+
+    private static string CodigoOperativo(string? texto) => texto switch
+    {
+        "Licencia" => "L",
+        "No disponible" => "N",
+        _ => "D",
+    };
 
     public AgenteDto Desactivar(long id)
     {
@@ -916,6 +1256,8 @@ public class HttpAgenteService(ApiClient api) : IAgenteService
             FechaIngresoTexto = item.FechaIngreso?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
             EstadoAdministrativo = TextoActivo(item.EstadoAdministrativo),
             EstadoOperativo = TextoOperativo(item.EstadoOperativo),
+            CaptacionesActivas = item.CaptacionesActivas,
+            OportunidadesActivas = item.OperacionesActivas,
         };
     }
 
@@ -1080,9 +1422,11 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
         CaptacionId = item.IdCaptacion,
         CaptacionCodigo = item.CodigoCaptacion,
         DireccionLocal = item.DireccionLocal,
+        AgenteResponsableId = item.IdAgente,
         NombreAgenteResponsable = item.AgenteNombre,
         Estado = Codigos.EstadoOportunidad(item.Estado),
         FechaRegistroTexto = item.FechaRegistro.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
+        FechaActualizacion = item.FechaActualizacion ?? item.FechaRegistro,
         MotivoCierre = item.MotivoCierre ?? "",
         Observaciones = item.Observaciones ?? "",
         FechaCierreTexto = item.FechaCierre?.ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture) ?? "",
@@ -1118,7 +1462,11 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
             {
                 idOportunidad = request.OportunidadId,
                 montoPropuesto = request.MontoPropuesto,
-                plazoTentativo = request.PlazoTentativo,
+                plazoMeses = request.PlazoMeses,
+                fechaInicio = request.FechaInicio,
+                formaPago = request.FormaPago,
+                mesesGarantia = request.MesesGarantia,
+                mesesAdelanto = request.MesesAdelanto,
                 observaciones = request.Observaciones,
             },
             ct);
@@ -1172,16 +1520,21 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         return pagina?.Items.FirstOrDefault(item => item.Id == id);
     }
 
-    public SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud)
+    // Sincrono: solo por compatibilidad de la interfaz. Las pantallas usan la variante
+    // async (ReenviarAEvaluacionAsync), que no bloquea el circuito de Blazor Server.
+    public SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud) =>
+        Task.Run(() => ReenviarAEvaluacionAsync(codigoSolicitud)).GetAwaiter().GetResult();
+
+    public async Task<SolicitudAlquilerDto> ReenviarAEvaluacionAsync(
+        string codigoSolicitud, CancellationToken ct = default)
     {
         var solicitud = ByCodigo(codigoSolicitud)
             ?? throw new InvalidOperationException("Solicitud no encontrada.");
-        var respuesta = Task.Run(() => api.PostAsync<SolicitudApi>($"solicitudes/{solicitud.Id}/reenviar", new { }))
-            .GetAwaiter().GetResult();
+        var respuesta = await api.PostAsync<SolicitudApi>(
+            $"solicitudes/{solicitud.Id}/reenviar", new { }, ct);
         if (respuesta is null)
         {
-            var actualizada = Task.Run(() => BuscarSolicitudRegistradaAsync(solicitud.OportunidadId, default))
-                .GetAwaiter().GetResult();
+            var actualizada = await BuscarSolicitudRegistradaAsync(solicitud.OportunidadId, ct);
             if (actualizada is not null)
             {
                 ActualizarCache(actualizada);
@@ -1239,19 +1592,44 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         CodigoSolicitud = item.CodigoSolicitud,
         CodigoOperacion = item.CodigoOportunidad ?? $"OPO-{item.IdOportunidad:0000}",
         OportunidadId = item.IdOportunidad,
+        AgenteResponsableId = item.IdAgente,
         ClienteNombre = item.ClienteNombre ?? "",
         DireccionLocal = item.DireccionLocal ?? "",
         DistritoLocal = item.DistritoLocal ?? "",
         MontoMensual = item.MontoPropuesto,
         MontoMensualTexto = item.MontoPropuesto.ToString("N0", CultureInfo.GetCultureInfo("es-PE")),
-        PlazoMeses = ParseMeses(item.PlazoTentativo),
+        PlazoMeses = item.PlazoMeses ?? ParseMeses(item.PlazoTentativo),
         PlazoTentativo = item.PlazoTentativo ?? "",
+        FechaInicioTexto = item.FechaInicio?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+        FormaPago = item.FormaPago switch
+        {
+            "TRANSFERENCIA" => "Transferencia",
+            "DEPOSITO_BANCARIO" => "Depósito bancario",
+            "EFECTIVO" => "Efectivo",
+            "CHEQUE" => "Cheque",
+            "OTRO" => "Otro",
+            _ => item.FormaPago ?? "",
+        },
+        MesesGarantia = item.MesesGarantia,
+        MesesAdelanto = item.MesesAdelanto,
         Observaciones = item.Observaciones ?? "",
-        DocumentosTexto = "0/6",
-        PorcentajeDocumentos = 0,
+        DocumentosTexto = $"{item.DocumentosEntregados}/{item.DocumentosRequeridos}",
+        PorcentajeDocumentos = item.DocumentosRequeridos > 0
+            ? (int)Math.Round(item.DocumentosEntregados * 100.0 / item.DocumentosRequeridos)
+            : 0,
         FechaRegistroTexto = item.FechaRegistro?.ToString("dd MMM", CultureInfo.InvariantCulture) ?? "",
         Estado = Codigos.EstadoSolicitud(item.Estado),
+        FechaActualizacionEstado = item.FechaActualizacionEstado,
     };
+
+    public async Task<IReadOnlyList<EvaluacionSolicitudDto>> ListarEvaluacionesAsync(
+        long idSolicitud, CancellationToken ct = default)
+    {
+        if (idSolicitud <= 0)
+            return Array.Empty<EvaluacionSolicitudDto>();
+        var lista = await api.GetAsync<List<EvaluacionApi>>($"solicitudes/{idSolicitud}/evaluaciones", ct);
+        return lista?.Select(Mapear).ToList() ?? [];
+    }
 
     private static EvaluacionSolicitudDto Mapear(EvaluacionApi item) => new()
     {
@@ -1271,6 +1649,74 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         var digitos = new string(plazo.Where(char.IsDigit).ToArray());
         return int.TryParse(digitos, out var meses) ? meses : 0;
     }
+}
+
+public class HttpContratoService(ApiClient api) : IContratoService
+{
+    private List<ContratoAlquilerDto>? _cache;
+
+    public IReadOnlyList<ContratoAlquilerDto> All() =>
+        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+
+    public async Task<IReadOnlyList<ContratoAlquilerDto>> RefrescarAsync(CancellationToken ct = default)
+    {
+        _cache = await Cargar(ct);
+        return _cache;
+    }
+
+    public ContratoAlquilerDto? ByOportunidad(long oportunidadId) =>
+        All().FirstOrDefault(item => item.OportunidadId == oportunidadId);
+
+    public async Task<ContratoAlquilerDto> RegistrarAsync(
+        ContratoFormRequest request, CancellationToken ct = default)
+    {
+        var creado = await api.PostAsync<ContratoApi>("contratos", new
+            {
+                idSolicitud = request.SolicitudId,
+            },
+            ct)
+            ?? throw new InvalidOperationException("El API no devolvio el contrato registrado.");
+        var dto = Mapear(creado);
+        (_cache ??= []).Insert(0, dto);
+        return dto;
+    }
+
+    private async Task<List<ContratoAlquilerDto>> Cargar(CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<ContratoApi>("contratos", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    private static ContratoAlquilerDto Mapear(ContratoApi item) => new()
+    {
+        Id = item.Id,
+        OportunidadId = item.IdOportunidad ?? 0,
+        CodigoOportunidad = item.CodigoOportunidad ?? "",
+        CodigoSolicitud = item.CodigoSolicitud ?? "",
+        ClienteNombre = item.ClienteNombre ?? "",
+        DireccionLocal = item.DireccionLocal ?? "",
+        DistritoLocal = item.DistritoLocal ?? "",
+        CodigoCaptacion = item.CodigoCaptacion ?? "",
+        AgenteNombre = item.AgenteNombre ?? "",
+        RentaMensual = item.RentaMensual,
+        RentaMensualTexto = item.RentaMensual.ToString("N0", CultureInfo.GetCultureInfo("es-PE")),
+        Moneda = item.Moneda ?? "USD",
+        PlazoMeses = item.PlazoContratoMeses ?? 0,
+        ComisionGenerada = item.ComisionGenerada,
+        ComisionGeneradaTexto = item.ComisionGenerada.ToString("N0", CultureInfo.GetCultureInfo("es-PE")),
+        FechaInicioTexto = item.FechaInicioContrato?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+        FechaFinTexto = item.FechaFinContrato?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+        FechaCierreTexto = item.FechaCierre?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+        Estado = Codigos.EstadoContrato(item.EstadoContrato),
+        ComisionEstado = item.ComisionEstado switch
+        {
+            "PENDIENTE" => "Pendiente",
+            "PARCIAL" => "Parcial",
+            "COBRADA" => "Cobrada",
+            "ANULADA" => "Anulada",
+            _ => item.ComisionEstado ?? "",
+        },
+    };
 }
 
 public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidades) : IVisitaService
@@ -1452,6 +1898,477 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
     };
 }
 
+public class HttpDocumentoSolicitudService(ApiClient api) : IDocumentoSolicitudService
+{
+    public async Task<IReadOnlyList<DocumentoSolicitudDto>> ListarAsync(
+        long idSolicitud, CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<DocumentoSolicitudApi>>(
+            $"solicitudes/{idSolicitud}/documentos", ct);
+        return lista?.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<DocumentoSolicitudDto> SubirAsync(
+        long idSolicitud, string tipoDocumento, string nombreArchivo, byte[] contenido,
+        CancellationToken ct = default)
+    {
+        // Un POST con cuerpo grande rompe el HttpClient de .NET 10 contra GlassFish (los POST
+        // chicos sí funcionan). Como es entorno local en el mismo equipo, el archivo se escribe
+        // en una carpeta temporal compartida y al backend solo se le manda el NOMBRE (POST
+        // chico); el backend lo lee de ahi, lo guarda en el almacen y borra el temporal.
+        var carpeta = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "controllocal", "uploads-tmp");
+        Directory.CreateDirectory(carpeta);
+        var temporal = Guid.NewGuid().ToString("N") + Path.GetExtension(nombreArchivo);
+        var rutaTemporal = Path.Combine(carpeta, temporal);
+        await File.WriteAllBytesAsync(rutaTemporal, contenido, ct);
+        ControlLocal.Web.Services.CrashLog.Breadcrumb($"SubirAsync(handoff) temp={temporal} bytes={contenido.Length}");
+        try
+        {
+            var creado = await api.PostAsync<DocumentoSolicitudApi>(
+                $"solicitudes/{idSolicitud}/documentos/local", new
+                {
+                    tipoDocumento,
+                    nombreArchivo,
+                    archivoTemporal = temporal,
+                }, ct)
+                ?? throw new InvalidOperationException("El API no devolvio el documento registrado.");
+            ControlLocal.Web.Services.CrashLog.Breadcrumb("SubirAsync(handoff) OK");
+            return Mapear(creado);
+        }
+        finally
+        {
+            // Red de seguridad: el backend ya lo borra; esto cubre el caso de que el POST falle.
+            try { if (File.Exists(rutaTemporal)) File.Delete(rutaTemporal); } catch { /* best-effort */ }
+        }
+    }
+
+    public async Task<DocumentoSolicitudDto> RevisarAsync(
+        long idSolicitud, long idDocumento, string resultado, string? observaciones,
+        CancellationToken ct = default)
+    {
+        var revisado = await api.PatchAsync<DocumentoSolicitudApi>(
+            $"solicitudes/{idSolicitud}/documentos/{idDocumento}/revisar",
+            new { resultado, observaciones }, ct)
+            ?? throw new InvalidOperationException("El API no devolvio el documento revisado.");
+        return Mapear(revisado);
+    }
+
+    public async Task<EstadoAlmacen> EstadoAlmacenAsync(CancellationToken ct = default)
+    {
+        var estado = await api.GetAsync<EstadoAlmacen>("documentos/salud", ct);
+        return estado ?? EstadoAlmacen.Falla("Almacén", "El backend no devolvió el estado del almacén.");
+    }
+
+    private static DocumentoSolicitudDto Mapear(DocumentoSolicitudApi item) => new()
+    {
+        Id = item.Id,
+        SolicitudId = item.IdSolicitud ?? 0,
+        TipoDocumento = item.TipoDocumento ?? "",
+        TipoNombre = item.TipoNombre ?? "",
+        NombreArchivo = item.NombreArchivo ?? "",
+        RutaArchivo = item.RutaArchivo,
+        FechaEntregaTexto = item.FechaEntrega?.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-PE")) ?? "",
+        Estado = Codigos.EstadoDocumento(item.Estado),
+        ResultadoRevision = Codigos.ResultadoRevisionDocumento(item.ResultadoRevision),
+        Observaciones = item.Observaciones ?? "",
+    };
+}
+
+public class HttpInteraccionService(ApiClient api) : IInteraccionService
+{
+    private List<InteraccionComercialDto>? _cache;
+
+    public IReadOnlyList<InteraccionComercialDto> All() =>
+        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+
+    public InteraccionComercialDto? ById(long id) =>
+        All().FirstOrDefault(item => item.Id == id);
+
+    public InteraccionComercialDto Agregar(InteraccionFormRequest request)
+    {
+        var creada = Task.Run(() => api.PostAsync<InteraccionApi>("interacciones", new
+            {
+                idOportunidad = request.OportunidadId,
+                canalContacto = request.CanalContacto,
+                resultado = request.Resultado,
+                observaciones = request.Observaciones,
+            }))
+            .GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException("El API no devolvio la interaccion registrada.");
+        var dto = Mapear(creada);
+        (_cache ??= []).Insert(0, dto);
+        return dto;
+    }
+
+    public async Task<InteraccionComercialDto> AgregarAsync(InteraccionFormRequest request, CancellationToken ct = default)
+    {
+        var creada = await api.PostAsync<InteraccionApi>("interacciones", new
+            {
+                idOportunidad = request.OportunidadId,
+                canalContacto = request.CanalContacto,
+                resultado = request.Resultado,
+                observaciones = request.Observaciones,
+            }, ct)
+            ?? throw new InvalidOperationException("El API no devolvio la interaccion registrada.");
+        var dto = Mapear(creada);
+        (_cache ??= []).Insert(0, dto);
+        return dto;
+    }
+
+    public InteraccionComercialDto Actualizar(long id, string? resultado = null, string? observaciones = null)
+    {
+        var actualizada = Task.Run(() => api.PutAsync<InteraccionApi>($"interacciones/{id}", new
+            {
+                resultado,
+                observaciones,
+            }))
+            .GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException("El API no devolvio la interaccion actualizada.");
+        var dto = Mapear(actualizada);
+        _cache ??= [];
+        var indice = _cache.FindIndex(item => item.Id == id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Insert(0, dto);
+        return dto;
+    }
+
+    private async Task<List<InteraccionComercialDto>> Cargar(CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<InteraccionApi>("interacciones", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    private static InteraccionComercialDto Mapear(InteraccionApi item) => new()
+    {
+        Id = item.Id,
+        OportunidadId = item.IdOportunidad ?? 0,
+        FechaHoraTexto = item.FechaHora?.ToString("dd MMM yyyy · HH:mm", CultureInfo.GetCultureInfo("es-PE")) ?? "",
+        CanalContacto = item.CanalContacto ?? "",
+        Resultado = item.Resultado ?? "",
+        Observaciones = item.Observaciones ?? "",
+        ClienteNombre = item.ClienteNombre ?? "",
+        CaptacionCodigo = item.CodigoCaptacion ?? "",
+        NombreAgenteResponsable = item.AgenteNombre ?? "",
+    };
+}
+
+public class HttpReasignacionCaptacionService(
+    ApiClient api,
+    ICaptacionService captaciones,
+    HttpAgenteService agentes) : IReasignacionCaptacionService
+{
+    private static readonly string[] NoReasignables = { "Rechazada", "Cerrada", "Vencida" };
+
+    public IReadOnlyList<CaptacionDto> Reasignables() =>
+        captaciones.All().Where(item => !NoReasignables.Contains(item.Estado)).ToList();
+
+    public IReadOnlyList<AgenteDto> AgentesDestino() => agentes.All();
+
+    public IReadOnlyList<ReasignacionCaptacionDto> Historial() =>
+        Task.Run(() => CargarHistorial()).GetAwaiter().GetResult();
+
+    public ReasignacionCaptacionDto Reasignar(ReasignarCaptacionRequest request)
+    {
+        if (request.AgenteNuevoId <= 0)
+            throw new InvalidOperationException("Selecciona el agente destino.");
+        if (string.IsNullOrWhiteSpace(request.Motivo))
+            throw new InvalidOperationException("Debes ingresar un motivo para continuar.");
+
+        // El broker responsable lo toma el backend del JWT; aqui solo van id y motivo.
+        Task.Run(() => api.PostAsync<CaptacionApi>(
+                $"captaciones/{request.CaptacionId}/reasignar",
+                new { idAgenteNuevo = request.AgenteNuevoId, motivo = request.Motivo.Trim() }))
+            .GetAwaiter().GetResult();
+
+        // Refresca captaciones para que Reasignables refleje el nuevo responsable.
+        Task.Run(() => captaciones.RefrescarAsync()).GetAwaiter().GetResult();
+
+        var historial = Task.Run(() => CargarHistorial()).GetAwaiter().GetResult();
+        return historial.FirstOrDefault(item => item.CaptacionId == request.CaptacionId)
+            ?? throw new InvalidOperationException(
+                "La reasignacion se registro pero no se pudo recuperar del historial.");
+    }
+
+    private async Task<List<ReasignacionCaptacionDto>> CargarHistorial(CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<ReasignacionCaptacionApi>>("captaciones/reasignaciones", ct);
+        return lista?.Select(Mapear).ToList() ?? [];
+    }
+
+    private static ReasignacionCaptacionDto Mapear(ReasignacionCaptacionApi item) => new()
+    {
+        IdReasignacion = item.IdReasignacion,
+        CaptacionId = item.IdCaptacion ?? 0,
+        CodigoCaptacion = item.CodigoCaptacion ?? "",
+        DireccionLocal = item.DireccionLocal ?? "",
+        AgenteAnteriorId = item.IdAgenteAnterior ?? 0,
+        AgenteAnteriorNombre = item.AgenteAnteriorNombre ?? "",
+        AgenteNuevoId = item.IdAgenteNuevo ?? 0,
+        AgenteNuevoNombre = item.AgenteNuevoNombre ?? "",
+        BrokerResponsableId = item.IdBroker ?? 0,
+        BrokerResponsableNombre = item.BrokerNombre ?? "",
+        FechaCambio = item.FechaCambio,
+        FechaCambioTexto = item.FechaCambio?.ToString("dd MMM yyyy · HH:mm", CultureInfo.GetCultureInfo("es-PE")) ?? "",
+        Motivo = item.Motivo ?? "",
+    };
+}
+
+public class HttpBrokerService(ApiClient api) : IBrokerService
+{
+    private List<BrokerDto>? _cache;
+
+    public IReadOnlyList<BrokerDto> All() =>
+        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+
+    public BrokerDto? ById(string codigoBroker) =>
+        All().FirstOrDefault(item => item.CodigoBroker.Equals(codigoBroker, StringComparison.OrdinalIgnoreCase));
+
+    public BrokerDto First() => All().FirstOrDefault() ?? new BrokerDto();
+
+    public BrokerDto Agregar(BrokerDto broker)
+    {
+        var creado = Task.Run(() => api.PostAsync<BrokerApi>("brokers", Request(broker)))
+            .GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException("El API no devolvio el broker registrado.");
+        var dto = Mapear(creado);
+        (_cache ??= []).Add(dto);
+        return dto;
+    }
+
+    public BrokerDto Actualizar(BrokerDto broker)
+    {
+        var actualizado = Task.Run(() => api.PutAsync<BrokerApi>($"brokers/{broker.Id}", Request(broker)))
+            .GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException("El API no devolvio el broker actualizado.");
+        var dto = Mapear(actualizado);
+        _cache ??= [];
+        var indice = _cache.FindIndex(item => item.Id == dto.Id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Add(dto);
+        return dto;
+    }
+
+    public async Task<BrokerDto> AgregarAsync(BrokerDto broker, CancellationToken ct = default)
+    {
+        var creado = await api.PostAsync<BrokerApi>("brokers", Request(broker), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el broker registrado.");
+        var dto = Mapear(creado);
+        (_cache ??= []).Add(dto);
+        return dto;
+    }
+
+    public async Task<BrokerDto> ActualizarAsync(BrokerDto broker, CancellationToken ct = default)
+    {
+        var actualizado = await api.PutAsync<BrokerApi>($"brokers/{broker.Id}", Request(broker), ct)
+            ?? throw new InvalidOperationException("El API no devolvio el broker actualizado.");
+        var dto = Mapear(actualizado);
+        _cache ??= [];
+        var indice = _cache.FindIndex(item => item.Id == dto.Id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Add(dto);
+        return dto;
+    }
+
+    private async Task<List<BrokerDto>> Cargar(CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<BrokerApi>("brokers", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    private static BrokerDto Mapear(BrokerApi item)
+    {
+        var nombre = item.Nombre ?? "";
+        return new BrokerDto
+        {
+            Id = item.Id,
+            CodigoBroker = item.CodigoBroker ?? "",
+            Iniciales = Iniciales(nombre),
+            Nombre = nombre,
+            TipoPersona = item.TipoPersona == "J" ? "Persona juridica" : "Persona natural",
+            Email = item.Correo ?? "",
+            TipoDocumento = string.IsNullOrWhiteSpace(item.TipoDocumento) ? "D" : item.TipoDocumento!,
+            NumeroDocumento = item.NumeroDocumento ?? "",
+            Telefono = item.Telefono ?? "",
+            Usuario = item.Usuario ?? "",
+            Zona = item.Zona ?? "",
+            TipoBroker = item.EsAdministrador ? "Broker administrador" : "Broker supervisor",
+            FechaDesignacion = item.FechaDesignacion,
+            FechaDesignacionTexto = item.FechaDesignacion?.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-PE")) ?? "",
+            AgentesACargo = item.AgentesACargo,
+            CaptacionesActivas = 0,
+            EstadoAdministrativo = item.EstadoAdministrativo == "I" ? "Inactivo" : "Activo",
+            EsAdministrador = item.EsAdministrador,
+        };
+    }
+
+    private static object Request(BrokerDto broker) => new
+    {
+        nombre = broker.Nombre,
+        tipoPersona = broker.TipoPersona.Contains("jur", StringComparison.OrdinalIgnoreCase) ? "J" : "N",
+        tipoDocumento = string.IsNullOrWhiteSpace(broker.TipoDocumento) ? "D" : broker.TipoDocumento,
+        broker.NumeroDocumento,
+        broker.Telefono,
+        correo = broker.Email,
+        broker.Usuario,
+        contrasena = broker.ContrasenaTemporal,
+        broker.Zona,
+        broker.CodigoBroker,
+        estado = broker.EstadoAdministrativo.Equals("Inactivo", StringComparison.OrdinalIgnoreCase) ? "I" : "A",
+        esAdministrador = broker.EsAdministrador,
+    };
+
+    private static string Iniciales(string? nombre)
+    {
+        var iniciales = string.Concat((nombre ?? "")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(parte => char.ToUpperInvariant(parte[0])));
+        return string.IsNullOrWhiteSpace(iniciales) ? "--" : iniciales;
+    }
+}
+
+public class HttpAssignmentService(ApiClient api) : IAssignmentService
+{
+    public IReadOnlyList<AssignAgentDto> Agents() =>
+        Task.Run(() => CargarAgentes()).GetAwaiter().GetResult();
+
+    public IReadOnlyList<AssignBrokerDto> Brokers() =>
+        Task.Run(() => CargarBrokers()).GetAwaiter().GetResult();
+
+    public IReadOnlyList<BrokerAgenteDto> Historial() =>
+        Task.Run(() => CargarHistorial()).GetAwaiter().GetResult();
+
+    public BrokerAgenteDto ReasignarAgente(string agenteId, string brokerId, string motivo) =>
+        Task.Run(() => ReasignarAgenteAsync(agenteId, brokerId, motivo)).GetAwaiter().GetResult();
+
+    public async Task<IReadOnlyList<AssignAgentDto>> AgentsAsync(CancellationToken ct = default) =>
+        await CargarAgentes(ct);
+
+    public async Task<IReadOnlyList<AssignBrokerDto>> BrokersAsync(CancellationToken ct = default) =>
+        await CargarBrokers(ct);
+
+    public async Task<IReadOnlyList<BrokerAgenteDto>> HistorialAsync(CancellationToken ct = default) =>
+        await CargarHistorial(ct);
+
+    public async Task<BrokerAgenteDto> ReasignarAgenteAsync(
+        string agenteId, string brokerId, string motivo, CancellationToken ct = default)
+    {
+        if (!long.TryParse(agenteId, out var idAgente) || idAgente <= 0)
+            throw new InvalidOperationException("Selecciona el agente a reasignar.");
+        if (!long.TryParse(brokerId, out var idBroker) || idBroker <= 0)
+            throw new InvalidOperationException("Selecciona el broker destino.");
+        if (string.IsNullOrWhiteSpace(motivo))
+            throw new InvalidOperationException("Ingresa el motivo de la reasignacion.");
+
+        var respuesta = await api.PostAsync<BrokerAgenteApi>("asignaciones/reasignar", new
+            {
+                idAgente,
+                idBrokerDestino = idBroker,
+                motivo = motivo.Trim(),
+            }, ct)
+            ?? throw new InvalidOperationException("El API no devolvio la reasignacion registrada.");
+        return MapearHistorial(respuesta);
+    }
+
+    private async Task<List<AssignAgentDto>> CargarAgentes(CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<AsignacionAgenteApi>>("asignaciones/agentes", ct);
+        return lista?.Select(MapearAgente).ToList() ?? [];
+    }
+
+    private async Task<List<AssignBrokerDto>> CargarBrokers(CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<AsignacionBrokerApi>>("asignaciones/brokers", ct);
+        return lista?.Select(MapearBroker).ToList() ?? [];
+    }
+
+    private async Task<List<BrokerAgenteDto>> CargarHistorial(CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<BrokerAgenteApi>>("asignaciones/historial", ct);
+        return lista?.Select(MapearHistorial).ToList() ?? [];
+    }
+
+    private static AssignAgentDto MapearAgente(AsignacionAgenteApi item)
+    {
+        var estadoAdmin = TextoActivo(item.EstadoAdministrativo);
+        var estadoOper = TextoOperativo(item.EstadoOperativo);
+        var seleccionable = estadoAdmin == "Activo" && estadoOper == "Disponible";
+        return new AssignAgentDto
+        {
+            Id = item.IdAgente.ToString(CultureInfo.InvariantCulture),
+            Iniciales = Iniciales(item.Nombre),
+            Nombre = item.Nombre ?? "",
+            NumeroDocumento = item.NumeroDocumento ?? "",
+            EstadoAdministrativo = estadoAdmin,
+            EstadoOperativo = estadoOper,
+            BrokerActual = string.IsNullOrWhiteSpace(item.BrokerActual) ? "—" : item.BrokerActual!,
+            Seleccionable = seleccionable,
+            MotivoNoDisponible = seleccionable ? null
+                : estadoAdmin != "Activo" ? "Agente inactivo"
+                : estadoOper == "Licencia" ? "En licencia — no recibe asignaciones"
+                : "Agente no disponible",
+            EsAdministrador = false,
+        };
+    }
+
+    private static AssignBrokerDto MapearBroker(AsignacionBrokerApi item)
+    {
+        var estadoAdmin = TextoActivo(item.EstadoAdministrativo);
+        var seleccionable = estadoAdmin == "Activo" && !item.EsAdministrador;
+        return new AssignBrokerDto
+        {
+            Id = item.IdBroker.ToString(CultureInfo.InvariantCulture),
+            Iniciales = Iniciales(item.Nombre),
+            Nombre = item.Nombre ?? "",
+            Zona = item.Zona ?? "",
+            EstadoAdministrativo = estadoAdmin,
+            TipoBroker = item.EsAdministrador ? "admin" : "supervisor",
+            AgentesACargo = item.AgentesACargo,
+            Seleccionable = seleccionable,
+            MotivoNoDisponible = seleccionable ? null
+                : item.EsAdministrador ? "No se puede asignar a un broker administrador"
+                : "Broker inactivo",
+            EsAdministrador = item.EsAdministrador,
+        };
+    }
+
+    private static BrokerAgenteDto MapearHistorial(BrokerAgenteApi item) => new()
+    {
+        Id = item.Id,
+        AgenteId = item.IdAgente ?? 0,
+        AgenteNombre = item.AgenteNombre ?? "",
+        BrokerAnteriorId = item.IdBrokerAnterior ?? 0,
+        BrokerAnteriorNombre = string.IsNullOrWhiteSpace(item.BrokerAnteriorNombre) ? "—" : item.BrokerAnteriorNombre!,
+        BrokerNuevoId = item.IdBrokerNuevo ?? 0,
+        BrokerNuevoNombre = item.BrokerNuevoNombre ?? "",
+        BrokerAdministradorId = item.IdBrokerAdministrador ?? 0,
+        BrokerAdministradorNombre = item.BrokerAdministradorNombre ?? "",
+        FechaAsignacion = item.FechaCambio is { } fecha ? DateOnly.FromDateTime(fecha) : null,
+        FechaAsignacionTexto = item.FechaCambio?.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-PE")) ?? "",
+        Motivo = item.Motivo ?? "",
+        Estado = "Activa",
+    };
+
+    private static string TextoActivo(string? codigo) => codigo == "I" ? "Inactivo" : "Activo";
+
+    private static string TextoOperativo(string? codigo) => codigo switch
+    {
+        "L" => "Licencia",
+        "N" => "No disponible",
+        _ => "Disponible",
+    };
+
+    private static string Iniciales(string? nombre)
+    {
+        var iniciales = string.Concat((nombre ?? "")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(parte => char.ToUpperInvariant(parte[0])));
+        return string.IsNullOrWhiteSpace(iniciales) ? "--" : iniciales;
+    }
+}
+
 public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore store) : INotificacionService
 {
     private static readonly TimeSpan CacheBackendTtl = TimeSpan.FromSeconds(12);
@@ -1560,11 +2477,25 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
         Icono = Icono(item),
         EntidadTipo = item.EntidadTipo,
         EntidadRef = item.EntidadId.ToString(CultureInfo.InvariantCulture),
-        Ruta = item.Ruta,
+        Ruta = Ruta(item),
         DestinatarioRol = Destinatario(item.Tipo),
         Fecha = item.FechaGeneracion ?? DateTime.Now,
         Leida = item.Estado != "ACTIVA",
     };
+
+    // Lleva al broker directo a evaluar la solicitud, y al agente al detalle del
+    // expediente; ambas pantallas resuelven el id numérico de la alerta. Para los
+    // demás tipos se respeta la ruta que envíe el backend.
+    private static string? Ruta(AlertaApi item)
+    {
+        var id = item.EntidadId.ToString(CultureInfo.InvariantCulture);
+        return item.Tipo switch
+        {
+            "SOLICITUD_REENVIADA" => $"evaluacion/{id}",
+            "SOLICITUD_EVALUADA" => $"solicitud-detail/{id}",
+            _ => item.Ruta,
+        };
+    }
 
     private string Destinatario(string tipo) => tipo switch
     {
@@ -1657,6 +2588,34 @@ internal static class Codigos
         _ => codigo,
     };
 
+    public static string EstadoContrato(string? codigo) => codigo switch
+    {
+        "EN_PROCESO" => "En proceso",
+        "FIRMADO" => "Firmado",
+        "VIGENTE" => "Vigente",
+        "RENOVADO" => "Renovado",
+        "FINALIZADO" => "Finalizado",
+        "RESCINDIDO" => "Rescindido",
+        "ANULADO" => "Anulado",
+        _ => codigo ?? "",
+    };
+
+    public static string EstadoDocumento(string? codigo) => codigo switch
+    {
+        "R" => "Registrado",
+        "O" => "Observado",
+        "V" => "Validado",
+        _ => "",
+    };
+
+    public static string ResultadoRevisionDocumento(string? codigo) => codigo switch
+    {
+        "P" => "Pendiente",
+        "C" => "Conforme",
+        "O" => "Observado",
+        _ => "",
+    };
+
     private static string Documento(string codigo) => codigo switch
     {
         "R" => "RUC",
@@ -1664,4 +2623,57 @@ internal static class Codigos
         "P" => "Pasaporte",
         _ => "DNI",
     };
+}
+
+// Perfil del usuario en sesion: foto y telefono persistidos en el backend.
+public sealed record PerfilDto(string? Nombre, string? Correo, string? Telefono, string? FotoClave);
+
+public class HttpPerfilService(ApiClient api)
+{
+    public Task<PerfilDto?> ObtenerAsync(CancellationToken ct = default) =>
+        api.GetAsync<PerfilDto>("perfil", ct);
+
+    public Task ActualizarTelefonoAsync(string telefono, CancellationToken ct = default) =>
+        api.PatchAsync("perfil", new { telefono }, ct);
+
+    // La imagen viaja en base64 dentro del JSON (el POST binario rompe el handler de .NET
+    // contra GlassFish). Devuelve la clave opaca para servirla por "/documento?clave=".
+    public async Task<string?> ActualizarFotoAsync(
+        string nombreArchivo, byte[] contenido, CancellationToken ct = default)
+    {
+        var respuesta = await api.PostAsync<FotoRespuesta>("perfil/foto", new
+        {
+            nombreArchivo,
+            contenidoBase64 = Convert.ToBase64String(contenido),
+        }, ct);
+        return respuesta?.Clave;
+    }
+
+    private sealed record FotoRespuesta(string Clave);
+}
+
+// Galeria de fotos de un local. La imagen viaja en base64 (el POST binario rompe el handler
+// de .NET contra GlassFish). Cada foto se sirve por "/documento?clave=".
+public sealed record FotoLocalDto(long IdFoto, string Clave, string Nombre);
+
+public class HttpFotoLocalService(ApiClient api)
+{
+    public async Task<IReadOnlyList<FotoLocalDto>> ListarAsync(long idLocal, CancellationToken ct = default) =>
+        await api.GetAsync<List<FotoLocalDto>>($"locales/{idLocal}/fotos", ct) ?? [];
+
+    public Task<FotoLocalDto?> SubirAsync(
+        long idLocal, string nombreArchivo, byte[] contenido, CancellationToken ct = default) =>
+        api.PostAsync<FotoLocalDto>($"locales/{idLocal}/fotos", new
+        {
+            nombreArchivo,
+            contenidoBase64 = Convert.ToBase64String(contenido),
+        }, ct);
+
+    public Task EliminarAsync(long idLocal, long idFoto, CancellationToken ct = default) =>
+        api.DeleteAsync($"locales/{idLocal}/fotos/{idFoto}", ct);
+
+    // Trae los bytes de la foto (por su clave opaca) directo del backend, para incrustarla
+    // en el PDF de la ficha (que se genera en el circuito). No pasa por el proxy /documento.
+    public Task<byte[]?> DescargarBytesAsync(string clave, CancellationToken ct = default) =>
+        api.GetBytesAsync($"documentos/contenido?clave={Uri.EscapeDataString(clave)}", ct);
 }

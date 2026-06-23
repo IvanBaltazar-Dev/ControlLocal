@@ -167,16 +167,20 @@
         (string.IsNullOrEmpty(_query) || Coincide(s, _query)));
 
     private static bool Coincide(SolicitudAlquilerDto s, string q) =>
-        (s.CodigoSolicitud?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (s.ClienteNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (s.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (s.CodigoOperacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(s.CodigoSolicitud, q)
+        || TextoFiltro.Contiene(s.ClienteNombre, q)
+        || TextoFiltro.Contiene(s.DireccionLocal, q)
+        || TextoFiltro.Contiene(s.CodigoOperacion, q);
 
     private static string TonoEstado(string e) => e switch
     {
         "Aprobada" => "green",
         "Rechazada" => "red",
-        "Observada" => "info",
+        "Observada" => "amber",
+        "Pendiente de revision" => "amber",
+        "Pendiente de revisión" => "amber",
+        "En revision" => "blue",
+        "Cerrada" => "green",
         _ => "blue",
     };
 
@@ -186,6 +190,7 @@
         "Rechazada" => "x",
         "Observada" => "alert",
         "En revision" => "clock",
+        "Cerrada" => "checkCircle",
         _ => "fileText",
     };
 

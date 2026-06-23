@@ -235,6 +235,11 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         });
     }
 
+    @Override
+    public List<ReasignacionCaptacion> listarReasignaciones() {
+        return reasignacionDAO.listarTodos();
+    }
+
     public Broker validarBroker(Long brokerId) {
         BusinessValidations.id(brokerId, "El id de broker");
         Broker broker = brokerDAO.buscarPorId(brokerId)

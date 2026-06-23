@@ -21,25 +21,56 @@
             <div>
                 <FormSection Num="1" Title="Cliente interesado" Sub="Persona o empresa que quiere evaluar el local">
                     <Field Label="Cliente" Required="true">
-                        <select @bind="_clienteId" disabled="@(_cargando || _procesando)">
-                            <option value="0">Seleccionar cliente</option>
+                        <input class="cl-input search" type="search" placeholder="Escribe para buscar cliente por nombre o rubro…"
+                               value="@_busquedaCliente" @oninput="@(e => _busquedaCliente = e.Value?.ToString() ?? "")"
+                               disabled="@(_cargando || _procesando)" />
+                        <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
                             @foreach (var cliente in ClientesDisponibles)
                             {
-                                <option value="@cliente.Id">@cliente.Nombre - @cliente.RubroInteres</option>
+                                var sel = _clienteId == cliente.Id;
+                                <div role="button" tabindex="0"
+                                     style="@PickStyle(sel)"
+                                     @onclick="@(() => _clienteId = cliente.Id)">
+                                    <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@Iniciales(cliente.Nombre)</span>
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@cliente.Nombre</div>
+                                        <div class="cl-muted" style="font-size:11px;">@cliente.RubroInteres</div>
+                                    </div>
+                                    @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
+                                </div>
                             }
-                        </select>
+                            @if (!ClientesDisponibles.Any())
+                            {
+                                <div class="cl-help">No hay clientes que coincidan con la búsqueda.</div>
+                            }
+                        </div>
                     </Field>
                 </FormSection>
 
                 <FormSection Num="2" Title="Captacion activa" Sub="Propiedad disponible para seguimiento comercial">
                     <Field Label="Captacion" Required="true">
-                        <select @bind="_captacionId" disabled="@(_cargando || _procesando)">
-                            <option value="0">Seleccionar captacion</option>
+                        <input class="cl-input search" type="search" placeholder="Escribe para buscar por código, dirección o distrito…"
+                               value="@_busquedaCaptacion" @oninput="@(e => _busquedaCaptacion = e.Value?.ToString() ?? "")"
+                               disabled="@(_cargando || _procesando)" />
+                        <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
                             @foreach (var captacion in CaptacionesActivas)
                             {
-                                <option value="@captacion.Id">@captacion.CodigoCaptacion - @captacion.DireccionLocal, @captacion.DistritoLocal</option>
+                                var sel = _captacionId == captacion.Id;
+                                <div role="button" tabindex="0"
+                                     style="@PickStyle(sel)"
+                                     @onclick="@(() => _captacionId = captacion.Id)">
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@captacion.CodigoCaptacion · @captacion.DireccionLocal</div>
+                                        <div class="cl-muted" style="font-size:11px;">@captacion.DistritoLocal</div>
+                                    </div>
+                                    @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
+                                </div>
                             }
-                        </select>
+                            @if (!CaptacionesActivas.Any())
+                            {
+                                <div class="cl-help">No hay captaciones activas que coincidan con la búsqueda.</div>
+                            }
+                        </div>
                     </Field>
                 </FormSection>
 
@@ -91,17 +122,40 @@
     private long _clienteId;
     private long _captacionId;
     private string _observaciones = "";
+    private string _busquedaCliente = "";
+    private string _busquedaCaptacion = "";
     private bool _cargando = true;
     private bool _procesando;
     private string? _err;
 
+    // La lista se mantiene tal cual; la búsqueda solo la reduce (mixto: lista + buscador).
     private IEnumerable<ClienteInteresadoDto> ClientesDisponibles =>
         _clientes.Where(item => item.Estado is "Activo" or "A")
+            .Where(item => TextoFiltro.Contiene(item.Nombre, _busquedaCliente)
+                || TextoFiltro.Contiene(item.RubroInteres, _busquedaCliente))
             .OrderBy(item => item.Nombre);
 
     private IEnumerable<CaptacionDto> CaptacionesActivas =>
         _captaciones.Where(item => item.Estado is "Activa" or "A")
+            .Where(item => TextoFiltro.Contiene(item.CodigoCaptacion, _busquedaCaptacion)
+                || TextoFiltro.Contiene(item.DireccionLocal, _busquedaCaptacion)
+                || TextoFiltro.Contiene(item.DistritoLocal, _busquedaCaptacion))
             .OrderByDescending(item => item.FechaCaptacion);
+
+    // Estilo de cada fila seleccionable de los buscadores (resaltada si está elegida).
+    private static string PickStyle(bool sel)
+    {
+        var border = sel ? "#005BFF" : "var(--c-border)";
+        var bg = sel ? "#EAF1FF" : "#fff";
+        return $"display:flex;align-items:center;gap:10px;padding:9px 11px;border:1.5px solid {border};border-radius:10px;background:{bg};cursor:pointer;";
+    }
+
+    private static string Iniciales(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre)) return "?";
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(partes.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
 
     private ClienteInteresadoDto? ClienteSeleccionado =>
         _clientes.FirstOrDefault(item => item.Id == _clienteId);

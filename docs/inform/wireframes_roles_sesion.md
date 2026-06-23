@@ -143,7 +143,6 @@ Usar pagina dedicada para flujos largos:
 - Endpoints publicos: `/Api/salud` y `/Api/auth/login`.
 - Endpoints privados: requieren encabezado `Authorization`.
 - Algunas rutas de decision de captacion exigen rol `BROKER` o `ADMIN`.
-- En produccion, el filtro exige HTTPS o `X-Forwarded-Proto: https`.
 
 ### Mantener Sesion Activa
 
@@ -153,7 +152,6 @@ No forma parte del MVP actual. Para implementarlo despues se necesita:
 - Expiracion mas larga y revocable.
 - Logout que invalide sesion persistente.
 - Registro de dispositivos o sesiones si se requiere auditoria.
-- Proteccion `Secure` y `SameSite` en cookies de produccion.
 
 No se recomienda guardar tokens largos ni contrasenas en `localStorage`.
 

@@ -41,14 +41,17 @@
 
     private record ToneStyle(string Bg, string Color);
 
+    // Tonos vívidos: verde = positivo, ámbar = precaución, rojo = descartado/negativo,
+    // azul = en proceso, info = informativo, gris = neutro.
     private static readonly Dictionary<string, ToneStyle> Tones = new()
     {
-        ["blue"] = new("#EDF2F9", "#005BFF"),
-        ["green"] = new("#E9F2EC", "#2F7D52"),
-        ["gray"] = new("#EDF2F9", "#515B6B"),
-        ["red"] = new("#F6E7E4", "#D64550"),
-        ["info"] = new("#E6F0F5", "#00AEEF"),
-        ["navy"] = new("#EAF1FF", "#061A4D"),
+        ["blue"] = new("#E4EEFF", "#0A57E7"),
+        ["green"] = new("#DDF5E5", "#0E9F4E"),
+        ["gray"] = new("#EEF1F6", "#5A6472"),
+        ["red"] = new("#FCE4E1", "#E0322B"),
+        ["info"] = new("#DEF3FB", "#0398D6"),
+        ["amber"] = new("#FEEFD2", "#E08A00"),
+        ["navy"] = new("#E5ECFB", "#1E3A8A"),
     };
 
     private ToneStyle T => Tones.TryGetValue(Tone, out var t) ? t : Tones["blue"];

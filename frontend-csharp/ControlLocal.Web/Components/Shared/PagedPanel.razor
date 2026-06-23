@@ -1,0 +1,62 @@
+@*
+    Panel reutilizable: tarjeta con buscador propio + paginación. El cuerpo (tabla, timeline,
+    lista…) lo provee el consumidor a través de <Cuerpo>, que recibe los items de la página
+    visible. Mantiene la misma página/paginador que el resto de la app (Paginador.TamanoPagina).
+*@
+@typeparam TItem
+
+<div class="cl-card">
+    <div class="cl-card-head">
+        <div class="cl-card-title">@Title</div>
+        <span class="cl-badge blue">@Filtrados.Count</span>
+    </div>
+    <div class="cl-card-body">
+        @if (ConBusqueda)
+        {
+            <div style="margin-bottom:12px;">
+                <input type="search" placeholder="@Placeholder" value="@_query" @oninput="OnBuscar"
+                       style="width:100%;padding:8px 12px;border:1px solid var(--c-border);border-radius:8px;font-size:13px;background:#fff;" />
+            </div>
+        }
+        @if (Filtrados.Count == 0)
+        {
+            <div style="padding:20px;text-align:center;color:#7E8794;font-size:12.5px;">@Vacio</div>
+        }
+        else
+        {
+            @Cuerpo(Visibles)
+            <Pagination Total="Filtrados.Count" PageSize="TamanoPagina" @bind-Page="_pagina" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public IReadOnlyList<TItem> Items { get; set; } = Array.Empty<TItem>();
+    [Parameter] public Func<TItem, string, bool>? Coincide { get; set; }
+    [Parameter] public RenderFragment<IReadOnlyList<TItem>> Cuerpo { get; set; } = default!;
+    [Parameter] public string Placeholder { get; set; } = "Buscar…";
+    [Parameter] public string Vacio { get; set; } = "Sin registros.";
+    [Parameter] public bool ConBusqueda { get; set; } = true;
+    [Parameter] public int TamanoPagina { get; set; } = 5;
+
+    private string _query = "";
+    private int _pagina = 1;
+
+    private IReadOnlyList<TItem> Filtrados
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_query) || Coincide is null) return Items;
+            return Items.Where(i => Coincide(i, _query)).ToList();
+        }
+    }
+
+    private IReadOnlyList<TItem> Visibles => Paginador.Pagina(Filtrados, ref _pagina, TamanoPagina);
+
+    private void OnBuscar(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? string.Empty;
+        _pagina = 1;
+    }
+}

@@ -1,12 +1,16 @@
 @page "/broker-profile/{CodigoParam?}"
 @inject AppState App
 @inject IBrokerService Brokers
+@inject ISolicitudService SolicitudSvc
+@inject IInteraccionService InteraccionSvc
+@inject IVisitaService VisitaSvc
+@inject HttpAgenteService AgentesSvc
 
 <PageTitle>Perfil de broker · ControlLocal</PageTitle>
 
 <AppShell Crumbs="@(new[] { "ControlLocal", "Brokers", b.Nombre })"
           Title="@b.Nombre"
-          Subtitle="Perfil del broker · información administrativa en modo lectura">
+          Subtitle="Perfil del broker · solicitudes y actividad de su equipo">
     <Actions>
         <button class="cl-btn" @onclick="@(() => App.Navigate("brokers"))">
             <Icon Name="chevronLeft" Size="13" /> Volver
@@ -20,7 +24,13 @@
         }
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;">
+        @if (_cargando)
+        {
+            <div class="cl-card"><div class="cl-card-body" style="padding:48px;text-align:center;color:#7E8794;">Cargando información del broker…</div></div>
+        }
+        else
+        {
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start;">
             <div class="cl-stack">
                 <div class="cl-card" style="text-align:center;padding:24px;">
                     <div class="cl-avatar" style="width:78px;height:78px;font-size:26px;margin:0 auto;">@b.Iniciales</div>
@@ -63,25 +73,131 @@
                         <Def K="Fecha de designación" V="@b.FechaDesignacionTexto" />
                         <Def K="Estado" V="@b.EstadoAdministrativo" />
                     </div>
-                    <div class="cl-alert blue" style="margin-top:16px;">
-                        <Icon Name="info" Size="15" />
-                        <span>El tipo de broker, el código y la fecha de designación se gestionan internamente y no se modifican desde el perfil.</span>
-                    </div>
                 </div>
             </div>
         </div>
+
+        <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;">
+            <PagedPanel TItem="SolicitudAlquilerDto" Title="Últimas solicitudes creadas"
+                        Items="_solicitudes" Coincide="CoincideSolicitud"
+                        Placeholder="Buscar por código, cliente o local…"
+                        Vacio="Este broker no tiene solicitudes registradas por su equipo.">
+                <Cuerpo Context="items">
+                    <table class="cl-table">
+                        <thead><tr><th>Solicitud</th><th>Cliente</th><th>Local</th><th>Estado</th><th>Monto/mes</th></tr></thead>
+                        <tbody>
+                            @foreach (var s in items)
+                            {
+                                <tr>
+                                    <td><span class="mono">@s.CodigoSolicitud</span></td>
+                                    <td style="font-weight:600;">@(string.IsNullOrWhiteSpace(s.ClienteNombre) ? "—" : s.ClienteNombre)</td>
+                                    <td>@s.DireccionLocal</td>
+                                    <td><StatusBadge Label="@s.Estado" /></td>
+                                    <td>@(s.MontoMensual > 0 ? $"USD {s.MontoMensualTexto}" : "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </Cuerpo>
+            </PagedPanel>
+
+            <PagedPanel TItem="ActividadItem" Title="Última actividad del equipo"
+                        Items="_actividad" Coincide="CoincideActividad"
+                        Placeholder="Buscar en la actividad…"
+                        Vacio="Sin interacciones ni visitas programadas del equipo.">
+                <Cuerpo Context="items">
+                    <Timeline Items="@(items.Select(a => new Timeline.TimelineItem(a.Tiempo, a.Titulo, a.Subtitulo)).ToArray())" />
+                </Cuerpo>
+            </PagedPanel>
+        </div>
+        }
     </ChildContent>
 </AppShell>
 
 @code {
     [Parameter] public string? CodigoParam { get; set; }
 
+    private bool _cargando = true;
     private BrokerDto b = new();
+    private List<SolicitudAlquilerDto> _solicitudes = new();
+    private List<ActividadItem> _actividad = new();
 
-    protected override void OnParametersSet()
+    private record ActividadItem(string Tiempo, string Titulo, string Subtitulo);
+
+    protected override async Task OnParametersSetAsync()
     {
-        b = (string.IsNullOrEmpty(CodigoParam) ? null : Brokers.ById(CodigoParam)) ?? Brokers.First();
+        _cargando = true;
+        try
+        {
+            b = (string.IsNullOrEmpty(CodigoParam) ? null : Brokers.ById(CodigoParam))
+                ?? Brokers.All().FirstOrDefault()
+                ?? new();
+
+            if (b.Id > 0)
+            {
+                var agentes = await AgentesSvc.AgentesDelBrokerAsync(b.Id);
+                var idsAgentes = agentes.Select(a => a.Id).ToHashSet();
+                var nombresAgentes = agentes
+                    .Select(a => (a.Nombre ?? "").Trim())
+                    .Where(n => n.Length > 0)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                try
+                {
+                    var sols = await SolicitudSvc.RefrescarAsync();
+                    _solicitudes = sols
+                        .Where(s => idsAgentes.Contains(s.AgenteResponsableId))
+                        .OrderByDescending(s => s.Id)
+                        .ToList();
+                }
+                catch { _solicitudes = new(); }
+
+                var actividad = new List<ActividadItem>();
+                try
+                {
+                    var visitas = await VisitaSvc.RefrescarAsync();
+                    actividad.AddRange(visitas
+                        .Where(v => EsProgramada(v.Estado) && nombresAgentes.Contains((v.NombreAgente ?? "").Trim()))
+                        .Select(v => new ActividadItem(
+                            $"{v.FechaTexto} · {v.HoraTexto}",
+                            string.IsNullOrWhiteSpace(v.ClienteNombre) ? "Visita programada" : v.ClienteNombre,
+                            $"Visita programada · {v.DireccionLocal} · {v.NombreAgente}")));
+                }
+                catch { }
+
+                try
+                {
+                    actividad.AddRange(InteraccionSvc.All()
+                        .Where(i => nombresAgentes.Contains((i.NombreAgenteResponsable ?? "").Trim()))
+                        .Select(i => new ActividadItem(
+                            i.FechaHoraTexto,
+                            string.IsNullOrWhiteSpace(i.ClienteNombre) ? "Interacción" : i.ClienteNombre,
+                            $"{EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, i.CanalContacto)} · {i.NombreAgenteResponsable}")));
+                }
+                catch { }
+
+                _actividad = actividad;
+            }
+        }
+        finally
+        {
+            _cargando = false;
+        }
     }
+
+    private static bool EsProgramada(string estado)
+    {
+        var e = (estado ?? "").Trim().ToUpperInvariant();
+        return e is "P" or "G" or "PROGRAMADA" or "REPROGRAMADA";
+    }
+
+    private static bool CoincideSolicitud(SolicitudAlquilerDto s, string q) =>
+        TextoFiltro.Contiene(s.CodigoSolicitud, q)
+        || TextoFiltro.Contiene(s.ClienteNombre, q)
+        || TextoFiltro.Contiene(s.DireccionLocal, q);
+
+    private static bool CoincideActividad(ActividadItem a, string q) =>
+        TextoFiltro.Contiene(a.Titulo, q) || TextoFiltro.Contiene(a.Subtitulo, q);
 
     private static string DocLabel(string valor) => valor switch
     {

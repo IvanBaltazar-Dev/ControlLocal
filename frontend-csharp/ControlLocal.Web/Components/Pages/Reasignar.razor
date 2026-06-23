@@ -23,7 +23,10 @@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">1 · Agente a reasignar</div></div>
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
-                    @foreach (var a in Assign.Agents().Where(a => !a.EsAdministrador))
+                    <input class="cl-input search" type="search" placeholder="Buscar agente por nombre, documento o broker…"
+                           value="@_buscarAgente" @oninput="@(e => _buscarAgente = e.Value?.ToString() ?? "")" />
+                    <div style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
+                    @foreach (var a in AgentesFiltrados)
                     {
                         var border = _agent == a.Id && a.Seleccionable ? "#005BFF" : "var(--c-border)";
                         var bg = !a.Seleccionable ? "var(--c-bg-2)" : _agent == a.Id ? "#EAF1FF" : "#fff";
@@ -44,6 +47,15 @@
                             </div>
                         </label>
                     }
+                    @if (_cargando)
+                    {
+                        <div class="cl-help">Cargando agentes…</div>
+                    }
+                    else if (!AgentesFiltrados.Any())
+                    {
+                        <div class="cl-help">Ningún agente coincide con la búsqueda.</div>
+                    }
+                    </div>
                     <div class="cl-help">Los agentes inactivos o en licencia se muestran como no disponibles para selección.</div>
                 </div>
             </div>
@@ -52,7 +64,10 @@
             <div class="cl-card">
                 <div class="cl-card-head"><div class="cl-card-title">2 · Nuevo Broker asignado</div></div>
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
-                    @foreach (var b in Assign.Brokers().Where(b => !b.EsAdministrador))
+                    <input class="cl-input search" type="search" placeholder="Buscar broker por nombre o zona…"
+                           value="@_buscarBroker" @oninput="@(e => _buscarBroker = e.Value?.ToString() ?? "")" />
+                    <div style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
+                    @foreach (var b in BrokersFiltrados)
                     {
                         var dup = A is not null && A.BrokerActual == b.Nombre;
                         var selectable = b.Seleccionable && !dup;
@@ -76,6 +91,11 @@
                             </div>
                         </label>
                     }
+                    @if (!BrokersFiltrados.Any())
+                    {
+                        <div class="cl-help">Ningún broker coincide con la búsqueda.</div>
+                    }
+                    </div>
                     <div class="cl-help">No se permite asignar a brokers inactivos ni a un broker administrador.</div>
                 </div>
             </div>
@@ -116,10 +136,10 @@
                         <dt>Fecha de asignación</dt><dd>@DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</dd>
                         <dt>Autoriza</dt><dd>Administración</dd>
                     </dl>
-                    <button class="cl-btn primary" style="width:100%;margin-top:14px;justify-content:center;" @onclick="TryConfirm">
-                        <Icon Name="swap" Size="14" /> Confirmar asignación
+                    <button class="cl-btn primary" disabled="@_procesando" style="width:100%;margin-top:14px;justify-content:center;" @onclick="TryConfirm">
+                        <Icon Name="swap" Size="14" /> @(_procesando ? "Reasignando..." : "Confirmar asignación")
                     </button>
-                    <button class="cl-btn ghost" style="width:100%;margin-top:6px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("brokers"))">Cancelar</button>
+                    <button class="cl-btn ghost" disabled="@_procesando" style="width:100%;margin-top:6px;justify-content:center;color:var(--c-text-2);" @onclick="@(() => App.Navigate("brokers"))">Cancelar</button>
                 </div>
             </div>
         </div>
@@ -131,7 +151,7 @@
                 <table class="cl-table">
                     <thead><tr><th>Fecha</th><th>Agente</th><th>Broker anterior</th><th>Broker nuevo</th><th>Responsable</th><th>Motivo</th><th>Estado</th></tr></thead>
                     <tbody>
-                        @foreach (var h in Assign.Historial())
+                        @foreach (var h in _historial)
                         {
                             <tr>
                                 <td class="muted">@h.FechaAsignacionTexto</td>
@@ -152,6 +172,7 @@
                        Title="Confirmar reasignación de agente"
                        Desc="@($"Estás por asignar a {A?.Nombre} al broker supervisor {B?.Nombre}. Si el agente tenía un broker anterior, esa supervisión quedará cerrada desde hoy.")"
                        ConfirmLabel="Confirmar asignación" CancelLabel="Cancelar"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">El agente fue asignado correctamente al broker supervisor.</Toast>
@@ -159,15 +180,59 @@
 </AppShell>
 
 @code {
-    private string _agent = "a1";
-    private string _broker = "b1";
+    private string _agent = "";
+    private string _broker = "";
     private string _motivo = "";
+    private string _buscarAgente = "";
+    private string _buscarBroker = "";
     private bool _confirm;
     private bool _toast;
+    private bool _cargando = true;
+    private bool _procesando;
     private string? _err;
 
-    private AssignAgentDto? A => Assign.Agents().FirstOrDefault(x => x.Id == _agent);
-    private AssignBrokerDto? B => Assign.Brokers().FirstOrDefault(x => x.Id == _broker);
+    // Datos cargados del backend (no se consultan en cada render, igual que reasignar-captaciones).
+    private IReadOnlyList<AssignAgentDto> _agentes = [];
+    private IReadOnlyList<AssignBrokerDto> _brokers = [];
+    private IReadOnlyList<BrokerAgenteDto> _historial = [];
+
+    private AssignAgentDto? A => _agentes.FirstOrDefault(x => x.Id == _agent);
+    private AssignBrokerDto? B => _brokers.FirstOrDefault(x => x.Id == _broker);
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            _agentes = await Assign.AgentsAsync(DisposedToken);
+            _brokers = await Assign.BrokersAsync(DisposedToken);
+            _historial = await Assign.HistorialAsync(DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _err = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    // La lista se mantiene tal cual; el buscador solo la reduce (mixto: lista + búsqueda).
+    private IEnumerable<AssignAgentDto> AgentesFiltrados =>
+        _agentes.Where(a => !a.EsAdministrador)
+            .Where(a => TextoFiltro.Contiene(a.Nombre, _buscarAgente)
+                || TextoFiltro.Contiene(a.NumeroDocumento, _buscarAgente)
+                || TextoFiltro.Contiene(a.BrokerActual, _buscarAgente));
+
+    private IEnumerable<AssignBrokerDto> BrokersFiltrados =>
+        _brokers.Where(b => !b.EsAdministrador)
+            .Where(b => TextoFiltro.Contiene(b.Nombre, _buscarBroker)
+                || TextoFiltro.Contiene(b.Zona, _buscarBroker));
 
     private void TryConfirm()
     {
@@ -182,18 +247,31 @@
 
     private async Task OnConfirm()
     {
+        if (_procesando || A is null || B is null) return;
         _confirm = false;
         try
         {
-            Assign.ReasignarAgente(_agent, _broker, _motivo.Trim());
-            _motivo = "";
+            _procesando = true;
+            _err = null;
+            await RenderIfAliveAsync();
+            await Assign.ReasignarAgenteAsync(_agent, _broker, _motivo.Trim(), DisposedToken);
+            await CargarAsync();
+            _agent = ""; _broker = ""; _motivo = "";
             _toast = true;
             await RenderIfAliveAsync();
             await DelayThenRenderAsync(2400, () => _toast = false);
         }
-        catch (InvalidOperationException ex)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
         {
             _err = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
         }
     }
 

@@ -37,12 +37,14 @@ public static class Navigation
             }),
             new NavSection("Bandejas de revisión", new[]
             {
-                new NavItem("pin", "Captaciones por revisar", "bandeja-captaciones", "9"),
-                new NavItem("fileText", "Solicitudes por evaluar", "solicitudes", "6"),
+                new NavItem("pin", "Captaciones por revisar", "bandeja-captaciones"),
+                new NavItem("fileText", "Solicitudes por evaluar", "solicitudes"),
             }),
             new NavSection("Seguimiento", new[]
             {
                 new NavItem("target", "Operaciones del equipo", "oportunidades"),
+                new NavItem("building", "Propiedades del equipo", "propiedades-equipo"),
+                new NavItem("store", "Cierres exitosos", "propiedades-alquiladas"),
             }),
         },
         [Roles.Agente] = new[]
@@ -59,11 +61,12 @@ public static class Navigation
             }),
             new NavSection("Operación", new[]
             {
-                new NavItem("pin", "Captaciones", "captaciones", "14"),
+                new NavItem("pin", "Captaciones", "captaciones"),
                 new NavItem("target", "Oportunidades comerciales", "oportunidades"),
-                new NavItem("target", "Interacciones comerciales", "interacciones", "5"),
+                new NavItem("target", "Interacciones comerciales", "interacciones"),
                 new NavItem("calendar", "Visitas", "visitas"),
                 new NavItem("fileText", "Solicitudes de alquiler", "solicitudes"),
+                new NavItem("store", "Cierres exitosos", "propiedades-alquiladas"),
             }),
         },
     };
@@ -98,6 +101,8 @@ public static class Navigation
         ["broker-form"] = "brokers",
         ["broker-nuevo"] = "brokers",
         ["oportunidades"] = "oportunidades",
+        ["propiedades-equipo"] = "propiedades-equipo",
+        ["propiedades-alquiladas"] = "propiedades-alquiladas",
     };
 
     public static readonly Dictionary<string, RoleUser> RoleUsers = new()

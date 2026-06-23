@@ -2,6 +2,7 @@ package com.controllocal.rest.http;
 
 import com.controllocal.bl.BusinessException;
 
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
@@ -17,6 +18,17 @@ public class ApiExceptionMapper implements ExceptionMapper<Throwable> {
         }
         if (error instanceof BusinessException || error instanceof IllegalArgumentException) {
             return respuesta(Response.Status.BAD_REQUEST.getStatusCode(), error.getMessage());
+        }
+        // Errores de cliente de JAX-RS (body vacío/malformado, no encontrado, etc.):
+        // se devuelven con SU código real, no como 500 genérico que oculta la causa.
+        if (error instanceof WebApplicationException web) {
+            int estado = web.getResponse() != null
+                    ? web.getResponse().getStatus()
+                    : Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
+            String mensaje = estado == Response.Status.BAD_REQUEST.getStatusCode()
+                    ? "El cuerpo de la solicitud es obligatorio o tiene un formato inválido."
+                    : (web.getMessage() != null ? web.getMessage() : "No se pudo completar la operacion.");
+            return respuesta(estado, mensaje);
         }
 
         System.err.println("[ControlLocal API] Error no controlado: " + error);

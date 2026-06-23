@@ -63,9 +63,8 @@ config/api.properties
 Ejemplo:
 
 ```properties
-api.environment=development
 api.cors.origin=http://localhost:5232
-api.token.secret=your_secret_with_at_least_32_characters
+api.token.secret=ControlLocal-development-token-secret-2026
 ```
 
 Si GlassFish no se inicia desde la raiz del repo, pasa la ruta con:

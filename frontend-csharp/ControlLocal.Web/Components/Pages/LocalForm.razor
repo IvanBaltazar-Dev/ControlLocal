@@ -81,6 +81,23 @@
                     </div>
                 </FormSection>
 
+                <FormSection Num="4" Title="Ficha técnica" Sub="Datos del inmueble para la evaluación y la ficha comercial (opcionales)">
+                    <div class="cl-grid c3">
+                        <Field Label="Frente (m)"><input type="number" step="0.01" @bind="_frente" placeholder="Ej. 6.5" /></Field>
+                        <Field Label="Zonificación"><input @bind="_zonificacion" placeholder="Ej. CZ, RDM, I2" /></Field>
+                        <Field Label="N.° de estacionamientos"><input type="number" @bind="_numEstacionamientos" placeholder="Ej. 2" /></Field>
+                        <Field Label="Carga eléctrica (kW)"><input type="number" step="0.01" @bind="_cargaElectrica" placeholder="Ej. 15" /></Field>
+                        <Field Label="Cuota de mantenimiento (USD/mes)"><input type="number" step="0.01" @bind="_cuotaMantenimiento" placeholder="Ej. 120" /></Field>
+                        <Field Label="Apto para licencia de funcionamiento">
+                            <select @bind="_aptoLicencia">
+                                <option value="">Sin especificar</option>
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                            </select>
+                        </Field>
+                    </div>
+                </FormSection>
+
                 @if (_err is not null)
                 {
                     <div class="cl-alert red" style="margin-bottom:14px;">
@@ -90,13 +107,15 @@
 
                 @if (_isEdit)
                 {
-                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@GuardarEdicion" SaveLabel="Guardar cambios" />
+                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@GuardarEdicion" SaveLabel="Guardar cambios"
+                                   Busy="@_procesando" BusyLabel="Guardando..." />
                 }
                 else
                 {
-                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar local">
+                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar local"
+                                   Busy="@_procesando" BusyLabel="Guardando...">
                         <Extra>
-                            <button class="cl-btn ghost" @onclick="GuardarBorrador"><Icon Name="save" Size="13" /> Guardar sin publicar</button>
+                            <button class="cl-btn ghost" disabled="@_procesando" @onclick="GuardarBorrador"><Icon Name="save" Size="13" /> Guardar sin publicar</button>
                         </Extra>
                     </FormFooterBar>
                 }
@@ -117,6 +136,7 @@
                            Title="¿Registrar local comercial?"
                            Desc="El local quedará registrado. Puedes crear su captación ahora para iniciar el proceso comercial, o solo guardarlo."
                            ConfirmLabel="Registrar y crear captación" CancelLabel="Solo registrar"
+                           Busy="@_procesando"
                            OnClose="@OnOnlyRegister"
                            OnConfirm="@OnRegisterAndCreate" />
         }
@@ -129,6 +149,7 @@
 
     private LocalComercialDto _l = new();
     private bool _isEdit = false;
+    private bool _procesando;
 
     private long _propietarioId;
     private string _direccion = "";
@@ -146,6 +167,12 @@
     private string _tipoInmueble = "L";
     private string _uso = "C";
     private string _estadoPublicacion = "B";
+    private string _frente = "";
+    private string _zonificacion = "";
+    private string _aptoLicencia = "";
+    private string _cargaElectrica = "";
+    private string _numEstacionamientos = "";
+    private string _cuotaMantenimiento = "";
 
     private IReadOnlyList<string> Distritos => OpcionConValorActual(EnumCatalog.DistritosLima, _distrito);
     private IReadOnlyList<string> Rubros => OpcionConValorActual(EnumCatalog.RubrosComerciales, _rubro);
@@ -180,6 +207,12 @@
                 _zonaUrbanizacion = _l.ZonaUrbanizacion ?? "";
                 _geoLat = _l.GeoLat?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
                 _geoLong = _l.GeoLong?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                _frente = _l.Frente?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                _zonificacion = _l.Zonificacion ?? "";
+                _aptoLicencia = _l.AptoLicenciaFuncionamiento is bool apto ? (apto ? "true" : "false") : "";
+                _cargaElectrica = _l.CargaElectricaKw?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                _numEstacionamientos = _l.NumeroEstacionamientos?.ToString() ?? "";
+                _cuotaMantenimiento = _l.CuotaMantenimiento?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
             }
         }
     }
@@ -198,46 +231,74 @@
 
     private async Task OnOnlyRegister()
     {
+        if (_procesando) return;
         _confirm = false;
-        if (!GuardarLocal()) return;
-        _toastMsg = "Local registrado correctamente";
-        _toast = true;
-        StateHasChanged();
-        await Task.Delay(300);
-        App.Navigate("locales");
+        try
+        {
+            _procesando = true;
+            StateHasChanged();
+            if (!await GuardarLocalAsync()) return;
+            _toastMsg = "Local registrado correctamente";
+            _toast = true;
+            StateHasChanged();
+            await Task.Delay(300);
+            App.Navigate("locales");
+        }
+        finally { _procesando = false; StateHasChanged(); }
     }
 
     private async Task GuardarEdicion()
     {
-        if (!GuardarLocal()) return;
-        _toastMsg = "Cambios guardados correctamente";
-        _toast = true;
-        StateHasChanged();
-        await Task.Delay(300);
-        App.Navigate("locales");
+        if (_procesando) return;
+        try
+        {
+            _procesando = true;
+            StateHasChanged();
+            if (!await GuardarLocalAsync()) return;
+            _toastMsg = "Cambios guardados correctamente";
+            _toast = true;
+            StateHasChanged();
+            await Task.Delay(300);
+            App.Navigate("locales");
+        }
+        finally { _procesando = false; StateHasChanged(); }
     }
 
     private async Task GuardarBorrador()
     {
-        _estadoPublicacion = "B";
-        if (!GuardarLocal()) return;
-        _toastMsg = "Local guardado sin publicar.";
-        _toast = true;
-        StateHasChanged();
-        await Task.Delay(300);
-        App.Navigate("locales");
+        if (_procesando) return;
+        try
+        {
+            _procesando = true;
+            _estadoPublicacion = "B";
+            StateHasChanged();
+            if (!await GuardarLocalAsync()) return;
+            _toastMsg = "Local guardado sin publicar.";
+            _toast = true;
+            StateHasChanged();
+            await Task.Delay(300);
+            App.Navigate("locales");
+        }
+        finally { _procesando = false; StateHasChanged(); }
     }
 
     private async Task OnRegisterAndCreate()
     {
+        if (_procesando) return;
         _confirm = false;
-        if (!GuardarLocal()) return;
-        await Task.Yield();
-        var prospeccion = ProspeccionSvc.All().FirstOrDefault(item => item.LocalId == _l.Id);
-        App.Navigate(prospeccion is null ? $"captacion-form/local/{_l.Id}" : $"captacion-form/captar/{prospeccion.Id}");
+        try
+        {
+            _procesando = true;
+            StateHasChanged();
+            if (!await GuardarLocalAsync()) return;
+            await Task.Yield();
+            var prospeccion = ProspeccionSvc.All().FirstOrDefault(item => item.LocalId == _l.Id);
+            App.Navigate(prospeccion is null ? $"captacion-form/local/{_l.Id}" : $"captacion-form/captar/{prospeccion.Id}");
+        }
+        finally { _procesando = false; StateHasChanged(); }
     }
 
-    private bool GuardarLocal()
+    private async Task<bool> GuardarLocalAsync()
     {
         if (_propietarioId <= 0)
         {
@@ -289,6 +350,27 @@
             _err = "La longitud debe estar entre -180 y 180.";
             return false;
         }
+        if (!DecimalOpcional(_frente, out var frente) || frente is < 0)
+        {
+            _err = "El frente no puede ser negativo.";
+            return false;
+        }
+        if (!DecimalOpcional(_cargaElectrica, out var cargaElectrica) || cargaElectrica is < 0)
+        {
+            _err = "La carga eléctrica no puede ser negativa.";
+            return false;
+        }
+        if (!DecimalOpcional(_cuotaMantenimiento, out var cuotaMantenimiento) || cuotaMantenimiento is < 0)
+        {
+            _err = "La cuota de mantenimiento no puede ser negativa.";
+            return false;
+        }
+        if (!EnteroOpcional(_numEstacionamientos, out var numEstacionamientos) || numEstacionamientos is < 0)
+        {
+            _err = "El número de estacionamientos no puede ser negativo.";
+            return false;
+        }
+        bool? aptoLicencia = string.IsNullOrEmpty(_aptoLicencia) ? null : _aptoLicencia == "true";
 
         try
         {
@@ -313,8 +395,14 @@
                 GeoLong = geoLong,
                 EstadoPublicacion = _estadoPublicacion,
                 Descripcion = _descripcion.Trim(),
+                Frente = frente,
+                Zonificacion = string.IsNullOrWhiteSpace(_zonificacion) ? null : _zonificacion.Trim(),
+                AptoLicenciaFuncionamiento = aptoLicencia,
+                CargaElectricaKw = cargaElectrica,
+                NumeroEstacionamientos = numEstacionamientos,
+                CuotaMantenimiento = cuotaMantenimiento,
             };
-            _l = _isEdit ? LocalSvc.Actualizar(local) : LocalSvc.Agregar(local);
+            _l = _isEdit ? await LocalSvc.ActualizarAsync(local) : await LocalSvc.AgregarAsync(local);
             _isEdit = true;
             _err = null;
             return true;

@@ -72,6 +72,6 @@
     protected override void OnParametersSet()
     {
         _o = (long.TryParse(IdParam, out var id) ? OwnerSvc.ById(id) : null)
-             ?? OwnerSvc.All().First();
+             ?? OwnerSvc.All().FirstOrDefault() ?? new();
     }
 }

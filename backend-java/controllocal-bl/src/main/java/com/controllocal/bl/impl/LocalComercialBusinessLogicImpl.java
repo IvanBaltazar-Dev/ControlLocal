@@ -9,23 +9,69 @@ import com.controllocal.bl.support.BusinessValidations;
 import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.*;
 import com.controllocal.dao.impl.*;
+import com.controllocal.model.inmueble.Distrito;
+import com.controllocal.model.inmueble.FotoLocal;
 import com.controllocal.model.inmueble.LocalComercial;
 
 public class LocalComercialBusinessLogicImpl implements LocalComercialBusinessLogic {
 
     private final LocalComercialDAO localDAO;
+    private final CaptacionDAO captacionDAO;
+    private final PrecioLocalDAO precioLocalDAO;
+    private final HistorialEstadoDAO historialEstadoDAO;
+    private final AlertaDAO alertaDAO;
+    private final DistritoDAO distritoDAO;
+    // Galeria de fotos: DAO propio (no participa en los constructores inyectables existentes).
+    private final FotoLocalDAO fotoLocalDAO = new FotoLocalDAOImpl();
 
     public LocalComercialBusinessLogicImpl() {
         this(new LocalComercialDAOImpl());
     }
 
     public LocalComercialBusinessLogicImpl(LocalComercialDAO localDAO) {
+        this(localDAO, new CaptacionDAOImpl(), new PrecioLocalDAOImpl(),
+                new HistorialEstadoDAOImpl(), new AlertaDAOImpl(), new DistritoDAOImpl());
+    }
+
+    public LocalComercialBusinessLogicImpl(LocalComercialDAO localDAO, CaptacionDAO captacionDAO,
+            PrecioLocalDAO precioLocalDAO, HistorialEstadoDAO historialEstadoDAO, AlertaDAO alertaDAO,
+            DistritoDAO distritoDAO) {
         this.localDAO = localDAO;
+        this.captacionDAO = captacionDAO;
+        this.precioLocalDAO = precioLocalDAO;
+        this.historialEstadoDAO = historialEstadoDAO;
+        this.alertaDAO = alertaDAO;
+        this.distritoDAO = distritoDAO;
+    }
+
+    // Resuelve la FK al catalogo distrito (solo Lima por ahora) desde el nombre escrito.
+    // Compara sin acentos ni mayusculas para tolerar variantes como "Brena"/"Breña".
+    // Si el distrito no esta catalogado, deja id_distrito en NULL (no rompe el alta).
+    private void resolverDistrito(LocalComercial local) {
+        String nombre = local.getDistrito();
+        if (nombre == null || nombre.isBlank()) {
+            local.setIdDistrito(null);
+            return;
+        }
+        String objetivo = normalizar(nombre);
+        local.setIdDistrito(distritoDAO.listarActivos().stream()
+                .filter(distrito -> normalizar(distrito.getNombre()).equals(objetivo))
+                .map(Distrito::getIdDistrito)
+                .findFirst()
+                .orElse(null));
+    }
+
+    // Minuscula + sin tildes/diacriticos para una comparacion laxa de nombres de distrito.
+    private static String normalizar(String valor) {
+        return java.text.Normalizer.normalize(valor.trim(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase();
     }
 
     public Long registrar(LocalComercial local) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.local(local);
+            resolverDistrito(local);
             return localDAO.crear(local);
         });
     }
@@ -48,10 +94,6 @@ public class LocalComercialBusinessLogicImpl implements LocalComercialBusinessLo
         return localDAO.contar();
     }
 
-    private final CaptacionDAO captacionDAO = new CaptacionDAOImpl();
-    private final PrecioLocalDAO precioLocalDAO = new PrecioLocalDAOImpl();
-    private final HistorialEstadoDAO historialEstadoDAO = new HistorialEstadoDAOImpl();
-    private final AlertaDAO alertaDAO = new AlertaDAOImpl();
     public boolean actualizar(LocalComercial localModificado, long idAgente) {
         // 1. Obtenemos el local original para comparar
         LocalComercial localOriginal = localDAO.buscarPorId(localModificado.getIdLocal())
@@ -91,6 +133,9 @@ public class LocalComercialBusinessLogicImpl implements LocalComercialBusinessLo
 
             alertaDAO.crearAlertaSensible(localModificado.getIdLocal(), idAgente, "Modificación comercial sensible, revisar");
         }
+
+        // Resolver la FK al catalogo distrito antes de persistir.
+        resolverDistrito(localModificado);
 
         // Finalmente, guardar
         return localDAO.actualizar(localModificado);
@@ -138,6 +183,40 @@ public class LocalComercialBusinessLogicImpl implements LocalComercialBusinessLo
 
         // Llamamos al DAO que tiene la consulta con el INNER JOIN que definimos antes
         return localDAO.listarPorAgente(idAgente, limite, desplazamiento);
+    }
+
+    @Override
+    public Long agregarFoto(Long idLocal, String clave, String nombreArchivo) {
+        return TransactionRunner.write(conn -> {
+            BusinessValidations.id(idLocal, "El id del local");
+            if (localDAO.buscarPorId(idLocal).isEmpty()) {
+                throw new BusinessException("El local no existe.");
+            }
+            int actuales = fotoLocalDAO.listarPorLocal(idLocal).size();
+            if (actuales >= 6) {
+                throw new BusinessException("Maximo 6 fotos por local. Elimina alguna para subir otra.");
+            }
+            FotoLocal foto = new FotoLocal();
+            foto.setIdLocal(idLocal);
+            foto.setClave(clave);
+            foto.setNombreArchivo(nombreArchivo);
+            foto.setOrden(actuales);
+            return fotoLocalDAO.crear(foto);
+        });
+    }
+
+    @Override
+    public List<FotoLocal> listarFotos(Long idLocal) {
+        BusinessValidations.id(idLocal, "El id del local");
+        return fotoLocalDAO.listarPorLocal(idLocal);
+    }
+
+    @Override
+    public boolean eliminarFoto(Long idFoto) {
+        return TransactionRunner.write(conn -> {
+            BusinessValidations.id(idFoto, "El id de la foto");
+            return fotoLocalDAO.eliminar(idFoto);
+        });
     }
 }
 

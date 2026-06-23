@@ -14,6 +14,8 @@ public class SolicitudAlquilerDto
 
     public long OportunidadId { get; set; }
 
+    public long AgenteResponsableId { get; set; }
+
     public string ClienteNombre { get; set; } = string.Empty;
 
     public string DireccionLocal { get; set; } = string.Empty;
@@ -29,6 +31,15 @@ public class SolicitudAlquilerDto
 
     public string PlazoTentativo { get; set; } = string.Empty;
 
+    // Condiciones del trato capturadas al registrar la solicitud (el broker las evalúa).
+    public string FechaInicioTexto { get; set; } = string.Empty;
+
+    public string FormaPago { get; set; } = string.Empty;
+
+    public int? MesesGarantia { get; set; }
+
+    public int? MesesAdelanto { get; set; }
+
     public string Observaciones { get; set; } = string.Empty;
 
     // Documentos completados listos para mostrar (ej. "6/6").
@@ -40,4 +51,7 @@ public class SolicitudAlquilerDto
     public string FechaRegistroTexto { get; set; } = string.Empty;
 
     public string Estado { get; set; } = string.Empty;
+
+    // Fecha del último cambio de estado de la solicitud (registrada / evaluada / aprobada…).
+    public DateTime? FechaActualizacionEstado { get; set; }
 }

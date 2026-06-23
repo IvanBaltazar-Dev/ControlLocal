@@ -130,6 +130,49 @@ public class PersonaDAOImpl implements PersonaDAO {
         }
     }
 
+    @Override
+    public boolean actualizarFoto(Long idPersona, String fotoClave) {
+        JdbcSupport.validarId(idPersona);
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "UPDATE persona SET foto_clave = ? WHERE id_persona = ?")) {
+            ps.setString(1, fotoClave);
+            ps.setLong(2, idPersona);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new DAOException("Error al actualizar la foto de la persona " + idPersona + ".", e);
+        }
+    }
+
+    @Override
+    public boolean actualizarTelefono(Long idPersona, String telefono) {
+        JdbcSupport.validarId(idPersona);
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "UPDATE persona SET telefono = ? WHERE id_persona = ?")) {
+            ps.setString(1, telefono);
+            ps.setLong(2, idPersona);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new DAOException("Error al actualizar el telefono de la persona " + idPersona + ".", e);
+        }
+    }
+
+    @Override
+    public Optional<String> buscarFoto(Long idPersona) {
+        JdbcSupport.validarId(idPersona);
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT foto_clave FROM persona WHERE id_persona = ?")) {
+            ps.setLong(1, idPersona);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.ofNullable(rs.getString("foto_clave")) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al obtener la foto de la persona " + idPersona + ".", e);
+        }
+    }
+
     private void validar(Persona persona, boolean requiereId) {
         if (persona == null) {
             throw new IllegalArgumentException("La persona no puede ser null.");

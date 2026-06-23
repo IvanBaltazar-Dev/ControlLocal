@@ -25,7 +25,7 @@ public class InteraccionComercialDAOImpl implements InteraccionComercialDAO {
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
-            SELECT id_interaccion, fecha_hora, canal_contacto, observaciones, resultado,
+            SELECT id_interaccion, fecha_hora, canal_contacto, i.observaciones, i.resultado,
                    i.id_oportunidad, o.id_cliente, o.id_captacion, i.id_agente,
                    i.transcripcion_nota, i.fecha_creacion
             FROM interaccion_comercial i

@@ -129,6 +129,11 @@ final class JdbcSupport {
         return rs.wasNull() ? null : valor;
     }
 
+    static Long getNullableLong(ResultSet rs, String column) throws SQLException {
+        long valor = rs.getLong(column);
+        return rs.wasNull() ? null : valor;
+    }
+
     static Persona mapPersona(ResultSet rs) throws SQLException {
         Persona persona = new Persona();
         persona.setIdPersona(rs.getLong("id_persona"));

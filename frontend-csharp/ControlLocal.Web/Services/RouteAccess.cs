@@ -23,6 +23,7 @@ public static class RouteAccess
 
         ["Agents"] = [Roles.Broker],
         ["AgenteDetail"] = [Roles.Broker],
+        ["PropiedadesEquipo"] = [Roles.Broker],
         ["AgenteForm"] = [Roles.Broker],
         ["ReasignarCaptaciones"] = [Roles.Broker],
         ["BandejaCaptaciones"] = [Roles.Broker],
@@ -49,10 +50,11 @@ public static class RouteAccess
         ["Visitas"] = [Roles.Agente],
         ["VisitaForm"] = [Roles.Agente],
         ["SolicitudForm"] = [Roles.Agente],
-        ["SolicitudDetail"] = [Roles.Agente],
+        ["SolicitudDetail"] = [Roles.Broker, Roles.Agente],
         ["Documentos"] = [Roles.Agente],
 
         ["Solicitudes"] = [Roles.Broker, Roles.Agente],
+        ["PropiedadesAlquiladas"] = [Roles.Broker, Roles.Agente],
         ["CaptacionDetail"] = [Roles.Broker, Roles.Agente],
         ["OportunidadDetail"] = [Roles.Broker, Roles.Agente],
         ["FichaPropiedad"] = [Roles.Broker, Roles.Agente],

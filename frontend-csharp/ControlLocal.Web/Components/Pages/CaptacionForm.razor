@@ -280,7 +280,9 @@
                 Exclusividad = _exclusividad,
                 Observaciones = _observaciones.Trim(),
             };
-            var guardada = _esEdicion ? CaptacionSvc.Actualizar(dto) : CaptacionSvc.Agregar(dto);
+            var guardada = _esEdicion
+                ? await CaptacionSvc.ActualizarAsync(dto, DisposedToken)
+                : await CaptacionSvc.AgregarAsync(dto, DisposedToken);
             if (_esCaptar)
                 ProspeccionSvc.MarcarCaptado(ProspeccionId, guardada.CodigoCaptacion);
 

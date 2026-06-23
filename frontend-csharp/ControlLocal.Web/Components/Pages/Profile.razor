@@ -1,6 +1,7 @@
 @page "/profile"
 @inherits SafeComponentBase
 @inject AppState App
+@inject HttpPerfilService PerfilSvc
 
 <PageTitle>Mi perfil · ControlLocal</PageTitle>
 
@@ -253,7 +254,27 @@
     private bool _toast;
     private string _toastMsg = "";
 
-    private void GuardarTelefono()
+    // Carga la foto y el telefono ya persistidos para este usuario.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var perfil = await PerfilSvc.ObtenerAsync(DisposedToken);
+            if (perfil is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(perfil.Telefono))
+                    _telefono = perfil.Telefono!;
+                if (!string.IsNullOrWhiteSpace(perfil.FotoClave))
+                    _fotoUrl = $"/documento?clave={Uri.EscapeDataString(perfil.FotoClave!)}";
+            }
+        }
+        catch
+        {
+            // El perfil se muestra con los datos de sesion si el backend no responde.
+        }
+    }
+
+    private async Task GuardarTelefono()
     {
         _telefonoErr = null;
         var digitos = _telefono.Count(char.IsDigit);
@@ -263,7 +284,15 @@
             return;
         }
 
-        Notificar("Teléfono actualizado correctamente.");
+        try
+        {
+            await PerfilSvc.ActualizarTelefonoAsync(_telefono.Trim(), DisposedToken);
+            Notificar("Teléfono actualizado correctamente.");
+        }
+        catch (Exception ex)
+        {
+            _telefonoErr = ex.Message;
+        }
     }
 
     private async Task CambiarFoto(InputFileChangeEventArgs e)
@@ -301,8 +330,18 @@
             return;
         }
 
-        _fotoUrl = $"data:{archivo.ContentType};base64,{Convert.ToBase64String(contenido)}";
-        Notificar("Foto de perfil actualizada.");
+        try
+        {
+            var clave = await PerfilSvc.ActualizarFotoAsync(archivo.Name, contenido, DisposedToken);
+            _fotoUrl = !string.IsNullOrWhiteSpace(clave)
+                ? $"/documento?clave={Uri.EscapeDataString(clave!)}"
+                : $"data:{archivo.ContentType};base64,{Convert.ToBase64String(contenido)}";
+            Notificar("Foto de perfil actualizada.");
+        }
+        catch (Exception ex)
+        {
+            _fotoErr = ex.Message;
+        }
     }
 
     private void Notificar(string mensaje)

@@ -86,6 +86,6 @@
     protected override void OnParametersSet()
     {
         _c = (long.TryParse(IdParam, out var id) ? ClienteSvc.ById(id) : null)
-             ?? ClienteSvc.All().First();
+             ?? ClienteSvc.All().FirstOrDefault() ?? new();
     }
 }

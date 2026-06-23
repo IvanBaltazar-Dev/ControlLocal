@@ -74,6 +74,7 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
 
     public Long registrar(EvaluacionSolicitud evaluacion) {
         return TransactionRunner.write(conn -> {
+            derivarTipoSegunResultado(evaluacion);
             BusinessValidations.evaluacion(evaluacion);
             SolicitudAlquiler solicitud = solicitudDAO.buscarPorId(BusinessValidations.idSolicitud(evaluacion.getSolicitudAlquiler()))
                     .orElseThrow(() -> new BusinessException("Solicitud no encontrada para evaluacion."));
@@ -102,6 +103,11 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
         return evaluacionDAO.listarTodos();
     }
 
+    public List<EvaluacionSolicitud> listarPorSolicitud(Long idSolicitud) {
+        BusinessValidations.id(idSolicitud, "El id de solicitud");
+        return evaluacionDAO.listarPorSolicitud(idSolicitud);
+    }
+
     public List<EvaluacionSolicitud> listarPorBroker(Long idBroker) {
         Broker broker = brokerDAO.buscarPorId(idBroker)
                 .orElseThrow(() -> new BusinessException("Broker no encontrado."));
@@ -117,6 +123,7 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
     public boolean actualizar(EvaluacionSolicitud evaluacion) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(evaluacion != null ? evaluacion.getIdEvaluacion() : null, "El id de evaluacion");
+            derivarTipoSegunResultado(evaluacion);
             BusinessValidations.evaluacion(evaluacion);
             SolicitudAlquiler solicitud = solicitudDAO.buscarPorId(BusinessValidations.idSolicitud(evaluacion.getSolicitudAlquiler()))
                     .orElseThrow(() -> new BusinessException("Solicitud no encontrada para evaluacion."));
@@ -166,6 +173,19 @@ public class EvaluacionSolicitudBusinessLogicImpl implements EvaluacionSolicitud
         if (!brokerAgenteDAO.existeAsignacionActiva(broker.getIdBroker(), idAgente)) {
             throw new BusinessException("El broker no supervisa al agente responsable de esta solicitud.");
         }
+    }
+
+    // El broker ya no elige el "tipo de evaluacion": se deriva del resultado para
+    // conservar trazabilidad. Observada => revision con ajustes (OBSERVACION);
+    // Aprobada/Rechazada => decision final (FINAL).
+    private static void derivarTipoSegunResultado(EvaluacionSolicitud evaluacion) {
+        if (evaluacion == null || evaluacion.getResultado() == null) {
+            return;
+        }
+        evaluacion.setTipoEvaluacion(
+                evaluacion.getResultado() == ResultadoEvaluacionSolicitud.OBSERVADA
+                        ? TipoEvaluacionSolicitud.OBSERVACION
+                        : TipoEvaluacionSolicitud.FINAL);
     }
 
     private static void aplicarResultado(SolicitudAlquiler solicitud, EvaluacionSolicitud evaluacion) {

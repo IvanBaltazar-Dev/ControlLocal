@@ -75,6 +75,8 @@ else
                                 <div class="cl-card-body">
                                     <dl class="cl-kv">
                                         <dt>Comisión</dt><dd>@_cap.ComisionPactadaTexto%</dd>
+                                        <dt>Urgencia</dt><dd>@UrgenciaTexto</dd>
+                                        <dt>Exclusividad</dt><dd>@(_cap.Exclusividad == true ? "Encargo exclusivo" : "No exclusivo")</dd>
                                         <dt>Vigencia</dt><dd>@_cap.VigenciaTexto</dd>
                                         <dt>Estado captación</dt><dd>@_cap.Estado</dd>
                                     </dl>
@@ -197,6 +199,8 @@ else
 
     private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
     private string _tab = "Resumen";
+
+    private string UrgenciaTexto => _cap.Urgencia is int nivel ? $"{nivel} / 5" : "—";
 
     private readonly string[] _stages = { "Captación activa", "Clientes interesados", "Con solicitud", "En evaluación", "Alquilada" };
     private int _current;

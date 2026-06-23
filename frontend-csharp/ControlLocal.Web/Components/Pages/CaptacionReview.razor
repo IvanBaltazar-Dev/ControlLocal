@@ -30,7 +30,7 @@ else
             {
                 <button class="cl-btn" disabled="@_procesando" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar</button>
                 <button class="cl-btn danger" disabled="@_procesando" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
-                <button class="cl-btn primary" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar</button>
+                <button class="cl-btn amber" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar</button>
                 <button class="cl-btn success" disabled="@_procesando" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar</button>
             }
         </Actions>
@@ -115,7 +115,7 @@ else
                             {
                                 <div style="display:flex;flex-direction:column;gap:8px;">
                                     <button class="cl-btn success" disabled="@_procesando" @onclick="@(() => AbrirModal("aprobar"))"><Icon Name="check" Size="13" /> Aprobar captacion</button>
-                                    <button class="cl-btn primary" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar y devolver</button>
+                                    <button class="cl-btn amber" disabled="@_procesando" @onclick="@(() => AbrirModal("observar"))"><Icon Name="alert" Size="13" /> Observar y devolver</button>
                                     <button class="cl-btn danger" disabled="@_procesando" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
                                     <button class="cl-btn" disabled="@_procesando" @onclick="@(() => AbrirModal("reasignar"))"><Icon Name="swap" Size="13" /> Reasignar agente</button>
                                 </div>
@@ -145,7 +145,7 @@ else
                 </Field>
             </ConfirmDialog>
 
-            <ConfirmDialog Open="@(_modal == "observar")" Tone="blue" Icon="alert"
+            <ConfirmDialog Open="@(_modal == "observar")" Tone="amber" Icon="alert"
                            Title="Observar y devolver al agente"
                            Desc="Indica que debe corregir el agente antes de reenviar."
                            ConfirmLabel="Enviar observaciones" CancelLabel="Cancelar"
@@ -385,7 +385,11 @@ else
         _mensajeRevision = MensajeParaEstado(_captacion?.Estado, mensaje);
         _toast = _mensajeRevision?.Text ?? mensaje;
         StateHasChanged();
-        await Task.CompletedTask;
+        // Igual que la evaluacion de solicitud (que navega a "solicitudes"), volvemos a la
+        // bandeja tras registrar la decision para que la pagina no se quede "pegada"
+        // esperando un refresco manual. El agente ya fue notificado del resultado.
+        await Task.Delay(900);
+        App.Navigate("bandeja-captaciones");
     }
 
     private async Task<bool> ConfirmarDecisionAplicadaAsync(string decision, string mensaje)

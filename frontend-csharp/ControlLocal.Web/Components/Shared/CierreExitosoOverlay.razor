@@ -20,6 +20,13 @@
             <h2 class="cl-success-title">@Title</h2>
             <p class="cl-success-sub">@Subtitle</p>
 
+            @if (!string.IsNullOrWhiteSpace(Confirmacion))
+            {
+                <div class="cl-success-confirm">
+                    <Icon Name="check" Size="13" /> @Confirmacion
+                </div>
+            }
+
             @if (Resumen is { Count: > 0 })
             {
                 <div class="cl-success-summary">
@@ -53,6 +60,8 @@
     [Parameter] public string Eyebrow { get; set; } = "Proceso completado";
     [Parameter] public string Title { get; set; } = "¡Cierre exitoso!";
     [Parameter] public string Subtitle { get; set; } = "";
+    // Línea de confirmación clara y breve (qué quedó hecho / a quién se notificó).
+    [Parameter] public string? Confirmacion { get; set; }
     [Parameter] public IReadOnlyList<Fila>? Resumen { get; set; }
     [Parameter] public RenderFragment? Acciones { get; set; }
 

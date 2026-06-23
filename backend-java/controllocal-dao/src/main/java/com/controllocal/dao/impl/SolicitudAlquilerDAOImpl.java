@@ -15,6 +15,7 @@ import com.controllocal.dao.SolicitudAlquilerDAO;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.enums.EstadoSolicitudAlquiler;
+import com.controllocal.model.comercial.enums.FormaPago;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.persona.ClienteInteresado;
@@ -27,13 +28,16 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             INSERT INTO solicitud_alquiler (
                 codigo_solicitud, fecha_registro, monto_propuesto, plazo_tentativo,
                 observaciones, estado, fecha_actualizacion_estado,
-                fecha_vigencia_oferta, id_oportunidad, id_agente
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fecha_vigencia_oferta, id_oportunidad, id_agente,
+                plazo_contrato_meses, fecha_inicio_contrato, forma_pago, meses_garantia, meses_adelanto
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT_SQL = """
             SELECT s.id_solicitud, s.codigo_solicitud, s.fecha_registro, s.monto_propuesto,
                    s.plazo_tentativo, s.observaciones, s.estado, s.fecha_actualizacion_estado,
                    s.fecha_vigencia_oferta,
+                   s.plazo_contrato_meses, s.fecha_inicio_contrato, s.forma_pago,
+                   s.meses_garantia, s.meses_adelanto,
                    s.id_oportunidad, o.codigo_oportunidad, o.id_cliente, o.id_captacion,
                    s.id_agente, s.fecha_creacion AS solicitud_fecha_creacion,
                    s.fecha_actualizacion AS solicitud_fecha_actualizacion,
@@ -57,7 +61,9 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             SET codigo_solicitud = ?, fecha_registro = ?, monto_propuesto = ?,
                 plazo_tentativo = ?, observaciones = ?, estado = ?,
                 fecha_actualizacion_estado = ?, fecha_vigencia_oferta = ?,
-                id_oportunidad = ?, id_agente = ?
+                id_oportunidad = ?, id_agente = ?,
+                plazo_contrato_meses = ?, fecha_inicio_contrato = ?, forma_pago = ?,
+                meses_garantia = ?, meses_adelanto = ?
             WHERE id_solicitud = ?
             """;
     private static final String DELETE_SQL = """
@@ -81,6 +87,11 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             JdbcSupport.setDate(ps, 8, solicitud.getFechaVigenciaOferta());
             ps.setLong(9, solicitud.getOportunidadComercial().getIdOportunidad());
             ps.setLong(10, solicitud.getAgenteResponsable().getIdAgente());
+            JdbcSupport.setInteger(ps, 11, solicitud.getPlazoContratoMeses());
+            JdbcSupport.setDate(ps, 12, solicitud.getFechaInicioContrato());
+            JdbcSupport.setEnum(ps, 13, solicitud.getFormaPago());
+            JdbcSupport.setInteger(ps, 14, solicitud.getMesesGarantia());
+            JdbcSupport.setInteger(ps, 15, solicitud.getMesesAdelanto());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -139,7 +150,12 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             JdbcSupport.setDate(ps, 8, solicitud.getFechaVigenciaOferta());
             ps.setLong(9, solicitud.getOportunidadComercial().getIdOportunidad());
             ps.setLong(10, solicitud.getAgenteResponsable().getIdAgente());
-            ps.setLong(11, solicitud.getIdSolicitud());
+            JdbcSupport.setInteger(ps, 11, solicitud.getPlazoContratoMeses());
+            JdbcSupport.setDate(ps, 12, solicitud.getFechaInicioContrato());
+            JdbcSupport.setEnum(ps, 13, solicitud.getFormaPago());
+            JdbcSupport.setInteger(ps, 14, solicitud.getMesesGarantia());
+            JdbcSupport.setInteger(ps, 15, solicitud.getMesesAdelanto());
+            ps.setLong(16, solicitud.getIdSolicitud());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new DAOException("Error al actualizar solicitud de alquiler con id " + solicitud.getIdSolicitud() + ".", e);
@@ -169,6 +185,11 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
         solicitud.setEstado(JdbcSupport.getEnum(rs, "estado", EstadoSolicitudAlquiler.class));
         solicitud.setFechaActualizacionEstado(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_actualizacion_estado")));
         solicitud.setFechaVigenciaOferta(JdbcSupport.toLocalDate(rs.getDate("fecha_vigencia_oferta")));
+        solicitud.setPlazoContratoMeses(JdbcSupport.getNullableInt(rs, "plazo_contrato_meses"));
+        solicitud.setFechaInicioContrato(JdbcSupport.toLocalDate(rs.getDate("fecha_inicio_contrato")));
+        solicitud.setFormaPago(JdbcSupport.getNullableEnum(rs, "forma_pago", FormaPago.class));
+        solicitud.setMesesGarantia(JdbcSupport.getNullableInt(rs, "meses_garantia"));
+        solicitud.setMesesAdelanto(JdbcSupport.getNullableInt(rs, "meses_adelanto"));
         Persona personaCliente = new Persona();
         personaCliente.setNombresORazonSocial(rs.getString("cliente_nombre"));
         ClienteInteresado cliente = JdbcSupport.cliente(rs.getLong("id_cliente"));

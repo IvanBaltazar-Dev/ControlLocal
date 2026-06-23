@@ -13,5 +13,10 @@ public interface UsuarioInternoBusinessLogic {
     public List<UsuarioInterno> listarTodos();
     public boolean actualizar(UsuarioInterno usuario);
     public boolean desactivar(Long idUsuario);
+
+    // Perfil del usuario en sesion: foto y telefono de su persona asociada.
+    public boolean actualizarFotoPerfil(Long idUsuario, String fotoClave);
+    public boolean actualizarTelefono(Long idUsuario, String telefono);
+    public Optional<String> obtenerFotoPerfil(Long idUsuario);
 }
 

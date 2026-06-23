@@ -107,13 +107,13 @@
     }
 
     private IEnumerable<ClienteInteresadoDto> Filtrados() => Todos.Where(c =>
-        (string.IsNullOrEmpty(_tipo) || (c.TipoPersona?.Contains(_tipo, StringComparison.OrdinalIgnoreCase) ?? false)) &&
+        TextoFiltro.Contiene(c.TipoPersona, _tipo) &&
         (string.IsNullOrEmpty(_rubro) || c.RubroInteres == _rubro) &&
         (string.IsNullOrEmpty(_estado) || c.Estado == _estado) &&
         (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
 
     private static bool Coincide(ClienteInteresadoDto c, string q) =>
-        (c.Nombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (c.NumeroDocumento?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (c.RubroInteres?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(c.Nombre, q)
+        || TextoFiltro.Contiene(c.NumeroDocumento, q)
+        || TextoFiltro.Contiene(c.RubroInteres, q);
 }

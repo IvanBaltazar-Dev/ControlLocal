@@ -93,8 +93,8 @@
         (string.IsNullOrEmpty(_query) || Coincide(b, _query)));
 
     private static bool Coincide(BrokerDto b, string q) =>
-        (b.Nombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (b.Email?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(b.Nombre, q)
+        || TextoFiltro.Contiene(b.Email, q);
 
     private static string DocLabel(string valor) => valor switch
     {

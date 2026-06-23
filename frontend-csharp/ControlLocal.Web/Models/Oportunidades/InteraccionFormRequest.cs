@@ -14,6 +14,4 @@ public class InteraccionFormRequest
     public string Resultado { get; set; } = string.Empty;
 
     public string? Observaciones { get; set; }
-
-    public string? TranscripcionNota { get; set; }
 }

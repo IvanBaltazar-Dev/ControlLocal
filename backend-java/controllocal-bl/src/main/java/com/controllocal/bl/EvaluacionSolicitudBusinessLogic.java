@@ -14,6 +14,7 @@ public interface EvaluacionSolicitudBusinessLogic {
     public Optional<EvaluacionSolicitud> buscarPorId(Long idEvaluacion);
     public List<EvaluacionSolicitud> listarTodos();
     public List<EvaluacionSolicitud> listarPorBroker(Long idBroker);
+    public List<EvaluacionSolicitud> listarPorSolicitud(Long idSolicitud);
     public boolean actualizar(EvaluacionSolicitud evaluacion);
     public boolean eliminar(Long idEvaluacion);
 }

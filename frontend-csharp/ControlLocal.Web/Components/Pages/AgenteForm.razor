@@ -125,7 +125,9 @@
                     </div>
                 }
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("agents"))" OnSave="@TryConfirm" SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar agente")" />
+                <FormFooterBar OnCancel="@(() => App.Navigate("agents"))" OnSave="@TryConfirm"
+                               SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar agente")"
+                               Busy="@_procesando" BusyLabel="Guardando..." />
             </div>
 
             <div class="cl-stack">
@@ -137,6 +139,7 @@
                        Title="@(_isEdit ? "¿Guardar cambios del agente?" : "¿Registrar agente y abrir supervisión?")"
                        Desc="@(_isEdit ? "Se actualizarán contacto, zona y estado. La identidad y el usuario permanecen sin cambios." : "Se creará la cuenta del agente y quedará bajo tu supervisión directa. Podrá registrar captaciones, clientes y operaciones.")"
                        ConfirmLabel="@(_isEdit ? "Guardar cambios" : "Registrar agente")" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">@(_isEdit ? "Agente actualizado correctamente" : "Agente registrado · supervisión activa")</Toast>
@@ -149,6 +152,7 @@
     private bool _isEdit => IdParam > 0;
     private bool _confirm;
     private bool _toast;
+    private bool _procesando;
 
     private string _tipo = "natural";
     private string _razonSocial = "";
@@ -265,6 +269,7 @@
 
     private async Task OnConfirm()
     {
+        if (_procesando) return;
         _confirm = false;
         var anterior = _isEdit ? AgenteSvc.ById(IdParam) : null;
         var agente = new AgenteDto
@@ -292,10 +297,30 @@
             BrokerNombre = _supervision,
         };
 
-        if (_isEdit)
-            AgenteSvc.Actualizar(agente);
-        else
-            AgenteSvc.Agregar(agente);
+        try
+        {
+            _procesando = true;
+            _err = null;
+            await RenderIfAliveAsync();
+            if (_isEdit)
+                await AgenteSvc.ActualizarAsync(agente, DisposedToken);
+            else
+                await AgenteSvc.AgregarAsync(agente, DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception error)
+        {
+            _err = error.Message;
+            return;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
 
         _toast = true;
         await RenderIfAliveAsync();

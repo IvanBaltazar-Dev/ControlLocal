@@ -21,16 +21,13 @@ public class JwtAuthFilter implements Filter {
     @Override
     public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse,
                          FilterChain chain) throws IOException, ServletException {
+
         HttpServletRequest request = (HttpServletRequest) servletRequest;
         HttpServletResponse response = (HttpServletResponse) servletResponse;
         String ruta = request.getRequestURI().substring(request.getContextPath().length());
 
         if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || esPublica(ruta)) {
             chain.doFilter(request, response);
-            return;
-        }
-        if (Entorno.esProduccion() && !esHttps(request)) {
-            JsonUtils.responderError(response, 400, "HTTPS es obligatorio.");
             return;
         }
 
@@ -57,19 +54,15 @@ public class JwtAuthFilter implements Filter {
 
     private boolean esPublica(String ruta) {
         return "/Api/salud".equalsIgnoreCase(ruta)
-                || "/Api/auth/login".equalsIgnoreCase(ruta);
+                || "/Api/auth/login".equalsIgnoreCase(ruta)
+                // Descarga por clave opaca (capability): el visor del frontend la consume
+                // tras su proxy "/documento", sin propagar el token JWT al navegador.
+                || "/Api/documentos/contenido".equalsIgnoreCase(ruta);
     }
 
     private boolean requiereBroker(String ruta) {
         String normalizada = ruta.toLowerCase();
         return normalizada.equals("/api/captaciones/pendientes")
                 || normalizada.matches("/api/captaciones/\\d+/(decision|reasignar|cierre)");
-    }
-
-    private boolean esHttps(HttpServletRequest request) {
-        if (request.isSecure()) {
-            return true;
-        }
-        return "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
     }
 }

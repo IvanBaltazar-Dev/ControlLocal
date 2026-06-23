@@ -11,11 +11,15 @@ import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
 import com.controllocal.dao.BrokerAgenteDAO;
 import com.controllocal.dao.BrokerDAO;
+import com.controllocal.dao.PersonaDAO;
 import com.controllocal.dao.ReasignacionAgenteBrokerDAO;
+import com.controllocal.dao.UsuarioInternoDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
 import com.controllocal.dao.impl.BrokerAgenteDAOImpl;
 import com.controllocal.dao.impl.BrokerDAOImpl;
+import com.controllocal.dao.impl.PersonaDAOImpl;
 import com.controllocal.dao.impl.ReasignacionAgenteBrokerDAOImpl;
+import com.controllocal.dao.impl.UsuarioInternoDAOImpl;
 import com.controllocal.model.persona.enums.EstadoActivoInactivo;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
@@ -28,6 +32,9 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
     private final AgenteInmobiliarioDAO agenteDAO;
     private final BrokerAgenteDAO brokerAgenteDAO;
     private final ReasignacionAgenteBrokerDAO reasignacionDAO;
+    // Necesarios para el alta/edicion atomica del broker (persona + usuario interno).
+    private final PersonaDAO personaDAO;
+    private final UsuarioInternoDAO usuarioDAO;
 
     public BrokerBusinessLogicImpl() {
         this(new BrokerDAOImpl(), new AgenteInmobiliarioDAOImpl(), new BrokerAgenteDAOImpl(), new ReasignacionAgenteBrokerDAOImpl());
@@ -43,10 +50,19 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
 
     public BrokerBusinessLogicImpl(BrokerDAO brokerDAO, AgenteInmobiliarioDAO agenteDAO, BrokerAgenteDAO brokerAgenteDAO,
                                    ReasignacionAgenteBrokerDAO reasignacionDAO) {
+        this(brokerDAO, agenteDAO, brokerAgenteDAO, reasignacionDAO,
+                new PersonaDAOImpl(), new UsuarioInternoDAOImpl());
+    }
+
+    public BrokerBusinessLogicImpl(BrokerDAO brokerDAO, AgenteInmobiliarioDAO agenteDAO, BrokerAgenteDAO brokerAgenteDAO,
+                                   ReasignacionAgenteBrokerDAO reasignacionDAO, PersonaDAO personaDAO,
+                                   UsuarioInternoDAO usuarioDAO) {
         this.brokerDAO = brokerDAO;
         this.agenteDAO = agenteDAO;
         this.brokerAgenteDAO = brokerAgenteDAO;
         this.reasignacionDAO = reasignacionDAO;
+        this.personaDAO = personaDAO;
+        this.usuarioDAO = usuarioDAO;
     }
 
     public Long registrarBroker(Long idBrokerAdministrador, Broker broker) {
@@ -56,6 +72,43 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
             BusinessValidations.broker(broker);
             return brokerDAO.crear(broker);
         });
+    }
+
+    @Override
+    public Long registrarBrokerCompleto(Long idBrokerAdministrador, Broker broker) {
+        return TransactionRunner.write(conn -> {
+            validarBrokerAdministrador(idBrokerAdministrador);
+            if (broker == null || broker.getPersona() == null) {
+                throw new BusinessException("El broker y su persona son obligatorios.");
+            }
+            validarUnicoBrokerAdministrador(broker, null);
+            // 1) persona  2) usuario_interno (el broker lo es)  3) broker — todo atomico.
+            personaDAO.crear(broker.getPersona());
+            usuarioDAO.crear(broker);
+            BusinessValidations.broker(broker);
+            return brokerDAO.crear(broker);
+        });
+    }
+
+    @Override
+    public boolean actualizarBrokerCompleto(Long idBrokerAdministrador, Broker broker) {
+        return TransactionRunner.write(conn -> {
+            validarBrokerAdministrador(idBrokerAdministrador);
+            BusinessValidations.id(broker != null ? broker.getIdBroker() : null, "El id de broker");
+            validarUnicoBrokerAdministrador(broker, broker.getIdBroker());
+            if (broker.getPersona() != null) {
+                personaDAO.actualizar(broker.getPersona());
+            }
+            usuarioDAO.actualizar(broker);
+            BusinessValidations.broker(broker);
+            return brokerDAO.actualizar(broker);
+        });
+    }
+
+    @Override
+    public Optional<BrokerAgente> buscarBrokerActivoDeAgente(Long idAgente) {
+        BusinessValidations.id(idAgente, "El id de agente");
+        return brokerAgenteDAO.buscarActivoPorAgente(idAgente);
     }
 
     public Long registrarPrimerBrokerAdministrador(Broker broker) {

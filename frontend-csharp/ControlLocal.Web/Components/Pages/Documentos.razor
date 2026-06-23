@@ -3,8 +3,9 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
-@inject IDocumentoStorage Storage
+@inject IDocumentoSolicitudService DocSvc
 @inject INotificacionService Notificaciones
+@inject IJSRuntime JS
 
 <PageTitle>Documentos @CodigoExpediente · ControlLocal</PageTitle>
 
@@ -13,8 +14,8 @@
           Subtitle="Carga y revisa los documentos requeridos para la evaluacion">
     <Actions>
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate($"solicitud-detail/{CodigoExpediente}"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn primary" disabled="@(PendientesDeCarga > 0)"
-                title="@(PendientesDeCarga > 0 ? "Completa los documentos pendientes de carga" : "")"
+        <button class="cl-btn primary" disabled="@(PendientesDeSubsanar > 0 || _reenviando)"
+                title="@(PendientesDeSubsanar > 0 ? "Completa o subsana los documentos pendientes u observados" : "")"
                 @onclick="@(() => _confirm = true)"><Icon Name="arrowRight" Size="13" /> Reenviar a evaluacion</button>
     </Actions>
     <ChildContent>
@@ -27,8 +28,8 @@
             <div class="cl-card">
                 <div class="cl-card-head">
                     <div class="cl-card-title">Documentos de la solicitud</div>
-                    <span class="cl-badge @(PendientesDeCarga == 0 ? "green" : "blue")">
-                        @(PendientesDeCarga == 0 ? "Carga completa" : $"{PendientesDeCarga} por cargar")
+                    <span class="cl-badge @(PendientesDeSubsanar == 0 ? "green" : "blue")">
+                        @(PendientesDeSubsanar == 0 ? "Listo para reenviar" : $"{PendientesDeSubsanar} por subsanar")
                     </span>
                 </div>
                 <div class="cl-card-body" style="padding:0;">
@@ -39,21 +40,52 @@
                             {
                                 <tr>
                                     <td>
-                                        <div class="cl-flex"><Icon Name="fileText" Size="15" /> <span style="font-weight:550;">@documento.Nombre</span></div>
-                                        @if (!string.IsNullOrWhiteSpace(documento.Observaciones))
+                                        <div class="cl-flex">
+                                            @{ var refArch = documento.Clave ?? documento.NombreArchivo; }
+                                            @if (!string.IsNullOrWhiteSpace(documento.Clave) && TiposContenido.EsImagen(documento.Clave))
+                                            {
+                                                <img src="@TiposContenido.UrlContenido(documento.Clave)" alt="@documento.Nombre"
+                                                     style="width:26px;height:26px;border-radius:5px;object-fit:cover;border:1px solid var(--c-border);" />
+                                            }
+                                            else
+                                            {
+                                                <Icon Name="@(string.IsNullOrWhiteSpace(refArch) ? "fileText" : TiposContenido.IconoPara(refArch))" Size="15" />
+                                            }
+                                            <span style="font-weight:550;">@documento.Nombre</span>
+                                        </div>
+                                        @if (documento.Estado == "Observado" && !string.IsNullOrWhiteSpace(documento.Observaciones))
+                                        {
+                                            <div class="cl-alert amber" style="margin-top:6px;padding:6px 9px;">
+                                                <Icon Name="alert" Size="13" />
+                                                <span style="font-size:11.5px;"><b>Observado por el broker:</b> @documento.Observaciones · vuelve a cargarlo y reenvía.</span>
+                                            </div>
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(documento.Observaciones))
                                         {
                                             <div class="cl-muted" style="font-size:11px;margin-top:3px;">@documento.Observaciones</div>
                                         }
                                     </td>
                                     <td><StatusBadge Label="@EstadoPantalla(documento)" /></td>
-                                    <td><StatusBadge Label="@documento.ResultadoRevision" /></td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(documento.ResultadoRevision))
+                                        {
+                                            <StatusBadge Label="@documento.ResultadoRevision" />
+                                        }
+                                        else
+                                        {
+                                            <span class="cl-muted">—</span>
+                                        }
+                                    </td>
                                     <td><span class="cl-muted" style="font-size:12px;">@documento.Actualizado</span></td>
                                     <td>
                                         <div class="cl-row-actions">
-                                            <button title="Ver" @onclick="@(() => AbrirVisor(documento))"><Icon Name="eye" Size="14" /></button>
+                                            @if (!string.IsNullOrWhiteSpace(documento.Clave))
+                                            {
+                                                <button title="Ver" @onclick="@(() => AbrirVisor(documento))"><Icon Name="eye" Size="14" /></button>
+                                            }
                                             @if (RequiereCarga(documento))
                                             {
-                                                <button title="Reemplazar" @onclick="@(() => _tipoSeleccionado = documento.TipoCodigo)"><Icon Name="upload" Size="13" /></button>
+                                                <button title="@(string.IsNullOrWhiteSpace(documento.NombreArchivo) ? "Subir" : "Reemplazar")" @onclick="@(() => AbrirSelectorAsync(documento.TipoCodigo))"><Icon Name="upload" Size="13" /></button>
                                             }
                                         </div>
                                     </td>
@@ -66,8 +98,25 @@
 
             <div class="cl-stack">
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Subir documento</div></div>
+                    <div class="cl-card-head">
+                        <div class="cl-card-title">Subir documento</div>
+                        @if (_estadoAlmacen is { } estado)
+                        {
+                            <span class="cl-badge @(estado.Conectado ? "green" : "red")"
+                                  title="@estado.Detalle">
+                                <Icon Name="@(estado.Conectado ? "checkCircle" : "alert")" Size="12" />
+                                @($"Almacén {estado.Proveedor}: {(estado.Conectado ? "conectado" : "sin conexión")}")
+                            </span>
+                        }
+                    </div>
                     <div class="cl-card-body">
+                        @if (_estadoAlmacen is { Conectado: false } caido)
+                        {
+                            <div class="cl-alert red" style="margin-bottom:10px;">
+                                <Icon Name="alert" Size="15" />
+                                <span>@caido.Detalle Revisa la configuración del almacenamiento antes de subir documentos.</span>
+                            </div>
+                        }
                         <Field Label="Tipo de documento">
                             <select @bind="_tipoSeleccionado">
                                 @foreach (var documento in _documentos.Where(RequiereCarga))
@@ -77,11 +126,24 @@
                             </select>
                         </Field>
                         <div style="margin-top:10px;">
-                            <InputFile OnChange="SubirArchivo" accept=".pdf,.png,.jpg,.jpeg" class="cl-input" />
+                            <InputFile id="doc-file-input" OnChange="SeleccionarArchivo" accept=".pdf,.png,.jpg,.jpeg" class="cl-input" />
                         </div>
                         <div class="cl-help" style="margin-top:6px;">
-                            PDF, PNG o JPG de hasta @(ValidadorArchivos.TamanoMaximo / 1024 / 1024) MB.
+                            PDF, PNG o JPG de hasta @(ValidadorArchivos.TamanoMaximo / 1024 / 1024) MB. Se guarda solo al confirmar.
                         </div>
+                        @if (_archivoEnEspera is { } espera)
+                        {
+                            <div class="cl-alert blue" style="margin-top:10px;flex-direction:column;align-items:stretch;gap:8px;">
+                                <div class="cl-flex" style="gap:8px;">
+                                    <Icon Name="fileText" Size="15" />
+                                    <span style="font-size:12.5px;">Listo para guardar: <b>@espera.Nombre</b> → @espera.TipoNombre</span>
+                                </div>
+                                <div class="cl-flex" style="gap:8px;justify-content:flex-end;">
+                                    <button class="cl-btn ghost sm" disabled="@_guardando" @onclick="QuitarSeleccion"><Icon Name="x" Size="13" /> Quitar</button>
+                                    <button class="cl-btn primary sm" disabled="@_guardando" @onclick="GuardarArchivoEnEsperaAsync"><Icon Name="save" Size="13" /> Guardar</button>
+                                </div>
+                            </div>
+                        }
                         @if (_error is not null)
                         {
                             <div class="cl-alert red" style="margin-top:10px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
@@ -103,28 +165,21 @@
             </div>
         </div>
 
-        <Modal Open="_visorAbierto" Tone="blue" Icon="fileText"
-               Title="@(_documentoVisor?.Nombre ?? "Documento")"
-               Desc="Campos de DocumentoSolicitud."
-               OnClose="@(() => _visorAbierto = false)">
-            <ChildContent>
-                <dl class="cl-kv">
-                    <dt>Estado</dt><dd><StatusBadge Label="@EstadoPantalla(_documentoVisor)" /></dd>
-                    <dt>Resultado de revision</dt><dd>@(_documentoVisor?.ResultadoRevision ?? "Pendiente")</dd>
-                    <dt>Actualizado</dt><dd>@(_documentoVisor?.Actualizado ?? "—")</dd>
-                    <dt>Archivo</dt><dd>@(_documentoVisor?.NombreArchivo ?? "Sin archivo cargado")</dd>
-                    <dt>Observaciones</dt><dd>@Texto(_documentoVisor?.Observaciones)</dd>
-                </dl>
-            </ChildContent>
-            <Footer>
-                <button class="cl-btn primary" @onclick="@(() => _visorAbierto = false)">Cerrar</button>
-            </Footer>
-        </Modal>
+        <DocViewerModal Open="_visorAbierto"
+                        Nombre="@(_documentoVisor?.Nombre ?? "Documento")"
+                        Estado="@EstadoPantalla(_documentoVisor)"
+                        Expediente="@CodigoExpediente"
+                        Actualizado="@(_documentoVisor?.Actualizado ?? "—")"
+                        Url="@UrlVisor"
+                        Incrustable="@IncrustableVisor"
+                        Nota="@(_documentoVisor?.Observaciones)"
+                        OnClose="@(() => _visorAbierto = false)" />
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="arrowRight"
                        Title="¿Reenviar la solicitud a evaluacion?"
-                       Desc="La solicitud volvera al estado En revision."
+                       Desc="La solicitud volvera al estado En revision y se notificara al broker."
                        ConfirmLabel="Reenviar" CancelLabel="Cancelar"
+                       Busy="@_reenviando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="ReenviarAsync" />
         <Toast Show="@(_toast is not null)">@_toast</Toast>
@@ -139,41 +194,131 @@
     private string? _error;
     private string? _toast;
     private bool _confirm;
+    private bool _reenviando;
     private bool _visorAbierto;
     private DocumentoItem? _documentoVisor;
+    private EstadoAlmacen? _estadoAlmacen;
+    private ArchivoEnEspera? _archivoEnEspera;
+    private bool _guardando;
 
     private string CodigoExpediente => _solicitud?.CodigoSolicitud ?? CodigoSolicitud ?? "Solicitud";
+    private long IdSolicitud => _solicitud?.Id ?? 0;
+
+    // URL del contenido real del documento abierto en el visor (null si no hay archivo).
+    private string? UrlVisor => string.IsNullOrEmpty(_documentoVisor?.Clave)
+        ? null
+        : $"/documento?clave={Uri.EscapeDataString(_documentoVisor.Clave)}";
+    private bool IncrustableVisor =>
+        _documentoVisor?.Clave is { } clave && TiposContenido.SePuedeIncrustar(clave);
+
+    // Comprueba al entrar que el almacén (S3 o Local) responde, para avisar de inmediato
+    // si está caído antes de que el usuario intente subir o ver un documento.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _estadoAlmacen = await DocSvc.EstadoAlmacenAsync(DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _estadoAlmacen = EstadoAlmacen.Falla("Almacén", ex.Message);
+        }
+    }
 
     private sealed class DocumentoItem
     {
         public required string TipoCodigo { get; init; }
         public required string Nombre { get; init; }
         public string Estado { get; set; } = "";
-        public string ResultadoRevision { get; set; } = "Pendiente";
+        public string ResultadoRevision { get; set; } = "";
         public string Actualizado { get; set; } = "—";
         public string? Observaciones { get; set; }
         public string? NombreArchivo { get; set; }
+        // Clave del archivo en el almacén (Local/S3). Sin clave no hay archivo que abrir.
+        public string? Clave { get; set; }
     }
 
+    // Archivo elegido por el usuario que aún NO se ha persistido. Se confirma con Guardar
+    // (lo sube al almacén) o se descarta con Quitar, antes de registrarse como documento.
+    private sealed class ArchivoEnEspera
+    {
+        public required string TipoCodigo { get; init; }
+        public required string TipoNombre { get; init; }
+        public required string Nombre { get; init; }
+        public required byte[] Contenido { get; init; }
+    }
+
+    // Checklist de documentos requeridos por la solicitud. Todos inician "Pendiente de
+    // carga" (sin archivo, sin revisión); el estado solo cambia cuando el agente sube el
+    // archivo o el broker lo revisa. No hay datos de ejemplo: nada figura como validado
+    // mientras no exista un archivo real. (Metadatos por persistir en backend; ver flujo S3.)
     private readonly List<DocumentoItem> _documentos =
     [
-        new() { TipoCodigo = "I", Nombre = "Documento de identidad", Estado = "Validado", ResultadoRevision = "Conforme", Actualizado = "22 May", NombreArchivo = "documento_identidad.pdf" },
-        new() { TipoCodigo = "R", Nombre = "Ficha o constancia RUC", Estado = "Validado", ResultadoRevision = "Conforme", Actualizado = "22 May", NombreArchivo = "ficha_ruc.pdf" },
-        new() { TipoCodigo = "V", Nombre = "Vigencia de poder", Estado = "Observado", ResultadoRevision = "Observado", Actualizado = "22 May", Observaciones = "El documento esta vencido.", NombreArchivo = "vigencia_poder.pdf" },
-        new() { TipoCodigo = "E", Nombre = "Sustento economico", Estado = "Observado", ResultadoRevision = "Observado", Actualizado = "22 May", Observaciones = "Falta el ultimo periodo.", NombreArchivo = "sustento_economico.pdf" },
+        new() { TipoCodigo = "I", Nombre = "Documento de identidad" },
+        new() { TipoCodigo = "R", Nombre = "Ficha o constancia RUC" },
+        new() { TipoCodigo = "V", Nombre = "Vigencia de poder" },
+        new() { TipoCodigo = "E", Nombre = "Sustento economico" },
         new() { TipoCodigo = "G", Nombre = "Documento de garantia" },
-        new() { TipoCodigo = "D", Nombre = "Declaracion jurada", Estado = "Validado", ResultadoRevision = "Conforme", Actualizado = "22 May", NombreArchivo = "declaracion_jurada.pdf" },
+        new() { TipoCodigo = "D", Nombre = "Declaracion jurada" },
     ];
 
     private int Entregados => _documentos.Count(item => !string.IsNullOrWhiteSpace(item.NombreArchivo));
-    private int PendientesDeCarga => _documentos.Count - Entregados;
     private int Porcentaje => (int)Math.Round(Entregados * 100.0 / _documentos.Count);
+    // Bloquea el reenvío hasta que no quede ningún documento sin subir NI observado por el broker.
+    private int PendientesDeSubsanar => _documentos.Count(RequiereCarga);
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _solicitud = string.IsNullOrWhiteSpace(CodigoSolicitud)
             ? SolicitudSvc.All().FirstOrDefault()
             : SolicitudSvc.ByCodigo(CodigoSolicitud);
+        await CargarDocumentosAsync();
+    }
+
+    // Trae los documentos reales de la solicitud y los superpone sobre el checklist.
+    // Sin documentos, cada tipo queda "Pendiente de carga" (nada figura como validado).
+    private async Task CargarDocumentosAsync()
+    {
+        foreach (var item in _documentos)
+        {
+            item.Estado = "";
+            item.ResultadoRevision = "";
+            item.Actualizado = "—";
+            item.Observaciones = null;
+            item.NombreArchivo = null;
+            item.Clave = null;
+        }
+
+        if (IdSolicitud > 0)
+        {
+            try
+            {
+                var reales = await DocSvc.ListarAsync(IdSolicitud, DisposedToken);
+                foreach (var item in _documentos)
+                {
+                    // Si hay varios del mismo tipo (recargas), gana el más reciente.
+                    var real = reales.LastOrDefault(r => r.TipoDocumento == item.TipoCodigo);
+                    if (real is null) continue;
+                    item.Estado = string.IsNullOrWhiteSpace(real.Estado) ? "Registrado" : real.Estado;
+                    item.ResultadoRevision = real.ResultadoRevision;
+                    item.Actualizado = string.IsNullOrWhiteSpace(real.FechaEntregaTexto) ? "—" : real.FechaEntregaTexto;
+                    item.Observaciones = string.IsNullOrWhiteSpace(real.Observaciones) ? null : real.Observaciones;
+                    item.NombreArchivo = real.NombreArchivo;
+                    item.Clave = real.RutaArchivo;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                _error = $"No se pudieron cargar los documentos: {ex.Message}";
+            }
+        }
+
         _tipoSeleccionado = _documentos.FirstOrDefault(RequiereCarga)?.TipoCodigo ?? "";
     }
 
@@ -191,7 +336,17 @@
         _visorAbierto = true;
     }
 
-    private async Task SubirArchivo(InputFileChangeEventArgs evento)
+    // Abre el explorador de archivos para el tipo de la fila pulsada (el icono "upload").
+    private async Task AbrirSelectorAsync(string tipoCodigo)
+    {
+        _tipoSeleccionado = tipoCodigo;
+        _error = null;
+        await JS.InvokeVoidAsync("controlLocal.clickElemento", "doc-file-input");
+    }
+
+    // Paso 1: el usuario elige un archivo. Se valida pero NO se persiste; queda "en espera"
+    // hasta que confirme con Guardar (o lo descarte con Quitar).
+    private async Task SeleccionarArchivo(InputFileChangeEventArgs evento)
     {
         _error = null;
         var documento = _documentos.FirstOrDefault(item => item.TipoCodigo == _tipoSeleccionado);
@@ -202,6 +357,12 @@
         }
 
         var archivo = evento.File;
+        if (archivo is null)
+        {
+            _error = "No se recibió ningún archivo.";
+            return;
+        }
+
         using var memoria = new MemoryStream();
         try
         {
@@ -211,6 +372,13 @@
         catch (IOException)
         {
             _error = $"El archivo supera el maximo de {ValidadorArchivos.TamanoMaximo / 1024 / 1024} MB.";
+            return;
+        }
+        catch (Exception ex)
+        {
+            // Cualquier otro fallo al leer el archivo del navegador (canal interrumpido,
+            // etc.) se muestra en la UI; nunca debe propagarse y tumbar el circuito.
+            _error = $"No se pudo leer el archivo: {ex.Message}";
             return;
         }
 
@@ -224,13 +392,75 @@
             return;
         }
 
-        memoria.Position = 0;
-        var guardado = await Storage.GuardarAsync(CodigoExpediente, archivo.Name, memoria);
-        documento.Estado = "Registrado";
-        documento.ResultadoRevision = "Pendiente";
-        documento.Observaciones = null;
-        documento.Actualizado = DateTime.Today.ToString("dd MMM", System.Globalization.CultureInfo.InvariantCulture);
-        documento.NombreArchivo = guardado.Nombre;
+        if (IdSolicitud <= 0)
+        {
+            _error = "No se pudo identificar la solicitud para registrar el documento.";
+            return;
+        }
+
+        // Deja el archivo listo, pendiente de confirmación. Aún no toca el almacén.
+        _archivoEnEspera = new ArchivoEnEspera
+        {
+            TipoCodigo = documento.TipoCodigo,
+            TipoNombre = documento.Nombre,
+            Nombre = archivo.Name,
+            Contenido = memoria.ToArray(),
+        };
+    }
+
+    // Descarta el archivo en espera sin persistirlo.
+    private void QuitarSeleccion()
+    {
+        _archivoEnEspera = null;
+        _error = null;
+    }
+
+    // Paso 2: confirma la subida. Recién aquí los bytes van al backend, que los guarda en el
+    // almacén (S3 o disco) y persiste los metadatos en una sola operación.
+    private async Task GuardarArchivoEnEsperaAsync()
+    {
+        if (_guardando || _archivoEnEspera is not { } espera)
+        {
+            return;
+        }
+        var documento = _documentos.FirstOrDefault(item => item.TipoCodigo == espera.TipoCodigo);
+        if (documento is null)
+        {
+            _error = "No se encontró el tipo de documento.";
+            return;
+        }
+
+        _error = null;
+        ControlLocal.Web.Services.CrashLog.Breadcrumb(
+            $"GuardarArchivo: solicitud={IdSolicitud} tipo={espera.TipoCodigo} archivo={espera.Nombre} bytes={espera.Contenido.Length}");
+        DocumentoSolicitudDto registrado;
+        try
+        {
+            _guardando = true;
+            await RenderIfAliveAsync();
+            registrado = await DocSvc.SubirAsync(
+                IdSolicitud, espera.TipoCodigo, espera.Nombre, espera.Contenido, DisposedToken);
+            ControlLocal.Web.Services.CrashLog.Breadcrumb("GuardarArchivo: SubirAsync regreso OK");
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudo subir el documento: {ex.Message}";
+            return;
+        }
+        finally
+        {
+            _guardando = false;
+        }
+
+        documento.Estado = string.IsNullOrWhiteSpace(registrado.Estado) ? "Registrado" : registrado.Estado;
+        documento.ResultadoRevision = registrado.ResultadoRevision;
+        documento.Observaciones = string.IsNullOrWhiteSpace(registrado.Observaciones) ? null : registrado.Observaciones;
+        documento.Actualizado = string.IsNullOrWhiteSpace(registrado.FechaEntregaTexto)
+            ? DateTime.Today.ToString("dd MMM", System.Globalization.CultureInfo.InvariantCulture)
+            : registrado.FechaEntregaTexto;
+        documento.NombreArchivo = registrado.NombreArchivo;
+        documento.Clave = registrado.RutaArchivo;
+        _archivoEnEspera = null;
         _tipoSeleccionado = _documentos.FirstOrDefault(RequiereCarga)?.TipoCodigo ?? "";
         _toast = $"Documento \"{documento.Nombre}\" registrado.";
         await OcultarToastAsync();
@@ -238,15 +468,19 @@
 
     private async Task ReenviarAsync()
     {
-        _confirm = false;
+        if (_reenviando) return;
         if (_solicitud is null)
         {
+            _confirm = false;
             _error = "Solicitud no encontrada.";
             return;
         }
         try
         {
-            SolicitudSvc.ReenviarAEvaluacion(_solicitud.CodigoSolicitud);
+            _reenviando = true;
+            _error = null;
+            await RenderIfAliveAsync();
+            await SolicitudSvc.ReenviarAEvaluacionAsync(_solicitud.CodigoSolicitud, DisposedToken);
             Notificaciones.Crear(new NotificacionDto
             {
                 Tipo = "Solicitud por evaluar",
@@ -254,17 +488,31 @@
                 Severidad = "MEDIA",
                 Icono = "fileText",
                 EntidadTipo = "Solicitud",
-                EntidadRef = _solicitud.CodigoSolicitud,
-                Ruta = "solicitudes",
+                // Id numérico para deduplicar con la alerta que el backend ya persiste para
+                // el broker supervisor (SOLICITUD_REENVIADA, que llega vía broker_agente).
+                EntidadRef = _solicitud.Id.ToString(),
+                // Lleva al broker directo a evaluar ESTA solicitud, no a la lista genérica.
+                Ruta = $"evaluacion/{_solicitud.CodigoSolicitud}",
                 DestinatarioRol = Roles.Broker,
                 Fecha = DateTime.Now,
             });
         }
-        catch (InvalidOperationException ex)
+        catch (OperationCanceledException)
         {
+            return;
+        }
+        catch (Exception ex)
+        {
+            // Cualquier fallo (estado no reenviable, backend caido, etc.) se muestra en la
+            // UI; nunca debe propagarse y tumbar/colgar el circuito de Blazor Server.
             _error = ex.Message;
             await RenderIfAliveAsync();
             return;
+        }
+        finally
+        {
+            _reenviando = false;
+            _confirm = false;
         }
         _toast = "Solicitud reenviada a evaluación. Se notificó al broker.";
         await RenderIfAliveAsync();

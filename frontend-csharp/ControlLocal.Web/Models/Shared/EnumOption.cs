@@ -98,6 +98,21 @@ public static class EnumCatalog
         new("C", "Cerrado")
     ];
 
+    public static readonly IReadOnlyList<EnumOption> CanalesPublicacion =
+    [
+        new("URBANIA", "Urbania"),
+        new("ADONDEVIVIR", "AdondeVivir"),
+        new("PROPERATI", "Properati"),
+        new("NEXO_INMOBILIARIO", "Nexo Inmobiliario"),
+        new("FACEBOOK", "Facebook"),
+        new("MARKETPLACE", "Marketplace"),
+        new("INSTAGRAM", "Instagram"),
+        new("WHATSAPP", "WhatsApp"),
+        new("WEB_PROPIA", "Web propia"),
+        new("REFERIDO", "Referido"),
+        new("OTRO", "Otro")
+    ];
+
     public static readonly IReadOnlyList<string> DistritosLima =
     [
         "Ancon",
@@ -117,7 +132,7 @@ public static class EnumCatalog
         "Lima",
         "Lince",
         "Los Olivos",
-        "Lurigancho",
+        "Lurigancho-Chosica",
         "Lurin",
         "Magdalena del Mar",
         "Miraflores",
@@ -265,7 +280,8 @@ public static class EnumCatalog
         new("O", "Observada"),
         new("A", "Aprobada"),
         new("R", "Rechazada"),
-        new("D", "Desistida")
+        new("D", "Desistida"),
+        new("C", "Cerrada")
     ];
 
     public static readonly IReadOnlyList<EnumOption> EstadosDocumentoSolicitud =

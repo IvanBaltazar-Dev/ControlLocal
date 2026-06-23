@@ -87,6 +87,25 @@ public class EvaluacionSolicitudDAOImpl implements EvaluacionSolicitudDAO {
     }
 
     @Override
+    public List<EvaluacionSolicitud> listarPorSolicitud(Long idSolicitud) {
+        JdbcSupport.validarId(idSolicitud);
+        List<EvaluacionSolicitud> evaluaciones = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     SELECT_SQL + " WHERE id_solicitud = ? ORDER BY fecha_evaluacion, id_evaluacion")) {
+            ps.setLong(1, idSolicitud);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    evaluaciones.add(mapRow(rs));
+                }
+            }
+            return evaluaciones;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar evaluaciones de la solicitud " + idSolicitud + ".", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(EvaluacionSolicitud evaluacion) {
         validar(evaluacion, true);
         try (Connection conn = DBManager.getConnection();

@@ -1,9 +1,13 @@
 @page "/ficha-propiedad/{CodigoParam?}"
 @using ControlLocal.Web.Services
+@using QuestPDF.Fluent
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
 @inject ILocalService LocalSvc
 @inject IPropietarioService PropSvc
+@inject IPrecioLocalService PrecioSvc
+@inject ExportacionService Exportar
+@inject HttpFotoLocalService FotoSvc
 
 <PageTitle>Ficha @_m.Codigo · ControlLocal</PageTitle>
 
@@ -15,10 +19,10 @@
                     Status="@_m.Estado"
                     Stats="_stats">
             <Actions>
-                <button class="cl-btn on-dark" @onclick="@(() => App.Navigate("captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-                <a class="cl-btn on-light" href="@($"/ficha/{_m.Codigo}/pdf")" target="_blank" rel="noopener">
-                    <Icon Name="download" Size="14" /> Exportar PDF
-                </a>
+                <button class="cl-btn on-dark" @onclick="@(() => App.Navigate(EsAgente ? "captaciones" : "propiedades-equipo"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+                <button class="cl-btn on-light" disabled="@_exportando" @onclick="ExportarPdf">
+                    <Icon Name="download" Size="14" /> @(_exportando ? "Generando…" : "Exportar PDF")
+                </button>
             </Actions>
         </DetailHero>
 
@@ -27,16 +31,66 @@
                 <div class="cl-card">
                     <div class="cl-card-head">
                         <div class="cl-card-title">Galería del local</div>
-                        <span class="cl-muted" style="font-size:12px;">Fotos referenciales</span>
+                        <span class="cl-badge @(_fotos.Count >= 6 ? "green" : "blue")">@_fotos.Count / 6 fotos</span>
                     </div>
                     <div class="cl-card-body">
-                        <div class="cl-gallery">
-                            <div class="shot hero-shot"><span class="shot-tag">fachada</span></div>
-                            <div class="shot"><span class="shot-tag">interior</span></div>
-                            <div class="shot"><span class="shot-tag">depósito</span></div>
-                            <div class="shot"><span class="shot-tag">acceso</span></div>
-                            <div class="shot"><span class="more">+6 fotos</span></div>
-                        </div>
+                        @if (_fotos.Count > 0)
+                        {
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">
+                                @foreach (var foto in _fotos)
+                                {
+                                    <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--c-border);aspect-ratio:4/3;">
+                                        <img src="@RutaFoto(foto.Clave)" alt="@foto.Nombre"
+                                             style="width:100%;height:100%;object-fit:cover;display:block;" />
+                                        @if (EsAgente)
+                                        {
+                                            <button class="cl-btn sm" title="Eliminar foto"
+                                                    style="position:absolute;top:6px;right:6px;padding:4px 6px;"
+                                                    @onclick="@(() => EliminarFoto(foto.IdFoto))">
+                                                <Icon Name="x" Size="12" />
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="cl-ph" style="height:150px;flex-direction:column;gap:6px;">
+                                <Icon Name="store" Size="24" />
+                                <span>Aún no hay fotos cargadas para este local</span>
+                            </div>
+                        }
+
+                        @if (EsAgente)
+                        {
+                            <div style="margin-top:14px;">
+                                @if (_fotos.Count < 6)
+                                {
+                                    <label for="foto-local" class="cl-dropzone @(_subiendoFoto ? "is-busy" : "")">
+                                        <Icon Name="upload" Size="22" />
+                                        <div class="cl-dropzone-title">@(_subiendoFoto ? "Subiendo fotos…" : "Subir fotos del local")</div>
+                                        <div class="cl-dropzone-sub">Haz clic para elegir una o varias · PNG o JPG · hasta @MaxMb MB</div>
+                                        <span class="cl-badge blue" style="margin-top:8px;">@_fotos.Count / 6 · puedes subir @(6 - _fotos.Count) más</span>
+                                        <InputFile id="foto-local" OnChange="SubirFotos" accept=".png,.jpg,.jpeg" multiple
+                                                   disabled="@_subiendoFoto" style="display:none;" />
+                                    </label>
+                                }
+                                else
+                                {
+                                    <div class="cl-alert blue">
+                                        <Icon Name="checkCircle" Size="15" />
+                                        <span>Galería completa (<b>6/6</b>). Elimina una foto para subir otra.</span>
+                                    </div>
+                                }
+                                @if (_fotoErr is not null)
+                                {
+                                    <div class="cl-alert red" style="margin-top:10px;">
+                                        <Icon Name="alert" Size="15" /><span>@_fotoErr</span>
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
                 </div>
 
@@ -50,6 +104,12 @@
                             <Spec Icon="checkCircle" K="Conservación" V="@_m.Antiguedad" />
                             <Spec Icon="mapPin" K="Distrito" V="@_m.Distrito" />
                             <Spec Icon="pin" K="Referencia" V="@_m.Referencia" />
+                            <Spec Icon="layers" K="Frente" V="@_m.Frente" />
+                            <Spec Icon="grid" K="Estacionamientos" V="@_m.Estacionamientos" />
+                            <Spec Icon="info" K="Carga eléctrica" V="@_m.CargaElectrica" />
+                            <Spec Icon="pin" K="Zonificación" V="@_m.Zonificacion" />
+                            <Spec Icon="checkCircle" K="Apto licencia" V="@_m.AptoLicencia" />
+                            <Spec Icon="store" K="Cuota mantenimiento" V="@_m.CuotaMantenimiento" />
                         </div>
                     </div>
                 </div>
@@ -82,11 +142,29 @@
                         <div class="cl-divider"></div>
                         <dl class="cl-kv">
                             <dt>Comisión</dt><dd>@_m.ComisionTexto%</dd>
+                            <dt>Urgencia</dt><dd>@_m.Urgencia</dd>
+                            <dt>Exclusividad</dt><dd>@_m.Exclusividad</dd>
                             <dt>Vigencia</dt><dd>@_m.VigenciaTexto</dd>
                             <dt>Restante</dt><dd>@(string.IsNullOrEmpty(_m.DiasRestantesTexto) ? "—" : _m.DiasRestantesTexto)</dd>
                         </dl>
                     </div>
                 </div>
+
+                @if (_m.Precios.Count > 0)
+                {
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Histórico de precios</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv">
+                                @foreach (var precio in _m.Precios)
+                                {
+                                    <dt>@precio.FechaTexto · @precio.HitoTexto</dt>
+                                    <dd>@precio.Moneda @precio.MontoTexto</dd>
+                                }
+                            </dl>
+                        </div>
+                    </div>
+                }
 
                 <div class="cl-card">
                     <div class="cl-card-head"><div class="cl-card-title">Propietario</div></div>
@@ -130,8 +208,63 @@
 
     private FichaModel _m = new();
     private List<DetailHero.Stat> _stats = new();
+    private bool _exportando;
 
-    protected override void OnParametersSet()
+    private List<FotoLocalDto> _fotos = new();
+    private bool _subiendoFoto;
+    private string? _fotoErr;
+
+    private bool EsAgente => App.Role == Roles.Agente;
+    private static int MaxMb => (int)(ValidadorArchivos.TamanoMaximo / 1024 / 1024);
+    private static string RutaFoto(string clave) => TiposContenido.UrlContenido(clave);
+
+    // Genera el PDF dentro del circuito (con la sesión y los datos ya cargados) y dispara
+    // la descarga. Reemplaza al enlace a /ficha/{codigo}/pdf, que abría una request HTTP
+    // sin el token JWT del circuito y por eso fallaba al exportar.
+    private async Task ExportarPdf()
+    {
+        if (_exportando) return;
+        try
+        {
+            _exportando = true;
+            // Descarga los bytes de las fotos (máx. 6) para incrustarlas como galería en el PDF.
+            // Best-effort por foto: una imagen que no cargue no impide exportar la ficha.
+            var bytes = new List<byte[]>();
+            foreach (var foto in _fotos.Take(6))
+            {
+                try
+                {
+                    var b = await FotoSvc.DescargarBytesAsync(foto.Clave);
+                    if (b is { Length: > 0 }) bytes.Add(b);
+                }
+                catch
+                {
+                    // omitir la foto que no se pudo descargar
+                }
+            }
+            _m.Fotos = bytes;
+
+            // QuestPDF decodifica las imágenes al generar (diferido). Si una foto rompiera el
+            // render, se reintenta SIN galería para que la exportación nunca falle.
+            byte[] pdf;
+            try
+            {
+                pdf = new FichaPropiedadDocument(_m).GeneratePdf();
+            }
+            catch
+            {
+                _m.Fotos = new();
+                pdf = new FichaPropiedadDocument(_m).GeneratePdf();
+            }
+            await Exportar.DescargarPdfAsync($"Ficha_{_m.Codigo}", pdf);
+        }
+        finally
+        {
+            _exportando = false;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
     {
         _m = FichaBuilder.Build(CodigoParam, CaptacionSvc, LocalSvc, PropSvc);
         _stats = new()
@@ -141,6 +274,119 @@
             new("Comisión", $"{_m.ComisionTexto}%"),
             new("Vigencia", _m.VigenciaTexto),
         };
+
+        if (_m.LocalId > 0)
+        {
+            try
+            {
+                _m.Precios = (await PrecioSvc.ListarPorLocalAsync(_m.LocalId)).ToList();
+            }
+            catch
+            {
+                // La ficha se muestra aunque el historico de precios no cargue.
+            }
+
+            try
+            {
+                _fotos = (await FotoSvc.ListarAsync(_m.LocalId)).ToList();
+            }
+            catch
+            {
+                // La ficha se muestra aunque la galeria no cargue.
+            }
+        }
+    }
+
+    // Subida múltiple (hasta completar 6): valida cada imagen y la sube; el tope real lo
+    // impone también el backend (BL), aquí se da feedback inmediato y se respeta el límite.
+    private async Task SubirFotos(InputFileChangeEventArgs e)
+    {
+        _fotoErr = null;
+        if (_m.LocalId <= 0)
+        {
+            _fotoErr = "Guarda el local antes de subir fotos.";
+            return;
+        }
+        if (_fotos.Count >= 6)
+        {
+            _fotoErr = "Máximo de 6 fotos por local.";
+            return;
+        }
+
+        IReadOnlyList<IBrowserFile> archivos;
+        try
+        {
+            archivos = e.GetMultipleFiles(maximumFileCount: 24);
+        }
+        catch
+        {
+            _fotoErr = "Selecciona menos imágenes a la vez.";
+            return;
+        }
+
+        try
+        {
+            _subiendoFoto = true;
+            foreach (var archivo in archivos)
+            {
+                if (_fotos.Count >= 6)
+                {
+                    _fotoErr = "Se alcanzó el máximo de 6 fotos; algunas no se subieron.";
+                    break;
+                }
+
+                byte[] contenido;
+                try
+                {
+                    await using var stream = archivo.OpenReadStream(ValidadorArchivos.TamanoMaximo);
+                    using var memoria = new MemoryStream();
+                    await stream.CopyToAsync(memoria);
+                    contenido = memoria.ToArray();
+                }
+                catch (IOException)
+                {
+                    _fotoErr = $"«{archivo.Name}» supera el máximo de {MaxMb} MB.";
+                    continue;
+                }
+
+                var validacion = ValidadorArchivos.Validar(
+                    archivo.Name, archivo.ContentType, archivo.Size,
+                    contenido.Take(8).ToArray(), ".png", ".jpg", ".jpeg");
+                if (!validacion.EsValido)
+                {
+                    _fotoErr = $"«{archivo.Name}»: {validacion.Error}";
+                    continue;
+                }
+
+                try
+                {
+                    var creada = await FotoSvc.SubirAsync(_m.LocalId, archivo.Name, contenido);
+                    if (creada is not null)
+                        _fotos.Add(creada);
+                }
+                catch (Exception ex)
+                {
+                    _fotoErr = ex.Message;
+                }
+            }
+        }
+        finally
+        {
+            _subiendoFoto = false;
+        }
+    }
+
+    private async Task EliminarFoto(long idFoto)
+    {
+        try
+        {
+            await FotoSvc.EliminarAsync(_m.LocalId, idFoto);
+            _fotos.RemoveAll(f => f.IdFoto == idFoto);
+        }
+        catch (Exception ex)
+        {
+            _fotoErr = ex.Message;
+        }
     }
 
     private static string Initials(string name) =>

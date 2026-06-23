@@ -118,6 +118,12 @@ public class CaptacionesRest {
         captacion.setMotivoOperacion(operacionAlquiler(dto.motivoOperacion()));
         captacion.setUrgencia(dto.urgencia());
         captacion.setExclusividad(dto.exclusividad());
+        // Reenviar a revision: una captacion OBSERVADA que el agente edita y guarda vuelve
+        // a la cola de revision del broker (PENDIENTE_REVISION). Sin esto se quedaba
+        // OBSERVADA y el broker nunca la volvia a ver.
+        if (captacion.getEstado() == com.controllocal.model.comercial.enums.EstadoCaptacion.OBSERVADA) {
+            captacion.setEstado(com.controllocal.model.comercial.enums.EstadoCaptacion.PENDIENTE_REVISION);
+        }
         captaciones.actualizar(captacion);
 
         return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));

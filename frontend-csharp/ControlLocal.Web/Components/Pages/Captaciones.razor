@@ -170,9 +170,9 @@
         (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
 
     private static bool Coincide(CaptacionDto c, string q) =>
-        (c.CodigoCaptacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (c.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (c.PropietarioNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(c.CodigoCaptacion, q)
+        || TextoFiltro.Contiene(c.DireccionLocal, q)
+        || TextoFiltro.Contiene(c.PropietarioNombre, q);
 
     // Vigencia solo aplica a captaciones activas; se deriva de los días restantes.
     private static string? VigenciaCat(CaptacionDto c)
@@ -192,10 +192,12 @@
     private static string TonoEstado(string e) => e switch
     {
         "Activa" => "green",
-        "Observada" => "info",
+        "Pendiente de revision" => "amber",
+        "Pendiente de revisión" => "amber",
+        "Observada" => "amber",
         "Rechazada" => "red",
         "Vencida" => "red",
-        "Cerrada" => "navy",
+        "Cerrada" => "green",
         _ => "blue",
     };
 

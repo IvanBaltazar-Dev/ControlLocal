@@ -18,8 +18,6 @@ public class InteraccionComercialDto
 
     public string Observaciones { get; set; } = string.Empty;
 
-    public string TranscripcionNota { get; set; } = string.Empty;
-
     public string ClienteNombre { get; set; } = string.Empty;
 
     public string CaptacionCodigo { get; set; } = string.Empty;

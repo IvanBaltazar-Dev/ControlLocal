@@ -22,6 +22,8 @@ CREATE TABLE persona (
     correo VARCHAR(150) UNIQUE,
     estado CHAR(1) NOT NULL,
     consentimiento_uso_dato BOOLEAN NULL,
+    -- Foto de perfil: clave opaca del archivo en el almacen (NULL si aun no sube foto).
+    foto_clave VARCHAR(200) NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT ck_persona_tipo_persona CHECK (
@@ -230,6 +232,22 @@ CREATE TABLE local_comercial (
     CONSTRAINT ck_local_mantenimiento CHECK (
         cuota_mantenimiento IS NULL OR cuota_mantenimiento >= 0
     )
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 7-ter) Galeria de fotos del local
+-- El binario vive en el almacen de archivos; aqui solo la clave opaca.
+-- =========================================================
+CREATE TABLE foto_local (
+    id_foto         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_local        BIGINT NOT NULL,
+    clave           VARCHAR(200) NOT NULL,
+    nombre_archivo  VARCHAR(150) NOT NULL,
+    orden           INT NOT NULL DEFAULT 0,
+    fecha_registro  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_foto_local_local
+        FOREIGN KEY (id_local) REFERENCES local_comercial(id_local),
+    INDEX idx_foto_local_local (id_local)
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -542,6 +560,12 @@ CREATE TABLE solicitud_alquiler (
     estado CHAR(1) NOT NULL,
     fecha_actualizacion_estado DATETIME NULL,
     fecha_vigencia_oferta DATE NULL,
+    -- Condiciones del trato que el broker evalua y que el contrato hereda al cerrar.
+    plazo_contrato_meses INT NULL,
+    fecha_inicio_contrato DATE NULL,
+    forma_pago VARCHAR(20) NULL,
+    meses_garantia INT NULL,
+    meses_adelanto INT NULL,
     id_oportunidad BIGINT NOT NULL UNIQUE,
     id_agente BIGINT NOT NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -550,12 +574,20 @@ CREATE TABLE solicitud_alquiler (
         FOREIGN KEY (id_oportunidad) REFERENCES oportunidad_comercial(id_oportunidad),
     CONSTRAINT fk_solicitud_agente
         FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
+    -- Estados: G=registrada, E=en evaluacion, O=observada, A=aprobada, R=rechazada,
+    -- D=descartada, C=cerrada (su alquiler se concreto en contrato).
     CONSTRAINT ck_solicitud_estado CHECK (
-        estado IN ('G', 'E', 'O', 'A', 'R', 'D')
+        estado IN ('G', 'E', 'O', 'A', 'R', 'D', 'C')
     ),
     CONSTRAINT ck_solicitud_monto CHECK (
         monto_propuesto > 0
-    )
+    ),
+    CONSTRAINT ck_solicitud_forma_pago CHECK (
+        forma_pago IS NULL OR forma_pago IN ('TRANSFERENCIA', 'DEPOSITO_BANCARIO', 'EFECTIVO', 'CHEQUE', 'OTRO')
+    ),
+    CONSTRAINT ck_solicitud_plazo CHECK (plazo_contrato_meses IS NULL OR plazo_contrato_meses > 0),
+    CONSTRAINT ck_solicitud_garantia CHECK (meses_garantia IS NULL OR meses_garantia >= 0),
+    CONSTRAINT ck_solicitud_adelanto CHECK (meses_adelanto IS NULL OR meses_adelanto >= 0)
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -797,42 +829,23 @@ CREATE INDEX idx_motivo_solicitud ON motivo_no_continuidad(id_solicitud);
 -- 19) Cierre, seguimiento y gestion operativa
 -- =========================================================
 
+-- Contrato minimo: solo formaliza el vinculo y el cierre. Las condiciones del trato
+-- (renta, plazo, fecha de inicio, forma de pago, garantia, adelanto) viven en
+-- solicitud_alquiler; la comision vive en comision_liquidacion. No se duplican aqui.
 CREATE TABLE contrato_alquiler (
     id_contrato_alquiler BIGINT AUTO_INCREMENT PRIMARY KEY,
     id_oportunidad BIGINT NOT NULL UNIQUE,
     id_solicitud BIGINT NULL UNIQUE,
-    renta_mensual DECIMAL(12,2) NOT NULL,
-    moneda VARCHAR(10) NOT NULL,
-    plazo_contrato_meses INT NOT NULL,
-    fecha_inicio_contrato DATE NOT NULL,
-    fecha_fin_contrato DATE NOT NULL,
-    meses_garantia INT NULL,
-    monto_garantia DECIMAL(12,2) NULL,
-    meses_adelanto INT NULL,
-    cuota_mantenimiento DECIMAL(10,2) NULL,
-    tipo_reajuste VARCHAR(20) NOT NULL,
-    porcentaje_reajuste DECIMAL(5,2) NULL,
-    forma_pago VARCHAR(20) NOT NULL,
     fecha_cierre DATE NOT NULL,
-    comision_generada DECIMAL(12,2) NOT NULL,
     estado_contrato VARCHAR(20) NOT NULL,
     incidencias TEXT NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_contrato_oportunidad FOREIGN KEY (id_oportunidad) REFERENCES oportunidad_comercial(id_oportunidad),
     CONSTRAINT fk_contrato_solicitud FOREIGN KEY (id_solicitud) REFERENCES solicitud_alquiler(id_solicitud),
-    CONSTRAINT ck_contrato_moneda CHECK (moneda IN ('PEN', 'USD')),
-    CONSTRAINT ck_contrato_reajuste CHECK (tipo_reajuste IN ('NINGUNO', 'ANUAL_FIJO', 'INDEXADO_IPC', 'OTRO')),
-    CONSTRAINT ck_contrato_forma_pago CHECK (forma_pago IN ('TRANSFERENCIA', 'DEPOSITO_BANCARIO', 'EFECTIVO', 'CHEQUE', 'OTRO')),
     CONSTRAINT ck_contrato_estado CHECK (
         estado_contrato IN ('EN_PROCESO', 'FIRMADO', 'VIGENTE', 'RENOVADO',
                             'FINALIZADO', 'RESCINDIDO', 'ANULADO')
-    ),
-    CONSTRAINT ck_contrato_fechas CHECK (fecha_fin_contrato >= fecha_inicio_contrato),
-    CONSTRAINT ck_contrato_montos CHECK (
-        renta_mensual >= 0 AND comision_generada >= 0
-        AND (monto_garantia IS NULL OR monto_garantia >= 0)
-        AND (cuota_mantenimiento IS NULL OR cuota_mantenimiento >= 0)
     )
 ) ENGINE=InnoDB;
 

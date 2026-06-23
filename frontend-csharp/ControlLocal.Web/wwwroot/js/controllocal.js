@@ -18,6 +18,13 @@ window.controlLocal = {
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     },
 
+    // Dispara el selector de archivos de un <input type="file"> por id, para que
+    // un boton/icono ajeno pueda abrir el explorador nativo.
+    clickElemento: function (id) {
+        const el = document.getElementById(id);
+        if (el) el.click();
+    },
+
     session: {
         get: function () {
             return localStorage.getItem("controlLocal.session");

@@ -34,6 +34,7 @@ public interface CaptacionBusinessLogic {
     public List<Captacion> listPendingReviews();
     public List<Captacion> listPendingReviews(Long idBroker);
     public boolean actualizar(Captacion captacion);
+    public List<ReasignacionCaptacion> listarReasignaciones();
     public Broker validarBroker(Long brokerId);
     public Broker validarBrokerAdministrador(Long brokerId);
     public AgenteInmobiliario validarAgenteDisponible(Long agenteId);

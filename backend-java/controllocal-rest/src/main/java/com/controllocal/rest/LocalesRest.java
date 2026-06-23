@@ -1,22 +1,24 @@
 package com.controllocal.rest;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import com.controllocal.bl.LocalComercialBusinessLogic;
+import com.controllocal.bl.PrecioLocalBusinessLogic;
 import com.controllocal.bl.ProspeccionBusinessLogic;
+import com.controllocal.bl.PublicacionBusinessLogic;
 import com.controllocal.bl.impl.LocalComercialBusinessLogicImpl;
+import com.controllocal.bl.impl.PrecioLocalBusinessLogicImpl;
 import com.controllocal.bl.impl.ProspeccionBusinessLogicImpl;
-import com.controllocal.dao.PublicacionDAO;
-import com.controllocal.dao.impl.PublicacionDAOImpl;
-import com.controllocal.model.comercial.Publicacion;
+import com.controllocal.bl.impl.PublicacionBusinessLogicImpl;
 import com.controllocal.model.comercial.Prospeccion;
-import com.controllocal.model.comercial.enums.CanalPublicacion;
-import com.controllocal.model.comercial.enums.Moneda;
+import com.controllocal.model.inmueble.FotoLocal;
 import com.controllocal.model.inmueble.LocalComercial;
-import com.controllocal.model.inmueble.enums.EstadoPublicacion;
+import com.controllocal.model.inmueble.PrecioLocal;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
+import com.controllocal.rest.almacen.AlmacenDocumentos;
+import com.controllocal.rest.almacen.AlmacenException;
+import com.controllocal.rest.almacen.Almacenes;
 import com.controllocal.rest.dto.Dtos;
 import com.controllocal.rest.http.ApiException;
 import com.controllocal.rest.http.PageResponse;
@@ -44,7 +46,8 @@ import jakarta.ws.rs.core.Response;
 public class LocalesRest {
 
     private final LocalComercialBusinessLogic locales = new LocalComercialBusinessLogicImpl();
-    private final PublicacionDAO publicaciones = new PublicacionDAOImpl();
+    private final PublicacionBusinessLogic publicacionBL = new PublicacionBusinessLogicImpl();
+    private final PrecioLocalBusinessLogic precios = new PrecioLocalBusinessLogicImpl();
     private final ProspeccionBusinessLogic prospecciones = new ProspeccionBusinessLogicImpl();
 
     @Context
@@ -106,7 +109,7 @@ public class LocalesRest {
         validarDto(dto);
         LocalComercial local = dto.aEntidad();
         local.setIdLocal(locales.registrar(local));
-        sincronizarPublicacion(local, dto.estadoPublicacion());
+        publicacionBL.sincronizar(local, dto.estadoPublicacion());
         registrarProspeccionInicial(local, usuario.idDominio());
         return Response.status(Response.Status.CREATED)
                 .entity(respuesta(local))
@@ -135,7 +138,7 @@ public class LocalesRest {
             throw new ApiException(400, e.getMessage());
         }
 
-        sincronizarPublicacion(cambios, dto.estadoPublicacion());
+        publicacionBL.sincronizar(cambios, dto.estadoPublicacion());
 
         // Para devolver la respuesta actualizada, volvemos a buscar el local
         LocalComercial actualizado = locales.buscarPorId(id)
@@ -163,6 +166,151 @@ public class LocalesRest {
         return Response.noContent().build();
     }
 
+    // =========================================================
+    // PRECIOS DEL LOCAL (historico)
+    // =========================================================
+    @GET
+    @Path("{id}/precios")
+    public List<Dtos.PrecioResponse> listarPrecios(@PathParam("id") long id) {
+        return precios.listarPorLocal(id).stream()
+                .map(Dtos.PrecioResponse::desde)
+                .toList();
+    }
+
+    @POST
+    @Path("{id}/precios")
+    public Response registrarPrecio(@PathParam("id") long id, Dtos.PrecioRequest dto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
+        if (dto == null) {
+            throw ApiException.badRequest("Los datos del precio son obligatorios.");
+        }
+        PrecioLocal precio = dto.aEntidad(id);
+        precios.registrar(precio);
+        return Response.status(Response.Status.CREATED)
+                .entity(Dtos.PrecioResponse.desde(precio))
+                .build();
+    }
+
+    // =========================================================
+    // PUBLICACIONES DEL LOCAL
+    // =========================================================
+    @GET
+    @Path("{id}/publicaciones")
+    public List<Dtos.PublicacionResponse> listarPublicaciones(@PathParam("id") long id) {
+        return publicacionBL.listarPorInmueble(id).stream()
+                .map(Dtos.PublicacionResponse::desde)
+                .toList();
+    }
+
+    // =========================================================
+    // GALERIA DE FOTOS DEL LOCAL
+    // La imagen llega en base64 (el POST binario rompe el HttpClient de .NET contra
+    // GlassFish), se guarda en el almacen y se sirve por "/documento?clave=".
+    // =========================================================
+    private static final long TAMANO_MAXIMO_FOTO = 5L * 1024 * 1024; // 5 MB
+
+    @GET
+    @Path("{id}/fotos")
+    public List<FotoLocalResponse> listarFotos(@PathParam("id") long id) {
+        return locales.listarFotos(id).stream()
+                .map(f -> new FotoLocalResponse(f.getIdFoto(), f.getClave(), f.getNombreArchivo()))
+                .toList();
+    }
+
+    @POST
+    @Path("{id}/fotos")
+    public Response subirFoto(@PathParam("id") long id, FotoLocalRequest dto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
+        if (dto == null || dto.nombreArchivo() == null || dto.nombreArchivo().isBlank()
+                || dto.contenidoBase64() == null || dto.contenidoBase64().isBlank()) {
+            throw ApiException.badRequest("La foto es obligatoria.");
+        }
+        String contentType = contentTypeImagen(dto.nombreArchivo());
+        if (contentType == null) {
+            throw ApiException.badRequest("Solo se permiten imagenes PNG o JPG.");
+        }
+        byte[] contenido;
+        try {
+            contenido = java.util.Base64.getDecoder().decode(dto.contenidoBase64());
+        } catch (IllegalArgumentException error) {
+            throw ApiException.badRequest("El contenido de la imagen (base64) es invalido.");
+        }
+        if (contenido.length == 0) {
+            throw ApiException.badRequest("La imagen esta vacia.");
+        }
+        if (contenido.length > TAMANO_MAXIMO_FOTO) {
+            throw ApiException.badRequest(
+                    "La imagen supera el maximo de " + (TAMANO_MAXIMO_FOTO / 1024 / 1024) + " MB.");
+        }
+        // Verifica la firma binaria real (magic bytes), no solo la extension: rechaza
+        // archivos no-imagen renombrados a .png/.jpg.
+        if (!firmaImagenValida(contenido, contentType)) {
+            throw ApiException.badRequest("El archivo no es una imagen PNG o JPG valida.");
+        }
+        try {
+            AlmacenDocumentos.ArchivoGuardado guardado = Almacenes.actual().guardar(
+                    "locales/" + id, dto.nombreArchivo(), contenido, contentType);
+            long idFoto = locales.agregarFoto(id, guardado.clave(), guardado.nombre());
+            return Response.status(Response.Status.CREATED)
+                    .entity(new FotoLocalResponse(idFoto, guardado.clave(), guardado.nombre()))
+                    .build();
+        } catch (AlmacenException error) {
+            throw new ApiException(502, "No se pudo guardar la foto en el almacen: " + error.getMessage());
+        }
+    }
+
+    @DELETE
+    @Path("{id}/fotos/{idFoto}")
+    public Response eliminarFoto(@PathParam("id") long id, @PathParam("idFoto") long idFoto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
+        // Recupera la clave del binario ANTES de borrar la fila, para limpiar el almacen.
+        String clave = locales.listarFotos(id).stream()
+                .filter(f -> f.getIdFoto() != null && f.getIdFoto() == idFoto)
+                .map(f -> f.getClave())
+                .findFirst().orElse(null);
+        if (!locales.eliminarFoto(idFoto)) {
+            throw ApiException.noEncontrado("Foto");
+        }
+        // Borra el objeto del almacen (S3/disco) para no dejar binarios huerfanos. Best-effort:
+        // si el binario ya no esta, la operacion no debe fallar.
+        if (clave != null && !clave.isBlank()) {
+            try {
+                Almacenes.actual().eliminar(clave);
+            } catch (Exception ignore) {
+                // huerfano tolerado: el registro ya se elimino correctamente.
+            }
+        }
+        return Response.noContent().build();
+    }
+
+    private static String contentTypeImagen(String nombre) {
+        String n = nombre == null ? "" : nombre.toLowerCase();
+        if (n.endsWith(".png")) return "image/png";
+        if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+        return null;
+    }
+
+    // Firma binaria: PNG = 89 50 4E 47 ; JPG = FF D8 FF.
+    private static boolean firmaImagenValida(byte[] c, String contentType) {
+        if (c == null || c.length < 4) {
+            return false;
+        }
+        if ("image/png".equals(contentType)) {
+            return (c[0] & 0xFF) == 0x89 && (c[1] & 0xFF) == 0x50
+                    && (c[2] & 0xFF) == 0x4E && (c[3] & 0xFF) == 0x47;
+        }
+        if ("image/jpeg".equals(contentType)) {
+            return (c[0] & 0xFF) == 0xFF && (c[1] & 0xFF) == 0xD8 && (c[2] & 0xFF) == 0xFF;
+        }
+        return false;
+    }
+
+    public record FotoLocalRequest(String nombreArchivo, String contenidoBase64) {
+    }
+
+    public record FotoLocalResponse(Long idFoto, String clave, String nombre) {
+    }
+
     private void validarDto(Dtos.LocalRequest dto) {
         if (dto == null) {
             throw ApiException.badRequest("Los datos del local son obligatorios.");
@@ -170,56 +318,7 @@ public class LocalesRest {
     }
 
     private Dtos.LocalResponse respuesta(LocalComercial local) {
-        String estado = publicaciones.listarPorInmueble(local.getIdLocal()).stream()
-                .findFirst()
-                .map(Publicacion::getEstado)
-                .map(EstadoPublicacion::getCodigo)
-                .orElse(EstadoPublicacion.BORRADOR.getCodigo());
-        return Dtos.LocalResponse.desde(local, estado);
-    }
-
-    private void sincronizarPublicacion(LocalComercial local, String codigoEstado) {
-        if (codigoEstado == null || codigoEstado.isBlank()) {
-            return;
-        }
-        final EstadoPublicacion estado;
-        try {
-            estado = EstadoPublicacion.fromCodigo(codigoEstado);
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest("Estado de publicacion invalido: " + codigoEstado);
-        }
-
-        List<Publicacion> existentes = publicaciones.listarPorInmueble(local.getIdLocal());
-        Publicacion publicacion = existentes.isEmpty() ? null : existentes.get(0);
-        if (publicacion == null && estado == EstadoPublicacion.BORRADOR) {
-            return;
-        }
-        if (publicacion == null) {
-            publicacion = nuevaPublicacionWeb(local);
-        }
-        publicacion.setEstado(estado);
-        publicacion.setRentaPublicada(local.getPrecioReferencial());
-        publicacion.setTituloAnuncio("Publicacion " + local.getCodigoLocal());
-        publicacion.setFechaBaja(estado == EstadoPublicacion.CERRADO ? LocalDateTime.now() : null);
-
-        if (publicacion.getIdPublicacion() == null) {
-            publicaciones.crear(publicacion);
-        } else {
-            publicaciones.actualizar(publicacion);
-        }
-    }
-
-    private Publicacion nuevaPublicacionWeb(LocalComercial local) {
-        Publicacion publicacion = new Publicacion();
-        publicacion.setInmueble(local);
-        publicacion.setCanal(CanalPublicacion.WEB_PROPIA);
-        publicacion.setVersionAnuncio(1);
-        publicacion.setTituloAnuncio("Publicacion " + local.getCodigoLocal());
-        publicacion.setRentaPublicada(local.getPrecioReferencial());
-        publicacion.setMoneda(Moneda.PEN);
-        publicacion.setCodigoOrigen("WEB-" + local.getIdLocal());
-        publicacion.setFechaPublicacion(LocalDateTime.now());
-        return publicacion;
+        return Dtos.LocalResponse.desde(local, publicacionBL.codigoEstadoPublicacion(local.getIdLocal()));
     }
 
     private void registrarProspeccionInicial(LocalComercial local, long idAgente) {

@@ -48,14 +48,22 @@
                         }
                         @for (var day = 1; day <= DiasDelMes; day++)
                         {
-                            var hasVisit = _visitDays.Contains(day);
+                            var visitasDia = VisitasDelDia(day);
                             var isToday = EsHoy(day);
                             var bg = isToday ? "background:var(--c-primary-50);border-color:var(--c-primary);" : "";
-                            <div style="aspect-ratio:1;border:1px solid #E2E6EC;border-radius:7px;padding:5px;display:flex;flex-direction:column;@bg">
-                                <span style="font-size:11px;@(isToday ? "font-weight:700;color:var(--c-primary);" : "color:#515B6B;")">@day</span>
-                                @if (hasVisit)
+                            <div class="cl-cal-cell" style="@bg">
+                                <span class="cl-cal-day" style="@(isToday ? "font-weight:700;color:var(--c-primary);" : "")">@day</span>
+                                @foreach (var v in visitasDia.Take(3))
                                 {
-                                    <span style="margin-top:auto;align-self:flex-start;width:6px;height:6px;border-radius:50%;background:var(--c-primary);"></span>
+                                    <button class="cl-cal-visit @EstadoClase(v.Estado)"
+                                            title="@($"{v.HoraTexto} · {v.ClienteNombre} · {v.DireccionLocal}")"
+                                            @onclick="@(() => App.Navigate($"oportunidad-detail/{v.OportunidadId}"))">
+                                        <span class="h">@v.HoraTexto</span> <span class="c">@v.ClienteNombre</span>
+                                    </button>
+                                }
+                                @if (visitasDia.Count > 3)
+                                {
+                                    <span class="cl-cal-more">+@(visitasDia.Count - 3) más</span>
                                 }
                             </div>
                         }
@@ -344,8 +352,22 @@
 @code {
     private readonly string[] _dow = { "L", "M", "M", "J", "V", "S", "D" };
     private DateOnly _mes = new(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private int[] _visitDays = Array.Empty<int>();
+    // Visitas del mes visible agrupadas por día (para listarlas dentro del calendario).
+    private Dictionary<int, List<VisitaDto>> _visitasPorDia = new();
     private Timeline.TimelineItem[] _proximas = Array.Empty<Timeline.TimelineItem>();
+
+    private List<VisitaDto> VisitasDelDia(int dia) =>
+        _visitasPorDia.TryGetValue(dia, out var lista) ? lista : new();
+
+    // Color del borde/fondo de cada visita en el calendario según su estado.
+    private static string EstadoClase(string estado) => estado switch
+    {
+        "R" => "is-realizada",
+        "G" => "is-reprogramada",
+        "C" => "is-cancelada",
+        "N" => "is-norealizada",
+        _ => "",
+    };
 
     private static readonly string[] _meses =
     {
@@ -445,12 +467,12 @@
             (string.IsNullOrEmpty(_query) || Coincide(v, _query)));
 
     private static bool Coincide(VisitaDto v, string q) =>
-        (v.ClienteNombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (v.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (v.CodigoCaptacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (v.NombreAgente?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(v.ClienteNombre, q)
+        || TextoFiltro.Contiene(v.DireccionLocal, q)
+        || TextoFiltro.Contiene(v.CodigoCaptacion, q)
+        || TextoFiltro.Contiene(v.NombreAgente, q);
 
-    // Recalcula la agenda (calendario + próximas) a partir de las visitas vivas.
+    // Recalcula la agenda (calendario + próximas) a partir de las visitas cargadas.
     private void Recalcular()
     {
         var vivas = _visitas.Where(EsModificable).ToList();
@@ -458,12 +480,15 @@
             .Select(v => new Timeline.TimelineItem(
                 $"{v.FechaTexto} · {v.HoraTexto}", v.ClienteNombre, $"{v.DireccionLocal} · {v.CodigoCaptacion}"))
             .ToArray();
-        _visitDays = vivas
-            .Select(v => FechaDe(v.FechaTexto))
-            .Where(f => f is not null && f.Value.Year == _mes.Year && f.Value.Month == _mes.Month)
-            .Select(f => f!.Value.Day)
-            .Distinct()
-            .ToArray();
+        // Todas las visitas del mes visible, agrupadas por día y ordenadas por hora,
+        // para listarlas dentro de cada celda del calendario.
+        _visitasPorDia = _visitas
+            .Select(v => (Fecha: FechaDe(v.FechaTexto), Visita: v))
+            .Where(x => x.Fecha is not null && x.Fecha.Value.Year == _mes.Year && x.Fecha.Value.Month == _mes.Month)
+            .GroupBy(x => x.Fecha!.Value.Day)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.Visita).OrderBy(v => v.HoraTexto).ToList());
     }
 
     // Interpreta una fecha "24 May 2026" o ISO "2026-05-24".

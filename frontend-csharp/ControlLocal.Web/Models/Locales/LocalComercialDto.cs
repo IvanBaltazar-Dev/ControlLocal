@@ -69,6 +69,29 @@ public class LocalComercialDto
 
     [JsonPropertyName("fechaRegistro")]
     public DateTime? FechaRegistro { get; set; }
+
+    // Ficha tecnica (Diccionario v2). Opcionales: no todos los locales los registran.
+    [JsonPropertyName("frente")]
+    public decimal? Frente { get; set; }
+
+    [JsonPropertyName("zonificacion")]
+    public string? Zonificacion { get; set; }
+
+    [JsonPropertyName("aptoLicenciaFuncionamiento")]
+    public bool? AptoLicenciaFuncionamiento { get; set; }
+
+    [JsonPropertyName("cargaElectricaKw")]
+    public decimal? CargaElectricaKw { get; set; }
+
+    [JsonPropertyName("numeroEstacionamientos")]
+    public int? NumeroEstacionamientos { get; set; }
+
+    [JsonPropertyName("cuotaMantenimiento")]
+    public decimal? CuotaMantenimiento { get; set; }
+
+    // FK al catalogo distrito resuelta por el backend desde el nombre (solo Lima por ahora).
+    [JsonPropertyName("idDistrito")]
+    public long? IdDistrito { get; set; }
 }
 public class PageResponse<T>
 {

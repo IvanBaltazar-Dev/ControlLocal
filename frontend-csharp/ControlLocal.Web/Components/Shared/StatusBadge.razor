@@ -12,14 +12,15 @@
 
     public static readonly Dictionary<string, string> StatusMap = new()
     {
-        ["Borrador"] = "gray", ["En revisión"] = "blue", ["En revision"] = "blue", ["Pendiente de revision"] = "blue",
-        ["Observada"] = "blue", ["Activa"] = "green", ["Rechazada"] = "red", ["Cerrada"] = "gray",
-        ["Alquilada"] = "green", ["Sin alquilar"] = "gray",
+        ["Borrador"] = "gray", ["En revisión"] = "blue", ["En revision"] = "blue", ["Pendiente de revision"] = "amber",
+        ["Pendiente de revisión"] = "amber",
+        ["Observada"] = "amber", ["Activa"] = "green", ["Rechazada"] = "red", ["Cerrada"] = "green",
+        ["Vencida"] = "red", ["Alquilada"] = "green", ["Alquilado"] = "green", ["Sin alquilar"] = "amber",
         ["Captada"] = "blue", ["Con interacciones"] = "info", ["Con solicitud"] = "info",
         ["En evaluación"] = "blue", ["No continúa"] = "gray",
-        ["Registrada"] = "gray", ["Aprobada"] = "green", ["Observada · solicitud"] = "blue",
+        ["Registrada"] = "gray", ["Aprobada"] = "green", ["Observada · solicitud"] = "amber",
         ["Programada"] = "blue", ["Reprogramada"] = "blue", ["Realizada"] = "green", ["Cancelada"] = "red",
-        ["Aprobado"] = "green", ["Observado"] = "blue",
+        ["Aprobado"] = "green", ["Observado"] = "amber",
         ["Activo"] = "green", ["Inactivo"] = "gray", ["Suspendido"] = "red",
         ["Disponible"] = "green", ["No disponible"] = "gray", ["En licencia"] = "blue",
         ["Asignación activa"] = "green", ["Supervisión activa"] = "green", ["Supervisión cerrada"] = "gray",
@@ -28,5 +29,7 @@
         ["Prospecto"] = "gray", ["Contactado"] = "blue", ["Reunion"] = "info",
         ["Propuesta entregada"] = "blue", ["Captado"] = "green", ["Descartado"] = "red",
         ["Cerrada exitosa"] = "green", ["Cerrada no continúa"] = "gray", ["Cerrada no favorable"] = "red",
+        ["Vigente"] = "green", ["Firmado"] = "green", ["En proceso"] = "blue", ["Renovado"] = "green",
+        ["Finalizado"] = "gray", ["Rescindido"] = "red", ["Anulado"] = "red",
     };
 }

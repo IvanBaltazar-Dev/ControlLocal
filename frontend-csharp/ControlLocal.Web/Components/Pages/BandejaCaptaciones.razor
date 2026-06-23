@@ -157,14 +157,14 @@
         (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
 
     private static bool Coincide(BandejaCaptacionDto c, string q) =>
-        (c.CodigoCaptacion?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (c.NombreAgenteResponsable?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (c.DireccionLocal?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(c.CodigoCaptacion, q)
+        || TextoFiltro.Contiene(c.NombreAgenteResponsable, q)
+        || TextoFiltro.Contiene(c.DireccionLocal, q);
 
     private static string TonoEstado(string e) => e switch
     {
         "Activa" => "green",
-        "Observada" => "info",
+        "Observada" => "amber",
         "Rechazada" => "red",
         _ => "blue",
     };

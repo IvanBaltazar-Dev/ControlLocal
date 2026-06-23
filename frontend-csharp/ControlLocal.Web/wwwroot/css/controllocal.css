@@ -33,6 +33,8 @@
   --c-red-50: #FBE7E9;
   --c-info: #00AEEF;
   --c-info-50: #E3F6FD;
+  --c-amber: #C77700;
+  --c-amber-50: #FDF3E2;
 
   --r-sm: 8px;
   --r-md: 10px;
@@ -208,6 +210,8 @@
 .cl-btn.danger:hover { filter: brightness(0.95); }
 .cl-btn.success { background: var(--c-green); color: #fff; border-color: var(--c-green); }
 .cl-btn.success:hover { filter: brightness(0.96); }
+.cl-btn.amber { background: var(--c-amber); color: #fff; border-color: var(--c-amber); }
+.cl-btn.amber:hover { filter: brightness(0.96); }
 .cl-btn.ghost { background: transparent; border-color: transparent; box-shadow: none; }
 .cl-btn.ghost:hover { background: var(--c-bg-2); }
 .cl-btn.sm { padding: 6px 11px; font-size: 12px; border-radius: 8px; }
@@ -256,10 +260,12 @@
   opacity: 0.9;
 }
 .cl-badge.gray { background: var(--c-bg-2); color: var(--c-text-2); }
-.cl-badge.green { background: var(--c-green-50); color: #226040; }
-.cl-badge.blue { background: var(--c-primary-50); color: #214676; }
-.cl-badge.red { background: var(--c-red-50); color: #98352C; }
-.cl-badge.info { background: var(--c-info-50); color: #1F5A79; }
+.cl-badge.green { background: var(--c-green-50); color: #0E9F4E; }
+.cl-badge.blue { background: var(--c-primary-50); color: #1A5FD0; }
+.cl-badge.red { background: var(--c-red-50); color: #D6342A; }
+.cl-badge.info { background: var(--c-info-50); color: #0E92C9; }
+.cl-badge.amber { background: var(--c-amber-50); color: #C07400; }
+.cl-badge.navy { background: var(--c-primary-50); color: #1E3A8A; }
 .cl-badge.plain::before { display: none; }
 
 /* ============ TABLE ============ */
@@ -422,6 +428,7 @@
 .cl-modal-ico.blue { background: var(--c-primary-50); color: var(--c-primary); }
 .cl-modal-ico.green { background: var(--c-green-50); color: var(--c-green); }
 .cl-modal-ico.red { background: var(--c-red-50); color: var(--c-red); }
+.cl-modal-ico.amber { background: var(--c-amber-50); color: var(--c-amber); }
 .cl-modal-title { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
 .cl-modal-desc { font-size: 12.5px; color: var(--c-text-2); margin-top: 3px; line-height: 1.5; }
 .cl-modal-body { padding: 4px 22px 18px; }
@@ -440,6 +447,7 @@
 .cl-alert.blue { background: var(--c-primary-50); border-color: #C9CED6; color: #214676; }
 .cl-alert.red { background: var(--c-red-50); border-color: #E6BFB9; color: #7E2920; }
 .cl-alert.green { background: var(--c-green-50); border-color: #BEDBC8; color: #1E5538; }
+.cl-alert.amber { background: var(--c-amber-50); border-color: #EBD3A6; color: #7A4E00; }
 .cl-alert b { font-weight: 600; }
 
 /* ============ STAGE STEPPER (captación pivot) ============ */
@@ -1118,6 +1126,14 @@
 .cl-success-title { font-size: 24px; font-weight: 750; letter-spacing: 0; color: var(--c-text); margin: 14px 0 6px; }
 .cl-success-sub { font-size: 13px; color: var(--c-text-2); line-height: 1.55; margin: 0 auto 18px; max-width: 380px; }
 
+/* Línea de confirmación clara del cierre: refuerza qué quedó hecho (p. ej. notificación enviada). */
+.cl-success-confirm {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0 auto 18px;
+  padding: 9px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  color: var(--c-green); background: color-mix(in srgb, var(--c-green) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-green) 30%, transparent);
+}
+
 .cl-success-summary {
   display: grid; gap: 1px; background: var(--c-border-2); border: 1px solid var(--c-border-2);
   border-radius: 8px; overflow: hidden; margin-bottom: 18px; text-align: left;
@@ -1147,3 +1163,80 @@
   .cl-success-check, .cl-success-check::before, .cl-confetti i { animation: none; }
   .cl-confetti { display: none; }
 }
+
+/* ============================================================
+   Dashboard premium — hero diferenciado por rol + KPIs integrados
+   ============================================================ */
+/* Cada rol tiene su propia identidad visual sobre el mismo lenguaje de marca:
+   admin = autoridad global (violeta), broker = supervisión (cian), agente = energía (azul). */
+.cl-dash-hero { padding: 26px 28px; }
+.cl-dash-hero.admin {
+  background:
+    radial-gradient(120% 150% at 100% 0%, rgba(124,77,255,0.42) 0%, rgba(124,77,255,0) 55%),
+    linear-gradient(135deg, #0A1B3D 0%, #14306E 55%, #3A2E7E 100%);
+}
+.cl-dash-hero.broker {
+  background:
+    radial-gradient(120% 150% at 100% 0%, rgba(0,174,239,0.42) 0%, rgba(0,174,239,0) 55%),
+    linear-gradient(135deg, var(--c-navy) 0%, #0E2C66 55%, #0A6C86 100%);
+}
+.cl-dash-hero.agente {
+  background:
+    radial-gradient(120% 150% at 100% 0%, rgba(0,174,239,0.40) 0%, rgba(0,174,239,0) 50%),
+    linear-gradient(135deg, #062463 0%, #0B47B8 58%, #1466FF 100%);
+}
+.cl-dash-hero .cl-hero-stat { display: block; }
+.cl-hero-stat.clickable { cursor: pointer; transition: background .14s ease, transform .14s ease; }
+.cl-hero-stat.clickable:hover { background: rgba(8,24,64,0.52); transform: translateY(-1px); }
+.cl-hero-stat-foot { font-size: 10.5px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+
+/* Panel "Mi rendimiento" del agente (reemplaza la tabla comparativa, sin sentido para
+   quien solo se ve a sí mismo). */
+.cl-perf { display: flex; flex-direction: column; gap: 16px; padding: 18px; }
+.cl-perf-top { display: flex; align-items: baseline; gap: 10px; }
+.cl-perf-big { font-size: 42px; font-weight: 680; letter-spacing: -0.02em; color: var(--c-primary); line-height: 1; }
+.cl-perf-cap { font-size: 12.5px; color: var(--c-text-3); }
+.cl-perf-bar { height: 8px; background: var(--c-bg-2); border-radius: 999px; overflow: hidden; }
+.cl-perf-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--c-primary), var(--c-info)); border-radius: 999px; }
+.cl-perf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.cl-perf-cell { background: var(--c-bg); border: 1px solid var(--c-border-2); border-radius: 10px; padding: 11px 12px; }
+.cl-perf-cell .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--c-text-3); font-weight: 600; }
+.cl-perf-cell .v { font-size: 20px; font-weight: 650; margin-top: 3px; }
+
+/* ============================================================
+   Calendario de visitas — celdas que listan las visitas del día
+   ============================================================ */
+.cl-cal-cell {
+  min-height: 92px; border: 1px solid var(--c-border-2); border-radius: 8px;
+  padding: 5px; display: flex; flex-direction: column; gap: 3px; overflow: hidden;
+}
+.cl-cal-day { font-size: 11px; color: var(--c-text-2); font-weight: 600; }
+.cl-cal-visit {
+  display: flex; align-items: center; gap: 5px; width: 100%; text-align: left;
+  border: 0; border-left: 3px solid var(--c-primary); border-radius: 4px;
+  background: var(--c-primary-50); color: var(--c-text); cursor: pointer;
+  padding: 2px 5px; font-size: 10px; line-height: 1.25; overflow: hidden;
+}
+.cl-cal-visit:hover { filter: brightness(0.97); }
+.cl-cal-visit .h { font-weight: 700; flex: 0 0 auto; }
+.cl-cal-visit .c { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--c-text-2); }
+.cl-cal-visit.is-realizada { border-left-color: #2F7D52; background: #E9F2EC; }
+.cl-cal-visit.is-reprogramada { border-left-color: #00AEEF; background: #E6F0F5; }
+.cl-cal-visit.is-cancelada { border-left-color: #C9CED6; background: var(--c-bg-2); color: var(--c-text-3); text-decoration: line-through; }
+.cl-cal-visit.is-norealizada { border-left-color: #D64550; background: #F6E7E4; }
+.cl-cal-more { font-size: 9.5px; color: var(--c-text-3); font-weight: 600; padding-left: 3px; }
+
+/* ============================================================
+   Dropzone de fotos de la propiedad (subida fácil, varias a la vez)
+   ============================================================ */
+.cl-dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; text-align: center; cursor: pointer;
+  border: 1.5px dashed var(--c-primary); border-radius: 12px;
+  background: var(--c-primary-50); color: var(--c-primary);
+  padding: 18px 16px; transition: background .14s ease, border-color .14s ease;
+}
+.cl-dropzone:hover { background: var(--c-primary-100); }
+.cl-dropzone.is-busy { opacity: 0.7; pointer-events: none; }
+.cl-dropzone-title { font-weight: 650; font-size: 13.5px; color: var(--c-text); }
+.cl-dropzone-sub { font-size: 11.5px; color: var(--c-text-3); }

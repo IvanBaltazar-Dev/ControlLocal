@@ -1,6 +1,8 @@
 @page "/local-detail/{IdParam?}"
 @inject AppState App
 @inject ILocalService LocalSvc
+@inject IPrecioLocalService PrecioSvc
+@inject IPublicacionService PublicacionSvc
 
 <PageTitle>@_l.CodigoLocal · ControlLocal</PageTitle>
 
@@ -20,26 +22,14 @@
                         <div class="cl-card-head"><div class="cl-card-title">Datos del local</div></div>
                         <div class="cl-card-body">
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                                <div>
-                                    <div class="cl-def-k">Código</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_l.CodigoLocal</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Dirección</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_l.Direccion</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Distrito</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_l.Distrito</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Área</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_l.AreaM2 m²</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Rubro</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_l.Rubro</div>
-                                </div>
+                                <Def K="Código" V="@_l.CodigoLocal" />
+                                <Def K="Dirección" V="@_l.Direccion" />
+                                <Def K="Distrito" V="@_l.Distrito" />
+                                <Def K="Zona o urbanización" V="@Txt(_l.ZonaUrbanizacion)" />
+                                <Def K="Área" V="@($"{_l.AreaM2} m²")" />
+                                <Def K="Rubro" V="@_l.Rubro" />
+                                <Def K="Tipo de inmueble" V="@Etiqueta(EnumCatalog.TiposInmueble, _l.TipoInmueble)" />
+                                <Def K="Uso" V="@Etiqueta(EnumCatalog.UsosInmueble, _l.Uso)" />
                             </div>
                         </div>
                     </div>
@@ -52,11 +42,79 @@
                                     <div class="cl-def-k">Precio referencial</div>
                                     <div style="font-weight:600;margin-top:4px;">@_l.PrecioReferencialTexto <span class="cl-muted" style="font-weight:400;">USD / mes</span></div>
                                 </div>
-                                <div>
-                                    <div class="cl-def-k">Propietario</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_l.PropietarioNombre</div>
-                                </div>
+                                <Def K="Propietario" V="@_l.PropietarioNombre" />
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Ficha técnica</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                                <Def K="N.° de ambientes" V="@Num(_l.Ambientes)" />
+                                <Def K="Antigüedad (años)" V="@Num(_l.AntiguedadAnios)" />
+                                <Def K="Frente (m)" V="@Dec(_l.Frente)" />
+                                <Def K="N.° de estacionamientos" V="@Num(_l.NumeroEstacionamientos)" />
+                                <Def K="Carga eléctrica (kW)" V="@Dec(_l.CargaElectricaKw)" />
+                                <Def K="Cuota de mantenimiento" V="@Dec(_l.CuotaMantenimiento)" />
+                                <Def K="Zonificación" V="@Txt(_l.Zonificacion)" />
+                                <Def K="Apto licencia funcionamiento" V="@SiNo(_l.AptoLicenciaFuncionamiento)" />
+                                <Def K="Coordenadas" V="@Geo()" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Histórico de precios</div></div>
+                        <div class="cl-card-body">
+                            @if (_precios.Count == 0)
+                            {
+                                <div class="cl-muted" style="font-size:13px;">Sin precios registrados todavía.</div>
+                            }
+                            else
+                            {
+                                <table class="cl-table">
+                                    <thead><tr><th>Fecha</th><th>Hito</th><th style="text-align:right;">Monto</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var precio in _precios)
+                                        {
+                                            <tr>
+                                                <td>@precio.FechaTexto</td>
+                                                <td>@precio.HitoTexto</td>
+                                                <td style="text-align:right;font-weight:600;">@precio.Moneda @precio.MontoTexto</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Publicaciones</div></div>
+                        <div class="cl-card-body">
+                            @if (_publicaciones.Count == 0)
+                            {
+                                <div class="cl-muted" style="font-size:13px;">El local aún no se ha publicado.</div>
+                            }
+                            else
+                            {
+                                <div class="cl-stack">
+                                    @foreach (var pub in _publicaciones)
+                                    {
+                                        <div class="cl-flex" style="justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid var(--c-border);padding-bottom:8px;">
+                                            <div style="min-width:0;">
+                                                <div style="font-weight:600;font-size:13px;">@pub.CanalTexto</div>
+                                                <div class="cl-muted" style="font-size:11.5px;">@pub.TituloAnuncio · @pub.FechaPublicacionTexto</div>
+                                            </div>
+                                            <div class="cl-flex" style="gap:10px;align-items:center;">
+                                                <span style="font-weight:600;font-size:13px;">@pub.Moneda @pub.RentaTexto</span>
+                                                <StatusBadge Label="@pub.EstadoTexto" />
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -65,8 +123,15 @@
                     <div class="cl-card">
                         <div class="cl-card-head"><div class="cl-card-title">Estado</div></div>
                         <div class="cl-card-body">
-                            <div style="text-align:center;padding:6px 0;">
-                                <StatusBadge Label="@_l.Estado" />
+                            <div style="text-align:center;padding:6px 0;display:flex;flex-direction:column;gap:10px;align-items:center;">
+                                <div>
+                                    <div class="cl-def-k" style="margin-bottom:6px;">Disponibilidad</div>
+                                    <StatusBadge Label="@_l.Estado" />
+                                </div>
+                                <div>
+                                    <div class="cl-def-k" style="margin-bottom:6px;">Publicación</div>
+                                    <StatusBadge Label="@Etiqueta(EnumCatalog.EstadosPublicacion, _l.EstadoPublicacion)" />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -84,10 +149,41 @@
     [Parameter] public string? IdParam { get; set; }
 
     private LocalComercialDto _l = new();
+    private IReadOnlyList<PrecioLocalDto> _precios = [];
+    private IReadOnlyList<PublicacionDto> _publicaciones = [];
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _l = (long.TryParse(IdParam, out var id) ? LocalSvc.ById(id) : null)
-             ?? LocalSvc.All().First();
+             ?? LocalSvc.All().FirstOrDefault() ?? new();
+
+        if (_l.Id > 0)
+        {
+            try
+            {
+                _precios = await PrecioSvc.ListarPorLocalAsync(_l.Id);
+                _publicaciones = await PublicacionSvc.ListarPorLocalAsync(_l.Id);
+            }
+            catch
+            {
+                // El detalle se muestra aunque el histórico/publicaciones no carguen.
+                _precios = [];
+                _publicaciones = [];
+            }
+        }
     }
+
+    private static string Txt(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor;
+    private static string Num(int? valor) => valor?.ToString() ?? "—";
+    private static string Dec(decimal? valor) =>
+        valor?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "—";
+    private static string SiNo(bool? valor) => valor is null ? "—" : valor.Value ? "Sí" : "No";
+
+    private string Geo() =>
+        _l.GeoLat is null || _l.GeoLong is null
+            ? "—"
+            : $"{_l.GeoLat.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}, {_l.GeoLong.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+
+    private static string Etiqueta(IReadOnlyList<ControlLocal.Web.Models.Shared.EnumOption> opciones, string? code) =>
+        string.IsNullOrEmpty(code) ? "—" : opciones.FirstOrDefault(o => o.Code == code)?.Label ?? code;
 }

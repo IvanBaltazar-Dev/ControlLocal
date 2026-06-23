@@ -47,17 +47,12 @@ public class CorsFilter implements Filter {
         chain.doFilter(request, response);
     }
 
+    // Origen del frontend local. Se puede sobrescribir con api.cors.origin si el
+    // frontend corre en otro puerto; por defecto el Blazor Server de desarrollo.
     private String cargarOrigen() {
-        String configurado = ApiConfig.get(
-                "api.cors.origin",
-                "API_CORS_ORIGIN",
-                Entorno.esProduccion() ? "" : "http://localhost:5232");
-        if (configurado == null || configurado.isBlank()) {
-            throw new IllegalStateException("api.cors.origin es obligatorio en produccion.");
-        }
-        if (Entorno.esProduccion() && "*".equals(configurado.trim())) {
-            throw new IllegalStateException("API_CORS_ORIGIN no puede ser '*' en produccion.");
-        }
-        return configurado.trim();
+        String configurado = ApiConfig.get("api.cors.origin", "API_CORS_ORIGIN", "http://localhost:5232");
+        return configurado == null || configurado.isBlank()
+                ? "http://localhost:5232"
+                : configurado.trim();
     }
 }

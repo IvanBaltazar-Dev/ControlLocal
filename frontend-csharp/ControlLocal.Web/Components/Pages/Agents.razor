@@ -8,7 +8,7 @@
 
 <AppShell Active="Mis agentes" Crumbs="@(new[] { "ControlLocal", "Mi equipo", "Mis agentes" })"
           Title="Mis agentes inmobiliarios"
-          Subtitle="Equipo bajo tu supervisión directa · 7 activos · 1 inactivo">
+          Subtitle="@($"Equipo bajo tu supervisión directa · {CuentaActivos} activos · {CuentaInactivos} inactivos")">
     <Actions>
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("agente-form"))"><Icon Name="plus" Size="13" /> Registrar agente</button>
     </Actions>
@@ -17,10 +17,31 @@
             <Icon Name="info" Size="15" />
             <span>Al registrar un agente se crea automáticamente una <b>relación activa de supervisión</b> entre tú y el agente. Solo el broker administrador puede reasignar agentes a otro broker.</span>
         </div>
-        @{
-            var filtrados = Filtrados().ToList();
-            var visibles = Paginador.Pagina(filtrados, ref _pagina);
+
+        @if (_cargando)
+        {
+            <div class="cl-card"><div class="cl-card-body" style="padding:44px;text-align:center;color:#7E8794;">Cargando agentes…</div></div>
         }
+        else
+        {
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="users" Label="Total" Value="@Todos.Count.ToString()" Tone="gray"
+                        Active="@(_tab == "Todos")" OnClick="@(() => SetTab("Todos"))" />
+            <MetricCard Icon="checkCircle" Label="Activos" Value="@CuentaActivos.ToString()" Tone="green"
+                        Active="@(_tab == "Activos")" OnClick="@(() => SetTab("Activos"))" />
+            <MetricCard Icon="x" Label="Inactivos" Value="@CuentaInactivos.ToString()" Tone="red"
+                        Active="@(_tab == "Inactivos")" OnClick="@(() => SetTab("Inactivos"))" />
+            <MetricCard Icon="layers" Label="Con cartera" Value="@CuentaConCaptaciones.ToString()" Tone="blue"
+                        Footer="Con captaciones activas"
+                        Active="@(_tab == "ConCaptaciones")" OnClick="@(() => SetTab("ConCaptaciones"))" />
+            <MetricCard Icon="alert" Label="Sin carga" Value="@CuentaSinCarga.ToString()" Tone="amber"
+                        Footer="Disponibles para asignar"
+                        Active="@(_tab == "SinCarga")" OnClick="@(() => SetTab("SinCarga"))" />
+        </div>
+
+        var filtrados = Filtrados().ToList();
+        var visibles = Paginador.Pagina(filtrados, ref _pagina);
+
         <FilterBar Search="Buscar agente por nombre, DNI o correo…"
                    @bind-Value="_query" ResultCount="filtrados.Count"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros"
@@ -81,6 +102,7 @@
             </div>
         </div>
         <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
+        }
 
         <ConfirmDialog Open="@(_deactivate is not null)" Tone="red" Icon="alert"
                        Title="¿Desactivar agente?"
@@ -98,17 +120,58 @@
     private string? _toast;
 
     private string _query = "", _estado = "", _zona = "";
+    private string _tab = "Todos";
     private int _pagina = 1;
 
-    private IReadOnlyList<AgenteDto> Todos => AgenteSvc.All();
+    private bool _cargando = true;
+    private IReadOnlyList<AgenteDto> _agentes = [];
+    private IReadOnlyList<AgenteDto> Todos => _agentes;
+
+    // Los conteos por agente (captaciones en cartera + operaciones en curso) llegan ya
+    // calculados del backend en AgenteResponse.captacionesActivas/operacionesActivas.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _agentes = await AgenteSvc.RefrescarAsync(DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception)
+        {
+            // La lista de agentes se muestra aunque no pueda refrescarse.
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    // KPIs clickeables que filtran la lista (mismo patrón que Solicitudes/Captaciones).
+    private int CuentaActivos => Todos.Count(a => a.EstadoAdministrativo == "Activo");
+    private int CuentaInactivos => Todos.Count(a => a.EstadoAdministrativo == "Inactivo");
+    private int CuentaConCaptaciones => Todos.Count(a => a.CaptacionesActivas > 0);
+    private int CuentaSinCarga => Todos.Count(a => a.CaptacionesActivas == 0 && a.OportunidadesActivas == 0);
+
+    private void SetTab(string tab) { _tab = _tab == tab ? "Todos" : tab; _pagina = 1; }
+
+    private bool CoincideTab(AgenteDto a) => _tab switch
+    {
+        "Activos" => a.EstadoAdministrativo == "Activo",
+        "Inactivos" => a.EstadoAdministrativo == "Inactivo",
+        "ConCaptaciones" => a.CaptacionesActivas > 0,
+        "SinCarga" => a.CaptacionesActivas == 0 && a.OportunidadesActivas == 0,
+        _ => true,
+    };
 
     private readonly IReadOnlyList<string> _estados = new[] { "Activo", "Inactivo" };
     private IReadOnlyList<string> _zonas => Todos.Select(a => a.Zona)
         .Where(z => !string.IsNullOrWhiteSpace(z)).Distinct().OrderBy(x => x).ToList();
 
-    private bool HayFiltros => new[] { _query, _estado, _zona }.Any(s => !string.IsNullOrEmpty(s));
+    private bool HayFiltros => _tab != "Todos" || new[] { _query, _estado, _zona }.Any(s => !string.IsNullOrEmpty(s));
 
-    private void LimpiarFiltros() { _query = _estado = _zona = ""; _pagina = 1; }
+    private void LimpiarFiltros() { _query = _estado = _zona = ""; _tab = "Todos"; _pagina = 1; }
 
     private async Task ExportarCsv(IReadOnlyList<AgenteDto> filtrados)
     {
@@ -122,20 +185,24 @@
     }
 
     private IEnumerable<AgenteDto> Filtrados() => Todos.Where(a =>
+        CoincideTab(a) &&
         (string.IsNullOrEmpty(_estado) || a.EstadoAdministrativo == _estado) &&
         (string.IsNullOrEmpty(_zona) || a.Zona == _zona) &&
         (string.IsNullOrEmpty(_query) || Coincide(a, _query)));
 
     private static bool Coincide(AgenteDto a, string q) =>
-        (a.Nombre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (a.NumeroDocumento?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || (a.Email?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        TextoFiltro.Contiene(a.Nombre, q)
+        || TextoFiltro.Contiene(a.NumeroDocumento, q)
+        || TextoFiltro.Contiene(a.Email, q);
 
     private async Task OnDeactivate()
     {
         var n = _deactivate;
         if (_deactivateId is long id)
+        {
             AgenteSvc.Desactivar(id);
+            try { _agentes = await AgenteSvc.RefrescarAsync(DisposedToken); } catch { }
+        }
         _deactivate = null;
         _deactivateId = null;
         _toast = $"{n} fue desactivado";

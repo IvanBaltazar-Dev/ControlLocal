@@ -88,7 +88,8 @@
             }
 
             <FormFooterBar OnCancel="@(() => App.Navigate("owners"))" OnSave="@TryConfirm"
-                           SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar propietario")" />
+                           SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar propietario")"
+                           Busy="@_procesando" BusyLabel="Guardando..." />
             </div>
 
             <div class="cl-stack">
@@ -102,6 +103,7 @@
                            ? "Se actualizarán los datos de contacto y el estado del propietario. La identidad permanece sin cambios."
                            : "Se creará el propietario en tu registro. Quedará disponible para vincular a la captación de un local comercial.")"
                        ConfirmLabel="@(_isEdit ? "Guardar" : "Registrar")" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">@(_isEdit ? "Cambios guardados correctamente" : "Propietario registrado correctamente")</Toast>
@@ -122,6 +124,7 @@
     private bool _consentimientoUsoDato = true;
     private bool _confirm;
     private bool _toast;
+    private bool _procesando;
     private string? _err;
 
     // Progreso interactivo de las secciones del formulario.
@@ -166,7 +169,7 @@
             _correo = owner.Correo;
             _estado = string.IsNullOrEmpty(owner.Estado) ? "Activo" : owner.Estado;
             _consentimientoUsoDato = owner.ConsentimientoUsoDato ?? false;
-            _tipo = owner.TipoPersona.Contains("jurídica", StringComparison.OrdinalIgnoreCase) ? "juridica" : "natural";
+            _tipo = TextoFiltro.Contiene(owner.TipoPersona, "jur") ? "juridica" : "natural";
             _tipoDocumento = ResolveTipoDocumento(owner);
         }
         else
@@ -209,9 +212,13 @@
 
     private async Task OnConfirm()
     {
+        if (_procesando) return;
         _confirm = false;
         try
         {
+            _procesando = true;
+            _err = null;
+            StateHasChanged();
             var propietario = new Models.Propietarios.PropietarioDto
             {
                 Id = _isEdit && long.TryParse(IdParam, out var id) ? id : 0,
@@ -224,8 +231,8 @@
                 Estado = _estado,
                 ConsentimientoUsoDato = _consentimientoUsoDato,
             };
-            if (_isEdit) OwnerSvc.Actualizar(propietario);
-            else OwnerSvc.Agregar(propietario);
+            if (_isEdit) await OwnerSvc.ActualizarAsync(propietario);
+            else await OwnerSvc.AgregarAsync(propietario);
 
             _toast = true;
             StateHasChanged();
@@ -235,6 +242,11 @@
         catch (Exception error)
         {
             _err = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            StateHasChanged();
         }
     }
 }

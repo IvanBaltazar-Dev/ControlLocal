@@ -1,8 +1,3 @@
-using Microsoft.Extensions.Options;
-using Amazon.S3;
-using Amazon.S3.Model;
-using System.Net;
-
 namespace ControlLocal.Web.Services;
 
 public sealed record ArchivoValidado(bool EsValido, string? Error = null)
@@ -89,162 +84,50 @@ public static class ValidadorArchivos
     }
 }
 
-public sealed record DocumentoGuardado(string Clave, string Nombre, long Tamano, DateTime FechaSubida);
-
-// Almacenamiento de documentos del expediente. La implementación por defecto guarda
-// en disco local; OpcionesAlmacenDocumentos.Proveedor = "S3" permite apuntar el mismo
-// contrato a un bucket de objetos (Amazon S3 o compatible) sin tocar las pantallas.
-public interface IDocumentoStorage
+// Estado de conectividad del almacén de documentos del backend (S3 o disco). La pantalla
+// de documentos lo consulta (GET documentos/salud) para avisar de inmediato si el almacén
+// no responde, en vez de fallar al subir o al abrir un documento sin explicar por qué.
+// Espeja el record EstadoAlmacen del backend Java (proveedor, conectado, detalle).
+public sealed record EstadoAlmacen(string Proveedor, bool Conectado, string Detalle)
 {
-    Task<DocumentoGuardado> GuardarAsync(string carpeta, string nombreArchivo, Stream contenido, CancellationToken ct = default);
-    Task<Stream?> AbrirAsync(string clave, CancellationToken ct = default);
-    Task<bool> EliminarAsync(string clave, CancellationToken ct = default);
+    public static EstadoAlmacen Ok(string proveedor, string detalle) => new(proveedor, true, detalle);
+    public static EstadoAlmacen Falla(string proveedor, string detalle) => new(proveedor, false, detalle);
 }
 
-public class OpcionesAlmacenDocumentos
+// Resuelve el content-type a partir de la extensión, para servir el documento con la
+// cabecera correcta y que el navegador lo muestre en línea (PDF/imagen) en vez de bajarlo.
+public static class TiposContenido
 {
-    public const string Seccion = "AlmacenDocumentos";
-
-    // "Local" (disco) o "S3" (bucket de objetos compatible con S3).
-    public string Proveedor { get; set; } = "Local";
-    public string RutaLocal { get; set; } = "storage/documentos";
-    public string Bucket { get; set; } = "";
-    public string Prefix { get; set; } = "";
-    public string Region { get; set; } = "";
-    public string Endpoint { get; set; } = "";
-}
-
-public class AlmacenS3Documentos : IDocumentoStorage
-{
-    private readonly OpcionesAlmacenDocumentos _opciones;
-    private readonly IAmazonS3 _s3;
-
-    public AlmacenS3Documentos(IOptions<OpcionesAlmacenDocumentos> opciones)
+    public static string Para(string nombreOClave)
     {
-        _opciones = opciones.Value;
-        if (string.IsNullOrWhiteSpace(_opciones.Bucket))
-            throw new InvalidOperationException("AlmacenDocumentos:Bucket es obligatorio para usar S3.");
-
-        var config = new AmazonS3Config();
-        if (!string.IsNullOrWhiteSpace(_opciones.Endpoint))
+        var ext = Path.GetExtension(nombreOClave).ToLowerInvariant();
+        return ext switch
         {
-            config.ServiceURL = _opciones.Endpoint;
-            config.ForcePathStyle = true;
-            if (!string.IsNullOrWhiteSpace(_opciones.Region))
-                config.AuthenticationRegion = _opciones.Region;
-        }
-        else if (!string.IsNullOrWhiteSpace(_opciones.Region))
-        {
-            config.RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(_opciones.Region);
-        }
-        _s3 = new AmazonS3Client(config);
+            ".pdf" => "application/pdf",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".csv" => "text/csv",
+            _ => "application/octet-stream",
+        };
     }
 
-    public async Task<DocumentoGuardado> GuardarAsync(
-        string carpeta,
-        string nombreArchivo,
-        Stream contenido,
-        CancellationToken ct = default)
+    // Solo PDF e imágenes se pueden incrustar de forma segura en un visor en línea.
+    public static bool SePuedeIncrustar(string nombreOClave) =>
+        Para(nombreOClave) is "application/pdf" or "image/png" or "image/jpeg";
+
+    public static bool EsImagen(string nombreOClave) =>
+        Para(nombreOClave) is "image/png" or "image/jpeg";
+
+    // URL del contenido real (foto/documento) servido por el proxy del frontend a partir de
+    // su clave opaca. Único punto para que miniaturas y visores resuelvan igual la URL.
+    public static string UrlContenido(string clave) =>
+        $"/documento?clave={Uri.EscapeDataString(clave)}";
+
+    // Icono coherente con el tipo real del archivo (imagen vs PDF vs otro).
+    public static string IconoPara(string nombreOClave) => Para(nombreOClave) switch
     {
-        var carpetaSegura = ValidadorArchivos.NombreSeguro(carpeta + ".d")[..^2];
-        var nombreSeguro = ValidadorArchivos.NombreSeguro(nombreArchivo);
-        var clave = CrearClave($"{carpetaSegura}/{Guid.NewGuid():N}_{nombreSeguro}");
-        var tamano = contenido.CanSeek ? contenido.Length - contenido.Position : 0;
-
-        await _s3.PutObjectAsync(new PutObjectRequest
-        {
-            BucketName = _opciones.Bucket,
-            Key = clave,
-            InputStream = contenido,
-            AutoCloseStream = false,
-        }, ct);
-
-        return new DocumentoGuardado(clave, nombreSeguro, tamano, DateTime.Now);
-    }
-
-    public async Task<Stream?> AbrirAsync(string clave, CancellationToken ct = default)
-    {
-        ValidarClave(clave);
-        try
-        {
-            using var respuesta = await _s3.GetObjectAsync(_opciones.Bucket, clave, ct);
-            var memoria = new MemoryStream();
-            await respuesta.ResponseStream.CopyToAsync(memoria, ct);
-            memoria.Position = 0;
-            return memoria;
-        }
-        catch (AmazonS3Exception error) when (error.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
-
-    public async Task<bool> EliminarAsync(string clave, CancellationToken ct = default)
-    {
-        ValidarClave(clave);
-        var respuesta = await _s3.DeleteObjectAsync(_opciones.Bucket, clave, ct);
-        return respuesta.HttpStatusCode is HttpStatusCode.OK or HttpStatusCode.NoContent;
-    }
-
-    private string CrearClave(string relativa)
-    {
-        var prefix = _opciones.Prefix.Trim().Trim('/');
-        return string.IsNullOrEmpty(prefix) ? relativa : $"{prefix}/{relativa}";
-    }
-
-    private void ValidarClave(string clave)
-    {
-        if (string.IsNullOrWhiteSpace(clave) || clave.Contains("..", StringComparison.Ordinal)
-            || clave.Contains('\\'))
-            throw new InvalidOperationException("Clave de documento invalida.");
-
-        var prefix = _opciones.Prefix.Trim().Trim('/');
-        if (!string.IsNullOrEmpty(prefix) && !clave.StartsWith(prefix + "/", StringComparison.Ordinal))
-            throw new InvalidOperationException("La clave no pertenece al prefijo configurado.");
-    }
-}
-
-public class AlmacenLocalDocumentos(IOptions<OpcionesAlmacenDocumentos> opciones, IWebHostEnvironment env)
-    : IDocumentoStorage
-{
-    private string Raiz => Path.IsPathRooted(opciones.Value.RutaLocal)
-        ? opciones.Value.RutaLocal
-        : Path.Combine(env.ContentRootPath, opciones.Value.RutaLocal);
-
-    public async Task<DocumentoGuardado> GuardarAsync(string carpeta, string nombreArchivo, Stream contenido, CancellationToken ct = default)
-    {
-        var carpetaSegura = ValidadorArchivos.NombreSeguro(carpeta + ".d")[..^2];
-        var nombreSeguro = ValidadorArchivos.NombreSeguro(nombreArchivo);
-        var clave = $"{carpetaSegura}/{Guid.NewGuid():N}_{nombreSeguro}";
-
-        var destino = RutaFisica(clave);
-        Directory.CreateDirectory(Path.GetDirectoryName(destino)!);
-        await using var fs = File.Create(destino);
-        await contenido.CopyToAsync(fs, ct);
-        return new DocumentoGuardado(clave, nombreSeguro, fs.Length, DateTime.Now);
-    }
-
-    public Task<Stream?> AbrirAsync(string clave, CancellationToken ct = default)
-    {
-        var ruta = RutaFisica(clave);
-        return Task.FromResult<Stream?>(File.Exists(ruta) ? File.OpenRead(ruta) : null);
-    }
-
-    public Task<bool> EliminarAsync(string clave, CancellationToken ct = default)
-    {
-        var ruta = RutaFisica(clave);
-        if (!File.Exists(ruta)) return Task.FromResult(false);
-        File.Delete(ruta);
-        return Task.FromResult(true);
-    }
-
-    // La clave nunca puede escapar de la raíz del almacén (anti path traversal).
-    private string RutaFisica(string clave)
-    {
-        var completa = Path.GetFullPath(Path.Combine(Raiz, clave));
-        var raiz = Path.GetFullPath(Raiz);
-        if (!completa.StartsWith(raiz, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Clave de documento inválida.");
-        return completa;
-    }
+        "image/png" or "image/jpeg" => "image",
+        "application/pdf" => "filePdf",
+        _ => "fileText",
+    };
 }

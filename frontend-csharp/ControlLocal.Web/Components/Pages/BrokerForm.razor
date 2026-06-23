@@ -131,7 +131,7 @@
     protected override void OnParametersSet()
     {
         var broker = (string.IsNullOrWhiteSpace(CodigoParam) ? null : Brokers.ById(CodigoParam))
-                     ?? Brokers.First();
+                     ?? Brokers.All().FirstOrDefault() ?? new();
 
         _codigoBroker = broker.CodigoBroker;
         _nombre = broker.Nombre;

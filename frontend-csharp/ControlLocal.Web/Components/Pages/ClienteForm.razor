@@ -107,7 +107,9 @@
                     </div>
                 }
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("clientes"))" OnSave="@TryConfirm" SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar cliente")" />
+                <FormFooterBar OnCancel="@(() => App.Navigate("clientes"))" OnSave="@TryConfirm"
+                               SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar cliente")"
+                               Busy="@_procesando" BusyLabel="Guardando..." />
             </div>
 
             <div class="cl-stack">
@@ -123,6 +125,7 @@
                        Title="@(_isEdit ? "¿Guardar cambios?" : "¿Registrar cliente interesado?")"
                        Desc="@(_isEdit ? "Se actualizarán contacto, rubro, consentimientos y estado. La identidad permanece sin cambios." : "Se creará el cliente en tu cartera. Quedará disponible para vincular a oportunidades comerciales.")"
                        ConfirmLabel="@(_isEdit ? "Guardar" : "Registrar")" CancelLabel="Revisar datos"
+                       Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">@(_isEdit ? "Cliente actualizado correctamente" : "Cliente registrado correctamente")</Toast>
@@ -136,6 +139,7 @@
     private string _tipo = "juridica";
     private bool _confirm;
     private bool _toast;
+    private bool _procesando;
 
     private string _razonSocial = "";
     private string _nombreNatural = "";
@@ -245,9 +249,13 @@
 
     private async Task OnConfirm()
     {
+        if (_procesando) return;
         _confirm = false;
         try
         {
+            _procesando = true;
+            _err = null;
+            await RenderIfAliveAsync();
             var cliente = new Models.Clientes.ClienteInteresadoDto
             {
                 Id = ClienteId,
@@ -262,8 +270,8 @@
                 ConsentimientoContacto = _consentimientoContacto,
                 ConsentimientoUsoDato = _consentimientoUsoDato,
             };
-            if (_isEdit) ClienteSvc.Actualizar(cliente);
-            else ClienteSvc.Agregar(cliente);
+            if (_isEdit) await ClienteSvc.ActualizarAsync(cliente, DisposedToken);
+            else await ClienteSvc.AgregarAsync(cliente, DisposedToken);
 
             _toast = true;
             await RenderIfAliveAsync();
@@ -277,6 +285,11 @@
         catch (Exception error)
         {
             _err = error.Message;
+        }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
         }
     }
 

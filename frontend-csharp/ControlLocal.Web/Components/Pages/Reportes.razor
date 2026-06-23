@@ -1,102 +1,113 @@
 @page "/reportes"
+@inherits SafeComponentBase
 @using QuestPDF.Fluent
 @inject AppState App
+@inject IIndicadorService Indicadores
 @inject ExportacionService Exportar
 
 <PageTitle>@_title · ControlLocal</PageTitle>
 
 <AppShell Active="@_sideActive" Crumbs="@(new[] { "ControlLocal", _title })" Title="@_title" Subtitle="@_subtitle">
     <Actions>
-        <select class="cl-select" style="width:150px;" @bind="_periodo">
-            @foreach (var p in ReporteIndicadores.Periodos)
-            {
-                <option value="@p.Codigo">@p.Etiqueta</option>
-            }
-        </select>
+        <span class="cl-badge gray">Últimos 6 meses</span>
         <button class="cl-btn primary" @onclick="ExportarPdf"><Icon Name="download" Size="13" /> Exportar PDF</button>
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
-            @foreach (var i in Datos.Indicadores)
-            {
-                <MetricCard Icon="@i.Icono" Label="@i.Etiqueta" Value="@i.Valor" Delta="@i.Delta" Tone="@i.Tono" />
-            }
-        </div>
+        @if (_cargando)
+        {
+            <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando indicadores…</div></div>
+        }
+        else
+        {
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+                @foreach (var i in Datos.Indicadores)
+                {
+                    <MetricCard Icon="@i.Icono" Label="@i.Etiqueta" Value="@i.Valor" Delta="@i.Delta" Tone="@i.Tono" />
+                }
+            </div>
 
-        <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
-            <div class="cl-card">
-                <div class="cl-card-head">
-                    <div>
-                        <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas por mes" : "Cierres del equipo por mes")</div>
-                        <div class="cl-card-sub">Volumen de alquileres concretados</div>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
+                <div class="cl-card">
+                    <div class="cl-card-head">
+                        <div>
+                            <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas por mes" : "Cierres del equipo por mes")</div>
+                            <div class="cl-card-sub">Volumen de alquileres concretados</div>
+                        </div>
+                    </div>
+                    <div class="cl-card-body">
+                        <BarChart Data="Datos.CierresPorMes.Valores" Height="200" Labels="Datos.CierresPorMes.Etiquetas" />
                     </div>
                 </div>
-                <div class="cl-card-body">
-                    <BarChart Data="Datos.CierresPorMes.Valores" Height="200" Labels="Datos.CierresPorMes.Etiquetas" />
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Captaciones por etapa</div></div>
+                    <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
+                        <DonutChart Segments="_donut" />
+                        <div style="flex:1;font-size:12px;">
+                            @foreach (var e in Datos.Etapas)
+                            {
+                                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+                                    <span style="width:9px;height:9px;border-radius:2px;background:@e.Color;"></span>
+                                    <span style="flex:1;">@e.Nombre</span>
+                                    <b>@e.Valor</b>
+                                </div>
+                            }
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">Operaciones por etapa</div></div>
-                <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
-                    <DonutChart Segments="_donut" />
-                    <div style="flex:1;font-size:12px;">
-                        @foreach (var e in Datos.Etapas)
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">Embudo de conversión</div></div>
+                    <div class="cl-card-body">
+                        @foreach (var r in Datos.Embudo)
                         {
-                            <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
-                                <span style="width:9px;height:9px;border-radius:2px;background:@e.Color;"></span>
-                                <span style="flex:1;">@e.Nombre</span>
-                                <b>@e.Valor</b>
+                            <div style="margin-bottom:12px;">
+                                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+                                    <span>@r[0]</span><span><b>@r[1]</b> <span class="cl-muted">· @r[2]</span></span>
+                                </div>
+                                <div style="height:8px;background:#E2E6EC;border-radius:4px;overflow:hidden;">
+                                    <div style="width:@r[2];height:100%;background:@r[3];border-radius:4px;"></div>
+                                </div>
                             </div>
                         }
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
-            <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">Embudo de conversión</div></div>
-                <div class="cl-card-body">
-                    @foreach (var r in Datos.Embudo)
-                    {
-                        <div style="margin-bottom:12px;">
-                            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
-                                <span>@r[0]</span><span><b>@r[1]</b> <span class="cl-muted">· @r[2]</span></span>
-                            </div>
-                            <div style="height:8px;background:#E2E6EC;border-radius:4px;overflow:hidden;">
-                                <div style="width:@r[2];height:100%;background:@r[3];border-radius:4px;"></div>
-                            </div>
-                        </div>
-                    }
+                <div class="cl-card">
+                    <div class="cl-card-head"><div class="cl-card-title">@(_isAdmin ? "Desempeño por broker" : "Desempeño por agente")</div></div>
+                    <div class="cl-card-body" style="padding:0;">
+                        @if (Datos.Desempeno.Length == 0)
+                        {
+                            <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Sin actividad registrada todavía.</div>
+                        }
+                        else
+                        {
+                            <table class="cl-table">
+                                <thead><tr><th>@(_isAdmin ? "Broker" : "Agente")</th><th>Captac.</th><th>Cierres</th><th>Conversión</th></tr></thead>
+                                <tbody>
+                                    @foreach (var r in Datos.Desempeno)
+                                    {
+                                        <tr>
+                                            <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r.Nombre)</span>@r.Nombre</div></td>
+                                            <td>@r.Captaciones</td>
+                                            <td><b>@r.Cierres</b></td>
+                                            <td><StatusBadge Label="@r.Conversion" ToneOverride="@ConvTone(r.Conversion)" Plain="true" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
                 </div>
             </div>
-            <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">@(_isAdmin ? "Desempeño por broker" : "Desempeño por agente")</div></div>
-                <div class="cl-card-body" style="padding:0;">
-                    <table class="cl-table">
-                        <thead><tr><th>@(_isAdmin ? "Broker" : "Agente")</th><th>Captac.</th><th>Cierres</th><th>Conversión</th><th>Tendencia</th></tr></thead>
-                        <tbody>
-                            @foreach (var r in Datos.Desempeno)
-                            {
-                                <tr>
-                                    <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r.Nombre)</span>@r.Nombre</div></td>
-                                    <td>@r.Captaciones</td>
-                                    <td><b>@r.Cierres</b></td>
-                                    <td><StatusBadge Label="@r.Conversion" ToneOverride="@ConvTone(r.Conversion)" Plain="true" /></td>
-                                    <td><Sparkline Data="@r.Tendencia" Height="28" Color="#2F7D52" /></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        }
     </ChildContent>
 </AppShell>
 
 @code {
     private bool _isAdmin => App.Role == Roles.Admin;
-    private string _periodo = "6m";
+    private bool _cargando = true;
+    private IndicadoresDto _ind = IndicadoresDto.Vacio;
 
     private string _title => _isAdmin ? "Reportes globales" : "Reportes de equipo";
     private string _sideActive => _isAdmin ? "Reportes globales" : "Reportes de equipo";
@@ -104,11 +115,26 @@
         ? "Indicadores de toda la corredora · desempeño por broker y conversión global"
         : "Indicadores de los agentes a tu cargo · captaciones, cierres y conversión";
 
-    private DatosReporte Datos => ReporteIndicadores.Para(_isAdmin, _periodo);
+    private DatosReporte Datos => ReporteIndicadores.Desde(_ind, _isAdmin);
 
     private DonutChart.Segment[] _donut => Datos.Etapas
         .Select(e => new DonutChart.Segment(double.Parse(e.Valor), e.Color))
         .ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _ind = await Indicadores.ObtenerAsync(DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
     private static string Initials(string name) =>
         string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(w => w[0]));
@@ -121,8 +147,7 @@
 
     private async Task ExportarPdf()
     {
-        var etiqueta = ReporteIndicadores.Periodos.First(p => p.Codigo == _periodo).Etiqueta;
-        var pdf = new ReporteIndicadoresDocument(Datos, etiqueta).GeneratePdf();
+        var pdf = new ReporteIndicadoresDocument(Datos, "Últimos 6 meses").GeneratePdf();
         await Exportar.DescargarPdfAsync(_isAdmin ? "reporte_global" : "reporte_equipo", pdf);
     }
 }

@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using ControlLocal.Web.Components;
 using ControlLocal.Web.Data;
 using ControlLocal.Web.Services;
@@ -8,6 +7,16 @@ using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 
 QuestPDF.Settings.License = LicenseType.Community;
+
+// [DIAGNOSTICO TEMPORAL] Captura crashes no manejados a un archivo (%TEMP%/ControlLocal-crash.log).
+CrashLog.Breadcrumb("=== Arranque ControlLocal.Web ===");
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+    CrashLog.Breadcrumb($"UnhandledException: {e.ExceptionObject}");
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    CrashLog.Breadcrumb($"UnobservedTaskException: {e.Exception}");
+    e.SetObserved();
+};
 
 var contentRoot = ResolverRaizContenido();
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -39,34 +48,29 @@ builder.Services.AddScoped<ExportacionService>();
 builder.Services.AddSingleton<NotificacionStore>();
 builder.Services.AddScoped<INotificacionService, HttpAlertaService>();
 builder.Services.AddHttpClient<ControlLocal.Web.Services.Api.LocalesApiService>();
-// Estado de solicitudes compartido en sesion (Singleton) para que las transiciones
-// del flujo (reenviar a evaluacion / evaluacion del broker) persistan de verdad.
-builder.Services.AddSingleton<SolicitudStore>();
 
-// Almacenamiento de documentos del expediente: disco local por defecto;
-// AlmacenDocumentos:Proveedor=S3 apunta el mismo contrato al bucket de objetos.
-builder.Services.Configure<OpcionesAlmacenDocumentos>(
-    builder.Configuration.GetSection(OpcionesAlmacenDocumentos.Seccion));
-builder.Services.AddScoped<AlmacenLocalDocumentos>();
-builder.Services.AddScoped<AlmacenS3Documentos>();
-builder.Services.AddScoped<IDocumentoStorage>(servicios =>
-{
-    var configuracion = servicios.GetRequiredService<
-        Microsoft.Extensions.Options.IOptions<OpcionesAlmacenDocumentos>>().Value;
-    return configuracion.Proveedor.Equals("S3", StringComparison.OrdinalIgnoreCase)
-        ? servicios.GetRequiredService<AlmacenS3Documentos>()
-        : servicios.GetRequiredService<AlmacenLocalDocumentos>();
-});
+// El almacenamiento de documentos (S3 o disco, implementación híbrida) vive en el
+// backend Java (capa rest). El frontend solo envía/recibe bytes a través del API REST.
 
 // Cliente HTTP del API REST implementado por el backend Java.
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.Seccion));
 builder.Services.AddScoped<ApiSession>();
-builder.Services.AddHttpClient<ApiClient>();
+builder.Services.AddHttpClient<ApiClient>()
+    // Evita reutilizar conexiones keep-alive que GlassFish ya cerro (lo que colgaba los POST).
+    // Recicla el pool rapido; sin dependencias nuevas.
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromSeconds(30),
+        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(5),
+    });
 builder.Services.AddScoped<IAuthService, HttpAuthService>();
+builder.Services.AddScoped<HttpPerfilService>();
 builder.Services.AddScoped<HttpAgenteService>();
 builder.Services.AddScoped<IPropietarioService, HttpPropietarioService>();
 builder.Services.AddScoped<IClienteService, HttpClienteService>();
 builder.Services.AddScoped<ILocalService, HttpLocalService>();
+builder.Services.AddScoped<IPrecioLocalService, HttpPrecioLocalService>();
+builder.Services.AddScoped<IPublicacionService, HttpPublicacionService>();
 builder.Services.AddScoped<HttpProspeccionService>();
 builder.Services.AddScoped<IProspeccionService>(services =>
     services.GetRequiredService<HttpProspeccionService>());
@@ -75,27 +79,25 @@ builder.Services.AddScoped<HttpOportunidadService>();
 builder.Services.AddScoped<IOportunidadService>(services =>
     services.GetRequiredService<HttpOportunidadService>());
 builder.Services.AddScoped<IVisitaService, HttpVisitaService>();
+builder.Services.AddScoped<HttpFotoLocalService>();
 builder.Services.AddScoped<IAgenteService>(services =>
     services.GetRequiredService<HttpAgenteService>());
 
 builder.Services.AddScoped<ISolicitudService, HttpSolicitudService>();
+builder.Services.AddScoped<IDocumentoSolicitudService, HttpDocumentoSolicitudService>();
+builder.Services.AddScoped<IContratoService, HttpContratoService>();
 
-// Servicios locales de pantallas que aun no tienen un endpoint REST equivalente
-// implementado en el backend Java. Cuando se agregue el endpoint REST y su
-// HttpXxxService, basta con reemplazar el Mock por la implementacion HTTP.
-builder.Services.AddScoped<IBrokerService, MockBrokerService>();
-builder.Services.AddScoped<IInteraccionService, MockInteraccionService>();
-builder.Services.AddScoped<IAssignmentService, MockAssignmentService>();
-builder.Services.AddScoped<IReasignacionCaptacionService, MockReasignacionCaptacionService>();
+// Todas las pantallas usan ya el backend REST (no quedan mocks en uso).
+builder.Services.AddScoped<IIndicadorService, HttpIndicadorService>();
+builder.Services.AddScoped<IInteraccionService, HttpInteraccionService>();
+builder.Services.AddScoped<IReasignacionCaptacionService, HttpReasignacionCaptacionService>();
+builder.Services.AddScoped<IAssignmentService, HttpAssignmentService>();
+builder.Services.AddScoped<IBrokerService, HttpBrokerService>();
 
 var app = builder.Build();
 
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    app.UseHsts();
-    app.UseHttpsRedirection();
-}
+// Solo desarrollo local: la página de excepción para desarrolladores ya viene
+// activada por defecto. Sin HSTS ni redirección HTTPS (se corre en HTTP local).
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
 // Cabeceras de seguridad para toda respuesta del servidor.
@@ -111,17 +113,53 @@ app.Use(async (context, next) =>
 
 app.UseAntiforgery();
 
-// Exportación de la ficha de propiedad a PDF (generado en servidor con QuestPDF).
-// El código se valida contra el formato esperado antes de procesar.
-app.MapGet("/ficha/{codigo}/pdf", (string codigo,
-    ICaptacionService capSvc, ILocalService localSvc, IPropietarioService propSvc) =>
-{
-    if (!Regex.IsMatch(codigo, "^[A-Za-z0-9-]{1,20}$"))
-        return Results.BadRequest("Código de ficha inválido.");
+// La ficha de propiedad se exporta a PDF desde el circuito Blazor (FichaPropiedad.razor),
+// donde la sesión (token JWT) y los datos ya están cargados. El antiguo endpoint
+// /ficha/{codigo}/pdf abría una request HTTP sin sesión y por eso fallaba al exportar.
 
-    var model = FichaBuilder.Build(codigo, capSvc, localSvc, propSvc);
-    var bytes = new FichaPropiedadDocument(model).GeneratePdf();
-    return Results.File(bytes, "application/pdf", $"Ficha_{model.Codigo}.pdf");
+// Proxy del contenido real de un documento del expediente. El archivo vive en el
+// almacén del backend (S3 o disco); este endpoint lo descarga del API REST (clave
+// opaca, sin propagar el token JWT al navegador) y lo reenvía al visor en línea.
+// La clave se valida aquí y de nuevo en el backend (anti path-traversal).
+app.MapGet("/documento", async (string? clave, HttpContext http, IHttpClientFactory factory,
+    Microsoft.Extensions.Options.IOptions<ApiOptions> apiOpciones, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(clave)
+        || clave.Contains("..", StringComparison.Ordinal)
+        || clave.Contains('\\'))
+        return Results.BadRequest("Clave de documento inválida.");
+
+    byte[] contenido;
+    try
+    {
+        var cliente = factory.CreateClient();
+        cliente.BaseAddress = new Uri(apiOpciones.Value.BaseUrl.TrimEnd('/') + "/");
+        cliente.Timeout = TimeSpan.FromSeconds(Math.Clamp(apiOpciones.Value.TimeoutSeconds, 5, 60));
+        using var respuesta = await cliente.GetAsync(
+            $"documentos/contenido?clave={Uri.EscapeDataString(clave)}", ct);
+        if (respuesta.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return Results.NotFound("El documento no existe o ya no está disponible.");
+        if (!respuesta.IsSuccessStatusCode)
+            return Results.Problem("No se pudo obtener el documento del backend.");
+        contenido = await respuesta.Content.ReadAsByteArrayAsync(ct);
+    }
+    catch (Exception)
+    {
+        return Results.Problem("No se pudo obtener el documento del backend.");
+    }
+
+    // El middleware global pone X-Frame-Options: DENY (anti-clickjacking de la app),
+    // pero el visor incrusta este contenido en un <iframe> del MISMO origen. Se relaja
+    // solo para esta respuesta a SAMEORIGIN para que la previsualización funcione.
+    http.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+    http.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
+
+    var nombre = Path.GetFileName(clave);
+    var tipo = TiposContenido.Para(nombre);
+    // PDF e imágenes se muestran en línea; el resto se descarga.
+    var enLinea = TiposContenido.SePuedeIncrustar(nombre);
+    return Results.File(contenido, tipo, fileDownloadName: enLinea ? null : nombre,
+        enableRangeProcessing: true);
 });
 
 app.MapStaticAssets();

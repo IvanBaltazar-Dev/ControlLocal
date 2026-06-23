@@ -53,7 +53,7 @@ public class ApiClient
         _sesion = sesion;
         _navegacion = navegacion;
         _http.BaseAddress = new Uri(opciones.Value.BaseUrl.TrimEnd('/') + "/");
-        _http.Timeout = TimeSpan.FromSeconds(Math.Clamp(opciones.Value.TimeoutSeconds, 5, 60));
+        _http.Timeout = TimeSpan.FromSeconds(Math.Clamp(opciones.Value.TimeoutSeconds, 5, 120));
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
@@ -85,6 +85,16 @@ public class ApiClient
         return GetAsync<PaginaApi<T>>($"{ruta}{separador}pagina={pagina}&tamano={tamano}", ct);
     }
 
+    // Descarga binaria (sin deserializar JSON): trae los bytes de una foto/documento
+    // (p.ej. documentos/contenido?clave=) para incrustarlos en un PDF generado en el circuito.
+    public async Task<byte[]?> GetBytesAsync(string ruta, CancellationToken ct = default)
+    {
+        using var solicitud = Solicitud(HttpMethod.Get, ruta);
+        using var respuesta = await EnviarAsync(solicitud, ct);
+        await ValidarRespuestaAsync(respuesta, ct);
+        return await respuesta.Content.ReadAsByteArrayAsync(ct);
+    }
+
     public async Task<TRespuesta?> PostAsync<TRespuesta>(string ruta, object cuerpo, CancellationToken ct = default)
     {
         using var solicitud = Solicitud(HttpMethod.Post, ruta);
@@ -92,6 +102,30 @@ public class ApiClient
         using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
         return await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
+    }
+
+    // Sube un archivo como octet-stream y devuelve el JSON de respuesta. El backend
+    // (capa rest) guarda el contenido en el almacen (S3 o disco) y persiste sus metadatos.
+    public async Task<TRespuesta?> PostBytesAsync<TRespuesta>(
+        string ruta, byte[] contenido, string contentType, CancellationToken ct = default)
+    {
+        ControlLocal.Web.Services.CrashLog.Breadcrumb(
+            $"PostBytes inicio ruta={ruta} bytes={contenido?.Length ?? -1} ct={contentType} token={(_sesion.Token is null ? "no" : "si")}");
+        using var solicitud = Solicitud(HttpMethod.Post, ruta);
+        var cuerpo = new ByteArrayContent(contenido);
+        cuerpo.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        solicitud.Content = cuerpo;
+        // Subida robusta: no esperar "100-continue" y forzar conexion nueva (sin reutilizar
+        // una keep-alive que GlassFish pudo cerrar), que es lo que colgaba el POST.
+        solicitud.Headers.ExpectContinue = false;
+        solicitud.Headers.ConnectionClose = true;
+        ControlLocal.Web.Services.CrashLog.Breadcrumb("PostBytes antes de EnviarAsync");
+        using var respuesta = await EnviarAsync(solicitud, ct);
+        ControlLocal.Web.Services.CrashLog.Breadcrumb($"PostBytes recibio status={(int)respuesta.StatusCode}");
+        await ValidarRespuestaAsync(respuesta, ct);
+        var resultado = await LeerJsonAsync<TRespuesta>(respuesta.Content, ct);
+        ControlLocal.Web.Services.CrashLog.Breadcrumb("PostBytes fin OK");
+        return resultado;
     }
 
     public async Task<TRespuesta?> PutAsync<TRespuesta>(string ruta, object cuerpo, CancellationToken ct = default)
@@ -135,6 +169,16 @@ public class ApiClient
         var solicitud = new HttpRequestMessage(metodo, ruta.TrimStart('/'));
         if (_sesion.Token is not null)
             solicitud.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _sesion.Token);
+
+        // GlassFish cierra conexiones keep-alive ociosas; el HttpClient de .NET reutiliza esas
+        // conexiones medio-cerradas y el POST/PUT/PATCH se quedaba colgado hasta el timeout (el
+        // boton "Guardando" no persistia nunca). Igual que PostBytesAsync: no esperar
+        // "100-continue" y forzar conexion nueva en cada escritura.
+        if (metodo != HttpMethod.Get)
+        {
+            solicitud.Headers.ExpectContinue = false;
+            solicitud.Headers.ConnectionClose = true;
+        }
         return solicitud;
     }
 
@@ -150,16 +194,19 @@ public class ApiClient
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            ControlLocal.Web.Services.CrashLog.Breadcrumb($"EnviarAsync cancelado por ct: {solicitud.Method} {destino}");
             throw;
         }
         catch (TaskCanceledException ex)
         {
+            ControlLocal.Web.Services.CrashLog.Breadcrumb($"EnviarAsync timeout: {solicitud.Method} {destino}");
             throw new InvalidOperationException(
                 $"El API REST no respondio a tiempo ({destino}). Verifica que el backend siga levantado.",
                 ex);
         }
         catch (HttpRequestException ex)
         {
+            ControlLocal.Web.Services.CrashLog.Breadcrumb($"EnviarAsync HttpRequestException: {solicitud.Method} {destino} :: {ex.Message}");
             throw new InvalidOperationException(
                 $"No se pudo conectar al API REST ({destino}). Verifica Api:BaseUrl y que GlassFish este sirviendo /controllocal/Api.",
                 ex);

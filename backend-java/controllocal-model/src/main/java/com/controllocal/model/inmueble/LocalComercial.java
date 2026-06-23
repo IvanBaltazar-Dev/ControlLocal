@@ -42,6 +42,8 @@ public class LocalComercial {
     private BigDecimal cargaElectricaKw;
     private Integer numeroEstacionamientos;
     private BigDecimal cuotaMantenimiento;
+    // FK al catalogo distrito (resuelto desde el nombre). NULL si el distrito no esta catalogado.
+    private Long idDistrito;
 
     public LocalComercial() {
     }
@@ -268,6 +270,8 @@ public class LocalComercial {
     }
     public BigDecimal getCuotaMantenimiento() { return cuotaMantenimiento; }
     public void setCuotaMantenimiento(BigDecimal cuotaMantenimiento) { this.cuotaMantenimiento = cuotaMantenimiento; }
+    public Long getIdDistrito() { return idDistrito; }
+    public void setIdDistrito(Long idDistrito) { this.idDistrito = idDistrito; }
 
     public void cambiarEstado(EstadoLocalComercial estado) {
         this.estado = estado;

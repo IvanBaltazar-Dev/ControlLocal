@@ -1,4 +1,6 @@
+using System.Globalization;
 using ControlLocal.Web.Data;
+using ControlLocal.Web.Models.Locales;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -31,6 +33,21 @@ public class FichaModel
     public string AgenteNombre { get; set; } = "";
     public string Descripcion { get; set; } = "";
     public string GeneradoTexto { get; set; } = "";
+    // Ficha técnica del inmueble (Fase 1). "—" cuando el dato no está registrado.
+    public string Frente { get; set; } = "—";
+    public string Estacionamientos { get; set; } = "—";
+    public string CargaElectrica { get; set; } = "—";
+    public string AptoLicencia { get; set; } = "—";
+    public string Zonificacion { get; set; } = "—";
+    public string CuotaMantenimiento { get; set; } = "—";
+    // Captacion: senales comerciales internas.
+    public string Urgencia { get; set; } = "—";
+    public string Exclusividad { get; set; } = "—";
+    // Historico de precios del local (se carga aparte; FichaBuilder solo fija LocalId).
+    public long LocalId { get; set; }
+    public List<PrecioLocalDto> Precios { get; set; } = new();
+    // Bytes de las fotos del local (se cargan aparte antes de exportar; máx. 6). Vacío = sin galería.
+    public List<byte[]> Fotos { get; set; } = new();
 }
 
 // Centraliza la derivación del modelo de ficha para que la pantalla y el PDF
@@ -46,9 +63,9 @@ public static class FichaBuilder
         var prop = propSvc.All().FirstOrDefault(p => Loose(p.Nombre, cap.PropietarioNombre));
 
         var area = cap.AreaM2 > 0 ? cap.AreaM2 : (local?.AreaM2 ?? 0);
-        var rubro = local?.Rubro is { Length: > 0 } r ? r : "Restaurante / Café";
-        var precio = local?.PrecioReferencialTexto is { Length: > 0 } pr ? pr : "2 100";
-        var comision = cap.ComisionPactadaTexto is { Length: > 0 } c && c != "—" ? c : "5.0";
+        var rubro = local?.Rubro is { Length: > 0 } r ? r : "Por definir";
+        var precio = local?.PrecioReferencialTexto is { Length: > 0 } pr ? pr : "—";
+        var comision = cap.ComisionPactadaTexto is { Length: > 0 } c && c != "—" ? c : "—";
 
         return new FichaModel
         {
@@ -58,9 +75,9 @@ public static class FichaBuilder
             Estado = cap.Estado,
             AreaM2 = area,
             Rubro = rubro,
-            Ambientes = "3 ambientes",
-            Antiguedad = "Buen estado de conservación",
-            Referencia = "A media cuadra de la avenida principal",
+            Ambientes = local?.Ambientes is int amb ? $"{amb} ambientes" : "—",
+            Antiguedad = local?.AntiguedadAnios is int ant ? $"{ant} años" : "—",
+            Referencia = local?.ZonaUrbanizacion is { Length: > 0 } zona ? zona : "—",
             PrecioTexto = precio,
             ComisionTexto = comision,
             VigenciaTexto = string.IsNullOrEmpty(cap.VigenciaTexto) ? "Por definir" : cap.VigenciaTexto,
@@ -70,11 +87,22 @@ public static class FichaBuilder
             PropietarioDocumento = prop?.NumeroDocumento ?? "—",
             PropietarioTelefono = prop?.Telefono ?? "—",
             PropietarioCorreo = prop?.Correo ?? "—",
-            AgenteNombre = string.IsNullOrEmpty(cap.NombreAgenteResponsable) ? "Valentina Mora" : cap.NombreAgenteResponsable,
+            AgenteNombre = string.IsNullOrEmpty(cap.NombreAgenteResponsable) ? "Sin asignar" : cap.NombreAgenteResponsable,
+            Urgencia = cap.Urgencia is int nivel ? $"{nivel} / 5" : "—",
+            Exclusividad = cap.Exclusividad == true ? "Encargo exclusivo" : (cap.Exclusividad == false ? "No exclusivo" : "—"),
+            LocalId = local?.Id ?? 0,
             Descripcion = $"Local comercial ubicado en {cap.DireccionLocal}, {cap.DistritoLocal}. " +
                           $"Espacio de {area} m² ideal para el rubro {rubro.ToLowerInvariant()}. " +
                           "Cuenta con frontis a la calle, instalaciones eléctricas y sanitarias operativas, " +
                           "y excelente afluencia peatonal en la zona.",
+            Frente = local?.Frente is decimal fr ? $"{fr.ToString("0.##", CultureInfo.InvariantCulture)} m" : "—",
+            Estacionamientos = local?.NumeroEstacionamientos is int est ? est.ToString() : "—",
+            CargaElectrica = local?.CargaElectricaKw is decimal carga
+                ? $"{carga.ToString("0.##", CultureInfo.InvariantCulture)} kW" : "—",
+            AptoLicencia = local?.AptoLicenciaFuncionamiento is bool apto ? (apto ? "Sí" : "No") : "—",
+            Zonificacion = local?.Zonificacion is { Length: > 0 } zon ? zon : "—",
+            CuotaMantenimiento = local?.CuotaMantenimiento is decimal cuota
+                ? $"USD {cuota.ToString("0.##", CultureInfo.InvariantCulture)}" : "—",
             GeneradoTexto = $"Generado el {DateTime.Now:dd/MM/yyyy} a las {DateTime.Now:HH:mm}",
         };
     }
@@ -129,6 +157,14 @@ public class FichaPropiedadDocument : IDocument
                 Caracteristicas(col.Item().PaddingHorizontal(36).PaddingTop(20));
                 CondicionesYPropietario(col.Item().PaddingHorizontal(36).PaddingTop(18));
                 Descripcion(col.Item().PaddingHorizontal(36).PaddingTop(18));
+                if (_m.Fotos.Count > 0)
+                {
+                    Galeria(col.Item().PaddingHorizontal(36).PaddingTop(18));
+                }
+                if (_m.Precios.Count > 0)
+                {
+                    PreciosHistoricos(col.Item().PaddingHorizontal(36).PaddingTop(18));
+                }
             });
 
             Footer(page.Footer());
@@ -197,6 +233,9 @@ public class FichaPropiedadDocument : IDocument
             {
                 KeyValue(left, "Rubro sugerido", _m.Rubro);
                 KeyValue(left, "Ambientes", _m.Ambientes);
+                KeyValue(left, "Frente", _m.Frente);
+                KeyValue(left, "Estacionamientos", _m.Estacionamientos);
+                KeyValue(left, "Carga eléctrica", _m.CargaElectrica);
                 KeyValue(left, "Referencia", _m.Referencia);
             });
             row.ConstantItem(24);
@@ -204,6 +243,9 @@ public class FichaPropiedadDocument : IDocument
             {
                 KeyValue(right, "Distrito", _m.Distrito);
                 KeyValue(right, "Estado de conservación", _m.Antiguedad);
+                KeyValue(right, "Zonificación", _m.Zonificacion);
+                KeyValue(right, "Apto licencia funcionamiento", _m.AptoLicencia);
+                KeyValue(right, "Cuota de mantenimiento", _m.CuotaMantenimiento);
                 KeyValue(right, "Días restantes", string.IsNullOrEmpty(_m.DiasRestantesTexto) ? "—" : _m.DiasRestantesTexto);
             });
         });
@@ -218,6 +260,8 @@ public class FichaPropiedadDocument : IDocument
             {
                 KeyValue(inner, "Monto mensual", $"USD {_m.PrecioTexto}");
                 KeyValue(inner, "Comisión pactada", $"{_m.ComisionTexto}%");
+                KeyValue(inner, "Urgencia", _m.Urgencia);
+                KeyValue(inner, "Exclusividad", _m.Exclusividad);
                 KeyValue(inner, "Vigencia", _m.VigenciaTexto);
             });
         });
@@ -240,6 +284,47 @@ public class FichaPropiedadDocument : IDocument
     {
         SectionHeader(col.Item(), "Descripción");
         col.Item().PaddingTop(8).Text(_m.Descripcion).FontSize(10).LineHeight(1.5f).FontColor(Body);
+    });
+
+    // Galería premium: cuadrícula de hasta 6 fotos (3 por fila) con marco suave.
+    private void Galeria(IContainer c) => c.Column(col =>
+    {
+        SectionHeader(col.Item(), "Galería del local");
+        var fotos = _m.Fotos.Where(b => b is { Length: > 0 }).Take(6).ToList();
+        col.Item().PaddingTop(10).Column(grid =>
+        {
+            for (var i = 0; i < fotos.Count; i += 3)
+            {
+                grid.Item().PaddingBottom(8).Row(row =>
+                {
+                    for (var j = 0; j < 3; j++)
+                    {
+                        if (j > 0) row.ConstantItem(8);
+                        if (i + j < fotos.Count)
+                        {
+                            row.RelativeItem().Height(104).Background(Soft)
+                               .Border(1).BorderColor(Line).Image(fotos[i + j]).FitArea();
+                        }
+                        else
+                        {
+                            row.RelativeItem();
+                        }
+                    }
+                });
+            }
+        });
+    });
+
+    private void PreciosHistoricos(IContainer c) => c.Column(col =>
+    {
+        SectionHeader(col.Item(), "Histórico de precios");
+        col.Item().PaddingTop(8).Column(inner =>
+        {
+            foreach (var precio in _m.Precios)
+            {
+                KeyValue(inner, $"{precio.FechaTexto} · {precio.HitoTexto}", $"{precio.Moneda} {precio.MontoTexto}");
+            }
+        });
     });
 
     private static void SectionHeader(IContainer c, string text) =>

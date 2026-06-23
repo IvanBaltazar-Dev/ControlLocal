@@ -15,6 +15,11 @@ public interface BrokerBusinessLogic {
     public Optional<Broker> buscarPorUsuario(Long idUsuario);
     public List<Broker> listarTodos();
     public boolean actualizarBroker(Long idBrokerAdministrador, Broker broker);
+    // Alta/edicion atomica del broker con su persona y usuario interno (1 transaccion).
+    public Long registrarBrokerCompleto(Long idBrokerAdministrador, Broker broker);
+    public boolean actualizarBrokerCompleto(Long idBrokerAdministrador, Broker broker);
+    // Supervision activa de un agente (el broker que lo tiene asignado ahora).
+    public Optional<BrokerAgente> buscarBrokerActivoDeAgente(Long idAgente);
     public boolean desactivarBroker(Long idBrokerAdministrador, Long idBroker);
     public Long asignarAgente(Long idBrokerAdministrador, Long idBrokerSupervisor, Long idAgente, String motivo);
     public boolean desactivarAsignacionAgente(Long idBrokerAdministrador, Long idBrokerAgente);

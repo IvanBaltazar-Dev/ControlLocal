@@ -27,7 +27,6 @@ public class Captacion {
     private Broker brokerRevisor;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
-
     // Condiciones del encargo (Diccionario v2): operacion solicitada,
     // urgencia del propietario (1 a 5) y exclusividad pactada.
     private OperacionRequerimiento motivoOperacion = OperacionRequerimiento.ALQUILER;

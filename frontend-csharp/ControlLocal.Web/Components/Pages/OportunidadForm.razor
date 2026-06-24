@@ -22,12 +22,14 @@
                 <FormSection Num="1" Title="Cliente interesado" Sub="Persona o empresa que quiere evaluar el local">
                     <Field Label="Cliente" Required="true">
                         <input class="cl-input search" type="search" placeholder="Escribe para buscar cliente por nombre o rubro…"
-                               value="@_busquedaCliente" @oninput="OnBusquedaCliente"
-                               @onfocus="AbrirPickerCliente"
+                               value="@_busquedaCliente"
+                               @oninput="OnBusquedaCliente"
+                               @onfocus="@(() => _desplegarClientes = true)"
                                disabled="@(_cargando || _procesando)" />
-                        @if (_clientePickerAbierto)
-                        {
-                            <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                               
+                        <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                            @if (_desplegarClientes || _clienteId == 0)
+                            {
                                 @foreach (var cliente in ClientesDisponibles)
                                 {
                                     var sel = _clienteId == cliente.Id;
@@ -39,19 +41,22 @@
                                             <div style="font-weight:600;font-size:13px;">@cliente.Nombre</div>
                                             <div class="cl-muted" style="font-size:11px;">@cliente.RubroInteres</div>
                                         </div>
-                                        @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
+                                        @if (sel)
+                                        {
+                                            <Icon Name="check" Size="15" Color="#005BFF" />
+                                        }
                                     </div>
                                 }
                                 @if (!ClientesDisponibles.Any())
                                 {
                                     <div class="cl-help">No hay clientes que coincidan con la búsqueda.</div>
                                 }
-                            </div>
-                        }
-                        else if (_clienteId > 0 && ClienteSeleccionado is not null)
-                        {
-                            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
-                                <div style="flex:1;min-width:0;@PickStyle(true)">
+                            }
+                            else if (ClienteSeleccionado is not null)
+                            {
+                                <div role="button" tabindex="0"
+                                     style="@PickStyle(true)"
+                                     @onclick="@(() => _desplegarClientes = true)">
                                     <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@Iniciales(ClienteSeleccionado.Nombre)</span>
                                     <div style="flex:1;min-width:0;">
                                         <div style="font-weight:600;font-size:13px;">@ClienteSeleccionado.Nombre</div>
@@ -59,22 +64,22 @@
                                     </div>
                                     <Icon Name="check" Size="15" Color="#005BFF" />
                                 </div>
-                                <button type="button" class="cl-btn ghost sm" disabled="@(_cargando || _procesando)"
-                                        @onclick="AbrirPickerCliente">Cambiar</button>
-                            </div>
-                        }
+                            }
+                        </div>
                     </Field>
                 </FormSection>
 
                 <FormSection Num="2" Title="Captacion activa" Sub="Propiedad disponible para seguimiento comercial">
                     <Field Label="Captacion" Required="true">
                         <input class="cl-input search" type="search" placeholder="Escribe para buscar por código, dirección o distrito…"
-                               value="@_busquedaCaptacion" @oninput="OnBusquedaCaptacion"
-                               @onfocus="AbrirPickerCaptacion"
+                               value="@_busquedaCaptacion"
+                               @oninput="OnBusquedaCaptacion"
+                               @onfocus="@(() => _desplegarCaptaciones = true)"
                                disabled="@(_cargando || _procesando)" />
-                        @if (_captacionPickerAbierto)
-                        {
-                            <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                               
+                        <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                            @if (_desplegarCaptaciones || _captacionId == 0)
+                            {
                                 @foreach (var captacion in CaptacionesActivas)
                                 {
                                     var sel = _captacionId == captacion.Id;
@@ -85,29 +90,30 @@
                                             <div style="font-weight:600;font-size:13px;">@captacion.CodigoCaptacion · @captacion.DireccionLocal</div>
                                             <div class="cl-muted" style="font-size:11px;">@captacion.DistritoLocal</div>
                                         </div>
-                                        @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
+                                        @if (sel)
+                                        {
+                                            <Icon Name="check" Size="15" Color="#005BFF" />
+                                        }
                                     </div>
                                 }
                                 @if (!CaptacionesActivas.Any())
                                 {
                                     <div class="cl-help">No hay captaciones activas que coincidan con la búsqueda.</div>
                                 }
-                            </div>
-                        }
-                        else if (_captacionId > 0 && CaptacionSeleccionada is not null)
-                        {
-                            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
-                                <div style="flex:1;min-width:0;@PickStyle(true)">
+                            }
+                            else if (CaptacionSeleccionada is not null)
+                            {
+                                <div role="button" tabindex="0"
+                                     style="@PickStyle(true)"
+                                     @onclick="@(() => _desplegarCaptaciones = true)">
                                     <div style="flex:1;min-width:0;">
                                         <div style="font-weight:600;font-size:13px;">@CaptacionSeleccionada.CodigoCaptacion · @CaptacionSeleccionada.DireccionLocal</div>
                                         <div class="cl-muted" style="font-size:11px;">@CaptacionSeleccionada.DistritoLocal</div>
                                     </div>
                                     <Icon Name="check" Size="15" Color="#005BFF" />
                                 </div>
-                                <button type="button" class="cl-btn ghost sm" disabled="@(_cargando || _procesando)"
-                                        @onclick="AbrirPickerCaptacion">Cambiar</button>
-                            </div>
-                        }
+                            }
+                        </div>
                     </Field>
                 </FormSection>
 
@@ -136,9 +142,12 @@
                     <div class="cl-card-head"><div class="cl-card-title">Resumen</div></div>
                     <div class="cl-card-body">
                         <dl class="cl-kv">
-                            <dt>Cliente</dt><dd>@(ClienteSeleccionado?.Nombre ?? "-")</dd>
-                            <dt>Captacion</dt><dd>@(CaptacionSeleccionada?.CodigoCaptacion ?? "-")</dd>
-                            <dt>Local</dt><dd>@(CaptacionSeleccionada?.DireccionLocal ?? "-")</dd>
+                            <dt>Cliente</dt>
+                            <dd>@(ClienteSeleccionado?.Nombre ?? "-")</dd>
+                            <dt>Captacion</dt>
+                            <dd>@(CaptacionSeleccionada?.CodigoCaptacion ?? "-")</dd>
+                            <dt>Local</dt>
+                            <dd>@(CaptacionSeleccionada?.DireccionLocal ?? "-")</dd>
                         </dl>
                     </div>
                 </div>
@@ -156,8 +165,14 @@
 
     private IReadOnlyList<ClienteInteresadoDto> _clientes = [];
     private IReadOnlyList<CaptacionDto> _captaciones = [];
+    
     private long _clienteId;
     private long _captacionId;
+    
+    // Banderas para controlar el estado de "desplegado" de las listas
+    private bool _desplegarClientes = false;
+    private bool _desplegarCaptaciones = false;
+    
     private string _observaciones = "";
     private string _busquedaCliente = "";
     private string _busquedaCaptacion = "";
@@ -167,7 +182,6 @@
     private bool _procesando;
     private string? _err;
 
-    // La lista se mantiene tal cual; la búsqueda solo la reduce (mixto: lista + buscador).
     private IEnumerable<ClienteInteresadoDto> ClientesDisponibles =>
         _clientes.Where(item => item.Estado is "Activo" or "A")
             .Where(item => TextoFiltro.Contiene(item.Nombre, _busquedaCliente)
@@ -181,7 +195,6 @@
                 || TextoFiltro.Contiene(item.DistritoLocal, _busquedaCaptacion))
             .OrderByDescending(item => item.FechaCaptacion);
 
-    // Estilo de cada fila seleccionable de los buscadores (resaltada si está elegida).
     private static string PickStyle(bool sel)
     {
         var border = sel ? "#005BFF" : "var(--c-border)";
@@ -208,6 +221,33 @@
         new FormStepsSidebar.Step("Captacion", "Propiedad activa", _captacionId > 0),
         new FormStepsSidebar.Step("Contexto", "Notas iniciales", true),
     };
+    
+    
+    private void OnBusquedaCliente(ChangeEventArgs e)
+    {
+        _busquedaCliente = e.Value?.ToString() ?? "";
+        _desplegarClientes = true; 
+    }
+
+    private void SeleccionarCliente(long id)
+    {
+        _clienteId = id;
+        _desplegarClientes = false; 
+        _busquedaCliente = ""; 
+    }
+
+    private void OnBusquedaCaptacion(ChangeEventArgs e)
+    {
+        _busquedaCaptacion = e.Value?.ToString() ?? "";
+        _desplegarCaptaciones = true;
+    }
+
+    private void SeleccionarCaptacion(long id)
+    {
+        _captacionId = id;
+        _desplegarCaptaciones = false;
+        _busquedaCaptacion = "";
+    }
 
     protected override async Task OnParametersSetAsync()
     {

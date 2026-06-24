@@ -3,6 +3,9 @@
 @using QuestPDF.Fluent
 @inject AppState App
 @inject IIndicadorService Indicadores
+@inject ICaptacionService CaptacionSvc
+@inject ISolicitudService SolicitudSvc
+@inject ILocalService LocalSvc
 @inject ExportacionService Exportar
 
 <PageTitle>@_title · ControlLocal</PageTitle>
@@ -100,14 +103,145 @@
                     </div>
                 </div>
             </div>
+
+            @if (_isBroker)
+            {
+                <div style="margin-top:22px;display:flex;flex-direction:column;gap:14px;">
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">Locales comerciales captados</div>
+                                <div class="cl-card-sub">Filtra por distrito, estado, agente y rango de precio referencial</div>
+                            </div>
+                            <button class="cl-btn sm" @onclick="ExportarCaptacionesCsv"><Icon Name="download" Size="13" /> Exportar CSV</button>
+                        </div>
+                        <div class="cl-card-body" style="padding-top:0;">
+                            <FilterBar Search="Buscar por código, dirección o propietario…"
+                                       @bind-Value="_qCaptacion" ResultCount="CaptacionesFiltradas.Count"
+                                       HasActiveFilters="HayFiltrosCaptacion" OnClear="LimpiarFiltrosCaptacion">
+                                <FilterSelect Placeholder="Distrito" Options="_distritosCaptacion" @bind-Value="_capDistrito" />
+                                <FilterSelect Placeholder="Estado" Options="_estadosCaptacion" @bind-Value="_capEstado" />
+                                <FilterSelect Placeholder="Agente" Options="_agentesCaptacion" @bind-Value="_capAgente" />
+                                <input class="cl-input" type="number" min="0" step="100" placeholder="Precio mín. USD"
+                                       style="width:130px;" @bind="_capPrecioMin" />
+                                <input class="cl-input" type="number" min="0" step="100" placeholder="Precio máx. USD"
+                                       style="width:130px;" @bind="_capPrecioMax" />
+                            </FilterBar>
+                            @{
+                                var capsVisibles = Paginador.Pagina(CaptacionesFiltradas, ref _pagCaptacion);
+                            }
+                            <table class="cl-table">
+                                <thead>
+                                    <tr>
+                                        <th>Captación</th><th>Dirección</th><th>Distrito</th><th>Agente</th>
+                                        <th>Precio ref.</th><th>Estado</th><th>Vigencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in capsVisibles)
+                                    {
+                                        <tr>
+                                            <td><span class="mono">@c.CodigoCaptacion</span></td>
+                                            <td style="font-weight:600;">@c.DireccionLocal</td>
+                                            <td>@c.DistritoLocal</td>
+                                            <td>@c.NombreAgenteResponsable</td>
+                                            <td>USD @PrecioLocal(c).ToString("N0")</td>
+                                            <td><StatusBadge Label="@c.Estado" /></td>
+                                            <td class="cl-muted" style="font-size:12px;">@c.VigenciaTexto</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (_cargandoReportes)
+                            {
+                                <div style="padding:32px;text-align:center;color:#7E8794;">Cargando captaciones…</div>
+                            }
+                            else if (CaptacionesFiltradas.Count == 0)
+                            {
+                                <div style="padding:32px;text-align:center;color:#7E8794;">Sin captaciones para los filtros seleccionados.</div>
+                            }
+                            <Pagination Total="CaptacionesFiltradas.Count" @bind-Page="_pagCaptacion" />
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">Solicitudes de alquiler</div>
+                                <div class="cl-card-sub">Filtra por fechas, estado, local comercial y agente responsable</div>
+                            </div>
+                            <button class="cl-btn sm" @onclick="ExportarSolicitudesCsv"><Icon Name="download" Size="13" /> Exportar CSV</button>
+                        </div>
+                        <div class="cl-card-body" style="padding-top:0;">
+                            <FilterBar Search="Buscar por código, cliente u operación…"
+                                       @bind-Value="_qSolicitud" ResultCount="SolicitudesFiltradas.Count"
+                                       HasActiveFilters="HayFiltrosSolicitud" OnClear="LimpiarFiltrosSolicitud">
+                                <input class="cl-input" type="date" title="Fecha desde" @bind="_solDesde" />
+                                <input class="cl-input" type="date" title="Fecha hasta" @bind="_solHasta" />
+                                <FilterSelect Placeholder="Estado" Options="_estadosSolicitud" @bind-Value="_solEstado" />
+                                <FilterSelect Placeholder="Local" Options="_localesSolicitud" @bind-Value="_solLocal" />
+                                <FilterSelect Placeholder="Agente" Options="_agentesSolicitud" @bind-Value="_solAgente" />
+                            </FilterBar>
+                            @{
+                                var solsVisibles = Paginador.Pagina(SolicitudesFiltradas, ref _pagSolicitud);
+                            }
+                            <table class="cl-table">
+                                <thead>
+                                    <tr>
+                                        <th>Solicitud</th><th>Cliente</th><th>Local</th><th>Agente</th>
+                                        <th>Fecha</th><th>Monto/mes</th><th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var s in solsVisibles)
+                                    {
+                                        <tr>
+                                            <td><span class="mono">@s.CodigoSolicitud</span></td>
+                                            <td style="font-weight:600;">@s.ClienteNombre</td>
+                                            <td>@s.DireccionLocal</td>
+                                            <td>@s.AgenteNombre</td>
+                                            <td class="cl-muted" style="font-size:12px;">@s.FechaRegistroTexto</td>
+                                            <td>USD @s.MontoMensualTexto</td>
+                                            <td><StatusBadge Label="@s.Estado" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (_cargandoReportes)
+                            {
+                                <div style="padding:32px;text-align:center;color:#7E8794;">Cargando solicitudes…</div>
+                            }
+                            else if (SolicitudesFiltradas.Count == 0)
+                            {
+                                <div style="padding:32px;text-align:center;color:#7E8794;">Sin solicitudes para los filtros seleccionados.</div>
+                            }
+                            <Pagination Total="SolicitudesFiltradas.Count" @bind-Page="_pagSolicitud" />
+                        </div>
+                    </div>
+                </div>
+            }
         }
     </ChildContent>
 </AppShell>
 
 @code {
     private bool _isAdmin => App.Role == Roles.Admin;
+    private bool _isBroker => App.Role == Roles.Broker;
     private bool _cargando = true;
+    private bool _cargandoReportes;
     private IndicadoresDto _ind = IndicadoresDto.Vacio;
+
+    private IReadOnlyList<CaptacionDto> _captaciones = [];
+    private IReadOnlyList<SolicitudAlquilerDto> _solicitudes = [];
+    private Dictionary<long, decimal> _preciosPorLocal = new();
+
+    private string _qCaptacion = "", _capDistrito = "", _capEstado = "", _capAgente = "";
+    private decimal? _capPrecioMin, _capPrecioMax;
+    private int _pagCaptacion = 1;
+
+    private string _qSolicitud = "", _solEstado = "", _solLocal = "", _solAgente = "";
+    private DateOnly? _solDesde, _solHasta;
+    private int _pagSolicitud = 1;
 
     private string _title => _isAdmin ? "Reportes globales" : "Reportes de equipo";
     private string _sideActive => _isAdmin ? "Reportes globales" : "Reportes de equipo";
@@ -126,6 +260,16 @@
         try
         {
             _ind = await Indicadores.ObtenerAsync(DisposedToken);
+            if (_isBroker)
+            {
+                _cargandoReportes = true;
+                var capsTask = CaptacionSvc.RefrescarAsync(DisposedToken);
+                var solsTask = SolicitudSvc.RefrescarAsync(DisposedToken);
+                _captaciones = await capsTask;
+                _solicitudes = await solsTask;
+                _preciosPorLocal = LocalSvc.All()
+                    .ToDictionary(l => l.Id, l => l.PrecioReferencial);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -133,7 +277,94 @@
         finally
         {
             _cargando = false;
+            _cargandoReportes = false;
         }
+    }
+
+    private decimal PrecioLocal(CaptacionDto c) =>
+        c.LocalId > 0 && _preciosPorLocal.TryGetValue(c.LocalId, out var p) ? p : 0;
+
+    private IReadOnlyList<string> _distritosCaptacion => Opciones(_captaciones.Select(c => c.DistritoLocal));
+    private IReadOnlyList<string> _estadosCaptacion => Opciones(_captaciones.Select(c => c.Estado));
+    private IReadOnlyList<string> _agentesCaptacion => Opciones(_captaciones.Select(c => c.NombreAgenteResponsable));
+
+    private IReadOnlyList<string> _estadosSolicitud => Opciones(_solicitudes.Select(s => s.Estado));
+    private IReadOnlyList<string> _localesSolicitud => Opciones(_solicitudes.Select(s => s.DireccionLocal));
+    private IReadOnlyList<string> _agentesSolicitud => Opciones(_solicitudes.Select(s => s.AgenteNombre));
+
+    private static IReadOnlyList<string> Opciones(IEnumerable<string?> valores) =>
+        valores.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()).Distinct().OrderBy(v => v).ToList();
+
+    private List<CaptacionDto> CaptacionesFiltradas => _captaciones
+        .Where(c => string.IsNullOrEmpty(_capDistrito) || c.DistritoLocal == _capDistrito)
+        .Where(c => string.IsNullOrEmpty(_capEstado) || c.Estado == _capEstado)
+        .Where(c => string.IsNullOrEmpty(_capAgente) || c.NombreAgenteResponsable == _capAgente)
+        .Where(c => !_capPrecioMin.HasValue || PrecioLocal(c) >= _capPrecioMin.Value)
+        .Where(c => !_capPrecioMax.HasValue || PrecioLocal(c) <= _capPrecioMax.Value)
+        .Where(c => string.IsNullOrEmpty(_qCaptacion)
+            || TextoFiltro.Contiene(c.CodigoCaptacion, _qCaptacion)
+            || TextoFiltro.Contiene(c.DireccionLocal, _qCaptacion)
+            || TextoFiltro.Contiene(c.PropietarioNombre, _qCaptacion))
+        .OrderByDescending(c => c.FechaCaptacion)
+        .ToList();
+
+    private List<SolicitudAlquilerDto> SolicitudesFiltradas => _solicitudes
+        .Where(s => string.IsNullOrEmpty(_solEstado) || s.Estado == _solEstado)
+        .Where(s => string.IsNullOrEmpty(_solLocal) || s.DireccionLocal == _solLocal)
+        .Where(s => string.IsNullOrEmpty(_solAgente) || s.AgenteNombre == _solAgente)
+        .Where(s => !_solDesde.HasValue || (s.FechaRegistro.HasValue && s.FechaRegistro.Value >= _solDesde.Value))
+        .Where(s => !_solHasta.HasValue || (s.FechaRegistro.HasValue && s.FechaRegistro.Value <= _solHasta.Value))
+        .Where(s => string.IsNullOrEmpty(_qSolicitud)
+            || TextoFiltro.Contiene(s.CodigoSolicitud, _qSolicitud)
+            || TextoFiltro.Contiene(s.ClienteNombre, _qSolicitud)
+            || TextoFiltro.Contiene(s.CodigoOperacion, _qSolicitud))
+        .OrderByDescending(s => s.FechaRegistro)
+        .ToList();
+
+    private bool HayFiltrosCaptacion =>
+        !string.IsNullOrEmpty(_qCaptacion) || !string.IsNullOrEmpty(_capDistrito)
+        || !string.IsNullOrEmpty(_capEstado) || !string.IsNullOrEmpty(_capAgente)
+        || _capPrecioMin.HasValue || _capPrecioMax.HasValue;
+
+    private bool HayFiltrosSolicitud =>
+        !string.IsNullOrEmpty(_qSolicitud) || !string.IsNullOrEmpty(_solEstado)
+        || !string.IsNullOrEmpty(_solLocal) || !string.IsNullOrEmpty(_solAgente)
+        || _solDesde.HasValue || _solHasta.HasValue;
+
+    private void LimpiarFiltrosCaptacion()
+    {
+        _qCaptacion = _capDistrito = _capEstado = _capAgente = "";
+        _capPrecioMin = _capPrecioMax = null;
+        _pagCaptacion = 1;
+    }
+
+    private void LimpiarFiltrosSolicitud()
+    {
+        _qSolicitud = _solEstado = _solLocal = _solAgente = "";
+        _solDesde = _solHasta = null;
+        _pagSolicitud = 1;
+    }
+
+    private async Task ExportarCaptacionesCsv()
+    {
+        await Exportar.DescargarCsvAsync("reporte_locales_captados",
+            new[] { "Captación", "Dirección", "Distrito", "Agente", "Precio ref. USD", "Estado", "Vigencia" },
+            CaptacionesFiltradas.Select(c => (IReadOnlyList<string?>)new[]
+            {
+                c.CodigoCaptacion, c.DireccionLocal, c.DistritoLocal, c.NombreAgenteResponsable,
+                PrecioLocal(c).ToString("N0"), c.Estado, c.VigenciaTexto,
+            }));
+    }
+
+    private async Task ExportarSolicitudesCsv()
+    {
+        await Exportar.DescargarCsvAsync("reporte_solicitudes",
+            new[] { "Solicitud", "Operación", "Cliente", "Local", "Agente", "Fecha", "Monto USD", "Estado" },
+            SolicitudesFiltradas.Select(s => (IReadOnlyList<string?>)new[]
+            {
+                s.CodigoSolicitud, s.CodigoOperacion, s.ClienteNombre, s.DireccionLocal, s.AgenteNombre,
+                s.FechaRegistroTexto, s.MontoMensualTexto, s.Estado,
+            }));
     }
 
     private static string Initials(string name) =>

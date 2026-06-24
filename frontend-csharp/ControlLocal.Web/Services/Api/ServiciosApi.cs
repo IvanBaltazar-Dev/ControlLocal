@@ -1593,6 +1593,7 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         CodigoOperacion = item.CodigoOportunidad ?? $"OPO-{item.IdOportunidad:0000}",
         OportunidadId = item.IdOportunidad,
         AgenteResponsableId = item.IdAgente,
+        AgenteNombre = item.AgenteNombre ?? "",
         ClienteNombre = item.ClienteNombre ?? "",
         DireccionLocal = item.DireccionLocal ?? "",
         DistritoLocal = item.DistritoLocal ?? "",
@@ -1617,6 +1618,7 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         PorcentajeDocumentos = item.DocumentosRequeridos > 0
             ? (int)Math.Round(item.DocumentosEntregados * 100.0 / item.DocumentosRequeridos)
             : 0,
+        FechaRegistro = item.FechaRegistro,
         FechaRegistroTexto = item.FechaRegistro?.ToString("dd MMM", CultureInfo.InvariantCulture) ?? "",
         Estado = Codigos.EstadoSolicitud(item.Estado),
         FechaActualizacionEstado = item.FechaActualizacionEstado,

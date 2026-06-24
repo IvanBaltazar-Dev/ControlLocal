@@ -22,55 +22,92 @@
                 <FormSection Num="1" Title="Cliente interesado" Sub="Persona o empresa que quiere evaluar el local">
                     <Field Label="Cliente" Required="true">
                         <input class="cl-input search" type="search" placeholder="Escribe para buscar cliente por nombre o rubro…"
-                               value="@_busquedaCliente" @oninput="@(e => _busquedaCliente = e.Value?.ToString() ?? "")"
+                               value="@_busquedaCliente" @oninput="OnBusquedaCliente"
+                               @onfocus="AbrirPickerCliente"
                                disabled="@(_cargando || _procesando)" />
-                        <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
-                            @foreach (var cliente in ClientesDisponibles)
-                            {
-                                var sel = _clienteId == cliente.Id;
-                                <div role="button" tabindex="0"
-                                     style="@PickStyle(sel)"
-                                     @onclick="@(() => _clienteId = cliente.Id)">
-                                    <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@Iniciales(cliente.Nombre)</span>
-                                    <div style="flex:1;min-width:0;">
-                                        <div style="font-weight:600;font-size:13px;">@cliente.Nombre</div>
-                                        <div class="cl-muted" style="font-size:11px;">@cliente.RubroInteres</div>
+                        @if (_clientePickerAbierto)
+                        {
+                            <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                                @foreach (var cliente in ClientesDisponibles)
+                                {
+                                    var sel = _clienteId == cliente.Id;
+                                    <div role="button" tabindex="0"
+                                         style="@PickStyle(sel)"
+                                         @onclick="@(() => SeleccionarCliente(cliente.Id))">
+                                        <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@Iniciales(cliente.Nombre)</span>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:600;font-size:13px;">@cliente.Nombre</div>
+                                            <div class="cl-muted" style="font-size:11px;">@cliente.RubroInteres</div>
+                                        </div>
+                                        @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
                                     </div>
-                                    @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
+                                }
+                                @if (!ClientesDisponibles.Any())
+                                {
+                                    <div class="cl-help">No hay clientes que coincidan con la búsqueda.</div>
+                                }
+                            </div>
+                        }
+                        else if (_clienteId > 0 && ClienteSeleccionado is not null)
+                        {
+                            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                                <div style="flex:1;min-width:0;@PickStyle(true)">
+                                    <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@Iniciales(ClienteSeleccionado.Nombre)</span>
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@ClienteSeleccionado.Nombre</div>
+                                        <div class="cl-muted" style="font-size:11px;">@ClienteSeleccionado.RubroInteres</div>
+                                    </div>
+                                    <Icon Name="check" Size="15" Color="#005BFF" />
                                 </div>
-                            }
-                            @if (!ClientesDisponibles.Any())
-                            {
-                                <div class="cl-help">No hay clientes que coincidan con la búsqueda.</div>
-                            }
-                        </div>
+                                <button type="button" class="cl-btn ghost sm" disabled="@(_cargando || _procesando)"
+                                        @onclick="AbrirPickerCliente">Cambiar</button>
+                            </div>
+                        }
                     </Field>
                 </FormSection>
 
                 <FormSection Num="2" Title="Captacion activa" Sub="Propiedad disponible para seguimiento comercial">
                     <Field Label="Captacion" Required="true">
                         <input class="cl-input search" type="search" placeholder="Escribe para buscar por código, dirección o distrito…"
-                               value="@_busquedaCaptacion" @oninput="@(e => _busquedaCaptacion = e.Value?.ToString() ?? "")"
+                               value="@_busquedaCaptacion" @oninput="OnBusquedaCaptacion"
+                               @onfocus="AbrirPickerCaptacion"
                                disabled="@(_cargando || _procesando)" />
-                        <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
-                            @foreach (var captacion in CaptacionesActivas)
-                            {
-                                var sel = _captacionId == captacion.Id;
-                                <div role="button" tabindex="0"
-                                     style="@PickStyle(sel)"
-                                     @onclick="@(() => _captacionId = captacion.Id)">
-                                    <div style="flex:1;min-width:0;">
-                                        <div style="font-weight:600;font-size:13px;">@captacion.CodigoCaptacion · @captacion.DireccionLocal</div>
-                                        <div class="cl-muted" style="font-size:11px;">@captacion.DistritoLocal</div>
+                        @if (_captacionPickerAbierto)
+                        {
+                            <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                                @foreach (var captacion in CaptacionesActivas)
+                                {
+                                    var sel = _captacionId == captacion.Id;
+                                    <div role="button" tabindex="0"
+                                         style="@PickStyle(sel)"
+                                         @onclick="@(() => SeleccionarCaptacion(captacion.Id))">
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:600;font-size:13px;">@captacion.CodigoCaptacion · @captacion.DireccionLocal</div>
+                                            <div class="cl-muted" style="font-size:11px;">@captacion.DistritoLocal</div>
+                                        </div>
+                                        @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
                                     </div>
-                                    @if (sel) { <Icon Name="check" Size="15" Color="#005BFF" /> }
+                                }
+                                @if (!CaptacionesActivas.Any())
+                                {
+                                    <div class="cl-help">No hay captaciones activas que coincidan con la búsqueda.</div>
+                                }
+                            </div>
+                        }
+                        else if (_captacionId > 0 && CaptacionSeleccionada is not null)
+                        {
+                            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                                <div style="flex:1;min-width:0;@PickStyle(true)">
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@CaptacionSeleccionada.CodigoCaptacion · @CaptacionSeleccionada.DireccionLocal</div>
+                                        <div class="cl-muted" style="font-size:11px;">@CaptacionSeleccionada.DistritoLocal</div>
+                                    </div>
+                                    <Icon Name="check" Size="15" Color="#005BFF" />
                                 </div>
-                            }
-                            @if (!CaptacionesActivas.Any())
-                            {
-                                <div class="cl-help">No hay captaciones activas que coincidan con la búsqueda.</div>
-                            }
-                        </div>
+                                <button type="button" class="cl-btn ghost sm" disabled="@(_cargando || _procesando)"
+                                        @onclick="AbrirPickerCaptacion">Cambiar</button>
+                            </div>
+                        }
                     </Field>
                 </FormSection>
 
@@ -124,6 +161,8 @@
     private string _observaciones = "";
     private string _busquedaCliente = "";
     private string _busquedaCaptacion = "";
+    private bool _clientePickerAbierto = true;
+    private bool _captacionPickerAbierto = true;
     private bool _cargando = true;
     private bool _procesando;
     private string? _err;
@@ -183,8 +222,10 @@
 
             if (!string.IsNullOrWhiteSpace(CaptacionCodigo))
             {
-                _captacionId = _captaciones.FirstOrDefault(item =>
-                    item.CodigoCaptacion.Equals(CaptacionCodigo, StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+                var captacion = _captaciones.FirstOrDefault(item =>
+                    item.CodigoCaptacion.Equals(CaptacionCodigo, StringComparison.OrdinalIgnoreCase));
+                if (captacion is not null)
+                    SeleccionarCaptacion(captacion.Id);
             }
         }
         catch (OperationCanceledException)
@@ -198,6 +239,38 @@
         {
             _cargando = false;
         }
+    }
+
+    private void AbrirPickerCliente() => _clientePickerAbierto = true;
+
+    private void AbrirPickerCaptacion() => _captacionPickerAbierto = true;
+
+    private void OnBusquedaCliente(ChangeEventArgs e)
+    {
+        _busquedaCliente = e.Value?.ToString() ?? "";
+        _clientePickerAbierto = true;
+    }
+
+    private void OnBusquedaCaptacion(ChangeEventArgs e)
+    {
+        _busquedaCaptacion = e.Value?.ToString() ?? "";
+        _captacionPickerAbierto = true;
+    }
+
+    private void SeleccionarCliente(long id)
+    {
+        _clienteId = id;
+        _clientePickerAbierto = false;
+        if (_clientes.FirstOrDefault(item => item.Id == id) is { } cliente)
+            _busquedaCliente = cliente.Nombre;
+    }
+
+    private void SeleccionarCaptacion(long id)
+    {
+        _captacionId = id;
+        _captacionPickerAbierto = false;
+        if (_captaciones.FirstOrDefault(item => item.Id == id) is { } captacion)
+            _busquedaCaptacion = $"{captacion.CodigoCaptacion} · {captacion.DireccionLocal}";
     }
 
     private async Task GuardarAsync()

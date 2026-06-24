@@ -16,6 +16,8 @@ public class SolicitudAlquilerDto
 
     public long AgenteResponsableId { get; set; }
 
+    public string AgenteNombre { get; set; } = string.Empty;
+
     public string ClienteNombre { get; set; } = string.Empty;
 
     public string DireccionLocal { get; set; } = string.Empty;
@@ -46,6 +48,8 @@ public class SolicitudAlquilerDto
     public string DocumentosTexto { get; set; } = string.Empty;
 
     public int PorcentajeDocumentos { get; set; }
+
+    public DateOnly? FechaRegistro { get; set; }
 
     // Fecha de registro lista para mostrar (ej. "23 May").
     public string FechaRegistroTexto { get; set; } = string.Empty;

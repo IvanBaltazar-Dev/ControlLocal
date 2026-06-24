@@ -26,6 +26,7 @@ public static class RouteAccess
         ["PropiedadesEquipo"] = [Roles.Broker],
         ["AgenteForm"] = [Roles.Broker],
         ["ReasignarCaptaciones"] = [Roles.Broker],
+        ["HistorialReasignaciones"] = [Roles.Admin, Roles.Broker],
         ["BandejaCaptaciones"] = [Roles.Broker],
         ["CaptacionReview"] = [Roles.Broker],
         ["Evaluacion"] = [Roles.Broker],

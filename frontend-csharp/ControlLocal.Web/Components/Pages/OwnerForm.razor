@@ -35,7 +35,7 @@
                     <div class="cl-grid c2">
                         <Field Label="Razón social" Required="true"><input @bind="_nombre" placeholder="Ej. Inmobiliaria del Sur S.A.C." @oninput="@(() => _err = null)" /></Field>
                         <Field Label="RUC" Required="true">
-                            <input @bind="_numeroDocumento" placeholder="20 ___ ___ ___" disabled="@_isEdit" @oninput="@(() => _err = null)" />
+                            <input @bind="_numeroDocumento" placeholder="20XXXXXXXX" disabled="@_isEdit" @oninput="@(() => _err = null)" />
                             @if (_isEdit)
                             {
                                 <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El RUC no se puede modificar.</div>
@@ -49,7 +49,7 @@
                         <Field Label="Nombres" Required="true"><input @bind="_nombre" placeholder="Nombres" @oninput="@(() => _err = null)" /></Field>
                         <DocumentTypeSelector PersonType="natural" SelectedDocType="@_tipoDocumento" OnChange="OnTipoDocChange" Disabled="@_isEdit" />
                         <Field Label="Número de documento" Required="true">
-                            <input @bind="_numeroDocumento" placeholder="__ ___ ___" disabled="@_isEdit" @oninput="@(() => _err = null)" />
+                            <input @bind="_numeroDocumento" placeholder="XXXXXXXX" disabled="@_isEdit" @oninput="@(() => _err = null)" />
                             @if (_isEdit)
                             {
                                 <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El documento de identidad no se puede modificar.</div>
@@ -61,7 +61,7 @@
 
             <FormSection Num="3" Title="Contacto" Sub="Teléfono y correo para coordinación">
                 <div class="cl-grid c2">
-                    <Field Label="Teléfono" Required="true"><input @bind="_telefono" placeholder="+51 ___ ___ ___" @oninput="@(() => _err = null)" /></Field>
+                    <Field Label="Teléfono" Required="true"><input @bind="_telefono" placeholder="+51 999999999" @oninput="@(() => _err = null)" /></Field>
                     <Field Label="Correo electrónico" Required="true"><input @bind="_correo" placeholder="propietario@@correo.com" @oninput="@(() => _err = null)" /></Field>
                 </div>
                 <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;">

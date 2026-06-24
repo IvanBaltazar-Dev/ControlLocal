@@ -103,11 +103,11 @@
                         <Field Label="Zona asignada" Required="true">
                             <select value="@_zona" @onchange="@(e => { _zona = e.Value?.ToString() ?? ""; _errors.Remove("zona"); })">
                                 <option value="">Selecciona una zona</option>
-                                <option value="lima-centro">Lima Centro / Sur</option>
-                                <option value="lima-norte">Lima Norte</option>
-                                <option value="lima-este">Lima Este</option>
-                                <option value="callao">Callao / Norte</option>
-                                <option value="lima-moderna">Lima Moderna</option>
+                                <option value="Lima Centro / Sur">Lima Centro / Sur</option>
+                                <option value="Lima Norte">Lima Norte</option>
+                                <option value="Lima Este">Lima Este</option>
+                                <option value="Callao / Norte">Callao / Norte</option>
+                                <option value="Lima Moderna">Lima Moderna</option>
                             </select>
                             @if (Err("zona") is { } e8)
                             {

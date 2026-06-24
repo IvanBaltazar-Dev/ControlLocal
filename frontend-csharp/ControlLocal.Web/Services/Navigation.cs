@@ -20,6 +20,7 @@ public static class Navigation
             {
                 new NavItem("briefcase", "Brokers", "brokers"),
                 new NavItem("users", "Reasignar agentes", "reasignar"),
+                new NavItem("history", "Historial de reasignaciones", "historial-reasignaciones"),
                 new NavItem("folder", "Catálogos del sistema", "catalogs"),
             }),
         },
@@ -34,6 +35,7 @@ public static class Navigation
             {
                 new NavItem("users", "Mis agentes", "agents"),
                 new NavItem("swap", "Reasignar captaciones", "reasignar-captaciones"),
+                new NavItem("history", "Historial de reasignaciones", "historial-reasignaciones"),
             }),
             new NavSection("Bandejas de revisión", new[]
             {

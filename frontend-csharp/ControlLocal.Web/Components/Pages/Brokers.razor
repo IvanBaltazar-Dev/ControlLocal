@@ -1,4 +1,5 @@
 @page "/brokers"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IBrokerService BrokerSvc
 
@@ -6,11 +7,21 @@
 
 <AppShell Active="Brokers" Crumbs="@(new[] { "ControlLocal", "Administración", "Brokers" })"
           Title="Gestión de brokers"
-          Subtitle="6 brokers · 5 activos · 1 inactivo — busca, revisa y edita los datos de cada broker">
+          Subtitle="@_subtitle">
     <Actions>
         <button class="cl-btn primary" @onclick="@(() => App.Navigate("broker-nuevo"))"><Icon Name="plus" Size="13" /> Nuevo broker</button>
     </Actions>
     <ChildContent>
+        @if (_errorCarga is not null)
+        {
+            <div class="cl-alert red" style="margin-bottom:14px;">
+                <Icon Name="alert" Size="15" />
+                <span>
+                    No se pudo cargar la lista de brokers desde el servidor. Detalle: <b>@_errorCarga</b>.
+                    <button class="cl-btn small" style="margin-left:8px;" @onclick="CargarAsync">Reintentar</button>
+                </span>
+            </div>
+        }
         @{
             var filtrados = Filtrados().ToList();
             var visibles = Paginador.Pagina(filtrados, ref _pagina);
@@ -45,13 +56,24 @@
                                 </td>
                                 <td><StatusBadge Label="@b.TipoBroker" /></td>
                                 <td><span class="mono">@DocLabel(b.TipoDocumento) @b.NumeroDocumento</span></td>
-                                <td>@b.Zona</td>
+                                <td>@ZonaLabel(b.Zona)</td>
                                 <td><span><b>@b.AgentesACargo</b> <span class="cl-muted">supervisados</span></span></td>
                                 <td><StatusBadge Label="@b.EstadoAdministrativo" /></td>
                                 <td>
                                     <div class="cl-row-actions">
                                         <button title="Ver perfil" @onclick="@(() => App.Navigate($"broker-profile/{b.CodigoBroker}"))"><Icon Name="eye" Size="15" /></button>
                                         <button title="Editar broker" @onclick="@(() => App.Navigate($"broker-form/{b.CodigoBroker}"))"><Icon Name="edit" Size="14" /></button>
+                                        @if (!b.EsAdministrador)
+                                        {
+                                            @if (b.EstadoAdministrativo == "Activo")
+                                            {
+                                                <button title="Desactivar broker" @onclick="@(() => SolicitarDesactivar(b))"><Icon Name="lock" Size="14" /></button>
+                                            }
+                                            else
+                                            {
+                                                <button title="Reactivar broker" style="color:#1E5538;" @onclick="@(() => SolicitarReactivar(b))"><Icon Name="check" Size="14" /></button>
+                                            }
+                                        }
                                     </div>
                                 </td>
                             </tr>
@@ -69,6 +91,24 @@
             </div>
         </div>
         <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
+
+        <ConfirmDialog Open="_confirmDesactivar" Tone="red" Icon="lock"
+                       Title="Desactivar broker"
+                       Desc="@($"Estás por desactivar al broker {_accion?.Nombre}. No podrá iniciar sesión ni recibir nuevas asignaciones hasta que se reactive. Sus supervisiones actuales quedan registradas y no se cierran automáticamente.")"
+                       ConfirmLabel="Desactivar" CancelLabel="Cancelar"
+                       Busy="@_procesandoEstado"
+                       OnClose="@(() => _confirmDesactivar = false)"
+                       OnConfirm="@(() => EjecutarCambioEstadoAsync("Inactivo"))" />
+
+        <ConfirmDialog Open="_confirmReactivar" Tone="green" Icon="check"
+                       Title="Reactivar broker"
+                       Desc="@($"Vas a reactivar al broker {_accion?.Nombre}. Volverá a poder iniciar sesión y recibir asignaciones de agentes.")"
+                       ConfirmLabel="Reactivar" CancelLabel="Cancelar"
+                       Busy="@_procesandoEstado"
+                       OnClose="@(() => _confirmReactivar = false)"
+                       OnConfirm="@(() => EjecutarCambioEstadoAsync("Activo"))" />
+
+        <Toast Show="_toast" Tone="@_toastTone">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
 
@@ -76,8 +116,60 @@
     private string _query = "", _estado = "", _zona = "";
     private int _pagina = 1;
 
+    // Datos cargados una sola vez (no en cada render). Si la API falla, el render
+    // sigue funcionando con lista vacía y se muestra un banner de error con reintento.
+    private IReadOnlyList<BrokerDto> _brokers = Array.Empty<BrokerDto>();
+    private string? _errorCarga;
+
+    // Cambio de estado administrativo (desactivar / reactivar).
+    private BrokerDto? _accion;
+    private bool _confirmDesactivar;
+    private bool _confirmReactivar;
+    private bool _procesandoEstado;
+    private bool _toast;
+    private string _toastMsg = "";
+    private string _toastTone = "green";
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            _errorCarga = null;
+            _brokers = await Task.Run(() => BrokerSvc.All().Where(b => !b.EsAdministrador).ToList(), DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _errorCarga = ex.Message;
+            _brokers = Array.Empty<BrokerDto>();
+        }
+    }
+
     // Los brokers administradores no se listan en esta gestión.
-    private IReadOnlyList<BrokerDto> Todos => BrokerSvc.All().Where(b => !b.EsAdministrador).ToList();
+    private IReadOnlyList<BrokerDto> Todos => _brokers;
+
+    private string _subtitle => $"{Todos.Count} brokers · {Todos.Count(b => b.EstadoAdministrativo == "Activo")} activos · {Todos.Count(b => b.EstadoAdministrativo == "Inactivo")} inactivos — busca, revisa y edita los datos de cada broker";
+
+    // Las zonas se guardan con código (lima-centro). Mostramos la etiqueta para que la
+    // tabla sea consistente con los selects del formulario.
+    private static readonly Dictionary<string, string> _zonaLabels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["lima-centro"] = "Lima Centro / Sur",
+        ["lima-norte"] = "Lima Norte",
+        ["lima-este"] = "Lima Este",
+        ["callao"] = "Callao / Norte",
+        ["lima-moderna"] = "Lima Moderna",
+    };
+
+    private static string ZonaLabel(string? zona)
+    {
+        if (string.IsNullOrWhiteSpace(zona)) return "—";
+        return _zonaLabels.TryGetValue(zona, out var label) ? label : zona;
+    }
 
     private readonly IReadOnlyList<string> _estados = new[] { "Activo", "Inactivo" };
     private IReadOnlyList<string> _zonas => Todos.Select(b => b.Zona)
@@ -103,5 +195,77 @@
         "CE" => "Carnet de extranjeria",
         "PAS" => "Pasaporte",
         _ => EnumCatalog.LabelFor(EnumCatalog.TiposDocumentoIdentidad, valor),
+    };
+
+    private void SolicitarDesactivar(BrokerDto broker)
+    {
+        _accion = broker;
+        _confirmDesactivar = true;
+    }
+
+    private void SolicitarReactivar(BrokerDto broker)
+    {
+        _accion = broker;
+        _confirmReactivar = true;
+    }
+
+    // Cambio de estado vía PUT /brokers/{id}: el backend solo aplica los campos
+    // recibidos. Clonamos el dto y cambiamos solo EstadoAdministrativo.
+    private async Task EjecutarCambioEstadoAsync(string nuevoEstadoLabel)
+    {
+        if (_accion is null || _procesandoEstado) return;
+        var brokerObjetivo = _accion;
+        _procesandoEstado = true;
+        try
+        {
+            await RenderIfAliveAsync();
+            var dto = ClonarConEstado(brokerObjetivo, nuevoEstadoLabel);
+            await BrokerSvc.ActualizarAsync(dto, DisposedToken);
+            _toastMsg = nuevoEstadoLabel == "Activo"
+                ? $"Broker {brokerObjetivo.Nombre} reactivado correctamente."
+                : $"Broker {brokerObjetivo.Nombre} desactivado correctamente.";
+            _toastTone = nuevoEstadoLabel == "Activo" ? "green" : "blue";
+            _confirmDesactivar = false;
+            _confirmReactivar = false;
+            _accion = null;
+            await CargarAsync();
+            _toast = true;
+            await RenderIfAliveAsync();
+            await DelayThenRenderAsync(2400, () => _toast = false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _errorCarga = ex.Message;
+        }
+        finally
+        {
+            _procesandoEstado = false;
+            await RenderIfAliveAsync();
+        }
+    }
+
+    private static BrokerDto ClonarConEstado(BrokerDto origen, string estadoLabel) => new()
+    {
+        Id = origen.Id,
+        CodigoBroker = origen.CodigoBroker,
+        Iniciales = origen.Iniciales,
+        Nombre = origen.Nombre,
+        TipoPersona = origen.TipoPersona,
+        Email = origen.Email,
+        TipoDocumento = origen.TipoDocumento,
+        NumeroDocumento = origen.NumeroDocumento,
+        Telefono = origen.Telefono,
+        Usuario = origen.Usuario,
+        Zona = origen.Zona,
+        TipoBroker = origen.TipoBroker,
+        FechaDesignacion = origen.FechaDesignacion,
+        FechaDesignacionTexto = origen.FechaDesignacionTexto,
+        AgentesACargo = origen.AgentesACargo,
+        CaptacionesActivas = origen.CaptacionesActivas,
+        EstadoAdministrativo = estadoLabel,
+        EsAdministrador = origen.EsAdministrador,
     };
 }

@@ -208,7 +208,14 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
     }
 
     public List<BrokerAgente> listarAgentesSupervisados(Long idBroker) {
-        Broker broker = validarBroker(idBroker);
+        // Solo se usa para mostrar conteo de agentes en listados (incluye brokers
+        // inactivos), por lo que NO se valida el estado del broker; bastaria con
+        // confirmar que existe. Si se valida con brokerValido, al desactivar un
+        // broker el propio PUT /brokers/{id} (que arma la respuesta con el conteo)
+        // explota con "El broker no esta activo", lo mismo que cualquier listado.
+        BusinessValidations.id(idBroker, "El id de broker");
+        Broker broker = brokerDAO.buscarPorId(idBroker)
+                .orElseThrow(() -> new BusinessException("Broker no encontrado."));
         if (broker.isEsAdministrador()) {
             return brokerAgenteDAO.listarTodos();
         }

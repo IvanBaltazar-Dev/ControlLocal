@@ -176,6 +176,8 @@
     private string _observaciones = "";
     private string _busquedaCliente = "";
     private string _busquedaCaptacion = "";
+    private bool _clientePickerAbierto = true;
+    private bool _captacionPickerAbierto = true;
     private bool _cargando = true;
     private bool _procesando;
     private string? _err;
@@ -260,8 +262,10 @@
 
             if (!string.IsNullOrWhiteSpace(CaptacionCodigo))
             {
-                _captacionId = _captaciones.FirstOrDefault(item =>
-                    item.CodigoCaptacion.Equals(CaptacionCodigo, StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+                var captacion = _captaciones.FirstOrDefault(item =>
+                    item.CodigoCaptacion.Equals(CaptacionCodigo, StringComparison.OrdinalIgnoreCase));
+                if (captacion is not null)
+                    SeleccionarCaptacion(captacion.Id);
             }
         }
         catch (OperationCanceledException)
@@ -275,6 +279,38 @@
         {
             _cargando = false;
         }
+    }
+
+    private void AbrirPickerCliente() => _clientePickerAbierto = true;
+
+    private void AbrirPickerCaptacion() => _captacionPickerAbierto = true;
+
+    private void OnBusquedaCliente(ChangeEventArgs e)
+    {
+        _busquedaCliente = e.Value?.ToString() ?? "";
+        _clientePickerAbierto = true;
+    }
+
+    private void OnBusquedaCaptacion(ChangeEventArgs e)
+    {
+        _busquedaCaptacion = e.Value?.ToString() ?? "";
+        _captacionPickerAbierto = true;
+    }
+
+    private void SeleccionarCliente(long id)
+    {
+        _clienteId = id;
+        _clientePickerAbierto = false;
+        if (_clientes.FirstOrDefault(item => item.Id == id) is { } cliente)
+            _busquedaCliente = cliente.Nombre;
+    }
+
+    private void SeleccionarCaptacion(long id)
+    {
+        _captacionId = id;
+        _captacionPickerAbierto = false;
+        if (_captaciones.FirstOrDefault(item => item.Id == id) is { } captacion)
+            _busquedaCaptacion = $"{captacion.CodigoCaptacion} · {captacion.DireccionLocal}";
     }
 
     private async Task GuardarAsync()

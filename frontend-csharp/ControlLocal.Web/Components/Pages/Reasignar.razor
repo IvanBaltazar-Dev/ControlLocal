@@ -62,7 +62,13 @@
 
             @* Selector de broker destino *@
             <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">2 · Nuevo Broker asignado</div></div>
+                <div class="cl-card-head">
+                    <div class="cl-card-title">2 · Nuevo Broker asignado</div>
+                    <div class="cl-help" style="margin-left:auto;font-size:11px;">
+                        @if (_cargando) { <span>Cargando…</span> }
+                        else { <span>@(_brokers.Count(b => !b.EsAdministrador)) brokers supervisores</span> }
+                    </div>
+                </div>
                 <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
                     <input class="cl-input search" type="search" placeholder="Buscar broker por nombre o zona…"
                            value="@_buscarBroker" @oninput="@(e => _buscarBroker = e.Value?.ToString() ?? "")" />
@@ -91,7 +97,22 @@
                             </div>
                         </label>
                     }
-                    @if (!BrokersFiltrados.Any())
+                    @if (_cargando)
+                    {
+                        <div class="cl-help">Cargando brokers…</div>
+                    }
+                    else if (_brokers.Count == 0)
+                    {
+                        <div class="cl-alert red" style="margin:4px 0;">
+                            <Icon Name="alert" Size="14" />
+                            <span>
+                                No se pudo cargar la lista de brokers desde el servidor.
+                                @if (_err is not null) { <text> Detalle: @_err</text> }
+                                <button class="cl-btn small" style="margin-left:8px;" @onclick="CargarAsync">Reintentar</button>
+                            </span>
+                        </div>
+                    }
+                    else if (!BrokersFiltrados.Any())
                     {
                         <div class="cl-help">Ningún broker coincide con la búsqueda.</div>
                     }

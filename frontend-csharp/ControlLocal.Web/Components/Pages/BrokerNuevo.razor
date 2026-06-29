@@ -240,8 +240,8 @@
         if (string.IsNullOrWhiteSpace(_telefono)) _errors["telefono"] = "Requerido";
         else if (PeruInputRules.ValidarTelefono(_telefono) is { } telefonoError) _errors["telefono"] = telefonoError;
         if (string.IsNullOrWhiteSpace(_correo)) _errors["correo"] = "Requerido";
-        else if (!Regex.IsMatch(_correo, @"^[^\s@]+@[^\s@]+\.[^\s@]+$")) _errors["correo"] = "Formato de correo inválido";
-        if (string.IsNullOrWhiteSpace(_usuario)) _errors["usuario"] = "Requerido";
+        else if (!PeruInputRules.EsCorreoValido(_correo))
+              _errors["correo"] = PeruInputRules.CorreoMensaje;        if (string.IsNullOrWhiteSpace(_usuario)) _errors["usuario"] = "Requerido";
         if (_passwd.Length < 8) _errors["passwd"] = "Debe tener al menos 8 caracteres";
         if (string.IsNullOrWhiteSpace(_zona)) _errors["zona"] = "Requerido";
         if (string.IsNullOrEmpty(_estado)) _errors["estado"] = "Requerido";

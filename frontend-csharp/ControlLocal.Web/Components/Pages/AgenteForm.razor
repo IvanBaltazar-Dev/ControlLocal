@@ -65,7 +65,13 @@
                 <FormSection Num="3" Title="Cuenta de acceso y asignación" Sub="Credenciales del sistema y zona de operación">
                     <div class="cl-grid c2">
                         <Field Label="Correo corporativo" Required="true"><input @bind="_correo" @bind:event="oninput" placeholder="agente@@controllocal.pe" /></Field>
-                        <Field Label="Teléfono" Required="true"><input value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" @oninput="OnTelefonoInput" /></Field>
+                        <Field Label="Teléfono principal" Required="true">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="color:var(--cl-text-muted); font-weight:500;">+51</span>
+                                <input type="tel" value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" style="width: 100%;" @oninput="OnTelefonoInput" />
+                            </div>
+  
+                        </Field>
                         <Field Label="Usuario" Required="true">
                             <input @bind="_usuario" @bind:event="oninput" placeholder="nombre.apellido" disabled="@_isEdit" />
                             @if (_isEdit)
@@ -170,7 +176,7 @@
     private string _estadoAdministrativo = "Activo";
     private string _estadoOperativo = "Disponible";
     private string? _err;
-
+    
     private string _nombreMostrar => _tipo == "juridica" ? _razonSocial : _nombreNatural;
 
     private bool IsStep1Complete => !string.IsNullOrEmpty(_tipo);

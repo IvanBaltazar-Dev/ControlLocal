@@ -8,11 +8,11 @@
 
 <AppShell Active="Prospecciones" Crumbs="@(new[] { "ControlLocal", "Operacion", "Prospecciones" })"
           Title="Prospecciones"
-          Subtitle="Seguimiento previo a captacion: propietario, propiedad, interacciones y decision">
+          Subtitle="Seguimiento previo a captación: propietario, propiedad, interacciones y decisión">
     <Actions>
         @if (App.Role == Roles.Agente)
         {
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Nueva prospeccion</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Nueva prospección</button>
         }
         else
         {
@@ -35,11 +35,11 @@
         {
             <div class="cl-alert red" style="margin-bottom:16px;">
                 <Icon Name="clock" Size="15" />
-                <span>Hay <b>@_totalRecontactar</b> prospeccion(es) con recontacto pendiente. Registra una interaccion, crea captacion o descarta con motivo.</span>
+                <span>Hay <b>@_totalRecontactar</b> prospeccion(es) con recontacto pendiente. Registra una interacción, crea captación o descarta con motivo.</span>
             </div>
         }
 
-        <FilterBar Search="Buscar por direccion, codigo, propietario..."
+        <FilterBar Search="Buscar por dirección, cdigo, propietario..."
                    Value="@_query" ValueChanged="CambiarBusquedaAsync" ResultCount="@((int)_total)"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltrosAsync">
             <select class="cl-select" value="@_filtroEstado" @onchange="CambiarEstadoSelectAsync">
@@ -93,7 +93,7 @@
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="store" Size="28" style="margin-bottom:10px;" />
                         <div style="font-weight:600;margin-bottom:4px;">Sin prospecciones en este filtro</div>
-                        <div style="font-size:12px;">Ajusta la busqueda o registra un local para iniciar una prospeccion.</div>
+                        <div style="font-size:12px;">Ajusta la busqueda o registra un local para iniciar una prospección.</div>
                     </div>
                 }
                 else
@@ -140,11 +140,11 @@
                                             }
                                             @if (p.Estado == "T" && !string.IsNullOrWhiteSpace(p.CaptacionCodigo))
                                             {
-                                                <button class="cl-btn sm success" @onclick="@(() => App.Navigate($"captacion-detail/{p.CaptacionCodigo}"))"><Icon Name="pin" Size="12" /> Captacion</button>
+                                                <button class="cl-btn sm success" @onclick="@(() => App.Navigate($"captacion-detail/{p.CaptacionCodigo}"))"><Icon Name="pin" Size="12" /> Captación</button>
                                             }
                                             @if (App.Role == Roles.Agente && (p.Estado is "E" or "S"))
                                             {
-                                                <button class="cl-btn sm success" @onclick="@(() => App.Navigate($"captacion-form/captar/{p.Id}"))"><Icon Name="pin" Size="12" /> Crear captacion</button>
+                                                <button class="cl-btn sm success" @onclick="@(() => App.Navigate($"captacion-form/captar/{p.Id}"))"><Icon Name="pin" Size="12" /> Crear captación</button>
                                             }
                                             <button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"local-detail/{p.LocalId}"))"><Icon Name="eye" Size="12" /> Local</button>
                                         </div>
@@ -382,7 +382,7 @@
         "R" => $"Reunion {FechaCorta(p.FechaReunionTexto)}",
         "E" => $"Propuesta {FechaCorta(p.FechaPropuestaTexto)}",
         "S" => $"Seguim. {FechaCorta(p.FechaRecontactoTexto)}",
-        "T" => "En captacion",
+        "T" => "En captación",
         "D" => "Descartada",
         _ => "-",
     };

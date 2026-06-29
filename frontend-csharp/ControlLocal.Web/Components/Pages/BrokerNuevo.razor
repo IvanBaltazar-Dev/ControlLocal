@@ -63,11 +63,17 @@
 
                 <FormSection Num="3" Title="Contacto" Sub="Medios de contacto corporativo">
                     <div class="cl-grid c2">
-                        <Field Label="Teléfono" Required="true">
-                            <input placeholder="999999999" inputmode="numeric" maxlength="9" value="@_telefono" @oninput="OnTelefonoInput" />
-                            @if (Err("telefono") is { } e4)
+                        <Field Label="Teléfono principal" Required="true">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="color:var(--cl-text-muted); font-weight:500;">+51</span>
+                                <input type="tel" value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" style="width: 100%;" @oninput="OnTelefonoInput" />
+                            </div>
+    
+                            @if (Err("Telefono") != null)
                             {
-                                <div class="cl-help" style="color:#D64550;">@e4</div>
+                                <span style="color: red; font-size: 12px; margin-top: 4px; display: block;">
+                                    @Err("Telefono")
+                                </span>
                             }
                         </Field>
                         <Field Label="Correo corporativo" Required="true">

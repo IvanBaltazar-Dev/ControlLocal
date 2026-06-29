@@ -63,7 +63,12 @@
 
             <FormSection Num="3" Title="Contacto" Sub="Teléfono y correo para coordinación">
                 <div class="cl-grid c2">
-                    <Field Label="Teléfono" Required="true"><input value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" @oninput="OnTelefonoInput" /></Field>
+                        <Field Label="Teléfono principal" Required="true">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="color:var(--cl-text-muted); font-weight:500;">+51</span>
+                                <input type="tel" value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" style="width: 100%;" @oninput="OnTelefonoInput" />
+                            </div>
+                        </Field>
                     <Field Label="Correo electrónico" Required="true"><input @bind="_correo" placeholder="propietario@@correo.com" @oninput="@(() => _err = null)" /></Field>
                 </div>
                 <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;">

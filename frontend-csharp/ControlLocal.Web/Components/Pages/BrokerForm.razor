@@ -44,7 +44,12 @@
 
                 <FormSection Num="2" Title="Contacto y estado" Sub="Medios de contacto y estado administrativo">
                     <div class="cl-grid c2">
-                        <Field Label="Teléfono" Required="true"><input value="@_telefono" inputmode="numeric" maxlength="9" @oninput="OnTelefonoInput" /></Field>
+                        <Field Label="Teléfono principal" Required="true">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="color:var(--cl-text-muted); font-weight:500;">+51</span>
+                                <input type="tel" value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" style="width: 100%;" @oninput="OnTelefonoInput" />
+                            </div>
+                        </Field>
                         <Field Label="Correo" Required="true"><input type="email" @bind="_correo" @bind:event="oninput" /></Field>
                         <Field Label="Zona o ámbito" Required="true"><input @bind="_zona" @bind:event="oninput" /></Field>
                         <Field Label="Estado" Required="true">

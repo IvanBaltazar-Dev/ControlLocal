@@ -37,6 +37,19 @@ public class CaptacionesRest {
 
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
     private final CoincidenciaCarteraSupport coincidencias = new CoincidenciaCarteraSupport();
+    private final com.controllocal.bl.LocalComercialBusinessLogic locales = new com.controllocal.bl.impl.LocalComercialBusinessLogicImpl();
+
+    // Método centralizado para resolver la foto de portada
+    private Dtos.CaptacionResponse mapearConFoto(Captacion captacion) {
+        String clavePortada = null;
+        if (captacion.getLocalComercial() != null && captacion.getLocalComercial().getIdLocal() != null) {
+            List<com.controllocal.model.inmueble.FotoLocal> fotos = locales.listarFotos(captacion.getLocalComercial().getIdLocal());
+            if (!fotos.isEmpty()) {
+                clavePortada = fotos.get(0).getClave();
+            }
+        }
+        return Dtos.CaptacionResponse.desde(captacion, clavePortada);
+    }
 
     @Context
     private HttpServletRequest request;
@@ -65,7 +78,7 @@ public class CaptacionesRest {
     @GET
     @Path("{id}")
     public Dtos.CaptacionResponse obtener(@PathParam("id") long id) {
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, SeguridadRest.usuario(request)));
+        return mapearConFoto(obtenerConAcceso(id, SeguridadRest.usuario(request)));
     }
 
     @GET
@@ -76,7 +89,7 @@ public class CaptacionesRest {
                 .filter(item -> item.getCodigoCaptacion() != null
                         && item.getCodigoCaptacion().equalsIgnoreCase(codigo))
                 .findFirst()
-                .map(Dtos.CaptacionResponse::desde)
+                .map(this::mapearConFoto)
                 .orElseThrow(() -> ApiException.noEncontrado("Captacion"));
     }
 
@@ -122,7 +135,7 @@ public class CaptacionesRest {
         long id = captaciones.registrar(captacion);
 
         return Response.status(Response.Status.CREATED)
-                .entity(Dtos.CaptacionResponse.desde(
+                .entity(mapearConFoto(
                         captaciones.buscarPorId(id).orElseThrow(() -> ApiException.noEncontrado("Captacion"))))
                 .build();
     }
@@ -149,15 +162,13 @@ public class CaptacionesRest {
         captacion.setMotivoOperacion(operacionAlquiler(dto.motivoOperacion()));
         captacion.setUrgencia(dto.urgencia());
         captacion.setExclusividad(dto.exclusividad());
-        // Reenviar a revision: una captacion OBSERVADA que el agente edita y guarda vuelve
-        // a la cola de revision del broker (PENDIENTE_REVISION). Sin esto se quedaba
-        // OBSERVADA y el broker nunca la volvia a ver.
+
         if (captacion.getEstado() == com.controllocal.model.comercial.enums.EstadoCaptacion.OBSERVADA) {
             captacion.setEstado(com.controllocal.model.comercial.enums.EstadoCaptacion.PENDIENTE_REVISION);
         }
         captaciones.actualizar(captacion);
 
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return mapearConFoto(obtenerConAcceso(id, usuario));
     }
 
     @POST
@@ -177,7 +188,7 @@ public class CaptacionesRest {
             case "RECHAZAR", "R" -> captaciones.rechazarCaptacion(id, usuario.idDominio(), dto.observacion());
             default -> throw ApiException.badRequest("Decision no valida.");
         }
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return mapearConFoto(obtenerConAcceso(id, usuario));
     }
 
     @POST
@@ -190,7 +201,7 @@ public class CaptacionesRest {
             throw ApiException.badRequest("El agente destino es obligatorio.");
         }
         captaciones.reasignarCaptacion(id, dto.idAgenteNuevo(), usuario.idDominio(), dto.motivo());
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return mapearConFoto(obtenerConAcceso(id, usuario));
     }
 
     @POST
@@ -203,7 +214,7 @@ public class CaptacionesRest {
             throw ApiException.badRequest("El motivo de cierre es obligatorio.");
         }
         captaciones.cerrarCaptacion(id, usuario.idDominio(), dto.motivo());
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return mapearConFoto(obtenerConAcceso(id, usuario));
     }
 
     private Captacion obtenerConAcceso(long id, UsuarioAutenticado usuario) {
@@ -235,9 +246,12 @@ public class CaptacionesRest {
         int tamanoValido = SeguridadRest.tamano(tamano);
         int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
         int hasta = Math.min(desde + tamanoValido, fuente.size());
+
+
         List<Dtos.CaptacionResponse> items = fuente.subList(desde, hasta).stream()
-                .map(Dtos.CaptacionResponse::desde)
+                .map(this::mapearConFoto)
                 .toList();
+
         return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
     }
 

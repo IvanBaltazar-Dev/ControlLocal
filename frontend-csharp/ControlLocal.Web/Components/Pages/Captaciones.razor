@@ -47,8 +47,16 @@
             @foreach (var c in visibles)
             {
                 <div class="cl-prop-card">
-                    <div class="cl-prop-photo">
-                        <div class="ph-label">foto del local</div>
+                    <div class="cl-prop-photo" style="position:relative; background-color:#e0e0e0;">
+                        @if (!string.IsNullOrEmpty(c.FotoPortadaClave))
+                        {
+                            <img src="@TiposContenido.UrlContenido(c.FotoPortadaClave)"
+                                 style="width:100%; height:100%; object-fit:cover; display:block;" />
+                        }
+                        else
+                        {
+                            <div class="ph-label">foto del local</div>
+                        }
                         <div class="top-l"><StatusBadge Label="@c.Estado" /></div>
                         <div class="top-r">@c.CodigoCaptacion</div>
                     </div>

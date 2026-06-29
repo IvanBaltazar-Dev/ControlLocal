@@ -320,6 +320,13 @@
             _cargando = false;
         }
     }
+    private static string ObtenerColorEstado(string estado) => estado switch
+    {
+        "Pendiente" => "amber",
+        "Cobrada" => "green",
+        "Anulada" => "red", 
+        _ => "gray"
+    };
 
     private async Task RecargarAsync() => await CargarAsync();
 

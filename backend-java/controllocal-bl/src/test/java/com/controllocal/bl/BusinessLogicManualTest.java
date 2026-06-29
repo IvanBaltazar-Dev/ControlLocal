@@ -438,7 +438,27 @@ public class BusinessLogicManualTest {
         }
 
         public Optional<Captacion> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
+        public Optional<Captacion> buscarPorCodigo(String codigo) {
+            return items.values().stream()
+                    .filter(c -> java.util.Objects.equals(c.getCodigoCaptacion(), codigo))
+                    .findFirst();
+        }
         public List<Captacion> listarTodos() { return new ArrayList<>(items.values()); }
+        public List<Captacion> listarPendientesRevision() {
+            return items.values().stream()
+                    .filter(c -> c.getEstado() == EstadoCaptacion.PENDIENTE_REVISION
+                            || c.getEstado() == EstadoCaptacion.OBSERVADA)
+                    .toList();
+        }
+        public boolean existeCaptacionActivaPorLocal(Long idLocal) {
+            if (idLocal == null) {
+                return false;
+            }
+            return items.values().stream()
+                    .anyMatch(c -> c.getEstado() == EstadoCaptacion.ACTIVA
+                            && c.getLocalComercial() != null
+                            && java.util.Objects.equals(c.getLocalComercial().getIdLocal(), idLocal));
+        }
         public boolean actualizar(Captacion captacion) { items.put(captacion.getIdCaptacion(), captacion); return true; }
         public boolean eliminar(Long id) { items.get(id).setEstado(EstadoCaptacion.CERRADA); return true; }
         @Override
@@ -570,6 +590,11 @@ public class BusinessLogicManualTest {
         long sequence = 1;
         public Long crear(SolicitudAlquiler solicitud) { solicitud.setIdSolicitud(sequence++); items.put(solicitud.getIdSolicitud(), solicitud); return solicitud.getIdSolicitud(); }
         public Optional<SolicitudAlquiler> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
+        public Optional<SolicitudAlquiler> buscarPorCodigo(String codigo) {
+            return items.values().stream()
+                    .filter(s -> java.util.Objects.equals(s.getCodigoSolicitud(), codigo))
+                    .findFirst();
+        }
         public List<SolicitudAlquiler> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(SolicitudAlquiler solicitud) { items.put(solicitud.getIdSolicitud(), solicitud); return true; }
         public boolean eliminar(Long id) { return items.remove(id) != null; }

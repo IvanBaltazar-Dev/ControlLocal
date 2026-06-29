@@ -137,7 +137,7 @@
         try
         {
             _errorCarga = null;
-            _brokers = await Task.Run(() => BrokerSvc.All().Where(b => !b.EsAdministrador).ToList(), DisposedToken);
+            _brokers = (await BrokerSvc.AllAsync(DisposedToken)).Where(b => !b.EsAdministrador).ToList();
         }
         catch (OperationCanceledException)
         {

@@ -33,6 +33,12 @@ public class AlertasRest {
     private final AlertaBusinessLogic alertas = new AlertaBusinessLogicImpl();
     private final ProspeccionBusinessLogic prospecciones = new ProspeccionBusinessLogicImpl();
 
+    // Sin planificador: el barrido de recontacto se materializa "best-effort" al consultar la
+    // campana, pero a lo sumo una vez cada INTERVALO_SYNC_MS para no pagar su costo (N+1 queries)
+    // en cada GET. La tarea RECONTACTO de la bandeja no depende de esto (la deriva TareaBusinessLogic).
+    private static volatile long ultimaSyncRecontacto = 0L;
+    private static final long INTERVALO_SYNC_MS = 5 * 60 * 1000L;
+
     @Context
     private HttpServletRequest request;
 
@@ -41,12 +47,17 @@ public class AlertasRest {
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("20") int tamano) {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
-        // Sin planificador: al consultar la campana, materializa las alertas de recontacto
-        // vencido (dia 8 sin accion). Best-effort: si falla, la campana igual responde.
-        try {
-            prospecciones.sincronizarRecontacto();
-        } catch (RuntimeException ignored) {
-            // no bloquear la campana por el barrido de recontacto
+        // Materializa las alertas de recontacto vencido (dia 8 sin accion) como mucho una vez por
+        // intervalo: evita que cada GET cargue el barrido y sature GlassFish. Si falla, la campana
+        // igual responde.
+        long ahora = System.currentTimeMillis();
+        if (ahora - ultimaSyncRecontacto > INTERVALO_SYNC_MS) {
+            ultimaSyncRecontacto = ahora;
+            try {
+                prospecciones.sincronizarRecontacto();
+            } catch (RuntimeException ignored) {
+                // no bloquear la campana por el barrido de recontacto
+            }
         }
         List<Alerta> fuente = alertasDelUsuario(usuario);
         int paginaValida = SeguridadRest.pagina(pagina);

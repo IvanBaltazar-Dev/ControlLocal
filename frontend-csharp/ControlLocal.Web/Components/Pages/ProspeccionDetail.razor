@@ -257,15 +257,15 @@ else
                                     }
                                     @if (!EsCaptada && _p.Estado == "P")
                                     {
-                                        <button class="cl-btn" disabled="@_procesando" @onclick="@(() => Avanzar(ProspeccionSvc.Contactar, "Propietario contactado"))"><Icon Name="phone" Size="13" /> Contactar propietario</button>
+                                        <button class="cl-btn" disabled="@_procesando" @onclick="@(() => Avanzar(ProspeccionSvc.ContactarAsync, "Propietario contactado"))"><Icon Name="phone" Size="13" /> Contactar propietario</button>
                                     }
                                     @if (!EsCaptada && _p.Estado == "C")
                                     {
-                                        <button class="cl-btn" disabled="@_procesando" @onclick="@(() => Avanzar(ProspeccionSvc.RegistrarReunion, "Reunion registrada"))"><Icon Name="users" Size="13" /> Registrar reunion</button>
+                                        <button class="cl-btn" disabled="@_procesando" @onclick="@(() => Avanzar(ProspeccionSvc.RegistrarReunionAsync, "Reunion registrada"))"><Icon Name="users" Size="13" /> Registrar reunion</button>
                                     }
                                     @if (!EsCaptada && _p.Estado == "R")
                                     {
-                                        <button class="cl-btn" disabled="@_procesando" @onclick="@(() => Avanzar(ProspeccionSvc.EntregarPropuesta, "Propuesta entregada"))"><Icon Name="fileText" Size="13" /> Entregar propuesta</button>
+                                        <button class="cl-btn" disabled="@_procesando" @onclick="@(() => Avanzar(ProspeccionSvc.EntregarPropuestaAsync, "Propuesta entregada"))"><Icon Name="fileText" Size="13" /> Entregar propuesta</button>
                                     }
                                     @if (!EsCaptada && (_p.Estado is "E" or "S"))
                                     {
@@ -395,7 +395,7 @@ else
             if (_p is not null)
             {
                 var interaccionesTask = InteraccionSvc.ListarPorProspeccionAsync(_p.Id, DisposedToken);
-                _local = _p.LocalId > 0 ? LocalSvc.ById(_p.LocalId) : null;
+                _local = _p.LocalId > 0 ? await LocalSvc.ByIdAsync(_p.LocalId, DisposedToken) : null;
                 _interacciones = (await interaccionesTask).ToList();
             }
         }
@@ -529,7 +529,7 @@ else
         _ => "La vista resume como se trabajo la propiedad con su propietario.",
     };
 
-    private async Task Avanzar(Func<long, ProspeccionDto> accion, string mensaje)
+    private async Task Avanzar(Func<long, CancellationToken, Task<ProspeccionDto>> accion, string mensaje)
     {
         if (_p is null || _procesando)
             return;
@@ -538,9 +538,9 @@ else
             _procesando = true;
             _error = null;
             await RenderIfAliveAsync();
-            _p = accion(_p.Id);
+            _p = await accion(_p.Id, DisposedToken);
             if (_p.LocalId > 0)
-                _local = LocalSvc.ById(_p.LocalId);
+                _local = await LocalSvc.ByIdAsync(_p.LocalId, DisposedToken);
             _interacciones = (await InteraccionSvc.ListarPorProspeccionAsync(_p.Id, DisposedToken)).ToList();
             Notificar(mensaje);
         }
@@ -612,8 +612,8 @@ else
             _modalError = null;
             await RenderIfAliveAsync();
             _p = _p.Estado is "E" or "S"
-                ? ProspeccionSvc.Rechazar(_p.Id, _motivo.Trim())
-                : ProspeccionSvc.Descartar(_p.Id, _motivo.Trim());
+                ? await ProspeccionSvc.RechazarAsync(_p.Id, _motivo.Trim(), DisposedToken)
+                : await ProspeccionSvc.DescartarAsync(_p.Id, _motivo.Trim(), DisposedToken);
             _modalDescartar = false;
             Notificar("Prospeccion descartada.");
         }

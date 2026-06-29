@@ -12,14 +12,18 @@ import com.controllocal.rest.seguridad.UsuarioAutenticado;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+
+import com.controllocal.rest.http.PageResponse;
 
 // Etapa 5: bandeja "Acciones Pendientes" del agente. Sin alta manual: las tareas se
 // derivan/reconcilian del estado del flujo. El agente solo resuelve (en su pantalla) o cancela.
@@ -39,6 +43,22 @@ public class TareasRest {
         return tareas.bandejaDe(usuario.idDominio()).stream()
                 .map(TareaResponse::desde)
                 .toList();
+    }
+
+    @GET
+    @Path("pendientes")
+    public PageResponse<TareaResponse> pendientes(
+            @QueryParam("pagina") @DefaultValue("1") int pagina,
+            @QueryParam("tamano") @DefaultValue("5") int tamano) {
+        UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "AGENTE");
+        List<TareaResponse> fuente = tareas.bandejaDe(usuario.idDominio()).stream()
+                .map(TareaResponse::desde)
+                .toList();
+        int paginaValida = SeguridadRest.pagina(pagina);
+        int tamanoValido = SeguridadRest.tamano(tamano);
+        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
+        int hasta = Math.min(desde + tamanoValido, fuente.size());
+        return new PageResponse<>(fuente.subList(desde, hasta), fuente.size(), paginaValida, tamanoValido);
     }
 
     @POST

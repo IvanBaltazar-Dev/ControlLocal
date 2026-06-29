@@ -313,7 +313,7 @@ else
 
             _cap = await captacionTask;
             _local = _cap is { LocalId: > 0 }
-                ? await Task.Run(() => LocalSvc.ById(_cap.LocalId), DisposedToken)
+                ? await LocalSvc.ObtenerAsync(_cap.LocalId, DisposedToken)
                 : null;
             // Resuelve la publicación de origen (si la oportunidad fue atribuida a una).
             _publicaciones = _op.PublicacionOrigenId > 0 && _cap is { LocalId: > 0 }

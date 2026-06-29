@@ -96,7 +96,9 @@
     private string _query = "", _tipo = "", _rubro = "", _estado = "";
     private int _pagina = 1;
 
-    private IReadOnlyList<ClienteInteresadoDto> Todos => ClienteSvc.All();
+    private IReadOnlyList<ClienteInteresadoDto> Todos = new List<ClienteInteresadoDto>();
+
+    protected override async Task OnInitializedAsync() => Todos = await ClienteSvc.AllAsync();
 
     private int ContactoAutorizado => Todos.Count(c => c.ConsentimientoContacto == true);
     private int UsoDatoAutorizado => Todos.Count(c => c.ConsentimientoUsoDato == true);

@@ -822,6 +822,9 @@ CREATE INDEX idx_captacion_agente ON captacion(id_agente);
 CREATE INDEX idx_captacion_broker ON captacion(id_broker_revisor);
 CREATE INDEX idx_captacion_estado ON captacion(estado);
 CREATE INDEX idx_captacion_codigo_estado ON captacion(codigo_captacion, estado);
+-- Rangos por fecha (indicadores/reportes por periodo) y alcance por agente filtrando estado.
+CREATE INDEX idx_captacion_fecha ON captacion(fecha_captacion);
+CREATE INDEX idx_captacion_agente_estado ON captacion(id_agente, estado);
 
 CREATE INDEX idx_cliente_persona ON cliente_interesado(id_persona);
 
@@ -848,6 +851,7 @@ CREATE INDEX idx_visita_oportunidad ON visita(id_oportunidad);
 CREATE INDEX idx_visita_agente ON visita(id_agente);
 CREATE INDEX idx_visita_estado ON visita(estado);
 CREATE INDEX idx_visita_oportunidad_fecha ON visita(id_oportunidad, fecha_visita, hora_visita);
+CREATE INDEX idx_visita_agente_estado_fecha ON visita(id_agente, estado, fecha_visita);
 
 CREATE INDEX idx_prospeccion_local ON prospeccion(id_local);
 CREATE INDEX idx_prospeccion_agente ON prospeccion(id_agente);
@@ -861,9 +865,12 @@ CREATE INDEX idx_prospeccion_local_estado ON prospeccion(id_local, estado);
 CREATE INDEX idx_solicitud_oportunidad ON solicitud_alquiler(id_oportunidad);
 CREATE INDEX idx_solicitud_agente ON solicitud_alquiler(id_agente);
 CREATE INDEX idx_solicitud_estado ON solicitud_alquiler(estado);
+CREATE INDEX idx_solicitud_codigo ON solicitud_alquiler(codigo_solicitud);
 CREATE INDEX idx_solicitud_oportunidad_estado_fecha ON solicitud_alquiler(id_oportunidad, estado, fecha_registro);
+CREATE INDEX idx_solicitud_agente_estado_fecha ON solicitud_alquiler(id_agente, estado, fecha_registro);
 
 CREATE INDEX idx_documento_solicitud ON documento_solicitud(id_solicitud);
+CREATE INDEX idx_documento_solicitud_estado_tipo ON documento_solicitud(id_solicitud, estado, id_tipo_documento_requerido);
 
 CREATE INDEX idx_evaluacion_solicitud ON evaluacion_solicitud(id_solicitud);
 CREATE INDEX idx_evaluacion_broker ON evaluacion_solicitud(responsable_evaluacion);
@@ -993,6 +1000,7 @@ CREATE TABLE tarea (
     CONSTRAINT ck_tarea_estado CHECK (estado IN ('PENDIENTE', 'EN_PROCESO', 'COMPLETADA', 'VENCIDA', 'CANCELADA')),
     CONSTRAINT ck_tarea_prioridad CHECK (prioridad IN ('BAJA', 'MEDIA', 'ALTA')),
     INDEX idx_tarea_agente_estado (id_agente, estado),
+    INDEX idx_tarea_agente_estado_programada (id_agente, estado, fecha_programada),
     INDEX idx_tarea_programada (fecha_programada),
     INDEX idx_tarea_entidad (entidad_tipo, entidad_id)
 ) ENGINE=InnoDB;

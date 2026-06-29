@@ -303,7 +303,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _m = FichaBuilder.Build(CodigoParam, CaptacionSvc, LocalSvc, PropSvc);
+        _m = await FichaBuilder.BuildAsync(CodigoParam, CaptacionSvc, LocalSvc, PropSvc);
         _stats = new()
         {
             new("Área", _m.AreaM2.ToString(), "m²"),

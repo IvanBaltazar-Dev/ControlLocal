@@ -46,7 +46,11 @@
                                 <div style="width:@(Math.Clamp(MiConversion, 0, 100))%;height:100%;background:linear-gradient(90deg,#005BFF,#00AEEF);border-radius:5px;transition:width .4s ease;"></div>
                             </div>
                             <div style="margin-top:7px;font-size:12px;color:#7E8794;">
-                                <b style="color:#243043;">@_ind.Cierres</b> cierres sobre <b style="color:#243043;">@_ind.CaptacionesTotales</b> captaciones en el periodo
+                                <b style="color:#243043;">@_ind.CierresCohorte</b> de <b style="color:#243043;">@_ind.CaptacionesTotales</b> captaciones del periodo ya cerraron
+                                @if (_ind.Cierres != _ind.CierresCohorte)
+                                {
+                                    <span class="cl-muted"> · @_ind.Cierres cierres totales en el periodo</span>
+                                }
                             </div>
                         </div>
                     </div>
@@ -126,7 +130,7 @@
                     </div>
                     <div class="cl-card-body" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
                         <DonutChart Segments="EtapaSegmentos" Size="150" Thickness="24"
-                                    CenterValue="@TotalEtapas.ToString()" CenterLabel="captaciones" />
+                                    CenterValue="@($"{PctActivas}%")" CenterLabel="activas" />
                         <div style="flex:1;min-width:170px;font-size:12px;">
                             @foreach (var e in Datos.Etapas)
                             {
@@ -137,6 +141,10 @@
                                     <span class="cl-muted" style="min-width:38px;text-align:right;">@PctEtapa(e.Valor)%</span>
                                 </div>
                             }
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid #E2E6EC;">
+                                <span style="flex:1;color:#515B6B;">Total captaciones</span>
+                                <b style="color:#243043;">@TotalEtapas</b>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -154,7 +162,7 @@
                         else
                         {
                             <table class="cl-table">
-                                <thead><tr><th>Operacion</th><th>Cliente</th><th>Local</th><th>Renta</th><th>Cierre</th></tr></thead>
+                                <thead><tr><th>Operacion</th><th>Cliente</th><th>Local</th><th>Comisión generada</th><th>Cierre</th></tr></thead>
                                 <tbody>
                                     @foreach (var c in UltimosCierres)
                                     {
@@ -162,7 +170,7 @@
                                             <td><span class="mono">@(string.IsNullOrWhiteSpace(c.CodigoOportunidad) ? c.CodigoSolicitud : c.CodigoOportunidad)</span></td>
                                             <td style="font-weight:600;">@c.ClienteNombre</td>
                                             <td>@c.DireccionLocal</td>
-                                            <td>@c.Moneda @c.RentaMensualTexto</td>
+                                            <td style="font-weight:600;">@c.Moneda @c.ComisionGeneradaTexto</td>
                                             <td class="cl-muted" style="font-size:12px;">@c.FechaCierreTexto</td>
                                         </tr>
                                     }
@@ -345,9 +353,9 @@
 
     private DatosReporte Datos => ReporteIndicadores.Desde(_ind, _isAdmin, _isAgente);
 
-    // Conversión propia (cierres / captaciones): KPI principal de agente y broker.
-    private int MiConversion => _ind.CaptacionesTotales > 0
-        ? (int)Math.Round(_ind.Cierres * 100.0 / _ind.CaptacionesTotales) : 0;
+    // Conversión propia por COHORTE (captaciones del periodo que ya cerraron): KPI principal de
+    // agente y broker. El backend ya entrega el % correcto (<=100); aquí solo se muestra.
+    private int MiConversion => _ind.ConversionPropia;
 
     // En agente/broker la conversión se muestra grande aparte (cl-kpi-hero), así que
     // aquí van los demás KPIs (se excluye la tarjeta de conversión, icono "target").
@@ -379,10 +387,22 @@
 
     private DateOnly PeriodoFin => DateOnly.FromDateTime(DateTime.Today);
 
-    // Dona "Captaciones por etapa": total al centro + una porción por etapa del pipeline.
+    // Dona "Salud de captaciones": al centro va el % de Activas (lectura clave de salud); el
+    // total de captaciones se muestra abajo en la leyenda, no al centro.
     private int TotalEtapas => Datos.Etapas.Sum(e => ParseValor(e.Valor));
 
     private int PctEtapa(string valor) => TotalEtapas > 0 ? (int)Math.Round(ParseValor(valor) * 100.0 / TotalEtapas) : 0;
+
+    // % de captaciones Activas sobre el total (la primera porción de la dona de salud).
+    private int PctActivas
+    {
+        get
+        {
+            var activas = Datos.Etapas.FirstOrDefault(
+                e => e.Nombre.StartsWith("Activas", StringComparison.OrdinalIgnoreCase));
+            return activas != null ? PctEtapa(activas.Valor) : 0;
+        }
+    }
 
     private DonutChart.Segment[] EtapaSegmentos => Datos.Etapas
         .Select(e => new DonutChart.Segment(ParseValor(e.Valor), e.Color))
@@ -407,7 +427,7 @@
                 var solsTask = SolicitudSvc.RefrescarAsync(DisposedToken);
                 _captaciones = await capsTask;
                 _solicitudes = await solsTask;
-                _preciosPorLocal = LocalSvc.All()
+                _preciosPorLocal = (await LocalSvc.AllAsync(DisposedToken))
                     .ToDictionary(l => l.Id, l => l.PrecioReferencial);
             }
             catch (OperationCanceledException) { }

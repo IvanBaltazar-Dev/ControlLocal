@@ -34,6 +34,7 @@ public sealed record IndicadoresDto(
     int Cierres,
     int AgentesActivos,
     int BrokersActivos,
+    int PropiedadesEquipo,
     IReadOnlyList<string> MesesEtiquetas,
     IReadOnlyList<int> CierresPorMes,
     IReadOnlyList<int> ConversionPorPeriodo,
@@ -42,11 +43,16 @@ public sealed record IndicadoresDto(
     IReadOnlyList<IndicadorConteoDto> CaptacionesSalud,
     IReadOnlyList<IndicadorEmbudoDto> Embudo,
     IReadOnlyList<IndicadorDesempenoDto> Desempeno,
-    IndicadorOperativoDto? Operativo = null)
+    IndicadorOperativoDto? Operativo = null,
+    // Conversion propia por cohorte (captaciones del periodo que ya cerraron). El backend ya
+    // entrega el % correcto (<=100); el front lo muestra tal cual en vez de dividir contadores.
+    int CierresCohorte = 0,
+    int ConversionPropia = 0)
 {
     // Valor neutro para cuando el backend no responde: ningun panel se rompe.
     public static readonly IndicadoresDto Vacio = new(
         "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0,
         Array.Empty<string>(), Array.Empty<int>(),
         Array.Empty<int>(), Array.Empty<int>(),
         Array.Empty<IndicadorConteoDto>(), Array.Empty<IndicadorConteoDto>(),

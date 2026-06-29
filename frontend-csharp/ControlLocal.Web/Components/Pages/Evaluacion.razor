@@ -262,7 +262,7 @@
         {
             // Si el backend no responde, se evalua con la ultima copia en cache.
         }
-        _solicitud = ResolverSolicitud(CodigoParam);
+        _solicitud = await ResolverSolicitud(CodigoParam);
         if (_solicitud is not null)
             await CargarDocumentosAsync();
         _cargando = false;
@@ -270,13 +270,14 @@
 
     // El parámetro puede venir como código (SOL-...) desde el flujo in-app o como id
     // numérico desde una alerta del backend; aquí se resuelve por cualquiera de los dos.
-    private SolicitudAlquilerDto? ResolverSolicitud(string? param)
+    private async Task<SolicitudAlquilerDto?> ResolverSolicitud(string? param)
     {
+        var solicitudes = await SolicitudSvc.AllAsync();
         if (string.IsNullOrWhiteSpace(param))
-            return SolicitudSvc.All().FirstOrDefault();
-        return SolicitudSvc.ByCodigo(param)
+            return solicitudes.FirstOrDefault();
+        return await SolicitudSvc.ByCodigoAsync(param)
             ?? (long.TryParse(param, out var id)
-                ? SolicitudSvc.All().FirstOrDefault(item => item.Id == id)
+                ? solicitudes.FirstOrDefault(item => item.Id == id)
                 : null);
     }
 

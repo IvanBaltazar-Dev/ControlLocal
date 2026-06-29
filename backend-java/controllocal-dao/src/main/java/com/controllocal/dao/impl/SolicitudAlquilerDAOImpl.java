@@ -122,6 +122,22 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
     }
 
     @Override
+    public Optional<SolicitudAlquiler> buscarPorCodigo(String codigo) {
+        if (codigo == null || codigo.isBlank()) {
+            return Optional.empty();
+        }
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE s.codigo_solicitud = ?")) {
+            ps.setString(1, codigo.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al buscar solicitud de alquiler con codigo " + codigo + ".", e);
+        }
+    }
+
+    @Override
     public List<SolicitudAlquiler> listarTodos() {
         List<SolicitudAlquiler> solicitudes = new ArrayList<>();
         try (Connection conn = DBManager.getConnection();
@@ -356,4 +372,3 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
         JdbcSupport.validarId(JdbcSupport.getIdAgente(solicitud.getAgenteResponsable()));
     }
 }
-

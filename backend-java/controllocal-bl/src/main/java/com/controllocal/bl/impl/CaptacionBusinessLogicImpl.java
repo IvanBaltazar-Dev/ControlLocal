@@ -29,6 +29,7 @@ import com.controllocal.model.comercial.enums.TipoEntidad;
 import com.controllocal.model.comercial.ReasignacionCaptacion;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
+import com.controllocal.model.usuario.BrokerAgente;
 
 public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
 
@@ -211,6 +212,14 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         return captacionDAO.buscarPorId(idCaptacion);
     }
 
+    @Override
+    public Optional<Captacion> buscarPorCodigo(String codigoCaptacion) {
+        if (codigoCaptacion == null || codigoCaptacion.isBlank()) {
+            return Optional.empty();
+        }
+        return captacionDAO.buscarPorCodigo(codigoCaptacion.trim());
+    }
+
     public List<Captacion> listarTodos() {
         return captacionDAO.listarTodos();
     }
@@ -232,17 +241,18 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         if (broker.isEsAdministrador()) {
             return captacionDAO.listarTodos();
         }
-        return captacionDAO.listarTodos().stream()
-                .filter(captacion -> brokerPuedeSupervisarCaptacion(broker, captacion))
+        // Filtra en SQL por los agentes que el broker supervisa (evita traer toda la tabla y filtrar en memoria).
+        List<Long> idsAgente = brokerAgenteDAO.listarActivosPorBroker(idBroker).stream()
+                .map(BrokerAgente::getIdAgente)
                 .toList();
+        return captacionDAO.listarPorAgentes(idsAgente);
     }
 
     @Override
     public List<Captacion> listarPorAgente(Long idAgente) {
         BusinessValidations.id(idAgente, "El id de agente");
-        return captacionDAO.listarTodos().stream()
-                .filter(captacion -> idAgente.equals(BusinessValidations.idAgente(captacion.getAgenteResponsable())))
-                .toList();
+        // Filtra en SQL por agente (reutiliza listarPorAgentes; evita el scan completo + filtro en memoria).
+        return captacionDAO.listarPorAgentes(List.of(idAgente));
     }
 
     @Override
@@ -257,10 +267,8 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
 
     @Override
     public List<Captacion> listPendingReviews() {
-        return captacionDAO.listarTodos().stream()
-                .filter(captacion -> captacion.getEstado() == EstadoCaptacion.PENDIENTE_REVISION
-                        || captacion.getEstado() == EstadoCaptacion.OBSERVADA)
-                .toList();
+        // Filtra los estados pendiente/observada en SQL (antes traia toda la tabla y filtraba en memoria).
+        return captacionDAO.listarPendientesRevision();
     }
 
     @Override
@@ -316,11 +324,8 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
 
     public void validarUnicaCaptacionActivaPorLocal(Long idLocal) {
         BusinessValidations.id(idLocal, "El id de local");
-        boolean existeActiva = captacionDAO.listarTodos().stream()
-                .anyMatch(captacion -> captacion.getEstado() == EstadoCaptacion.ACTIVA
-                        && captacion.getLocalComercial() != null
-                        && idLocal.equals(captacion.getLocalComercial().getIdLocal()));
-        if (existeActiva) {
+        // Consulta puntual en SQL (antes escaneaba toda la tabla en cada registro/aprobacion).
+        if (captacionDAO.existeCaptacionActivaPorLocal(idLocal)) {
             throw new BusinessException("Solo una captacion del mismo local puede estar ACTIVA.");
         }
     }
@@ -337,11 +342,6 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
         if (!brokerAgenteDAO.existeAsignacionActiva(broker.getIdBroker(), idAgente)) {
             throw new BusinessException("El broker no supervisa al agente responsable de esta operacion.");
         }
-    }
-
-    private boolean brokerPuedeSupervisarCaptacion(Broker broker, Captacion captacion) {
-        Long idAgente = BusinessValidations.idAgente(captacion.getAgenteResponsable());
-        return idAgente != null && brokerAgenteDAO.existeAsignacionActiva(broker.getIdBroker(), idAgente);
     }
 
     private Captacion buscarCaptacionObligatoria(Long idCaptacion) {

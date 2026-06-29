@@ -168,6 +168,15 @@
     private string? _error;
     private string? _cuentaSel;
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await App.EnsureInitializedAsync();
+        if (App.IsAuthenticated)
+            App.Navigate("dashboard");
+    }
+
     // Autocompleta el formulario al hacer clic en una tarjeta de cuenta demo.
     private void UsarCuenta(string key, string usuario, string password)
     {

@@ -953,8 +953,14 @@ public final class Dtos {
             int interacciones,
             int visitas,
             int cierres,
+            // Conversion propia por COHORTE: captaciones nacidas en el periodo que ya cerraron
+            // (cierresCohorte) sobre el total de captaciones del periodo (captacionesTotales).
+            // Garantiza <= 100% (a diferencia de cierres/captaciones, que mezclaba cohortes).
+            int cierresCohorte,
+            int conversionPropia,
             int agentesActivos,
             int brokersActivos,
+            int propiedadesEquipo,
             List<String> mesesEtiquetas,
             List<Integer> cierresPorMes,
             List<Integer> conversionPorPeriodo,
@@ -964,6 +970,51 @@ public final class Dtos {
             List<IndicadorEmbudo> embudo,
             List<IndicadorDesempeno> desempeno,
             IndicadorOperativo operativo) {
+    }
+
+    // RF-017: avance comercial de UNA propiedad (captacion activa) dentro del seguimiento.
+    public record AvancePropiedad(
+            long idCaptacion,
+            String codigoCaptacion,
+            String direccion,
+            String distrito,
+            String estadoComercial,
+            int oportunidadesTotales,
+            int oportunidadesAbiertas,
+            int oportunidadesConVisita,
+            int oportunidadesConSolicitud,
+            int cerradasExitosas,
+            int cerradasNoFavorables,
+            int cerradasNoContinuidad,
+            int interesados,
+            int interacciones,
+            int visitasProgramadas,
+            int visitasConcretadas,
+            int solicitudesRecibidas,
+            int tasaOportVisita,
+            int tasaOportSolicitud,
+            String motivoNoContinuidad) {
+    }
+
+    // RF-017: reporte de avance comercial = agregado (suma de propiedades) + detalle por propiedad.
+    public record AvanceComercialResponse(
+            String ambito,
+            int propiedades,
+            int oportunidadesTotales,
+            int oportunidadesAbiertas,
+            int oportunidadesConVisita,
+            int oportunidadesConSolicitud,
+            int cerradasExitosas,
+            int cerradasNoFavorables,
+            int cerradasNoContinuidad,
+            int interesados,
+            int interacciones,
+            int visitasProgramadas,
+            int visitasConcretadas,
+            int solicitudesRecibidas,
+            int tasaOportVisita,
+            int tasaOportSolicitud,
+            List<AvancePropiedad> detalle) {
     }
 
     // ---------- Soporte ----------

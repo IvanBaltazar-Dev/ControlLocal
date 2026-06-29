@@ -32,27 +32,33 @@ public static class ReporteIndicadores
     // backend (GET /indicadores/resumen). Reemplaza a los antiguos datos de ejemplo.
     public static DatosReporte Desde(IndicadoresDto ind, bool esAdmin, bool esAgente = false)
     {
+        // Activas DEL PERIODO (de la salud, que ya viene acotada al filtro) para que el subtítulo
+        // "X activas" sea coherente con "Captaciones totales" del periodo, no con el global.
+        var activasPeriodo = ind.CaptacionesSalud
+            .FirstOrDefault(e => e.Nombre.StartsWith("Activas", StringComparison.OrdinalIgnoreCase))?.Valor
+            ?? ind.CaptacionesActivas;
+
         var indicadores = esAdmin
             ? new[]
             {
-                new IndicadorReporte("pin", "Captaciones totales", ind.CaptacionesTotales.ToString(), $"{ind.CaptacionesActivas} activas", "navy"),
+                new IndicadorReporte("pin", "Captaciones totales", ind.CaptacionesTotales.ToString(), $"{activasPeriodo} activas", "navy"),
                 new IndicadorReporte("check", "Operaciones cerradas", ind.Cierres.ToString(), "acumulado", "green"),
-                new IndicadorReporte("target", "Tasa de conversión", $"{Conversion(ind.Cierres, ind.CaptacionesTotales)}%", "cierres / captaciones", "blue"),
+                new IndicadorReporte("target", "Tasa de conversión", $"{ind.ConversionPropia}%", $"{ind.CierresCohorte} de {ind.CaptacionesTotales} captaciones cerradas", "blue"),
                 new IndicadorReporte("users", "Agentes activos", ind.AgentesActivos.ToString(), $"{ind.BrokersActivos} brokers", "blue"),
             }
             : esAgente
                 ? new[]
                 {
-                    new IndicadorReporte("pin", "Mis captaciones", ind.CaptacionesTotales.ToString(), $"{ind.CaptacionesActivas} activas", "navy"),
+                    new IndicadorReporte("pin", "Mis captaciones", ind.CaptacionesTotales.ToString(), $"{activasPeriodo} activas", "navy"),
                     new IndicadorReporte("check", "Mis cierres", ind.Cierres.ToString(), "en el periodo", "green"),
-                    new IndicadorReporte("target", "Conversión propia", $"{Conversion(ind.Cierres, ind.CaptacionesTotales)}%", "cierres / captaciones", "blue"),
+                    new IndicadorReporte("target", "Conversión propia", $"{ind.ConversionPropia}%", $"{ind.CierresCohorte} de {ind.CaptacionesTotales} captaciones cerradas", "blue"),
                     new IndicadorReporte("calendar", "Mis visitas", ind.Visitas.ToString(), "en el periodo", "blue"),
                 }
             : new[]
             {
-                new IndicadorReporte("pin", "Captaciones del equipo", ind.CaptacionesTotales.ToString(), $"{ind.CaptacionesActivas} activas", "navy"),
+                new IndicadorReporte("pin", "Captaciones del equipo", ind.CaptacionesTotales.ToString(), $"{activasPeriodo} activas", "navy"),
                 new IndicadorReporte("check", "Cierres del equipo", ind.Cierres.ToString(), "acumulado", "green"),
-                new IndicadorReporte("target", "Conversión", $"{Conversion(ind.Cierres, ind.CaptacionesTotales)}%", "cierres / captaciones", "blue"),
+                new IndicadorReporte("target", "Conversión", $"{ind.ConversionPropia}%", $"{ind.CierresCohorte} de {ind.CaptacionesTotales} captaciones cerradas", "blue"),
                 new IndicadorReporte("calendar", "Visitas realizadas", ind.Visitas.ToString(), "del equipo", "blue"),
             };
 
@@ -82,9 +88,6 @@ public static class ReporteIndicadores
             string.IsNullOrEmpty(ind.Ambito) ? (esAdmin ? "Reportes globales" : "Reportes de equipo") : ind.Ambito,
             indicadores, serie, etapas, embudo, desempeno);
     }
-
-    private static int Conversion(int cierres, int captaciones) =>
-        captaciones <= 0 ? 0 : (int)Math.Round(cierres * 100.0 / captaciones);
 }
 
 // Reporte de indicadores exportable a PDF (A4) — premium, colorido y CLARO (sin fondos
@@ -214,18 +217,27 @@ public class ReporteIndicadoresDocument : IDocument
             return;
         }
         var max = valores.DefaultIfEmpty(0).Max();
+        // Indice del pico (barra mas alta): se resalta con el acento de marca; el resto en cian suave.
+        var idxPico = -1;
+        for (var i = 0; i < valores.Length; i++)
+        {
+            if (valores[i] > 0 && (idxPico < 0 || valores[i] > valores[idxPico])) idxPico = i;
+        }
         c.Row(row =>
         {
             for (var i = 0; i < etiquetas.Length; i++)
             {
                 var v = i < valores.Length ? valores[i] : 0;
                 var ratio = max > 0 ? v / max : 0;
+                var esPico = i == idxPico;
                 row.RelativeItem().Column(colb =>
                 {
-                    colb.Item().AlignCenter().Text(v.ToString("0")).FontSize(8).SemiBold().FontColor(Ink);
+                    colb.Item().AlignCenter().Text(v.ToString("0")).FontSize(8)
+                        .SemiBold().FontColor(esPico ? Primary : Ink);
                     colb.Item().PaddingTop(3).Height(96).AlignBottom().AlignCenter()
-                        .Width(20).Height((float)Math.Max(3, 96 * ratio)).Background(Primary);
-                    colb.Item().PaddingTop(4).AlignCenter().Text(etiquetas[i]).FontSize(8).FontColor(Muted);
+                        .Width(20).Height((float)Math.Max(3, 96 * ratio)).Background(esPico ? Primary : Cian);
+                    colb.Item().PaddingTop(4).AlignCenter().Text(etiquetas[i]).FontSize(8)
+                        .FontColor(Muted);
                 });
             }
         });
@@ -241,14 +253,14 @@ public class ReporteIndicadoresDocument : IDocument
             col.Item().Text("Sin etapas registradas.").FontSize(9).FontColor(Muted);
             return;
         }
-        // Encabezado: % de captaciones que terminaron alquiladas (etapa Alquilada).
-        var alquilada = _d.Etapas.FirstOrDefault(e => e.Nombre.Contains("Alquilada", StringComparison.OrdinalIgnoreCase));
-        var pctCierre = (int)Math.Round(100.0 * (alquilada != null ? ParseInt(alquilada.Valor) : 0) / total);
+        // Encabezado: % de captaciones ACTIVAS (misma lectura que la dona en pantalla).
+        var activas = _d.Etapas.FirstOrDefault(e => e.Nombre.StartsWith("Activas", StringComparison.OrdinalIgnoreCase));
+        var pctActivas = (int)Math.Round(100.0 * (activas != null ? ParseInt(activas.Valor) : 0) / total);
         col.Item().PaddingBottom(10).Row(r =>
         {
-            r.ConstantItem(60).AlignMiddle().Text($"{pctCierre}%").FontSize(26).Bold().FontColor(Verde);
+            r.ConstantItem(60).AlignMiddle().Text($"{pctActivas}%").FontSize(26).Bold().FontColor(Verde);
             r.ConstantItem(8);
-            r.RelativeItem().AlignMiddle().Text("de las captaciones llegó al cierre").FontSize(9.5f).FontColor(Muted);
+            r.RelativeItem().AlignMiddle().Text("de las captaciones están activas").FontSize(9.5f).FontColor(Muted);
         });
         col.Item().Height(20).Background(Soft).Row(row =>
         {
@@ -273,6 +285,12 @@ public class ReporteIndicadoresDocument : IDocument
                     lr.ConstantItem(70).AlignRight().AlignMiddle().Text($"{e.Valor} · {pct}%").FontSize(9).Bold().FontColor(Ink);
                 });
             }
+            // Total abajo (no al centro): cierra la lectura de la dona como en pantalla.
+            leg.Item().PaddingTop(8).BorderTop(1).BorderColor(Line).PaddingTop(8).Row(lr =>
+            {
+                lr.RelativeItem().AlignMiddle().Text("Total captaciones").FontSize(9).FontColor(Muted);
+                lr.ConstantItem(70).AlignRight().AlignMiddle().Text(total.ToString()).FontSize(9).Bold().FontColor(Ink);
+            });
         });
     });
 

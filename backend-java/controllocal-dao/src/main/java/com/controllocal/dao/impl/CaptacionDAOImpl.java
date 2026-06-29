@@ -68,6 +68,15 @@ public class CaptacionDAOImpl implements CaptacionDAO {
     private static final String SELECT_PAGE_SQL =
             SELECT_SQL + " ORDER BY c.id_captacion LIMIT ? OFFSET ?";
 
+    private static final String SELECT_PENDIENTES_SQL =
+            SELECT_SQL + " WHERE c.estado IN ('" + EstadoCaptacion.PENDIENTE_REVISION.getCodigo()
+                    + "', '" + EstadoCaptacion.OBSERVADA.getCodigo() + "') ORDER BY c.id_captacion";
+
+    // Aprovecha el indice unico uq_captacion_activa_por_local sobre la columna generada
+    // id_local_activo (= id_local solo cuando estado='A'): lookup directo por indice.
+    private static final String EXISTE_ACTIVA_POR_LOCAL_SQL =
+            "SELECT COUNT(*) FROM captacion WHERE id_local_activo = ?";
+
     private static final String COUNT_SQL = "SELECT COUNT(*) FROM captacion";
 
     private static final String UPDATE_SQL = """
@@ -152,6 +161,25 @@ public class CaptacionDAOImpl implements CaptacionDAO {
     }
 
     @Override
+    public Optional<Captacion> buscarPorCodigo(String codigo) {
+        if (codigo == null || codigo.isBlank()) {
+            return Optional.empty();
+        }
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_SQL + " WHERE c.codigo_captacion = ?")) {
+            statement.setString(1, codigo.trim());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return Optional.of(mapRow(resultSet));
+                }
+                return Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al buscar la captacion con codigo " + codigo + ".", e);
+        }
+    }
+
+    @Override
     public List<Captacion> listarTodos() {
         List<Captacion> captaciones = new ArrayList<>();
         try (Connection connection = DBManager.getConnection()) {
@@ -209,6 +237,37 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             return resultado;
         } catch (java.sql.SQLException e) {
             throw new com.controllocal.dao.DAOException("Error al listar captacion por propietario.", e);
+        }
+    }
+
+    @Override
+    public List<Captacion> listarPendientesRevision() {
+        List<Captacion> resultado = new ArrayList<>();
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_PENDIENTES_SQL);
+             ResultSet resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                resultado.add(mapRow(resultSet));
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar captaciones pendientes de revision.", e);
+        }
+    }
+
+    @Override
+    public boolean existeCaptacionActivaPorLocal(Long idLocal) {
+        if (idLocal == null) {
+            return false;
+        }
+        try (Connection connection = DBManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(EXISTE_ACTIVA_POR_LOCAL_SQL)) {
+            statement.setLong(1, idLocal);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() && resultSet.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al verificar captacion activa por local " + idLocal + ".", e);
         }
     }
 

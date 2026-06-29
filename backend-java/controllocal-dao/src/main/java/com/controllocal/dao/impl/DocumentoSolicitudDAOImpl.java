@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -95,6 +96,49 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
     }
 
     @Override
+    public List<DocumentoSolicitud> listarPorSolicitud(Long idSolicitud) {
+        JdbcSupport.validarId(idSolicitud);
+        List<DocumentoSolicitud> documentos = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " WHERE d.id_solicitud = ? ORDER BY d.id_documento")) {
+            ps.setLong(1, idSolicitud);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    documentos.add(mapRow(rs));
+                }
+            }
+            return documentos;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar documentos de la solicitud " + idSolicitud + ".", e);
+        }
+    }
+
+    @Override
+    public List<DocumentoSolicitud> listarPorSolicitudes(Collection<Long> idsSolicitud) {
+        List<DocumentoSolicitud> documentos = new ArrayList<>();
+        if (idsSolicitud == null || idsSolicitud.isEmpty()) {
+            return documentos;
+        }
+        String sql = SELECT_SQL + " WHERE d.id_solicitud IN (" + JdbcSupport.placeholders(idsSolicitud.size())
+                + ") ORDER BY d.id_solicitud, d.id_documento";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsSolicitud) {
+                ps.setLong(idx++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    documentos.add(mapRow(rs));
+                }
+            }
+            return documentos;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar documentos por solicitudes.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(DocumentoSolicitud documento) {
         validar(documento, true);
         try (Connection conn = DBManager.getConnection();
@@ -168,4 +212,3 @@ public class DocumentoSolicitudDAOImpl implements DocumentoSolicitudDAO {
         JdbcSupport.validarId(JdbcSupport.getIdSolicitud(documento.getSolicitudAlquiler()));
     }
 }
-

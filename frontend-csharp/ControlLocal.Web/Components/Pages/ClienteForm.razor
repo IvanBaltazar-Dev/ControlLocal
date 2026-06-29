@@ -12,6 +12,10 @@
                             ? "Actualiza contacto, rubro, consentimientos y estado. La identidad no se puede modificar."
                             : "Prospecto comercial · podrás vincularlo a una captación activa para iniciar el seguimiento")">
     <Actions>
+        @if (_isEdit)
+        {
+            <button class="cl-btn secondary" @onclick="AbrirRequerimiento"><Icon Name="target" Size="13" /> Registrar requerimiento</button>
+        }
         <button class="cl-btn ghost" @onclick="@(() => App.Navigate("clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
@@ -95,6 +99,21 @@
                             Autoriza el uso de sus datos para la gestión inmobiliaria.
                         </label>
                     </div>
+                    <div class="cl-muted" style="font-size:12px;margin-top:14px;display:flex;align-items:flex-start;gap:8px;border-top:1px solid var(--c-border);padding-top:12px;">
+                        <Icon Name="target" Size="14" />
+                        <span>
+                            El detalle del perfil de búsqueda (renta, metraje, distritos, tipo de inmueble) se captura como
+                            <b>requerimiento</b>.
+                            @if (_isEdit)
+                            {
+                                <text>Usa <b>“Registrar requerimiento”</b> arriba para añadirlo.</text>
+                            }
+                            else
+                            {
+                                <text>Al registrar el cliente podrás añadirlo enseguida.</text>
+                            }
+                        </span>
+                    </div>
                 </FormSection>
 
                 @if (_isEdit)
@@ -128,6 +147,22 @@
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
         <Toast Show="_toast">@(_isEdit ? "Cliente actualizado correctamente" : "Cliente registrado correctamente")</Toast>
+        <Toast Show="_reqToast">Requerimiento registrado correctamente</Toast>
+
+        @* Paso opcional tras crear: invitar a registrar el requerimiento (perfil de búsqueda). Así el
+           cliente no queda solo con perfil + consentimientos; se captura renta, distritos, metraje, etc. *@
+        <Modal Open="_invitarRequerimiento" Tone="green" Icon="checkCircle"
+               Title="Cliente registrado"
+               Desc="¿Quieres registrar ahora un requerimiento (perfil de búsqueda) para empezar a recomendarle propiedades de tu cartera?"
+               OnClose="IrAClientes">
+            <Footer>
+                <button class="cl-btn ghost" @onclick="IrAClientes">Más tarde</button>
+                <button class="cl-btn primary" @onclick="AbrirRequerimiento"><Icon Name="target" Size="13" /> Registrar requerimiento</button>
+            </Footer>
+        </Modal>
+
+        <RequerimientoEditor Open="_requerimientoOpen" ClienteId="ClienteIdParaReq" Existing="SeedRequerimiento"
+                             OnClose="CerrarRequerimiento" OnSaved="RequerimientoGuardado" />
     </ChildContent>
 </AppShell>
 
@@ -138,7 +173,17 @@
     private string _tipo = "juridica";
     private bool _confirm;
     private bool _toast;
+    private bool _reqToast;
     private bool _procesando;
+
+    // Flujo de requerimiento: tras crear se invita a registrarlo; en edición el botón lo abre directo.
+    private long _clienteCreadoId;
+    private bool _invitarRequerimiento;
+    private bool _requerimientoOpen;
+    private long ClienteIdParaReq => _isEdit ? ClienteId : _clienteCreadoId;
+    // Semilla para precargar el rubro del cliente (Id=0 => alta, no edición del requerimiento).
+    private ControlLocal.Web.Models.Cartera.RequerimientoDto SeedRequerimiento =>
+        new() { Id = 0, ClienteId = ClienteIdParaReq, Rubro = _rubro };
 
     private string _razonSocial = "";
     private string _nombreNatural = "";
@@ -223,11 +268,11 @@
         _err = null;
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (!_isEdit) return;
 
-        var c = ClienteSvc.ById(ClienteId);
+        var c = await ClienteSvc.ByIdAsync(ClienteId, DisposedToken);
         if (c is null)
         {
             _err = "No se encontró el cliente seleccionado.";
@@ -300,13 +345,23 @@
                 ConsentimientoContacto = _consentimientoContacto,
                 ConsentimientoUsoDato = _consentimientoUsoDato,
             };
-            if (_isEdit) await ClienteSvc.ActualizarAsync(cliente, DisposedToken);
-            else await ClienteSvc.AgregarAsync(cliente, DisposedToken);
-
-            _toast = true;
-            await RenderIfAliveAsync();
-            await Task.Delay(300, DisposedToken);
-            App.Navigate("clientes");
+            if (_isEdit)
+            {
+                await ClienteSvc.ActualizarAsync(cliente, DisposedToken);
+                _toast = true;
+                await RenderIfAliveAsync();
+                await Task.Delay(300, DisposedToken);
+                App.Navigate("clientes");
+            }
+            else
+            {
+                var creado = await ClienteSvc.AgregarAsync(cliente, DisposedToken);
+                _clienteCreadoId = creado.Id;
+                _toast = true;
+                // No navega aún: ofrece registrar el requerimiento con el id recién creado.
+                _invitarRequerimiento = true;
+                await RenderIfAliveAsync();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -321,6 +376,39 @@
             _procesando = false;
             await RenderIfAliveAsync();
         }
+    }
+
+    // --- Flujo de requerimiento (perfil de búsqueda del cliente) ---
+    private void AbrirRequerimiento()
+    {
+        _invitarRequerimiento = false;
+        _requerimientoOpen = true;
+    }
+
+    private void CerrarRequerimiento()
+    {
+        _requerimientoOpen = false;
+        // En el alta vuelve a ofrecer la opción; en edición solo cierra el modal.
+        if (!_isEdit)
+        {
+            _invitarRequerimiento = true;
+        }
+    }
+
+    private async Task RequerimientoGuardado()
+    {
+        _requerimientoOpen = false;
+        _invitarRequerimiento = false;
+        _reqToast = true;
+        await RenderIfAliveAsync();
+        await Task.Delay(300, DisposedToken);
+        App.Navigate("clientes");
+    }
+
+    private void IrAClientes()
+    {
+        _invitarRequerimiento = false;
+        App.Navigate("clientes");
     }
 
     private static string ResolveTipoDocumento(string tipoPersona)

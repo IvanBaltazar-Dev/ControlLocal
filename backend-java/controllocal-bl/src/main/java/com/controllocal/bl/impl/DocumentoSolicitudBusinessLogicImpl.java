@@ -1,5 +1,6 @@
 package com.controllocal.bl.impl;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -87,6 +88,17 @@ public class DocumentoSolicitudBusinessLogicImpl implements DocumentoSolicitudBu
         return documentoDAO.listarTodos();
     }
 
+    @Override
+    public List<DocumentoSolicitud> listarPorSolicitud(Long idSolicitud) {
+        BusinessValidations.id(idSolicitud, "El id de solicitud");
+        return documentoDAO.listarPorSolicitud(idSolicitud);
+    }
+
+    @Override
+    public List<DocumentoSolicitud> listarPorSolicitudes(Collection<Long> idsSolicitud) {
+        return documentoDAO.listarPorSolicitudes(idsSolicitud);
+    }
+
     public boolean actualizar(DocumentoSolicitud documento) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(documento != null ? documento.getIdDocumento() : null, "El id de documento");
@@ -145,10 +157,7 @@ public class DocumentoSolicitudBusinessLogicImpl implements DocumentoSolicitudBu
     public List<DocumentoSolicitud> conformarPendientes(Long idSolicitud) {
         return TransactionRunner.write((TransactionRunner.TransactionalConnectionSupplier<List<DocumentoSolicitud>>) conn -> {
             BusinessValidations.id(idSolicitud, "El id de solicitud");
-            List<DocumentoSolicitud> documentosSolicitud = documentoDAO.listarTodos().stream()
-                    .filter(doc -> doc.getSolicitudAlquiler() != null
-                            && idSolicitud.equals(doc.getSolicitudAlquiler().getIdSolicitud()))
-                    .toList();
+            List<DocumentoSolicitud> documentosSolicitud = documentoDAO.listarPorSolicitud(idSolicitud);
             for (DocumentoSolicitud documento : documentosSolicitud) {
                 if (documento.getResultadoRevision() == ResultadoRevisionDocumento.PENDIENTE) {
                     documento.actualizarRevision(ResultadoRevisionDocumento.CONFORME, null);
@@ -180,4 +189,3 @@ public class DocumentoSolicitudBusinessLogicImpl implements DocumentoSolicitudBu
                         + solicitud.getCodigoSolicitud() + detalle));
     }
 }
-

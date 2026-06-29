@@ -42,3 +42,10 @@ public class ReportePropietarioDto
     private static string Fecha(DateTime? f) =>
         f?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "—";
 }
+
+// Valores derivados (no manuales) que el formulario de reporte muestra en solo lectura: se calculan
+// en el backend a partir de la actividad real de la propiedad en el periodo.
+public sealed record ReportePreviewDto(int Consultas, int Visitas, string Objeciones)
+{
+    public static readonly ReportePreviewDto Vacio = new(0, 0, "");
+}

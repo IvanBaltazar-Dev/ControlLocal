@@ -337,11 +337,12 @@
         catch (OperationCanceledException) { }
         catch { /* se resuelve con la última copia en caché */ }
         // El parámetro puede ser el código (SOL-...) o el id numérico (alerta del backend).
+        var solicitudes = await SolicitudSvc.AllAsync(DisposedToken);
         _solicitud = string.IsNullOrWhiteSpace(CodigoSolicitud)
-            ? SolicitudSvc.All().FirstOrDefault()
-            : SolicitudSvc.ByCodigo(CodigoSolicitud)
+            ? solicitudes.FirstOrDefault()
+            : await SolicitudSvc.ByCodigoAsync(CodigoSolicitud, DisposedToken)
                 ?? (long.TryParse(CodigoSolicitud, out var id)
-                    ? SolicitudSvc.All().FirstOrDefault(s => s.Id == id)
+                    ? solicitudes.FirstOrDefault(s => s.Id == id)
                     : null);
         await CargarDocumentosAsync();
     }

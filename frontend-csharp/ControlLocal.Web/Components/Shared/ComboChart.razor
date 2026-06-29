@@ -1,45 +1,63 @@
-@* Barras + linea para comparar volumen y porcentaje sin depender de librerias externas. *@
-<svg width="100%" height="@H" viewBox="0 0 @W @H" preserveAspectRatio="none" role="img" aria-label="@Title">
-    @foreach (var t in Grid)
-    {
-        var gy = F(Pad + (PlotH * t));
-        <line x1="@Pad" x2="@(W - Pad)" y1="@gy" y2="@gy" stroke="#E2E6EC" stroke-width="1" />
-    }
-
-    @for (var i = 0; i < Bars.Length; i++)
-    {
-        var value = Bars[i];
-        var bh = MaxBar <= 0 ? 0 : value / MaxBar * PlotH;
-        var x = F(Pad + i * Bw + (Bw - BarW) / 2);
-        var y = F(H - Pad - bh);
-        var fill = BarColor(i);
-        <rect x="@x" y="@y" width="@F(BarW)" height="@F(bh)" fill="@fill" rx="3">
-            <title>@Tooltip(i)</title>
-        </rect>
-    }
-
-    @if (Line.Length > 0)
-    {
-        <polyline points="@LinePoints" fill="none" stroke="@LineColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
-        @for (var i = 0; i < Line.Length && i < Bars.Length; i++)
+@* Histograma de cierres + linea de conversion. El SVG dibuja SOLO barras/grilla/linea
+   (preserveAspectRatio="none" estira rectangulos sin problema); las etiquetas de mes van como
+   HTML nitido debajo, asi no se deforman al ensanchar la tarjeta. La barra pico se resalta. *@
+<div class="cl-combo" style="position:relative;">
+    <svg width="100%" height="@H" viewBox="0 0 @W @H" preserveAspectRatio="none" role="img" aria-label="@Title" style="display:block;">
+        @foreach (var t in Grid)
         {
-            var cx = F(Pad + i * Bw + Bw / 2);
-            var cy = F(LineY(Line[i]));
-            <circle cx="@cx" cy="@cy" r="3.2" fill="#fff" stroke="@LineColor" stroke-width="2" vector-effect="non-scaling-stroke">
+            var gy = F(Pad + (PlotH * t));
+            <line x1="0" x2="@W" y1="@gy" y2="@gy" stroke="#EEF1F5" stroke-width="1" vector-effect="non-scaling-stroke" />
+        }
+
+        @for (var i = 0; i < Bars.Length; i++)
+        {
+            var value = Bars[i];
+            var bh = MaxBar <= 0 ? 0 : value / MaxBar * PlotH;
+            var x = F(Pad + i * Bw + (Bw - BarW) / 2);
+            var y = F(H - Pad - bh);
+            var esPico = i == IndicePico;
+            <rect x="@x" y="@y" width="@F(BarW)" height="@F(bh)" fill="@BarColor(i)"
+                  rx="3" opacity="@(esPico ? "1" : "0.82")">
                 <title>@Tooltip(i)</title>
-            </circle>
+            </rect>
         }
+
+        @if (Line.Length > 0)
+        {
+            <polyline points="@LinePoints" fill="none" stroke="@LineColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            @for (var i = 0; i < Line.Length && i < Bars.Length; i++)
+            {
+                var cx = F(Pad + i * Bw + Bw / 2);
+                var cy = F(LineY(Line[i]));
+                <circle cx="@cx" cy="@cy" r="3.2" fill="#fff" stroke="@LineColor" stroke-width="2" vector-effect="non-scaling-stroke">
+                    <title>@Tooltip(i)</title>
+                </circle>
+            }
+        }
+    </svg>
+
+    @* Caption del pico: "apunta a la cima" con el valor del mes mas alto. *@
+    @if (IndicePico >= 0 && MaxBar > 0)
+    {
+        <div style="position:absolute;left:@(PicoLeftPct)%;top:0;transform:translateX(-50%);font-size:11px;font-weight:700;color:#243043;pointer-events:none;white-space:nowrap;">
+            @Bars[IndicePico]:0
+            <span style="display:block;text-align:center;color:#94A3B8;font-size:13px;line-height:.7;">▾</span>
+        </div>
     }
 
-    @for (var i = 0; i < Labels.Length && i < Bars.Length; i++)
-    {
-        if (PasoEtiqueta > 0 && i % PasoEtiqueta == 0)
+    @* Etiquetas de mes como HTML (una celda por barra, texto solo cada PasoEtiqueta): nitidas
+       siempre, alineadas con las barras por ser celdas de igual ancho. El mes pico va en negrita. *@
+    <div style="display:flex;margin-top:4px;">
+        @for (var i = 0; i < Bars.Length; i++)
         {
-            var lx = F(Pad + i * Bw + Bw / 2);
-            <svg:text x="@lx" y="@(H - 4)" font-size="9" fill="#7E8794" text-anchor="middle">@Labels[i]</svg:text>
+            var mostrar = i < Labels.Length && PasoEtiqueta > 0 && i % PasoEtiqueta == 0;
+            var esPico = i == IndicePico;
+            <div style="flex:1 1 0;text-align:center;font-size:11px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;@(esPico ? "font-weight:700;color:#243043;" : "color:#7E8794;")">
+                @(mostrar ? Labels[i] : "")
+            </div>
         }
-    }
-</svg>
+    </div>
+</div>
 
 @code {
     [Parameter] public string Title { get; set; } = "Grafico combinado";
@@ -50,14 +68,36 @@
     [Parameter] public string LineColor { get; set; } = "#005BFF";
 
     private const int W = 640;
-    private const int Pad = 22;
+    private const int Pad = 16;
+    // Espacio reservado arriba para el caption del pico (no encimar la barra mas alta).
+    private const int TopGap = 16;
     private int H => Height;
-    private int PlotH => H - Pad * 2;
+    private int PlotH => H - Pad - TopGap;
     private double MaxBar => Bars.Length == 0 ? 0 : Math.Max(1, Bars.Max());
     private double Bw => Bars.Length == 0 ? 0 : (W - Pad * 2) / (double)Bars.Length;
-    private double BarW => Math.Clamp(Bw * 0.58, 3, 42);
+    private double BarW => Math.Clamp(Bw * 0.6, 4, 46);
     private int PasoEtiqueta => Labels.Length == 0 ? 0 : Math.Max(1, (int)Math.Ceiling(Labels.Length / 9.0));
     private static readonly double[] Grid = { 0, 0.25, 0.5, 0.75, 1 };
+
+    // Indice de la barra mas alta (el "pico" que se resalta). -1 si no hay barras.
+    private int IndicePico
+    {
+        get
+        {
+            if (Bars.Length == 0 || Bars.Max() <= 0) return -1;
+            var idx = 0;
+            for (var i = 1; i < Bars.Length; i++)
+            {
+                if (Bars[i] > Bars[idx]) idx = i;
+            }
+            return idx;
+        }
+    }
+
+    // Posicion horizontal del caption del pico, en % del ancho del SVG (centro de su barra).
+    private double PicoLeftPct => IndicePico < 0 || Bars.Length == 0
+        ? 0
+        : (Pad + IndicePico * Bw + Bw / 2) / W * 100.0;
 
     private string LinePoints => string.Join(" ", Line.Take(Bars.Length).Select((value, i) =>
         $"{F(Pad + i * Bw + Bw / 2)},{F(LineY(value))}"));
@@ -70,6 +110,8 @@
 
     private string BarColor(int index)
     {
+        // El pico siempre con el acento de marca, para que la vista vaya "a la cima".
+        if (index == IndicePico) return "#005BFF";
         if (index == 0) return "#00AEEF";
         var previous = Bars[index - 1];
         var current = Bars[index];

@@ -26,6 +26,7 @@ public interface CaptacionBusinessLogic {
     public void closeAcquisition(Long acquisitionId, Long brokerId, String reason);
     public void closeAcquisition(Long acquisitionId);
     public Optional<Captacion> buscarPorId(Long idCaptacion);
+    public Optional<Captacion> buscarPorCodigo(String codigoCaptacion);
     public List<Captacion> listarTodos();
     public List<Captacion> listarPagina(int limite, int desplazamiento);
     public long contar();
@@ -44,4 +45,3 @@ public interface CaptacionBusinessLogic {
     public void validarCaptacionActiva(Captacion captacion);
     public void validarUnicaCaptacionActivaPorLocal(Long idLocal);
 }
-

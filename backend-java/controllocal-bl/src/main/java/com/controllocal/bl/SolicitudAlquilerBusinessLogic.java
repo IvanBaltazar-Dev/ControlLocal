@@ -13,6 +13,7 @@ public interface SolicitudAlquilerBusinessLogic {
 
     public Long registrar(SolicitudAlquiler solicitud);
     public Optional<SolicitudAlquiler> buscarPorId(Long idSolicitud);
+    public Optional<SolicitudAlquiler> buscarPorCodigo(String codigoSolicitud);
     public List<SolicitudAlquiler> listarTodos();
     // Carga en bloque solo las solicitudes pedidas (enriquecer una pagina sin traer todo).
     public List<SolicitudAlquiler> listarPorIds(Collection<Long> ids);
@@ -28,4 +29,3 @@ public interface SolicitudAlquilerBusinessLogic {
     // supervisor del agente responsable. Devuelve true si se persistio el cambio.
     public boolean reenviarAEvaluacion(Long idSolicitud);
 }
-

@@ -175,9 +175,9 @@
         _err = null;
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        if (long.TryParse(IdParam, out var id) && OwnerSvc.ById(id) is { } owner)
+        if (long.TryParse(IdParam, out var id) && await OwnerSvc.ByIdAsync(id) is { } owner)
         {
             _isEdit = true;
             _nombre = owner.Nombre;

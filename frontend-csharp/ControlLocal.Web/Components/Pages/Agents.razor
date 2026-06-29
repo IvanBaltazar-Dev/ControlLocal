@@ -200,7 +200,7 @@
         var n = _deactivate;
         if (_deactivateId is long id)
         {
-            AgenteSvc.Desactivar(id);
+            await AgenteSvc.DesactivarAsync(id);
             try { _agentes = await AgenteSvc.RefrescarAsync(DisposedToken); } catch { }
         }
         _deactivate = null;

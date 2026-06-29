@@ -94,6 +94,7 @@ builder.Services.AddScoped<ITareaService, HttpTareaService>();
 
 // Todas las pantallas usan ya el backend REST (no quedan mocks en uso).
 builder.Services.AddScoped<IIndicadorService, HttpIndicadorService>();
+builder.Services.AddScoped<IDashboardService, HttpDashboardService>();
 builder.Services.AddScoped<IInteraccionService, HttpInteraccionService>();
 builder.Services.AddScoped<IReasignacionCaptacionService, HttpReasignacionCaptacionService>();
 builder.Services.AddScoped<IAssignmentService, HttpAssignmentService>();

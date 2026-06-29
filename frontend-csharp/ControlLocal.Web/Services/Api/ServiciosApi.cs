@@ -459,29 +459,26 @@ internal sealed record BrokerApi(
 
 public class HttpPropietarioService(ApiClient api) : IPropietarioService
 {
-    private List<PropietarioDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<PropietarioDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<PropietarioDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<PropietarioDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
     public async Task<IReadOnlyList<PropietarioDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _cache = await Cargar(ct);
-        return _cache;
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
     }
 
-    public PropietarioDto? ById(long id)
+    public async Task<PropietarioDto?> ByIdAsync(long id, CancellationToken ct = default)
     {
-        var cacheado = All().FirstOrDefault(item => item.Id == id);
+        var lista = await _cache.ObtenerAsync(ct);
+        var cacheado = lista.FirstOrDefault(item => item.Id == id);
         if (cacheado is not null) return cacheado;
         try
         {
-            var remoto = Task.Run(() => api.GetAsync<PropietarioApi>($"propietarios/{id}"))
-                .GetAwaiter().GetResult();
-            if (remoto is null) return null;
-            var dto = Mapear(remoto);
-            (_cache ??= []).Add(dto);
-            return dto;
+            var remoto = await api.GetAsync<PropietarioApi>($"propietarios/{id}", ct);
+            return remoto is null ? null : Mapear(remoto);
         }
         catch
         {
@@ -489,52 +486,23 @@ public class HttpPropietarioService(ApiClient api) : IPropietarioService
         }
     }
 
-    public PropietarioDto Agregar(PropietarioDto propietario)
-    {
-        var creado = Task.Run(() => api.PostAsync<PropietarioApi>("propietarios", Request(propietario)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el propietario registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
-        return dto;
-    }
-
-    public PropietarioDto Actualizar(PropietarioDto propietario)
-    {
-        var actualizado = Task.Run(() =>
-                api.PutAsync<PropietarioApi>($"propietarios/{propietario.Id}", Request(propietario)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el propietario actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        return dto;
-    }
-
     public async Task<PropietarioDto> AgregarAsync(PropietarioDto propietario, CancellationToken ct = default)
     {
         var creado = await api.PostAsync<PropietarioApi>("propietarios", Request(propietario), ct)
             ?? throw new InvalidOperationException("El API no devolvio el propietario registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(creado);
     }
 
     public async Task<PropietarioDto> ActualizarAsync(PropietarioDto propietario, CancellationToken ct = default)
     {
         var actualizado = await api.PutAsync<PropietarioApi>($"propietarios/{propietario.Id}", Request(propietario), ct)
             ?? throw new InvalidOperationException("El API no devolvio el propietario actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(actualizado);
     }
 
-    private async Task<List<PropietarioDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<PropietarioDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var pagina = await api.GetPaginaAsync<PropietarioApi>("propietarios", 1, 100, ct);
         return pagina?.Items.Select(Mapear).ToList() ?? [];
@@ -570,23 +538,26 @@ public class HttpPropietarioService(ApiClient api) : IPropietarioService
 
 public class HttpClienteService(ApiClient api) : IClienteService
 {
-    private List<ClienteInteresadoDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<ClienteInteresadoDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<ClienteInteresadoDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<ClienteInteresadoDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
-    public ClienteInteresadoDto? ById(long id)
+    public async Task<IReadOnlyList<ClienteInteresadoDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        var cacheado = All().FirstOrDefault(item => item.Id == id);
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
+    }
+
+    public async Task<ClienteInteresadoDto?> ByIdAsync(long id, CancellationToken ct = default)
+    {
+        var lista = await _cache.ObtenerAsync(ct);
+        var cacheado = lista.FirstOrDefault(item => item.Id == id);
         if (cacheado is not null) return cacheado;
         try
         {
-            var remoto = Task.Run(() => api.GetAsync<ClienteApi>($"clientes/{id}"))
-                .GetAwaiter().GetResult();
-            if (remoto is null) return null;
-            var dto = Mapear(remoto);
-            (_cache ??= []).Add(dto);
-            return dto;
+            var remoto = await api.GetAsync<ClienteApi>($"clientes/{id}", ct);
+            return remoto is null ? null : Mapear(remoto);
         }
         catch
         {
@@ -597,71 +568,29 @@ public class HttpClienteService(ApiClient api) : IClienteService
     public async Task<ClienteInteresadoDto?> ObtenerAsync(long id, CancellationToken ct = default)
     {
         var remoto = await api.GetAsync<ClienteApi>($"clientes/{id}", ct);
-        if (remoto is null)
-            return null;
-        var dto = Mapear(remoto);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        return dto;
-    }
-
-    public async Task<IReadOnlyList<ClienteInteresadoDto>> RefrescarAsync(CancellationToken ct = default)
-    {
-        _cache = await Cargar(ct);
-        return _cache;
-    }
-
-    private async Task<List<ClienteInteresadoDto>> Cargar(CancellationToken ct = default)
-    {
-        var pagina = await api.GetPaginaAsync<ClienteApi>("clientes", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
-    }
-
-    public ClienteInteresadoDto Agregar(ClienteInteresadoDto cliente)
-    {
-        var creado = Task.Run(() => api.PostAsync<ClienteApi>("clientes", Request(cliente)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el cliente registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
-        return dto;
-    }
-
-    public ClienteInteresadoDto Actualizar(ClienteInteresadoDto cliente)
-    {
-        var actualizado = Task.Run(() =>
-                api.PutAsync<ClienteApi>($"clientes/{cliente.Id}", Request(cliente)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el cliente actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        return dto;
+        return remoto is null ? null : Mapear(remoto);
     }
 
     public async Task<ClienteInteresadoDto> AgregarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default)
     {
         var creado = await api.PostAsync<ClienteApi>("clientes", Request(cliente), ct)
             ?? throw new InvalidOperationException("El API no devolvio el cliente registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(creado);
     }
 
     public async Task<ClienteInteresadoDto> ActualizarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default)
     {
         var actualizado = await api.PutAsync<ClienteApi>($"clientes/{cliente.Id}", Request(cliente), ct)
             ?? throw new InvalidOperationException("El API no devolvio el cliente actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(actualizado);
+    }
+
+    private static async Task<IReadOnlyList<ClienteInteresadoDto>> CargarAsync(ApiClient api, CancellationToken ct)
+    {
+        var pagina = await api.GetPaginaAsync<ClienteApi>("clientes", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
     private static ClienteInteresadoDto Mapear(ClienteApi item) => new()
@@ -880,6 +809,8 @@ public class HttpCoincidenciaCarteraService(ApiClient api) : ICoincidenciaCarter
     };
 }
 
+internal sealed record ReportePreviewApi(int Consultas, int Visitas, string? Objeciones);
+
 internal sealed record ReportePropietarioApi(
     long Id,
     long? IdCaptacion,
@@ -908,6 +839,19 @@ public class HttpReportePropietarioService(ApiClient api) : IReportePropietarioS
         var resp = await api.PostAsync<ReportePropietarioApi>(
             $"captaciones/{idCaptacion}/reportes-propietario", Cuerpo(reporte), ct);
         return resp is null ? reporte : Map(resp);
+    }
+
+    public async Task<ReportePreviewDto> PreviewAsync(long idCaptacion, DateTime? desde, DateTime? hasta, CancellationToken ct = default)
+    {
+        var filtros = new List<string>();
+        if (desde is { } d) filtros.Add($"desde={d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}");
+        if (hasta is { } h) filtros.Add($"hasta={h.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}");
+        var ruta = $"captaciones/{idCaptacion}/reportes-propietario/preview";
+        if (filtros.Count > 0) ruta += "?" + string.Join("&", filtros);
+        var resp = await api.GetAsync<ReportePreviewApi>(ruta, ct);
+        return resp is null
+            ? ReportePreviewDto.Vacio
+            : new ReportePreviewDto(resp.Consultas, resp.Visitas, resp.Objeciones ?? "");
     }
 
     private static object Cuerpo(ReportePropietarioDto r) => new
@@ -1001,67 +945,56 @@ public class HttpRequerimientoService(ApiClient api) : IRequerimientoService
 
 public class HttpLocalService(ApiClient api, HttpProspeccionService prospecciones) : ILocalService
 {
-    private List<LocalComercialDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<LocalComercialDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<LocalComercialDto> All() =>
-        _cache ??= Task.Run(Cargar).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<LocalComercialDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
-    public LocalComercialDto? ById(long id) =>
-        All().FirstOrDefault(item => item.Id == id);
-
-    private async Task<List<LocalComercialDto>> Cargar()
+    public async Task<IReadOnlyList<LocalComercialDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        var items = await api.GetTodasPaginasAsync<LocalApi>("locales");
-        return items.Select(Mapear).ToList();
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
     }
 
-    public LocalComercialDto Agregar(LocalComercialDto local)
-    {
-        var creado = Task.Run(() => api.PostAsync<LocalApi>("locales", Request(local)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el local registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
-        prospecciones.Invalidar();
-        return dto;
-    }
+    public Task<LocalComercialDto?> ByIdAsync(long id, CancellationToken ct = default) =>
+        ObtenerAsync(id, ct);
 
-    public LocalComercialDto Actualizar(LocalComercialDto local)
+    public async Task<LocalComercialDto?> ObtenerAsync(long id, CancellationToken ct = default)
     {
-        var actualizado = Task.Run(() =>
-                api.PutAsync<LocalApi>($"locales/{local.Id}", Request(local)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el local actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        prospecciones.Invalidar();
-        return dto;
+        if (id <= 0)
+            return null;
+
+        var lista = await _cache.ObtenerAsync(ct);
+        var cacheado = lista.FirstOrDefault(item => item.Id == id);
+        if (cacheado is not null)
+            return cacheado;
+
+        var respuesta = await api.GetAsync<LocalApi>($"locales/{id}", ct);
+        return respuesta is null ? null : Mapear(respuesta);
     }
 
     public async Task<LocalComercialDto> AgregarAsync(LocalComercialDto local, CancellationToken ct = default)
     {
         var creado = await api.PostAsync<LocalApi>("locales", Request(local), ct)
             ?? throw new InvalidOperationException("El API no devolvio el local registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
+        _cache.Invalidar();
         prospecciones.Invalidar();
-        return dto;
+        return Mapear(creado);
     }
 
     public async Task<LocalComercialDto> ActualizarAsync(LocalComercialDto local, CancellationToken ct = default)
     {
         var actualizado = await api.PutAsync<LocalApi>($"locales/{local.Id}", Request(local), ct)
             ?? throw new InvalidOperationException("El API no devolvio el local actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
+        _cache.Invalidar();
         prospecciones.Invalidar();
-        return dto;
+        return Mapear(actualizado);
+    }
+
+    private static async Task<IReadOnlyList<LocalComercialDto>> CargarAsync(ApiClient api, CancellationToken ct)
+    {
+        var items = await api.GetTodasPaginasAsync<LocalApi>("locales", ct: ct);
+        return items.Select(Mapear).ToList();
     }
 
     private static LocalComercialDto Mapear(LocalApi item) => new()
@@ -1217,30 +1150,29 @@ public class HttpPublicacionService(ApiClient api) : IPublicacionService
 
 public class HttpProspeccionService(ApiClient api) : IProspeccionService
 {
-    private List<ProspeccionDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<ProspeccionDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<ProspeccionDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<ProspeccionDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
     public async Task<IReadOnlyList<ProspeccionDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _cache = await Cargar(ct);
-        return _cache;
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
     }
 
-    public ProspeccionDto? ById(long id) =>
-        All().FirstOrDefault(item => item.Id == id);
+    public async Task<ProspeccionDto?> ByIdAsync(long id, CancellationToken ct = default)
+    {
+        var lista = await _cache.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item => item.Id == id);
+    }
 
     public async Task<ProspeccionDto?> ObtenerAsync(long id, CancellationToken ct = default)
     {
         if (id <= 0)
             return null;
         var remoto = await api.GetAsync<ProspeccionApi>($"prospecciones/{id}", ct);
-        if (remoto is null)
-            return null;
-        var dto = Mapear(remoto);
-        ActualizarCache(dto);
-        return dto;
+        return remoto is null ? null : Mapear(remoto);
     }
 
     public async Task<PageResult<ProspeccionDto>> ListarPaginaAsync(
@@ -1283,47 +1215,35 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
             respuesta?.PageSize ?? tamano);
     }
 
-    public IReadOnlyList<ProspeccionDto> PorRecontactar(int diasAviso)
-    {
-        // Vencido = ultima accion de seguimiento hace diasAviso dias o mas (prospeccion viva).
-        var limite = DateOnly.FromDateTime(DateTime.Today).AddDays(-Math.Max(0, diasAviso));
-        return All()
-            .Where(item => item.Estado is "C" or "R" or "E" or "S"
-                && item.FechaRecontacto is { } fecha
-                && fecha <= limite)
-            .OrderBy(item => item.FechaRecontacto)
-            .ToList();
-    }
+    public Task<ProspeccionDto> ContactarAsync(long id, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/contactar", new { }, ct));
 
-    public ProspeccionDto Contactar(long id) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/contactar", new { }));
+    public Task<ProspeccionDto> RegistrarReunionAsync(long id, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/reunion", new { }, ct));
 
-    public ProspeccionDto RegistrarReunion(long id) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/reunion", new { }));
+    public Task<ProspeccionDto> EntregarPropuestaAsync(long id, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/propuesta", new { }, ct));
 
-    public ProspeccionDto EntregarPropuesta(long id) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/propuesta", new { }));
+    public Task<ProspeccionDto> RegistrarSeguimientoAsync(long id, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/seguimiento", new { }, ct));
 
-    public ProspeccionDto RegistrarSeguimiento(long id) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/seguimiento", new { }));
+    public Task<ProspeccionDto> RechazarAsync(long id, string motivo, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/rechazar", new { motivo }, ct));
 
-    public ProspeccionDto Rechazar(long id, string motivo) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/rechazar", new { motivo }));
+    public Task<ProspeccionDto> DescartarAsync(long id, string motivo, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/descartar", new { motivo }, ct));
 
-    public ProspeccionDto Descartar(long id, string motivo) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/descartar", new { motivo }));
+    public Task<ProspeccionDto> CaptarAsync(long id, decimal comisionPactada, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/captar", new { comisionPactada }, ct));
 
-    public ProspeccionDto Captar(long id, decimal comisionPactada) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/captar", new { comisionPactada }));
-
-    public ProspeccionDto MarcarCaptado(long id, string codigoCaptacion) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>(
+    public Task<ProspeccionDto> MarcarCaptadoAsync(long id, string codigoCaptacion, CancellationToken ct = default) =>
+        ActualizarAsync(() => api.PostAsync<ProspeccionApi>(
             $"prospecciones/{id}/marcar-captado",
-            new { codigoCaptacion }));
+            new { codigoCaptacion }, ct));
 
-    internal void Invalidar() => _cache = null;
+    internal void Invalidar() => _cache.Invalidar();
 
-    private async Task<List<ProspeccionDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<ProspeccionDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var items = await api.GetTodasPaginasAsync<ProspeccionApi>("prospecciones", ct: ct);
         return items.Select(Mapear).ToList();
@@ -1343,24 +1263,13 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
         return filtros.Count == 0 ? "prospecciones" : $"prospecciones?{string.Join("&", filtros)}";
     }
 
-    private ProspeccionDto Actualizar(Func<Task<ProspeccionApi?>> operacion)
+    private async Task<ProspeccionDto> ActualizarAsync(Func<Task<ProspeccionApi?>> operacion)
     {
-        // La llamada HTTP se crea DENTRO de Task.Run (hilo del pool, sin
-        // SynchronizationContext). Crearla en el contexto del circuito y luego
-        // bloquear con GetResult() interbloquea el circuito de Blazor Server.
-        var respuesta = Task.Run(operacion).GetAwaiter().GetResult()
+        var respuesta = await operacion()
             ?? throw new InvalidOperationException("El API no devolvio la prospeccion actualizada.");
         var dto = Mapear(respuesta);
-        ActualizarCache(dto);
+        _cache.Invalidar();
         return dto;
-    }
-
-    private void ActualizarCache(ProspeccionDto actualizada)
-    {
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == actualizada.Id);
-        if (indice >= 0) _cache[indice] = actualizada;
-        else _cache.Insert(0, actualizada);
     }
 
     private static ProspeccionDto Mapear(ProspeccionApi item) => new()
@@ -1418,6 +1327,14 @@ public class HttpTareaService(ApiClient api) : ITareaService
         return items?.Select(Map).ToList() ?? [];
     }
 
+    public async Task<PageResult<TareaDto>> BandejaPaginaAsync(
+        int pagina = 1, int tamano = 5, CancellationToken ct = default)
+    {
+        var page = await api.GetPaginaAsync<TareaApi>("tareas/pendientes", pagina, tamano, ct);
+        var items = page?.Items.Select(Map).ToList() ?? [];
+        return new PageResult<TareaDto>(items, page?.TotalRecords ?? items.Count, page?.Page ?? pagina, page?.PageSize ?? tamano);
+    }
+
     public Task CancelarAsync(long idTarea, CancellationToken ct = default) =>
         api.PostAsync<object>($"tareas/{idTarea}/cancelar", new { }, ct);
 
@@ -1438,56 +1355,88 @@ public class HttpTareaService(ApiClient api) : ITareaService
     };
 }
 
+// Dashboard agregado: una sola llamada trae indicadores + primera pagina de la bandeja.
+public sealed record DashboardDto(IndicadoresDto Indicadores, PageResult<TareaDto> Bandeja);
+
+public interface IDashboardService
+{
+    Task<DashboardDto> CargarAsync(string periodo, CancellationToken ct = default);
+}
+
+internal sealed record DashboardApi(IndicadoresDto? Indicadores, PaginaApi<TareaApi>? Bandeja);
+
+public class HttpDashboardService(ApiClient api) : IDashboardService
+{
+    public async Task<DashboardDto> CargarAsync(string periodo, CancellationToken ct = default)
+    {
+        var periodoSeguro = string.IsNullOrWhiteSpace(periodo) ? "6m" : periodo.Trim();
+        var resp = await api.GetAsync<DashboardApi>(
+            $"dashboard?periodo={Uri.EscapeDataString(periodoSeguro)}", ct);
+        var indicadores = resp?.Indicadores ?? IndicadoresDto.Vacio;
+        var bandeja = resp?.Bandeja;
+        var items = bandeja?.Items.Select(MapTarea).ToList() ?? new List<TareaDto>();
+        var pagina = new PageResult<TareaDto>(
+            items, bandeja?.TotalRecords ?? items.Count, bandeja?.Page ?? 1, bandeja?.PageSize ?? 5);
+        return new DashboardDto(indicadores, pagina);
+    }
+
+    private static TareaDto MapTarea(TareaApi t) => new()
+    {
+        Id = t.Id,
+        Tipo = t.Tipo ?? "",
+        EntidadTipo = t.EntidadTipo ?? "",
+        EntidadId = t.EntidadId ?? 0,
+        EntidadCodigo = t.EntidadCodigo ?? "",
+        RutaResolver = t.RutaResolver ?? "",
+        Descripcion = t.Descripcion ?? "",
+        Estado = t.Estado ?? "",
+        Prioridad = t.Prioridad ?? "",
+        FechaProgramada = t.FechaProgramada,
+        DiasSinAccion = t.DiasSinAccion,
+        FechaVencimiento = t.FechaVencimiento,
+    };
+}
+
 public class HttpCaptacionService(ApiClient api) : ICaptacionService
 {
-    private List<CaptacionDto>? _captaciones;
-    private List<BandejaCaptacionDto>? _bandeja;
+    private readonly CacheRemoto<IReadOnlyList<CaptacionDto>> _captaciones = new(ct => CargarCaptaciones(api, ct));
+    private readonly CacheRemoto<IReadOnlyList<BandejaCaptacionDto>> _bandeja = new(ct => CargarBandeja(api, ct));
 
-    public IReadOnlyList<CaptacionDto> All() =>
-        _captaciones ??= Task.Run(() => CargarCaptaciones()).GetAwaiter().GetResult();
-
-    public IReadOnlyList<BandejaCaptacionDto> Bandeja() =>
-        _bandeja ??= Task.Run(() => CargarBandeja()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<CaptacionDto>> AllAsync(CancellationToken ct = default) =>
+        _captaciones.ObtenerAsync(ct);
 
     // Recarga asincrona (sin bloquear el circuito) e invalida la cache: las
     // pantallas la invocan en OnInitializedAsync para ver siempre el estado
     // persistido por el otro rol (agente <-> broker) sin reconectar la sesion.
     public async Task<IReadOnlyList<CaptacionDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _captaciones = await CargarCaptaciones(ct);
-        return _captaciones;
+        _captaciones.Invalidar();
+        return await _captaciones.ObtenerAsync(ct);
+    }
+
+    public async Task<PageResult<CaptacionDto>> ListarReasignablesAsync(
+        int pagina = 1, int tamano = 8, string? query = null, CancellationToken ct = default)
+    {
+        var ruta = "captaciones/reasignables";
+        if (!string.IsNullOrWhiteSpace(query))
+            ruta += $"?q={Uri.EscapeDataString(query.Trim())}";
+        var page = await api.GetPaginaAsync<CaptacionApi>(ruta, pagina, tamano, ct);
+        var items = page?.Items.Select(Mapear).ToList() ?? [];
+        return new PageResult<CaptacionDto>(items, page?.TotalRecords ?? items.Count, page?.Page ?? pagina, page?.PageSize ?? tamano);
     }
 
     public async Task<IReadOnlyList<BandejaCaptacionDto>> RefrescarBandejaAsync(CancellationToken ct = default)
     {
-        _bandeja = await CargarBandeja(ct);
-        return _bandeja;
+        _bandeja.Invalidar();
+        return await _bandeja.ObtenerAsync(ct);
     }
 
-    public CaptacionDto? ByCodigo(string codigo) =>
-        All().FirstOrDefault(item => item.CodigoCaptacion.Equals(codigo, StringComparison.OrdinalIgnoreCase));
-
-    public CaptacionDto Agregar(CaptacionDto captacion)
+    public async Task<CaptacionDto?> ByCodigoAsync(string codigo, CancellationToken ct = default)
     {
-        var creada = Task.Run(() => api.PostAsync<CaptacionApi>("captaciones", Request(captacion)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio la captacion registrada.");
-        var dto = Mapear(creada);
-        ActualizarCache(dto);
-        _bandeja = null;
-        return dto;
-    }
-
-    public CaptacionDto Actualizar(CaptacionDto captacion)
-    {
-        var actualizada = Task.Run(() =>
-                api.PutAsync<CaptacionApi>($"captaciones/{captacion.Id}", Request(captacion)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio la captacion actualizada.");
-        var dto = Mapear(actualizada);
-        ActualizarCache(dto);
-        _bandeja = null;
-        return dto;
+        var lista = await _captaciones.ObtenerAsync(ct);
+        var encontrada = lista.FirstOrDefault(item =>
+            item.CodigoCaptacion.Equals(codigo, StringComparison.OrdinalIgnoreCase));
+        return encontrada ?? await ObtenerPorCodigoAsync(codigo, ct);
     }
 
     // Variantes async reales: el formulario las usa para no bloquear el circuito de
@@ -1496,20 +1445,18 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
     {
         var creada = await api.PostAsync<CaptacionApi>("captaciones", Request(captacion), ct)
             ?? throw new InvalidOperationException("El API no devolvio la captacion registrada.");
-        var dto = Mapear(creada);
-        ActualizarCache(dto);
-        _bandeja = null;
-        return dto;
+        _captaciones.Invalidar();
+        _bandeja.Invalidar();
+        return Mapear(creada);
     }
 
     public async Task<CaptacionDto> ActualizarAsync(CaptacionDto captacion, CancellationToken ct = default)
     {
         var actualizada = await api.PutAsync<CaptacionApi>($"captaciones/{captacion.Id}", Request(captacion), ct)
             ?? throw new InvalidOperationException("El API no devolvio la captacion actualizada.");
-        var dto = Mapear(actualizada);
-        ActualizarCache(dto);
-        _bandeja = null;
-        return dto;
+        _captaciones.Invalidar();
+        _bandeja.Invalidar();
+        return Mapear(actualizada);
     }
 
     public async Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default)
@@ -1518,24 +1465,16 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
         {
             var remota = await api.GetAsync<CaptacionApi>($"captaciones/codigo/{Uri.EscapeDataString(codigo)}", ct);
             if (remota is not null)
-            {
-                var dtoRemoto = Mapear(remota);
-                ActualizarCache(dtoRemoto);
-                return dtoRemoto;
-            }
+                return Mapear(remota);
         }
 
-        var encontrada = BuscarEnCache(codigo);
+        var captaciones = await _captaciones.ObtenerAsync(ct);
+        var encontrada = captaciones.FirstOrDefault(item =>
+            item.CodigoCaptacion.Equals(codigo, StringComparison.OrdinalIgnoreCase));
         if (encontrada is null)
         {
-            _captaciones ??= await CargarCaptaciones(ct);
-            encontrada = _captaciones.FirstOrDefault(item =>
-                item.CodigoCaptacion.Equals(codigo, StringComparison.OrdinalIgnoreCase));
-        }
-        if (encontrada is null)
-        {
-            _bandeja ??= await CargarBandeja(ct);
-            encontrada = Mapear(_bandeja.FirstOrDefault(item =>
+            var bandeja = await _bandeja.ObtenerAsync(ct);
+            encontrada = Mapear(bandeja.FirstOrDefault(item =>
                 item.CodigoCaptacion.Equals(codigo, StringComparison.OrdinalIgnoreCase)));
         }
 
@@ -1544,10 +1483,7 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
             return encontrada;
 
         var respuesta = await api.GetAsync<CaptacionApi>($"captaciones/{id}", ct);
-        var actualizada = respuesta is null ? encontrada : Mapear(respuesta);
-        if (actualizada is not null)
-            ActualizarCache(actualizada);
-        return actualizada;
+        return respuesta is null ? encontrada : Mapear(respuesta);
     }
 
     public async Task<CaptacionDto?> ObtenerPorIdAsync(long id, CancellationToken ct = default)
@@ -1556,10 +1492,8 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
             return null;
         var respuesta = await api.GetAsync<CaptacionApi>($"captaciones/{id}", ct);
         if (respuesta is null)
-            return _captaciones?.FirstOrDefault(item => item.Id == id);
-        var dto = Mapear(respuesta);
-        ActualizarCache(dto);
-        return dto;
+            return (await _captaciones.ObtenerAsync(ct)).FirstOrDefault(item => item.Id == id);
+        return Mapear(respuesta);
     }
 
     public async Task ResolverBandejaAsync(
@@ -1572,16 +1506,14 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
         if (accion is "OBSERVAR" or "RECHAZAR" && string.IsNullOrWhiteSpace(observacion))
             throw new InvalidOperationException("Debes ingresar un motivo para continuar.");
 
-        var actual = BuscarEnCache(codigo)
-            ?? await ObtenerPorCodigoAsync(codigo, ct)
+        var actual = await ObtenerPorCodigoAsync(codigo, ct)
             ?? throw new InvalidOperationException("Captacion no encontrada.");
-        var respuesta = await api.PostAsync<CaptacionApi>(
+        await api.PostAsync<CaptacionApi>(
             $"captaciones/{actual.Id}/decision",
             new { accion, observacion },
             ct);
-        if (respuesta is not null)
-            ActualizarCache(Mapear(respuesta));
-        _bandeja?.RemoveAll(item => item.CodigoCaptacion == codigo);
+        _captaciones.Invalidar();
+        _bandeja.Invalidar();
     }
 
     public async Task ReasignarBandejaAsync(
@@ -1592,63 +1524,38 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
     {
         if (idNuevoAgente <= 0 || string.IsNullOrWhiteSpace(motivo))
             throw new InvalidOperationException("Selecciona un agente destino e ingresa el motivo.");
-        var actual = BuscarEnCache(codigo)
-            ?? await ObtenerPorCodigoAsync(codigo, ct)
+        var actual = await ObtenerPorCodigoAsync(codigo, ct)
             ?? throw new InvalidOperationException("Captacion no encontrada.");
-        var respuesta = await api.PostAsync<CaptacionApi>(
+        await api.PostAsync<CaptacionApi>(
             $"captaciones/{actual.Id}/reasignar",
             new { idAgenteNuevo = idNuevoAgente, motivo },
             ct);
-        if (respuesta is not null)
-            ActualizarCache(Mapear(respuesta));
-        _bandeja = null;
+        _captaciones.Invalidar();
+        _bandeja.Invalidar();
     }
 
     public async Task CerrarAsync(long id, string motivo, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(motivo))
             throw new InvalidOperationException("El motivo de cierre es obligatorio.");
-        var respuesta = await api.PostAsync<CaptacionApi>(
+        await api.PostAsync<CaptacionApi>(
             $"captaciones/{id}/cierre",
             new { motivo = motivo.Trim() },
             ct);
-        if (respuesta is not null)
-            ActualizarCache(Mapear(respuesta));
-        _bandeja = null;
+        _captaciones.Invalidar();
+        _bandeja.Invalidar();
     }
 
-    private async Task<List<CaptacionDto>> CargarCaptaciones(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<CaptacionDto>> CargarCaptaciones(ApiClient api, CancellationToken ct)
     {
         var items = await api.GetTodasPaginasAsync<CaptacionApi>("captaciones", ct: ct);
         return items.Select(Mapear).ToList();
     }
 
-    private async Task<List<BandejaCaptacionDto>> CargarBandeja(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<BandejaCaptacionDto>> CargarBandeja(ApiClient api, CancellationToken ct)
     {
         var pagina = await api.GetPaginaAsync<CaptacionApi>("captaciones/pendientes", 1, 100, ct);
         return pagina?.Items.Select(MapearBandeja).ToList() ?? [];
-    }
-
-    private void ActualizarCache(CaptacionDto actualizada)
-    {
-        _captaciones ??= [];
-        var indice = _captaciones.FindIndex(item => item.CodigoCaptacion == actualizada.CodigoCaptacion);
-        if (indice >= 0)
-            _captaciones[indice] = actualizada;
-        else
-            _captaciones.Add(actualizada);
-    }
-
-    private CaptacionDto? BuscarEnCache(string codigo)
-    {
-        var captacion = _captaciones?.FirstOrDefault(item =>
-            item.CodigoCaptacion.Equals(codigo, StringComparison.OrdinalIgnoreCase));
-        if (captacion is not null)
-            return captacion;
-
-        var bandeja = _bandeja?.FirstOrDefault(item =>
-            item.CodigoCaptacion.Equals(codigo, StringComparison.OrdinalIgnoreCase));
-        return Mapear(bandeja);
     }
 
     private static CaptacionDto? Mapear(BandejaCaptacionDto? item) => item is null ? null : new CaptacionDto
@@ -1741,16 +1648,17 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
 
 public class HttpAgenteService(ApiClient api) : IAgenteService
 {
-    private List<AgenteDto>? _agentes;
+    private readonly CacheRemoto<IReadOnlyList<AgenteDto>> _agentes = new(ct => CargarAgentes(api, ct));
 
-    public IReadOnlyList<AgenteDto> All() =>
-        _agentes ??= CargarAgentesSinRomper();
+    public Task<IReadOnlyList<AgenteDto>> AllAsync(CancellationToken ct = default) =>
+        _agentes.ObtenerAsync(ct);
 
     public async Task<IReadOnlyList<AgenteDto>> RefrescarAsync(CancellationToken ct = default)
     {
+        _agentes.Invalidar();
         try
         {
-            _agentes = await CargarAgentes(ct);
+            return await _agentes.ObtenerAsync(ct);
         }
         catch (OperationCanceledException)
         {
@@ -1758,12 +1666,16 @@ public class HttpAgenteService(ApiClient api) : IAgenteService
         }
         catch
         {
-            _agentes ??= [];
+            // Resiliencia: la pantalla de agentes no debe romperse si el backend falla.
+            return [];
         }
-        return _agentes;
     }
 
-    public AgenteDto? ById(long id) => All().FirstOrDefault(item => item.Id == id);
+    public async Task<AgenteDto?> ByIdAsync(long id, CancellationToken ct = default)
+    {
+        var lista = await _agentes.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item => item.Id == id);
+    }
 
     // Agentes supervisados por un broker concreto (GET /brokers/{id}/agentes). Sirve para
     // acotar en la ficha del broker las solicitudes y la actividad de su equipo.
@@ -1776,31 +1688,20 @@ public class HttpAgenteService(ApiClient api) : IAgenteService
 
     // Alta/edición REST reales (antes eran solo memoria y no persistían). La BL del backend
     // crea persona + usuario_interno + agente y lo asigna al broker supervisor en sesión.
-    public AgenteDto Agregar(AgenteDto agente) =>
-        Task.Run(() => AgregarAsync(agente)).GetAwaiter().GetResult();
-
-    public AgenteDto Actualizar(AgenteDto agente) =>
-        Task.Run(() => ActualizarAsync(agente)).GetAwaiter().GetResult();
-
     public async Task<AgenteDto> AgregarAsync(AgenteDto agente, CancellationToken ct = default)
     {
         var creado = await api.PostAsync<AgenteApi>("agentes", Request(agente), ct)
             ?? throw new InvalidOperationException("El API no devolvio el agente registrado.");
-        var dto = Mapear(creado);
-        (_agentes ??= []).Add(dto);
-        return dto;
+        _agentes.Invalidar();
+        return Mapear(creado);
     }
 
     public async Task<AgenteDto> ActualizarAsync(AgenteDto agente, CancellationToken ct = default)
     {
         var actualizado = await api.PutAsync<AgenteApi>($"agentes/{agente.Id}", Request(agente), ct)
             ?? throw new InvalidOperationException("El API no devolvio el agente actualizado.");
-        var dto = Mapear(actualizado);
-        _agentes ??= [];
-        var indice = _agentes.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _agentes[indice] = dto;
-        else _agentes.Add(dto);
-        return dto;
+        _agentes.Invalidar();
+        return Mapear(actualizado);
     }
 
     private static object Request(AgenteDto a) => new
@@ -1826,27 +1727,15 @@ public class HttpAgenteService(ApiClient api) : IAgenteService
         _ => "D",
     };
 
-    public AgenteDto Desactivar(long id)
+    public async Task<AgenteDto> DesactivarAsync(long id, CancellationToken ct = default)
     {
-        var agente = ById(id) ?? throw new InvalidOperationException("Agente no encontrado.");
+        var agente = await ByIdAsync(id, ct) ?? throw new InvalidOperationException("Agente no encontrado.");
         agente.EstadoAdministrativo = "Inactivo";
         agente.EstadoOperativo = "No disponible";
         return agente;
     }
 
-    private List<AgenteDto> CargarAgentesSinRomper()
-    {
-        try
-        {
-            return Task.Run(() => CargarAgentes()).GetAwaiter().GetResult();
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    private async Task<List<AgenteDto>> CargarAgentes(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<AgenteDto>> CargarAgentes(ApiClient api, CancellationToken ct)
     {
         var pagina = await api.GetPaginaAsync<AgenteApi>("agentes", 1, 100, ct);
         return pagina?.Items.Select(Mapear).ToList() ?? [];
@@ -1912,22 +1801,22 @@ public class HttpAgenteService(ApiClient api) : IAgenteService
 
 public class HttpOportunidadService(ApiClient api) : IOportunidadService
 {
-    private List<OportunidadComercialDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<OportunidadComercialDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<OportunidadComercialDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<OportunidadComercialDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
     public async Task<IReadOnlyList<OportunidadComercialDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _cache = await Cargar(ct);
-        return _cache;
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
     }
 
-    public OportunidadComercialDto? ById(long id) =>
-        All().FirstOrDefault(item => item.Id == id);
-
-    public IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion) =>
-        All().Where(item => item.CaptacionCodigo == codigoCaptacion).ToList();
+    public async Task<OportunidadComercialDto?> ByIdAsync(long id, CancellationToken ct = default)
+    {
+        var lista = await _cache.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item => item.Id == id);
+    }
 
     public async Task<IReadOnlyList<OportunidadComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default)
     {
@@ -1939,11 +1828,6 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
     {
         var pagina = await api.GetPaginaAsync<OportunidadApi>($"oportunidades?idCliente={clienteId}", 1, 100, ct);
         return pagina?.Items.Select(Mapear).ToList() ?? [];
-    }
-
-    public OportunidadComercialDto Crear(OportunidadFormRequest request)
-    {
-        return CrearAsync(request).GetAwaiter().GetResult();
     }
 
     public async Task<OportunidadComercialDto> CrearAsync(
@@ -1974,21 +1858,8 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
         if (dto is null)
             throw new InvalidOperationException("La oportunidad se registro, pero no se pudo refrescar el seguimiento.");
         if (creada is not null)
-            ActualizarCache(dto);
+            _cache.Invalidar();
         return dto;
-    }
-
-    public OportunidadComercialDto MarcarSolicitudCreada(long id)
-    {
-        var oportunidad = ById(id)
-            ?? throw new InvalidOperationException("Oportunidad comercial no encontrada.");
-        oportunidad.Estado = "Solicitud creada";
-        return oportunidad;
-    }
-
-    public OportunidadComercialDto CerrarNoContinua(long id, string razon, string? observaciones)
-    {
-        return CerrarNoContinuaAsync(id, razon, observaciones).GetAwaiter().GetResult();
     }
 
     public async Task<OportunidadComercialDto> CerrarNoContinuaAsync(
@@ -2008,7 +1879,7 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
             : Mapear(actualizada);
         if (dto is null)
             throw new InvalidOperationException("La oportunidad se actualizo, pero no se pudo refrescar su estado.");
-        ActualizarCache(dto);
+        _cache.Invalidar();
         return dto;
     }
 
@@ -2023,24 +1894,16 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
             : Mapear(actualizada);
         if (dto is null)
             throw new InvalidOperationException("La oportunidad se cerro, pero no se pudo refrescar su estado.");
-        ActualizarCache(dto);
+        _cache.Invalidar();
         return dto;
     }
 
-    internal void Invalidar() => _cache = null;
+    internal void Invalidar() => _cache.Invalidar();
 
-    private async Task<List<OportunidadComercialDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<OportunidadComercialDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var items = await api.GetTodasPaginasAsync<OportunidadApi>("oportunidades", ct: ct);
         return items.Select(Mapear).ToList();
-    }
-
-    private void ActualizarCache(OportunidadComercialDto actualizada)
-    {
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == actualizada.Id);
-        if (indice >= 0) _cache[indice] = actualizada;
-        else _cache.Add(actualizada);
     }
 
     private static OportunidadComercialDto Mapear(OportunidadApi item) => new()
@@ -2066,15 +1929,34 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
 
 public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportunidades) : ISolicitudService
 {
-    private List<SolicitudAlquilerDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<SolicitudAlquilerDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<SolicitudAlquilerDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<SolicitudAlquilerDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
     public async Task<IReadOnlyList<SolicitudAlquilerDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _cache = await Cargar(ct);
-        return _cache;
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
+    }
+
+    public async Task<SolicitudAlquilerDto?> ObtenerAsync(string idOCodigo, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(idOCodigo))
+            return null;
+        var ruta = long.TryParse(idOCodigo.Trim(), out var id) && id > 0
+            ? $"solicitudes/{id}"
+            : $"solicitudes/codigo/{Uri.EscapeDataString(idOCodigo.Trim())}";
+        var item = await api.GetAsync<SolicitudApi>(ruta, ct);
+        return item is null ? null : Mapear(item);
+    }
+
+    public async Task<PageResult<SolicitudAlquilerDto>> ListarPaginaAsync(
+        int pagina = 1, int tamano = 20, CancellationToken ct = default)
+    {
+        var page = await api.GetPaginaAsync<SolicitudApi>("solicitudes", pagina, tamano, ct);
+        var items = page?.Items.Select(Mapear).ToList() ?? [];
+        return new PageResult<SolicitudAlquilerDto>(items, page?.TotalRecords ?? items.Count, page?.Page ?? pagina, page?.PageSize ?? tamano);
     }
 
     public async Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default)
@@ -2089,12 +1971,10 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
-    public SolicitudAlquilerDto? ByCodigo(string codigo) =>
-        All().FirstOrDefault(item => item.CodigoSolicitud.Equals(codigo, StringComparison.OrdinalIgnoreCase));
-
-    public SolicitudAlquilerDto Agregar(SolicitudFormRequest request)
+    public async Task<SolicitudAlquilerDto?> ByCodigoAsync(string codigo, CancellationToken ct = default)
     {
-        return AgregarAsync(request).GetAwaiter().GetResult();
+        var lista = await _cache.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item => item.CodigoSolicitud.Equals(codigo, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<SolicitudAlquilerDto> AgregarAsync(
@@ -2132,7 +2012,7 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
             }
 
             var reenviadaDto = Mapear(reenviada);
-            ActualizarCache(reenviadaDto);
+            _cache.Invalidar();
             oportunidades.Invalidar();
             return reenviadaDto;
         }
@@ -2146,7 +2026,7 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         }
 
         var dto = Mapear(respuesta);
-        ActualizarCache(dto);
+        _cache.Invalidar();
         oportunidades.Invalidar();
         return dto;
     }
@@ -2159,19 +2039,13 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
 
     private async Task<SolicitudApi?> BuscarSolicitudApiAsync(long id, CancellationToken ct)
     {
-        var pagina = await api.GetPaginaAsync<SolicitudApi>("solicitudes", 1, 100, ct);
-        return pagina?.Items.FirstOrDefault(item => item.Id == id);
+        return await api.GetAsync<SolicitudApi>($"solicitudes/{id}", ct);
     }
-
-    // Sincrono: solo por compatibilidad de la interfaz. Las pantallas usan la variante
-    // async (ReenviarAEvaluacionAsync), que no bloquea el circuito de Blazor Server.
-    public SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud) =>
-        Task.Run(() => ReenviarAEvaluacionAsync(codigoSolicitud)).GetAwaiter().GetResult();
 
     public async Task<SolicitudAlquilerDto> ReenviarAEvaluacionAsync(
         string codigoSolicitud, CancellationToken ct = default)
     {
-        var solicitud = ByCodigo(codigoSolicitud)
+        var solicitud = await ObtenerAsync(codigoSolicitud, ct)
             ?? throw new InvalidOperationException("Solicitud no encontrada.");
         var respuesta = await api.PostAsync<SolicitudApi>(
             $"solicitudes/{solicitud.Id}/reenviar", new { }, ct);
@@ -2180,19 +2054,14 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
             var actualizada = await BuscarSolicitudRegistradaAsync(solicitud.OportunidadId, ct);
             if (actualizada is not null)
             {
-                ActualizarCache(actualizada);
+                _cache.Invalidar();
                 return actualizada;
             }
             throw new InvalidOperationException("La solicitud se envio, pero no se pudo refrescar su estado.");
         }
         var dto = Mapear(respuesta);
-        ActualizarCache(dto);
+        _cache.Invalidar();
         return dto;
-    }
-
-    public EvaluacionSolicitudDto Evaluar(string codigoSolicitud, EvaluacionSolicitudDto evaluacion)
-    {
-        return EvaluarAsync(codigoSolicitud, evaluacion).GetAwaiter().GetResult();
     }
 
     public async Task<EvaluacionSolicitudDto> EvaluarAsync(
@@ -2200,7 +2069,7 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         EvaluacionSolicitudDto evaluacion,
         CancellationToken ct = default)
     {
-        var solicitud = ByCodigo(codigoSolicitud)
+        var solicitud = await ObtenerAsync(codigoSolicitud, ct)
             ?? throw new InvalidOperationException("Solicitud no encontrada.");
         var respuesta = await api.PostAsync<EvaluacionApi>("evaluaciones", new
             {
@@ -2211,22 +2080,14 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
             },
             ct);
 
-        _cache = null;
+        _cache.Invalidar();
         return respuesta is null ? evaluacion : Mapear(respuesta);
     }
 
-    private async Task<List<SolicitudAlquilerDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<SolicitudAlquilerDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var items = await api.GetTodasPaginasAsync<SolicitudApi>("solicitudes", ct: ct);
         return items.Select(Mapear).ToList();
-    }
-
-    private void ActualizarCache(SolicitudAlquilerDto solicitud)
-    {
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == solicitud.Id);
-        if (indice >= 0) _cache[indice] = solicitud;
-        else _cache.Insert(0, solicitud);
     }
 
     private static SolicitudAlquilerDto Mapear(SolicitudApi item) => new()
@@ -2300,19 +2161,38 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
 
 public class HttpContratoService(ApiClient api) : IContratoService
 {
-    private List<ContratoAlquilerDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<ContratoAlquilerDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<ContratoAlquilerDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<ContratoAlquilerDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
     public async Task<IReadOnlyList<ContratoAlquilerDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _cache = await Cargar(ct);
-        return _cache;
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
     }
 
-    public ContratoAlquilerDto? ByOportunidad(long oportunidadId) =>
-        All().FirstOrDefault(item => item.OportunidadId == oportunidadId);
+    public async Task<ContratoAlquilerDto?> ByOportunidadAsync(long oportunidadId, CancellationToken ct = default)
+    {
+        var lista = await _cache.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item => item.OportunidadId == oportunidadId);
+    }
+
+    public async Task<ContratoAlquilerDto?> ObtenerPorOportunidadAsync(
+        long oportunidadId, CancellationToken ct = default)
+    {
+        if (oportunidadId <= 0)
+            return null;
+        try
+        {
+            var item = await api.GetAsync<ContratoApi>($"contratos/oportunidad/{oportunidadId}", ct);
+            return item is null ? null : Mapear(item);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     public async Task<ContratoAlquilerDto> RegistrarAsync(
         ContratoFormRequest request, CancellationToken ct = default)
@@ -2326,9 +2206,8 @@ public class HttpContratoService(ApiClient api) : IContratoService
             },
             ct)
             ?? throw new InvalidOperationException("El API no devolvio el contrato registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Insert(0, dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(creado);
     }
 
     public async Task<ContratoAlquilerDto> AsignarComisionAsync(
@@ -2337,7 +2216,8 @@ public class HttpContratoService(ApiClient api) : IContratoService
         var actualizado = await api.PostAsync<ContratoApi>(
                 $"contratos/{idContrato}/comision/asignar", new { montoAgente }, ct)
             ?? throw new InvalidOperationException("El API no devolvio el contrato actualizado.");
-        return ReemplazarEnCache(Mapear(actualizado));
+        _cache.Invalidar();
+        return Mapear(actualizado);
     }
 
     public async Task<ContratoAlquilerDto> RegistrarCobroAsync(
@@ -2347,20 +2227,11 @@ public class HttpContratoService(ApiClient api) : IContratoService
                 $"contratos/{idContrato}/comision/cobro",
                 new { estado, fechaCobro, formaPago }, ct)
             ?? throw new InvalidOperationException("El API no devolvio el contrato actualizado.");
-        return ReemplazarEnCache(Mapear(actualizado));
+        _cache.Invalidar();
+        return Mapear(actualizado);
     }
 
-    private ContratoAlquilerDto ReemplazarEnCache(ContratoAlquilerDto dto)
-    {
-        if (_cache is not null)
-        {
-            var i = _cache.FindIndex(x => x.Id == dto.Id);
-            if (i >= 0) _cache[i] = dto; else _cache.Insert(0, dto);
-        }
-        return dto;
-    }
-
-    private async Task<List<ContratoAlquilerDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<ContratoAlquilerDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var items = await api.GetTodasPaginasAsync<ContratoApi>("contratos", ct: ct);
         return items.Select(Mapear).ToList();
@@ -2419,22 +2290,21 @@ public class HttpContratoService(ApiClient api) : IContratoService
 
 public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidades) : IVisitaService
 {
-    private List<VisitaDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<VisitaDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<VisitaDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<VisitaDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
     public async Task<IReadOnlyList<VisitaDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        _cache = await Cargar(ct);
-        return _cache;
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
     }
 
-    public VisitaDto? ById(long id) => All().FirstOrDefault(item => item.Id == id);
-
-    public VisitaDto Programar(VisitaFormRequest request)
+    public async Task<VisitaDto?> ByIdAsync(long id, CancellationToken ct = default)
     {
-        return ProgramarAsync(request).GetAwaiter().GetResult();
+        var lista = await _cache.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item => item.Id == id);
     }
 
     public async Task<VisitaDto> ProgramarAsync(VisitaFormRequest request, CancellationToken ct = default)
@@ -2457,25 +2327,16 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
             : Mapear(creada);
         if (dto is null)
             throw new InvalidOperationException("La visita se registro, pero no se pudo refrescar en la agenda.");
-        if (creada is not null)
-            (_cache ??= []).Insert(0, dto);
+        _cache.Invalidar();
         return dto;
     }
-
-    public VisitaDto Reprogramar(long id, string fechaTexto, string horaTexto) =>
-        ReprogramarAsync(id, fechaTexto, horaTexto).GetAwaiter().GetResult();
 
     public Task<VisitaDto> ReprogramarAsync(long id, string fechaTexto, string horaTexto, CancellationToken ct = default) =>
         ActualizarAsync(id, () => api.PatchAsync<VisitaApi>($"visitas/{id}/reprogramar", new
         {
             fechaVisita = ParseFecha(fechaTexto),
             horaVisita = ParseHora(horaTexto),
-        }, ct));
-
-    public VisitaDto Cancelar(long id, string motivo)
-    {
-        return CancelarAsync(id, motivo).GetAwaiter().GetResult();
-    }
+        }, ct), ct);
 
     public Task<VisitaDto> CancelarAsync(long id, string motivo, CancellationToken ct = default)
     {
@@ -2484,19 +2345,11 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
         return ActualizarAsync(id, () => api.PatchAsync<VisitaApi>(
             $"visitas/{id}/cancelar",
             new { motivo = motivo.Trim() },
-            ct));
+            ct), ct);
     }
-
-    public VisitaDto MarcarRealizada(long id) =>
-        MarcarRealizadaAsync(id).GetAwaiter().GetResult();
 
     public Task<VisitaDto> MarcarRealizadaAsync(long id, CancellationToken ct = default) =>
-        ActualizarAsync(id, () => api.PatchAsync<VisitaApi>($"visitas/{id}/realizar", new { }, ct));
-
-    public VisitaDto MarcarNoRealizada(long id, string motivo)
-    {
-        return MarcarNoRealizadaAsync(id, motivo).GetAwaiter().GetResult();
-    }
+        ActualizarAsync(id, () => api.PatchAsync<VisitaApi>($"visitas/{id}/realizar", new { }, ct), ct);
 
     public Task<VisitaDto> MarcarNoRealizadaAsync(long id, string motivo, CancellationToken ct = default)
     {
@@ -2505,12 +2358,7 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
         return ActualizarAsync(id, () => api.PatchAsync<VisitaApi>(
             $"visitas/{id}/no-realizada",
             new { motivo = motivo.Trim() },
-            ct));
-    }
-
-    public VisitaDto RegistrarResultado(long id, VisitaResultadoRequest request)
-    {
-        return RegistrarResultadoAsync(id, request).GetAwaiter().GetResult();
+            ct), ct);
     }
 
     public async Task<VisitaDto> RegistrarResultadoAsync(
@@ -2530,30 +2378,27 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
                 request.OpinionPrecio,
                 request.ProximaAccion,
             },
-            ct));
+            ct), ct);
         if (request.Resultado is "N" or "D")
             oportunidades.Invalidar();
         return actualizada;
     }
 
-    private async Task<List<VisitaDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<VisitaDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var pagina = await api.GetPaginaAsync<VisitaApi>("visitas", 1, 100, ct);
         return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
-    private async Task<VisitaDto> ActualizarAsync(long id, Func<Task<VisitaApi?>> operacion)
+    private async Task<VisitaDto> ActualizarAsync(long id, Func<Task<VisitaApi?>> operacion, CancellationToken ct = default)
     {
         var respuesta = await operacion();
         var dto = respuesta is null
-            ? (await RefrescarAsync()).FirstOrDefault(item => item.Id == id)
+            ? (await RefrescarAsync(ct)).FirstOrDefault(item => item.Id == id)
             : Mapear(respuesta);
         if (dto is null)
             throw new InvalidOperationException("La visita se actualizo, pero no se pudo refrescar su estado.");
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
+        _cache.Invalidar();
         return dto;
     }
 
@@ -2683,23 +2528,15 @@ public class HttpDocumentoSolicitudService(ApiClient api) : IDocumentoSolicitudS
 
 public class HttpInteraccionService(ApiClient api) : IInteraccionService
 {
-    private List<InteraccionComercialDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<InteraccionComercialDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<InteraccionComercialDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<InteraccionComercialDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
-    public InteraccionComercialDto? ById(long id)
+    public async Task<InteraccionComercialDto?> ByIdAsync(long id, CancellationToken ct = default)
     {
-        var item = Task.Run(() => api.GetAsync<InteraccionApi>($"interacciones/{id}"))
-            .GetAwaiter().GetResult();
-        if (item is null)
-            return null;
-        var dto = Mapear(item);
-        _cache ??= [];
-        var indice = _cache.FindIndex(actual => actual.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Insert(0, dto);
-        return dto;
+        var item = await api.GetAsync<InteraccionApi>($"interacciones/{id}", ct);
+        return item is null ? null : Mapear(item);
     }
 
     public async Task<PageResult<InteraccionComercialDto>> ListarPaginaAsync(
@@ -2720,23 +2557,12 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
             respuesta?.PageSize ?? tamano);
     }
 
-    public InteraccionComercialDto Agregar(InteraccionFormRequest request)
-    {
-        var creada = Task.Run(() => api.PostAsync<InteraccionApi>("interacciones", Cuerpo(request)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio la interaccion registrada.");
-        var dto = Mapear(creada);
-        (_cache ??= []).Insert(0, dto);
-        return dto;
-    }
-
     public async Task<InteraccionComercialDto> AgregarAsync(InteraccionFormRequest request, CancellationToken ct = default)
     {
         var creada = await api.PostAsync<InteraccionApi>("interacciones", Cuerpo(request), ct)
             ?? throw new InvalidOperationException("El API no devolvio la interaccion registrada.");
-        var dto = Mapear(creada);
-        (_cache ??= []).Insert(0, dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(creada);
     }
 
     public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default)
@@ -2767,24 +2593,19 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
-    public InteraccionComercialDto Actualizar(long id, string? resultado = null, string? observaciones = null)
+    public async Task<InteraccionComercialDto> ActualizarAsync(long id, string? resultado = null, string? observaciones = null, CancellationToken ct = default)
     {
-        var actualizada = Task.Run(() => api.PutAsync<InteraccionApi>($"interacciones/{id}", new
+        var actualizada = await api.PutAsync<InteraccionApi>($"interacciones/{id}", new
             {
                 resultado,
                 observaciones,
-            }))
-            .GetAwaiter().GetResult()
+            }, ct)
             ?? throw new InvalidOperationException("El API no devolvio la interaccion actualizada.");
-        var dto = Mapear(actualizada);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Insert(0, dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(actualizada);
     }
 
-    private async Task<List<InteraccionComercialDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<InteraccionComercialDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var pagina = await api.GetPaginaAsync<InteraccionApi>("interacciones", 1, 100, ct);
         return pagina?.Items.Select(Mapear).ToList() ?? [];
@@ -2827,6 +2648,7 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         ClienteId = item.IdCliente ?? 0,
         PropietarioId = item.IdPropietario ?? 0,
         CodigoProspeccion = item.CodigoProspeccion ?? "",
+        FechaHora = item.FechaHora,
         FechaHoraTexto = item.FechaHora?.ToString("dd MMM yyyy · HH:mm", CultureInfo.GetCultureInfo("es-PE")) ?? "",
         CanalContacto = item.CanalContacto ?? "",
         Resultado = item.Resultado ?? "",
@@ -2841,44 +2663,9 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
     };
 }
 
-public class HttpReasignacionCaptacionService(
-    ApiClient api,
-    ICaptacionService captaciones,
-    HttpAgenteService agentes) : IReasignacionCaptacionService
+public class HttpReasignacionCaptacionService(ApiClient api) : IReasignacionCaptacionService
 {
-    private static readonly string[] NoReasignables = { "Rechazada", "Cerrada", "Vencida" };
-
-    public IReadOnlyList<CaptacionDto> Reasignables() =>
-        captaciones.All().Where(item => !NoReasignables.Contains(item.Estado)).ToList();
-
-    public IReadOnlyList<AgenteDto> AgentesDestino() => agentes.All();
-
-    public IReadOnlyList<ReasignacionCaptacionDto> Historial() =>
-        Task.Run(() => CargarHistorial()).GetAwaiter().GetResult();
-
-    public ReasignacionCaptacionDto Reasignar(ReasignarCaptacionRequest request)
-    {
-        if (request.AgenteNuevoId <= 0)
-            throw new InvalidOperationException("Selecciona el agente destino.");
-        if (string.IsNullOrWhiteSpace(request.Motivo))
-            throw new InvalidOperationException("Debes ingresar un motivo para continuar.");
-
-        // El broker responsable lo toma el backend del JWT; aqui solo van id y motivo.
-        Task.Run(() => api.PostAsync<CaptacionApi>(
-                $"captaciones/{request.CaptacionId}/reasignar",
-                new { idAgenteNuevo = request.AgenteNuevoId, motivo = request.Motivo.Trim() }))
-            .GetAwaiter().GetResult();
-
-        // Refresca captaciones para que Reasignables refleje el nuevo responsable.
-        Task.Run(() => captaciones.RefrescarAsync()).GetAwaiter().GetResult();
-
-        var historial = Task.Run(() => CargarHistorial()).GetAwaiter().GetResult();
-        return historial.FirstOrDefault(item => item.CaptacionId == request.CaptacionId)
-            ?? throw new InvalidOperationException(
-                "La reasignacion se registro pero no se pudo recuperar del historial.");
-    }
-
-    private async Task<List<ReasignacionCaptacionDto>> CargarHistorial(CancellationToken ct = default)
+    public async Task<IReadOnlyList<ReasignacionCaptacionDto>> HistorialAsync(CancellationToken ct = default)
     {
         var lista = await api.GetAsync<List<ReasignacionCaptacionApi>>("captaciones/reasignaciones", ct);
         return lista?.Select(Mapear).ToList() ?? [];
@@ -2904,61 +2691,41 @@ public class HttpReasignacionCaptacionService(
 
 public class HttpBrokerService(ApiClient api) : IBrokerService
 {
-    private List<BrokerDto>? _cache;
+    private readonly CacheRemoto<IReadOnlyList<BrokerDto>> _cache = new(ct => CargarAsync(api, ct));
 
-    public IReadOnlyList<BrokerDto> All() =>
-        _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
+    public Task<IReadOnlyList<BrokerDto>> AllAsync(CancellationToken ct = default) =>
+        _cache.ObtenerAsync(ct);
 
-    public BrokerDto? ById(string codigoBroker) =>
-        All().FirstOrDefault(item => item.CodigoBroker.Equals(codigoBroker, StringComparison.OrdinalIgnoreCase));
-
-    public BrokerDto First() => All().FirstOrDefault() ?? new BrokerDto();
-
-    public BrokerDto Agregar(BrokerDto broker)
+    public async Task<IReadOnlyList<BrokerDto>> RefrescarAsync(CancellationToken ct = default)
     {
-        var creado = Task.Run(() => api.PostAsync<BrokerApi>("brokers", Request(broker)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el broker registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
-        return dto;
+        _cache.Invalidar();
+        return await _cache.ObtenerAsync(ct);
     }
 
-    public BrokerDto Actualizar(BrokerDto broker)
+    public async Task<BrokerDto?> ByCodigoAsync(string codigoBroker, CancellationToken ct = default)
     {
-        var actualizado = Task.Run(() => api.PutAsync<BrokerApi>($"brokers/{broker.Id}", Request(broker)))
-            .GetAwaiter().GetResult()
-            ?? throw new InvalidOperationException("El API no devolvio el broker actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        return dto;
+        var lista = await _cache.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item =>
+            item.CodigoBroker.Equals(codigoBroker, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<BrokerDto> AgregarAsync(BrokerDto broker, CancellationToken ct = default)
     {
         var creado = await api.PostAsync<BrokerApi>("brokers", Request(broker), ct)
             ?? throw new InvalidOperationException("El API no devolvio el broker registrado.");
-        var dto = Mapear(creado);
-        (_cache ??= []).Add(dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(creado);
     }
 
     public async Task<BrokerDto> ActualizarAsync(BrokerDto broker, CancellationToken ct = default)
     {
         var actualizado = await api.PutAsync<BrokerApi>($"brokers/{broker.Id}", Request(broker), ct)
             ?? throw new InvalidOperationException("El API no devolvio el broker actualizado.");
-        var dto = Mapear(actualizado);
-        _cache ??= [];
-        var indice = _cache.FindIndex(item => item.Id == dto.Id);
-        if (indice >= 0) _cache[indice] = dto;
-        else _cache.Add(dto);
-        return dto;
+        _cache.Invalidar();
+        return Mapear(actualizado);
     }
 
-    private async Task<List<BrokerDto>> Cargar(CancellationToken ct = default)
+    private static async Task<IReadOnlyList<BrokerDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
         var pagina = await api.GetPaginaAsync<BrokerApi>("brokers", 1, 100, ct);
         return pagina?.Items.Select(Mapear).ToList() ?? [];
@@ -3018,18 +2785,6 @@ public class HttpBrokerService(ApiClient api) : IBrokerService
 
 public class HttpAssignmentService(ApiClient api) : IAssignmentService
 {
-    public IReadOnlyList<AssignAgentDto> Agents() =>
-        Task.Run(() => CargarAgentes()).GetAwaiter().GetResult();
-
-    public IReadOnlyList<AssignBrokerDto> Brokers() =>
-        Task.Run(() => CargarBrokers()).GetAwaiter().GetResult();
-
-    public IReadOnlyList<BrokerAgenteDto> Historial() =>
-        Task.Run(() => CargarHistorial()).GetAwaiter().GetResult();
-
-    public BrokerAgenteDto ReasignarAgente(string agenteId, string brokerId, string motivo) =>
-        Task.Run(() => ReasignarAgenteAsync(agenteId, brokerId, motivo)).GetAwaiter().GetResult();
-
     public async Task<IReadOnlyList<AssignAgentDto>> AgentsAsync(CancellationToken ct = default) =>
         await CargarAgentes(ct);
 
@@ -3159,7 +2914,7 @@ public class HttpAssignmentService(ApiClient api) : IAssignmentService
 
 public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore store) : INotificacionService
 {
-    private static readonly TimeSpan CacheBackendTtl = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan CacheBackendTtl = TimeSpan.FromSeconds(60);
     private List<NotificacionDto>? _cache;
     private DateTime _cacheGeneradaUtc = DateTime.MinValue;
 

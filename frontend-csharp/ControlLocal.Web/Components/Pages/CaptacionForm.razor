@@ -38,7 +38,7 @@
                             {
                                 <select @bind="_localId" @bind:after="CargarLocalSeleccionado">
                                     <option value="0">— Seleccionar local —</option>
-                                    @foreach (var local in LocalSvc.All().Where(item => item.Estado == "Disponible"))
+                                    @foreach (var local in _locales.Where(item => item.Estado == "Disponible"))
                                     {
                                         <option value="@local.Id">@local.CodigoLocal · @local.Direccion (@local.Distrito)</option>
                                     }
@@ -165,7 +165,11 @@
         new FormStepsSidebar.Step("Observaciones", "Notas para revisión", IsStep4Complete),
     };
 
-    protected override void OnParametersSet()
+    private IReadOnlyList<LocalComercialDto> _locales = new List<LocalComercialDto>();
+
+    protected override async Task OnInitializedAsync() => _locales = await LocalSvc.AllAsync();
+
+    protected override async Task OnParametersSetAsync()
     {
         var clave = $"{CodigoParam}|{ProspeccionId}|{LocalId}";
         if (_claveCargada == clave) return;
@@ -173,7 +177,7 @@
 
         if (_esCaptar)
         {
-            var prospeccion = ProspeccionSvc.ById(ProspeccionId);
+            var prospeccion = await ProspeccionSvc.ByIdAsync(ProspeccionId);
             if (prospeccion is null)
             {
                 _err = "No se encontró la prospección seleccionada.";
@@ -182,20 +186,20 @@
             if (prospeccion.Estado is not ("E" or "S"))
                 _err = "La prospección debe tener propuesta entregada o estar en seguimiento.";
             _localId = prospeccion.LocalId;
-            _local = CompletarLocal(LocalSvc.ById(_localId), prospeccion);
+            _local = CompletarLocal(await LocalSvc.ByIdAsync(_localId), prospeccion);
             return;
         }
 
         if (_esEdicion)
         {
-            _captacion = CaptacionSvc.ByCodigo(CodigoParam!) ?? new CaptacionDto();
+            _captacion = await CaptacionSvc.ByCodigoAsync(CodigoParam!) ?? new CaptacionDto();
             if (_captacion.Id <= 0)
             {
                 _err = "No se encontró la captación seleccionada.";
                 return;
             }
             _localId = _captacion.LocalId;
-            _local = LocalSvc.ById(_localId) ?? new LocalComercialDto
+            _local = await LocalSvc.ByIdAsync(_localId) ?? new LocalComercialDto
             {
                 Id = _localId,
                 Direccion = _captacion.DireccionLocal,
@@ -218,13 +222,13 @@
         if (LocalId > 0)
         {
             _localId = LocalId;
-            CargarLocalSeleccionado();
+            await CargarLocalSeleccionado();
         }
     }
 
-    private void CargarLocalSeleccionado()
+    private async Task CargarLocalSeleccionado()
     {
-        _local = _localId > 0 ? LocalSvc.ById(_localId) : null;
+        _local = _localId > 0 ? await LocalSvc.ByIdAsync(_localId) : null;
         _err = _localId > 0 && _local is null ? "No se encontró el local seleccionado." : null;
     }
 
@@ -290,7 +294,7 @@
                 ? await CaptacionSvc.ActualizarAsync(dto, DisposedToken)
                 : await CaptacionSvc.AgregarAsync(dto, DisposedToken);
             if (_esCaptar)
-                ProspeccionSvc.MarcarCaptado(ProspeccionId, guardada.CodigoCaptacion);
+                await ProspeccionSvc.MarcarCaptadoAsync(ProspeccionId, guardada.CodigoCaptacion);
 
             Notificaciones.Crear(new NotificacionDto
             {

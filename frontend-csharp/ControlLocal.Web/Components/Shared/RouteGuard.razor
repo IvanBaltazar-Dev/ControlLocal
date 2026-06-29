@@ -1,5 +1,7 @@
 @inject AppState App
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @if (_permitido)
 {
@@ -16,6 +18,8 @@ else if (_esperandoSesion)
 
     private bool _permitido;
     private bool _esperandoSesion;
+    private DotNetObjectReference<RouteGuard>? _sessionRef;
+    private string? _sessionSubscriptionId;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -31,6 +35,9 @@ else if (_esperandoSesion)
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+            await SuscribirSesionAsync();
+
         if (!_esperandoSesion) return;
 
         await App.EnsureInitializedAsync();
@@ -51,5 +58,46 @@ else if (_esperandoSesion)
         _permitido = App.IsAuthenticated && RouteAccess.CanAccess(RouteData.PageType, App.Role);
         if (!_permitido && redirigirSiFalla)
             NavigationManager.NavigateTo(App.IsAuthenticated ? "/acceso-denegado" : "/login");
+    }
+
+    private async Task SuscribirSesionAsync()
+    {
+        _sessionRef = DotNetObjectReference.Create(this);
+
+        try
+        {
+            _sessionSubscriptionId = await JS.InvokeAsync<string>(
+                "controlLocal.session.subscribe",
+                _sessionRef);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException)
+        {
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnBrowserSessionChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await App.ReloadSessionAsync();
+            NavigationManager.NavigateTo(App.IsAuthenticated ? "/dashboard" : "/login");
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_sessionSubscriptionId is not null)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("controlLocal.session.unsubscribe", _sessionSubscriptionId);
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException)
+            {
+            }
+        }
+
+        _sessionRef?.Dispose();
     }
 }

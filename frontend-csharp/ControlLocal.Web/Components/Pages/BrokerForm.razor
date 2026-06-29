@@ -128,10 +128,10 @@
         new FormStepsSidebar.Step("Estructura", "Solo lectura", IsStep3Complete),
     };
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        var broker = (string.IsNullOrWhiteSpace(CodigoParam) ? null : Brokers.ById(CodigoParam))
-                     ?? Brokers.All().FirstOrDefault() ?? new();
+        var broker = (string.IsNullOrWhiteSpace(CodigoParam) ? null : await Brokers.ByCodigoAsync(CodigoParam, DisposedToken))
+                     ?? (await Brokers.AllAsync(DisposedToken)).FirstOrDefault() ?? new();
 
         _codigoBroker = broker.CodigoBroker;
         _nombre = broker.Nombre;
@@ -161,9 +161,9 @@
     private async Task OnConfirm()
     {
         _confirm = false;
-        var anterior = Brokers.ById(_codigoBroker)
+        var anterior = await Brokers.ByCodigoAsync(_codigoBroker, DisposedToken)
             ?? throw new InvalidOperationException("Broker no encontrado.");
-        Brokers.Actualizar(new BrokerDto
+        await Brokers.ActualizarAsync(new BrokerDto
         {
             Id = anterior.Id,
             CodigoBroker = anterior.CodigoBroker,
@@ -184,7 +184,7 @@
             CaptacionesActivas = anterior.CaptacionesActivas,
             EstadoAdministrativo = _estado,
             EsAdministrador = anterior.EsAdministrador,
-        });
+        }, DisposedToken);
         _toast = true;
         await RenderIfAliveAsync();
         try

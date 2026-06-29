@@ -98,6 +98,14 @@ public class SolicitudAlquilerBusinessLogicImpl implements SolicitudAlquilerBusi
         return solicitudDAO.buscarPorId(idSolicitud);
     }
 
+    @Override
+    public Optional<SolicitudAlquiler> buscarPorCodigo(String codigoSolicitud) {
+        if (codigoSolicitud == null || codigoSolicitud.isBlank()) {
+            return Optional.empty();
+        }
+        return solicitudDAO.buscarPorCodigo(codigoSolicitud.trim());
+    }
+
     public List<SolicitudAlquiler> listarTodos() {
         return solicitudDAO.listarTodos();
     }

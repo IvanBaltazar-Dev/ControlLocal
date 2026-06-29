@@ -235,7 +235,7 @@
                 .OrderBy(x => x.Nombre)
                 .ToList();
             if (App.Role == Roles.Admin)
-                _brokers = BrokerSvc.All().OrderBy(b => b.Nombre).ToList();
+                _brokers = (await BrokerSvc.AllAsync(DisposedToken)).OrderBy(b => b.Nombre).ToList();
         }
         catch (OperationCanceledException) { }
         catch { /* opciones de filtro best-effort */ }

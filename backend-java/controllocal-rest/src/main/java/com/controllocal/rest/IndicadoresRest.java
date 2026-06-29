@@ -23,7 +23,9 @@ import com.controllocal.bl.OportunidadComercialBusinessLogic;
 import com.controllocal.bl.ProspeccionBusinessLogic;
 import com.controllocal.bl.SolicitudAlquilerBusinessLogic;
 import com.controllocal.bl.VisitaBusinessLogic;
+import com.controllocal.bl.MotivoNoContinuidadBusinessLogic;
 import com.controllocal.bl.impl.AgenteBusinessLogicImpl;
+import com.controllocal.bl.impl.MotivoNoContinuidadBusinessLogicImpl;
 import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.ContratoAlquilerBusinessLogicImpl;
@@ -39,6 +41,7 @@ import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.Prospeccion;
 import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.comercial.Visita;
+import com.controllocal.model.comercial.MotivoNoContinuidad;
 import com.controllocal.model.comercial.enums.EstadoCaptacion;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.comercial.enums.EstadoProspeccion;
@@ -82,6 +85,7 @@ public class IndicadoresRest {
     private final InteraccionComercialBusinessLogic interacciones = new InteraccionComercialBusinessLogicImpl();
     private final AgenteBusinessLogic agentes = new AgenteBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
+    private final MotivoNoContinuidadBusinessLogic motivosNoContinuidad = new MotivoNoContinuidadBusinessLogicImpl();
 
     @Context
     private HttpServletRequest request;
@@ -89,7 +93,12 @@ public class IndicadoresRest {
     @GET
     @Path("resumen")
     public Dtos.IndicadoresResponse resumen(@QueryParam("periodo") String periodoParam) {
-        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        return resumen(SeguridadRest.usuario(request), periodoParam);
+    }
+
+    // Reutilizable por DashboardRest: calcula el resumen para un usuario ya autenticado (sin tocar
+    // el HttpServletRequest), de modo que el endpoint agregado no repita el computo por separado.
+    Dtos.IndicadoresResponse resumen(UsuarioAutenticado usuario, String periodoParam) {
         boolean esAdmin = usuario.tieneRol("ADMIN");
         boolean esBroker = usuario.tieneRol("BROKER");
         // null = sin filtro (admin ve todo); en caso contrario, ids de agentes en alcance.
@@ -170,15 +179,16 @@ public class IndicadoresRest {
         int captacionesPorRevisar = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.PENDIENTE_REVISION).count();
         int captacionesObservadas = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.OBSERVADA).count();
         int captacionesActivas = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.ACTIVA).count();
-        int captacionesBloqueadas = (int) caps.stream()
-                .filter(c -> c.getEstado() == EstadoCaptacion.RECHAZADA
-                        || c.getEstado() == EstadoCaptacion.VENCIDA
-                        || c.getEstado() == EstadoCaptacion.CERRADA)
-                .count();
         int solicitudesPorEvaluar = (int) sols.stream().filter(s -> s.getEstado() == EstadoSolicitudAlquiler.EN_REVISION).count();
         int oportunidadesActivas = (int) ops.stream()
                 .filter(o -> o.getEstado() == EstadoOportunidadComercial.ABIERTA
                         || o.getEstado() == EstadoOportunidadComercial.SOLICITUD_CREADA)
+                .count();
+        int propiedadesEquipo = (int) caps.stream()
+                .filter(c -> c.getEstado() == EstadoCaptacion.ACTIVA)
+                .map(c -> c.getLocalComercial() != null ? c.getLocalComercial().getIdLocal() : null)
+                .filter(Objects::nonNull)
+                .distinct()
                 .count();
         int cierres = contsPeriodo.size();
 
@@ -238,11 +248,22 @@ public class IndicadoresRest {
                 new Dtos.IndicadorConteo("Con solicitud", etSolicitud),
                 new Dtos.IndicadorConteo("En evaluacion", etEvaluacion),
                 new Dtos.IndicadorConteo("Alquilada", etAlquilada));
+        // "Salud de captaciones" acotada al PERIODO (captaciones creadas en la ventana): asi el
+        // desglose de la dona responde al filtro. Los escalares globales (captacionesPorRevisar,
+        // etc.) se mantienen para los pills accionables del menu, que no dependen del periodo.
+        int saludActivas = (int) capsPeriodo.stream().filter(c -> c.getEstado() == EstadoCaptacion.ACTIVA).count();
+        int saludPorRevisar = (int) capsPeriodo.stream().filter(c -> c.getEstado() == EstadoCaptacion.PENDIENTE_REVISION).count();
+        int saludObservadas = (int) capsPeriodo.stream().filter(c -> c.getEstado() == EstadoCaptacion.OBSERVADA).count();
+        int saludBloqueadas = (int) capsPeriodo.stream()
+                .filter(c -> c.getEstado() == EstadoCaptacion.RECHAZADA
+                        || c.getEstado() == EstadoCaptacion.VENCIDA
+                        || c.getEstado() == EstadoCaptacion.CERRADA)
+                .count();
         List<Dtos.IndicadorConteo> captacionesSalud = List.of(
-                new Dtos.IndicadorConteo("Activas", captacionesActivas),
-                new Dtos.IndicadorConteo("Por revisar", captacionesPorRevisar),
-                new Dtos.IndicadorConteo("Observadas", captacionesObservadas),
-                new Dtos.IndicadorConteo("Bloqueadas/cerradas", captacionesBloqueadas));
+                new Dtos.IndicadorConteo("Activas", saludActivas),
+                new Dtos.IndicadorConteo("Por revisar", saludPorRevisar),
+                new Dtos.IndicadorConteo("Observadas", saludObservadas),
+                new Dtos.IndicadorConteo("Bloqueadas/cerradas", saludBloqueadas));
 
         // Embudo de conversion sobre las oportunidades en alcance.
         Set<Long> oportunidadesConVisita = visPeriodo.stream()
@@ -267,7 +288,17 @@ public class IndicadoresRest {
 
         Serie cierresSerie = cierresSerie(contsPeriodo, periodo, inicio, hoy);
         Serie captacionesSerie = captacionesSerie(capsPeriodo, periodo, inicio, hoy);
-        List<Integer> conversionSerie = conversionSerie(cierresSerie.valores(), captacionesSerie.valores());
+        // Conversion propia por COHORTE: de las captaciones nacidas en el periodo, cuantas ya
+        // cerraron (tienen contrato). La linea del ComboChart y la cifra agregada se calculan
+        // sobre la MISMA cohorte (captaciones del periodo agrupadas por fecha_captacion), por lo
+        // que nunca superan 100% -- corrige el antiguo cierres/captaciones que mezclaba cohortes.
+        List<Captacion> capsPeriodoCerradas = capsPeriodo.stream()
+                .filter(c -> c.getIdCaptacion() != null && capsConContrato.contains(c.getIdCaptacion()))
+                .toList();
+        Serie cierresCohorteSerie = captacionesSerie(capsPeriodoCerradas, periodo, inicio, hoy);
+        List<Integer> conversionSerie = conversionSerie(cierresCohorteSerie.valores(), captacionesSerie.valores());
+        int cierresCohorte = capsPeriodoCerradas.size();
+        int conversionPropia = porcentaje(cierresCohorte, capsPeriodo.size());
 
         List<Dtos.IndicadorDesempeno> desempeno = esAdmin
                 ? desempenoPorBroker(capsPeriodo, contsPeriodo)
@@ -292,8 +323,11 @@ public class IndicadoresRest {
                 intsPeriodo.size(),
                 visPeriodo.size(),
                 cierres,
+                cierresCohorte,
+                conversionPropia,
                 agentesActivos,
                 brokersActivos,
+                propiedadesEquipo,
                 cierresSerie.etiquetas(),
                 cierresSerie.valores(),
                 conversionSerie,
@@ -303,6 +337,159 @@ public class IndicadoresRest {
                 embudo,
                 desempeno,
                 operativo);
+    }
+
+    // RF-017: reporte de avance comercial por propiedad. Por cada captacion ACTIVA en alcance,
+    // resume las oportunidades generadas y su avance en el embudo (visitas, solicitudes, cierres
+    // por tipo), interesados, interacciones, tasas de conversion y motivo principal de no
+    // continuidad. Es una lectura ACUMULADA del estado actual de cada propiedad (no por periodo).
+    @GET
+    @Path("avance")
+    public Dtos.AvanceComercialResponse avance() {
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        boolean esAdmin = usuario.tieneRol("ADMIN");
+        boolean esBroker = usuario.tieneRol("BROKER");
+        Set<Long> alcance = agentesEnAlcance(usuario);
+
+        List<Captacion> caps = (alcance == null ? captaciones.listarTodos() : captaciones.listarPorAgentes(alcance))
+                .stream()
+                .filter(c -> enAlcance(alcance, idAgente(c.getAgenteResponsable())))
+                .filter(c -> c.getEstado() == EstadoCaptacion.ACTIVA)
+                .toList();
+        List<OportunidadComercial> ops = (alcance == null ? oportunidades.listarTodos() : oportunidades.listarPorAgentes(alcance))
+                .stream().filter(o -> enAlcance(alcance, idAgente(o.getAgenteResponsable()))).toList();
+        List<SolicitudAlquiler> sols = (alcance == null ? solicitudes.listarTodos() : solicitudes.listarPorAgentes(alcance))
+                .stream().filter(s -> enAlcance(alcance, idAgente(s.getAgenteResponsable()))).toList();
+        List<Visita> vis = (alcance == null ? visitas.listarTodos() : visitas.listarPorAgentes(alcance))
+                .stream().filter(v -> enAlcance(alcance, idAgente(v.getAgenteResponsable()))).toList();
+        List<InteraccionComercial> ints = (alcance == null ? interacciones.listarTodos() : interacciones.listarPorAgentes(alcance))
+                .stream().filter(i -> enAlcance(alcance, idAgente(i.getAgenteResponsable()))).toList();
+        List<MotivoNoContinuidad> motivos = motivosNoContinuidad.listarTodos();
+
+        List<Dtos.AvancePropiedad> detalle = new ArrayList<>();
+        Set<Long> interesadosGlobal = new HashSet<>();
+        int totalOpsGlobal = 0;
+
+        for (Captacion c : caps) {
+            Long idCap = c.getIdCaptacion();
+            if (idCap == null) {
+                continue;
+            }
+            List<OportunidadComercial> opsCap = ops.stream()
+                    .filter(o -> idCap.equals(idCaptacion(o.getCaptacion()))).toList();
+            Set<Long> idsOpsCap = opsCap.stream()
+                    .map(IndicadoresRest::idOportunidad).filter(Objects::nonNull).collect(Collectors.toSet());
+
+            int abiertas = (int) opsCap.stream().filter(o -> o.getEstado() == EstadoOportunidadComercial.ABIERTA).count();
+            int cerradasExitosas = (int) opsCap.stream().filter(o -> o.getEstado() == EstadoOportunidadComercial.FINALIZADA_EXITOSA).count();
+            int cerradasNoFav = (int) opsCap.stream().filter(o -> o.getEstado() == EstadoOportunidadComercial.FINALIZADA_NO_FAVORABLE).count();
+            int cerradasNoCont = (int) opsCap.stream().filter(o -> o.getEstado() == EstadoOportunidadComercial.NO_CONTINUA).count();
+
+            List<Visita> visCap = vis.stream()
+                    .filter(v -> { Long io = idOportunidad(v.getOportunidadComercial()); return io != null && idsOpsCap.contains(io); })
+                    .toList();
+            int visitasProgramadas = (int) visCap.stream()
+                    .filter(v -> v.getEstado() == EstadoVisita.PROGRAMADA || v.getEstado() == EstadoVisita.REPROGRAMADA).count();
+            int visitasConcretadas = (int) visCap.stream().filter(v -> v.getEstado() == EstadoVisita.REALIZADA).count();
+            Set<Long> opsConVisita = visCap.stream()
+                    .map(v -> idOportunidad(v.getOportunidadComercial())).filter(Objects::nonNull).collect(Collectors.toSet());
+            int oportunidadesConVisita = (int) idsOpsCap.stream().filter(opsConVisita::contains).count();
+
+            List<SolicitudAlquiler> solsCap = sols.stream()
+                    .filter(s -> idCap.equals(idCaptacion(s.getCaptacion()))
+                            || (s.getOportunidadComercial() != null && idsOpsCap.contains(idOportunidad(s.getOportunidadComercial()))))
+                    .toList();
+            int solicitudesRecibidas = solsCap.size();
+            Set<Long> opsConSolicitud = solsCap.stream()
+                    .map(s -> idOportunidad(s.getOportunidadComercial())).filter(Objects::nonNull).collect(Collectors.toSet());
+            int oportunidadesConSolicitud = (int) idsOpsCap.stream().filter(opsConSolicitud::contains).count();
+            // Respaldo por estado (SOLICITUD_CREADA/FINALIZADA_EXITOSA) si la solicitud no quedo enlazada.
+            int conSolicitudPorEstado = (int) opsCap.stream()
+                    .filter(o -> o.getEstado() == EstadoOportunidadComercial.SOLICITUD_CREADA
+                            || o.getEstado() == EstadoOportunidadComercial.FINALIZADA_EXITOSA).count();
+            oportunidadesConSolicitud = Math.max(oportunidadesConSolicitud, conSolicitudPorEstado);
+
+            Set<Long> interesados = new HashSet<>();
+            for (OportunidadComercial o : opsCap) {
+                if (o.getClienteInteresado() != null && o.getClienteInteresado().getIdCliente() != null) {
+                    interesados.add(o.getClienteInteresado().getIdCliente());
+                }
+            }
+            for (SolicitudAlquiler s : solsCap) {
+                if (s.getClienteInteresado() != null && s.getClienteInteresado().getIdCliente() != null) {
+                    interesados.add(s.getClienteInteresado().getIdCliente());
+                }
+            }
+            interesadosGlobal.addAll(interesados);
+
+            int interaccionesCap = (int) ints.stream().filter(i ->
+                    idCap.equals(idCaptacion(i.getCaptacion()))
+                            || (i.getOportunidadComercial() != null && idsOpsCap.contains(idOportunidad(i.getOportunidadComercial()))))
+                    .count();
+
+            int totalOps = opsCap.size();
+            totalOpsGlobal += totalOps;
+            int tasaOportVisita = porcentaje(oportunidadesConVisita, totalOps);
+            int tasaOportSolicitud = porcentaje(oportunidadesConSolicitud, totalOps);
+            String motivo = motivoPrincipal(motivos, idsOpsCap);
+
+            var local = c.getLocalComercial();
+            detalle.add(new Dtos.AvancePropiedad(
+                    idCap,
+                    textoSeguro(c.getCodigoCaptacion()),
+                    local != null ? textoSeguro(local.getDireccion()) : "",
+                    local != null ? textoSeguro(local.getDistrito()) : "",
+                    c.getEstado() != null ? c.getEstado().getDescripcion() : "",
+                    totalOps, abiertas, oportunidadesConVisita, oportunidadesConSolicitud,
+                    cerradasExitosas, cerradasNoFav, cerradasNoCont,
+                    interesados.size(), interaccionesCap, visitasProgramadas, visitasConcretadas,
+                    solicitudesRecibidas, tasaOportVisita, tasaOportSolicitud, motivo));
+        }
+
+        detalle.sort(Comparator.comparingInt(Dtos.AvancePropiedad::oportunidadesAbiertas).reversed()
+                .thenComparing(Comparator.comparingInt(Dtos.AvancePropiedad::interacciones).reversed()));
+
+        int aAbiertas = detalle.stream().mapToInt(Dtos.AvancePropiedad::oportunidadesAbiertas).sum();
+        int aConVisita = detalle.stream().mapToInt(Dtos.AvancePropiedad::oportunidadesConVisita).sum();
+        int aConSolicitud = detalle.stream().mapToInt(Dtos.AvancePropiedad::oportunidadesConSolicitud).sum();
+        int aExitosas = detalle.stream().mapToInt(Dtos.AvancePropiedad::cerradasExitosas).sum();
+        int aNoFav = detalle.stream().mapToInt(Dtos.AvancePropiedad::cerradasNoFavorables).sum();
+        int aNoCont = detalle.stream().mapToInt(Dtos.AvancePropiedad::cerradasNoContinuidad).sum();
+        int aInteracciones = detalle.stream().mapToInt(Dtos.AvancePropiedad::interacciones).sum();
+        int aVisProg = detalle.stream().mapToInt(Dtos.AvancePropiedad::visitasProgramadas).sum();
+        int aVisConc = detalle.stream().mapToInt(Dtos.AvancePropiedad::visitasConcretadas).sum();
+        int aSolicitudes = detalle.stream().mapToInt(Dtos.AvancePropiedad::solicitudesRecibidas).sum();
+        int tasaVisitaAgg = porcentaje(aConVisita, totalOpsGlobal);
+        int tasaSolicitudAgg = porcentaje(aConSolicitud, totalOpsGlobal);
+
+        String ambito = esAdmin ? "Avance comercial global" : esBroker ? "Avance comercial del equipo" : "Mi avance comercial";
+        return new Dtos.AvanceComercialResponse(
+                ambito, detalle.size(), totalOpsGlobal, aAbiertas, aConVisita, aConSolicitud,
+                aExitosas, aNoFav, aNoCont, interesadosGlobal.size(), aInteracciones,
+                aVisProg, aVisConc, aSolicitudes, tasaVisitaAgg, tasaSolicitudAgg, detalle);
+    }
+
+    // Razon mas frecuente de no continuidad entre las oportunidades dadas; "" si no hay ninguna.
+    private static String motivoPrincipal(List<MotivoNoContinuidad> motivos, Set<Long> idsOportunidad) {
+        if (idsOportunidad.isEmpty()) {
+            return "";
+        }
+        Map<String, Integer> conteo = new HashMap<>();
+        for (MotivoNoContinuidad m : motivos) {
+            Long idOp = m.getOportunidadComercial() != null ? idOportunidad(m.getOportunidadComercial()) : null;
+            if (idOp == null || !idsOportunidad.contains(idOp) || m.getRazonPrincipal() == null) {
+                continue;
+            }
+            conteo.merge(m.getRazonPrincipal().getDescripcion(), 1, Integer::sum);
+        }
+        return conteo.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse("");
+    }
+
+    private static String textoSeguro(String texto) {
+        return texto == null ? "" : texto;
     }
 
     private Serie cierresSerie(
@@ -386,8 +573,14 @@ public class IndicadoresRest {
 
     // Indicadores operativos del seguimiento (Etapa 9): recontactos, atraso de seguimiento,
     // visitas pendientes, solicitudes sin cierre y conversion prospeccion -> captacion.
+    // "Recontacto vencido" usa el MISMO umbral que la bandeja de tareas (>= DIAS_RECONTACTO dias
+    // de atraso): asi el numero de "Disciplina comercial" es coherente con los items que la
+    // bandeja realmente genera, en vez de contar como vencido el mismo dia del recontacto.
+    private static final int DIAS_RECONTACTO = 7;
+
     private Dtos.IndicadorOperativo operativo(List<Prospeccion> pros, List<Visita> vis, List<SolicitudAlquiler> sols) {
         LocalDate hoy = LocalDate.now();
+        LocalDate limiteVencido = hoy.minusDays(DIAS_RECONTACTO);
         int recontactosVencidos = 0;
         int recontactosAlDia = 0;
         long sumaAtraso = 0;
@@ -399,7 +592,9 @@ public class IndicadoresRest {
             if (fr == null) {
                 continue;
             }
-            if (fr.isAfter(hoy)) {
+            // Vencido = atrasado >= DIAS_RECONTACTO (igual que la bandeja). Los recontactos recien
+            // cumplidos (entre hoy-7 y hoy) aun no escalan, cuentan como al dia.
+            if (fr.isAfter(limiteVencido)) {
                 recontactosAlDia++;
             } else {
                 recontactosVencidos++;
@@ -547,8 +742,10 @@ public class IndicadoresRest {
         return persona != null ? persona.getNombresORazonSocial() : "—";
     }
 
+    // Todos los usos son ratios parte<=total (etapas del embudo, conversion por cohorte). El
+    // clamp a 100 es una red de seguridad: ninguna tasa de conversion debe pintarse > 100%.
     private static int porcentaje(int parte, int total) {
-        return total <= 0 ? 0 : (int) Math.round(parte * 100.0 / total);
+        return total <= 0 ? 0 : Math.min(100, (int) Math.round(parte * 100.0 / total));
     }
 
     private record Periodo(String codigo, int dias) {

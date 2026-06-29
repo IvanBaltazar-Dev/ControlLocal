@@ -129,8 +129,8 @@
         _cargando = true;
         try
         {
-            b = (string.IsNullOrEmpty(CodigoParam) ? null : Brokers.ById(CodigoParam))
-                ?? Brokers.All().FirstOrDefault()
+            b = (string.IsNullOrEmpty(CodigoParam) ? null : await Brokers.ByCodigoAsync(CodigoParam))
+                ?? (await Brokers.AllAsync()).FirstOrDefault()
                 ?? new();
 
             if (b.Id > 0)
@@ -167,7 +167,7 @@
 
                 try
                 {
-                    actividad.AddRange(InteraccionSvc.All()
+                    actividad.AddRange((await InteraccionSvc.AllAsync())
                         .Where(i => nombresAgentes.Contains((i.NombreAgenteResponsable ?? "").Trim()))
                         .Select(i => new ActividadItem(
                             i.FechaHoraTexto,

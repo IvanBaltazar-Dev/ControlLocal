@@ -52,10 +52,19 @@ public class AppState
     {
         if (_initialized) return;
 
+        await ReloadSessionAsync();
+    }
+
+    public async Task ReloadSessionAsync()
+    {
         try
         {
             var json = await _js.InvokeAsync<string?>("controlLocal.session.get");
             _initialized = true;
+            CurrentUser = null;
+            Role = Roles.Agente;
+            _apiSession.Token = null;
+
             if (string.IsNullOrWhiteSpace(json)) return;
 
             var session = JsonSerializer.Deserialize<BrowserSession>(json);

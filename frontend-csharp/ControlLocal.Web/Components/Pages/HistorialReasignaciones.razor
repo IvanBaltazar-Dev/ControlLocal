@@ -124,7 +124,7 @@
         _errorCarga = null;
         try
         {
-            _historial = await Task.Run(() => ReasignacionSvc.Historial(), DisposedToken);
+            _historial = await ReasignacionSvc.HistorialAsync(DisposedToken);
         }
         catch (OperationCanceledException)
         {

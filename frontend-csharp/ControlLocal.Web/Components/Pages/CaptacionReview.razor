@@ -353,7 +353,7 @@ else
             else
             {
                 _local = _captacion.LocalId > 0
-                    ? await Task.Run(() => LocalSvc.ById(_captacion.LocalId))
+                    ? await LocalSvc.ObtenerAsync(_captacion.LocalId)
                     : null;
                 if (EsEstadoFinal)
                     _mensajeRevision ??= MensajeParaEstado(_captacion.Estado);

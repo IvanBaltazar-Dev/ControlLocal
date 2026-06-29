@@ -183,10 +183,10 @@
     private bool _editModal;
     private string _obsEditTemp = "";
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _interaccion = long.TryParse(InteraccionIdParam, out var id)
-            ? InteraccionSvc.ById(id)
+            ? await InteraccionSvc.ByIdAsync(id)
             : null;
 
         if (_interaccion is null)
@@ -194,7 +194,7 @@
 
         _obsEditTemp = _interaccion.Observaciones;
         _captacion = !string.IsNullOrWhiteSpace(_interaccion.CaptacionCodigo)
-            ? CaptacionSvc.ByCodigo(_interaccion.CaptacionCodigo)
+            ? await CaptacionSvc.ByCodigoAsync(_interaccion.CaptacionCodigo)
             : null;
     }
 
@@ -235,23 +235,23 @@
         _ => "",
     };
 
-    private void ActualizarResultado()
+    private async Task ActualizarResultado()
     {
         if (_interaccion is null || string.IsNullOrEmpty(_nuevoResultado))
             return;
 
-        _interaccion = InteraccionSvc.Actualizar(_interaccion.Id, resultado: _nuevoResultado);
+        _interaccion = await InteraccionSvc.ActualizarAsync(_interaccion.Id, resultado: _nuevoResultado);
         _nuevoResultado = "";
         _toastMsg = "Resultado actualizado correctamente";
         _ = OcultarToastAsync();
     }
 
-    private void GuardarObservaciones()
+    private async Task GuardarObservaciones()
     {
         if (_interaccion is null)
             return;
 
-        _interaccion = InteraccionSvc.Actualizar(_interaccion.Id, observaciones: _obsEditTemp);
+        _interaccion = await InteraccionSvc.ActualizarAsync(_interaccion.Id, observaciones: _obsEditTemp);
         _editModal = false;
         _toastMsg = "Observaciones guardadas correctamente";
         _ = OcultarToastAsync();

@@ -21,7 +21,7 @@
                         <Field Label="Propietario" Required="true">
                             <select @bind="_propietarioId" disabled="@_isEdit">
                                 <option value="0">— Selecciona un propietario —</option>
-                                @foreach (var p in PropSvc.All())
+                                @foreach (var p in _propietarios)
                                 {
                                     <option value="@p.Id">@p.Nombre</option>
                                 }
@@ -170,12 +170,18 @@
     private bool _toast;
     private string _toastMsg = "Local registrado correctamente";
     private string? _err;
+    private IReadOnlyList<PropietarioDto> _propietarios = new List<PropietarioDto>();
 
-    protected override void OnParametersSet()
+    protected override async Task OnInitializedAsync()
+    {
+        _propietarios = await PropSvc.AllAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
     {
         if (long.TryParse(IdParam, out var id))
         {
-            _l = LocalSvc.ById(id) ?? new();
+            _l = await LocalSvc.ByIdAsync(id) ?? new();
             _isEdit = _l.Id > 0;
 
             if (_isEdit)
@@ -265,7 +271,7 @@
             if (!await GuardarLocalAsync()) return;
             await Task.Yield();
             await ProspeccionSvc.RefrescarAsync();
-            var prospeccion = ProspeccionSvc.All().FirstOrDefault(item => item.LocalId == _l.Id);
+            var prospeccion = (await ProspeccionSvc.AllAsync()).FirstOrDefault(item => item.LocalId == _l.Id);
             App.Navigate(prospeccion is not null ? $"prospeccion-detail/{prospeccion.Id}" : "prospecciones");
         }
         finally { _procesando = false; StateHasChanged(); }
@@ -281,7 +287,7 @@
             if (!await GuardarLocalAsync()) return;
             await Task.Yield();
             await ProspeccionSvc.RefrescarAsync();
-            var prospeccion = ProspeccionSvc.All().FirstOrDefault(item => item.LocalId == _l.Id);
+            var prospeccion = (await ProspeccionSvc.AllAsync()).FirstOrDefault(item => item.LocalId == _l.Id);
             App.Navigate(prospeccion is null ? $"captacion-form/local/{_l.Id}" : $"captacion-form/captar/{prospeccion.Id}");
         }
         finally { _procesando = false; StateHasChanged(); }
@@ -374,7 +380,7 @@
                 PrecioReferencial = precio,
                 Estado = _estado,
                 PropietarioId = _propietarioId,
-                PropietarioNombre = PropSvc.ById(_propietarioId)?.Nombre ?? "",
+                PropietarioNombre = _propietarios.FirstOrDefault(p => p.Id == _propietarioId)?.Nombre ?? "",
                 TipoInmueble = _tipoInmueble,
                 Uso = _uso,
                 Ambientes = ambientes,

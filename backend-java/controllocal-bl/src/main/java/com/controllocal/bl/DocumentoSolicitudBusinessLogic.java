@@ -1,5 +1,6 @@
 package com.controllocal.bl;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,6 +12,8 @@ public interface DocumentoSolicitudBusinessLogic {
     public Long registrar(DocumentoSolicitud documento);
     public Optional<DocumentoSolicitud> buscarPorId(Long idDocumento);
     public List<DocumentoSolicitud> listarTodos();
+    public List<DocumentoSolicitud> listarPorSolicitud(Long idSolicitud);
+    public List<DocumentoSolicitud> listarPorSolicitudes(Collection<Long> idsSolicitud);
     public boolean actualizar(DocumentoSolicitud documento);
     public boolean eliminar(Long idDocumento);
 
@@ -26,4 +29,3 @@ public interface DocumentoSolicitudBusinessLogic {
     // Devuelve la lista de documentos resultante.
     public List<DocumentoSolicitud> conformarPendientes(Long idSolicitud);
 }
-

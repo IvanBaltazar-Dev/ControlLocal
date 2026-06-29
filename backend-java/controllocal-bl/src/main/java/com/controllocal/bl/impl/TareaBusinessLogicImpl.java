@@ -4,10 +4,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import com.controllocal.bl.BusinessException;
 import com.controllocal.bl.CaptacionBusinessLogic;
@@ -58,7 +61,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
     private static final int DIAS_RECONTACTO = 7;
     private static final int DIAS_VISITA_PROXIMA = 3;
     // Cadencia del reporte al propietario: se vuelve a pedir si el ultimo reporte supera este plazo.
-    private static final int DIAS_REPORTE = 30;
+    private static final int DIAS_REPORTE = 15;
     // Puntaje minimo de coincidencia para sugerir una oportunidad en la bandeja (evita ruido).
     private static final int UMBRAL_PROPUESTA = 60;
 
@@ -110,8 +113,12 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
             throw new BusinessException("El agente es obligatorio.");
         }
 
+        // Datos base del agente: se cargan UNA vez y se reutilizan para derivar y para enriquecer.
+        // Antes enriquecer re-consultaba cada entidad por id (N+1); ahora lee de mapas en memoria.
+        DatosAgente datos = cargarDatos(idAgente);
+
         // Lecturas (fuera de transaccion): que deberia existir vs que existe.
-        List<Tarea> vigentes = derivarTareas(idAgente);
+        List<Tarea> vigentes = derivarTareas(idAgente, datos);
         Set<String> clavesVigentes = new HashSet<>();
         for (Tarea t : vigentes) {
             clavesVigentes.add(clave(t.getEntidadTipo(), t.getEntidadId()));
@@ -147,7 +154,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
 
         return tareaDAO.listarPorAgente(idAgente, null).stream()
                 .filter(t -> t.getEstado() == EstadoTarea.PENDIENTE || t.getEstado() == EstadoTarea.EN_PROCESO)
-                .map(this::enriquecer)
+                .map(t -> enriquecer(t, datos))
                 .toList();
     }
 
@@ -163,29 +170,82 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                 (TransactionRunner.TransactionalConnectionSupplier<Boolean>) conn -> tareaDAO.eliminar(idTarea));
     }
 
+    // Carga las listas base del agente UNA sola vez (acotadas por rol en SQL) y las indexa por id
+    // para que el enriquecimiento no vuelva a consultar la BD por cada tarea.
+    private DatosAgente cargarDatos(Long idAgente) {
+        List<Long> ids = List.of(idAgente);
+        return new DatosAgente(
+                prospecciones.listarPorAgentes(ids),
+                solicitudes.listarPorAgentes(ids),
+                oportunidades.listarPorAgentes(ids),
+                captaciones.listarPorAgente(idAgente),
+                visitas.listarPorAgentes(ids));
+    }
+
+    // Snapshot de las entidades del agente para construir su bandeja sin N+1: listas para derivar
+    // y mapas por id para enriquecer.
+    private static final class DatosAgente {
+        final List<Prospeccion> prospecciones;
+        final List<SolicitudAlquiler> solicitudes;
+        final List<OportunidadComercial> oportunidades;
+        final List<Captacion> captaciones;
+        final List<Visita> visitas;
+        final Map<Long, Prospeccion> prospeccionPorId;
+        final Map<Long, SolicitudAlquiler> solicitudPorId;
+        final Map<Long, OportunidadComercial> oportunidadPorId;
+        final Map<Long, Captacion> captacionPorId;
+        final Map<Long, Visita> visitaPorId;
+
+        DatosAgente(List<Prospeccion> prospecciones, List<SolicitudAlquiler> solicitudes,
+                List<OportunidadComercial> oportunidades, List<Captacion> captaciones, List<Visita> visitas) {
+            this.prospecciones = prospecciones;
+            this.solicitudes = solicitudes;
+            this.oportunidades = oportunidades;
+            this.captaciones = captaciones;
+            this.visitas = visitas;
+            this.prospeccionPorId = indice(prospecciones, Prospeccion::getIdProspeccion);
+            this.solicitudPorId = indice(solicitudes, SolicitudAlquiler::getIdSolicitud);
+            this.oportunidadPorId = indice(oportunidades, OportunidadComercial::getIdOportunidad);
+            this.captacionPorId = indice(captaciones, Captacion::getIdCaptacion);
+            this.visitaPorId = indice(visitas, Visita::getIdVisita);
+        }
+
+        private static <T> Map<Long, T> indice(List<T> items, Function<T, Long> id) {
+            Map<Long, T> mapa = new HashMap<>();
+            for (T item : items) {
+                Long clave = id.apply(item);
+                if (clave != null) {
+                    mapa.putIfAbsent(clave, item);
+                }
+            }
+            return mapa;
+        }
+    }
+
     // Deriva las tareas que el estado actual del flujo justifica para el agente.
-    private List<Tarea> derivarTareas(Long idAgente) {
+    private List<Tarea> derivarTareas(Long idAgente, DatosAgente datos) {
         List<Tarea> out = new ArrayList<>();
 
-        // Listas base cargadas una sola vez y reutilizadas: antes solicitudes,
-        // oportunidades y las captaciones del agente se consultaban dos veces por bandeja.
-        List<SolicitudAlquiler> todasSolicitudes = solicitudes.listarTodos();
-        List<OportunidadComercial> todasOportunidades = oportunidades.listarTodos();
-        List<Captacion> misCaptaciones = captaciones.listarPorAgente(idAgente);
+        // Listas base acotadas al agente (ya cargadas en bandejaDe): la bandeja es personal y no
+        // debe depender del volumen global de solicitudes/oportunidades/visitas/requerimientos.
+        List<SolicitudAlquiler> misSolicitudes = datos.solicitudes;
+        List<OportunidadComercial> misOportunidades = datos.oportunidades;
+        List<Captacion> misCaptaciones = datos.captaciones;
 
         // 1) Recontactos vencidos (>= 7 dias sin accion de seguimiento).
-        for (Prospeccion p : prospecciones.listarPorRecontactar(DIAS_RECONTACTO)) {
-            if (esDelAgente(p.getAgenteResponsable(), idAgente)) {
+        LocalDate hoy = LocalDate.now();
+        LocalDate limiteRecontacto = hoy.minusDays(DIAS_RECONTACTO);
+        for (Prospeccion p : datos.prospecciones) {
+            if (esDelAgente(p.getAgenteResponsable(), idAgente)
+                    && p.getEstado() != null
+                    && p.getEstado().enProceso()
+                    && p.getFechaRecontacto() != null
+                    && !p.getFechaRecontacto().isAfter(limiteRecontacto)) {
                 out.add(construir(TipoTarea.RECONTACTO, TipoEntidad.PROSPECCION, p.getIdProspeccion(),
                         nz(p.getCodigoProspeccion()), idAgente, Prioridad.ALTA,
                         "Recontacta o evalua descartar la prospeccion " + nz(p.getCodigoProspeccion()) + "."));
             }
         }
-
-        // Solicitudes del agente (sirven para los disparadores 2 y 4).
-        List<SolicitudAlquiler> misSolicitudes = todasSolicitudes.stream()
-                .filter(s -> esDelAgente(s.getAgenteResponsable(), idAgente))
-                .toList();
 
         // 2) Solicitudes aprobadas sin cierre (estado APROBADA; el cierre la pasa a CERRADA).
         for (SolicitudAlquiler s : misSolicitudes) {
@@ -195,7 +255,9 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
             }
         }
 
-        // 3) Comisiones pendientes con monto del agente ya asignado (lista para cobro).
+        // 3) Comisiones pendientes con monto del agente ya asignado (lista para cobro). Las
+        // liquidaciones de todos los contratos cerrados se traen en UNA sola consulta (sin N+1).
+        List<Long> idsContratoCerrados = new ArrayList<>();
         for (SolicitudAlquiler s : misSolicitudes) {
             if (s.getEstado() != EstadoSolicitudAlquiler.CERRADA) {
                 continue;
@@ -204,17 +266,23 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
             if (oportunidad == null || oportunidad.getIdOportunidad() == null) {
                 continue;
             }
-            Optional<ContratoAlquiler> contrato = contratos.buscarPorOportunidad(oportunidad.getIdOportunidad());
-            if (contrato.isEmpty() || contrato.get().getIdContratoAlquiler() == null) {
-                continue;
-            }
-            Long idContrato = contrato.get().getIdContratoAlquiler();
-            for (ComisionLiquidacion c : comisiones.listarPorContrato(idContrato)) {
-                if (c.getEstado() == EstadoComision.PENDIENTE && c.getMontoAgente() != null) {
-                    out.add(construir(TipoTarea.SEGUIMIENTO, TipoEntidad.CONTRATO_ALQUILER, idContrato,
-                            null, idAgente, Prioridad.MEDIA, "Comision lista para cobro (contrato " + idContrato + ")."));
-                    break;
+            contratos.buscarPorOportunidad(oportunidad.getIdOportunidad())
+                    .map(ContratoAlquiler::getIdContratoAlquiler)
+                    .filter(id -> id != null)
+                    .ifPresent(idsContratoCerrados::add);
+        }
+        if (!idsContratoCerrados.isEmpty()) {
+            Set<Long> contratosConComisionLista = new java.util.LinkedHashSet<>();
+            for (ComisionLiquidacion c : comisiones.listarPorContratos(idsContratoCerrados)) {
+                Long idContrato = c.getContratoAlquiler() != null
+                        ? c.getContratoAlquiler().getIdContratoAlquiler() : null;
+                if (idContrato != null && c.getEstado() == EstadoComision.PENDIENTE && c.getMontoAgente() != null) {
+                    contratosConComisionLista.add(idContrato);
                 }
+            }
+            for (Long idContrato : contratosConComisionLista) {
+                out.add(construir(TipoTarea.SEGUIMIENTO, TipoEntidad.CONTRATO_ALQUILER, idContrato,
+                        null, idAgente, Prioridad.MEDIA, "Comision lista para cobro (contrato " + idContrato + ")."));
             }
         }
 
@@ -228,12 +296,8 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
 
         // 5) Visitas que requieren accion: no realizadas (se cayeron), vencidas sin cerrar, o proximas.
         // REALIZADA/CANCELADA son terminales -> no disparan y se auto-resuelven (VISITA esta en ENTIDADES_AUTO).
-        LocalDate hoy = LocalDate.now();
         LocalDate limiteVisita = hoy.plusDays(DIAS_VISITA_PROXIMA);
-        for (Visita v : visitas.listarTodos()) {
-            if (!esDelAgente(v.getAgenteResponsable(), idAgente)) {
-                continue;
-            }
+        for (Visita v : datos.visitas) {
             LocalDate fecha = v.getFechaVisita();
             boolean pendiente = v.getEstado() == EstadoVisita.PROGRAMADA || v.getEstado() == EstadoVisita.REPROGRAMADA;
             if (v.getEstado() == EstadoVisita.NO_REALIZADA) {
@@ -262,7 +326,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
         }
 
         // 7) Coincidencias de cartera (gancho Etapa 8): proponer oportunidad prellenada.
-        derivarCoincidenciasCartera(idAgente, out, misCaptaciones, todasOportunidades, todasSolicitudes);
+        derivarCoincidenciasCartera(idAgente, out, misCaptaciones, misOportunidades, misSolicitudes);
 
         return out;
     }
@@ -298,7 +362,11 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                 yaPropuesto.add(cli + "#" + cap);
             }
         }
-        for (RequerimientoCliente r : requerimientos.listarTodos()) {
+        List<RequerimientoCliente> requerimientosDelAgente = new ArrayList<>();
+        for (Long idCliente : misClientes) {
+            requerimientosDelAgente.addAll(requerimientos.listarPorCliente(idCliente));
+        }
+        for (RequerimientoCliente r : requerimientosDelAgente) {
             if (r.getEstado() != EstadoRequerimiento.ACTIVO || r.getCliente() == null) {
                 continue;
             }
@@ -382,7 +450,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
         };
     }
 
-    private Tarea enriquecer(Tarea tarea) {
+    private Tarea enriquecer(Tarea tarea, DatosAgente datos) {
         LocalDate hoy = LocalDate.now();
         // PROPONER_OPORTUNIDAD (entidad REQUERIMIENTO): el Resolver abre la ficha del cliente,
         // donde vive el panel de propiedades de cartera compatibles para proponer. Sin vencimiento.
@@ -397,14 +465,14 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
             tarea.setDiasSinAccion(diasDesde(baseProgramada(tarea), hoy));
             return tarea;
         }
-        enriquecerEntidad(tarea, hoy);
+        enriquecerEntidad(tarea, datos, hoy);
         return tarea;
     }
 
     // Con UNA lectura de la entidad de origen resuelve: el código (para la ruta de Resolver),
     // la fecha de vencimiento (cuando la entidad impone un plazo) y la fecha base de "días sin
     // acción" (la del plazo real de la entidad, no la fecha en que se creó la tarea).
-    private void enriquecerEntidad(Tarea tarea, LocalDate hoy) {
+    private void enriquecerEntidad(Tarea tarea, DatosAgente datos, LocalDate hoy) {
         Long id = tarea.getEntidadId();
         String codigo = "";
         LocalDate vencimiento = null;
@@ -413,7 +481,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
             try {
                 switch (tarea.getEntidadTipo()) {
                     case PROSPECCION -> {
-                        Prospeccion p = prospecciones.buscarPorId(id).orElse(null);
+                        Prospeccion p = datos.prospeccionPorId.get(id);
                         if (p != null) {
                             codigo = nz(p.getCodigoProspeccion());
                             if (p.getFechaRecontacto() != null) {
@@ -423,7 +491,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                         }
                     }
                     case SOLICITUD_ALQUILER -> {
-                        SolicitudAlquiler s = solicitudes.buscarPorId(id).orElse(null);
+                        SolicitudAlquiler s = datos.solicitudPorId.get(id);
                         if (s != null) {
                             codigo = nz(s.getCodigoSolicitud());
                             if (s.getFechaActualizacionEstado() != null) {
@@ -435,7 +503,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                         }
                     }
                     case CAPTACION -> {
-                        Captacion c = captaciones.buscarPorId(id).orElse(null);
+                        Captacion c = datos.captacionPorId.get(id);
                         if (c != null) {
                             codigo = nz(c.getCodigoCaptacion());
                             // Reporte periódico al propietario: vence cuando toca el siguiente.
@@ -443,7 +511,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                         }
                     }
                     case VISITA -> {
-                        Visita v = visitas.buscarPorId(id).orElse(null);
+                        Visita v = datos.visitaPorId.get(id);
                         if (v != null) {
                             codigo = v.getOportunidadComercial() != null
                                     ? nz(v.getOportunidadComercial().getCodigoOportunidad())
@@ -461,9 +529,10 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                                     ? "SOL-" + c.getSolicitudAlquiler().getIdSolicitud()
                                     : "CON-" + id)
                             .orElse("");
-                    case OPORTUNIDAD -> codigo = oportunidades.buscarPorId(id)
-                            .map(OportunidadComercial::getCodigoOportunidad)
-                            .orElse("");
+                    case OPORTUNIDAD -> {
+                        OportunidadComercial o = datos.oportunidadPorId.get(id);
+                        codigo = o != null ? nz(o.getCodigoOportunidad()) : "";
+                    }
                     default -> { }
                 }
             } catch (RuntimeException ignored) {

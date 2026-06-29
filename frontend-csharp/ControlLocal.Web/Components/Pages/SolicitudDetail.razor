@@ -3,7 +3,6 @@
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
 @inject IDocumentoSolicitudService DocSvc
-@inject IOportunidadService OportunidadSvc
 @inject ICaptacionService CaptacionSvc
 @inject ILocalService LocalSvc
 @inject IContratoService ContratoSvc
@@ -175,7 +174,7 @@ else
                             <Spec Icon="store" K="Rubro" V="@Texto(_local?.Rubro ?? _captacion?.Rubro)" />
                             <Spec Icon="user" K="Propietario" V="@Texto(_captacion?.PropietarioNombre)" />
                             <Spec Icon="activity" K="Comisión" V="@ComisionCaptacion" />
-                            <Spec Icon="folder" K="Captación" V="@Texto(_oportunidad?.CaptacionCodigo)" />
+                            <Spec Icon="folder" K="Captación" V="@Texto(_captacion?.CodigoCaptacion)" />
                         </div>
                         <div style="margin-top:14px;">
                             <div class="cl-def-k" style="margin-bottom:6px;">Descripción</div>
@@ -378,33 +377,27 @@ else
     private string _estadoContrato = "V";
     private string _incidencias = "";
 
-    // Refresca primero (evita el crash de .First() con cache fria al abrir desde
-    // una notificacion) y luego resuelve la solicitud, su oportunidad y captacion.
+    // Carga puntual: abrir desde tarea/notificacion no debe pedir listas globales.
     protected override async Task OnParametersSetAsync()
     {
         _cargando = true;
         try
         {
-            var solicitudes = await SolicitudSvc.RefrescarAsync(DisposedToken);
-            await OportunidadSvc.RefrescarAsync(DisposedToken);
-            await CaptacionSvc.RefrescarAsync(DisposedToken);
-
-            _s = ResolverSolicitud(CodigoParam, solicitudes) ?? new();
-            _oportunidad = _s.OportunidadId > 0
-                ? OportunidadSvc.ById(_s.OportunidadId)
-                : OportunidadSvc.All().FirstOrDefault(item => item.CodigoOportunidad == _s.CodigoOperacion);
-            _captacion = _oportunidad is null ? null : CaptacionSvc.ByCodigo(_oportunidad.CaptacionCodigo);
+            _s = await ResolverSolicitudAsync(CodigoParam) ?? new();
+            _oportunidad = null;
+            _captacion = _s.CaptacionId > 0
+                ? await CaptacionSvc.ObtenerPorIdAsync(_s.CaptacionId, DisposedToken)
+                : null;
             // El precio referencial y la descripcion viven en el local; se resuelven
             // por el id de la captacion. Task.Run evita bloquear el circuito si la
             // cache de locales aun no esta tibia (ById dispara una carga sincrona).
             if (_captacion is { LocalId: > 0 } cap)
-                _local = await Task.Run(() => LocalSvc.ById(cap.LocalId), DisposedToken);
+                _local = await LocalSvc.ObtenerAsync(cap.LocalId, DisposedToken);
             else
                 _local = null;
             // Contrato ya registrado para esta operacion (si la propiedad ya se alquilo).
             _contrato = _s.OportunidadId > 0
-                ? (await ContratoSvc.RefrescarAsync(DisposedToken))
-                    .FirstOrDefault(c => c.OportunidadId == _s.OportunidadId)
+                ? await ContratoSvc.ObtenerPorOportunidadAsync(_s.OportunidadId, DisposedToken)
                 : null;
             await CargarDocumentosAsync();
             // Historial de evaluaciones (trazabilidad). Best-effort: no rompe el detalle.
@@ -447,14 +440,14 @@ else
     }
 
     // El parámetro puede ser el código (SOL-...) o el id numérico (alerta del backend).
-    private SolicitudAlquilerDto? ResolverSolicitud(
-        string? param, IReadOnlyList<SolicitudAlquilerDto> solicitudes)
+    private async Task<SolicitudAlquilerDto?> ResolverSolicitudAsync(string? param)
     {
         if (string.IsNullOrEmpty(param))
-            return solicitudes.FirstOrDefault();
-        return SolicitudSvc.ByCodigo(param)
-            ?? (long.TryParse(param, out var id) ? solicitudes.FirstOrDefault(item => item.Id == id) : null)
-            ?? solicitudes.FirstOrDefault();
+        {
+            var pagina = await SolicitudSvc.ListarPaginaAsync(1, 1, DisposedToken);
+            return pagina.Items.FirstOrDefault();
+        }
+        return await SolicitudSvc.ObtenerAsync(param, DisposedToken);
     }
 
     private static string Initials(string name) =>
@@ -583,15 +576,6 @@ else
             _confirmAlquiler = false;
             ConstruirResumenAlquiler(creado);
             _alquilada = true;
-            // Refresca la oportunidad para reflejar el cierre (Finalizada exitosa).
-            try
-            {
-                await OportunidadSvc.RefrescarAsync(DisposedToken);
-                if (_oportunidad is not null)
-                    _oportunidad = OportunidadSvc.ById(_oportunidad.Id) ?? _oportunidad;
-            }
-            catch (OperationCanceledException) { }
-            catch { /* el cierre ya se registro; el refresco es best-effort */ }
         }
         catch (OperationCanceledException)
         {

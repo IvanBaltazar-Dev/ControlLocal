@@ -2,7 +2,7 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject IIndicadorService Indicadores
-@inject ICaptacionService CaptacionSvc
+@inject IDashboardService DashboardSvc
 @inject ITareaService TareaSvc
 
 <PageTitle>@Title · ControlLocal</PageTitle>
@@ -105,15 +105,30 @@
                             <div class="cl-card-title">@WorkTitle</div>
                             <div class="cl-card-sub">@WorkSubtitle</div>
                         </div>
-                        @if (!IsAdmin && !IsBroker && _bandeja.Count > 5)
+                        @if (!IsAdmin && !IsBroker && _bandejaTotal > 5)
                         {
-                            <button class="cl-btn sm" @onclick="@(() => _verTodas = true)">Ver todas (@_bandeja.Count)</button>
+                            <button class="cl-btn sm" @onclick="AbrirBandejaCompletaAsync">Ver todas (@_bandejaTotal)</button>
                         }
                     </div>
                     <div class="cl-card-body">
                         @if (!IsAdmin && !IsBroker)
                         {
-                            <BandejaAcciones Tareas="_topBandeja" OnCancelar="CancelarTareaAsync" />
+                            @if (_bandejaCargando)
+                            {
+                                <div style="padding:22px;text-align:center;color:#7E8794;font-size:12.5px;">Cargando tus acciones pendientes…</div>
+                            }
+                            else if (_bandejaError)
+                            {
+                                <div style="padding:22px;text-align:center;color:#5B6472;">
+                                    <div style="font-weight:700;font-size:14px;color:#B91C1C;">No se pudo cargar tu bandeja</div>
+                                    <div style="font-size:12px;margin:4px 0 12px;">El servicio tardó demasiado en responder. Tus indicadores de seguimiento sí cargaron; reintenta para ver tus acciones pendientes.</div>
+                                    <button class="cl-btn sm primary" @onclick="ReintentarBandejaAsync"><Icon Name="refresh" Size="12" /> Reintentar</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <BandejaAcciones Tareas="_topBandeja" OnCancelar="CancelarTareaAsync" />
+                            }
                         }
                         else if (PrioridadesDashboard.Count == 0)
                         {
@@ -183,7 +198,7 @@
                     </div>
                     <div class="cl-card-body" style="display:flex;gap:18px;align-items:center;">
                         <DonutChart Segments="SaludSegmentos" Size="140" Thickness="22"
-                                    CenterValue="@TotalSalud.ToString()" CenterLabel="captaciones" />
+                                    CenterValue="@($"{PctActivasSalud}%")" CenterLabel="activas" />
                         <div style="flex:1;font-size:12px;">
                             @for (var i = 0; i < CaptacionesSalud.Count; i++)
                             {
@@ -195,6 +210,10 @@
                                     <span class="cl-muted" style="min-width:38px;text-align:right;">@PctSalud(etapa.Valor)%</span>
                                 </div>
                             }
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--c-border);">
+                                <span style="flex:1;color:#515B6B;">Total captaciones</span>
+                                <b style="color:#243043;">@TotalSalud</b>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -214,7 +233,7 @@
                                 <table class="cl-table">
                                     <thead><tr><th>@(IsAdmin ? "Broker" : "Agente")</th><th>Captac.</th><th>Cierres</th></tr></thead>
                                     <tbody>
-                                        @foreach (var d in _ind.Desempeno)
+                                        @foreach (var d in DesempenoVisible)
                                         {
                                             <tr>
                                                 <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(d.Nombre)</span>@d.Nombre</div></td>
@@ -223,6 +242,12 @@
                                         }
                                     </tbody>
                                 </table>
+                                @if (_ind.Desempeno.Count > DesempenoPageSize)
+                                {
+                                    <div style="padding:0 12px 12px;">
+                                        <Pagination Total="_ind.Desempeno.Count" PageSize="DesempenoPageSize" @bind-Page="_desempenoPage" />
+                                    </div>
+                                }
                             }
                         </div>
                     }
@@ -277,16 +302,28 @@
     // Bandeja de acciones del agente (Etapa 5): superficie principal, alimentada por el motor abstracto.
     private IReadOnlyList<TareaDto> _bandeja = [];
     private IReadOnlyList<TareaDto> _topBandeja => _bandeja.Take(5).ToList();
+    private int _bandejaTotal;
     private bool _verTodas;
+    // Distingue "bandeja vacia confirmada" de "no se pudo cargar /tareas": si la carga falla
+    // (timeout/red), NO se pinta "¡Todo al dia!" sino un estado de error con reintento.
+    private bool _bandejaError;
+    // La bandeja carga aparte del resto del dashboard (su panel mas lento no bloquea el tablero).
+    private bool _bandejaCargando;
+    private const int DesempenoPageSize = 5;
+    private int _desempenoPage = 1;
+    private IReadOnlyList<IndicadorDesempenoDto> DesempenoVisible =>
+        Paginador.Pagina(_ind.Desempeno, ref _desempenoPage, DesempenoPageSize);
 
     // Identidad visual del hero por rol.
     private string RoleClass => IsAdmin ? "admin" : IsBroker ? "broker" : "agente";
     private string HeroIcon => IsAdmin ? "briefcase" : IsBroker ? "users" : "activity";
     private string HeroEyebrow => IsAdmin ? "Corredora · visión global" : IsBroker ? "Equipo · supervisión" : "Mi actividad comercial";
 
-    // Conversión propia del agente (su fila de desempeño, o derivada de cierres/captaciones).
-    private int MiConversion => _ind.Desempeno.FirstOrDefault()?.Conversion
-        ?? (_ind.CaptacionesTotales > 0 ? (int)Math.Round(_ind.Cierres * 100.0 / _ind.CaptacionesTotales) : 0);
+    // Conversión propia del agente por COHORTE (captaciones del periodo que ya cerraron): el
+    // backend ya entrega el % correcto (<=100). Si no llegó, cae a la fila de desempeño.
+    private int MiConversion => _ind.ConversionPropia > 0
+        ? _ind.ConversionPropia
+        : (_ind.Desempeno.FirstOrDefault()?.Conversion ?? 0);
 
     private IndicadorOperativoDto Op => _ind.Operativo ?? IndicadorOperativoDto.Vacio;
 
@@ -305,13 +342,13 @@
     private string WorkTitle => IsAdmin
         ? "Bandeja ejecutiva"
         : IsBroker
-            ? "Bandeja de supervisión"
+            ? "Centro de control del equipo"
             : "Tu bandeja de trabajo";
 
     private string WorkSubtitle => IsAdmin
         ? "Cinco focos comerciales que pueden frenar ingresos o SLA"
         : IsBroker
-            ? "Revisión, cierres y seguimiento del equipo ordenados por urgencia"
+            ? "Aprobaciones, cierres y seguimiento vencido ordenados por urgencia"
             : "Máximo cinco operaciones priorizadas con vencimiento y días sin acción";
 
     private string DecisionTitle => IsAdmin
@@ -397,46 +434,79 @@
 
     private int PctSalud(int valor) => TotalSalud > 0 ? (int)Math.Round(valor * 100.0 / TotalSalud) : 0;
 
+    // % de captaciones Activas sobre el total (al centro de la dona de salud).
+    private int PctActivasSalud
+    {
+        get
+        {
+            var activas = CaptacionesSalud.FirstOrDefault(
+                e => e.Nombre.StartsWith("Activas", StringComparison.OrdinalIgnoreCase));
+            return activas != null ? PctSalud(activas.Valor) : 0;
+        }
+    }
+
     private DonutChart.Segment[] SaludSegmentos => CaptacionesSalud
         .Select((e, i) => new DonutChart.Segment(e.Valor, ColoresEstado.PorIndiceSaludCaptacion(i)))
         .ToArray();
 
     protected override async Task OnInitializedAsync()
     {
-        // Las tres llamadas se lanzan en paralelo y cada respuesta se espera con su
-        // propio try/catch: si un endpoint tarda o falla, el dashboard se pinta con lo
-        // que si cargo (valores por defecto) en vez de tumbar el circuito entero.
-        var indicadoresTask = Indicadores.ObtenerAsync(DisposedToken);
-        var captacionesTask = IsBroker ? CaptacionSvc.RefrescarAsync(DisposedToken) : null;
-        var bandejaTask = !IsAdmin && !IsBroker ? TareaSvc.BandejaAsync(DisposedToken) : null;
-
-        try { _ind = await indicadoresTask; }
-        catch (OperationCanceledException) { }
+        // Una sola llamada agregada trae indicadores + primera pagina de la bandeja (antes eran dos
+        // round-trips). Best-effort: ante un fallo se pinta con valores por defecto sin tumbar el circuito.
+        DashboardDto? datos = null;
+        try { datos = await DashboardSvc.CargarAsync("6m", DisposedToken); }
+        catch (OperationCanceledException) { return; }
         catch { /* se queda en IndicadoresDto.Vacio: los paneles muestran ceros */ }
 
-        // El broker ve el total de propiedades (inmuebles distintos) captadas por su equipo.
-        if (captacionesTask is not null)
-        {
-            try
-            {
-                var caps = await captacionesTask;
-                _propiedadesEquipo = caps
-                    .Select(c => c.LocalId > 0 ? c.LocalId : (long)(c.DireccionLocal ?? "").GetHashCode())
-                    .Distinct().Count();
-            }
-            catch (OperationCanceledException) { }
-            catch { /* sin el conteo de propiedades del equipo */ }
-        }
-
-        // Solo el agente tiene bandeja de acciones; se trae ya reconciliada del backend.
-        if (bandejaTask is not null)
-        {
-            try { _bandeja = await bandejaTask; }
-            catch (OperationCanceledException) { }
-            catch { /* la bandeja se mostrara vacia; se recarga en la proxima visita */ }
-        }
-
+        _ind = datos?.Indicadores ?? _ind;
         _cargando = false;
+        _propiedadesEquipo = _ind.PropiedadesEquipo > 0 ? _ind.PropiedadesEquipo : _ind.CaptacionesActivas;
+
+        // Solo el agente tiene bandeja de acciones; viene ya reconciliada en la misma respuesta.
+        if (!IsAdmin && !IsBroker)
+        {
+            if (datos is not null) AplicarBandeja(datos.Bandeja);
+            else _bandejaError = true; // no se pudo cargar: se muestra estado de error, no "todo al dia"
+        }
+        _bandejaCargando = false;
+        StateHasChanged();
+    }
+
+    // Reintenta SOLO la bandeja (el resto del dashboard ya esta pintado).
+    private async Task ReintentarBandejaAsync()
+    {
+        _bandejaError = false;
+        _bandejaCargando = true;
+        try { await CargarBandejaPaginaAsync(5); }
+        catch (OperationCanceledException) { }
+        catch { _bandejaError = true; }
+        finally { _bandejaCargando = false; }
+    }
+
+    private async Task AbrirBandejaCompletaAsync()
+    {
+        _verTodas = true;
+
+        if (_bandejaTotal <= _bandeja.Count)
+            return;
+
+        _bandejaCargando = true;
+        try { await CargarBandejaPaginaAsync(Math.Clamp(_bandejaTotal, 5, 100)); }
+        catch (OperationCanceledException) { }
+        catch { _bandejaError = true; }
+        finally { _bandejaCargando = false; }
+    }
+
+    private async Task CargarBandejaPaginaAsync(int tamano)
+    {
+        AplicarBandeja(await TareaSvc.BandejaPaginaAsync(1, tamano, DisposedToken));
+    }
+
+    private void AplicarBandeja(PageResult<TareaDto> pagina)
+    {
+        _bandeja = pagina.Items;
+        _bandejaTotal = (int)pagina.TotalRecords;
+        _bandejaError = false;
     }
 
     private async Task CancelarTareaAsync(TareaDto tarea)
@@ -444,7 +514,7 @@
         try
         {
             await TareaSvc.CancelarAsync(tarea.Id, DisposedToken);
-            _bandeja = await TareaSvc.BandejaAsync(DisposedToken);
+            await CargarBandejaPaginaAsync(_verTodas ? Math.Clamp(_bandejaTotal, 5, 100) : 5);
         }
         catch (OperationCanceledException)
         {

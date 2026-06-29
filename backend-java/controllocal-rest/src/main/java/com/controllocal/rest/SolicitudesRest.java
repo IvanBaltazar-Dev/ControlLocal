@@ -4,16 +4,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.controllocal.bl.AgenteBusinessLogic;
 import com.controllocal.bl.BrokerBusinessLogic;
 import com.controllocal.bl.DocumentoSolicitudBusinessLogic;
 import com.controllocal.bl.EvaluacionSolicitudBusinessLogic;
 import com.controllocal.bl.SolicitudAlquilerBusinessLogic;
+import com.controllocal.bl.impl.AgenteBusinessLogicImpl;
 import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
 import com.controllocal.bl.impl.DocumentoSolicitudBusinessLogicImpl;
 import com.controllocal.bl.impl.EvaluacionSolicitudBusinessLogicImpl;
@@ -59,6 +62,7 @@ public class SolicitudesRest {
     private final SolicitudAlquilerBusinessLogic solicitudes =
             new SolicitudAlquilerBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
+    private final AgenteBusinessLogic agentes = new AgenteBusinessLogicImpl();
     private final DocumentoSolicitudBusinessLogic documentos =
             new DocumentoSolicitudBusinessLogicImpl();
     private final EvaluacionSolicitudBusinessLogic evaluaciones =
@@ -101,8 +105,12 @@ public class SolicitudesRest {
         int tamanoValido = SeguridadRest.tamano(tamano);
         int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
         int hasta = Math.min(desde + tamanoValido, fuente.size());
-        Map<Long, Set<String>> entregados = entregadosPorSolicitud();
-        List<Dtos.SolicitudResponse> items = fuente.subList(desde, hasta).stream()
+        List<SolicitudAlquiler> paginaItems = fuente.subList(desde, hasta);
+        Map<Long, Set<String>> entregados = entregadosPorSolicitud(paginaItems.stream()
+                .map(SolicitudAlquiler::getIdSolicitud)
+                .filter(java.util.Objects::nonNull)
+                .toList());
+        List<Dtos.SolicitudResponse> items = paginaItems.stream()
                 .map(item -> aResponse(item, entregados))
                 .toList();
         return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
@@ -111,19 +119,19 @@ public class SolicitudesRest {
     @GET
     @Path("{id}")
     public Dtos.SolicitudResponse obtener(@PathParam("id") long id) {
-        return aResponse(obtenerConAcceso(id, SeguridadRest.usuario(request)), entregadosPorSolicitud());
+        return aResponse(obtenerConAcceso(id, SeguridadRest.usuario(request)), entregadosPorSolicitud(List.of(id)));
     }
 
     @GET
     @Path("codigo/{codigo}")
     public Dtos.SolicitudResponse obtenerPorCodigo(@PathParam("codigo") String codigo) {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
-        return solicitudesDelUsuario(usuario).stream()
-                .filter(item -> item.getCodigoSolicitud() != null
-                        && item.getCodigoSolicitud().equalsIgnoreCase(codigo))
-                .findFirst()
-                .map(item -> aResponse(item, entregadosPorSolicitud()))
+        SolicitudAlquiler solicitud = solicitudes.buscarPorCodigo(codigo)
                 .orElseThrow(() -> ApiException.noEncontrado("Solicitud"));
+        if (!puedeVer(usuario, solicitud)) {
+            throw ApiException.prohibido();
+        }
+        return aResponse(solicitud, entregadosPorSolicitud(List.of(solicitud.getIdSolicitud())));
     }
 
     @POST
@@ -141,7 +149,7 @@ public class SolicitudesRest {
                 .entity(aResponse(
                         solicitudes.buscarPorId(id)
                                 .orElseThrow(() -> ApiException.noEncontrado("Solicitud")),
-                        entregadosPorSolicitud()))
+                        entregadosPorSolicitud(List.of(id))))
                 .build();
     }
 
@@ -153,15 +161,14 @@ public class SolicitudesRest {
         solicitudes.reenviarAEvaluacion(id);
         return aResponse(
                 solicitudes.buscarPorId(id).orElseThrow(() -> ApiException.noEncontrado("Solicitud")),
-                entregadosPorSolicitud());
+                entregadosPorSolicitud(List.of(id)));
     }
 
     @GET
     @Path("{id}/documentos")
     public List<Dtos.DocumentoSolicitudResponse> listarDocumentos(@PathParam("id") long id) {
         obtenerConAcceso(id, SeguridadRest.usuario(request));
-        return documentos.listarTodos().stream()
-                .filter(doc -> perteneceA(doc, id))
+        return documentos.listarPorSolicitud(id).stream()
                 .map(Dtos.DocumentoSolicitudResponse::desde)
                 .toList();
     }
@@ -516,9 +523,9 @@ public class SolicitudesRest {
 
     // Cuenta, por solicitud, cuantos tipos del checklist requerido ya tienen un
     // documento entregado (Registrado o Validado). Una sola lectura para toda la lista.
-    private Map<Long, Set<String>> entregadosPorSolicitud() {
+    private Map<Long, Set<String>> entregadosPorSolicitud(Collection<Long> idsSolicitud) {
         Map<Long, Set<String>> mapa = new HashMap<>();
-        for (DocumentoSolicitud doc : documentos.listarTodos()) {
+        for (DocumentoSolicitud doc : documentos.listarPorSolicitudes(idsSolicitud)) {
             Long idSolicitud = doc.getSolicitudAlquiler() != null
                     ? doc.getSolicitudAlquiler().getIdSolicitud() : null;
             if (idSolicitud == null) {
@@ -570,13 +577,17 @@ public class SolicitudesRest {
     }
 
     private List<SolicitudAlquiler> solicitudesDelUsuario(UsuarioAutenticado usuario) {
-        // El AGENTE se acota en SQL a sus propias solicitudes (caso dominante). Broker y
-        // admin mantienen listarTodos + puedeVer: el broker-administrador supervisa
-        // tambien agentes sin asignacion explicita, que un listarPorAgentes no cubriria.
         if (usuario.tieneRol("AGENTE")) {
             return solicitudes.listarPorAgentes(List.of(usuario.idDominio())).stream()
                     .filter(item -> puedeVer(usuario, item))
                     .toList();
+        }
+        if (usuario.tieneRol("BROKER")) {
+            List<Long> idsAgente = agentes.listarPorBroker(usuario.idDominio()).stream()
+                    .map(AgenteInmobiliario::getIdAgente)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            return solicitudes.listarPorAgentes(idsAgente);
         }
         return solicitudes.listarTodos().stream()
                 .filter(item -> puedeVer(usuario, item))

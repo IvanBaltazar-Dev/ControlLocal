@@ -21,7 +21,9 @@ public class InteraccionComercialDto
 
     public string CodigoProspeccion { get; set; } = string.Empty;
 
-    // Fecha y hora listas para mostrar.
+    // Fecha y hora crudas (para filtrar/exportar por rango) y su version lista para mostrar.
+    public DateTime? FechaHora { get; set; }
+
     public string FechaHoraTexto { get; set; } = string.Empty;
 
     public string CanalContacto { get; set; } = string.Empty;

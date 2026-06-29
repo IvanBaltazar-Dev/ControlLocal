@@ -55,12 +55,13 @@ public class FichaModel
 // emparejamiento laxo y usa valores de respaldo razonables cuando no hay match.
 public static class FichaBuilder
 {
-    public static FichaModel Build(string? codigo, ICaptacionService capSvc, ILocalService localSvc, IPropietarioService propSvc)
+    public static async Task<FichaModel> BuildAsync(string? codigo, ICaptacionService capSvc, ILocalService localSvc, IPropietarioService propSvc)
     {
-        var cap = (string.IsNullOrEmpty(codigo) ? null : capSvc.ByCodigo(codigo)) ?? capSvc.All().First();
+        var cap = (string.IsNullOrEmpty(codigo) ? null : await capSvc.ByCodigoAsync(codigo)) ?? (await capSvc.AllAsync()).First();
 
-        var local = localSvc.All().FirstOrDefault(l => Loose(l.Direccion, cap.DireccionLocal));
-        var prop = propSvc.All().FirstOrDefault(p => Loose(p.Nombre, cap.PropietarioNombre));
+        var local = (await localSvc.AllAsync()).FirstOrDefault(l => Loose(l.Direccion, cap.DireccionLocal));
+        var propietarios = await propSvc.AllAsync();
+        var prop = propietarios.FirstOrDefault(p => Loose(p.Nombre, cap.PropietarioNombre));
 
         var area = cap.AreaM2 > 0 ? cap.AreaM2 : (local?.AreaM2 ?? 0);
         var rubro = local?.Rubro is { Length: > 0 } r ? r : "Por definir";

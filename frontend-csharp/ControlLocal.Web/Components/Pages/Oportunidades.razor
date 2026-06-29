@@ -154,10 +154,10 @@
     {
         try
         {
-            await OportunidadSvc.RefrescarAsync();
-            await SolicitudSvc.RefrescarAsync();
-            await CaptacionSvc.RefrescarAsync();
-            _ops = Construir();
+            var oportunidades = await OportunidadSvc.RefrescarAsync();
+            var solicitudes = await SolicitudSvc.RefrescarAsync();
+            var captaciones = await CaptacionSvc.RefrescarAsync();
+            _ops = Construir(oportunidades, solicitudes, captaciones);
         }
         catch (Exception ex)
         {
@@ -169,10 +169,10 @@
         }
     }
 
-    private IReadOnlyList<OpRow> Construir() => OportunidadSvc.All().Select(o =>
+    private IReadOnlyList<OpRow> Construir(IReadOnlyList<OportunidadComercialDto> oportunidades, IReadOnlyList<SolicitudAlquilerDto> solicitudes, IReadOnlyList<CaptacionDto> captaciones) => oportunidades.Select(o =>
     {
-        var captacion = CaptacionSvc.ByCodigo(o.CaptacionCodigo);
-        var solicitud = SolicitudSvc.All().FirstOrDefault(s =>
+        var captacion = captaciones.FirstOrDefault(c => c.CodigoCaptacion.Equals(o.CaptacionCodigo, StringComparison.OrdinalIgnoreCase));
+        var solicitud = solicitudes.FirstOrDefault(s =>
             s.OportunidadId == o.Id
             || s.CodigoOperacion == o.CodigoOportunidad
             || o.ClienteNombre.Contains(s.ClienteNombre)

@@ -9,6 +9,7 @@ import com.controllocal.model.comercial.SolicitudAlquiler;
 public interface SolicitudAlquilerDAO extends CrudDAO<SolicitudAlquiler> {
     Long crear(SolicitudAlquiler solicitud);
     Optional<SolicitudAlquiler> buscarPorId(Long id);
+    Optional<SolicitudAlquiler> buscarPorCodigo(String codigo);
     List<SolicitudAlquiler> listarTodos();
     boolean actualizar(SolicitudAlquiler solicitud);
     boolean eliminar(Long id);

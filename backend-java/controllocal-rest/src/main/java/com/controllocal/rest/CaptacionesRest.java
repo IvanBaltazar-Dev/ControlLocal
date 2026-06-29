@@ -3,7 +3,9 @@ package com.controllocal.rest;
 import java.util.List;
 import java.util.Locale;
 
+import com.controllocal.bl.BrokerBusinessLogic;
 import com.controllocal.bl.CaptacionBusinessLogic;
+import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.inmueble.LocalComercial;
@@ -36,6 +38,7 @@ public class CaptacionesRest {
     private static final RateLimiter LIMITADOR_SENSIBLE = new RateLimiter(30);
 
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
+    private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
     private final CoincidenciaCarteraSupport coincidencias = new CoincidenciaCarteraSupport();
 
     @Context
@@ -63,6 +66,21 @@ public class CaptacionesRest {
     }
 
     @GET
+    @Path("reasignables")
+    public PageResponse<Dtos.CaptacionResponse> reasignables(
+            @QueryParam("pagina") @DefaultValue("1") int pagina,
+            @QueryParam("tamano") @DefaultValue("10") int tamano,
+            @QueryParam("q") String query) {
+        UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "BROKER", "ADMIN");
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        List<Captacion> fuente = captacionesDelUsuario(usuario).stream()
+                .filter(c -> c.getEstado() == com.controllocal.model.comercial.enums.EstadoCaptacion.ACTIVA)
+                .filter(c -> q.isBlank() || coincideReasignable(c, q))
+                .toList();
+        return pagina(fuente, pagina, tamano);
+    }
+
+    @GET
     @Path("{id}")
     public Dtos.CaptacionResponse obtener(@PathParam("id") long id) {
         return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, SeguridadRest.usuario(request)));
@@ -72,12 +90,12 @@ public class CaptacionesRest {
     @Path("codigo/{codigo}")
     public Dtos.CaptacionResponse obtenerPorCodigo(@PathParam("codigo") String codigo) {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
-        return captacionesDelUsuario(usuario).stream()
-                .filter(item -> item.getCodigoCaptacion() != null
-                        && item.getCodigoCaptacion().equalsIgnoreCase(codigo))
-                .findFirst()
-                .map(Dtos.CaptacionResponse::desde)
+        Captacion captacion = captaciones.buscarPorCodigo(codigo)
                 .orElseThrow(() -> ApiException.noEncontrado("Captacion"));
+        if (!puedeVer(usuario, captacion)) {
+            throw ApiException.prohibido();
+        }
+        return Dtos.CaptacionResponse.desde(captacion);
     }
 
     @GET
@@ -209,12 +227,28 @@ public class CaptacionesRest {
     private Captacion obtenerConAcceso(long id, UsuarioAutenticado usuario) {
         Captacion captacion = captaciones.buscarPorId(id)
                 .orElseThrow(() -> ApiException.noEncontrado("Captacion"));
-        boolean permitido = captacionesDelUsuario(usuario).stream()
-                .anyMatch(item -> item.getIdCaptacion().equals(captacion.getIdCaptacion()));
-        if (!permitido) {
+        if (!puedeVer(usuario, captacion)) {
             throw ApiException.prohibido();
         }
         return captacion;
+    }
+
+    private boolean puedeVer(UsuarioAutenticado usuario, Captacion captacion) {
+        AgenteInmobiliario agente = captacion.getAgenteResponsable();
+        Long idAgente = agente != null ? agente.getIdAgente() : null;
+        if (idAgente == null) {
+            return false;
+        }
+        if ("ADMIN".equals(usuario.rol())) {
+            return true;
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return usuario.idDominio() == idAgente;
+        }
+        if ("BROKER".equals(usuario.rol())) {
+            return brokers.puedeSupervisarAgente(usuario.idDominio(), idAgente);
+        }
+        return false;
     }
 
     private List<Captacion> captacionesDelUsuario(UsuarioAutenticado usuario) {
@@ -239,6 +273,24 @@ public class CaptacionesRest {
                 .map(Dtos.CaptacionResponse::desde)
                 .toList();
         return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+    }
+
+    private static boolean coincideReasignable(Captacion c, String q) {
+        if (q == null || q.isBlank()) {
+            return true;
+        }
+        String codigo = texto(c.getCodigoCaptacion());
+        LocalComercial local = c.getLocalComercial();
+        String direccion = local != null ? texto(local.getDireccion()) : "";
+        String distrito = local != null ? texto(local.getDistrito()) : "";
+        AgenteInmobiliario agente = c.getAgenteResponsable();
+        String agenteNombre = agente != null && agente.getPersona() != null
+                ? texto(agente.getPersona().getNombresORazonSocial()) : "";
+        return codigo.contains(q) || direccion.contains(q) || distrito.contains(q) || agenteNombre.contains(q);
+    }
+
+    private static String texto(String valor) {
+        return valor == null ? "" : valor.toLowerCase(Locale.ROOT);
     }
 
     private void limitar() {

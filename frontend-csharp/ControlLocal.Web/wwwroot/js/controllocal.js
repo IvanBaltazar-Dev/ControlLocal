@@ -26,14 +26,43 @@ window.controlLocal = {
     },
 
     session: {
+        _subscriptions: new Map(),
         get: function () {
             return localStorage.getItem("controlLocal.session");
         },
         set: function (value) {
             localStorage.setItem("controlLocal.session", value);
+            this.notify();
         },
         clear: function () {
             localStorage.removeItem("controlLocal.session");
+            this.notify();
+        },
+        notify: function () {
+            window.dispatchEvent(new Event("controlLocalSessionChanged"));
+        },
+        subscribe: function (dotNetRef) {
+            const id = (window.crypto && window.crypto.randomUUID)
+                ? window.crypto.randomUUID()
+                : `${Date.now()}-${Math.random()}`;
+            const notifyDotNet = () => dotNetRef.invokeMethodAsync("OnBrowserSessionChanged");
+            const storageHandler = (event) => {
+                if (event.key === "controlLocal.session") notifyDotNet();
+            };
+            const localHandler = () => notifyDotNet();
+
+            window.addEventListener("storage", storageHandler);
+            window.addEventListener("controlLocalSessionChanged", localHandler);
+            this._subscriptions.set(id, { storageHandler, localHandler });
+            return id;
+        },
+        unsubscribe: function (id) {
+            const subscription = this._subscriptions.get(id);
+            if (!subscription) return;
+
+            window.removeEventListener("storage", subscription.storageHandler);
+            window.removeEventListener("controlLocalSessionChanged", subscription.localHandler);
+            this._subscriptions.delete(id);
         }
     }
 };

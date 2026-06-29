@@ -263,8 +263,8 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _l = (long.TryParse(IdParam, out var id) ? LocalSvc.ById(id) : null)
-             ?? LocalSvc.All().FirstOrDefault() ?? new();
+        _l = (long.TryParse(IdParam, out var id) ? await LocalSvc.ByIdAsync(id) : null)
+             ?? (await LocalSvc.AllAsync()).FirstOrDefault() ?? new();
 
         if (_l.Id > 0)
         {

@@ -197,8 +197,8 @@
         try
         {
             await AgenteSvc.RefrescarAsync();
-            _a = (long.TryParse(IdParam, out var id) ? AgenteSvc.ById(id) : null)
-                 ?? AgenteSvc.All().FirstOrDefault()
+            _a = (long.TryParse(IdParam, out var id) ? await AgenteSvc.ByIdAsync(id) : null)
+                 ?? (await AgenteSvc.AllAsync()).FirstOrDefault()
                  ?? new AgenteDto { Nombre = "Agente no encontrado" };
 
             // Los conteos (captaciones en cartera + operaciones en curso) llegan calculados del
@@ -237,7 +237,7 @@
 
                 try
                 {
-                    _actividad = InteraccionSvc.All()
+                    _actividad = (await InteraccionSvc.AllAsync())
                         .Where(i => MismoAgente(i.NombreAgenteResponsable, _a.Nombre))
                         .Take(6)
                         .ToList();

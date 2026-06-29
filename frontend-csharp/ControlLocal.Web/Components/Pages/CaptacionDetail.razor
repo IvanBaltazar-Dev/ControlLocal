@@ -142,8 +142,11 @@ else
                                     <div class="cl-card-title">Interacciones con propietario</div>
                                     <div class="cl-card-sub">Comunicacion registrada durante la captacion</div>
                                 </div>
-                                <div class="cl-flex" style="gap:8px;">
-                                    <span class="cl-badge blue">@_interaccionesCaptacion.Count</span>
+                                <div class="cl-flex" style="gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <input type="date" @bind="_intDesde" title="Desde" style="font-size:12px;" />
+                                    <input type="date" @bind="_intHasta" title="Hasta" style="font-size:12px;" />
+                                    <span class="cl-badge blue">@InteraccionesFiltradas.Count</span>
+                                    <button class="cl-btn sm" disabled="@(InteraccionesFiltradas.Count == 0)" @onclick="ExportarInteracciones"><Icon Name="download" Size="12" /> CSV</button>
                                     @if (!_readOnly && _cap.Id > 0)
                                     {
                                         <a class="cl-btn sm" href="@($"/interaccion-form/captacion/{_cap.Id}")"><Icon Name="plus" Size="12" /> Registrar</a>
@@ -151,16 +154,20 @@ else
                                 </div>
                             </div>
                             <div class="cl-card-body" style="padding:0;">
-                                @if (_interaccionesCaptacion.Count == 0)
+                                @if (InteraccionesFiltradas.Count == 0)
                                 {
-                                    <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Aun no hay interacciones de captacion con el propietario.</div>
+                                    <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">
+                                        @(_interaccionesCaptacion.Count == 0
+                                            ? "Aun no hay interacciones de captacion con el propietario."
+                                            : "No hay interacciones en el rango de fechas seleccionado.")
+                                    </div>
                                 }
                                 else
                                 {
                                     <table class="cl-table">
                                         <thead><tr><th>Fecha</th><th>Canal</th><th>Resultado</th><th>Observaciones</th></tr></thead>
                                         <tbody>
-                                            @foreach (var interaccion in _interaccionesCaptacion)
+                                            @foreach (var interaccion in InteraccionesFiltradas)
                                             {
                                                 <tr>
                                                     <td style="font-size:12px;color:#7E8794;">@interaccion.FechaHoraTexto</td>
@@ -375,10 +382,17 @@ else
                     <div class="cl-alert red" style="margin-bottom:12px;"><Icon Name="alert" Size="15" /><span>@_errReporte</span></div>
                 }
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                    <Field Label="Periodo desde"><input type="date" @bind="_rPeriodoInicio" /></Field>
-                    <Field Label="Periodo hasta"><input type="date" @bind="_rPeriodoFin" /></Field>
-                    <Field Label="Consultas recibidas"><input type="number" min="0" @bind="_rConsultas" /></Field>
-                    <Field Label="Visitas realizadas"><input type="number" min="0" @bind="_rVisitas" /></Field>
+                    <Field Label="Periodo desde"><input type="date" @bind="_rPeriodoInicio" @bind:after="RecalcularPreview" /></Field>
+                    <Field Label="Periodo hasta"><input type="date" @bind="_rPeriodoFin" @bind:after="RecalcularPreview" /></Field>
+                    <Field Label="Consultas recibidas (automático)">
+                        <div style="padding:8px 10px;border:1.5px solid var(--c-border);border-radius:9px;background:#F6F8FB;color:#384150;font-size:13px;">@(_previewCargando ? "Calculando…" : _rConsultas.ToString())</div>
+                    </Field>
+                    <Field Label="Visitas realizadas (automático)">
+                        <div style="padding:8px 10px;border:1.5px solid var(--c-border);border-radius:9px;background:#F6F8FB;color:#384150;font-size:13px;">@(_previewCargando ? "Calculando…" : _rVisitas.ToString())</div>
+                    </Field>
+                </div>
+                <div class="cl-muted" style="font-size:11.5px;margin:-4px 0 4px;">
+                    Consultas y visitas se calculan de las interacciones y visitas reales de la propiedad en el periodo seleccionado.
                 </div>
                 <Field Label="Canal de envío al propietario">
                     <select @bind="_rCanal">
@@ -388,10 +402,10 @@ else
                         }
                     </select>
                 </Field>
-                <Field Label="Objeciones frecuentes">
-                    <textarea rows="2" @bind="_rObjeciones" placeholder="Objeciones del mercado: precio, ubicación, estado del local..."></textarea>
+                <Field Label="Objeciones frecuentes (automático)">
+                    <div style="padding:8px 10px;border:1.5px solid var(--c-border);border-radius:9px;background:#F6F8FB;color:#384150;font-size:13px;min-height:18px;">@(_previewCargando ? "Calculando…" : (string.IsNullOrWhiteSpace(_rObjeciones) ? "Sin objeciones registradas en el periodo (se jalan de los motivos de no continuidad)." : _rObjeciones))</div>
                 </Field>
-                <Field Label="Ajustes recomendados">
+                <Field Label="Ajustes recomendados (opcional)">
                     <textarea rows="2" @bind="_rAjustes" placeholder="Recomendaciones al propietario: precio, acondicionamiento, condiciones..."></textarea>
                 </Field>
             </ChildContent>
@@ -416,6 +430,8 @@ else
     private IReadOnlyList<OportunidadComercialDto> _ops = new List<OportunidadComercialDto>();
     private IReadOnlyList<SolicitudAlquilerDto> _solicitudes = new List<SolicitudAlquilerDto>();
     private IReadOnlyList<InteraccionComercialDto> _interaccionesCaptacion = new List<InteraccionComercialDto>();
+    private DateTime? _intDesde;
+    private DateTime? _intHasta;
     private CoincidenciasDto? _coincidencias;
     private bool _cargandoCoin;
     private string? _errCoin;
@@ -427,6 +443,7 @@ else
     private IReadOnlyList<ReportePropietarioDto> _reportes = new List<ReportePropietarioDto>();
     private bool _modalReporte;
     private bool _guardandoReporte;
+    private bool _previewCargando;
     private string? _errReporte;
     private DateTime? _rPeriodoInicio;
     private DateTime? _rPeriodoFin;
@@ -523,7 +540,7 @@ else
                 ? await CaptacionSvc.ObtenerPorCodigoAsync(CodigoParam, DisposedToken) ?? new()
                 : (await CaptacionSvc.RefrescarAsync(DisposedToken)).FirstOrDefault() ?? new();
             _local = _cap.LocalId > 0
-                ? LocalSvc.ById(_cap.LocalId)
+                ? await LocalSvc.ObtenerAsync(_cap.LocalId, DisposedToken)
                 : null;
 
             var oportunidadesTask = _cap.Id > 0
@@ -648,11 +665,11 @@ else
         await Exportar.DescargarPdfAsync($"Contrato_exclusividad_{_cap.CodigoCaptacion}", pdf);
     }
 
-    private void AbrirReporte()
+    private async Task AbrirReporte()
     {
         _errReporte = null;
         var hoy = DateTime.Today;
-        _rPeriodoInicio = hoy.AddDays(-30);
+        _rPeriodoInicio = hoy.AddDays(-15);
         _rPeriodoFin = hoy;
         _rConsultas = 0;
         _rVisitas = 0;
@@ -660,9 +677,36 @@ else
         _rAjustes = "";
         _rCanal = "E";
         _modalReporte = true;
+        await RecalcularPreview();
     }
 
     private void CerrarReporte() => _modalReporte = false;
+
+    // Consultas, visitas y objeciones son derivadas: las recalcula el backend para el periodo
+    // seleccionado y el formulario solo las muestra (no se editan a mano).
+    private async Task RecalcularPreview()
+    {
+        if (!_modalReporte || _cap.Id <= 0) return;
+        _previewCargando = true;
+        try
+        {
+            var preview = await ReporteSvc.PreviewAsync(_cap.Id, _rPeriodoInicio, _rPeriodoFin, DisposedToken);
+            _rConsultas = preview.Consultas;
+            _rVisitas = preview.Visitas;
+            _rObjeciones = preview.Objeciones;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+            // Si el preview falla, dejamos los valores actuales; el usuario puede reintentar al cambiar el periodo.
+        }
+        finally
+        {
+            _previewCargando = false;
+        }
+    }
 
     private async Task GuardarReporte()
     {
@@ -709,6 +753,37 @@ else
         return partes.Length == 1
             ? partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant()
             : $"{partes[0][0]}{partes[1][0]}".ToUpperInvariant();
+    }
+
+    // Interacciones de la propiedad filtradas por rango de fecha (para revisar y exportar).
+    private IReadOnlyList<InteraccionComercialDto> InteraccionesFiltradas =>
+        _interaccionesCaptacion.Where(EnRangoInteraccion).ToList();
+
+    private bool EnRangoInteraccion(InteraccionComercialDto i)
+    {
+        if (_intDesde is null && _intHasta is null) return true;
+        if (i.FechaHora is not { } f) return false;
+        var dia = f.Date;
+        if (_intDesde is { } desde && dia < desde.Date) return false;
+        if (_intHasta is { } hasta && dia > hasta.Date) return false;
+        return true;
+    }
+
+    private async Task ExportarInteracciones()
+    {
+        var filas = InteraccionesFiltradas
+            .Select(i => (IReadOnlyList<string?>)new[]
+            {
+                i.FechaHoraTexto,
+                EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, i.CanalContacto),
+                EnumCatalog.LabelResultadoInteraccion(i.Contexto, i.Resultado),
+                i.Observaciones,
+            })
+            .ToList();
+        await Exportar.DescargarCsvAsync(
+            $"Interacciones_{_cap.CodigoCaptacion}",
+            new[] { "Fecha", "Canal", "Resultado", "Observaciones" },
+            filas);
     }
 
     private static string Texto(string? valor) =>

@@ -26,65 +26,43 @@ public sealed record PageResult<T>(IReadOnlyList<T> Items, long TotalRecords, in
 
 public interface IBrokerService
 {
-    IReadOnlyList<BrokerDto> All();
-    BrokerDto? ById(string codigoBroker);
-    BrokerDto First();
-    BrokerDto Agregar(BrokerDto broker);
-    BrokerDto Actualizar(BrokerDto broker);
-    // Variantes async reales (no bloquean el circuito de Blazor Server).
-    Task<BrokerDto> AgregarAsync(BrokerDto broker, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(broker));
-    Task<BrokerDto> ActualizarAsync(BrokerDto broker, CancellationToken ct = default) =>
-        Task.FromResult(Actualizar(broker));
+    Task<IReadOnlyList<BrokerDto>> AllAsync(CancellationToken ct = default);
+    Task<BrokerDto?> ByCodigoAsync(string codigoBroker, CancellationToken ct = default);
+    Task<IReadOnlyList<BrokerDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<BrokerDto> AgregarAsync(BrokerDto broker, CancellationToken ct = default);
+    Task<BrokerDto> ActualizarAsync(BrokerDto broker, CancellationToken ct = default);
 }
 
 public interface IAgenteService
 {
-    IReadOnlyList<AgenteDto> All();
-    Task<IReadOnlyList<AgenteDto>> RefrescarAsync(CancellationToken ct = default) =>
-        Task.FromResult(All());
-    AgenteDto? ById(long id);
-    AgenteDto Agregar(AgenteDto agente);
-    AgenteDto Actualizar(AgenteDto agente);
-    // Variantes async reales (no bloquean el circuito de Blazor Server).
-    Task<AgenteDto> AgregarAsync(AgenteDto agente, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(agente));
-    Task<AgenteDto> ActualizarAsync(AgenteDto agente, CancellationToken ct = default) =>
-        Task.FromResult(Actualizar(agente));
-    AgenteDto Desactivar(long id);
+    Task<IReadOnlyList<AgenteDto>> AllAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<AgenteDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<AgenteDto?> ByIdAsync(long id, CancellationToken ct = default);
+    Task<AgenteDto> AgregarAsync(AgenteDto agente, CancellationToken ct = default);
+    Task<AgenteDto> ActualizarAsync(AgenteDto agente, CancellationToken ct = default);
+    Task<AgenteDto> DesactivarAsync(long id, CancellationToken ct = default);
 }
 
 public interface IPropietarioService
 {
-    IReadOnlyList<PropietarioDto> All();
-    PropietarioDto? ById(long id);
-    // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
+    Task<IReadOnlyList<PropietarioDto>> AllAsync(CancellationToken ct = default);
+    Task<PropietarioDto?> ByIdAsync(long id, CancellationToken ct = default);
+    // Recarga fresca desde el backend e invalida la cache del circuito.
     Task<IReadOnlyList<PropietarioDto>> RefrescarAsync(CancellationToken ct = default);
-    // Alta individual; asigna el id y devuelve el registro.
-    PropietarioDto Agregar(PropietarioDto propietario);
-    PropietarioDto Actualizar(PropietarioDto propietario);
-    // Variantes async reales (no bloquean el circuito de Blazor Server).
-    Task<PropietarioDto> AgregarAsync(PropietarioDto propietario, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(propietario));
-    Task<PropietarioDto> ActualizarAsync(PropietarioDto propietario, CancellationToken ct = default) =>
-        Task.FromResult(Actualizar(propietario));
+    Task<PropietarioDto> AgregarAsync(PropietarioDto propietario, CancellationToken ct = default);
+    Task<PropietarioDto> ActualizarAsync(PropietarioDto propietario, CancellationToken ct = default);
 }
 
 public interface IClienteService
 {
-    IReadOnlyList<ClienteInteresadoDto> All();
-    ClienteInteresadoDto? ById(long id);
-    Task<ClienteInteresadoDto?> ObtenerAsync(long id, CancellationToken ct = default) =>
-        Task.FromResult(ById(id));
-    Task<IReadOnlyList<ClienteInteresadoDto>> RefrescarAsync(CancellationToken ct = default) =>
-        Task.FromResult(All());
-    ClienteInteresadoDto Agregar(ClienteInteresadoDto cliente);
-    ClienteInteresadoDto Actualizar(ClienteInteresadoDto cliente);
-    // Variantes async reales (no bloquean el circuito de Blazor Server).
-    Task<ClienteInteresadoDto> AgregarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(cliente));
-    Task<ClienteInteresadoDto> ActualizarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default) =>
-        Task.FromResult(Actualizar(cliente));
+    Task<IReadOnlyList<ClienteInteresadoDto>> AllAsync(CancellationToken ct = default);
+    Task<ClienteInteresadoDto?> ByIdAsync(long id, CancellationToken ct = default);
+    // GET fresco + mapeo (no cache-first), para detalle/edición que necesitan el dato del backend.
+    Task<ClienteInteresadoDto?> ObtenerAsync(long id, CancellationToken ct = default);
+    // Recarga fresca desde el backend e invalida la cache del circuito.
+    Task<IReadOnlyList<ClienteInteresadoDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<ClienteInteresadoDto> AgregarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default);
+    Task<ClienteInteresadoDto> ActualizarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default);
 }
 
 public interface IFichaComercialService
@@ -120,6 +98,9 @@ public interface IReportePropietarioService
     Task<IReadOnlyList<ReportePropietarioDto>> ListarPorCaptacionAsync(long idCaptacion, CancellationToken ct = default);
 
     Task<ReportePropietarioDto> CrearAsync(long idCaptacion, ReportePropietarioDto reporte, CancellationToken ct = default);
+
+    // Valores derivados del periodo (consultas/visitas/objeciones) para previsualizar antes de registrar.
+    Task<ReportePreviewDto> PreviewAsync(long idCaptacion, DateTime? desde, DateTime? hasta, CancellationToken ct = default);
 }
 
 // Requerimientos de cliente (perfil de busqueda). Crear/actualizar vincula al cliente y entra al matching.
@@ -136,15 +117,13 @@ public interface IRequerimientoService
 
 public interface ILocalService
 {
-    IReadOnlyList<LocalComercialDto> All();
-    LocalComercialDto? ById(long id);
-    LocalComercialDto Agregar(LocalComercialDto local);
-    LocalComercialDto Actualizar(LocalComercialDto local);
-    // Variantes async reales (no bloquean el circuito de Blazor Server).
-    Task<LocalComercialDto> AgregarAsync(LocalComercialDto local, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(local));
-    Task<LocalComercialDto> ActualizarAsync(LocalComercialDto local, CancellationToken ct = default) =>
-        Task.FromResult(Actualizar(local));
+    Task<IReadOnlyList<LocalComercialDto>> AllAsync(CancellationToken ct = default);
+    Task<LocalComercialDto?> ByIdAsync(long id, CancellationToken ct = default);
+    // Igual que ByIdAsync (cache-first + GET de respaldo); se mantiene por compatibilidad de llamadas.
+    Task<LocalComercialDto?> ObtenerAsync(long id, CancellationToken ct = default);
+    Task<IReadOnlyList<LocalComercialDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<LocalComercialDto> AgregarAsync(LocalComercialDto local, CancellationToken ct = default);
+    Task<LocalComercialDto> ActualizarAsync(LocalComercialDto local, CancellationToken ct = default);
 }
 
 // Historico de precios de un local (tabla precio_local). Solo lectura + alta de hito.
@@ -173,43 +152,30 @@ public interface IPublicacionService
 // cada acción reinicia el reloj a 7 días; desde el día 8 sin acción la prospección queda vencida.
 public interface IProspeccionService
 {
-    IReadOnlyList<ProspeccionDto> All();
-    ProspeccionDto? ById(long id);
-    Task<ProspeccionDto?> ObtenerAsync(long id, CancellationToken ct = default) =>
-        Task.FromResult(ById(id));
+    Task<IReadOnlyList<ProspeccionDto>> AllAsync(CancellationToken ct = default);
+    Task<ProspeccionDto?> ByIdAsync(long id, CancellationToken ct = default);
+    // GET fresco + mapeo (no cache-first), para detalle/edicion que necesitan el dato del backend.
+    Task<ProspeccionDto?> ObtenerAsync(long id, CancellationToken ct = default);
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<ProspeccionDto>> RefrescarAsync(CancellationToken ct = default);
     Task<PageResult<ProspeccionDto>> ListarPaginaAsync(
         int pagina, int tamano = 8, string? estado = null, string? distrito = null,
         string? query = null, CancellationToken ct = default, long? idCaptacion = null, long? idLocal = null,
-        long? idAgente = null, long? idBrokerSupervisor = null) =>
-        Task.FromResult(new PageResult<ProspeccionDto>(All(), All().Count, 1, All().Count));
+        long? idAgente = null, long? idBrokerSupervisor = null);
     Task<PageResult<ProspeccionDto>> ListarRecontactarPaginaAsync(
-        int pagina, int tamano = 8, int diasAviso = 7, CancellationToken ct = default) =>
-        Task.FromResult(new PageResult<ProspeccionDto>(PorRecontactar(diasAviso), PorRecontactar(diasAviso).Count, 1, tamano));
-    Task<long> ContarAsync(string? estado = null, string? distrito = null, string? query = null, CancellationToken ct = default) =>
-        Task.FromResult((long)All().Count(item =>
-            (string.IsNullOrEmpty(estado) || item.Estado == estado)
-            && (string.IsNullOrEmpty(distrito) || item.Distrito == distrito)
-            && (string.IsNullOrEmpty(query)
-                || TextoFiltro.Contiene(item.Direccion, query)
-                || TextoFiltro.Contiene(item.LocalCodigo, query)
-                || TextoFiltro.Contiene(item.CodigoProspeccion, query)
-                || TextoFiltro.Contiene(item.PropietarioNombre, query))));
-    Task<long> ContarRecontactarAsync(int diasAviso = 7, CancellationToken ct = default) =>
-        Task.FromResult((long)PorRecontactar(diasAviso).Count);
-    // En gestion cuya ultima accion de seguimiento tiene ya diasAviso dias o mas (recontacto pendiente).
-    IReadOnlyList<ProspeccionDto> PorRecontactar(int diasAviso);
-    ProspeccionDto Contactar(long id);
-    ProspeccionDto RegistrarReunion(long id);
-    ProspeccionDto EntregarPropuesta(long id);
+        int pagina, int tamano = 8, int diasAviso = 7, CancellationToken ct = default);
+    Task<long> ContarAsync(string? estado = null, string? distrito = null, string? query = null, CancellationToken ct = default);
+    Task<long> ContarRecontactarAsync(int diasAviso = 7, CancellationToken ct = default);
+    Task<ProspeccionDto> ContactarAsync(long id, CancellationToken ct = default);
+    Task<ProspeccionDto> RegistrarReunionAsync(long id, CancellationToken ct = default);
+    Task<ProspeccionDto> EntregarPropuestaAsync(long id, CancellationToken ct = default);
     // Acción de seguimiento del propietario (un clic): reinicia el reloj de recontacto.
-    ProspeccionDto RegistrarSeguimiento(long id);
-    ProspeccionDto Rechazar(long id, string motivo);
-    ProspeccionDto Descartar(long id, string motivo);
+    Task<ProspeccionDto> RegistrarSeguimientoAsync(long id, CancellationToken ct = default);
+    Task<ProspeccionDto> RechazarAsync(long id, string motivo, CancellationToken ct = default);
+    Task<ProspeccionDto> DescartarAsync(long id, string motivo, CancellationToken ct = default);
     // El propietario acepta: marca Captado y simula la captación creada.
-    ProspeccionDto Captar(long id, decimal comisionPactada);
-    ProspeccionDto MarcarCaptado(long id, string codigoCaptacion);
+    Task<ProspeccionDto> CaptarAsync(long id, decimal comisionPactada, CancellationToken ct = default);
+    Task<ProspeccionDto> MarcarCaptadoAsync(long id, string codigoCaptacion, CancellationToken ct = default);
 }
 
 // Bandeja "Acciones Pendientes" del agente (Etapa 5). Sin alta manual: las tareas se
@@ -217,28 +183,23 @@ public interface IProspeccionService
 public interface ITareaService
 {
     Task<IReadOnlyList<TareaDto>> BandejaAsync(CancellationToken ct = default);
+    Task<PageResult<TareaDto>> BandejaPaginaAsync(int pagina = 1, int tamano = 5, CancellationToken ct = default);
     Task CancelarAsync(long idTarea, CancellationToken ct = default);
 }
 
 public interface ICaptacionService
 {
-    IReadOnlyList<CaptacionDto> All();
-    IReadOnlyList<BandejaCaptacionDto> Bandeja();
-    CaptacionDto? ByCodigo(string codigo);
-    CaptacionDto Agregar(CaptacionDto captacion);
-    CaptacionDto Actualizar(CaptacionDto captacion);
-    // Variantes async reales (no bloquean el circuito de Blazor Server). Las pantallas
-    // deben usar estas; las sincronas quedan por compatibilidad.
-    Task<CaptacionDto> AgregarAsync(CaptacionDto captacion, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(captacion));
-    Task<CaptacionDto> ActualizarAsync(CaptacionDto captacion, CancellationToken ct = default) =>
-        Task.FromResult(Actualizar(captacion));
+    Task<IReadOnlyList<CaptacionDto>> AllAsync(CancellationToken ct = default);
+    Task<CaptacionDto?> ByCodigoAsync(string codigo, CancellationToken ct = default);
+    Task<CaptacionDto> AgregarAsync(CaptacionDto captacion, CancellationToken ct = default);
+    Task<CaptacionDto> ActualizarAsync(CaptacionDto captacion, CancellationToken ct = default);
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<CaptacionDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<PageResult<CaptacionDto>> ListarReasignablesAsync(
+        int pagina = 1, int tamano = 8, string? query = null, CancellationToken ct = default);
     Task<IReadOnlyList<BandejaCaptacionDto>> RefrescarBandejaAsync(CancellationToken ct = default);
     Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default);
-    Task<CaptacionDto?> ObtenerPorIdAsync(long id, CancellationToken ct = default) =>
-        Task.FromResult(All().FirstOrDefault(item => item.Id == id));
+    Task<CaptacionDto?> ObtenerPorIdAsync(long id, CancellationToken ct = default);
     Task ResolverBandejaAsync(string codigo, string decision, string? observacion, CancellationToken ct = default);
     Task ReasignarBandejaAsync(string codigo, long idNuevoAgente, string motivo, CancellationToken ct = default);
     Task CerrarAsync(long id, string motivo, CancellationToken ct = default);
@@ -246,29 +207,21 @@ public interface ICaptacionService
 
 public interface ISolicitudService
 {
-    IReadOnlyList<SolicitudAlquilerDto> All();
+    Task<IReadOnlyList<SolicitudAlquilerDto>> AllAsync(CancellationToken ct = default);
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<SolicitudAlquilerDto>> RefrescarAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<SolicitudAlquilerDto>>(All().Where(item => item.CaptacionId == captacionId).ToList());
-    Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<SolicitudAlquilerDto>>(All().Where(item => item.OportunidadId == oportunidadId).ToList());
-    SolicitudAlquilerDto? ByCodigo(string codigo);
-    SolicitudAlquilerDto Agregar(SolicitudFormRequest request);
-    Task<SolicitudAlquilerDto> AgregarAsync(SolicitudFormRequest request, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(request));
-    SolicitudAlquilerDto ReenviarAEvaluacion(string codigoSolicitud);
-    // Reenvio asincrono real (no bloquea el circuito de Blazor Server). Las pantallas
-    // deben usar esta variante; la sincrona queda solo por compatibilidad.
-    Task<SolicitudAlquilerDto> ReenviarAEvaluacionAsync(
-        string codigoSolicitud, CancellationToken ct = default) =>
-        Task.FromResult(ReenviarAEvaluacion(codigoSolicitud));
-    EvaluacionSolicitudDto Evaluar(string codigoSolicitud, EvaluacionSolicitudDto evaluacion);
+    Task<SolicitudAlquilerDto?> ObtenerAsync(string idOCodigo, CancellationToken ct = default);
+    Task<PageResult<SolicitudAlquilerDto>> ListarPaginaAsync(int pagina = 1, int tamano = 20, CancellationToken ct = default);
+    Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default);
+    Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default);
+    Task<SolicitudAlquilerDto?> ByCodigoAsync(string codigo, CancellationToken ct = default);
+    Task<SolicitudAlquilerDto> AgregarAsync(SolicitudFormRequest request, CancellationToken ct = default);
+    // Reenvio asincrono real (no bloquea el circuito de Blazor Server).
+    Task<SolicitudAlquilerDto> ReenviarAEvaluacionAsync(string codigoSolicitud, CancellationToken ct = default);
     Task<EvaluacionSolicitudDto> EvaluarAsync(
         string codigoSolicitud,
         EvaluacionSolicitudDto evaluacion,
-        CancellationToken ct = default) =>
-        Task.FromResult(Evaluar(codigoSolicitud, evaluacion));
+        CancellationToken ct = default);
     // Historial de evaluaciones de una solicitud (trazabilidad), accesible al agente dueño y al broker.
     Task<IReadOnlyList<EvaluacionSolicitudDto>> ListarEvaluacionesAsync(long idSolicitud, CancellationToken ct = default);
 }
@@ -278,10 +231,12 @@ public interface ISolicitudService
 // seccion de propiedades alquiladas; registrar crea el contrato y cierra la operacion.
 public interface IContratoService
 {
-    IReadOnlyList<ContratoAlquilerDto> All();
+    Task<IReadOnlyList<ContratoAlquilerDto>> AllAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ContratoAlquilerDto>> RefrescarAsync(CancellationToken ct = default);
-    // Contrato ya registrado para una oportunidad (null si aun no se ha alquilado).
-    ContratoAlquilerDto? ByOportunidad(long oportunidadId);
+    // Contrato ya registrado para una oportunidad, desde la cache del circuito (null si aun no se ha alquilado).
+    Task<ContratoAlquilerDto?> ByOportunidadAsync(long oportunidadId, CancellationToken ct = default);
+    // Igual que ByOportunidadAsync pero consultado fresco al backend (sin cache-first).
+    Task<ContratoAlquilerDto?> ObtenerPorOportunidadAsync(long oportunidadId, CancellationToken ct = default);
     // Crea el contrato a partir de la solicitud aprobada y cierra el trato.
     Task<ContratoAlquilerDto> RegistrarAsync(ContratoFormRequest request, CancellationToken ct = default);
     // Etapa 2: el broker supervisor define el monto real del agente (la empresa se calcula sola).
@@ -318,8 +273,8 @@ public interface IDocumentoSolicitudService
 
 public interface IInteraccionService
 {
-    IReadOnlyList<InteraccionComercialDto> All();
-    InteraccionComercialDto? ById(long id);
+    Task<IReadOnlyList<InteraccionComercialDto>> AllAsync(CancellationToken ct = default);
+    Task<InteraccionComercialDto?> ByIdAsync(long id, CancellationToken ct = default);
     Task<PageResult<InteraccionComercialDto>> ListarPaginaAsync(
         int pagina,
         int tamano = 8,
@@ -327,21 +282,14 @@ public interface IInteraccionService
         string? resultado = null,
         string? canal = null,
         string? query = null,
-        CancellationToken ct = default) =>
-        Task.FromResult(new PageResult<InteraccionComercialDto>(All(), All().Count, 1, All().Count));
-    InteraccionComercialDto Agregar(InteraccionFormRequest request);
+        CancellationToken ct = default);
     // Variante async real (no bloquea el circuito de Blazor Server).
-    Task<InteraccionComercialDto> AgregarAsync(InteraccionFormRequest request, CancellationToken ct = default) =>
-        Task.FromResult(Agregar(request));
-    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.OportunidadId == oportunidadId).ToList());
-    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorProspeccionAsync(long prospeccionId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.ProspeccionId == prospeccionId).ToList());
-    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.CaptacionId == captacionId).ToList());
-    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.ClienteId == clienteId).ToList());
-    InteraccionComercialDto Actualizar(long id, string? resultado = null, string? observaciones = null);
+    Task<InteraccionComercialDto> AgregarAsync(InteraccionFormRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default);
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorProspeccionAsync(long prospeccionId, CancellationToken ct = default);
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default);
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default);
+    Task<InteraccionComercialDto> ActualizarAsync(long id, string? resultado = null, string? observaciones = null, CancellationToken ct = default);
 }
 
 // Espeja VisitaBusinessLogic del backend Java: listado + transiciones de estado
@@ -350,95 +298,59 @@ public interface IInteraccionService
 // Una misma captación puede tener varias oportunidades (varios clientes interesados).
 public interface IOportunidadService
 {
-    IReadOnlyList<OportunidadComercialDto> All();
-    OportunidadComercialDto? ById(long id);
+    Task<IReadOnlyList<OportunidadComercialDto>> AllAsync(CancellationToken ct = default);
+    Task<OportunidadComercialDto?> ByIdAsync(long id, CancellationToken ct = default);
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<OportunidadComercialDto>> RefrescarAsync(CancellationToken ct = default);
-    // Todos los clientes interesados (oportunidades) de una captación.
-    IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion);
-    Task<IReadOnlyList<OportunidadComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<OportunidadComercialDto>>(All().Where(item => item.CaptacionId == captacionId).ToList());
-    Task<IReadOnlyList<OportunidadComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<OportunidadComercialDto>>(All().Where(item => item.ClienteId == clienteId).ToList());
-    OportunidadComercialDto Crear(OportunidadFormRequest request);
-    Task<OportunidadComercialDto> CrearAsync(OportunidadFormRequest request, CancellationToken ct = default) =>
-        Task.FromResult(Crear(request));
-    OportunidadComercialDto MarcarSolicitudCreada(long id);
-    OportunidadComercialDto CerrarNoContinua(long id, string razon, string? observaciones);
+    Task<IReadOnlyList<OportunidadComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default);
+    Task<IReadOnlyList<OportunidadComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default);
+    Task<OportunidadComercialDto> CrearAsync(OportunidadFormRequest request, CancellationToken ct = default);
     Task<OportunidadComercialDto> CerrarNoContinuaAsync(
         long id,
         string razon,
         string? observaciones,
-        CancellationToken ct = default) =>
-        Task.FromResult(CerrarNoContinua(id, razon, observaciones));
+        CancellationToken ct = default);
     Task<OportunidadComercialDto> CerrarExitosaAsync(long id, CancellationToken ct = default);
 }
 
 public interface IVisitaService
 {
-    IReadOnlyList<VisitaDto> All();
-    VisitaDto? ById(long id);
+    Task<IReadOnlyList<VisitaDto>> AllAsync(CancellationToken ct = default);
+    Task<VisitaDto?> ByIdAsync(long id, CancellationToken ct = default);
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<VisitaDto>> RefrescarAsync(CancellationToken ct = default);
     // POST /visitas — programa una nueva visita (estado inicial PROGRAMADA).
-    VisitaDto Programar(VisitaFormRequest request);
+    Task<VisitaDto> ProgramarAsync(VisitaFormRequest request, CancellationToken ct = default);
     // PATCH /visitas/{id}/reprogramar — mueve fecha/hora (estado REPROGRAMADA).
-    VisitaDto Reprogramar(long id, string fechaTexto, string horaTexto);
+    Task<VisitaDto> ReprogramarAsync(long id, string fechaTexto, string horaTexto, CancellationToken ct = default);
     // PATCH /visitas/{id}/cancelar — cancela con motivo (estado CANCELADA).
-    VisitaDto Cancelar(long id, string motivo);
+    Task<VisitaDto> CancelarAsync(long id, string motivo, CancellationToken ct = default);
     // PATCH /visitas/{id}/realizar — confirma que la visita ocurrio.
-    VisitaDto MarcarRealizada(long id);
+    Task<VisitaDto> MarcarRealizadaAsync(long id, CancellationToken ct = default);
     // PATCH /visitas/{id}/no-realizada — confirma que la cita no llego a ocurrir.
-    VisitaDto MarcarNoRealizada(long id, string motivo);
+    Task<VisitaDto> MarcarNoRealizadaAsync(long id, string motivo, CancellationToken ct = default);
     // PATCH /visitas/{id}/resultado — registra el desenlace de una visita REALIZADA.
     // Si el resultado es de no continuidad (N/D), razonNoContinuidad es obligatorio:
     // registra el motivo ligado a la visita y cierra la oportunidad.
-    VisitaDto RegistrarResultado(long id, VisitaResultadoRequest request);
-    Task<VisitaDto> ProgramarAsync(VisitaFormRequest request, CancellationToken ct = default) =>
-        Task.FromResult(Programar(request));
-    Task<VisitaDto> ReprogramarAsync(long id, string fechaTexto, string horaTexto, CancellationToken ct = default) =>
-        Task.FromResult(Reprogramar(id, fechaTexto, horaTexto));
-    Task<VisitaDto> CancelarAsync(long id, string motivo, CancellationToken ct = default) =>
-        Task.FromResult(Cancelar(id, motivo));
-    Task<VisitaDto> MarcarRealizadaAsync(long id, CancellationToken ct = default) =>
-        Task.FromResult(MarcarRealizada(id));
-    Task<VisitaDto> MarcarNoRealizadaAsync(long id, string motivo, CancellationToken ct = default) =>
-        Task.FromResult(MarcarNoRealizada(id, motivo));
-    Task<VisitaDto> RegistrarResultadoAsync(long id, VisitaResultadoRequest request, CancellationToken ct = default) =>
-        Task.FromResult(RegistrarResultado(id, request));
+    Task<VisitaDto> RegistrarResultadoAsync(long id, VisitaResultadoRequest request, CancellationToken ct = default);
 }
 
 public interface IAssignmentService
 {
-    IReadOnlyList<AssignAgentDto> Agents();
-    IReadOnlyList<AssignBrokerDto> Brokers();
+    Task<IReadOnlyList<AssignAgentDto>> AgentsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<AssignBrokerDto>> BrokersAsync(CancellationToken ct = default);
     // Historial de reasignaciones de agentes entre brokers (relación BrokerAgente).
-    IReadOnlyList<BrokerAgenteDto> Historial();
+    Task<IReadOnlyList<BrokerAgenteDto>> HistorialAsync(CancellationToken ct = default);
     // Asigna el agente al broker destino, cierra la supervisión anterior y registra el historial.
-    BrokerAgenteDto ReasignarAgente(string agenteId, string brokerId, string motivo);
-    // Variantes async reales (no bloquean el circuito de Blazor Server) — normalizado con la
-    // reasignación de captaciones.
-    Task<IReadOnlyList<AssignAgentDto>> AgentsAsync(CancellationToken ct = default) =>
-        Task.FromResult(Agents());
-    Task<IReadOnlyList<AssignBrokerDto>> BrokersAsync(CancellationToken ct = default) =>
-        Task.FromResult(Brokers());
-    Task<IReadOnlyList<BrokerAgenteDto>> HistorialAsync(CancellationToken ct = default) =>
-        Task.FromResult(Historial());
     Task<BrokerAgenteDto> ReasignarAgenteAsync(
-        string agenteId, string brokerId, string motivo, CancellationToken ct = default) =>
-        Task.FromResult(ReasignarAgente(agenteId, brokerId, motivo));
+        string agenteId, string brokerId, string motivo, CancellationToken ct = default);
 }
 
 // Reasignación de captaciones a otro agente del equipo. Espeja el flujo de
 // negocio reasignarCaptacion(...) del backend Java (registra historial).
 public interface IReasignacionCaptacionService
 {
-    // Captaciones que el broker puede reasignar (estado reasignable).
-    IReadOnlyList<CaptacionDto> Reasignables();
-    // Agentes candidatos a recibir la captación (del equipo del broker).
-    IReadOnlyList<AgenteDto> AgentesDestino();
-    // Historial de reasignaciones registradas, más reciente primero.
-    IReadOnlyList<ReasignacionCaptacionDto> Historial();
-    // Registra una reasignación y devuelve el asiento de historial creado.
-    ReasignacionCaptacionDto Reasignar(ReasignarCaptacionRequest request);
+    // Historial de reasignaciones registradas, más reciente primero. La reasignación en sí la
+    // ejecuta ReasignarCaptaciones vía ICaptacionService.ReasignarBandejaAsync.
+    Task<IReadOnlyList<ReasignacionCaptacionDto>> HistorialAsync(CancellationToken ct = default);
 }

@@ -88,6 +88,22 @@ public class ContratosRest {
         return new PageResponse<>(items, total, paginaValida, tamanoValido);
     }
 
+    @GET
+    @Path("oportunidad/{idOportunidad}")
+    public Dtos.ContratoResponse obtenerPorOportunidad(@PathParam("idOportunidad") long idOportunidad) {
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        ContratoAlquiler contrato = contratos.buscarPorOportunidad(idOportunidad)
+                .orElseThrow(() -> ApiException.noEncontrado("Contrato"));
+        SolicitudAlquiler solicitud = solicitudDe(contrato);
+        boolean permitido = usuario.tieneRol("ADMIN")
+                || (usuario.tieneRol("BROKER") && brokerSupervisaContrato(solicitud, usuario))
+                || (usuario.tieneRol("AGENTE") && esSolicitudDelAgente(solicitud, usuario));
+        if (!permitido) {
+            throw ApiException.prohibido();
+        }
+        return Dtos.ContratoResponse.desde(contrato, solicitud, comision(contrato), usuario.tieneRol("ADMIN", "BROKER"));
+    }
+
     @POST
     public Response registrar(Dtos.ContratoRequest dto) {
         UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "AGENTE");

@@ -231,11 +231,11 @@
         _err = null;
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (!_isEdit) return;
 
-        var agente = AgenteSvc.ById(IdParam);
+        var agente = await AgenteSvc.ByIdAsync(IdParam);
         if (agente is null)
         {
             _err = "No se encontró el agente seleccionado.";
@@ -290,7 +290,7 @@
     {
         if (_procesando) return;
         _confirm = false;
-        var anterior = _isEdit ? AgenteSvc.ById(IdParam) : null;
+        var anterior = _isEdit ? await AgenteSvc.ByIdAsync(IdParam) : null;
         var agente = new AgenteDto
         {
             Id = anterior?.Id ?? 0,

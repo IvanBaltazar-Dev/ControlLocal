@@ -5,6 +5,8 @@ public static class PeruInputRules
     public const string TelefonoMensaje = "El teléfono debe tener 9 dígitos.";
     public const string DniMensaje = "El DNI debe tener 8 dígitos.";
     public const string RucMensaje = "El RUC debe tener 11 dígitos.";
+    public const string TelefonoCelularMensaje = "El celular peruano debe tener 9 dígitos y empezar con 9.";
+    public const string CorreoMensaje = "Ingresa un correo válido.";
 
     public static string Digitos(string? valor, int maxLength)
     {
@@ -43,8 +45,18 @@ public static class PeruInputRules
             _ => "El numero de documento solo debe contener numeros.",
         };
 
-    public static string? ValidarTelefono(string? valor) =>
-        Telefono(valor).Length == 9 ? null : TelefonoMensaje;
+    public static string? ValidarTelefono(string? valor)
+    {
+        var telefono = Telefono(valor);
+    
+        if (telefono.Length != 9)
+            return TelefonoMensaje;
+    
+        if (!telefono.StartsWith("9"))
+            return TelefonoCelularMensaje;
+    
+        return null;
+    }
 
     public static string? ValidarDocumento(string? tipoDocumento, string? valor)
     {
@@ -65,4 +77,14 @@ public static class PeruInputRules
             "RUC" => "R",
             _ => (tipoDocumento ?? "").Trim().ToUpperInvariant(),
         };
+    public static bool EsCorreoValido(string? correo)
+    {
+        if (string.IsNullOrWhiteSpace(correo))
+            return false;
+    
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            correo.Trim(),
+            @"^[^\s@]+@[^\s@]+\.[^\s@]+$"
+            );
+    }
 }

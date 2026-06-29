@@ -17,6 +17,9 @@ public interface VisitaBusinessLogic {
     public Long registrar(Visita visita);
     public Optional<Visita> buscarPorId(Long idVisita);
     public List<Visita> listarTodos();
+    public List<Visita> listarPorAgentes(java.util.Collection<Long> idsAgente);
+    public List<Visita> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion);
+    public List<Visita> listarPorCliente(Long idCliente);
     public boolean actualizar(Visita visita);
     public boolean eliminar(Long idVisita);
 

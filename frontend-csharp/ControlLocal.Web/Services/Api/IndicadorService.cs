@@ -36,7 +36,10 @@ public sealed record IndicadoresDto(
     int BrokersActivos,
     IReadOnlyList<string> MesesEtiquetas,
     IReadOnlyList<int> CierresPorMes,
+    IReadOnlyList<int> ConversionPorPeriodo,
+    IReadOnlyList<int> CaptacionesPorPeriodo,
     IReadOnlyList<IndicadorConteoDto> Etapas,
+    IReadOnlyList<IndicadorConteoDto> CaptacionesSalud,
     IReadOnlyList<IndicadorEmbudoDto> Embudo,
     IReadOnlyList<IndicadorDesempenoDto> Desempeno,
     IndicadorOperativoDto? Operativo = null)
@@ -45,7 +48,9 @@ public sealed record IndicadoresDto(
     public static readonly IndicadoresDto Vacio = new(
         "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         Array.Empty<string>(), Array.Empty<int>(),
-        Array.Empty<IndicadorConteoDto>(), Array.Empty<IndicadorEmbudoDto>(),
+        Array.Empty<int>(), Array.Empty<int>(),
+        Array.Empty<IndicadorConteoDto>(), Array.Empty<IndicadorConteoDto>(),
+        Array.Empty<IndicadorEmbudoDto>(),
         Array.Empty<IndicadorDesempenoDto>(), IndicadorOperativoDto.Vacio);
 }
 

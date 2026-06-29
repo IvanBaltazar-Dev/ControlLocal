@@ -11,6 +11,7 @@ import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -163,6 +164,51 @@ public class CaptacionDAOImpl implements CaptacionDAO {
             }
         } catch (SQLException e) {
             throw new DAOException("Error al listar las captaciones.", e);
+        }
+    }
+
+    @Override
+    public List<Captacion> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        List<Captacion> resultado = new ArrayList<>();
+        if (idsAgente == null || idsAgente.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE c.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ") ORDER BY c.id_captacion";
+        try (java.sql.Connection conn = DBManager.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsAgente) {
+                ps.setLong(idx++, id);
+            }
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (java.sql.SQLException e) {
+            throw new com.controllocal.dao.DAOException("Error al listar captacion por agentes.", e);
+        }
+    }
+
+    @Override
+    public List<Captacion> listarPorPropietario(Long idPropietario) {
+        List<Captacion> resultado = new ArrayList<>();
+        if (idPropietario == null) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE l.id_propietario = ? ORDER BY c.id_captacion";
+        try (java.sql.Connection conn = DBManager.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idPropietario);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (java.sql.SQLException e) {
+            throw new com.controllocal.dao.DAOException("Error al listar captacion por propietario.", e);
         }
     }
 

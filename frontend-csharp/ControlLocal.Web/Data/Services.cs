@@ -103,11 +103,14 @@ public interface IFichaComercialService
 // Recomendacion de cartera (Etapa 8): cruza demanda (requerimientos) y oferta (captaciones) en ambos sentidos.
 public interface ICoincidenciaCarteraService
 {
-    Task<CoincidenciasDto> PropiedadesParaClienteAsync(long idCliente, CancellationToken ct = default);
+    Task<CoincidenciasDto> PropiedadesParaClienteAsync(long idCliente, int page = 1, int pageSize = 6,
+        CancellationToken ct = default);
 
-    Task<CoincidenciasDto> ClientesParaCaptacionAsync(string idOrCodigo, CancellationToken ct = default);
+    Task<CoincidenciasDto> ClientesParaCaptacionAsync(string idOrCodigo, int page = 1, int pageSize = 6,
+        CancellationToken ct = default);
 
-    Task<CoincidenciasDto> ClientesParaProspeccionAsync(long idProspeccion, CancellationToken ct = default);
+    Task<CoincidenciasDto> ClientesParaProspeccionAsync(long idProspeccion, int page = 1, int pageSize = 6,
+        CancellationToken ct = default);
 }
 
 // Reporte periódico al propietario (Etapa 8). Vive en el expediente de la captación; el agente
@@ -317,6 +320,15 @@ public interface IInteraccionService
 {
     IReadOnlyList<InteraccionComercialDto> All();
     InteraccionComercialDto? ById(long id);
+    Task<PageResult<InteraccionComercialDto>> ListarPaginaAsync(
+        int pagina,
+        int tamano = 8,
+        string? grupo = null,
+        string? resultado = null,
+        string? canal = null,
+        string? query = null,
+        CancellationToken ct = default) =>
+        Task.FromResult(new PageResult<InteraccionComercialDto>(All(), All().Count, 1, All().Count));
     InteraccionComercialDto Agregar(InteraccionFormRequest request);
     // Variante async real (no bloquea el circuito de Blazor Server).
     Task<InteraccionComercialDto> AgregarAsync(InteraccionFormRequest request, CancellationToken ct = default) =>

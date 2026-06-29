@@ -82,6 +82,18 @@ public class VisitaBusinessLogicImpl implements VisitaBusinessLogic {
         return visitaDAO.listarTodos();
     }
 
+    public List<Visita> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        return visitaDAO.listarPorAgentes(idsAgente);
+    }
+
+    public List<Visita> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
+        return visitaDAO.listarPorCaptaciones(idsCaptacion);
+    }
+
+    public List<Visita> listarPorCliente(Long idCliente) {
+        return visitaDAO.listarPorCliente(idCliente);
+    }
+
     public boolean actualizar(Visita visita) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(visita != null ? visita.getIdVisita() : null, "El id de visita");

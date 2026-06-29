@@ -17,6 +17,8 @@ public class InteraccionComercialDto
 
     public long ClienteId { get; set; }
 
+    public long PropietarioId { get; set; }
+
     public string CodigoProspeccion { get; set; } = string.Empty;
 
     // Fecha y hora listas para mostrar.
@@ -31,6 +33,12 @@ public class InteraccionComercialDto
     public string TranscripcionNota { get; set; } = string.Empty;
 
     public string ClienteNombre { get; set; } = string.Empty;
+
+    public string PropietarioNombre { get; set; } = string.Empty;
+
+    public string PersonaTipo { get; set; } = string.Empty;
+
+    public string PersonaNombre { get; set; } = string.Empty;
 
     public string CaptacionCodigo { get; set; } = string.Empty;
 
@@ -52,4 +60,11 @@ public class InteraccionComercialDto
         "PROSPECCION" or "CAPTACION" => "propietario",
         _ => "cliente",
     };
+
+    public string PersonaTipoMostrar =>
+        !string.IsNullOrWhiteSpace(PersonaTipo) ? PersonaTipo : GrupoContexto == "propietario" ? "Propietario" : "Cliente";
+
+    public string PersonaNombreMostrar =>
+        !string.IsNullOrWhiteSpace(PersonaNombre) ? PersonaNombre
+        : GrupoContexto == "propietario" ? PropietarioNombre : ClienteNombre;
 }

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -149,7 +150,7 @@ public class SeguimientoComercialRest {
                         (a, b) -> a));
 
         List<SeguimientoComercialItemResponse> filas = new ArrayList<>();
-        prospecciones.listarTodos().stream()
+        prospeccionesEnAlcance(usuario, agentesBroker).stream()
                 .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker))
                 .map(this::filaProspeccion)
                 .forEach(filas::add);
@@ -158,12 +159,12 @@ public class SeguimientoComercialRest {
                         || captacionesBroker.contains(item.getIdCaptacion()))
                 .map(this::filaCaptacion)
                 .forEach(filas::add);
-        oportunidades.listarTodos().stream()
+        oportunidadesEnAlcance(usuario, agentesBroker, captacionesBroker).stream()
                 .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
                         || captacionPermitida(item.getCaptacion(), captacionesBroker, usuario))
                 .map(item -> filaOportunidad(item, propietarioPorLocal, propietarioIdPorLocal))
                 .forEach(filas::add);
-        solicitudes.listarTodos().stream()
+        solicitudesEnAlcance(usuario, agentesBroker, captacionesBroker).stream()
                 .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
                         || captacionPermitida(item.getCaptacion(), captacionesBroker, usuario))
                 .map(item -> filaSolicitud(item, propietarioPorLocal, propietarioIdPorLocal))
@@ -190,6 +191,56 @@ public class SeguimientoComercialRest {
         return brokers.listarAgentesSupervisados(usuario.idDominio()).stream()
                 .map(BrokerAgente::getIdAgente)
                 .collect(Collectors.toSet());
+    }
+
+    // Fuentes acotadas en SQL segun el rol (antes se escaneaban tablas completas). El filtro
+    // de visibilidad autoritativo se mantiene aguas abajo sobre este superconjunto.
+    private List<Prospeccion> prospeccionesEnAlcance(UsuarioAutenticado usuario, Set<Long> agentesBroker) {
+        if ("ADMIN".equals(usuario.rol())) {
+            return prospecciones.listarTodos();
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return prospecciones.listarPorAgentes(List.of(usuario.idDominio()));
+        }
+        return prospecciones.listarPorAgentes(agentesBroker);
+    }
+
+    private List<OportunidadComercial> oportunidadesEnAlcance(
+            UsuarioAutenticado usuario, Set<Long> agentesBroker, Set<Long> captacionesBroker) {
+        if ("ADMIN".equals(usuario.rol())) {
+            return oportunidades.listarTodos();
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return oportunidades.listarPorAgentes(List.of(usuario.idDominio()));
+        }
+        // BROKER: por agente del equipo UNION por captacion supervisada (sin duplicar filas).
+        Map<Long, OportunidadComercial> dedup = new LinkedHashMap<>();
+        for (OportunidadComercial o : oportunidades.listarPorAgentes(agentesBroker)) {
+            dedup.put(o.getIdOportunidad(), o);
+        }
+        for (OportunidadComercial o : oportunidades.listarPorCaptaciones(captacionesBroker)) {
+            dedup.put(o.getIdOportunidad(), o);
+        }
+        return new ArrayList<>(dedup.values());
+    }
+
+    private List<SolicitudAlquiler> solicitudesEnAlcance(
+            UsuarioAutenticado usuario, Set<Long> agentesBroker, Set<Long> captacionesBroker) {
+        if ("ADMIN".equals(usuario.rol())) {
+            return solicitudes.listarTodos();
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return solicitudes.listarPorAgentes(List.of(usuario.idDominio()));
+        }
+        // BROKER: por agente del equipo UNION por captacion supervisada (sin duplicar filas).
+        Map<Long, SolicitudAlquiler> dedup = new LinkedHashMap<>();
+        for (SolicitudAlquiler s : solicitudes.listarPorAgentes(agentesBroker)) {
+            dedup.put(s.getIdSolicitud(), s);
+        }
+        for (SolicitudAlquiler s : solicitudes.listarPorCaptaciones(captacionesBroker)) {
+            dedup.put(s.getIdSolicitud(), s);
+        }
+        return new ArrayList<>(dedup.values());
     }
 
     private List<Captacion> captacionesPermitidasBroker(UsuarioAutenticado usuario) {

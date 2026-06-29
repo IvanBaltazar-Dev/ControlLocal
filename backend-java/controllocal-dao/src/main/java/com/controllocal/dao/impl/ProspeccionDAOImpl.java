@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -127,6 +128,51 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
             return prospecciones;
         } catch (SQLException e) {
             throw new DAOException("Error al listar prospecciones por recontactar.", e);
+        }
+    }
+
+    @Override
+    public List<Prospeccion> listarPorAgentes(Collection<Long> idsAgente) {
+        List<Prospeccion> resultado = new ArrayList<>();
+        if (idsAgente == null || idsAgente.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE p.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ") ORDER BY p.id_prospeccion";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsAgente) {
+                ps.setLong(idx++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar prospeccion por agentes.", e);
+        }
+    }
+
+    @Override
+    public List<Prospeccion> listarPorPropietario(Long idPropietario) {
+        List<Prospeccion> resultado = new ArrayList<>();
+        if (idPropietario == null) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE l.id_propietario = ? ORDER BY p.id_prospeccion";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idPropietario);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar prospeccion por propietario.", e);
         }
     }
 

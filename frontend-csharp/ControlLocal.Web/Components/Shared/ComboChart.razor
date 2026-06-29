@@ -1,0 +1,89 @@
+@* Barras + linea para comparar volumen y porcentaje sin depender de librerias externas. *@
+<svg width="100%" height="@H" viewBox="0 0 @W @H" preserveAspectRatio="none" role="img" aria-label="@Title">
+    @foreach (var t in Grid)
+    {
+        var gy = F(Pad + (PlotH * t));
+        <line x1="@Pad" x2="@(W - Pad)" y1="@gy" y2="@gy" stroke="#E2E6EC" stroke-width="1" />
+    }
+
+    @for (var i = 0; i < Bars.Length; i++)
+    {
+        var value = Bars[i];
+        var bh = MaxBar <= 0 ? 0 : value / MaxBar * PlotH;
+        var x = F(Pad + i * Bw + (Bw - BarW) / 2);
+        var y = F(H - Pad - bh);
+        var fill = BarColor(i);
+        <rect x="@x" y="@y" width="@F(BarW)" height="@F(bh)" fill="@fill" rx="3">
+            <title>@Tooltip(i)</title>
+        </rect>
+    }
+
+    @if (Line.Length > 0)
+    {
+        <polyline points="@LinePoints" fill="none" stroke="@LineColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+        @for (var i = 0; i < Line.Length && i < Bars.Length; i++)
+        {
+            var cx = F(Pad + i * Bw + Bw / 2);
+            var cy = F(LineY(Line[i]));
+            <circle cx="@cx" cy="@cy" r="3.2" fill="#fff" stroke="@LineColor" stroke-width="2" vector-effect="non-scaling-stroke">
+                <title>@Tooltip(i)</title>
+            </circle>
+        }
+    }
+
+    @for (var i = 0; i < Labels.Length && i < Bars.Length; i++)
+    {
+        if (PasoEtiqueta > 0 && i % PasoEtiqueta == 0)
+        {
+            var lx = F(Pad + i * Bw + Bw / 2);
+            <svg:text x="@lx" y="@(H - 4)" font-size="9" fill="#7E8794" text-anchor="middle">@Labels[i]</svg:text>
+        }
+    }
+</svg>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Grafico combinado";
+    [Parameter] public double[] Bars { get; set; } = [];
+    [Parameter] public double[] Line { get; set; } = [];
+    [Parameter] public string[] Labels { get; set; } = [];
+    [Parameter] public int Height { get; set; } = 180;
+    [Parameter] public string LineColor { get; set; } = "#005BFF";
+
+    private const int W = 640;
+    private const int Pad = 22;
+    private int H => Height;
+    private int PlotH => H - Pad * 2;
+    private double MaxBar => Bars.Length == 0 ? 0 : Math.Max(1, Bars.Max());
+    private double Bw => Bars.Length == 0 ? 0 : (W - Pad * 2) / (double)Bars.Length;
+    private double BarW => Math.Clamp(Bw * 0.58, 3, 42);
+    private int PasoEtiqueta => Labels.Length == 0 ? 0 : Math.Max(1, (int)Math.Ceiling(Labels.Length / 9.0));
+    private static readonly double[] Grid = { 0, 0.25, 0.5, 0.75, 1 };
+
+    private string LinePoints => string.Join(" ", Line.Take(Bars.Length).Select((value, i) =>
+        $"{F(Pad + i * Bw + Bw / 2)},{F(LineY(value))}"));
+
+    private double LineY(double value)
+    {
+        var pct = Math.Clamp(value, 0, 100);
+        return H - Pad - pct / 100.0 * PlotH;
+    }
+
+    private string BarColor(int index)
+    {
+        if (index == 0) return "#00AEEF";
+        var previous = Bars[index - 1];
+        var current = Bars[index];
+        if (current > previous) return "#16A34A";
+        if (current < previous) return "#EF4444";
+        return "#64748B";
+    }
+
+    private string Tooltip(int index)
+    {
+        var label = index < Labels.Length ? Labels[index] : $"Periodo {index + 1}";
+        var conversion = index < Line.Length ? $"{Line[index]:0}% conversion" : "sin conversion";
+        return $"{label}: {Bars[index]:0} cierres, {conversion}";
+    }
+
+    private static string F(double d) => d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+}

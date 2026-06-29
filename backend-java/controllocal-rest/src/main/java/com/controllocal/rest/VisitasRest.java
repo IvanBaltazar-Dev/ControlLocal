@@ -208,26 +208,21 @@ public class VisitasRest {
     }
 
     private List<Visita> visitasDelUsuario(UsuarioAutenticado usuario) {
-        List<Visita> todas = visitas.listarTodos();
+        // Alcance acotado en SQL (no se escanea toda la tabla):
+        // - AGENTE: sus propias visitas.
+        // - ADMIN: todas (para consultar el equipo de cualquier broker desde su ficha).
+        // - BROKER: las de las captaciones que supervisa (semantica por captacion).
         if ("AGENTE".equals(usuario.rol())) {
-            return todas.stream()
-                    .filter(item -> item.getAgenteResponsable() != null
-                            && usuario.idDominio() == item.getAgenteResponsable().getIdAgente())
-                    .toList();
+            return visitas.listarPorAgentes(List.of(usuario.idDominio()));
         }
-        // El administrador ve todas las visitas (para poder consultar el equipo de cualquier
-        // broker desde su ficha); el broker queda acotado a las captaciones que supervisa.
         if (usuario.tieneRol("ADMIN")) {
-            return todas;
+            return visitas.listarTodos();
         }
         if (usuario.tieneRol("BROKER")) {
-            Set<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
+            List<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
                     .map(Captacion::getIdCaptacion)
-                    .collect(Collectors.toSet());
-            return todas.stream()
-                    .filter(item -> item.getCaptacion() != null
-                            && permitidas.contains(item.getCaptacion().getIdCaptacion()))
                     .toList();
+            return visitas.listarPorCaptaciones(permitidas);
         }
         throw ApiException.prohibido();
     }

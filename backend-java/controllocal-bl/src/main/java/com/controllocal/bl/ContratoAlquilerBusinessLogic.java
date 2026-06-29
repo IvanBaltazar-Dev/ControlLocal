@@ -1,6 +1,7 @@
 package com.controllocal.bl;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,4 +30,11 @@ public interface ContratoAlquilerBusinessLogic {
     Optional<ContratoAlquiler> buscarPorOportunidad(Long idOportunidad);
 
     List<ContratoAlquiler> listarTodos();
+
+    // Pagina de contratos acotada por rol en SQL (sin cargar tablas completas):
+    // agente -> sus contratos; broker -> contratos de sus captaciones; admin -> todos.
+    List<ContratoAlquiler> listarPaginaFiltrado(Long idAgente, Collection<Long> idsCaptacion,
+            int limite, int desplazamiento);
+
+    long contarFiltrado(Long idAgente, Collection<Long> idsCaptacion);
 }

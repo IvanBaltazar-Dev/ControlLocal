@@ -56,9 +56,15 @@ public static class ReporteIndicadores
                 new IndicadorReporte("calendar", "Visitas realizadas", ind.Visitas.ToString(), "del equipo", "blue"),
             };
 
-        var etapas = ind.Etapas
-            .Select((e, i) => new EtapaReporte(ColoresEstado.PorIndicePipeline(i), e.Nombre, e.Valor.ToString()))
+        var etapas = ind.CaptacionesSalud
+            .Select((e, i) => new EtapaReporte(ColoresEstado.PorIndiceSaludCaptacion(i), e.Nombre, e.Valor.ToString()))
             .ToArray();
+        if (etapas.Length == 0)
+        {
+            etapas = ind.Etapas
+                .Select((e, i) => new EtapaReporte(ColoresEstado.PorIndicePipeline(i), e.Nombre, e.Valor.ToString()))
+                .ToArray();
+        }
 
         var embudo = ind.Embudo
             .Select((f, i) => new[] { f.Etapa, f.Valor.ToString(), $"{f.Porcentaje}%", PaletaEmbudo[i % PaletaEmbudo.Length] })
@@ -129,7 +135,7 @@ public class ReporteIndicadoresDocument : IDocument
                 col.Item().Element(c => Bloque(c, "Cierres por mes", Barras));
                 col.Item().Row(row =>
                 {
-                    row.RelativeItem().Element(c => Bloque(c, "Captaciones por etapa", Dona));
+                    row.RelativeItem().Element(c => Bloque(c, "Salud de captaciones", Dona));
                     row.ConstantItem(16);
                     row.RelativeItem().Element(c => Bloque(c, "Embudo de conversión", Embudo));
                 });

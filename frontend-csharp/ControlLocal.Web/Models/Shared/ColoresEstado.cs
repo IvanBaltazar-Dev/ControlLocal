@@ -61,6 +61,12 @@ public static class ColoresEstado
     public static string PorIndicePipeline(int indice) =>
         PaletaPipeline[((indice % PaletaPipeline.Length) + PaletaPipeline.Length) % PaletaPipeline.Length];
 
+    public static string PorIndiceSaludCaptacion(int indice)
+    {
+        string[] paleta = { "#16A34A", "#FACC15", "#F97316", "#DC2626" };
+        return paleta[((indice % paleta.Length) + paleta.Length) % paleta.Length];
+    }
+
     public static string PorEtapa(string? nombre, int indice = 0)
     {
         if (!string.IsNullOrWhiteSpace(nombre) && PorNombre.TryGetValue(nombre.Trim(), out var exacto))

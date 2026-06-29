@@ -30,7 +30,8 @@ internal sealed record PropietarioApi(
     string Correo,
     string Estado,
     bool? ConsentimientoUsoDato,
-    DateTime? FechaCreacion);
+    DateTime? FechaCreacion,
+    int CantidadLocales);
 
 internal sealed record ClienteApi(
     long Id,
@@ -103,6 +104,8 @@ internal sealed record CoincidenciaApi(
 internal sealed record CoincidenciasApi(
     string? Origen,
     int Total,
+    int Page,
+    int PageSize,
     IReadOnlyList<CoincidenciaApi>? Items);
 
 internal sealed record RequerimientoApi(
@@ -381,6 +384,7 @@ internal sealed record InteraccionApi(
     long? IdProspeccion,
     long? IdCaptacion,
     long? IdCliente,
+    long? IdPropietario,
     string? CodigoProspeccion,
     DateTime? FechaHora,
     string? CanalContacto,
@@ -388,6 +392,9 @@ internal sealed record InteraccionApi(
     string? Observaciones,
     string? TranscripcionNota,
     string? ClienteNombre,
+    string? PropietarioNombre,
+    string? PersonaTipo,
+    string? PersonaNombre,
     string? CodigoCaptacion,
     string? AgenteNombre);
 
@@ -542,6 +549,7 @@ public class HttpPropietarioService(ApiClient api) : IPropietarioService
         NumeroDocumento = item.NumeroDocumento,
         Telefono = item.Telefono,
         Correo = item.Correo,
+        CantidadLocales = item.CantidadLocales,
         Estado = Codigos.EstadoActivo(item.Estado),
         ConsentimientoUsoDato = item.ConsentimientoUsoDato,
         FechaCreacion = item.FechaCreacion,
@@ -817,22 +825,27 @@ public class HttpFichaComercialService(ApiClient api) : IFichaComercialService
 
 public class HttpCoincidenciaCarteraService(ApiClient api) : ICoincidenciaCarteraService
 {
-    public async Task<CoincidenciasDto> PropiedadesParaClienteAsync(long idCliente, CancellationToken ct = default)
-    {
-        var resultado = await api.GetAsync<CoincidenciasApi>($"clientes/{idCliente}/coincidencias", ct);
-        return Mapear(resultado);
-    }
-
-    public async Task<CoincidenciasDto> ClientesParaCaptacionAsync(string idOrCodigo, CancellationToken ct = default)
+    public async Task<CoincidenciasDto> PropiedadesParaClienteAsync(
+        long idCliente, int page = 1, int pageSize = 6, CancellationToken ct = default)
     {
         var resultado = await api.GetAsync<CoincidenciasApi>(
-            $"captaciones/{Uri.EscapeDataString(idOrCodigo)}/coincidencias", ct);
+            $"clientes/{idCliente}/coincidencias?page={page}&page_size={pageSize}", ct);
         return Mapear(resultado);
     }
 
-    public async Task<CoincidenciasDto> ClientesParaProspeccionAsync(long idProspeccion, CancellationToken ct = default)
+    public async Task<CoincidenciasDto> ClientesParaCaptacionAsync(
+        string idOrCodigo, int page = 1, int pageSize = 6, CancellationToken ct = default)
     {
-        var resultado = await api.GetAsync<CoincidenciasApi>($"prospecciones/{idProspeccion}/coincidencias", ct);
+        var resultado = await api.GetAsync<CoincidenciasApi>(
+            $"captaciones/{Uri.EscapeDataString(idOrCodigo)}/coincidencias?page={page}&page_size={pageSize}", ct);
+        return Mapear(resultado);
+    }
+
+    public async Task<CoincidenciasDto> ClientesParaProspeccionAsync(
+        long idProspeccion, int page = 1, int pageSize = 6, CancellationToken ct = default)
+    {
+        var resultado = await api.GetAsync<CoincidenciasApi>(
+            $"prospecciones/{idProspeccion}/coincidencias?page={page}&page_size={pageSize}", ct);
         return Mapear(resultado);
     }
 
@@ -842,6 +855,8 @@ public class HttpCoincidenciaCarteraService(ApiClient api) : ICoincidenciaCarter
         {
             Origen = api.Origen ?? "",
             Total = api.Total,
+            Page = api.Page <= 0 ? 1 : api.Page,
+            PageSize = api.PageSize <= 0 ? 6 : api.PageSize,
             Items = api.Items?.Select(Mapear).ToList() ?? [],
         };
 
@@ -2687,6 +2702,24 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         return dto;
     }
 
+    public async Task<PageResult<InteraccionComercialDto>> ListarPaginaAsync(
+        int pagina,
+        int tamano = 8,
+        string? grupo = null,
+        string? resultado = null,
+        string? canal = null,
+        string? query = null,
+        CancellationToken ct = default)
+    {
+        var ruta = RutaInteracciones(grupo, resultado, canal, query);
+        var respuesta = await api.GetPaginaAsync<InteraccionApi>(ruta, pagina, tamano, ct);
+        return new PageResult<InteraccionComercialDto>(
+            respuesta?.Items.Select(Mapear).ToList() ?? [],
+            respuesta?.TotalRecords ?? 0,
+            respuesta?.Page ?? pagina,
+            respuesta?.PageSize ?? tamano);
+    }
+
     public InteraccionComercialDto Agregar(InteraccionFormRequest request)
     {
         var creada = Task.Run(() => api.PostAsync<InteraccionApi>("interacciones", Cuerpo(request)))
@@ -2757,6 +2790,20 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
+    private static string RutaInteracciones(string? grupo, string? resultado, string? canal, string? query)
+    {
+        var filtros = new List<string>();
+        if (!string.IsNullOrWhiteSpace(grupo) && !string.Equals(grupo, "Todas", StringComparison.OrdinalIgnoreCase))
+        {
+            var grupoApi = grupo.Contains("propietario", StringComparison.OrdinalIgnoreCase) ? "PROPIETARIO" : "CLIENTE";
+            filtros.Add($"grupo={Uri.EscapeDataString(grupoApi)}");
+        }
+        if (!string.IsNullOrWhiteSpace(resultado)) filtros.Add($"resultado={Uri.EscapeDataString(resultado)}");
+        if (!string.IsNullOrWhiteSpace(canal)) filtros.Add($"canal={Uri.EscapeDataString(canal)}");
+        if (!string.IsNullOrWhiteSpace(query)) filtros.Add($"q={Uri.EscapeDataString(query)}");
+        return filtros.Count == 0 ? "interacciones" : $"interacciones?{string.Join("&", filtros)}";
+    }
+
     private static object Cuerpo(InteraccionFormRequest request) => new
     {
         contexto = string.IsNullOrWhiteSpace(request.Contexto) ? "OPORTUNIDAD" : request.Contexto,
@@ -2778,6 +2825,7 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         ProspeccionId = item.IdProspeccion ?? 0,
         CaptacionId = item.IdCaptacion ?? 0,
         ClienteId = item.IdCliente ?? 0,
+        PropietarioId = item.IdPropietario ?? 0,
         CodigoProspeccion = item.CodigoProspeccion ?? "",
         FechaHoraTexto = item.FechaHora?.ToString("dd MMM yyyy · HH:mm", CultureInfo.GetCultureInfo("es-PE")) ?? "",
         CanalContacto = item.CanalContacto ?? "",
@@ -2785,6 +2833,9 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         Observaciones = item.Observaciones ?? "",
         TranscripcionNota = item.TranscripcionNota ?? "",
         ClienteNombre = item.ClienteNombre ?? "",
+        PropietarioNombre = item.PropietarioNombre ?? "",
+        PersonaTipo = item.PersonaTipo ?? "",
+        PersonaNombre = item.PersonaNombre ?? "",
         CaptacionCodigo = item.CodigoCaptacion ?? "",
         NombreAgenteResponsable = item.AgenteNombre ?? "",
     };

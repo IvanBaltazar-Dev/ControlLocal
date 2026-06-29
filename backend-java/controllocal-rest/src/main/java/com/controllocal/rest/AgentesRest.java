@@ -80,12 +80,10 @@ public class AgentesRest {
                 capPorAgente.merge(c.getAgenteResponsable().getIdAgente(), 1, Integer::sum);
             }
         }
+        // Acotado en SQL a las captaciones del equipo (antes se escaneaba toda la tabla
+        // de oportunidades y se filtraba en memoria).
         Map<Long, Integer> opPorAgente = new HashMap<>();
-        for (OportunidadComercial o : oportunidades.listarTodos()) {
-            if (o.getCaptacion() == null
-                    || !idsCaptacionEquipo.contains(o.getCaptacion().getIdCaptacion())) {
-                continue;
-            }
+        for (OportunidadComercial o : oportunidades.listarPorCaptaciones(idsCaptacionEquipo)) {
             if (o.getAgenteResponsable() != null && o.getAgenteResponsable().getIdAgente() != null
                     && esOperacionActiva(o.getEstado())) {
                 opPorAgente.merge(o.getAgenteResponsable().getIdAgente(), 1, Integer::sum);

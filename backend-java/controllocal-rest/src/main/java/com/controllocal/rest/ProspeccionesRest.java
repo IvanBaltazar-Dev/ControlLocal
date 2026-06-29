@@ -123,8 +123,17 @@ public class ProspeccionesRest {
 
     @GET
     @Path("{id}/coincidencias")
-    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(@PathParam("id") long id) {
-        return coincidencias.clientesParaProspeccion(id, SeguridadRest.usuario(request));
+    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(
+            @PathParam("id") long id,
+            @QueryParam("page") Integer page,
+            @QueryParam("pagina") Integer pagina,
+            @QueryParam("page_size") Integer pageSize,
+            @QueryParam("tamano") Integer tamano) {
+        return coincidencias.clientesParaProspeccion(
+                id,
+                SeguridadRest.usuario(request),
+                page != null ? page : pagina != null ? pagina : 1,
+                pageSize != null ? pageSize : tamano != null ? tamano : 6);
     }
 
     @POST
@@ -253,24 +262,21 @@ public class ProspeccionesRest {
     }
 
     private List<Prospeccion> prospeccionesDelUsuario(UsuarioAutenticado usuario) {
-        List<Prospeccion> todas = prospecciones.listarTodos();
+        // Alcance acotado en SQL (no se escanea toda la tabla):
+        // - AGENTE: sus propias prospecciones.
+        // - BROKER: las de los agentes que supervisa (semantica por equipo de agentes).
+        // - ADMIN: todas (gobierno).
         if ("AGENTE".equals(usuario.rol())) {
-            return todas.stream()
-                    .filter(item -> item.getAgenteResponsable() != null
-                            && usuario.idDominio() == item.getAgenteResponsable().getIdAgente())
-                    .toList();
+            return prospecciones.listarPorAgentes(List.of(usuario.idDominio()));
         }
         if ("ADMIN".equals(usuario.rol())) {
-            return todas;
+            return prospecciones.listarTodos();
         }
         if ("BROKER".equals(usuario.rol())) {
-            Set<Long> agentesSupervisados = brokers.listarAgentesSupervisados(usuario.idDominio()).stream()
+            List<Long> agentesSupervisados = brokers.listarAgentesSupervisados(usuario.idDominio()).stream()
                     .map(BrokerAgente::getIdAgente)
-                    .collect(Collectors.toSet());
-            return todas.stream()
-                    .filter(item -> item.getAgenteResponsable() != null
-                            && agentesSupervisados.contains(item.getAgenteResponsable().getIdAgente()))
                     .toList();
+            return prospecciones.listarPorAgentes(agentesSupervisados);
         }
         throw ApiException.prohibido();
     }

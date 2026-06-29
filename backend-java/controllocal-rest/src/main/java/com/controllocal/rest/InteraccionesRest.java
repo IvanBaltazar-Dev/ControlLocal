@@ -2,16 +2,21 @@ package com.controllocal.rest;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.bl.BrokerBusinessLogic;
 import com.controllocal.bl.InteraccionComercialBusinessLogic;
 import com.controllocal.bl.OportunidadComercialBusinessLogic;
+import com.controllocal.bl.ProspeccionBusinessLogic;
 import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
+import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.InteraccionComercialBusinessLogicImpl;
 import com.controllocal.bl.impl.OportunidadComercialBusinessLogicImpl;
+import com.controllocal.bl.impl.ProspeccionBusinessLogicImpl;
 import com.controllocal.model.comercial.InteraccionComercial;
 import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.Prospeccion;
@@ -46,6 +51,8 @@ public class InteraccionesRest {
 
     private final InteraccionComercialBusinessLogic interacciones = new InteraccionComercialBusinessLogicImpl();
     private final OportunidadComercialBusinessLogic oportunidades = new OportunidadComercialBusinessLogicImpl();
+    private final ProspeccionBusinessLogic prospecciones = new ProspeccionBusinessLogicImpl();
+    private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
 
     @Context
@@ -59,24 +66,37 @@ public class InteraccionesRest {
             @QueryParam("idOportunidad") Long idOportunidad,
             @QueryParam("idProspeccion") Long idProspeccion,
             @QueryParam("idCaptacion") Long idCaptacion,
-            @QueryParam("idCliente") Long idCliente) {
+            @QueryParam("idCliente") Long idCliente,
+            @QueryParam("grupo") String grupo,
+            @QueryParam("resultado") String resultado,
+            @QueryParam("canal") String canal,
+            @QueryParam("q") String q) {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
         Set<Long> agentesPermitidos = agentesPermitidos(usuario);
-        List<InteraccionComercial> base = listarBase(idOportunidad, idProspeccion, idCaptacion, idCliente);
+        List<InteraccionComercial> base = listarBase(usuario, agentesPermitidos, idOportunidad, idProspeccion, idCaptacion, idCliente);
         List<InteraccionComercial> fuente = base.stream()
                 .filter(item -> visiblePara(usuario, item, agentesPermitidos))
                 .filter(item -> coincideContexto(contexto, item))
                 .toList();
-        Map<Long, OportunidadComercial> ops = contieneOportunidades(fuente) ? mapaOportunidades() : Map.of();
+        enriquecerDirectas(fuente);
+        Map<Long, OportunidadComercial> ops = contieneOportunidades(fuente) ? mapaOportunidades(fuente) : Map.of();
 
+        List<Dtos.InteraccionResponse> respuestas = fuente.stream()
+                .sorted(Comparator.comparing(InteraccionesRest::fechaHoraOrden,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .reversed()
+                        .thenComparing(InteraccionComercial::getIdInteraccion, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
+                .filter(item -> coincideGrupo(grupo, item))
+                .filter(item -> resultado == null || resultado.isBlank() || resultado.equalsIgnoreCase(item.resultado()))
+                .filter(item -> canal == null || canal.isBlank() || canal.equalsIgnoreCase(item.canalContacto()))
+                .filter(item -> coincideBusqueda(q, item))
+                .toList();
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
-        int hasta = Math.min(desde + tamanoValido, fuente.size());
-        List<Dtos.InteraccionResponse> items = fuente.subList(desde, hasta).stream()
-                .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
-                .toList();
-        return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+        int desde = Math.min((paginaValida - 1) * tamanoValido, respuestas.size());
+        int hasta = Math.min(desde + tamanoValido, respuestas.size());
+        return new PageResponse<>(respuestas.subList(desde, hasta), respuestas.size(), paginaValida, tamanoValido);
     }
 
     @GET
@@ -88,6 +108,7 @@ public class InteraccionesRest {
         if (!visiblePara(usuario, interaccion, agentesPermitidos(usuario))) {
             throw ApiException.prohibido();
         }
+        enriquecerDirectas(List.of(interaccion));
         return Dtos.InteraccionResponse.desde(interaccion, oportunidadPara(interaccion));
     }
 
@@ -115,6 +136,7 @@ public class InteraccionesRest {
         long id = interacciones.registrar(interaccion);
         InteraccionComercial creada = interacciones.buscarPorId(id)
                 .orElseThrow(() -> ApiException.noEncontrado("Interaccion"));
+        enriquecerDirectas(List.of(creada));
         return Response.status(Response.Status.CREATED)
                 .entity(Dtos.InteraccionResponse.desde(creada, oportunidadPara(creada)))
                 .build();
@@ -136,11 +158,21 @@ public class InteraccionesRest {
             interaccion.setObservaciones(dto.observaciones());
         }
         interacciones.actualizar(interaccion);
+        enriquecerDirectas(List.of(interaccion));
         return Dtos.InteraccionResponse.desde(interaccion, oportunidadPara(interaccion));
     }
 
-    private Map<Long, OportunidadComercial> mapaOportunidades() {
-        return oportunidades.listarTodos().stream()
+    // Solo carga las oportunidades referenciadas por las interacciones visibles (antes traia la
+    // tabla completa para enriquecer la pagina).
+    private Map<Long, OportunidadComercial> mapaOportunidades(List<InteraccionComercial> fuente) {
+        Set<Long> ids = fuente.stream()
+                .map(InteraccionesRest::idOportunidad)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return oportunidades.listarPorIds(ids).stream()
                 .filter(item -> item.getIdOportunidad() != null)
                 .collect(Collectors.toMap(OportunidadComercial::getIdOportunidad, Function.identity(), (a, b) -> a));
     }
@@ -152,7 +184,20 @@ public class InteraccionesRest {
                 : null;
     }
 
+    private void enriquecerDirectas(List<InteraccionComercial> fuente) {
+        for (InteraccionComercial item : fuente) {
+            if (item.getProspeccion() != null && item.getProspeccion().getIdProspeccion() != null) {
+                prospecciones.buscarPorId(item.getProspeccion().getIdProspeccion()).ifPresent(item::setProspeccion);
+            }
+            if (item.getCaptacion() != null && item.getCaptacion().getIdCaptacion() != null) {
+                captaciones.buscarPorId(item.getCaptacion().getIdCaptacion()).ifPresent(item::setCaptacion);
+            }
+        }
+    }
+
     private List<InteraccionComercial> listarBase(
+            UsuarioAutenticado usuario,
+            Set<Long> agentesPermitidos,
             Long idOportunidad,
             Long idProspeccion,
             Long idCaptacion,
@@ -177,7 +222,13 @@ public class InteraccionesRest {
         if (idCliente != null) {
             return interacciones.listarPorCliente(idCliente);
         }
-        return interacciones.listarTodos();
+        // Sin filtro de entidad: acotar el origen al alcance del usuario en SQL.
+        // ADMIN ve todo (agentesPermitidos vacio = "todos", no "ninguno"); el resto
+        // queda limitado a sus agentes (un broker sin equipo no ve nada).
+        if (usuario.tieneRol("ADMIN")) {
+            return interacciones.listarTodos();
+        }
+        return interacciones.listarPorAgentes(agentesPermitidos);
     }
 
     private static boolean contieneOportunidades(List<InteraccionComercial> fuente) {
@@ -189,6 +240,36 @@ public class InteraccionesRest {
             return true;
         }
         return contexto.equalsIgnoreCase(contexto(interaccion));
+    }
+
+    private static boolean coincideGrupo(String grupo, Dtos.InteraccionResponse item) {
+        if (grupo == null || grupo.isBlank() || "TODAS".equalsIgnoreCase(grupo)) {
+            return true;
+        }
+        boolean propietario = "PROPIETARIO".equalsIgnoreCase(item.personaTipo());
+        return "PROPIETARIO".equalsIgnoreCase(grupo) ? propietario : !propietario;
+    }
+
+    private static boolean coincideBusqueda(String q, Dtos.InteraccionResponse item) {
+        if (q == null || q.isBlank()) {
+            return true;
+        }
+        String aguja = q.trim().toLowerCase();
+        return contiene(item.personaNombre(), aguja)
+                || contiene(item.clienteNombre(), aguja)
+                || contiene(item.propietarioNombre(), aguja)
+                || contiene(item.codigoCaptacion(), aguja)
+                || contiene(item.codigoProspeccion(), aguja)
+                || contiene(item.agenteNombre(), aguja)
+                || contiene(item.observaciones(), aguja);
+    }
+
+    private static boolean contiene(String valor, String q) {
+        return valor != null && valor.toLowerCase().contains(q);
+    }
+
+    private static java.time.LocalDateTime fechaHoraOrden(InteraccionComercial interaccion) {
+        return interaccion != null ? interaccion.getFechaHora() : null;
     }
 
     private static String contexto(Dtos.InteraccionRequest dto) {

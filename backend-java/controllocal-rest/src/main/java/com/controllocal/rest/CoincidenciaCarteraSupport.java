@@ -55,8 +55,8 @@ import com.controllocal.rest.seguridad.UsuarioAutenticado;
  */
 public final class CoincidenciaCarteraSupport {
 
-    /** Maximo de alternativas devueltas por consulta. */
-    private static final int TOPE = 12;
+    private static final int DEFAULT_PAGE_SIZE = 6;
+    private static final int MAX_PAGE_SIZE = 24;
 
     private final ClienteInteresadoBusinessLogic clientes = new ClienteInteresadoBusinessLogicImpl();
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
@@ -73,6 +73,11 @@ public final class CoincidenciaCarteraSupport {
 
     /** Cliente -> propiedades: captaciones activas (propias) con local disponible compatibles. */
     public CoincidenciasResponse propiedadesParaCliente(long idCliente, UsuarioAutenticado usuario) {
+        return propiedadesParaCliente(idCliente, usuario, 1, DEFAULT_PAGE_SIZE);
+    }
+
+    /** Cliente -> propiedades: captaciones activas (propias) con local disponible compatibles. */
+    public CoincidenciasResponse propiedadesParaCliente(long idCliente, UsuarioAutenticado usuario, int page, int pageSize) {
         clienteConAcceso(idCliente, usuario);
         List<RequerimientoCliente> activos = requerimientos.listarPorCliente(idCliente).stream()
                 .filter(r -> r.getEstado() == EstadoRequerimiento.ACTIVO)
@@ -96,26 +101,38 @@ public final class CoincidenciaCarteraSupport {
                 }
             }
         }
-        return armar("cliente:" + idCliente, items);
+        return armar("cliente:" + idCliente, items, page, pageSize);
     }
 
     /** Captacion -> clientes: demanda propia con requerimiento activo compatible. Accionable (Proponer). */
     public CoincidenciasResponse clientesParaCaptacion(String idOrCodigo, UsuarioAutenticado usuario) {
+        return clientesParaCaptacion(idOrCodigo, usuario, 1, DEFAULT_PAGE_SIZE);
+    }
+
+    /** Captacion -> clientes: demanda propia con requerimiento activo compatible. Accionable (Proponer). */
+    public CoincidenciasResponse clientesParaCaptacion(
+            String idOrCodigo, UsuarioAutenticado usuario, int page, int pageSize) {
         Captacion captacion = captacionConAcceso(idOrCodigo, usuario);
         List<CoincidenciaResponse> items =
                 clientesCompatibles(captacion.getLocalComercial(), usuario, captacion.getIdCaptacion());
-        return armar("captacion:" + nz(captacion.getCodigoCaptacion()), items);
+        return armar("captacion:" + nz(captacion.getCodigoCaptacion()), items, page, pageSize);
     }
 
     /** Prospeccion -> clientes: senal de demanda temprana. Solo accionable si la prospeccion ya tiene captacion. */
     public CoincidenciasResponse clientesParaProspeccion(long idProspeccion, UsuarioAutenticado usuario) {
+        return clientesParaProspeccion(idProspeccion, usuario, 1, DEFAULT_PAGE_SIZE);
+    }
+
+    /** Prospeccion -> clientes: senal de demanda temprana. Solo accionable si la prospeccion ya tiene captacion. */
+    public CoincidenciasResponse clientesParaProspeccion(
+            long idProspeccion, UsuarioAutenticado usuario, int page, int pageSize) {
         Prospeccion prospeccion = prospeccionConAcceso(idProspeccion, usuario);
         Long idCaptacion = prospeccion.getCaptacion() != null
                 ? prospeccion.getCaptacion().getIdCaptacion()
                 : null;
         List<CoincidenciaResponse> items =
                 clientesCompatibles(prospeccion.getLocalComercial(), usuario, idCaptacion);
-        return armar("prospeccion:" + idProspeccion, items);
+        return armar("prospeccion:" + idProspeccion, items, page, pageSize);
     }
 
     // ====================================================================
@@ -162,14 +179,17 @@ public final class CoincidenciaCarteraSupport {
         return items;
     }
 
-    private CoincidenciasResponse armar(String origen, List<CoincidenciaResponse> items) {
+    private CoincidenciasResponse armar(String origen, List<CoincidenciaResponse> items, int page, int pageSize) {
         List<CoincidenciaResponse> ordenado = items.stream()
                 .sorted(Comparator.comparingInt(CoincidenciaResponse::puntaje).reversed()
                         .thenComparing(c -> c.cumple().size(), Comparator.reverseOrder())
                         .thenComparing(CoincidenciaResponse::titulo))
-                .limit(TOPE)
                 .toList();
-        return new CoincidenciasResponse(origen, ordenado.size(), ordenado);
+        int pagina = SeguridadRest.pagina(page);
+        int tamano = Math.min(MAX_PAGE_SIZE, SeguridadRest.tamano(pageSize));
+        int desde = Math.min((pagina - 1) * tamano, ordenado.size());
+        int hasta = Math.min(desde + tamano, ordenado.size());
+        return new CoincidenciasResponse(origen, ordenado.size(), pagina, tamano, ordenado.subList(desde, hasta));
     }
 
     private CoincidenciaResponse filaPropiedad(
@@ -248,14 +268,26 @@ public final class CoincidenciaCarteraSupport {
         if ("ADMIN".equals(contexto.usuario().rol())) {
             return null;
         }
+        // Origen acotado en SQL (antes se escaneaban tablas completas). visible() sigue siendo
+        // el filtro autoritativo sobre este superconjunto: por agente del alcance UNION por
+        // captacion del alcance (incluye captaciones cuyo agente esta en el alcance).
+        Set<Long> scopeAgentes = "AGENTE".equals(contexto.usuario().rol())
+                ? Set.of(contexto.usuario().idDominio())
+                : contexto.agentesBroker();
+        Set<Long> capScope = new HashSet<>(contexto.captacionesBroker());
+        captaciones.listarPorAgentes(scopeAgentes).stream()
+                .map(Captacion::getIdCaptacion)
+                .filter(Objects::nonNull)
+                .forEach(capScope::add);
+
         Set<Long> ids = new HashSet<>();
-        oportunidades.listarTodos().stream()
+        fuente(oportunidades.listarPorAgentes(scopeAgentes), oportunidades.listarPorCaptaciones(capScope)).stream()
                 .filter(o -> visible(o, contexto))
                 .forEach(o -> add(ids, o.getClienteInteresado()));
-        solicitudes.listarTodos().stream()
+        fuente(solicitudes.listarPorAgentes(scopeAgentes), solicitudes.listarPorCaptaciones(capScope)).stream()
                 .filter(s -> visible(s, contexto))
                 .forEach(s -> add(ids, s.getClienteInteresado()));
-        visitas.listarTodos().stream()
+        fuente(visitas.listarPorAgentes(scopeAgentes), visitas.listarPorCaptaciones(capScope)).stream()
                 .filter(v -> visible(v, contexto))
                 .forEach(v -> {
                     add(ids, v.getClienteInteresado());
@@ -264,6 +296,12 @@ public final class CoincidenciaCarteraSupport {
                     }
                 });
         return ids;
+    }
+
+    private static <T> List<T> fuente(List<T> porAgente, List<T> porCaptacion) {
+        List<T> union = new ArrayList<>(porAgente);
+        union.addAll(porCaptacion);
+        return union;
     }
 
     private Contexto contexto(UsuarioAutenticado usuario) {
@@ -454,7 +492,8 @@ public final class CoincidenciaCarteraSupport {
     private record Contexto(UsuarioAutenticado usuario, Set<Long> agentesBroker, Set<Long> captacionesBroker) {
     }
 
-    public record CoincidenciasResponse(String origen, int total, List<CoincidenciaResponse> items) {
+    public record CoincidenciasResponse(String origen, int total, int page, int pageSize,
+                                        List<CoincidenciaResponse> items) {
     }
 
     public record CoincidenciaResponse(

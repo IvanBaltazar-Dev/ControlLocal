@@ -246,13 +246,33 @@ else
 
                         @if (_cap.Estado is "Activa" or "A")
                         {
-                            <PanelCoincidencias Titulo="Clientes interesados compatibles"
-                                                Icono="users"
-                                                Descripcion="Clientes de tu cartera cuyo requerimiento activo encaja con esta propiedad. Proponer abre la oportunidad prellenada."
-                                                Items="_coincidencias?.Items"
-                                                Cargando="_cargandoCoin"
-                                                Error="@_errCoin"
-                                                TextoVacio="Ningun cliente de tu cartera tiene un requerimiento activo que coincida por ahora." />
+                            @if (!_coincidenciasOpen)
+                            {
+                                <div class="cl-card">
+                                    <div class="cl-card-head">
+                                        <div>
+                                            <div class="cl-card-title"><Icon Name="users" Size="14" /> Clientes interesados compatibles</div>
+                                            <div class="cl-card-sub">Clientes con requerimiento activo compatible con esta propiedad.</div>
+                                        </div>
+                                        <button class="cl-btn sm" @onclick="AbrirCoincidencias"><Icon Name="chevronRight" Size="12" /> Ver clientes</button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <PanelCoincidencias Titulo="Clientes interesados compatibles"
+                                                    Icono="users"
+                                                    Descripcion="Clientes de tu cartera cuyo requerimiento activo encaja con esta propiedad. Proponer abre la oportunidad prellenada."
+                                                    Items="_coincidencias?.Items"
+                                                    Total="@(_coincidencias?.Total ?? 0)"
+                                                    Page="@_coinPage"
+                                                    PageSize="@_coinPageSize"
+                                                    PageChanged="CambiarPaginaCoincidencias"
+                                                    Cargando="_cargandoCoin"
+                                                    Error="@_errCoin"
+                                                    TextoVacio="Ningun cliente de tu cartera tiene un requerimiento activo que coincida por ahora." />
+                                <button class="cl-btn sm ghost" @onclick="CerrarCoincidencias"><Icon Name="chevronLeft" Size="12" /> Ocultar clientes</button>
+                            }
                         }
                     </div>
                 }
@@ -399,6 +419,9 @@ else
     private CoincidenciasDto? _coincidencias;
     private bool _cargandoCoin;
     private string? _errCoin;
+    private bool _coincidenciasOpen;
+    private int _coinPage = 1;
+    private readonly int _coinPageSize = 6;
 
     // Reporte al propietario (Etapa 8): historial + formulario de registro.
     private IReadOnlyList<ReportePropietarioDto> _reportes = new List<ReportePropietarioDto>();
@@ -539,22 +562,36 @@ else
             _cargando = false;
         }
 
-        await CargarCoincidencias();
+        _coincidenciasOpen = false;
+        _coincidencias = null;
+        _coinPage = 1;
     }
 
-    private async Task CargarCoincidencias()
+    private async Task AbrirCoincidencias()
+    {
+        _coincidenciasOpen = true;
+        await CargarCoincidencias(1);
+    }
+
+    private void CerrarCoincidencias() => _coincidenciasOpen = false;
+
+    private Task CambiarPaginaCoincidencias(int page) => CargarCoincidencias(page);
+
+    private async Task CargarCoincidencias(int page)
     {
         if (_cap.Id <= 0 || !(_cap.Estado is "Activa" or "A"))
         {
             _coincidencias = null;
             return;
         }
+        _coinPage = Math.Max(1, page);
         _cargandoCoin = true;
         _errCoin = null;
         try
         {
             _coincidencias = await CoincidenciaSvc.ClientesParaCaptacionAsync(
-                _cap.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), DisposedToken);
+                _cap.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), _coinPage, _coinPageSize, DisposedToken);
+            _coinPage = _coincidencias.Page;
         }
         catch (OperationCanceledException)
         {

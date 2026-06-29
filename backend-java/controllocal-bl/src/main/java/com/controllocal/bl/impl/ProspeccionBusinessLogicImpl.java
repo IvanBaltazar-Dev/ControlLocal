@@ -100,6 +100,16 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
         return prospeccionDAO.listarPorRecontactar(LocalDate.now().minusDays(Math.max(0, diasAviso)));
     }
 
+    @Override
+    public List<Prospeccion> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        return prospeccionDAO.listarPorAgentes(idsAgente);
+    }
+
+    @Override
+    public List<Prospeccion> listarPorPropietario(Long idPropietario) {
+        return prospeccionDAO.listarPorPropietario(idPropietario);
+    }
+
     public int sincronizarRecontacto() {
         return TransactionRunner.write(conn -> {
             LocalDate limite = LocalDate.now().minusDays(Prospeccion.DIAS_RECONTACTO);

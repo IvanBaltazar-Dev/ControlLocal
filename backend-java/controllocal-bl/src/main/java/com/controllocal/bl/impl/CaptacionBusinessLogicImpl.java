@@ -246,6 +246,16 @@ public class CaptacionBusinessLogicImpl implements CaptacionBusinessLogic {
     }
 
     @Override
+    public List<Captacion> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        return captacionDAO.listarPorAgentes(idsAgente);
+    }
+
+    @Override
+    public List<Captacion> listarPorPropietario(Long idPropietario) {
+        return captacionDAO.listarPorPropietario(idPropietario);
+    }
+
+    @Override
     public List<Captacion> listPendingReviews() {
         return captacionDAO.listarTodos().stream()
                 .filter(captacion -> captacion.getEstado() == EstadoCaptacion.PENDIENTE_REVISION

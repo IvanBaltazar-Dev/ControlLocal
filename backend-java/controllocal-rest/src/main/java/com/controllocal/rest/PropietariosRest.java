@@ -1,6 +1,11 @@
 package com.controllocal.rest;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -59,10 +64,12 @@ public class PropietariosRest {
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
         List<Propietario> permitidos = propietariosPermitidos(usuario);
+        Map<Long, Integer> localesPorPropietario = contarLocalesPorPropietario(usuario);
         int desde = Math.min((paginaValida - 1) * tamanoValido, permitidos.size());
         int hasta = Math.min(desde + tamanoValido, permitidos.size());
         List<Dtos.PropietarioResponse> items = permitidos.subList(desde, hasta).stream()
-                .map(Dtos.PropietarioResponse::desde)
+                .map(propietario -> Dtos.PropietarioResponse.desde(propietario,
+                        localesPorPropietario.getOrDefault(propietario.getIdPropietario(), 0)))
                 .toList();
         return new PageResponse<>(items, permitidos.size(), paginaValida, tamanoValido);
     }
@@ -76,7 +83,9 @@ public class PropietariosRest {
         if (!puedeVerPropietario(propietario, usuario)) {
             throw ApiException.prohibido();
         }
-        return Dtos.PropietarioResponse.desde(propietario);
+        return Dtos.PropietarioResponse.desde(
+                propietario,
+                contarLocalesPorPropietario(usuario).getOrDefault(propietario.getIdPropietario(), 0));
     }
 
     @GET
@@ -173,14 +182,14 @@ public class PropietariosRest {
                 .map(Captacion::getIdCaptacion)
                 .collect(Collectors.toSet());
 
-        Set<Long> desdeProspecciones = prospecciones.listarTodos().stream()
+        Set<Long> desdeProspecciones = prospeccionesEnAlcance(usuario).stream()
                 .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker))
                 .map(Prospeccion::getLocalComercial)
                 .map(this::propietarioId)
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
 
-        Set<Long> desdeCaptaciones = captaciones.listarTodos().stream()
+        Set<Long> desdeCaptaciones = captacionesEnAlcance(usuario).stream()
                 .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
                         || (item.getIdCaptacion() != null && captacionesBroker.contains(item.getIdCaptacion())))
                 .map(Captacion::getLocalComercial)
@@ -190,6 +199,65 @@ public class PropietariosRest {
 
         desdeProspecciones.addAll(desdeCaptaciones);
         return desdeProspecciones;
+    }
+
+    // Origen acotado en SQL segun el rol (antes se escaneaba toda la tabla). El filtro de
+    // visibilidad autoritativo se mantiene aguas abajo; estas fuentes son su superconjunto.
+    private List<Prospeccion> prospeccionesEnAlcance(UsuarioAutenticado usuario) {
+        if (usuario.tieneRol("ADMIN")) {
+            return prospecciones.listarTodos();
+        }
+        if (usuario.tieneRol("AGENTE")) {
+            return prospecciones.listarPorAgentes(List.of(usuario.idDominio()));
+        }
+        return prospecciones.listarPorAgentes(agentesSupervisados(usuario));
+    }
+
+    private List<Captacion> captacionesEnAlcance(UsuarioAutenticado usuario) {
+        if (usuario.tieneRol("ADMIN")) {
+            return captaciones.listarTodos();
+        }
+        if (usuario.tieneRol("AGENTE")) {
+            return captaciones.listarPorAgente(usuario.idDominio());
+        }
+        // BROKER: captaciones de su equipo (por agente) union las que supervisa (por captacion).
+        List<Captacion> resultado = new ArrayList<>(captaciones.listarPorAgentes(agentesSupervisados(usuario)));
+        resultado.addAll(captacionesPermitidasBroker(usuario));
+        return resultado;
+    }
+
+    private Map<Long, Integer> contarLocalesPorPropietario(UsuarioAutenticado usuario) {
+        Set<Long> agentesBroker = agentesSupervisados(usuario);
+        Set<Long> captacionesBroker = captacionesPermitidasBroker(usuario).stream()
+                .map(Captacion::getIdCaptacion)
+                .collect(Collectors.toSet());
+        Map<Long, Set<String>> locales = new HashMap<>();
+
+        prospeccionesEnAlcance(usuario).stream()
+                .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker))
+                .map(Prospeccion::getLocalComercial)
+                .forEach(local -> agregarLocal(locales, local));
+
+        captacionesEnAlcance(usuario).stream()
+                .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
+                        || (item.getIdCaptacion() != null && captacionesBroker.contains(item.getIdCaptacion())))
+                .map(Captacion::getLocalComercial)
+                .forEach(local -> agregarLocal(locales, local));
+
+        Map<Long, Integer> conteo = new HashMap<>();
+        locales.forEach((idPropietario, idsLocales) -> conteo.put(idPropietario, idsLocales.size()));
+        return conteo;
+    }
+
+    private void agregarLocal(Map<Long, Set<String>> locales, LocalComercial local) {
+        Long idPropietario = propietarioId(local);
+        if (idPropietario == null) {
+            return;
+        }
+        String claveLocal = local.getIdLocal() != null
+                ? "id:" + local.getIdLocal()
+                : "txt:" + Objects.toString(local.getDireccion(), "") + "|" + Objects.toString(local.getDistrito(), "");
+        locales.computeIfAbsent(idPropietario, key -> new HashSet<>()).add(claveLocal);
     }
 
     private Long propietarioId(LocalComercial local) {

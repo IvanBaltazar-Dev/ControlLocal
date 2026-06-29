@@ -3,6 +3,8 @@ package com.controllocal.dao.impl;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import com.controllocal.dao.ComisionLiquidacionDAO;
@@ -37,6 +39,20 @@ public class ComisionLiquidacionDAOImpl extends AbstractJdbcCrudDAO<ComisionLiqu
         JdbcSupport.validarId(idContrato);
         return query(SELECT + " WHERE id_contrato_alquiler = ? ORDER BY id_comision_liquidacion",
                 ps -> ps.setLong(1, idContrato));
+    }
+
+    @Override public List<ComisionLiquidacion> listarPorContratos(Collection<Long> idsContrato) {
+        if (idsContrato == null || idsContrato.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Long> ids = new ArrayList<>(idsContrato);
+        String sql = SELECT + " WHERE id_contrato_alquiler IN (" + JdbcSupport.placeholders(ids.size())
+                + ") ORDER BY id_comision_liquidacion";
+        return query(sql, ps -> {
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setLong(i + 1, ids.get(i));
+            }
+        });
     }
 
     @Override protected String insertSql() { return INSERT; }

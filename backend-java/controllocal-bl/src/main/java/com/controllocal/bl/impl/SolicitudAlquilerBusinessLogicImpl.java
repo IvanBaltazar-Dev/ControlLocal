@@ -102,6 +102,31 @@ public class SolicitudAlquilerBusinessLogicImpl implements SolicitudAlquilerBusi
         return solicitudDAO.listarTodos();
     }
 
+    @Override
+    public List<SolicitudAlquiler> listarPorIds(java.util.Collection<Long> ids) {
+        return solicitudDAO.listarPorIds(ids);
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        return solicitudDAO.listarPorAgentes(idsAgente);
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
+        return solicitudDAO.listarPorCaptaciones(idsCaptacion);
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorCliente(Long idCliente) {
+        return solicitudDAO.listarPorCliente(idCliente);
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorPropietario(Long idPropietario) {
+        return solicitudDAO.listarPorPropietario(idPropietario);
+    }
+
     public boolean actualizar(SolicitudAlquiler solicitud) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(solicitud != null ? solicitud.getIdSolicitud() : null, "El id de solicitud");

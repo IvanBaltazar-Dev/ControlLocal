@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -113,6 +114,120 @@ public class OportunidadComercialDAOImpl implements OportunidadComercialDAO {
             return oportunidades;
         } catch (SQLException e) {
             throw new DAOException("Error al listar oportunidades comerciales.", e);
+        }
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        List<OportunidadComercial> resultado = new ArrayList<>();
+        if (idsAgente == null || idsAgente.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ") ORDER BY o.id_oportunidad";
+        try (java.sql.Connection conn = DBManager.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsAgente) {
+                ps.setLong(idx++, id);
+            }
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (java.sql.SQLException e) {
+            throw new com.controllocal.dao.DAOException("Error al listar oportunidad por agentes.", e);
+        }
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
+        List<OportunidadComercial> resultado = new ArrayList<>();
+        if (idsCaptacion == null || idsCaptacion.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_captacion IN (" + JdbcSupport.placeholders(idsCaptacion.size()) + ") ORDER BY o.id_oportunidad";
+        try (java.sql.Connection conn = DBManager.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsCaptacion) {
+                ps.setLong(idx++, id);
+            }
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (java.sql.SQLException e) {
+            throw new com.controllocal.dao.DAOException("Error al listar oportunidad por captaciones.", e);
+        }
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorCliente(Long idCliente) {
+        List<OportunidadComercial> resultado = new ArrayList<>();
+        if (idCliente == null) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_cliente = ? ORDER BY o.id_oportunidad";
+        try (java.sql.Connection conn = DBManager.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idCliente);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (java.sql.SQLException e) {
+            throw new com.controllocal.dao.DAOException("Error al listar oportunidad por cliente.", e);
+        }
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorPropietario(Long idPropietario) {
+        List<OportunidadComercial> resultado = new ArrayList<>();
+        if (idPropietario == null) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE l.id_propietario = ? ORDER BY o.id_oportunidad";
+        try (java.sql.Connection conn = DBManager.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idPropietario);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (java.sql.SQLException e) {
+            throw new com.controllocal.dao.DAOException("Error al listar oportunidad por propietario.", e);
+        }
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorIds(java.util.Collection<Long> ids) {
+        List<OportunidadComercial> resultado = new ArrayList<>();
+        if (ids == null || ids.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_oportunidad IN (" + JdbcSupport.placeholders(ids.size()) + ")";
+        try (java.sql.Connection conn = DBManager.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : ids) {
+                ps.setLong(idx++, id);
+            }
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (java.sql.SQLException e) {
+            throw new com.controllocal.dao.DAOException("Error al listar oportunidad por ids.", e);
         }
     }
 

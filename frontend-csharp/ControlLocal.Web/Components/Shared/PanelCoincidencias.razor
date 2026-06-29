@@ -7,7 +7,7 @@
         <div class="cl-card-title"><Icon Name="@Icono" Size="14" /> @Titulo</div>
         @if (!Cargando && Error is null)
         {
-            <span class="cl-badge gray">@(Items?.Count ?? 0)</span>
+            <span class="cl-badge gray">@TotalVisible</span>
         }
     </div>
     <div class="cl-card-body">
@@ -33,7 +33,7 @@
             <div class="cl-stack" style="gap:10px;">
                 @foreach (var item in Items)
                 {
-                    <div style="border:1px solid var(--c-border);border-radius:10px;padding:12px 13px;background:#fff;">
+                    <div style="@CardStyle(item)" @onclick="@(() => Seleccionar(item))">
                         <div style="display:flex;align-items:flex-start;gap:10px;">
                             <div style="min-width:0;flex:1;">
                                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -84,7 +84,7 @@
                             </div>
                         }
 
-                        @if (!string.IsNullOrWhiteSpace(item.ProponerRuta) || (MostrarVer && Dato(DetalleRuta(item))))
+                        @if (ShowItemActions && (!string.IsNullOrWhiteSpace(item.ProponerRuta) || (MostrarVer && Dato(DetalleRuta(item)))))
                         {
                             <div style="display:flex;gap:8px;margin-top:11px;">
                                 @if (!string.IsNullOrWhiteSpace(item.ProponerRuta))
@@ -100,6 +100,10 @@
                     </div>
                 }
             </div>
+            @if (Total > PageSize && PageChanged.HasDelegate)
+            {
+                <Pagination Total="Total" PageSize="PageSize" Page="Page" PageChanged="PageChanged" />
+            }
         }
     </div>
 </div>
@@ -114,6 +118,36 @@
     [Parameter] public string TextoVacio { get; set; } = "No hay coincidencias por ahora.";
     [Parameter] public string EtiquetaAccion { get; set; } = "Proponer";
     [Parameter] public bool MostrarVer { get; set; } = true;
+    [Parameter] public bool ShowItemActions { get; set; } = true;
+    [Parameter] public bool Selectable { get; set; }
+    [Parameter] public long? SelectedId { get; set; }
+    [Parameter] public int Total { get; set; }
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int PageSize { get; set; } = 6;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+    [Parameter] public EventCallback<CoincidenciaDto> OnSelect { get; set; }
+
+    private int TotalVisible => Total > 0 ? Total : Items?.Count ?? 0;
+
+    private async Task Seleccionar(CoincidenciaDto item)
+    {
+        if (Selectable && OnSelect.HasDelegate)
+        {
+            await OnSelect.InvokeAsync(item);
+        }
+    }
+
+    private string CardStyle(CoincidenciaDto item)
+    {
+        var selected = Selectable && ItemKey(item) == SelectedId;
+        var cursor = Selectable ? "cursor:pointer;" : "";
+        var border = selected ? "var(--c-primary)" : "var(--c-border)";
+        var shadow = selected ? "box-shadow:0 0 0 3px rgba(0,91,255,0.10);" : "";
+        var background = selected ? "background:#F7FAFF;" : "background:#fff;";
+        return $"border:1px solid {border};border-radius:10px;padding:12px 13px;{background}{cursor}{shadow}";
+    }
+
+    private static long? ItemKey(CoincidenciaDto item) => item.Id ?? item.CaptacionId ?? item.ClienteId;
 
     private static bool Dato(string? valor) => !string.IsNullOrWhiteSpace(valor) && valor.Trim() != "-";
 

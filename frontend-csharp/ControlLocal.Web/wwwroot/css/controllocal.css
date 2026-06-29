@@ -1520,6 +1520,24 @@ a.cl-btn { text-decoration: none; }
 .cl-perf-cell .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--c-text-3); font-weight: 600; }
 .cl-perf-cell .v { font-size: 20px; font-weight: 650; margin-top: 3px; }
 
+.cl-report-analysis {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, .9fr);
+  gap: 14px;
+  align-items: start;
+}
+.cl-report-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 980px) {
+  .cl-report-analysis {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ============================================================
    Calendario de visitas — celdas que listan las visitas del día
    ============================================================ */

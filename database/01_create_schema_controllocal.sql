@@ -510,7 +510,7 @@ CREATE TABLE visita (
         estado IN ('P', 'G', 'C', 'N', 'R')
     ),
     CONSTRAINT ck_visita_resultado CHECK (
-        resultado IS NULL OR resultado IN ('P', 'I', 'N', 'S', 'D')
+        resultado IS NULL OR (estado = 'R' AND resultado IN ('P', 'I', 'N', 'S', 'D'))
     ),
     CONSTRAINT ck_visita_nivel_interes CHECK (
         nivel_interes IS NULL OR (nivel_interes BETWEEN 1 AND 5)
@@ -523,6 +523,16 @@ CREATE TABLE visita (
     ),
     CONSTRAINT ck_visita_proxima_accion CHECK (
         proxima_accion IS NULL OR proxima_accion IN ('V', 'O', 'S', 'D')
+    ),
+    CONSTRAINT ck_visita_desenlace_estado CHECK (
+        estado = 'R'
+        OR (
+            resultado IS NULL
+            AND nivel_interes IS NULL
+            AND objecion_principal IS NULL
+            AND opinion_precio IS NULL
+            AND proxima_accion IS NULL
+        )
     )
 ) ENGINE=InnoDB;
 

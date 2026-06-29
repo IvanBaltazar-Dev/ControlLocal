@@ -96,10 +96,15 @@ public final class Dtos {
 
     public record PropietarioResponse(Long id, String tipoPersona, String tipoDocumento, String numeroDocumento,
                                       String nombre, String telefono, String correo, String estado,
-                                      Boolean consentimientoUsoDato, LocalDateTime fechaCreacion) {
+                                      Boolean consentimientoUsoDato, LocalDateTime fechaCreacion,
+                                      int cantidadLocales) {
 
         public static PropietarioResponse desde(Propietario p) {
-            return new PropietarioResponse(p.getIdPropietario(), codigo(p.getTipoPersona()), codigo(p.getTipoDocumento()), p.getNumeroDocumento(), p.getNombresORazonSocial(), p.getTelefono(), p.getCorreo(), codigo(p.getEstado()), p.getPersona() != null ? p.getPersona().getConsentimientoUsoDato() : null, p.getFechaCreacion());
+            return desde(p, 0);
+        }
+
+        public static PropietarioResponse desde(Propietario p, int cantidadLocales) {
+            return new PropietarioResponse(p.getIdPropietario(), codigo(p.getTipoPersona()), codigo(p.getTipoDocumento()), p.getNumeroDocumento(), p.getNombresORazonSocial(), p.getTelefono(), p.getCorreo(), codigo(p.getEstado()), p.getPersona() != null ? p.getPersona().getConsentimientoUsoDato() : null, p.getFechaCreacion(), Math.max(0, cantidadLocales));
         }
     }
 
@@ -736,10 +741,11 @@ public final class Dtos {
     }
 
     public record InteraccionResponse(Long id, String contexto, Long idOportunidad, Long idProspeccion,
-                                      Long idCaptacion, Long idCliente,
+                                      Long idCaptacion, Long idCliente, Long idPropietario,
                                       String codigoProspeccion, LocalDateTime fechaHora, String canalContacto,
                                       String resultado, String observaciones, String transcripcionNota,
-                                      String clienteNombre, String codigoCaptacion, String agenteNombre) {
+                                      String clienteNombre, String propietarioNombre, String personaTipo,
+                                      String personaNombre, String codigoCaptacion, String agenteNombre) {
 
         // Los nombres se toman de la oportunidad (ya hidratada por OportunidadDAO);
         // la interaccion del DAO solo trae ids en sus relaciones.
@@ -752,22 +758,43 @@ public final class Dtos {
             var clienteDirecto = i.getClienteInteresado();
             var captacionDirecta = i.getCaptacion();
             String contexto = i.getContexto() == null || i.getContexto().isBlank() ? "OPORTUNIDAD" : i.getContexto();
+            var localPropietario = switch (contexto) {
+                case "PROSPECCION" -> prospeccion != null ? prospeccion.getLocalComercial() : null;
+                case "CAPTACION" -> captacionDirecta != null ? captacionDirecta.getLocalComercial() : null;
+                default -> captacion != null ? captacion.getLocalComercial() : null;
+            };
+            Long idPropietario = localPropietario != null ? localPropietario.getIdPropietario() : null;
+            String propietarioNombre = localPropietario != null && localPropietario.getPropietario() != null
+                    ? localPropietario.getPropietario().getNombresORazonSocial()
+                    : null;
+            String clienteNombre = clienteDirecto != null && clienteDirecto.getPersona() != null
+                    ? clienteDirecto.getPersona().getNombresORazonSocial()
+                    : cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null;
+            boolean esPropietario = "PROSPECCION".equals(contexto) || "CAPTACION".equals(contexto);
+            String personaTipo = esPropietario ? "Propietario" : "Cliente";
+            String personaNombre = esPropietario ? propietarioNombre : clienteNombre;
+            Long idClienteRespuesta = clienteDirecto != null ? clienteDirecto.getIdCliente()
+                    : cliente != null ? cliente.getIdCliente() : null;
+            Long idCaptacionRespuesta = captacionDirecta != null ? captacionDirecta.getIdCaptacion()
+                    : captacion != null ? captacion.getIdCaptacion() : null;
             return new InteraccionResponse(
                     i.getIdInteraccion(),
                     contexto,
                     i.getOportunidadComercial() != null ? i.getOportunidadComercial().getIdOportunidad() : null,
                     prospeccion != null ? prospeccion.getIdProspeccion() : null,
-                    captacionDirecta != null ? captacionDirecta.getIdCaptacion() : null,
-                    clienteDirecto != null ? clienteDirecto.getIdCliente() : null,
+                    idCaptacionRespuesta,
+                    idClienteRespuesta,
+                    idPropietario,
                     prospeccion != null ? prospeccion.getCodigoProspeccion() : null,
                     i.getFechaHora(),
                     codigo(i.getCanalContacto()),
                     codigo(i.getResultado()),
                     i.getObservaciones(),
                     i.getTranscripcionNota(),
-                    clienteDirecto != null && clienteDirecto.getPersona() != null
-                            ? clienteDirecto.getPersona().getNombresORazonSocial()
-                            : cliente != null && cliente.getPersona() != null ? cliente.getPersona().getNombresORazonSocial() : null,
+                    clienteNombre,
+                    propietarioNombre,
+                    personaTipo,
+                    personaNombre,
                     captacionDirecta != null ? captacionDirecta.getCodigoCaptacion()
                             : captacion != null ? captacion.getCodigoCaptacion() : null,
                     agenteDirecto != null && agenteDirecto.getPersona() != null
@@ -930,7 +957,10 @@ public final class Dtos {
             int brokersActivos,
             List<String> mesesEtiquetas,
             List<Integer> cierresPorMes,
+            List<Integer> conversionPorPeriodo,
+            List<Integer> captacionesPorPeriodo,
             List<IndicadorConteo> etapas,
+            List<IndicadorConteo> captacionesSalud,
             List<IndicadorEmbudo> embudo,
             List<IndicadorDesempeno> desempeno,
             IndicadorOperativo operativo) {

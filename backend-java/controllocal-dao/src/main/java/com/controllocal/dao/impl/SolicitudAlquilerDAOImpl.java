@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -132,6 +133,122 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             return solicitudes;
         } catch (SQLException e) {
             throw new DAOException("Error al listar solicitudes de alquiler.", e);
+        }
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorIds(Collection<Long> ids) {
+        List<SolicitudAlquiler> solicitudes = new ArrayList<>();
+        if (ids == null || ids.isEmpty()) {
+            return solicitudes;
+        }
+        String sql = SELECT_SQL + " WHERE s.id_solicitud IN (" + JdbcSupport.placeholders(ids.size()) + ")";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int i = 1;
+            for (Long id : ids) {
+                ps.setLong(i++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    solicitudes.add(mapRow(rs));
+                }
+            }
+            return solicitudes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar solicitudes de alquiler por ids.", e);
+        }
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorAgentes(Collection<Long> idsAgente) {
+        List<SolicitudAlquiler> solicitudes = new ArrayList<>();
+        if (idsAgente == null || idsAgente.isEmpty()) {
+            return solicitudes;
+        }
+        String sql = SELECT_SQL + " WHERE s.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size())
+                + ") ORDER BY s.id_solicitud";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsAgente) {
+                ps.setLong(idx++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    solicitudes.add(mapRow(rs));
+                }
+            }
+            return solicitudes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar solicitudes de alquiler por agentes.", e);
+        }
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorCaptaciones(Collection<Long> idsCaptacion) {
+        List<SolicitudAlquiler> solicitudes = new ArrayList<>();
+        if (idsCaptacion == null || idsCaptacion.isEmpty()) {
+            return solicitudes;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_captacion IN (" + JdbcSupport.placeholders(idsCaptacion.size())
+                + ") ORDER BY s.id_solicitud";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsCaptacion) {
+                ps.setLong(idx++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    solicitudes.add(mapRow(rs));
+                }
+            }
+            return solicitudes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar solicitudes de alquiler por captaciones.", e);
+        }
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorCliente(Long idCliente) {
+        List<SolicitudAlquiler> solicitudes = new ArrayList<>();
+        if (idCliente == null) {
+            return solicitudes;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_cliente = ? ORDER BY s.id_solicitud";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idCliente);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    solicitudes.add(mapRow(rs));
+                }
+            }
+            return solicitudes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar solicitudes de alquiler por cliente.", e);
+        }
+    }
+
+    @Override
+    public List<SolicitudAlquiler> listarPorPropietario(Long idPropietario) {
+        List<SolicitudAlquiler> solicitudes = new ArrayList<>();
+        if (idPropietario == null) {
+            return solicitudes;
+        }
+        String sql = SELECT_SQL + " WHERE l.id_propietario = ? ORDER BY s.id_solicitud";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idPropietario);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    solicitudes.add(mapRow(rs));
+                }
+            }
+            return solicitudes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar solicitudes de alquiler por propietario.", e);
         }
     }
 

@@ -124,6 +124,75 @@ public class VisitaDAOImpl implements VisitaDAO {
     }
 
     @Override
+    public List<Visita> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        List<Visita> resultado = new ArrayList<>();
+        if (idsAgente == null || idsAgente.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE v.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ") ORDER BY v.id_visita";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsAgente) {
+                ps.setLong(idx++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar visita por agentes.", e);
+        }
+    }
+
+    @Override
+    public List<Visita> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
+        List<Visita> resultado = new ArrayList<>();
+        if (idsCaptacion == null || idsCaptacion.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_captacion IN (" + JdbcSupport.placeholders(idsCaptacion.size()) + ") ORDER BY v.id_visita";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsCaptacion) {
+                ps.setLong(idx++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar visita por captaciones.", e);
+        }
+    }
+
+    @Override
+    public List<Visita> listarPorCliente(Long idCliente) {
+        List<Visita> resultado = new ArrayList<>();
+        if (idCliente == null) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE o.id_cliente = ? ORDER BY v.id_visita";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idCliente);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar visita por cliente.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(Visita visita) {
         validar(visita, true);
         try (Connection conn = DBManager.getConnection();
@@ -211,6 +280,14 @@ public class VisitaDAOImpl implements VisitaDAO {
         }
         if (visita.getFechaVisita() == null || visita.getHoraVisita() == null || visita.getEstado() == null) {
             throw new IllegalArgumentException("La visita tiene campos obligatorios incompletos.");
+        }
+        if (visita.getEstado() != EstadoVisita.REALIZADA
+                && (visita.getResultado() != null
+                        || visita.getNivelInteres() != null
+                        || visita.getObjecionPrincipal() != null
+                        || visita.getOpinionPrecio() != null
+                        || visita.getProximaAccion() != null)) {
+            throw new IllegalArgumentException("Solo una visita realizada puede tener desenlace comercial.");
         }
         JdbcSupport.validarId(JdbcSupport.getIdOportunidad(visita.getOportunidadComercial()));
         JdbcSupport.validarId(JdbcSupport.getIdAgente(visita.getAgenteResponsable()));

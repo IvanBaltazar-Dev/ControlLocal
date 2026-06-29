@@ -102,6 +102,10 @@
 
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
+                @{
+                    var visitasFiltradas = VisitasFiltradas().ToList();
+                    var visitasVisibles = Paginador.Pagina(visitasFiltradas, ref _pagVisitas).ToList();
+                }
                 <table class="cl-table">
                     <thead>
                         <tr>
@@ -110,7 +114,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var v in VisitasFiltradas())
+                        @foreach (var v in visitasVisibles)
                         {
                             <tr style="@FilaStyle(v)">
                                 <td><span style="font-size:12px;">@v.FechaTexto</span></td>
@@ -159,7 +163,7 @@
                 {
                     <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_loadError</span></div>
                 }
-                else if (!VisitasFiltradas().Any())
+                else if (visitasFiltradas.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="calendar" Size="28" style="margin-bottom:10px;" />
@@ -167,6 +171,9 @@
                         <div style="font-size:12px;">Programa una visita o cambia el filtro de estado.</div>
                     </div>
                 }
+                <div style="padding:0 14px 14px;">
+                    <Pagination Total="visitasFiltradas.Count" @bind-Page="_pagVisitas" />
+                </div>
             </div>
         </div>
 
@@ -368,6 +375,7 @@
     private Dictionary<int, List<VisitaDto>> _visitasPorDia = new();
     private Timeline.TimelineItem[] _proximas = Array.Empty<Timeline.TimelineItem>();
     private int _pagProximas = 1;
+    private int _pagVisitas = 1;
 
     private List<VisitaDto> VisitasDelDia(int dia) =>
         _visitasPorDia.TryGetValue(dia, out var lista) ? lista : new();
@@ -478,9 +486,9 @@
 
     private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
 
-    private void LimpiarFiltros() { _filtroEstado = ""; _query = ""; _distrito = ""; }
+    private void LimpiarFiltros() { _filtroEstado = ""; _query = ""; _distrito = ""; _pagVisitas = 1; }
 
-    private void ToggleEstado(string code) => _filtroEstado = _filtroEstado == code ? "" : code;
+    private void ToggleEstado(string code) { _filtroEstado = _filtroEstado == code ? "" : code; _pagVisitas = 1; }
 
     private IEnumerable<VisitaDto> VisitasFiltradas() =>
         _visitas.Where(v =>
@@ -601,6 +609,11 @@
 
     private void AbrirResultado(VisitaDto v)
     {
+        if (v.Estado != "R")
+        {
+            Notificar("Solo una visita realizada puede tener resultado comercial.");
+            return;
+        }
         _target = v;
         _resultadoTmp = ""; _obsTmp = ""; _razonTmp = "";
         _nivelInteresTmp = ""; _objecionTmp = ""; _opinionPrecioTmp = ""; _proximaAccionTmp = "";
@@ -695,6 +708,11 @@
     private async Task ConfirmarResultado()
     {
         if (_target is null || _procesando) return;
+        if (_target.Estado != "R")
+        {
+            _err = "Solo una visita realizada puede tener resultado comercial.";
+            return;
+        }
         try
         {
             _procesando = true;

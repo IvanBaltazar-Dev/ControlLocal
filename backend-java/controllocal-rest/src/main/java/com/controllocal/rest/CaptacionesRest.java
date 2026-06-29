@@ -82,8 +82,17 @@ public class CaptacionesRest {
 
     @GET
     @Path("{idOrCodigo}/coincidencias")
-    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(@PathParam("idOrCodigo") String idOrCodigo) {
-        return coincidencias.clientesParaCaptacion(idOrCodigo, SeguridadRest.usuario(request));
+    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(
+            @PathParam("idOrCodigo") String idOrCodigo,
+            @QueryParam("page") Integer page,
+            @QueryParam("pagina") Integer pagina,
+            @QueryParam("page_size") Integer pageSize,
+            @QueryParam("tamano") Integer tamano) {
+        return coincidencias.clientesParaCaptacion(
+                idOrCodigo,
+                SeguridadRest.usuario(request),
+                page != null ? page : pagina != null ? pagina : 1,
+                pageSize != null ? pageSize : tamano != null ? tamano : 6);
     }
 
     @POST

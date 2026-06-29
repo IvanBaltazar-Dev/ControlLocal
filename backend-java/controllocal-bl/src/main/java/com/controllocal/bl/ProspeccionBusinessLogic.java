@@ -21,6 +21,10 @@ public interface ProspeccionBusinessLogic {
     /** Prospecciones vivas cuya ultima accion de seguimiento tiene ya {@code diasAviso} dias o mas (recontacto vencido). */
     List<Prospeccion> listarPorRecontactar(int diasAviso);
 
+    // Filas acotadas a los agentes dados (alcance por rol). Vacio si la coleccion viene vacia.
+    List<Prospeccion> listarPorAgentes(java.util.Collection<Long> idsAgente);
+    List<Prospeccion> listarPorPropietario(Long idPropietario);
+
     /**
      * Crea las alertas SIN_RESPUESTA de las prospecciones con recontacto vencido
      * (desde el dia 8 sin nueva accion), sin duplicar las ya activas. Sustituye al

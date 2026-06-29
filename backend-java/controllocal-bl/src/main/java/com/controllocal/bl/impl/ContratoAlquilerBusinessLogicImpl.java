@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -271,6 +272,17 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
     @Override
     public List<ContratoAlquiler> listarTodos() {
         return contratoDAO.listarTodos();
+    }
+
+    @Override
+    public List<ContratoAlquiler> listarPaginaFiltrado(Long idAgente, Collection<Long> idsCaptacion,
+            int limite, int desplazamiento) {
+        return contratoDAO.listarPaginaFiltrado(idAgente, idsCaptacion, limite, desplazamiento);
+    }
+
+    @Override
+    public long contarFiltrado(Long idAgente, Collection<Long> idsCaptacion) {
+        return contratoDAO.contarFiltrado(idAgente, idsCaptacion);
     }
 
     // Comision del contrato = renta mensual * %comision pactada.

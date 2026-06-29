@@ -31,6 +31,8 @@ public interface CaptacionBusinessLogic {
     public long contar();
     public List<Captacion> listarPorBroker(Long idBroker);
     public List<Captacion> listarPorAgente(Long idAgente);
+    public List<Captacion> listarPorAgentes(java.util.Collection<Long> idsAgente);
+    public List<Captacion> listarPorPropietario(Long idPropietario);
     public List<Captacion> listPendingReviews();
     public List<Captacion> listPendingReviews(Long idBroker);
     public boolean actualizar(Captacion captacion);

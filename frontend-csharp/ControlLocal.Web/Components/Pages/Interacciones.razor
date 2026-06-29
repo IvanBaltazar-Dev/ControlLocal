@@ -1,4 +1,5 @@
 @page "/interacciones"
+@inherits SafeComponentBase
 @inject AppState App
 @inject IInteraccionService InteraccionSvc
 
@@ -6,7 +7,7 @@
 
 <AppShell Active="Interacciones comerciales" Crumbs="@(new[] { "ControlLocal", "Operacion", "Interacciones comerciales" })"
           Title="Registro de interacciones comerciales"
-          Subtitle="Historial separado por lado de la relación: con cliente y con propietario">
+          Subtitle="Historial separado por lado de la relacion: cliente y propietario">
     <Actions>
         @if (App.Role == Roles.Agente)
         {
@@ -19,84 +20,187 @@
     </Actions>
     <ChildContent>
         <div class="cl-card">
-            <div class="cl-card-head">
-                <div class="cl-card-title">Interacciones recientes</div>
-                <div style="display:flex;gap:8px;">
-                    <select @bind="_filterResultado" style="flex:0 0 150px;">
-                        <option value="">Todos los resultados</option>
+            <div style="padding:10px 14px 0;">
+                <Tabs Active="@_grupo" OnSelect="CambiarGrupo" Items="_grupos" />
+            </div>
+            <div class="cl-card-body" style="padding-top:12px;">
+                <FilterBar Search="Buscar persona, codigo, observacion..."
+                           Value="@_query"
+                           ValueChanged="CambiarBusqueda"
+                           ResultCount="@_total"
+                           HasActiveFilters="HayFiltros"
+                           OnClear="LimpiarFiltros">
+                    <select class="cl-select" value="@_filterCanal" @onchange="CambiarCanal">
+                        <option value="">Canal</option>
+                        @foreach (var opcion in EnumCatalog.CanalesContacto)
+                        {
+                            <option value="@opcion.Code">@opcion.Label</option>
+                        }
+                    </select>
+                    <select class="cl-select" value="@_filterResultado" @onchange="CambiarResultado">
+                        <option value="">Resultado</option>
                         @foreach (var opcion in ResultadosFiltro)
                         {
                             <option value="@opcion.Code">@opcion.Label</option>
                         }
                     </select>
-                </div>
-            </div>
-            <div style="padding:10px 14px 0;">
-                <Tabs Active="@_grupo" OnSelect="@(g => _grupo = g)" Items="_grupos" />
+                </FilterBar>
             </div>
             <div class="cl-card-body" style="padding:0;">
-                @{
-                    var interFiltradas = Filtradas().ToList();
-                    var interVisibles = Paginador.Pagina(interFiltradas, ref _pagina);
-                }
                 <table class="cl-table">
                     <thead>
                         <tr>
                             <th>Fecha</th>
                             <th>Contexto</th>
-                            <th>Destino</th>
+                            <th>Cliente/Propietario</th>
                             <th>Canal</th>
                             <th>Resultado</th>
                             <th>Accion</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var inter in interVisibles)
+                        @foreach (var inter in _items)
                         {
                             <tr @onclick="@(() => App.Navigate($"interaccion-detail/{inter.Id}"))">
                                 <td style="font-size:12px;color:#7E8794;">@inter.FechaHoraTexto</td>
                                 <td><span class="cl-badge gray">@inter.ContextoTexto</span></td>
-                                <td style="font-weight:600;font-size:13px;">@Destino(inter)</td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                                        <span class="cl-badge @(inter.GrupoContexto == "propietario" ? "amber" : "blue") plain">@inter.PersonaTipoMostrar</span>
+                                        <span style="font-weight:650;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@PersonaNombre(inter)</span>
+                                    </div>
+                                </td>
                                 <td><CanalBadge Canal="@inter.CanalContacto" /></td>
                                 <td><ResultadoBadge Resultado="@inter.Resultado" Contexto="@inter.Contexto" /></td>
-                                <td><button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"interaccion-detail/{inter.Id}"))"><Icon Name="eye" Size="13" /> Ver</button></td>
+                                <td><button class="cl-btn sm ghost" @onclick:stopPropagation="true" @onclick="@(() => App.Navigate($"interaccion-detail/{inter.Id}"))"><Icon Name="eye" Size="13" /> Ver</button></td>
                             </tr>
                         }
                     </tbody>
                 </table>
-                @if (interFiltradas.Count == 0)
+                @if (_cargando)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Cargando interacciones...</div>
+                }
+                else if (_items.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="target" Size="28" style="margin-bottom:10px;" />
                         <div style="font-weight:600;margin-bottom:4px;">Sin interacciones en este filtro</div>
-                        <div style="font-size:12px;">Cambia de pestaña o registra un contacto desde el proceso correspondiente.</div>
+                        <div style="font-size:12px;">Cambia los filtros o registra un contacto desde el proceso correspondiente.</div>
                     </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <div class="cl-alert amber" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
                 }
             </div>
         </div>
-        <Pagination Total="interFiltradas.Count" @bind-Page="_pagina" />
+        <Pagination Total="@_total" PageSize="@PageSize" Page="@_pagina" PageChanged="CambiarPagina" />
     </ChildContent>
 </AppShell>
 
 @code {
+    private const int PageSize = 8;
     private string _filterResultado = "";
+    private string _filterCanal = "";
+    private string _query = "";
     private string _grupo = "Todas";
     private int _pagina = 1;
-    private IReadOnlyList<InteraccionComercialDto> DatosInteracciones => InteraccionSvc.All();
+    private int _total;
+    private bool _cargando = true;
+    private string? _error;
+    private IReadOnlyList<InteraccionComercialDto> _items = [];
 
-    // Separa el historial por lado de la relación (Etapa 6): no mezcla cliente con propietario.
     private Tabs.TabItem[] _grupos =>
     [
-        new("Todas", DatosInteracciones.Count),
-        new("Con cliente", DatosInteracciones.Count(i => i.GrupoContexto == "cliente")),
-        new("Con propietario", DatosInteracciones.Count(i => i.GrupoContexto == "propietario")),
+        new("Todas", _grupo == "Todas" ? _total : null),
+        new("Con cliente", _grupo == "Con cliente" ? _total : null),
+        new("Con propietario", _grupo == "Con propietario" ? _total : null),
     ];
 
-    private IEnumerable<InteraccionComercialDto> Filtradas() =>
-        DatosInteracciones
-            .Where(i => _grupo == "Todas"
-                || (_grupo == "Con propietario" ? i.GrupoContexto == "propietario" : i.GrupoContexto == "cliente"))
-            .Where(i => string.IsNullOrEmpty(_filterResultado) || i.Resultado == _filterResultado);
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+    }
+
+    private async Task CambiarGrupo(string grupo)
+    {
+        if (_grupo == grupo)
+            return;
+        _grupo = grupo;
+        _pagina = 1;
+        await Cargar();
+    }
+
+    private async Task CambiarBusqueda(string value)
+    {
+        _query = value;
+        _pagina = 1;
+        await Cargar();
+    }
+
+    private async Task CambiarCanal(ChangeEventArgs e)
+    {
+        _filterCanal = e.Value?.ToString() ?? "";
+        _pagina = 1;
+        await Cargar();
+    }
+
+    private async Task CambiarResultado(ChangeEventArgs e)
+    {
+        _filterResultado = e.Value?.ToString() ?? "";
+        _pagina = 1;
+        await Cargar();
+    }
+
+    private async Task LimpiarFiltros()
+    {
+        _query = _filterCanal = _filterResultado = "";
+        _pagina = 1;
+        await Cargar();
+    }
+
+    private async Task CambiarPagina(int page)
+    {
+        _pagina = page;
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            var pagina = await InteraccionSvc.ListarPaginaAsync(
+                _pagina,
+                PageSize,
+                _grupo,
+                _filterResultado,
+                _filterCanal,
+                _query,
+                DisposedToken);
+            _items = pagina.Items;
+            _total = (int)Math.Min(int.MaxValue, pagina.TotalRecords);
+            _pagina = pagina.Page;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _items = [];
+            _total = 0;
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private bool HayFiltros =>
+        !string.IsNullOrWhiteSpace(_query)
+        || !string.IsNullOrWhiteSpace(_filterCanal)
+        || !string.IsNullOrWhiteSpace(_filterResultado);
 
     private static IReadOnlyList<EnumOption> ResultadosFiltro =>
         EnumCatalog.ResultadosProspeccionInteraccion
@@ -107,11 +211,10 @@
             .Select(group => group.First())
             .ToList();
 
-    private static string Destino(InteraccionComercialDto interaccion) => interaccion.Contexto switch
+    private static string PersonaNombre(InteraccionComercialDto interaccion)
     {
-        "PROSPECCION" => string.IsNullOrWhiteSpace(interaccion.CodigoProspeccion) ? "Prospeccion" : interaccion.CodigoProspeccion,
-        "CAPTACION" => string.IsNullOrWhiteSpace(interaccion.CaptacionCodigo) ? "Captacion" : interaccion.CaptacionCodigo,
-        "CLIENTE" => string.IsNullOrWhiteSpace(interaccion.ClienteNombre) ? "Cliente" : interaccion.ClienteNombre,
-        _ => string.IsNullOrWhiteSpace(interaccion.CaptacionCodigo) ? "Oportunidad" : interaccion.CaptacionCodigo,
-    };
+        if (!string.IsNullOrWhiteSpace(interaccion.PersonaNombreMostrar))
+            return interaccion.PersonaNombreMostrar;
+        return interaccion.GrupoContexto == "propietario" ? "Propietario sin nombre" : "Cliente sin nombre";
+    }
 }

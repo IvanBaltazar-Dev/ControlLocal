@@ -77,29 +77,57 @@
                 </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
-                <div class="cl-card">
-                    <div class="cl-card-head">
-                        <div>
-                            <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas en el periodo" : _isAgente ? "Mis cierres en el periodo" : "Cierres del equipo en el periodo")</div>
-                            <div class="cl-card-sub">@(_isAgente ? "Volumen de alquileres que concretaste en el rango seleccionado" : "Volumen de alquileres concretados según el rango seleccionado")</div>
+            <div class="cl-report-analysis">
+                <div class="cl-report-main">
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">Embudo de conversion</div>
+                                <div class="cl-card-sub">Lectura de avance captacion -> cierre en el periodo</div>
+                            </div>
+                        </div>
+                        <div class="cl-card-body">
+                            @foreach (var r in Datos.Embudo)
+                            {
+                                <div style="margin-bottom:12px;">
+                                    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;gap:10px;">
+                                        <span>@r[0]</span><span><b>@r[1]</b> <span class="cl-muted">- @r[2]</span></span>
+                                    </div>
+                                    <div style="height:8px;background:#E2E6EC;border-radius:4px;overflow:hidden;">
+                                        <div style="width:@r[2];height:100%;background:@r[3];border-radius:4px;"></div>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     </div>
-                    <div class="cl-card-body">
-                        <BarChart Data="Datos.CierresPorMes.Valores" Height="200" Labels="Datos.CierresPorMes.Etiquetas" />
+
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas en el periodo" : _isAgente ? "Mis cierres en el periodo" : "Cierres del equipo en el periodo")</div>
+                                <div class="cl-card-sub">@(_isAgente ? "Barras de cierre y linea de conversion propia" : "Barras de cierre y linea de conversion del alcance seleccionado")</div>
+                            </div>
+                        </div>
+                        <div class="cl-card-body">
+                            <ComboChart Bars="Datos.CierresPorMes.Valores"
+                                        Line="ConversionPorPeriodo"
+                                        Labels="Datos.CierresPorMes.Etiquetas"
+                                        Height="210" />
+                        </div>
                     </div>
                 </div>
+
                 <div class="cl-card">
                     <div class="cl-card-head">
                         <div>
-                            <div class="cl-card-title">Captaciones por etapa</div>
-                            <div class="cl-card-sub">En qué punto del proceso está cada captación</div>
+                            <div class="cl-card-title">Salud de captaciones</div>
+                            <div class="cl-card-sub">Activas, por revisar, observadas y bloqueadas/cerradas</div>
                         </div>
                     </div>
-                    <div class="cl-card-body" style="display:flex;gap:18px;align-items:center;">
-                        <DonutChart Segments="EtapaSegmentos" Size="140" Thickness="22"
+                    <div class="cl-card-body" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
+                        <DonutChart Segments="EtapaSegmentos" Size="150" Thickness="24"
                                     CenterValue="@TotalEtapas.ToString()" CenterLabel="captaciones" />
-                        <div style="flex:1;font-size:12px;">
+                        <div style="flex:1;min-width:170px;font-size:12px;">
                             @foreach (var e in Datos.Etapas)
                             {
                                 <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
@@ -114,78 +142,57 @@
                 </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Embudo de conversión</div></div>
-                    <div class="cl-card-body">
-                        @foreach (var r in Datos.Embudo)
+            <div class="cl-card" style="margin-top:14px;">
+                <div class="cl-card-head"><div class="cl-card-title">@(_isAgente ? "Ultimos cierres" : _isAdmin ? "Desempeno por broker" : "Desempeno por agente")</div></div>
+                <div class="cl-card-body" style="padding:0;">
+                    @if (_isAgente)
+                    {
+                        @if (UltimosCierres.Count == 0)
                         {
-                            <div style="margin-bottom:12px;">
-                                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
-                                    <span>@r[0]</span><span><b>@r[1]</b> <span class="cl-muted">· @r[2]</span></span>
-                                </div>
-                                <div style="height:8px;background:#E2E6EC;border-radius:4px;overflow:hidden;">
-                                    <div style="width:@r[2];height:100%;background:@r[3];border-radius:4px;"></div>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">@(_isAgente ? "Últimos cierres" : _isAdmin ? "Desempeño por broker" : "Desempeño por agente")</div></div>
-                    <div class="cl-card-body" style="padding:0;">
-                        @if (_isAgente)
-                        {
-                            @* Para el agente, una tabla comparativa solo lo mostraría a él: en su lugar,
-                               sus cierres más recientes (el contrato de mayor Id es el más nuevo). *@
-                            @if (UltimosCierres.Count == 0)
-                            {
-                                <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Aún no registras cierres.</div>
-                            }
-                            else
-                            {
-                                <table class="cl-table">
-                                    <thead><tr><th>Operación</th><th>Cliente</th><th>Local</th><th>Renta</th><th>Cierre</th></tr></thead>
-                                    <tbody>
-                                        @foreach (var c in UltimosCierres)
-                                        {
-                                            <tr>
-                                                <td><span class="mono">@(string.IsNullOrWhiteSpace(c.CodigoOportunidad) ? c.CodigoSolicitud : c.CodigoOportunidad)</span></td>
-                                                <td style="font-weight:600;">@c.ClienteNombre</td>
-                                                <td>@c.DireccionLocal</td>
-                                                <td>@c.Moneda @c.RentaMensualTexto</td>
-                                                <td class="cl-muted" style="font-size:12px;">@c.FechaCierreTexto</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            }
-                        }
-                        else if (Datos.Desempeno.Length == 0)
-                        {
-                            <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Sin actividad registrada todavía.</div>
+                            <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Aun no registras cierres.</div>
                         }
                         else
                         {
                             <table class="cl-table">
-                                <thead><tr><th>@(_isAdmin ? "Broker" : "Agente")</th><th>Captac.</th><th>Cierres</th><th>Conversión</th></tr></thead>
+                                <thead><tr><th>Operacion</th><th>Cliente</th><th>Local</th><th>Renta</th><th>Cierre</th></tr></thead>
                                 <tbody>
-                                    @foreach (var r in Datos.Desempeno)
+                                    @foreach (var c in UltimosCierres)
                                     {
                                         <tr>
-                                            <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r.Nombre)</span>@r.Nombre</div></td>
-                                            <td>@r.Captaciones</td>
-                                            <td><b>@r.Cierres</b></td>
-                                            <td><StatusBadge Label="@r.Conversion" ToneOverride="@ConvTone(r.Conversion)" Plain="true" /></td>
+                                            <td><span class="mono">@(string.IsNullOrWhiteSpace(c.CodigoOportunidad) ? c.CodigoSolicitud : c.CodigoOportunidad)</span></td>
+                                            <td style="font-weight:600;">@c.ClienteNombre</td>
+                                            <td>@c.DireccionLocal</td>
+                                            <td>@c.Moneda @c.RentaMensualTexto</td>
+                                            <td class="cl-muted" style="font-size:12px;">@c.FechaCierreTexto</td>
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         }
-                    </div>
+                    }
+                    else if (Datos.Desempeno.Length == 0)
+                    {
+                        <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Sin actividad registrada todavia.</div>
+                    }
+                    else
+                    {
+                        <table class="cl-table">
+                            <thead><tr><th>@(_isAdmin ? "Broker" : "Agente")</th><th>Captac.</th><th>Cierres</th><th>Conversion</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in Datos.Desempeno)
+                                {
+                                    <tr>
+                                        <td><div class="cl-flex"><span class="cl-avatar" style="width:24px;height:24px;font-size:10px;">@Initials(r.Nombre)</span>@r.Nombre</div></td>
+                                        <td>@r.Captaciones</td>
+                                        <td><b>@r.Cierres</b></td>
+                                        <td><StatusBadge Label="@r.Conversion" ToneOverride="@ConvTone(r.Conversion)" Plain="true" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
                 </div>
             </div>
-
             @if (_isBroker)
             {
                 <div style="margin-top:22px;display:flex;flex-direction:column;gap:14px;">
@@ -380,6 +387,8 @@
     private DonutChart.Segment[] EtapaSegmentos => Datos.Etapas
         .Select(e => new DonutChart.Segment(ParseValor(e.Valor), e.Color))
         .ToArray();
+
+    private double[] ConversionPorPeriodo => _ind.ConversionPorPeriodo.Select(v => (double)v).ToArray();
 
     private static int ParseValor(string? valor) => int.TryParse(valor, out var n) ? n : 0;
 

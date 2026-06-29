@@ -1,6 +1,7 @@
 package com.controllocal.dao;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,4 +16,9 @@ public interface ProspeccionDAO extends CrudDAO<Prospeccion> {
 
     /** Prospecciones EN_SEGUIMIENTO cuyo recontacto vence en/antes de {@code limite}. */
     List<Prospeccion> listarPorRecontactar(LocalDate limite);
+
+    // Filas acotadas a los agentes dados (alcance por rol). Vacio si la coleccion viene vacia.
+    List<Prospeccion> listarPorAgentes(java.util.Collection<Long> idsAgente);
+    // Prospecciones cuyo local pertenece al propietario (ficha comercial). Vacio si el id viene nulo.
+    List<Prospeccion> listarPorPropietario(Long idPropietario);
 }

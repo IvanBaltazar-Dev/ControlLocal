@@ -12,7 +12,10 @@ import org.junit.jupiter.api.Test;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.comercial.enums.FuenteOrigen;
 import com.controllocal.model.comercial.enums.EstadoVisita;
+import com.controllocal.model.comercial.enums.ObjecionVisita;
+import com.controllocal.model.comercial.enums.OpinionPrecio;
 import com.controllocal.model.comercial.enums.OperacionRequerimiento;
+import com.controllocal.model.comercial.enums.ProximaAccionVisita;
 import com.controllocal.model.comercial.enums.ResultadoInteraccion;
 import com.controllocal.model.comercial.enums.TipoDocumentoSolicitud;
 import com.controllocal.model.inmueble.Distrito;
@@ -101,6 +104,29 @@ class ModeloOperativoTest {
     }
 
     @Test
+    void visitaCanceladaONoRealizadaLimpiaDesenlaceComercial() {
+        Visita cancelada = visitaConDesenlace();
+        cancelada.cancelar("Cliente cancelo");
+
+        assertEquals(EstadoVisita.CANCELADA, cancelada.getEstado());
+        assertNull(cancelada.getResultado());
+        assertNull(cancelada.getNivelInteres());
+        assertNull(cancelada.getObjecionPrincipal());
+        assertNull(cancelada.getOpinionPrecio());
+        assertNull(cancelada.getProximaAccion());
+
+        Visita noRealizada = visitaConDesenlace();
+        noRealizada.marcarNoRealizada("No asistio");
+
+        assertEquals(EstadoVisita.NO_REALIZADA, noRealizada.getEstado());
+        assertNull(noRealizada.getResultado());
+        assertNull(noRealizada.getNivelInteres());
+        assertNull(noRealizada.getObjecionPrincipal());
+        assertNull(noRealizada.getOpinionPrecio());
+        assertNull(noRealizada.getProximaAccion());
+    }
+
+    @Test
     void descarteEliminaNivelDeInteres() {
         Visita visita = new Visita();
         visita.programar();
@@ -118,5 +144,16 @@ class ModeloOperativoTest {
         } catch (NoSuchFieldException e) {
             return null;
         }
+    }
+
+    private static Visita visitaConDesenlace() {
+        Visita visita = new Visita();
+        visita.programar();
+        visita.setResultado(ResultadoInteraccion.INTERESADO);
+        visita.setNivelInteres(4);
+        visita.setObjecionPrincipal(ObjecionVisita.PRECIO);
+        visita.setOpinionPrecio(OpinionPrecio.ALTO);
+        visita.setProximaAccion(ProximaAccionVisita.SEGUIMIENTO);
+        return visita;
     }
 }

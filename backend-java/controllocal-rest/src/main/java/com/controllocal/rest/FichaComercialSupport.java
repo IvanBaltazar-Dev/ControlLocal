@@ -223,9 +223,9 @@ public final class FichaComercialSupport {
     }
 
     private boolean clienteTieneHistoriaVisible(long idCliente, Contexto contexto) {
-        return oportunidades.listarTodos().stream().anyMatch(o -> mismoCliente(o, idCliente) && visible(o, contexto))
-                || solicitudes.listarTodos().stream().anyMatch(s -> mismoCliente(s, idCliente) && visible(s, contexto))
-                || visitas.listarTodos().stream().anyMatch(v -> mismoCliente(v, idCliente) && visible(v, contexto))
+        return oportunidades.listarPorCliente(idCliente).stream().anyMatch(o -> mismoCliente(o, idCliente) && visible(o, contexto))
+                || solicitudes.listarPorCliente(idCliente).stream().anyMatch(s -> mismoCliente(s, idCliente) && visible(s, contexto))
+                || visitas.listarPorCliente(idCliente).stream().anyMatch(v -> mismoCliente(v, idCliente) && visible(v, contexto))
                 || interacciones.listarTodos().stream().anyMatch(i -> mismoCliente(i, idCliente) && visible(i, contexto))
                 || contratos.listarTodos().stream().anyMatch(c -> {
                     SolicitudAlquiler solicitud = solicitudContrato(c);
@@ -234,10 +234,10 @@ public final class FichaComercialSupport {
     }
 
     private boolean propietarioTieneHistoriaVisible(long idPropietario, Contexto contexto) {
-        return prospecciones.listarTodos().stream().anyMatch(p -> mismoPropietario(p.getLocalComercial(), idPropietario) && visible(p, contexto))
-                || captaciones.listarTodos().stream().anyMatch(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
-                || oportunidades.listarTodos().stream().anyMatch(o -> mismoPropietario(local(o), idPropietario) && visible(o, contexto))
-                || solicitudes.listarTodos().stream().anyMatch(s -> mismoPropietario(local(s), idPropietario) && visible(s, contexto))
+        return prospecciones.listarPorPropietario(idPropietario).stream().anyMatch(p -> mismoPropietario(p.getLocalComercial(), idPropietario) && visible(p, contexto))
+                || captaciones.listarPorPropietario(idPropietario).stream().anyMatch(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
+                || oportunidades.listarPorPropietario(idPropietario).stream().anyMatch(o -> mismoPropietario(local(o), idPropietario) && visible(o, contexto))
+                || solicitudes.listarPorPropietario(idPropietario).stream().anyMatch(s -> mismoPropietario(local(s), idPropietario) && visible(s, contexto))
                 || contratos.listarTodos().stream().anyMatch(c -> {
                     SolicitudAlquiler solicitud = solicitudContrato(c);
                     return solicitud != null && mismoPropietario(local(solicitud), idPropietario)
@@ -254,18 +254,18 @@ public final class FichaComercialSupport {
 
     private List<FichaRowResponse> filasPropiedadesCliente(long idCliente, Contexto contexto) {
         Map<String, FichaRowResponse> filas = new LinkedHashMap<>();
-        oportunidades.listarTodos().stream()
+        oportunidades.listarPorCliente(idCliente).stream()
                 .filter(o -> mismoCliente(o, idCliente) && visible(o, contexto))
                 .forEach(o -> putLocal(filas, local(o), o.getCaptacion(), o.getAgenteResponsable(), "Propiedad mostrada",
                         "oportunidad-detail/" + textoId(o.getIdOportunidad()), o.getFechaRegistro()));
-        visitas.listarTodos().stream()
+        visitas.listarPorCliente(idCliente).stream()
                 .filter(v -> mismoCliente(v, idCliente) && visible(v, contexto))
                 .forEach(v -> putLocal(filas, local(v), v.getCaptacion(), v.getAgenteResponsable(), "Propiedad visitada",
                         v.getOportunidadComercial() != null && v.getOportunidadComercial().getIdOportunidad() != null
                                 ? "oportunidad-detail/" + v.getOportunidadComercial().getIdOportunidad()
                                 : "",
                         fechaOrden(v.getFechaVisita())));
-        solicitudes.listarTodos().stream()
+        solicitudes.listarPorCliente(idCliente).stream()
                 .filter(s -> mismoCliente(s, idCliente) && visible(s, contexto))
                 .forEach(s -> putLocal(filas, local(s), s.getCaptacion(), s.getAgenteResponsable(), "Solicitud enviada",
                         s.getCodigoSolicitud() != null ? "solicitud-detail/" + s.getCodigoSolicitud() : "",
@@ -274,7 +274,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasOportunidadesCliente(long idCliente, Contexto contexto) {
-        return oportunidades.listarTodos().stream()
+        return oportunidades.listarPorCliente(idCliente).stream()
                 .filter(o -> mismoCliente(o, idCliente) && visible(o, contexto))
                 .map(this::filaOportunidad)
                 .sorted(orden())
@@ -290,7 +290,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasVisitasCliente(long idCliente, Contexto contexto) {
-        return visitas.listarTodos().stream()
+        return visitas.listarPorCliente(idCliente).stream()
                 .filter(v -> mismoCliente(v, idCliente) && visible(v, contexto))
                 .map(this::filaVisita)
                 .sorted(orden())
@@ -298,7 +298,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasSolicitudesCliente(long idCliente, Contexto contexto) {
-        return solicitudes.listarTodos().stream()
+        return solicitudes.listarPorCliente(idCliente).stream()
                 .filter(s -> mismoCliente(s, idCliente) && visible(s, contexto))
                 .map(this::filaSolicitud)
                 .sorted(orden())
@@ -316,13 +316,13 @@ public final class FichaComercialSupport {
 
     private List<FichaRowResponse> filasAgentesCliente(long idCliente, Contexto contexto) {
         Map<Long, FichaRowResponse> agentes = new LinkedHashMap<>();
-        oportunidades.listarTodos().stream()
+        oportunidades.listarPorCliente(idCliente).stream()
                 .filter(o -> mismoCliente(o, idCliente) && visible(o, contexto))
                 .forEach(o -> putAgente(agentes, o.getAgenteResponsable(), "Oportunidad", o.getFechaRegistro()));
-        solicitudes.listarTodos().stream()
+        solicitudes.listarPorCliente(idCliente).stream()
                 .filter(s -> mismoCliente(s, idCliente) && visible(s, contexto))
                 .forEach(s -> putAgente(agentes, s.getAgenteResponsable(), "Solicitud", fechaOrden(s.getFechaRegistro())));
-        visitas.listarTodos().stream()
+        visitas.listarPorCliente(idCliente).stream()
                 .filter(v -> mismoCliente(v, idCliente) && visible(v, contexto))
                 .forEach(v -> putAgente(agentes, v.getAgenteResponsable(), "Visita", fechaOrden(v.getFechaVisita())));
         interacciones.listarTodos().stream()
@@ -333,11 +333,11 @@ public final class FichaComercialSupport {
 
     private List<FichaRowResponse> filasLocalesPropietario(long idPropietario, Contexto contexto) {
         Map<Long, FichaRowResponse> filas = new LinkedHashMap<>();
-        prospecciones.listarTodos().stream()
+        prospecciones.listarPorPropietario(idPropietario).stream()
                 .filter(p -> mismoPropietario(p.getLocalComercial(), idPropietario) && visible(p, contexto))
                 .forEach(p -> putLocal(filas, p.getLocalComercial(), p.getCaptacion(), p.getAgenteResponsable(),
                         "Local en prospeccion", rutaLocal(p.getLocalComercial()), p.getFechaRegistro()));
-        captaciones.listarTodos().stream()
+        captaciones.listarPorPropietario(idPropietario).stream()
                 .filter(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
                 .forEach(c -> putLocal(filas, c.getLocalComercial(), c, c.getAgenteResponsable(),
                         "Local captado", rutaCaptacion(c), fechaOrden(c.getFechaCaptacion())));
@@ -345,7 +345,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasProspeccionesPropietario(long idPropietario, Contexto contexto) {
-        return prospecciones.listarTodos().stream()
+        return prospecciones.listarPorPropietario(idPropietario).stream()
                 .filter(p -> mismoPropietario(p.getLocalComercial(), idPropietario) && visible(p, contexto))
                 .map(this::filaProspeccion)
                 .sorted(orden())
@@ -353,7 +353,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasCaptacionesPropietario(long idPropietario, Contexto contexto) {
-        return captaciones.listarTodos().stream()
+        return captaciones.listarPorPropietario(idPropietario).stream()
                 .filter(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
                 .map(this::filaCaptacion)
                 .sorted(orden())
@@ -361,7 +361,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasOportunidadesPropietario(long idPropietario, Contexto contexto) {
-        return oportunidades.listarTodos().stream()
+        return oportunidades.listarPorPropietario(idPropietario).stream()
                 .filter(o -> mismoPropietario(local(o), idPropietario) && visible(o, contexto))
                 .map(this::filaOportunidad)
                 .sorted(orden())
@@ -369,7 +369,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasSolicitudesPropietario(long idPropietario, Contexto contexto) {
-        return solicitudes.listarTodos().stream()
+        return solicitudes.listarPorPropietario(idPropietario).stream()
                 .filter(s -> mismoPropietario(local(s), idPropietario) && visible(s, contexto))
                 .map(this::filaSolicitud)
                 .sorted(orden())
@@ -387,16 +387,16 @@ public final class FichaComercialSupport {
 
     private List<FichaRowResponse> filasAgentesPropietario(long idPropietario, Contexto contexto) {
         Map<Long, FichaRowResponse> agentes = new LinkedHashMap<>();
-        prospecciones.listarTodos().stream()
+        prospecciones.listarPorPropietario(idPropietario).stream()
                 .filter(p -> mismoPropietario(p.getLocalComercial(), idPropietario) && visible(p, contexto))
                 .forEach(p -> putAgente(agentes, p.getAgenteResponsable(), "Prospeccion", p.getFechaRegistro()));
-        captaciones.listarTodos().stream()
+        captaciones.listarPorPropietario(idPropietario).stream()
                 .filter(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
                 .forEach(c -> putAgente(agentes, c.getAgenteResponsable(), "Captacion", fechaOrden(c.getFechaCaptacion())));
-        oportunidades.listarTodos().stream()
+        oportunidades.listarPorPropietario(idPropietario).stream()
                 .filter(o -> mismoPropietario(local(o), idPropietario) && visible(o, contexto))
                 .forEach(o -> putAgente(agentes, o.getAgenteResponsable(), "Oportunidad", o.getFechaRegistro()));
-        solicitudes.listarTodos().stream()
+        solicitudes.listarPorPropietario(idPropietario).stream()
                 .filter(s -> mismoPropietario(local(s), idPropietario) && visible(s, contexto))
                 .forEach(s -> putAgente(agentes, s.getAgenteResponsable(), "Solicitud", fechaOrden(s.getFechaRegistro())));
         return agentes.values().stream().sorted(orden()).toList();

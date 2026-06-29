@@ -79,13 +79,43 @@
 
                 @if (_ficha?.RequerimientoActivo == true)
                 {
-                    <PanelCoincidencias Titulo="Propiedades de cartera compatibles"
-                                        Icono="store"
-                                        Descripcion="Captaciones activas de tu cartera que encajan con la busqueda de este cliente. Proponer abre la oportunidad prellenada."
-                                        Items="_coincidencias?.Items"
-                                        Cargando="_cargandoCoin"
-                                        Error="@_errCoin"
-                                        TextoVacio="No hay propiedades activas que coincidan con su requerimiento por ahora." />
+                    @if (!_coincidenciasOpen)
+                    {
+                        <div class="cl-card">
+                            <div class="cl-card-head">
+                                <div>
+                                    <div class="cl-card-title"><Icon Name="store" Size="14" /> Propiedades de cartera compatibles</div>
+                                    <div class="cl-card-sub">Se cargan solo cuando decides revisar la demanda compatible.</div>
+                                </div>
+                                <button class="cl-btn sm" @onclick="AbrirCoincidencias"><Icon Name="chevronRight" Size="12" /> Ver propiedades</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <PanelCoincidencias Titulo="Propiedades de cartera compatibles"
+                                            Icono="store"
+                                            Descripcion="Captaciones activas de tu cartera que encajan con la busqueda de este cliente. Selecciona una propiedad y luego abre la oportunidad prellenada."
+                                            Items="_coincidencias?.Items"
+                                            Total="@(_coincidencias?.Total ?? 0)"
+                                            Page="@_coinPage"
+                                            PageSize="@_coinPageSize"
+                                            PageChanged="CambiarPaginaCoincidencias"
+                                            Cargando="_cargandoCoin"
+                                            Error="@_errCoin"
+                                            TextoVacio="No hay propiedades activas que coincidan con su requerimiento por ahora."
+                                            Selectable="true"
+                                            SelectedId="@CoincidenciaSeleccionadaId"
+                                            OnSelect="SeleccionarCoincidencia"
+                                            ShowItemActions="false" />
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                            <button class="cl-btn sm ghost" @onclick="CerrarCoincidencias"><Icon Name="chevronLeft" Size="12" /> Ocultar propiedades</button>
+                            <a class="cl-btn sm primary @(string.IsNullOrWhiteSpace(RutaCoincidenciaSeleccionada) ? "disabled" : "")"
+                               href="@Href(RutaCoincidenciaSeleccionada)">
+                                <Icon Name="target" Size="12" /> Abrir oportunidad prellenada
+                            </a>
+                        </div>
+                    }
                 }
 
                 <Tabs Items="@TabItems" Active="@ActiveLabel" OnSelect="@SeleccionarTab" />
@@ -232,6 +262,10 @@
     private CoincidenciasDto? _coincidencias;
     private bool _cargandoCoin;
     private string? _errCoin;
+    private bool _coincidenciasOpen;
+    private int _coinPage = 1;
+    private readonly int _coinPageSize = 6;
+    private CoincidenciaDto? _coincidenciaSeleccionada;
     private List<RequerimientoDto> _misRequerimientos = new();
     private bool _cargandoReq;
     private bool _reqBusy;
@@ -297,7 +331,10 @@
 
         if (!_notFound && Persona.Id > 0)
         {
-            await CargarCoincidencias(Persona.Id);
+            _coincidenciasOpen = false;
+            _coincidencias = null;
+            _coincidenciaSeleccionada = null;
+            _coinPage = 1;
             await CargarMisRequerimientos();
         }
     }
@@ -377,7 +414,12 @@
         }
         _ficha = await FichaSvc.ClienteAsync(Persona.Id) ?? _ficha;
         await CargarMisRequerimientos();
-        await CargarCoincidencias(Persona.Id);
+        _coincidencias = null;
+        _coincidenciaSeleccionada = null;
+        if (_coincidenciasOpen)
+        {
+            await CargarCoincidencias(Persona.Id, 1);
+        }
     }
 
     private static string EstadoReqLabel(string estado) => estado switch
@@ -416,18 +458,47 @@
         return string.Join(" · ", partes);
     }
 
-    private async Task CargarCoincidencias(long id)
+    private async Task AbrirCoincidencias()
+    {
+        _coincidenciasOpen = true;
+        await CargarCoincidencias(Persona.Id, 1);
+    }
+
+    private void CerrarCoincidencias()
+    {
+        _coincidenciasOpen = false;
+        _coincidenciaSeleccionada = null;
+    }
+
+    private async Task CambiarPaginaCoincidencias(int page) => await CargarCoincidencias(Persona.Id, page);
+
+    private void SeleccionarCoincidencia(CoincidenciaDto item) => _coincidenciaSeleccionada = item;
+
+    private long? CoincidenciaSeleccionadaId => _coincidenciaSeleccionada is null ? null : CoinKey(_coincidenciaSeleccionada);
+
+    private string RutaCoincidenciaSeleccionada => _coincidenciaSeleccionada?.ProponerRuta ?? "";
+
+    private static long? CoinKey(CoincidenciaDto item) => item.Id ?? item.CaptacionId ?? item.ClienteId;
+
+    private async Task CargarCoincidencias(long id, int page)
     {
         if (_ficha?.RequerimientoActivo != true)
         {
             _coincidencias = null;
+            _coincidenciaSeleccionada = null;
             return;
         }
+        _coinPage = Math.Max(1, page);
         _cargandoCoin = true;
         _errCoin = null;
         try
         {
-            _coincidencias = await CoincidenciaSvc.PropiedadesParaClienteAsync(id);
+            _coincidencias = await CoincidenciaSvc.PropiedadesParaClienteAsync(id, _coinPage, _coinPageSize);
+            _coinPage = _coincidencias.Page;
+            if (_coincidenciaSeleccionada is not null && !_coincidencias.Items.Any(i => CoinKey(i) == CoinKey(_coincidenciaSeleccionada)))
+            {
+                _coincidenciaSeleccionada = null;
+            }
         }
         catch (Exception ex)
         {

@@ -1,5 +1,7 @@
 package com.controllocal.rest;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -110,8 +112,17 @@ public class ClientesRest {
 
     @GET
     @Path("{id}/coincidencias")
-    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(@PathParam("id") long id) {
-        return coincidencias.propiedadesParaCliente(id, SeguridadRest.usuario(request));
+    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(
+            @PathParam("id") long id,
+            @QueryParam("page") Integer page,
+            @QueryParam("pagina") Integer pagina,
+            @QueryParam("page_size") Integer pageSize,
+            @QueryParam("tamano") Integer tamano) {
+        return coincidencias.propiedadesParaCliente(
+                id,
+                SeguridadRest.usuario(request),
+                page != null ? page : pagina != null ? pagina : 1,
+                pageSize != null ? pageSize : tamano != null ? tamano : 6);
     }
 
     @POST
@@ -181,12 +192,24 @@ public class ClientesRest {
     }
 
     private Set<Long> idsClientesPermitidos(UsuarioAutenticado usuario) {
+        // Solo se invoca para BROKER (ADMIN/AGENTE corto-circuitan antes).
         Set<Long> agentesBroker = agentesSupervisados(usuario);
         Set<Long> captacionesBroker = captacionesPermitidasBroker(usuario).stream()
                 .map(Captacion::getIdCaptacion)
                 .collect(Collectors.toSet());
+        // Captaciones cuyo agente pertenece al equipo: cubren la rama captacionPermitida
+        // (captacion.agente en el equipo) sin escanear toda la tabla.
+        Set<Long> captacionesScope = new HashSet<>(captacionesBroker);
+        captaciones.listarPorAgentes(agentesBroker).stream()
+                .map(Captacion::getIdCaptacion)
+                .filter(id -> id != null)
+                .forEach(captacionesScope::add);
 
-        Set<Long> desdeOportunidades = oportunidades.listarTodos().stream()
+        // Origen acotado en SQL (antes se escaneaba TODA la tabla); el filtro de
+        // visibilidad autoritativo se mantiene intacto sobre el superconjunto resultante.
+        List<OportunidadComercial> ops = new ArrayList<>(oportunidades.listarPorAgentes(agentesBroker));
+        ops.addAll(oportunidades.listarPorCaptaciones(captacionesScope));
+        Set<Long> desdeOportunidades = ops.stream()
                 .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
                         || captacionPermitida(item.getCaptacion(), usuario, agentesBroker, captacionesBroker))
                 .map(OportunidadComercial::getClienteInteresado)
@@ -194,7 +217,9 @@ public class ClientesRest {
                 .map(ClienteInteresado::getIdCliente)
                 .collect(Collectors.toSet());
 
-        Set<Long> desdeSolicitudes = solicitudes.listarTodos().stream()
+        List<SolicitudAlquiler> sols = new ArrayList<>(solicitudes.listarPorAgentes(agentesBroker));
+        sols.addAll(solicitudes.listarPorCaptaciones(captacionesScope));
+        Set<Long> desdeSolicitudes = sols.stream()
                 .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
                         || captacionPermitida(item.getCaptacion(), usuario, agentesBroker, captacionesBroker))
                 .map(SolicitudAlquiler::getClienteInteresado)

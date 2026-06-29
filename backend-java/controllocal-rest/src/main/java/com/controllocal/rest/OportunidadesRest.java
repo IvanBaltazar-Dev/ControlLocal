@@ -149,24 +149,21 @@ public class OportunidadesRest {
     }
 
     private List<OportunidadComercial> oportunidadesDelUsuario(UsuarioAutenticado usuario) {
-        List<OportunidadComercial> todas = oportunidades.listarTodos();
+        // Alcance acotado en SQL (no se escanea toda la tabla):
+        // - AGENTE: sus propias oportunidades.
+        // - BROKER: las de las captaciones que supervisa (semantica por captacion).
+        // - ADMIN: todas (gobierno).
         if ("AGENTE".equals(usuario.rol())) {
-            return todas.stream()
-                    .filter(item -> item.getAgenteResponsable() != null
-                            && usuario.idDominio() == item.getAgenteResponsable().getIdAgente())
-                    .toList();
+            return oportunidades.listarPorAgentes(List.of(usuario.idDominio()));
         }
         if ("ADMIN".equals(usuario.rol())) {
-            return todas;
+            return oportunidades.listarTodos();
         }
         if ("BROKER".equals(usuario.rol())) {
-            Set<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
+            List<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
                     .map(Captacion::getIdCaptacion)
-                    .collect(Collectors.toSet());
-            return todas.stream()
-                    .filter(item -> item.getCaptacion() != null
-                            && permitidas.contains(item.getCaptacion().getIdCaptacion()))
                     .toList();
+            return oportunidades.listarPorCaptaciones(permitidas);
         }
         throw ApiException.prohibido();
     }

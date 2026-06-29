@@ -61,6 +61,13 @@ public final class DBManager {
         String database = required(properties, "db.name", "database");
         boolean ssl = Boolean.parseBoolean(optional(properties, "db.ssl", "ssl", "false"));
 
+        // Tiempos limite del driver. Sin ellos, un query lento contra el RDS remoto retiene
+        // su conexion (y el hilo HTTP de GlassFish) indefinidamente; bajo la rafaga concurrente
+        // del dashboard eso agotaba el pool y hasta el login se quedaba sin conexion ~30s. Con
+        // socketTimeout un query que se pasa de tiempo aborta y devuelve su conexion al pool.
+        long connectTimeoutMs = longProp(properties, "db.connectTimeoutMs", 10_000L);
+        long socketTimeoutMs = longProp(properties, "db.socketTimeoutMs", 30_000L);
+
         this.url = "jdbc:mysql://" + host + ":" + port + "/" + database
                 + "?sslMode=" + (ssl ? "REQUIRED" : "DISABLED")
                 + "&serverTimezone=UTC"
@@ -68,11 +75,14 @@ public final class DBManager {
                 + "&characterEncoding=UTF-8"
                 + "&allowPublicKeyRetrieval=false"
                 + "&fallbackToSystemKeyStore=false"
-                + "&fallbackToSystemTrustStore=false";
+                + "&fallbackToSystemTrustStore=false"
+                + "&connectTimeout=" + connectTimeoutMs
+                + "&socketTimeout=" + socketTimeoutMs
+                + "&tcpKeepAlive=true";
         this.user = required(properties, "db.user", "user");
         this.password = required(properties, "db.password", "password");
 
-        this.maxPool = Math.max(1, intProp(properties, "db.pool.max", 10));
+        this.maxPool = Math.max(1, intProp(properties, "db.pool.max", 16));
         this.esperaMaxMs = longProp(properties, "db.pool.timeoutMs", 10_000L);
         this.revalidarMs = longProp(properties, "db.pool.revalidarMs", 30_000L);
 

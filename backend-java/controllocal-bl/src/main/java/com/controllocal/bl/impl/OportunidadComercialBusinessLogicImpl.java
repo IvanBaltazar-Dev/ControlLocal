@@ -66,6 +66,31 @@ public class OportunidadComercialBusinessLogicImpl implements OportunidadComerci
         return oportunidadDAO.listarTodos();
     }
 
+    @Override
+    public List<OportunidadComercial> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        return oportunidadDAO.listarPorAgentes(idsAgente);
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
+        return oportunidadDAO.listarPorCaptaciones(idsCaptacion);
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorCliente(Long idCliente) {
+        return oportunidadDAO.listarPorCliente(idCliente);
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorPropietario(Long idPropietario) {
+        return oportunidadDAO.listarPorPropietario(idPropietario);
+    }
+
+    @Override
+    public List<OportunidadComercial> listarPorIds(java.util.Collection<Long> ids) {
+        return oportunidadDAO.listarPorIds(ids);
+    }
+
     public boolean actualizar(OportunidadComercial oportunidad) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(oportunidad != null ? oportunidad.getIdOportunidad() : null, "El id de oportunidad");

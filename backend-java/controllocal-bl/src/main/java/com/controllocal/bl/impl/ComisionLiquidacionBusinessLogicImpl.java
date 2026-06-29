@@ -59,6 +59,11 @@ public class ComisionLiquidacionBusinessLogicImpl implements ComisionLiquidacion
     }
 
     @Override
+    public List<ComisionLiquidacion> listarPorContratos(java.util.Collection<Long> idsContrato) {
+        return comisionDAO.listarPorContratos(idsContrato);
+    }
+
+    @Override
     public Optional<ComisionLiquidacion> buscarPorId(Long idComision) {
         BusinessValidations.id(idComision, "El id de la liquidacion");
         return comisionDAO.buscarPorId(idComision);

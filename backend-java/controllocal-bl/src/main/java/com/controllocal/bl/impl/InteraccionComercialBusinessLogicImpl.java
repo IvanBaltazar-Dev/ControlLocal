@@ -106,6 +106,10 @@ public class InteraccionComercialBusinessLogicImpl implements InteraccionComerci
         return interaccionDAO.listarPorCliente(idCliente);
     }
 
+    public List<InteraccionComercial> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+        return interaccionDAO.listarPorAgentes(idsAgente);
+    }
+
     public boolean actualizar(InteraccionComercial interaccion) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(interaccion != null ? interaccion.getIdInteraccion() : null, "El id de interaccion");

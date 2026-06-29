@@ -570,6 +570,14 @@ public class SolicitudesRest {
     }
 
     private List<SolicitudAlquiler> solicitudesDelUsuario(UsuarioAutenticado usuario) {
+        // El AGENTE se acota en SQL a sus propias solicitudes (caso dominante). Broker y
+        // admin mantienen listarTodos + puedeVer: el broker-administrador supervisa
+        // tambien agentes sin asignacion explicita, que un listarPorAgentes no cubriria.
+        if (usuario.tieneRol("AGENTE")) {
+            return solicitudes.listarPorAgentes(List.of(usuario.idDominio())).stream()
+                    .filter(item -> puedeVer(usuario, item))
+                    .toList();
+        }
         return solicitudes.listarTodos().stream()
                 .filter(item -> puedeVer(usuario, item))
                 .toList();

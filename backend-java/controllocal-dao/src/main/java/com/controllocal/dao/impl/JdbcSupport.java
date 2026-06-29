@@ -42,6 +42,22 @@ final class JdbcSupport {
         }
     }
 
+    // Genera "?, ?, ?" para una clausula IN con n parametros. Devuelve "" si n <= 0
+    // (el llamante debe evitar emitir el IN vacio).
+    static String placeholders(int n) {
+        if (n <= 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(n * 2);
+        for (int i = 0; i < n; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append('?');
+        }
+        return sb.toString();
+    }
+
     static void setDate(PreparedStatement ps, int index, LocalDate value) throws SQLException {
         if (value == null) {
             ps.setNull(index, Types.DATE);

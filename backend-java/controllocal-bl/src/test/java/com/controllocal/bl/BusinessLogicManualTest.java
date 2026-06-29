@@ -448,6 +448,18 @@ public class BusinessLogicManualTest {
             // se debe iterar sobre el mapa 'items'. Por ahora, devolvemos true o false.
             return true; //true pq solo queremos ver el codigo
         }
+        public List<Captacion> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+            return items.values().stream()
+                    .filter(c -> idsAgente != null && c.getAgenteResponsable() != null
+                            && idsAgente.contains(c.getAgenteResponsable().getIdAgente()))
+                    .toList();
+        }
+        public List<Captacion> listarPorPropietario(Long idPropietario) {
+            return items.values().stream()
+                    .filter(c -> c.getLocalComercial() != null
+                            && java.util.Objects.equals(c.getLocalComercial().getIdPropietario(), idPropietario))
+                    .toList();
+        }
     }
 
     private static class InMemoryAgenteDAO implements AgenteInmobiliarioDAO {
@@ -561,6 +573,35 @@ public class BusinessLogicManualTest {
         public List<SolicitudAlquiler> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(SolicitudAlquiler solicitud) { items.put(solicitud.getIdSolicitud(), solicitud); return true; }
         public boolean eliminar(Long id) { return items.remove(id) != null; }
+        public List<SolicitudAlquiler> listarPorIds(java.util.Collection<Long> ids) {
+            return items.values().stream()
+                    .filter(s -> ids != null && ids.contains(s.getIdSolicitud()))
+                    .toList();
+        }
+        public List<SolicitudAlquiler> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+            return items.values().stream()
+                    .filter(s -> idsAgente != null && s.getAgenteResponsable() != null
+                            && idsAgente.contains(s.getAgenteResponsable().getIdAgente()))
+                    .toList();
+        }
+        public List<SolicitudAlquiler> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
+            return items.values().stream()
+                    .filter(s -> idsCaptacion != null && s.getCaptacion() != null
+                            && idsCaptacion.contains(s.getCaptacion().getIdCaptacion()))
+                    .toList();
+        }
+        public List<SolicitudAlquiler> listarPorCliente(Long idCliente) {
+            return items.values().stream()
+                    .filter(s -> s.getClienteInteresado() != null
+                            && java.util.Objects.equals(s.getClienteInteresado().getIdCliente(), idCliente))
+                    .toList();
+        }
+        public List<SolicitudAlquiler> listarPorPropietario(Long idPropietario) {
+            return items.values().stream()
+                    .filter(s -> s.getCaptacion() != null && s.getCaptacion().getLocalComercial() != null
+                            && java.util.Objects.equals(s.getCaptacion().getLocalComercial().getIdPropietario(), idPropietario))
+                    .toList();
+        }
     }
 
     private static class InMemoryOportunidadDAO implements OportunidadComercialDAO {
@@ -571,6 +612,35 @@ public class BusinessLogicManualTest {
         public List<OportunidadComercial> listarTodos() { return new ArrayList<>(items.values()); }
         public boolean actualizar(OportunidadComercial oportunidad) { items.put(oportunidad.getIdOportunidad(), oportunidad); return true; }
         public boolean eliminar(Long id) { return items.remove(id) != null; }
+        public List<OportunidadComercial> listarPorAgentes(java.util.Collection<Long> idsAgente) {
+            return items.values().stream()
+                    .filter(o -> idsAgente != null && o.getAgenteResponsable() != null
+                            && idsAgente.contains(o.getAgenteResponsable().getIdAgente()))
+                    .toList();
+        }
+        public List<OportunidadComercial> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
+            return items.values().stream()
+                    .filter(o -> idsCaptacion != null && o.getCaptacion() != null
+                            && idsCaptacion.contains(o.getCaptacion().getIdCaptacion()))
+                    .toList();
+        }
+        public List<OportunidadComercial> listarPorCliente(Long idCliente) {
+            return items.values().stream()
+                    .filter(o -> o.getClienteInteresado() != null
+                            && java.util.Objects.equals(o.getClienteInteresado().getIdCliente(), idCliente))
+                    .toList();
+        }
+        public List<OportunidadComercial> listarPorPropietario(Long idPropietario) {
+            return items.values().stream()
+                    .filter(o -> o.getCaptacion() != null && o.getCaptacion().getLocalComercial() != null
+                            && java.util.Objects.equals(o.getCaptacion().getLocalComercial().getIdPropietario(), idPropietario))
+                    .toList();
+        }
+        public List<OportunidadComercial> listarPorIds(java.util.Collection<Long> ids) {
+            return items.values().stream()
+                    .filter(o -> ids != null && ids.contains(o.getIdOportunidad()))
+                    .toList();
+        }
     }
 
     private static class JdbcRecorder implements InvocationHandler {

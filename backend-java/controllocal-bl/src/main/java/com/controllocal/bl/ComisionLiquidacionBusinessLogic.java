@@ -2,6 +2,7 @@ package com.controllocal.bl;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +26,12 @@ public interface ComisionLiquidacionBusinessLogic {
      * muchos contratos con su comision en memoria, evitando una consulta por contrato.
      */
     List<ComisionLiquidacion> listarTodos();
+
+    /**
+     * Comisiones de varios contratos en una sola consulta (para enriquecer una pagina de
+     * contratos sin recorrer toda la tabla).
+     */
+    List<ComisionLiquidacion> listarPorContratos(Collection<Long> idsContrato);
 
     Optional<ComisionLiquidacion> buscarPorId(Long idComision);
 

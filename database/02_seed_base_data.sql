@@ -2990,19 +2990,25 @@ BEGIN
                 WHEN MOD(v_i, 11) = 0 THEN 'G'
                 ELSE 'R'
             END,
-            CASE
-                WHEN MOD(v_i, 8) = 0 THEN NULL
-                WHEN MOD(v_i, 17) = 0 THEN NULL
-                WHEN MOD(v_i, 5) = 0 THEN 'S'
-                WHEN MOD(v_i, 7) = 0 THEN 'N'
-                ELSE 'I'
-            END,
+            -- Solo las visitas realizadas (estado 'R') llevan desenlace; el resto va NULL para
+            -- respetar ck_visita_resultado y ck_visita_desenlace_estado. 'R' <=> v_i no divisible
+            -- por 8, 17, 13 ni 11 (mismo criterio que el CASE de estado de arriba).
+            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+                 THEN (CASE WHEN MOD(v_i, 5) = 0 THEN 'S' WHEN MOD(v_i, 7) = 0 THEN 'N' ELSE 'I' END)
+                 ELSE NULL END,
             v_oportunidad_id,
             v_agente_id,
-            CASE WHEN MOD(v_i, 8) = 0 THEN NULL ELSE 1 + MOD(v_i, 5) END,
-            CASE WHEN MOD(v_i, 7) = 0 THEN 'P' WHEN MOD(v_i, 5) = 0 THEN 'C' ELSE 'E' END,
-            CASE WHEN MOD(v_i, 6) = 0 THEN 'B' WHEN MOD(v_i, 4) = 0 THEN 'A' ELSE 'J' END,
-            CASE WHEN MOD(v_i, 5) = 0 THEN 'O' WHEN MOD(v_i, 7) = 0 THEN 'D' ELSE 'S' END
+            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+                 THEN 1 + MOD(v_i, 5) ELSE NULL END,
+            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+                 THEN (CASE WHEN MOD(v_i, 7) = 0 THEN 'P' WHEN MOD(v_i, 5) = 0 THEN 'C' ELSE 'E' END)
+                 ELSE NULL END,
+            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+                 THEN (CASE WHEN MOD(v_i, 6) = 0 THEN 'B' WHEN MOD(v_i, 4) = 0 THEN 'A' ELSE 'J' END)
+                 ELSE NULL END,
+            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+                 THEN (CASE WHEN MOD(v_i, 5) = 0 THEN 'O' WHEN MOD(v_i, 7) = 0 THEN 'D' ELSE 'S' END)
+                 ELSE NULL END
         );
 
         SET v_i = v_i + 1;

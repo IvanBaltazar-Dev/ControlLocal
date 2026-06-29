@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -132,6 +133,30 @@ public class InteraccionComercialDAOImpl implements InteraccionComercialDAO {
     public List<InteraccionComercial> listarPorCliente(Long idCliente) {
         JdbcSupport.validarId(idCliente);
         return listarPorEntidad("i.id_cliente = ?", idCliente);
+    }
+
+    @Override
+    public List<InteraccionComercial> listarPorAgentes(Collection<Long> idsAgente) {
+        List<InteraccionComercial> resultado = new ArrayList<>();
+        if (idsAgente == null || idsAgente.isEmpty()) {
+            return resultado;
+        }
+        String sql = SELECT_SQL + " WHERE i.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ") ORDER BY i.id_interaccion";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long id : idsAgente) {
+                ps.setLong(idx++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar interaccion por agentes.", e);
+        }
     }
 
     @Override

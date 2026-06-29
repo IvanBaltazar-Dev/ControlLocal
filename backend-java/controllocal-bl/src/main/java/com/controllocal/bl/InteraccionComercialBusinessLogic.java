@@ -14,6 +14,7 @@ public interface InteraccionComercialBusinessLogic {
     public List<InteraccionComercial> listarPorProspeccion(Long idProspeccion);
     public List<InteraccionComercial> listarPorCaptacion(Long idCaptacion);
     public List<InteraccionComercial> listarPorCliente(Long idCliente);
+    public List<InteraccionComercial> listarPorAgentes(java.util.Collection<Long> idsAgente);
     public boolean actualizar(InteraccionComercial interaccion);
     public boolean eliminar(Long idInteraccion);
 }

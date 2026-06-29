@@ -152,14 +152,34 @@ else
 
                     @if (!EsDescartada)
                     {
-                        <PanelCoincidencias Titulo="Clientes que buscan algo asi"
-                                            Icono="users"
-                                            Descripcion="Clientes de tu cartera con requerimiento activo compatible con esta propiedad. Es una senal de demanda para decidir la captacion."
-                                            Items="_coincidencias?.Items"
-                                            Cargando="_cargandoCoin"
-                                            Error="@_errCoin"
-                                            EtiquetaAccion="Proponer"
-                                            TextoVacio="Ningun cliente de tu cartera busca algo asi por ahora." />
+                        @if (!_coincidenciasOpen)
+                        {
+                            <div class="cl-card">
+                                <div class="cl-card-head">
+                                    <div>
+                                        <div class="cl-card-title"><Icon Name="users" Size="14" /> Clientes que buscan algo asi</div>
+                                        <div class="cl-card-sub">Carga la demanda compatible solo cuando la necesites.</div>
+                                    </div>
+                                    <button class="cl-btn sm" @onclick="AbrirCoincidencias"><Icon Name="chevronRight" Size="12" /> Ver clientes</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <PanelCoincidencias Titulo="Clientes que buscan algo asi"
+                                                Icono="users"
+                                                Descripcion="Clientes de tu cartera con requerimiento activo compatible con esta propiedad. Es una senal de demanda para decidir la captacion."
+                                                Items="_coincidencias?.Items"
+                                                Total="@(_coincidencias?.Total ?? 0)"
+                                                Page="@_coinPage"
+                                                PageSize="@_coinPageSize"
+                                                PageChanged="CambiarPaginaCoincidencias"
+                                                Cargando="_cargandoCoin"
+                                                Error="@_errCoin"
+                                                EtiquetaAccion="Proponer"
+                                                TextoVacio="Ningun cliente de tu cartera busca algo asi por ahora." />
+                            <button class="cl-btn sm ghost" @onclick="CerrarCoincidencias"><Icon Name="chevronLeft" Size="12" /> Ocultar clientes</button>
+                        }
                     }
 
                     <div class="cl-card">
@@ -317,6 +337,9 @@ else
     private CoincidenciasDto? _coincidencias;
     private bool _cargandoCoin;
     private string? _errCoin;
+    private bool _coincidenciasOpen;
+    private int _coinPage = 1;
+    private readonly int _coinPageSize = 6;
     private bool _cargando = true;
     private bool _procesando;
     private bool _modalDescartar;
@@ -388,21 +411,35 @@ else
             _cargando = false;
         }
 
-        await CargarCoincidencias();
+        _coincidenciasOpen = false;
+        _coincidencias = null;
+        _coinPage = 1;
     }
 
-    private async Task CargarCoincidencias()
+    private async Task AbrirCoincidencias()
+    {
+        _coincidenciasOpen = true;
+        await CargarCoincidencias(1);
+    }
+
+    private void CerrarCoincidencias() => _coincidenciasOpen = false;
+
+    private Task CambiarPaginaCoincidencias(int page) => CargarCoincidencias(page);
+
+    private async Task CargarCoincidencias(int page)
     {
         if (_p is null || EsDescartada)
         {
             _coincidencias = null;
             return;
         }
+        _coinPage = Math.Max(1, page);
         _cargandoCoin = true;
         _errCoin = null;
         try
         {
-            _coincidencias = await CoincidenciaSvc.ClientesParaProspeccionAsync(_p.Id, DisposedToken);
+            _coincidencias = await CoincidenciaSvc.ClientesParaProspeccionAsync(_p.Id, _coinPage, _coinPageSize, DisposedToken);
+            _coinPage = _coincidencias.Page;
         }
         catch (OperationCanceledException)
         {

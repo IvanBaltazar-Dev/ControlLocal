@@ -27,5 +27,7 @@ public sealed class CoincidenciasDto
 {
     public string Origen { get; init; } = "";
     public int Total { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 6;
     public IReadOnlyList<CoincidenciaDto> Items { get; init; } = [];
 }

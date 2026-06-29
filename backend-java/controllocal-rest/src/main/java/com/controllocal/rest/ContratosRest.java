@@ -3,8 +3,10 @@ package com.controllocal.rest;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -58,12 +60,32 @@ public class ContratosRest {
     public PageResponse<Dtos.ContratoResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("100") int tamano) {
-        List<Dtos.ContratoResponse> fuente = contratosDelUsuario(SeguridadRest.usuario(request));
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        boolean esAdmin = usuario.tieneRol("ADMIN");
+        boolean esBroker = usuario.tieneRol("BROKER");
+        boolean esAgente = "AGENTE".equals(usuario.rol());
+        if (!esAdmin && !esBroker && !esAgente) {
+            throw ApiException.prohibido();
+        }
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
-        int hasta = Math.min(desde + tamanoValido, fuente.size());
-        return new PageResponse<>(fuente.subList(desde, hasta), fuente.size(), paginaValida, tamanoValido);
+        int desplazamiento = (paginaValida - 1) * tamanoValido;
+
+        // Alcance por rol resuelto en SQL (no se cargan tablas completas):
+        //  - agente: sus contratos (solicitud.id_agente)
+        //  - broker: contratos de las captaciones que supervisa
+        //  - admin : todos
+        Long idAgente = esAgente ? usuario.idDominio() : null;
+        Set<Long> captacionesBroker = esBroker
+                ? captaciones.listarPorBroker(usuario.idDominio()).stream()
+                        .map(Captacion::getIdCaptacion).filter(Objects::nonNull).collect(Collectors.toSet())
+                : null;
+
+        long total = contratos.contarFiltrado(idAgente, captacionesBroker);
+        List<ContratoAlquiler> paginaContratos = contratos.listarPaginaFiltrado(
+                idAgente, captacionesBroker, tamanoValido, desplazamiento);
+        List<Dtos.ContratoResponse> items = enriquecer(paginaContratos, esAdmin || esBroker);
+        return new PageResponse<>(items, total, paginaValida, tamanoValido);
     }
 
     @POST
@@ -219,33 +241,31 @@ public class ContratosRest {
                 .orElse(null);
     }
 
-    // Alcance por rol: el agente ve sus contratos; el broker/admin, los de las
-    // captaciones que supervisa. Se enriquece cada contrato con su solicitud.
-    private List<Dtos.ContratoResponse> contratosDelUsuario(UsuarioAutenticado usuario) {
-        boolean esAdmin = usuario.tieneRol("ADMIN");
-        boolean esBroker = usuario.tieneRol("BROKER");
-        boolean esAgente = "AGENTE".equals(usuario.rol());
-        if (!esAdmin && !esBroker && !esAgente) {
-            throw ApiException.prohibido();
+    // Enriquece SOLO la pagina ya acotada por rol: 2 consultas en bloque (las solicitudes y
+    // las comisiones de esos contratos), en lugar de cargar las tablas completas. Mantiene el
+    // criterio anterior: solo se devuelven contratos que tienen su solicitud.
+    private List<Dtos.ContratoResponse> enriquecer(List<ContratoAlquiler> pagina, boolean detalle) {
+        if (pagina.isEmpty()) {
+            return List.of();
         }
-        Set<Long> captacionesBroker = esBroker
-                ? captaciones.listarPorBroker(usuario.idDominio()).stream()
-                        .map(Captacion::getIdCaptacion).collect(Collectors.toSet())
-                : Set.of();
-
-        // Precarga en bloque para evitar el N+1: antes se hacia una consulta de solicitud
-        // y otra de comision por CADA contrato (1 + 2N). Ahora se traen las tres listas
-        // completas una sola vez y se cruzan en memoria por id.
+        Set<Long> idsSolicitud = new HashSet<>();
+        Set<Long> idsContrato = new HashSet<>();
+        for (ContratoAlquiler c : pagina) {
+            if (c.getSolicitudAlquiler() != null && c.getSolicitudAlquiler().getIdSolicitud() != null) {
+                idsSolicitud.add(c.getSolicitudAlquiler().getIdSolicitud());
+            }
+            if (c.getIdContratoAlquiler() != null) {
+                idsContrato.add(c.getIdContratoAlquiler());
+            }
+        }
         Map<Long, SolicitudAlquiler> solicitudPorId = new HashMap<>();
-        for (SolicitudAlquiler s : solicitudes.listarTodos()) {
+        for (SolicitudAlquiler s : solicitudes.listarPorIds(idsSolicitud)) {
             if (s.getIdSolicitud() != null) {
                 solicitudPorId.putIfAbsent(s.getIdSolicitud(), s);
             }
         }
-        // La primera comision por contrato (las listas vienen ordenadas por id, igual que
-        // listarPorContrato), que es justo la que usaba comision(contrato).
         Map<Long, ComisionLiquidacion> comisionPorContrato = new HashMap<>();
-        for (ComisionLiquidacion c : comisiones.listarTodos()) {
+        for (ComisionLiquidacion c : comisiones.listarPorContratos(idsContrato)) {
             Long idContrato = c.getContratoAlquiler() != null
                     ? c.getContratoAlquiler().getIdContratoAlquiler() : null;
             if (idContrato != null) {
@@ -254,27 +274,16 @@ public class ContratosRest {
         }
 
         List<Dtos.ContratoResponse> resultado = new ArrayList<>();
-        for (ContratoAlquiler contrato : contratos.listarTodos()) {
+        for (ContratoAlquiler contrato : pagina) {
             Long idSolicitud = contrato.getSolicitudAlquiler() != null
                     ? contrato.getSolicitudAlquiler().getIdSolicitud() : null;
-            SolicitudAlquiler solicitud = idSolicitud != null
-                    ? solicitudPorId.get(idSolicitud) : null;
+            SolicitudAlquiler solicitud = idSolicitud != null ? solicitudPorId.get(idSolicitud) : null;
             if (solicitud == null) {
                 continue;
             }
-            if (esAgente && !esSolicitudDelAgente(solicitud, usuario)) {
-                continue;
-            }
-            if (esBroker) {
-                Long idCaptacion = solicitud.getCaptacion() != null
-                        ? solicitud.getCaptacion().getIdCaptacion() : null;
-                if (idCaptacion == null || !captacionesBroker.contains(idCaptacion)) {
-                    continue;
-                }
-            }
             ComisionLiquidacion comision = contrato.getIdContratoAlquiler() != null
                     ? comisionPorContrato.get(contrato.getIdContratoAlquiler()) : null;
-            resultado.add(Dtos.ContratoResponse.desde(contrato, solicitud, comision, esAdmin || esBroker));
+            resultado.add(Dtos.ContratoResponse.desde(contrato, solicitud, comision, detalle));
         }
         return resultado;
     }

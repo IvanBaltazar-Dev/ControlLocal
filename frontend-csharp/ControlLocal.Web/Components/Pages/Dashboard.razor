@@ -177,22 +177,22 @@
                 <div class="cl-card">
                     <div class="cl-card-head">
                         <div>
-                            <div class="cl-card-title">Captaciones por etapa</div>
+                            <div class="cl-card-title">Salud de captaciones</div>
                             <div class="cl-card-sub">En qué punto del proceso está cada captación</div>
                         </div>
                     </div>
                     <div class="cl-card-body" style="display:flex;gap:18px;align-items:center;">
-                        <DonutChart Segments="EtapaSegmentos" Size="140" Thickness="22"
-                                    CenterValue="@TotalEtapas.ToString()" CenterLabel="captaciones" />
+                        <DonutChart Segments="SaludSegmentos" Size="140" Thickness="22"
+                                    CenterValue="@TotalSalud.ToString()" CenterLabel="captaciones" />
                         <div style="flex:1;font-size:12px;">
-                            @for (var i = 0; i < _ind.Etapas.Count; i++)
+                            @for (var i = 0; i < CaptacionesSalud.Count; i++)
                             {
-                                var etapa = _ind.Etapas[i];
+                                var etapa = CaptacionesSalud[i];
                                 <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
-                                    <span style="width:10px;height:10px;border-radius:3px;background:@ColoresEstado.PorIndicePipeline(i);"></span>
+                                    <span style="width:10px;height:10px;border-radius:3px;background:@ColoresEstado.PorIndiceSaludCaptacion(i);"></span>
                                     <span style="flex:1;">@etapa.Nombre</span>
                                     <b>@etapa.Valor</b>
-                                    <span class="cl-muted" style="min-width:38px;text-align:right;">@PctEtapa(etapa.Valor)%</span>
+                                    <span class="cl-muted" style="min-width:38px;text-align:right;">@PctSalud(etapa.Valor)%</span>
                                 </div>
                             }
                         </div>
@@ -390,12 +390,15 @@
     private string[] Meses => _ind.MesesEtiquetas.ToArray();
 
     // Dona "Captaciones por etapa": total al centro + una porción por etapa del pipeline.
-    private int TotalEtapas => _ind.Etapas.Sum(e => e.Valor);
+    private IReadOnlyList<IndicadorConteoDto> CaptacionesSalud =>
+        _ind.CaptacionesSalud.Count > 0 ? _ind.CaptacionesSalud : _ind.Etapas;
 
-    private int PctEtapa(int valor) => TotalEtapas > 0 ? (int)Math.Round(valor * 100.0 / TotalEtapas) : 0;
+    private int TotalSalud => CaptacionesSalud.Sum(e => e.Valor);
 
-    private DonutChart.Segment[] EtapaSegmentos => _ind.Etapas
-        .Select((e, i) => new DonutChart.Segment(e.Valor, ColoresEstado.PorIndicePipeline(i)))
+    private int PctSalud(int valor) => TotalSalud > 0 ? (int)Math.Round(valor * 100.0 / TotalSalud) : 0;
+
+    private DonutChart.Segment[] SaludSegmentos => CaptacionesSalud
+        .Select((e, i) => new DonutChart.Segment(e.Valor, ColoresEstado.PorIndiceSaludCaptacion(i)))
         .ToArray();
 
     protected override async Task OnInitializedAsync()

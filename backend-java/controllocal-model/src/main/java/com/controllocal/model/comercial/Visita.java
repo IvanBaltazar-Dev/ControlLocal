@@ -90,6 +90,7 @@ public class Visita {
     public void cancelar(String motivo) {
         this.estado = EstadoVisita.CANCELADA;
         this.observaciones = motivo;
+        limpiarDesenlace();
         this.fechaActualizacion = LocalDateTime.now();
     }
 
@@ -110,6 +111,7 @@ public class Visita {
         }
         this.estado = EstadoVisita.NO_REALIZADA;
         this.observaciones = motivo.trim();
+        limpiarDesenlace();
         this.fechaActualizacion = LocalDateTime.now();
     }
 
@@ -141,5 +143,13 @@ public class Visita {
 
     public boolean admiteResultado() {
         return estado == EstadoVisita.REALIZADA && resultado == null;
+    }
+
+    private void limpiarDesenlace() {
+        this.resultado = null;
+        this.nivelInteres = null;
+        this.objecionPrincipal = null;
+        this.opinionPrecio = null;
+        this.proximaAccion = null;
     }
 }

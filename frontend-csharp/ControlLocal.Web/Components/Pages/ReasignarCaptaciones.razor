@@ -10,7 +10,7 @@
           Title="Reasignar captacion a otro agente"
           Subtitle="Selecciona una captacion de tu equipo y reasignala a un agente disponible bajo tu supervision.">
     <Actions>
-        <button class="cl-btn" @onclick="@(() => App.Navigate("historial-reasignaciones"))"><Icon Name="history" Size="13" /> Ver historial completo</button>
+        <button class="cl-btn" @onclick="@(() => App.Navigate("historial-reasignaciones-captaciones"))"><Icon Name="history" Size="13" /> Ver historial completo</button>
     </Actions>
     <ChildContent>
         @if (_cargando)

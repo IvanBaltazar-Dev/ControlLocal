@@ -12,7 +12,7 @@
           Title="@(_solicitud is null ? "Evaluar solicitud" : $"{_solicitud.CodigoSolicitud} · {_solicitud.ClienteNombre}")"
           Subtitle="Revisa la solicitud y registra una decisión clara para el agente">
     <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes-revisar"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
         @if (_solicitud is not null && !_cargando)
         {
             <button class="cl-btn danger" disabled="@_procesando" @onclick="@(() => AbrirModal("rechazar"))"><Icon Name="x" Size="13" /> Rechazar</button>
@@ -347,7 +347,7 @@
         _toast = true;
         await RenderIfAliveAsync();
         await Task.Delay(900);
-        App.Navigate("solicitudes");
+        App.Navigate("solicitudes-revisar");
     }
 
     // Avisa al agente el resultado de la evaluacion de su solicitud.

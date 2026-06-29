@@ -1,5 +1,6 @@
 @page "/reportes"
 @inherits SafeComponentBase
+@using System.Globalization
 @using QuestPDF.Fluent
 @inject AppState App
 @inject IIndicadorService Indicadores
@@ -104,21 +105,6 @@
                             }
                         </div>
                     </div>
-
-                    <div class="cl-card">
-                        <div class="cl-card-head">
-                            <div>
-                                <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas en el periodo" : _isAgente ? "Mis cierres en el periodo" : "Cierres del equipo en el periodo")</div>
-                                <div class="cl-card-sub">@(_isAgente ? "Barras de cierre y linea de conversion propia" : "Barras de cierre y linea de conversion del alcance seleccionado")</div>
-                            </div>
-                        </div>
-                        <div class="cl-card-body">
-                            <ComboChart Bars="Datos.CierresPorMes.Valores"
-                                        Line="ConversionPorPeriodo"
-                                        Labels="Datos.CierresPorMes.Etiquetas"
-                                        Height="210" />
-                        </div>
-                    </div>
                 </div>
 
                 <div class="cl-card">
@@ -145,6 +131,42 @@
                                 <span style="flex:1;color:#515B6B;">Total captaciones</span>
                                 <b style="color:#243043;">@TotalEtapas</b>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-report-chart-row">
+                    <div class="cl-card cl-report-histogram">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas en el periodo" : _isAgente ? "Mis cierres en el periodo" : "Cierres del equipo en el periodo")</div>
+                                <div class="cl-card-sub">@(_isAgente ? "Cierres mensuales y conversion propia" : "Cierres mensuales y conversion del alcance seleccionado")</div>
+                            </div>
+                        </div>
+                        <div class="cl-card-body">
+                            <ComboChart Bars="Datos.CierresPorMes.Valores"
+                                        Line="ConversionPorPeriodo"
+                                        Labels="Datos.CierresPorMes.Etiquetas"
+                                        Height="230" />
+                        </div>
+                    </div>
+
+                    <div class="cl-card cl-commission-premium">
+                        <div class="cl-commission-premium__shine"></div>
+                        <div class="cl-card-body">
+                            <div class="cl-commission-premium__eyebrow"><Icon Name="coins" Size="13" /> Comision bruta</div>
+                            <div class="cl-commission-premium__value">@MonedaComision @ComisionBrutaTexto</div>
+                            <div class="cl-commission-premium__scope">@ComisionScope</div>
+                            <div class="cl-commission-premium__grid">
+                                <div>
+                                    <span>Cierres</span>
+                                    <b>@CierresEnPeriodo.Count</b>
+                                </div>
+                                <div>
+                                    <span>Promedio</span>
+                                    <b>@MonedaComision @TicketPromedioComisionTexto</b>
+                                </div>
+                            </div>
+                            <div class="cl-commission-premium__foot">@PeriodoActual.Label · solo cierres formalizados</div>
                         </div>
                     </div>
                 </div>
@@ -325,6 +347,7 @@
     private bool _isAdmin => App.Role == Roles.Admin;
     private bool _isBroker => App.Role == Roles.Broker;
     private bool _isAgente => App.Role == Roles.Agente;
+    private static readonly CultureInfo CulturaPe = CultureInfo.GetCultureInfo("es-PE");
     private bool _cargando = true;
     private bool _cargandoReportes;
     private IndicadoresDto _ind = IndicadoresDto.Vacio;
@@ -366,6 +389,39 @@
     // Cierres más recientes del agente (mayor Id = más nuevo), para el panel "Últimos cierres".
     private IReadOnlyList<ContratoAlquilerDto> UltimosCierres => _contratos
         .OrderByDescending(c => c.Id).Take(6).ToList();
+
+    private List<ContratoAlquilerDto> CierresEnPeriodo => _contratos
+        .Where(c => EnPeriodo(c.FechaCierre))
+        .OrderByDescending(c => c.FechaCierre)
+        .ToList();
+
+    private decimal ComisionBruta => CierresEnPeriodo.Sum(c => c.ComisionGenerada);
+
+    private string ComisionBrutaTexto => ComisionBruta.ToString("N0", CulturaPe);
+
+    private decimal TicketPromedioComision =>
+        CierresEnPeriodo.Count == 0 ? 0 : ComisionBruta / CierresEnPeriodo.Count;
+
+    private string TicketPromedioComisionTexto => TicketPromedioComision.ToString("N0", CulturaPe);
+
+    private string MonedaComision
+    {
+        get
+        {
+            var monedas = CierresEnPeriodo
+                .Select(c => string.IsNullOrWhiteSpace(c.Moneda) ? "USD" : c.Moneda.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .ToList();
+            return monedas.Count > 1 ? "Mix" : monedas.FirstOrDefault() ?? "USD";
+        }
+    }
+
+    private string ComisionScope => _isAdmin
+        ? "Comisiones brutas de todos los cierres"
+        : _isAgente
+            ? "Generada por tus cierres"
+            : "Comisiones brutas del equipo";
 
     private IndicadorOperativoDto Op => _ind.Operativo ?? IndicadorOperativoDto.Vacio;
 
@@ -423,8 +479,10 @@
             _cargandoReportes = true;
             try
             {
+                var contratosTask = ContratoSvc.RefrescarAsync(DisposedToken);
                 var capsTask = CaptacionSvc.RefrescarAsync(DisposedToken);
                 var solsTask = SolicitudSvc.RefrescarAsync(DisposedToken);
+                _contratos = await contratosTask;
                 _captaciones = await capsTask;
                 _solicitudes = await solsTask;
                 _preciosPorLocal = (await LocalSvc.AllAsync(DisposedToken))
@@ -435,6 +493,12 @@
             finally { _cargandoReportes = false; }
         }
         else if (_isAgente)
+        {
+            try { _contratos = await ContratoSvc.RefrescarAsync(DisposedToken); }
+            catch (OperationCanceledException) { }
+            catch { _contratos = []; }
+        }
+        else
         {
             try { _contratos = await ContratoSvc.RefrescarAsync(DisposedToken); }
             catch (OperationCanceledException) { }

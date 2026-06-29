@@ -23,6 +23,16 @@
             var filtrados = Filtrados().ToList();
             var visibles = Paginador.Pagina(filtrados, ref _pagina);
         }
+        @* Tarjetas-resumen que funcionan como filtro rápido por estado (clic alterna el filtro). *@
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="users" Label="Propietarios" Value="@Todos.Count.ToString()" Tone="blue"
+                        OnClick="@(() => FiltrarEstado(""))" Active="@(string.IsNullOrEmpty(_estado))" />
+            <MetricCard Icon="check" Label="Activos" Value="@Activos.ToString()" Tone="green"
+                        OnClick="@(() => FiltrarEstado("Activo"))" Active="@(_estado == "Activo")" />
+            <MetricCard Icon="alert" Label="Inactivos" Value="@Inactivos.ToString()" Tone="gray"
+                        OnClick="@(() => FiltrarEstado("Inactivo"))" Active="@(_estado == "Inactivo")" />
+            <MetricCard Icon="pin" Label="Locales gestionados" Value="@TotalLocales.ToString()" Tone="info" />
+        </div>
         <FilterBar Search="Buscar por nombre, razón social, documento…"
                    @bind-Value="_query" ResultCount="filtrados.Count"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros"
@@ -105,7 +115,8 @@
     {
         try
         {
-            Todos = await OwnerSvc.RefrescarAsync();
+            // Lo más reciente primero (id desc): el propietario recién registrado aparece al inicio.
+            Todos = (await OwnerSvc.RefrescarAsync()).OrderByDescending(o => o.Id).ToList();
         }
         catch (Exception ex)
         {
@@ -120,9 +131,20 @@
     private readonly IReadOnlyList<string> _tipos = new[] { "Natural", "Jurídica" };
     private readonly IReadOnlyList<string> _estados = new[] { "Activo", "Inactivo" };
 
+    private int Activos => Todos.Count(o => o.Estado == "Activo");
+    private int Inactivos => Todos.Count(o => o.Estado == "Inactivo");
+    private int TotalLocales => Todos.Sum(o => o.CantidadLocales);
+
     private bool HayFiltros => new[] { _query, _tipo, _estado }.Any(s => !string.IsNullOrEmpty(s));
 
     private void LimpiarFiltros() { _query = _tipo = _estado = ""; _pagina = 1; }
+
+    // Clic en una tarjeta-resumen: alterna el filtro por estado (volver a hacer clic lo quita).
+    private void FiltrarEstado(string estado)
+    {
+        _estado = _estado == estado ? "" : estado;
+        _pagina = 1;
+    }
 
     private IEnumerable<PropietarioDto> Filtrados() => Todos.Where(o =>
         TextoFiltro.Contiene(o.TipoPersona, _tipo) &&

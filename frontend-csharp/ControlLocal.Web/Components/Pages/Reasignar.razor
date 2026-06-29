@@ -169,10 +169,13 @@
         <div class="cl-card" id="historial-asignaciones" style="margin-top:14px;">
             <div class="cl-card-head"><div class="cl-card-title">Asignaciones recientes</div></div>
             <div class="cl-card-body" style="padding:0;">
+                @{
+                    var historialVisible = Paginador.Pagina(_historial, ref _paginaHistorial);
+                }
                 <table class="cl-table">
                     <thead><tr><th>Fecha</th><th>Agente</th><th>Broker anterior</th><th>Broker nuevo</th><th>Responsable</th><th>Motivo</th><th>Estado</th></tr></thead>
                     <tbody>
-                        @foreach (var h in _historial)
+                        @foreach (var h in historialVisible)
                         {
                             <tr>
                                 <td class="muted">@h.FechaAsignacionTexto</td>
@@ -184,8 +187,15 @@
                                 <td><StatusBadge Label="@(h.Estado == "Activa" ? "Asignación activa" : "Supervisión cerrada")" /></td>
                             </tr>
                         }
+                        @if (!_historial.Any())
+                        {
+                            <tr><td colspan="7" class="muted">Aun no hay asignaciones registradas.</td></tr>
+                        }
                     </tbody>
                 </table>
+                <div style="padding:0 12px 12px;">
+                    <Pagination Total="_historial.Count" @bind-Page="_paginaHistorial" />
+                </div>
             </div>
         </div>
 
@@ -211,6 +221,7 @@
     private bool _cargando = true;
     private bool _procesando;
     private string? _err;
+    private int _paginaHistorial = 1;
 
     // Datos cargados del backend (no se consultan en cada render, igual que reasignar-captaciones).
     private IReadOnlyList<AssignAgentDto> _agentes = [];

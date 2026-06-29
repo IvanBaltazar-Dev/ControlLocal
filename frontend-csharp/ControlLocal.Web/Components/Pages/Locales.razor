@@ -172,7 +172,10 @@
     {
         try
         {
-            _locales = (await ProspeccionSvc.RefrescarAsync(DisposedToken)).ToList();
+            // Lo más reciente primero (id desc): el local recién registrado aparece al inicio,
+            // también en la vista de agente (cuya consulta backend viene en orden ascendente).
+            _locales = (await ProspeccionSvc.RefrescarAsync(DisposedToken))
+                .OrderByDescending(p => p.Id).ToList();
         }
         catch (OperationCanceledException)
         {

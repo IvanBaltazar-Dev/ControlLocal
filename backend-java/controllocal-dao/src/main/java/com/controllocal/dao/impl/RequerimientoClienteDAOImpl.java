@@ -4,7 +4,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.controllocal.config.DBManager;
@@ -105,7 +109,9 @@ public class RequerimientoClienteDAOImpl extends AbstractJdbcCrudDAO<Requerimien
     @Override
     public List<RequerimientoCliente> listarTodos() {
         List<RequerimientoCliente> result = super.listarTodos();
-        result.forEach(this::cargarDistritos);
+        // Carga de distritos en bloque (1 consulta) en vez de una por requerimiento: el
+        // matching de cartera (coincidencias) llama listarTodos y el N+1 lo hacia colgar.
+        cargarDistritosEnBloque(result);
         return result;
     }
 
@@ -116,6 +122,23 @@ public class RequerimientoClienteDAOImpl extends AbstractJdbcCrudDAO<Requerimien
                 SELECT + " WHERE id_cliente = ? ORDER BY id_requerimiento",
                 ps -> ps.setLong(1, idCliente));
         result.forEach(this::cargarDistritos);
+        return result;
+    }
+
+    @Override
+    public List<RequerimientoCliente> listarPorClientes(Collection<Long> idsCliente) {
+        if (idsCliente == null || idsCliente.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Long> ids = new ArrayList<>(idsCliente);
+        String sql = SELECT + " WHERE id_cliente IN (" + JdbcSupport.placeholders(ids.size())
+                + ") ORDER BY id_requerimiento";
+        List<RequerimientoCliente> result = query(sql, ps -> {
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setLong(i + 1, ids.get(i));
+            }
+        });
+        cargarDistritosEnBloque(result);
         return result;
     }
 
@@ -161,6 +184,50 @@ public class RequerimientoClienteDAOImpl extends AbstractJdbcCrudDAO<Requerimien
             }
         } catch (SQLException e) {
             throw new DAOException("Error al cargar los distritos del requerimiento.", e);
+        }
+    }
+
+    // Carga los distritos de varios requerimientos en UNA sola consulta (vs. una por
+    // requerimiento). Evita el N+1 que disparaba el matching de cartera de la bandeja.
+    private void cargarDistritosEnBloque(List<RequerimientoCliente> requerimientos) {
+        if (requerimientos == null || requerimientos.isEmpty()) {
+            return;
+        }
+        Map<Long, RequerimientoCliente> porId = new HashMap<>();
+        for (RequerimientoCliente r : requerimientos) {
+            if (r.getIdRequerimiento() != null) {
+                porId.put(r.getIdRequerimiento(), r);
+            }
+        }
+        if (porId.isEmpty()) {
+            return;
+        }
+        List<Long> ids = new ArrayList<>(porId.keySet());
+        String sql = "SELECT rd.id_requerimiento, d.id_distrito, d.nombre, d.provincia, d.activo "
+                + "FROM distrito d "
+                + "INNER JOIN requerimiento_distrito rd ON rd.id_distrito = d.id_distrito "
+                + "WHERE rd.id_requerimiento IN (" + JdbcSupport.placeholders(ids.size()) + ") "
+                + "ORDER BY d.nombre";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setLong(i + 1, ids.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    RequerimientoCliente r = porId.get(rs.getLong("id_requerimiento"));
+                    if (r == null) {
+                        continue;
+                    }
+                    r.getDistritos().add(new Distrito(
+                            rs.getLong("id_distrito"),
+                            rs.getString("nombre"),
+                            rs.getString("provincia"),
+                            rs.getBoolean("activo")));
+                }
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al cargar los distritos de los requerimientos.", e);
         }
     }
 

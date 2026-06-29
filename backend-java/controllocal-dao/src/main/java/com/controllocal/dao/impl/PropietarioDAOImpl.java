@@ -74,7 +74,7 @@ public class PropietarioDAOImpl implements PropietarioDAO {
     public List<Propietario> listarTodos() {
         List<Propietario> propietarios = new ArrayList<>();
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY pr.id_propietario");
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY pr.id_propietario DESC");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 propietarios.add(mapRow(rs));
@@ -89,7 +89,7 @@ public class PropietarioDAOImpl implements PropietarioDAO {
     public List<Propietario> listarPagina(int limite, int desplazamiento) {
         List<Propietario> propietarios = new ArrayList<>();
         try (Connection conn = DBManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY pr.id_propietario LIMIT ? OFFSET ?")) {
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + " ORDER BY pr.id_propietario DESC LIMIT ? OFFSET ?")) {
             ps.setInt(1, limite);
             ps.setInt(2, desplazamiento);
             try (ResultSet rs = ps.executeQuery()) {

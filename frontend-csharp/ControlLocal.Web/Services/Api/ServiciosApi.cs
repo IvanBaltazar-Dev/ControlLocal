@@ -504,8 +504,10 @@ public class HttpPropietarioService(ApiClient api) : IPropietarioService
 
     private static async Task<IReadOnlyList<PropietarioDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
-        var pagina = await api.GetPaginaAsync<PropietarioApi>("propietarios", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        // Trae todos los propietarios recorriendo las páginas del backend (por partes de 100),
+        // no solo los primeros 100. Mismo patrón que locales/prospecciones.
+        var items = await api.GetTodasPaginasAsync<PropietarioApi>("propietarios", ct: ct);
+        return items.Select(Mapear).ToList();
     }
 
     private static PropietarioDto Mapear(PropietarioApi item) => new()
@@ -589,8 +591,10 @@ public class HttpClienteService(ApiClient api) : IClienteService
 
     private static async Task<IReadOnlyList<ClienteInteresadoDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
-        var pagina = await api.GetPaginaAsync<ClienteApi>("clientes", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        // Trae todos los clientes recorriendo las páginas del backend (por partes de 100),
+        // no solo los primeros 100. Mismo patrón que locales/prospecciones.
+        var items = await api.GetTodasPaginasAsync<ClienteApi>("clientes", ct: ct);
+        return items.Select(Mapear).ToList();
     }
 
     private static ClienteInteresadoDto Mapear(ClienteApi item) => new()
@@ -2256,6 +2260,7 @@ public class HttpContratoService(ApiClient api) : IContratoService
         ComisionGeneradaTexto = item.ComisionGenerada.ToString("N0", CultureInfo.GetCultureInfo("es-PE")),
         FechaInicioTexto = item.FechaInicioContrato?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
         FechaFinTexto = item.FechaFinContrato?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+        FechaCierre = item.FechaCierre,
         FechaCierreTexto = item.FechaCierre?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
         Estado = Codigos.EstadoContrato(item.EstadoContrato),
         ComisionEstado = item.ComisionEstado switch

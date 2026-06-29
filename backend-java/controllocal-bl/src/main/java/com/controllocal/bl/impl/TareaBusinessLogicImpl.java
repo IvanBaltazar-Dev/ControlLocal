@@ -32,7 +32,6 @@ import com.controllocal.model.comercial.ComisionLiquidacion;
 import com.controllocal.model.comercial.ContratoAlquiler;
 import com.controllocal.model.comercial.OportunidadComercial;
 import com.controllocal.model.comercial.Prospeccion;
-import com.controllocal.model.comercial.ReportePropietario;
 import com.controllocal.model.comercial.RequerimientoCliente;
 import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.comercial.Tarea;
@@ -171,15 +170,39 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
     }
 
     // Carga las listas base del agente UNA sola vez (acotadas por rol en SQL) y las indexa por id
-    // para que el enriquecimiento no vuelva a consultar la BD por cada tarea.
+    // para que el enriquecimiento no vuelva a consultar la BD por cada tarea. Todo lo que antes
+    // se consultaba por cliente (requerimientos) o por captacion (reportes) se trae aqui en bloque
+    // para que la bandeja tenga un numero fijo de consultas, independiente del volumen del agente.
     private DatosAgente cargarDatos(Long idAgente) {
         List<Long> ids = List.of(idAgente);
-        return new DatosAgente(
-                prospecciones.listarPorAgentes(ids),
-                solicitudes.listarPorAgentes(ids),
-                oportunidades.listarPorAgentes(ids),
-                captaciones.listarPorAgente(idAgente),
-                visitas.listarPorAgentes(ids));
+        long totalContratos = contratos.contarFiltrado(idAgente, null);
+        List<ContratoAlquiler> contratosAgente = totalContratos <= 0
+                ? List.of()
+                : contratos.listarPaginaFiltrado(idAgente, null, (int) Math.min(totalContratos, 5000), 0);
+
+        List<Prospeccion> prospeccionesAgente = prospecciones.listarPorAgentes(ids);
+        List<SolicitudAlquiler> solicitudesAgente = solicitudes.listarPorAgentes(ids);
+        List<OportunidadComercial> oportunidadesAgente = oportunidades.listarPorAgentes(ids);
+        List<Captacion> captacionesAgente = captaciones.listarPorAgente(idAgente);
+        List<Visita> visitasAgente = visitas.listarPorAgentes(ids);
+
+        // Requerimientos de los clientes del agente, en UNA consulta (con distritos en bloque):
+        // alimenta el matching de cartera y el enriquecimiento de tareas PROPONER_OPORTUNIDAD.
+        Set<Long> misClientes = idsClientesDelAgente(idAgente, oportunidadesAgente, solicitudesAgente);
+        List<RequerimientoCliente> requerimientosAgente = requerimientos.listarPorClientes(misClientes);
+
+        // Fecha del ultimo reporte por captacion, en UNA consulta: el disparador y el
+        // enriquecimiento del reporte periodico ya no consultan captacion por captacion.
+        List<Long> idsCaptacion = new ArrayList<>();
+        for (Captacion c : captacionesAgente) {
+            if (c.getIdCaptacion() != null) {
+                idsCaptacion.add(c.getIdCaptacion());
+            }
+        }
+        Map<Long, LocalDate> ultimoReporte = reportes.ultimoReportePorCaptaciones(idsCaptacion);
+
+        return new DatosAgente(prospeccionesAgente, solicitudesAgente, oportunidadesAgente,
+                captacionesAgente, visitasAgente, contratosAgente, requerimientosAgente, ultimoReporte);
     }
 
     // Snapshot de las entidades del agente para construir su bandeja sin N+1: listas para derivar
@@ -190,24 +213,39 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
         final List<OportunidadComercial> oportunidades;
         final List<Captacion> captaciones;
         final List<Visita> visitas;
+        final List<ContratoAlquiler> contratos;
+        // Requerimientos de los clientes del agente (precargados): lista para el matching de cartera
+        // e indice por id para enriquecer las tareas PROPONER_OPORTUNIDAD sin volver a la BD.
+        final List<RequerimientoCliente> requerimientos;
+        final Map<Long, RequerimientoCliente> requerimientoPorId;
+        // Fecha del ultimo reporte por captacion (precargada): vencimiento del reporte periodico.
+        final Map<Long, LocalDate> ultimoReportePorCaptacion;
         final Map<Long, Prospeccion> prospeccionPorId;
         final Map<Long, SolicitudAlquiler> solicitudPorId;
         final Map<Long, OportunidadComercial> oportunidadPorId;
         final Map<Long, Captacion> captacionPorId;
         final Map<Long, Visita> visitaPorId;
+        final Map<Long, ContratoAlquiler> contratoPorId;
 
         DatosAgente(List<Prospeccion> prospecciones, List<SolicitudAlquiler> solicitudes,
-                List<OportunidadComercial> oportunidades, List<Captacion> captaciones, List<Visita> visitas) {
+                List<OportunidadComercial> oportunidades, List<Captacion> captaciones, List<Visita> visitas,
+                List<ContratoAlquiler> contratos, List<RequerimientoCliente> requerimientos,
+                Map<Long, LocalDate> ultimoReportePorCaptacion) {
             this.prospecciones = prospecciones;
             this.solicitudes = solicitudes;
             this.oportunidades = oportunidades;
             this.captaciones = captaciones;
             this.visitas = visitas;
+            this.contratos = contratos;
+            this.requerimientos = requerimientos;
+            this.ultimoReportePorCaptacion = ultimoReportePorCaptacion;
+            this.requerimientoPorId = indice(requerimientos, RequerimientoCliente::getIdRequerimiento);
             this.prospeccionPorId = indice(prospecciones, Prospeccion::getIdProspeccion);
             this.solicitudPorId = indice(solicitudes, SolicitudAlquiler::getIdSolicitud);
             this.oportunidadPorId = indice(oportunidades, OportunidadComercial::getIdOportunidad);
             this.captacionPorId = indice(captaciones, Captacion::getIdCaptacion);
             this.visitaPorId = indice(visitas, Visita::getIdVisita);
+            this.contratoPorId = indice(contratos, ContratoAlquiler::getIdContratoAlquiler);
         }
 
         private static <T> Map<Long, T> indice(List<T> items, Function<T, Long> id) {
@@ -255,21 +293,13 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
             }
         }
 
-        // 3) Comisiones pendientes con monto del agente ya asignado (lista para cobro). Las
-        // liquidaciones de todos los contratos cerrados se traen en UNA sola consulta (sin N+1).
+        // 3) Comisiones pendientes con monto del agente ya asignado (lista para cobro). Los
+        // contratos del agente y sus liquidaciones se traen en bloque (sin buscar uno por uno).
         List<Long> idsContratoCerrados = new ArrayList<>();
-        for (SolicitudAlquiler s : misSolicitudes) {
-            if (s.getEstado() != EstadoSolicitudAlquiler.CERRADA) {
-                continue;
+        for (ContratoAlquiler contrato : datos.contratos) {
+            if (contrato.getIdContratoAlquiler() != null) {
+                idsContratoCerrados.add(contrato.getIdContratoAlquiler());
             }
-            OportunidadComercial oportunidad = s.getOportunidadComercial();
-            if (oportunidad == null || oportunidad.getIdOportunidad() == null) {
-                continue;
-            }
-            contratos.buscarPorOportunidad(oportunidad.getIdOportunidad())
-                    .map(ContratoAlquiler::getIdContratoAlquiler)
-                    .filter(id -> id != null)
-                    .ifPresent(idsContratoCerrados::add);
         }
         if (!idsContratoCerrados.isEmpty()) {
             Set<Long> contratosConComisionLista = new java.util.LinkedHashSet<>();
@@ -318,7 +348,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
         // Registrar un reporte reinicia el reloj y la tarea se auto-resuelve (CAPTACION esta en
         // ENTIDADES_AUTO), reapareciendo en el siguiente periodo.
         for (Captacion c : misCaptaciones) {
-            if (c.getEstado() == EstadoCaptacion.ACTIVA && c.getIdCaptacion() != null && reporteVencido(c)) {
+            if (c.getEstado() == EstadoCaptacion.ACTIVA && c.getIdCaptacion() != null && reporteVencido(c, datos)) {
                 out.add(construir(TipoTarea.REPORTE_PROPIETARIO, TipoEntidad.CAPTACION, c.getIdCaptacion(),
                         nz(c.getCodigoCaptacion()), idAgente, Prioridad.MEDIA,
                         "Reporta avances al propietario de la captacion " + nz(c.getCodigoCaptacion()) + "."));
@@ -326,7 +356,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
         }
 
         // 7) Coincidencias de cartera (gancho Etapa 8): proponer oportunidad prellenada.
-        derivarCoincidenciasCartera(idAgente, out, misCaptaciones, misOportunidades, misSolicitudes);
+        derivarCoincidenciasCartera(idAgente, out, datos);
 
         return out;
     }
@@ -337,10 +367,8 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
     // su Resolver abre la ficha del cliente (panel de propiedades compatibles). REQUERIMIENTO esta
     // en ENTIDADES_AUTO: la tarea se auto-resuelve cuando el requerimiento deja de estar activo,
     // ya no hay captacion compatible, o ya se creo la oportunidad.
-    private void derivarCoincidenciasCartera(Long idAgente, List<Tarea> out,
-            List<Captacion> misCaptaciones, List<OportunidadComercial> todasOportunidades,
-            List<SolicitudAlquiler> todasSolicitudes) {
-        List<Captacion> activas = misCaptaciones.stream()
+    private void derivarCoincidenciasCartera(Long idAgente, List<Tarea> out, DatosAgente datos) {
+        List<Captacion> activas = datos.captaciones.stream()
                 .filter(c -> c.getEstado() == EstadoCaptacion.ACTIVA
                         && c.getIdCaptacion() != null
                         && c.getLocalComercial() != null
@@ -349,24 +377,22 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
         if (activas.isEmpty()) {
             return;
         }
-        Set<Long> misClientes = idsClientesDelAgente(idAgente, todasOportunidades, todasSolicitudes);
+        Set<Long> misClientes = idsClientesDelAgente(idAgente, datos.oportunidades, datos.solicitudes);
         if (misClientes.isEmpty()) {
             return;
         }
         // Pares (cliente, captacion) que ya tienen oportunidad: no se vuelven a proponer.
         Set<String> yaPropuesto = new HashSet<>();
-        for (OportunidadComercial o : todasOportunidades) {
+        for (OportunidadComercial o : datos.oportunidades) {
             Long cli = o.getClienteInteresado() != null ? o.getClienteInteresado().getIdCliente() : null;
             Long cap = o.getCaptacion() != null ? o.getCaptacion().getIdCaptacion() : null;
             if (cli != null && cap != null) {
                 yaPropuesto.add(cli + "#" + cap);
             }
         }
-        List<RequerimientoCliente> requerimientosDelAgente = new ArrayList<>();
-        for (Long idCliente : misClientes) {
-            requerimientosDelAgente.addAll(requerimientos.listarPorCliente(idCliente));
-        }
-        for (RequerimientoCliente r : requerimientosDelAgente) {
+        // Requerimientos ya precargados en bloque (datos.requerimientos = los de los clientes del
+        // agente, con distritos): el matching trabaja en memoria, sin una consulta por cliente.
+        for (RequerimientoCliente r : datos.requerimientos) {
             if (r.getEstado() != EstadoRequerimiento.ACTIVO || r.getCliente() == null) {
                 continue;
             }
@@ -458,9 +484,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
             if (tarea.getEntidadCodigo() == null || tarea.getEntidadCodigo().isBlank()) {
                 tarea.setEntidadCodigo("REQ-" + tarea.getEntidadId());
             }
-            Long idCliente = requerimientos.buscarPorId(tarea.getEntidadId())
-                    .map(r -> r.getCliente() != null ? r.getCliente().getIdCliente() : null)
-                    .orElse(null);
+            Long idCliente = idClienteDeRequerimiento(tarea.getEntidadId(), datos);
             tarea.setRutaResolver(idCliente != null ? "cliente-detail/" + idCliente : "dashboard");
             tarea.setDiasSinAccion(diasDesde(baseProgramada(tarea), hoy));
             return tarea;
@@ -507,7 +531,7 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                         if (c != null) {
                             codigo = nz(c.getCodigoCaptacion());
                             // Reporte periódico al propietario: vence cuando toca el siguiente.
-                            vencimiento = vencimientoReporte(c, base);
+                            vencimiento = vencimientoReporte(c, base, datos);
                         }
                     }
                     case VISITA -> {
@@ -524,11 +548,12 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
                             }
                         }
                     }
-                    case CONTRATO_ALQUILER -> codigo = contratos.buscarPorId(id)
-                            .map(c -> c.getSolicitudAlquiler() != null
-                                    ? "SOL-" + c.getSolicitudAlquiler().getIdSolicitud()
-                                    : "CON-" + id)
-                            .orElse("");
+                    case CONTRATO_ALQUILER -> {
+                        ContratoAlquiler c = datos.contratoPorId.get(id);
+                        codigo = c != null && c.getSolicitudAlquiler() != null
+                                ? "SOL-" + c.getSolicitudAlquiler().getIdSolicitud()
+                                : "CON-" + id;
+                    }
                     case OPORTUNIDAD -> {
                         OportunidadComercial o = datos.oportunidadPorId.get(id);
                         codigo = o != null ? nz(o.getCodigoOportunidad()) : "";
@@ -548,24 +573,34 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
     }
 
     // Próximo reporte al propietario: un periodo (DIAS_REPORTE) después del último reporte de la
-    // captación, o después de iniciar la captación si aún no hay ninguno. El disparador #6 ya
-    // limita esto a captaciones ACTIVAS.
-    private LocalDate vencimientoReporte(Captacion captacion, LocalDate base) {
-        LocalDate ultimo = reportes.listarPorCaptacion(captacion.getIdCaptacion()).stream()
-                .map(ReportePropietario::getFechaReporte)
-                .filter(java.util.Objects::nonNull)
-                .max(LocalDate::compareTo)
-                .orElseGet(() -> captacion.getFechaCaptacion() != null
-                        ? captacion.getFechaCaptacion()
-                        : base);
+    // captación, o después de iniciar la captación si aún no hay ninguno. El último reporte por
+    // captación viene precargado en bloque (datos.ultimoReportePorCaptacion), sin consultar la BD.
+    private LocalDate vencimientoReporte(Captacion captacion, LocalDate base, DatosAgente datos) {
+        LocalDate ultimo = captacion.getIdCaptacion() != null
+                ? datos.ultimoReportePorCaptacion.get(captacion.getIdCaptacion())
+                : null;
+        if (ultimo == null) {
+            ultimo = captacion.getFechaCaptacion() != null ? captacion.getFechaCaptacion() : base;
+        }
         return ultimo.plusDays(DIAS_REPORTE);
     }
 
     // Hay reporte pendiente cuando el vencimiento del periodo ya llego (o paso) respecto a hoy.
-    private boolean reporteVencido(Captacion captacion) {
+    private boolean reporteVencido(Captacion captacion, DatosAgente datos) {
         LocalDate hoy = LocalDate.now();
-        LocalDate vencimiento = vencimientoReporte(captacion, hoy);
+        LocalDate vencimiento = vencimientoReporte(captacion, hoy, datos);
         return vencimiento == null || !vencimiento.isAfter(hoy);
+    }
+
+    // Cliente del requerimiento (para la ruta "Resolver" de PROPONER_OPORTUNIDAD). Lee del bloque
+    // precargado; solo si la tarea apunta a un requerimiento fuera de la cartera actual del agente
+    // (caso raro de tarea EN_PROCESO heredada) cae a una única lectura puntual.
+    private Long idClienteDeRequerimiento(Long idRequerimiento, DatosAgente datos) {
+        RequerimientoCliente r = datos.requerimientoPorId.get(idRequerimiento);
+        if (r == null && idRequerimiento != null) {
+            r = requerimientos.buscarPorId(idRequerimiento).orElse(null);
+        }
+        return r != null && r.getCliente() != null ? r.getCliente().getIdCliente() : null;
     }
 
     private static LocalDate baseProgramada(Tarea tarea) {

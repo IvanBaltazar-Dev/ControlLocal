@@ -137,7 +137,7 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
         if (idsAgente == null || idsAgente.isEmpty()) {
             return resultado;
         }
-        String sql = SELECT_SQL + " WHERE p.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ") ORDER BY p.id_prospeccion";
+        String sql = SELECT_SQL + " WHERE p.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ") ORDER BY p.id_prospeccion DESC";
         try (Connection conn = DBManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             int idx = 1;

@@ -1,13 +1,11 @@
 @page "/solicitudes"
-@page "/solicitudes-revisar"
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
 @inject ExportacionService Exportar
-@inject NavigationManager Nav
 
-<PageTitle>@_title · ControlLocal</PageTitle>
+<PageTitle>Solicitudes de alquiler - ControlLocal</PageTitle>
 
-<AppShell Active="@_sideActive" Crumbs="@_crumbs" Title="@_title" Subtitle="@_subtitle">
+<AppShell Active="Solicitudes de alquiler" Crumbs="@_crumbs" Title="Solicitudes de alquiler" Subtitle="@_subtitle">
     <Actions>
         @if (App.Role == Roles.Agente)
         {
@@ -76,11 +74,7 @@
                                 <td><span class="cl-muted" style="font-size:12px;">@s.FechaRegistroTexto</span></td>
                                 <td><StatusBadge Label="@s.Estado" /></td>
                                 <td>
-                                    @if (_canEvaluate)
-                                    {
-                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"evaluacion/{s.CodigoSolicitud}"))">Evaluar</button>
-                                    }
-                                    else if (App.Role == Roles.Agente && s.Estado == "Observada")
+                                    @if (App.Role == Roles.Agente && s.Estado == "Observada")
                                     {
                                         <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"documentos/{s.CodigoSolicitud}"))">Subsanar</button>
                                     }
@@ -121,9 +115,7 @@
 </AppShell>
 
 @code {
-    private bool _isBroker => App.Role == Roles.Broker;
-    private bool _canEvaluate => App.Role == Roles.Broker;
-    private string _defaultTab => App.Role == Roles.Broker ? "En revision" : "Todas";
+    private const string _defaultTab = "Todas";
     private string _tab = "Todas";
     private string _query = "", _distrito = "";
     private int _pagina = 1;
@@ -131,11 +123,10 @@
     private bool _cargando = true;
     private string? _error;
 
-    // El broker arranca viendo lo que debe evaluar, con datos frescos del backend:
-    // asi ve de inmediato lo que el agente acaba de enviar y el agente ve el resultado.
+    // Consulta general, separada de /solicitudes-revisar. Se recarga fresca para
+    // mostrar el estado real despues de una evaluacion o subsanacion.
     protected override async Task OnInitializedAsync()
     {
-        _tab = _defaultTab;
         try
         {
             Todas = await SolicitudSvc.RefrescarAsync();
@@ -207,21 +198,18 @@
         _ => "fileText",
     };
 
-    private string _title => _isBroker ? "Solicitudes por evaluar" : "Solicitudes de alquiler";
     // Misma página, dos accesos: la cola de revisión (Supervisión) y la lista (Consulta).
     // El item activo del sidebar depende de la ruta para no resaltar ambos.
-    private bool _esRevisar => Nav.Uri.Contains("solicitudes-revisar", StringComparison.OrdinalIgnoreCase);
-    private string _sideActive => _esRevisar ? "Solicitudes por revisar" : "Solicitudes de alquiler";
     private string _subtitle => App.Role switch
     {
-        Roles.Broker => "Solicitudes enviadas por tus agentes · evalúa documentos y resuelve cada operación",
+        Roles.Broker => "Consulta de solicitudes de alquiler enviadas por tu equipo",
         Roles.Admin => "Consulta global de solicitudes de alquiler en solo lectura",
         _ => "Solicitudes de alquiler que generé a partir de mis captaciones",
     };
 
     private string[] _crumbs => App.Role switch
     {
-        Roles.Broker => new[] { "ControlLocal", "Bandejas de revisión", "Solicitudes por evaluar" },
+        Roles.Broker => new[] { "ControlLocal", "Consulta comercial", "Solicitudes de alquiler" },
         Roles.Admin => new[] { "ControlLocal", "Comercial", "Solicitudes de alquiler" },
         _ => new[] { "ControlLocal", "Operación", "Solicitudes de alquiler" },
     };

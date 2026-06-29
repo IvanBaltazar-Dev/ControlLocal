@@ -136,51 +136,46 @@ else
                             </div>
                         </div>
 
-                        <div class="cl-card">
-                            <div class="cl-card-head">
-                                <div>
-                                    <div class="cl-card-title">Interacciones con propietario</div>
-                                    <div class="cl-card-sub">Comunicacion registrada durante la captacion</div>
+                            <div class="cl-card">
+                                <div class="cl-card-head">
+                                    <div>
+                                        <div class="cl-card-title">Interacciones con propietario</div>
+                                        <div class="cl-card-sub">Comunicacion registrada durante la captacion</div>
+                                    </div>
                                 </div>
-                                <div class="cl-flex" style="gap:8px;align-items:center;flex-wrap:wrap;">
-                                    <input type="date" @bind="_intDesde" title="Desde" style="font-size:12px;" />
-                                    <input type="date" @bind="_intHasta" title="Hasta" style="font-size:12px;" />
-                                    <span class="cl-badge blue">@InteraccionesFiltradas.Count</span>
-                                    <button class="cl-btn sm" disabled="@(InteraccionesFiltradas.Count == 0)" @onclick="ExportarInteracciones"><Icon Name="download" Size="12" /> CSV</button>
-                                    @if (!_readOnly && _cap.Id > 0)
+                                <div class="cl-card-body" style="padding:0;">
+                                    @if (_interaccionesCaptacion.Count == 0)
                                     {
-                                        <a class="cl-btn sm" href="@($"/interaccion-form/captacion/{_cap.Id}")"><Icon Name="plus" Size="12" /> Registrar</a>
+                                        <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">
+                                            Aun no hay interacciones de captacion con el propietario.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <table class="cl-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Fecha</th>
+                                                    <th>Canal</th>
+                                                    <th>Resultado</th>
+                                                    <th>Observaciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var interaccion in _interaccionesCaptacion)
+                                                {
+                                                    <tr>
+                                                        <td style="font-size:12px;color:#7E8794;">@interaccion.FechaHoraTexto</td>
+                                                        <td><CanalBadge Canal="@interaccion.CanalContacto" /></td>
+                                                        <td><ResultadoBadge Resultado="@interaccion.Resultado" Contexto="@interaccion.Contexto" /></td>
+                                                        <td>@Texto(interaccion.Observaciones)</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
                                     }
                                 </div>
                             </div>
-                            <div class="cl-card-body" style="padding:0;">
-                                @if (InteraccionesFiltradas.Count == 0)
-                                {
-                                    <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">
-                                        @(_interaccionesCaptacion.Count == 0
-                                            ? "Aun no hay interacciones de captacion con el propietario."
-                                            : "No hay interacciones en el rango de fechas seleccionado.")
-                                    </div>
-                                }
-                                else
-                                {
-                                    <table class="cl-table">
-                                        <thead><tr><th>Fecha</th><th>Canal</th><th>Resultado</th><th>Observaciones</th></tr></thead>
-                                        <tbody>
-                                            @foreach (var interaccion in InteraccionesFiltradas)
-                                            {
-                                                <tr>
-                                                    <td style="font-size:12px;color:#7E8794;">@interaccion.FechaHoraTexto</td>
-                                                    <td><CanalBadge Canal="@interaccion.CanalContacto" /></td>
-                                                    <td><ResultadoBadge Resultado="@interaccion.Resultado" Contexto="@interaccion.Contexto" /></td>
-                                                    <td>@Texto(interaccion.Observaciones)</td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                }
-                            </div>
-                        </div>
 
                         <div class="cl-card">
                             <div class="cl-card-head">
@@ -206,7 +201,7 @@ else
                                 else
                                 {
                                     <table class="cl-table">
-                                        <thead><tr><th>Reporte</th><th>Periodo</th><th>Consultas</th><th>Visitas</th><th>Canal</th><th>Recomendaciones</th></tr></thead>
+                                        <thead><tr><th>Reporte</th><th>Periodo</th><th>Consultas</th><th>Visitas</th><th>Canal</th><th>Recomendaciones</th><th></th></tr></thead>
                                         <tbody>
                                             @foreach (var r in _reportes)
                                             {
@@ -217,6 +212,9 @@ else
                                                     <td>@(r.VisitasReportadas?.ToString() ?? "-")</td>
                                                     <td><CanalBadge Canal="@r.CanalEnvio" /></td>
                                                     <td>@Texto(r.AjustesRecomendados)</td>
+                                                    <td style="text-align:right;">
+                                                        <button class="cl-btn sm" @onclick="@(() => DescargarReporte(r))" title="Exportar ficha de avance en PDF"><Icon Name="download" Size="12" /> PDF</button>
+                                                    </td>
                                                 </tr>
                                             }
                                         </tbody>
@@ -430,8 +428,6 @@ else
     private IReadOnlyList<OportunidadComercialDto> _ops = new List<OportunidadComercialDto>();
     private IReadOnlyList<SolicitudAlquilerDto> _solicitudes = new List<SolicitudAlquilerDto>();
     private IReadOnlyList<InteraccionComercialDto> _interaccionesCaptacion = new List<InteraccionComercialDto>();
-    private DateTime? _intDesde;
-    private DateTime? _intHasta;
     private CoincidenciasDto? _coincidencias;
     private bool _cargandoCoin;
     private string? _errCoin;
@@ -665,6 +661,16 @@ else
         await Exportar.DescargarPdfAsync($"Contrato_exclusividad_{_cap.CodigoCaptacion}", pdf);
     }
 
+    // Exporta un reporte de avance ya registrado (persistido en el backend) como PDF descargable.
+    private async Task DescargarReporte(ReportePropietarioDto r)
+    {
+        var canal = EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, r.CanalEnvio);
+        var pdf = CaptacionDocumentosPdf.FichaAvancePropietario(_cap, _local, r, canal);
+        var sufijo = r.FechaReporte?.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture)
+                     ?? r.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await Exportar.DescargarPdfAsync($"Reporte_propietario_{_cap.CodigoCaptacion}_{sufijo}", pdf);
+    }
+
     private async Task AbrirReporte()
     {
         _errReporte = null;
@@ -753,37 +759,6 @@ else
         return partes.Length == 1
             ? partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant()
             : $"{partes[0][0]}{partes[1][0]}".ToUpperInvariant();
-    }
-
-    // Interacciones de la propiedad filtradas por rango de fecha (para revisar y exportar).
-    private IReadOnlyList<InteraccionComercialDto> InteraccionesFiltradas =>
-        _interaccionesCaptacion.Where(EnRangoInteraccion).ToList();
-
-    private bool EnRangoInteraccion(InteraccionComercialDto i)
-    {
-        if (_intDesde is null && _intHasta is null) return true;
-        if (i.FechaHora is not { } f) return false;
-        var dia = f.Date;
-        if (_intDesde is { } desde && dia < desde.Date) return false;
-        if (_intHasta is { } hasta && dia > hasta.Date) return false;
-        return true;
-    }
-
-    private async Task ExportarInteracciones()
-    {
-        var filas = InteraccionesFiltradas
-            .Select(i => (IReadOnlyList<string?>)new[]
-            {
-                i.FechaHoraTexto,
-                EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, i.CanalContacto),
-                EnumCatalog.LabelResultadoInteraccion(i.Contexto, i.Resultado),
-                i.Observaciones,
-            })
-            .ToList();
-        await Exportar.DescargarCsvAsync(
-            $"Interacciones_{_cap.CodigoCaptacion}",
-            new[] { "Fecha", "Canal", "Resultado", "Observaciones" },
-            filas);
     }
 
     private static string Texto(string? valor) =>

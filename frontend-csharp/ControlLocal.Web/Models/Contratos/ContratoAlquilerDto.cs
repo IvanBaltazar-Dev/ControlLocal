@@ -46,6 +46,8 @@ public class ContratoAlquilerDto
 
     public string FechaFinTexto { get; set; } = string.Empty;
 
+    public DateOnly? FechaCierre { get; set; }
+
     public string FechaCierreTexto { get; set; } = string.Empty;
 
     public string Estado { get; set; } = string.Empty;

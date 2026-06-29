@@ -120,7 +120,7 @@ public static class Navigation
                 new NavItem("route", "Operaciones del equipo", "seguimiento-comercial"),
                 new NavItem("building", "Propiedades del equipo", "propiedades-equipo"),
                 new NavItem("swap", "Reasignar captaciones", "reasignar-captaciones"),
-                new NavItem("history", "Historial de reasignaciones", "historial-reasignaciones"),
+                new NavItem("history", "Historial de captaciones", "historial-reasignaciones-captaciones"),
             }),
 
             new NavSection("CIERRE", new[]
@@ -215,6 +215,7 @@ public static class Navigation
 
         ["seguimiento-comercial"] = "seguimiento-comercial",
         ["propiedades-equipo"] = "propiedades-equipo",
+        ["historial-reasignaciones-captaciones"] = "historial-reasignaciones-captaciones",
         ["propiedades-alquiladas"] = "propiedades-alquiladas",
         ["comisiones"] = "comisiones",
     };
@@ -239,4 +240,3 @@ public static class Navigation
     public static string SearchFor(string role) =>
         TopbarSearch.TryGetValue(role, out var s) ? s : TopbarSearch[Roles.Agente];
 }
-

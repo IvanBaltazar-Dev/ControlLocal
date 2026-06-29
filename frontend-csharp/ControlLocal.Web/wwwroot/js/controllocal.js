@@ -27,27 +27,69 @@ window.controlLocal = {
 
     session: {
         _subscriptions: new Map(),
+        _tabId: null,
+        _heartbeat: null,
+        _sessionKey: "controlLocal.session",
+        _tabsKey: "controlLocal.tabs",
+        _tabKey: "controlLocal.tabId",
+        _staleMs: 60000,
+        init: function () {
+            let hadTab = true;
+            try {
+                this._tabId = sessionStorage.getItem(this._tabKey);
+                if (!this._tabId) {
+                    hadTab = false;
+                    this._tabId = (window.crypto && window.crypto.randomUUID)
+                        ? window.crypto.randomUUID()
+                        : `${Date.now()}-${Math.random()}`;
+                    sessionStorage.setItem(this._tabKey, this._tabId);
+                }
+
+                const tabsAntes = this._readTabs();
+                const activeAntes = this._activeTabs(tabsAntes).filter(t => t.id !== this._tabId);
+                if (!hadTab && activeAntes.length === 0 && localStorage.getItem(this._sessionKey)) {
+                    localStorage.removeItem(this._sessionKey);
+                }
+
+                this._touch("active");
+                if (!this._heartbeat) {
+                    this._heartbeat = window.setInterval(() => this._touch("active"), 4000);
+                    window.addEventListener("pagehide", () => this._touch("closing"));
+                    window.addEventListener("beforeunload", () => this._touch("closing"));
+                    window.addEventListener("focus", () => this._touch("active"));
+                    document.addEventListener("visibilitychange", () => {
+                        this._touch(document.hidden ? "hidden" : "active");
+                    });
+                }
+            } catch {
+                // Si el navegador bloquea storage, la app sigue con sesion en memoria del circuito.
+            }
+        },
         get: function () {
-            return localStorage.getItem("controlLocal.session");
+            this.init();
+            return localStorage.getItem(this._sessionKey);
         },
         set: function (value) {
-            localStorage.setItem("controlLocal.session", value);
+            this.init();
+            localStorage.setItem(this._sessionKey, value);
             this.notify();
         },
         clear: function () {
-            localStorage.removeItem("controlLocal.session");
+            localStorage.removeItem(this._sessionKey);
+            localStorage.removeItem(this._tabsKey);
             this.notify();
         },
         notify: function () {
             window.dispatchEvent(new Event("controlLocalSessionChanged"));
         },
         subscribe: function (dotNetRef) {
+            this.init();
             const id = (window.crypto && window.crypto.randomUUID)
                 ? window.crypto.randomUUID()
                 : `${Date.now()}-${Math.random()}`;
             const notifyDotNet = () => dotNetRef.invokeMethodAsync("OnBrowserSessionChanged");
             const storageHandler = (event) => {
-                if (event.key === "controlLocal.session") notifyDotNet();
+                if (event.key === this._sessionKey) notifyDotNet();
             };
             const localHandler = () => notifyDotNet();
 
@@ -63,6 +105,30 @@ window.controlLocal = {
             window.removeEventListener("storage", subscription.storageHandler);
             window.removeEventListener("controlLocalSessionChanged", subscription.localHandler);
             this._subscriptions.delete(id);
+        },
+        _readTabs: function () {
+            try {
+                const raw = localStorage.getItem(this._tabsKey);
+                const tabs = raw ? JSON.parse(raw) : [];
+                return Array.isArray(tabs) ? tabs : [];
+            } catch {
+                return [];
+            }
+        },
+        _writeTabs: function (tabs) {
+            localStorage.setItem(this._tabsKey, JSON.stringify(tabs));
+        },
+        _activeTabs: function (tabs) {
+            const now = Date.now();
+            return tabs.filter(t => t && t.id && t.state !== "closing" && now - (t.at || 0) <= this._staleMs);
+        },
+        _touch: function (state) {
+            if (!this._tabId) return;
+            const now = Date.now();
+            const tabs = this._readTabs()
+                .filter(t => t && t.id && now - (t.at || 0) <= this._staleMs && t.id !== this._tabId);
+            tabs.push({ id: this._tabId, state: state, at: now, href: location.origin });
+            this._writeTabs(tabs);
         }
     }
 };

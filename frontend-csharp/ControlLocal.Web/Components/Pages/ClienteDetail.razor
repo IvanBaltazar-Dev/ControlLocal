@@ -1,91 +1,527 @@
 @page "/cliente-detail/{IdParam?}"
+@using ControlLocal.Web.Models.Fichas
 @inject AppState App
-@inject IClienteService ClienteSvc
+@inject IFichaComercialService FichaSvc
+@inject ICoincidenciaCarteraService CoincidenciaSvc
+@inject IRequerimientoService ReqSvc
 
-<PageTitle>@_c.Nombre · ControlLocal</PageTitle>
+<PageTitle>@(_notFound ? "Cliente no disponible" : Persona.Nombre) - ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Registro", "Clientes", _c.Nombre })"
-          Title="@_c.Nombre"
-          Subtitle="@($"Cliente interesado · {_c.TipoPersona}")">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Fichas comerciales", Persona.Nombre })"
+          Title="@(_notFound ? "Cliente no disponible" : Persona.Nombre)"
+          Subtitle="@(_notFound ? "La ficha no esta dentro del alcance de tu rol" : "Ficha comercial de cliente interesado")">
     <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"cliente-form/{_c.Id}"))"><Icon Name="edit" Size="13" /> Editar cliente</button>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate(_readOnly ? "seguimiento-comercial" : "clientes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        @if (!_notFound && Persona.Id > 0)
+        {
+            <button class="cl-btn" @onclick="@(() => App.Navigate($"cliente-contacto-detail/{Persona.Id}"))"><Icon Name="messageSquare" Size="13" /> Seguimiento comercial</button>
+        }
+        @if (_readOnly)
+        {
+            <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
+        else if (!_notFound && Persona.Id > 0)
+        {
+            <button class="cl-btn" @onclick="@(() => App.Navigate($"interaccion-form/cliente/{Persona.Id}"))"><Icon Name="messageSquare" Size="13" /> Registrar interaccion</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate($"cliente-form/{Persona.Id}"))"><Icon Name="edit" Size="13" /> Editar cliente</button>
+        }
     </Actions>
     <ChildContent>
-        <div style="max-width:880px;">
-            <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
-                <div class="cl-stack">
+        @if (_cargando)
+        {
+            <LoadingBlock Title="Cargando ficha comercial..." Subtitle="Preparando resumen y primera seccion." />
+        }
+        else if (_notFound)
+        {
+            <div class="cl-alert amber"><Icon Name="alert" Size="15" /><span>@(_error ?? "No se encontro una ficha de cliente vinculada a las operaciones visibles.")</span></div>
+        }
+        else
+        {
+            <div class="cl-stack">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;">
                     <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Datos del cliente</div></div>
+                        <div class="cl-card-head">
+                            <div class="cl-card-title">Resumen comercial</div>
+                            <StatusBadge Label="@Persona.Estado" />
+                        </div>
                         <div class="cl-card-body">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                                <div>
-                                    <div class="cl-def-k">Nombre o razón social</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_c.Nombre</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Tipo de persona</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_c.TipoPersona</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Número de documento</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_c.NumeroDocumento</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Teléfono</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_c.Telefono</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Correo</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_c.Correo</div>
-                                </div>
+                            <div class="cl-specs">
+                                <Spec Icon="user" K="Cliente" V="@Persona.Nombre" />
+                                <Spec Icon="fileText" K="@DocumentoEtiqueta" V="@Texto(Persona.NumeroDocumento)" />
+                                <Spec Icon="phone" K="Telefono" V="@Texto(Persona.Telefono)" />
+                                <Spec Icon="mail" K="Correo" V="@Texto(Persona.Correo)" />
+                                <Spec Icon="briefcase" K="Rubro de interes" V="@Texto(Persona.RubroInteres)" />
+                                <Spec Icon="calendar" K="Registro" V="@FechaRegistro" />
                             </div>
                         </div>
                     </div>
 
                     <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Perfil comercial y consentimientos</div></div>
+                        <div class="cl-card-head"><div class="cl-card-title">Alcance visible</div></div>
                         <div class="cl-card-body">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                                <div>
-                                    <div class="cl-def-k">Rubro de interés</div>
-                                    <div style="margin-top:8px;"><StatusBadge Label="@_c.RubroInteres" ToneOverride="blue" Plain="true" /></div>
-                                </div>
-                                <div><div class="cl-def-k">Contacto comercial</div><div style="font-weight:600;margin-top:4px;">@(_c.ConsentimientoContacto == true ? "Autorizado" : "No autorizado")</div></div>
-                                <div><div class="cl-def-k">Uso de datos</div><div style="font-weight:600;margin-top:4px;">@(_c.ConsentimientoUsoDato == true ? "Autorizado" : "No autorizado")</div></div>
+                            <div class="cl-stack" style="gap:10px;">
+                                <MetricMini Label="Oportunidades" Value='@Total("oportunidades")' Icon="target" />
+                                <MetricMini Label="Solicitudes" Value='@Total("solicitudes")' Icon="fileText" />
+                                <MetricMini Label="Cierres" Value='@Total("cierres")' Icon="checkCircle" />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="cl-stack">
+                @if (_ficha?.RequerimientoActivo == true && !string.IsNullOrWhiteSpace(_ficha.CtaRuta))
+                {
+                    <div class="cl-alert green">
+                        <Icon Name="target" Size="15" />
+                        <span>Este cliente tiene busqueda activa.</span>
+                        <a class="cl-btn sm success" href="@Href(_ficha.CtaRuta)" style="margin-left:auto;"><Icon Name="store" Size="12" /> Presentar propiedades de cartera</a>
+                    </div>
+                }
+
+                @if (_ficha?.RequerimientoActivo == true)
+                {
+                    <PanelCoincidencias Titulo="Propiedades de cartera compatibles"
+                                        Icono="store"
+                                        Descripcion="Captaciones activas de tu cartera que encajan con la busqueda de este cliente. Proponer abre la oportunidad prellenada."
+                                        Items="_coincidencias?.Items"
+                                        Cargando="_cargandoCoin"
+                                        Error="_errCoin"
+                                        TextoVacio="No hay propiedades activas que coincidan con su requerimiento por ahora." />
+                }
+
+                <Tabs Items="@TabItems" Active="@ActiveLabel" OnSelect="@SeleccionarTab" />
+
+                @if (EsGestionRequerimientos)
+                {
                     <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Estado</div></div>
-                        <div class="cl-card-body">
-                            <div style="text-align:center;padding:6px 0;">
-                                <StatusBadge Label="@_c.Estado" />
-                                <div class="cl-muted" style="font-size:12px;margin-top:8px;">Registro del cliente interesado</div>
-                            </div>
+                        <div class="cl-card-head">
+                            <div class="cl-card-title">Requerimientos del cliente</div>
+                            <button class="cl-btn sm primary" @onclick="NuevoRequerimiento"><Icon Name="plus" Size="12" /> Nuevo requerimiento</button>
+                        </div>
+                        <div class="cl-card-body" style="display:flex;flex-direction:column;gap:8px;">
+                            @if (_cargandoReq)
+                            {
+                                <div style="padding:18px;text-align:center;color:#7E8794;font-size:12.5px;">Cargando requerimientos...</div>
+                            }
+                            else if (_misRequerimientos.Count == 0)
+                            {
+                                <div style="padding:18px;text-align:center;color:#7E8794;font-size:12.5px;">Este cliente aun no tiene un perfil de busqueda. Crea uno para que entre a la recomendacion de cartera.</div>
+                            }
+                            else
+                            {
+                                @foreach (var req in _misRequerimientos)
+                                {
+                                    <div style="border:1px solid var(--c-border);border-radius:10px;padding:11px 12px;display:flex;gap:10px;align-items:flex-start;">
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                                <span style="font-weight:650;font-size:13px;">@req.Rubro</span>
+                                                <StatusBadge Label="@EstadoReqLabel(req.Estado)" />
+                                            </div>
+                                            <div class="cl-muted" style="font-size:11.5px;margin-top:3px;">@ResumenReq(req)</div>
+                                            @if (req.Distritos.Count > 0)
+                                            {
+                                                <div class="cl-muted" style="font-size:11.5px;margin-top:2px;"><Icon Name="mapPin" Size="11" /> @string.Join(", ", req.Distritos)</div>
+                                            }
+                                        </div>
+                                        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+                                            <button class="cl-btn sm" @onclick="() => EditarRequerimiento(req)"><Icon Name="edit" Size="12" /> Editar</button>
+                                            @if (req.Estado == "ACTIVO")
+                                            {
+                                                <button class="cl-btn sm ghost" disabled="@_reqBusy" @onclick="() => PausarReq(req)">Pausar</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="cl-btn sm ghost" disabled="@_reqBusy" @onclick="() => ActivarReq(req)">Activar</button>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
                         </div>
                     </div>
-                    <div class="cl-alert blue">
-                        <Icon Name="info" Size="15" />
-                        <span>Vincula el cliente a una captación activa para iniciar el seguimiento comercial.</span>
+                }
+                else
+                {
+                <div class="cl-card">
+                    <div class="cl-card-head">
+                        <div class="cl-card-title">@ActiveLabel</div>
+                        <span class="cl-badge gray">@TotalEtiqueta(ActiveSection)</span>
+                    </div>
+                    <div class="cl-card-body" style="padding:0;">
+                        @if (_cargandoSeccion)
+                        {
+                            <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Actualizando ficha...</div>
+                        }
+                        else if (ActiveSection.Items.Count == 0)
+                        {
+                            <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Sin registros visibles para esta seccion.</div>
+                        }
+                        else
+                        {
+                            <table class="cl-table">
+                                <thead>
+                                    <tr>
+                                        <th>Proceso</th>
+                                        <th>Codigo</th>
+                                        <th>Detalle</th>
+                                        @if (MostrarLocal) { <th>Local</th> }
+                                        @if (MostrarDistrito) { <th>Distrito</th> }
+                                        @if (MostrarPropietario) { <th>Propietario</th> }
+                                        @if (MostrarAgente) { <th>Agente</th> }
+                                        <th>Estado</th>
+                                        <th>Fecha</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in ActiveSection.Items)
+                                    {
+                                        <tr>
+                                            <td><span class="cl-flex" style="gap:7px;"><Icon Name="@row.Icono" Size="14" /> @row.Proceso</span></td>
+                                            <td><span class="mono">@Texto(row.Codigo)</span></td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(row.Ruta))
+                                                {
+                                                    <a href="@Href(row.Ruta)" style="font-weight:650;">@Texto(row.Titulo)</a>
+                                                }
+                                                else
+                                                {
+                                                    <span style="font-weight:650;">@Texto(row.Titulo)</span>
+                                                }
+                                                <div class="cl-muted" style="font-size:11.5px;margin-top:2px;">@Texto(row.Subtitulo)</div>
+                                            </td>
+                                            @if (MostrarLocal) { <td>@Texto(row.Local)</td> }
+                                            @if (MostrarDistrito) { <td>@Texto(row.Distrito)</td> }
+                                            @if (MostrarPropietario)
+                                            {
+                                                <td>
+                                                    <FichaLink Kind="owner" Id="@row.PropietarioId" Text="@row.Propietario" />
+                                                </td>
+                                            }
+                                            @if (MostrarAgente) { <td>@Texto(row.Agente)</td> }
+                                            <td><StatusBadge Label="@Texto(row.Estado)" /></td>
+                                            <td style="font-size:12px;color:#7E8794;">@Fecha(row.Fecha)</td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(row.Ruta))
+                                                {
+                                                    <a class="cl-btn sm" href="@Href(row.Ruta)"><Icon Name="eye" Size="12" /> Ver detalle</a>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
                     </div>
                 </div>
+
+                <Pagination Total="@TotalActual" PageSize="@ActiveSection.PageSize" Page="@ActiveSection.Page" PageChanged="@CambiarPagina" />
+                }
+
+                <RequerimientoEditor Open="_reqEditorOpen" ClienteId="Persona.Id" Existing="_reqEditing"
+                                     OnClose="CerrarEditorReq" OnSaved="OnReqGuardado" />
             </div>
-        </div>
+        }
     </ChildContent>
 </AppShell>
 
 @code {
     [Parameter] public string? IdParam { get; set; }
 
-    private ClienteInteresadoDto _c = new();
+    private const int PageSize = 8;
+    private FichaComercialDto? _ficha;
+    private CoincidenciasDto? _coincidencias;
+    private bool _cargandoCoin;
+    private string? _errCoin;
+    private List<RequerimientoDto> _misRequerimientos = new();
+    private bool _cargandoReq;
+    private bool _reqBusy;
+    private bool _reqEditorOpen;
+    private RequerimientoDto? _reqEditing;
+    private bool _cargando = true;
+    private bool _cargandoSeccion;
+    private bool _notFound;
+    private string? _error;
+    private string _active = "requerimientos";
 
-    protected override void OnParametersSet()
+    private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private FichaPersonaDto Persona => _ficha?.Persona ?? new FichaPersonaDto { Nombre = "Cliente" };
+    private FichaSectionDto ActiveSection => _ficha?.Sections.TryGetValue(_active, out var section) == true ? section : new FichaSectionDto { Section = _active };
+    private int TotalActual => (int)Math.Max(0, Math.Min(int.MaxValue, ActiveSection.TotalRecords));
+    private string ActiveLabel => TabsVisibles.FirstOrDefault(t => t.Key == _active)?.Label ?? "Ficha";
+    private Tabs.TabItem[] TabItems => TabsVisibles.Select(t => new Tabs.TabItem(t.Label, TotalTab(t.Key))).ToArray();
+    private IEnumerable<FichaTab> TabsVisibles => App.Role == Roles.Agente
+        ? _tabs.Where(t => t.Key != "agentes")
+        : _tabs;
+
+    private bool MostrarLocal => ColumnaConDatos(row => row.Local);
+    private bool MostrarDistrito => ColumnaConDatos(row => row.Distrito);
+    private bool MostrarPropietario => ColumnaConDatos(row => row.Propietario);
+    private bool MostrarAgente => App.Role is Roles.Broker or Roles.Admin && ColumnaConDatos(row => row.Agente);
+
+    private readonly FichaTab[] _tabs =
+    [
+        new("requerimientos", "Requerimientos"),
+        new("propiedades", "Propiedades"),
+        new("oportunidades", "Oportunidades"),
+        new("interacciones", "Interacciones"),
+        new("visitas", "Visitas"),
+        new("solicitudes", "Solicitudes"),
+        new("cierres", "Cierres"),
+        new("agentes", "Agentes"),
+    ];
+
+    protected override async Task OnParametersSetAsync()
     {
-        _c = (long.TryParse(IdParam, out var id) ? ClienteSvc.ById(id) : null)
-             ?? ClienteSvc.All().FirstOrDefault() ?? new();
+        _cargando = true;
+        _notFound = false;
+        _error = null;
+        try
+        {
+            if (!long.TryParse(IdParam, out var id) || id <= 0)
+            {
+                _notFound = true;
+                return;
+            }
+            _ficha = await FichaSvc.ClienteAsync(id);
+            _notFound = _ficha is null;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _notFound = true;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+
+        if (!_notFound && Persona.Id > 0)
+        {
+            await CargarCoincidencias(Persona.Id);
+            await CargarMisRequerimientos();
+        }
     }
+
+    private bool EsGestionRequerimientos => _active == "requerimientos" && App.Role == Roles.Agente;
+
+    private async Task CargarMisRequerimientos()
+    {
+        if (App.Role != Roles.Agente || Persona.Id <= 0)
+        {
+            _misRequerimientos = new();
+            return;
+        }
+        _cargandoReq = true;
+        try
+        {
+            _misRequerimientos = (await ReqSvc.ListarPorClienteAsync(Persona.Id)).ToList();
+        }
+        catch
+        {
+            _misRequerimientos = new();
+        }
+        finally
+        {
+            _cargandoReq = false;
+        }
+    }
+
+    private void NuevoRequerimiento()
+    {
+        _reqEditing = null;
+        _reqEditorOpen = true;
+    }
+
+    private void EditarRequerimiento(RequerimientoDto r)
+    {
+        _reqEditing = r;
+        _reqEditorOpen = true;
+    }
+
+    private void CerrarEditorReq() => _reqEditorOpen = false;
+
+    private async Task OnReqGuardado()
+    {
+        _reqEditorOpen = false;
+        await RefrescarTrasRequerimiento();
+    }
+
+    private Task PausarReq(RequerimientoDto r) => CambiarEstadoReq(r, "PAUSADO");
+
+    private Task ActivarReq(RequerimientoDto r) => CambiarEstadoReq(r, "ACTIVO");
+
+    private async Task CambiarEstadoReq(RequerimientoDto r, string estado)
+    {
+        if (_reqBusy)
+        {
+            return;
+        }
+        _reqBusy = true;
+        try
+        {
+            await ReqSvc.CambiarEstadoAsync(r.Id, estado);
+            await RefrescarTrasRequerimiento();
+        }
+        finally
+        {
+            _reqBusy = false;
+        }
+    }
+
+    // Un cambio de requerimiento afecta el aviso de busqueda activa y las coincidencias.
+    private async Task RefrescarTrasRequerimiento()
+    {
+        if (Persona.Id <= 0)
+        {
+            return;
+        }
+        _ficha = await FichaSvc.ClienteAsync(Persona.Id) ?? _ficha;
+        await CargarMisRequerimientos();
+        await CargarCoincidencias(Persona.Id);
+    }
+
+    private static string EstadoReqLabel(string estado) => estado switch
+    {
+        "ACTIVO" => "Activo",
+        "PAUSADO" => "Pausado",
+        "CERRADO" => "Cerrado",
+        _ => estado,
+    };
+
+    private static string TipoReqLabel(string? tipo) => tipo switch
+    {
+        "LOCAL_COMERCIAL" => "Local comercial",
+        "OFICINA" => "Oficina",
+        "DEPOSITO_ALMACEN" => "Deposito/Almacen",
+        "STAND_MODULO" => "Stand/Modulo",
+        "TERRENO_COMERCIAL" => "Terreno comercial",
+        "OTRO" => "Otro",
+        _ => tipo ?? "",
+    };
+
+    private static string RangoReq(decimal? min, decimal? max) =>
+        min is not null && max is not null ? $"{min:0.##} - {max:0.##}"
+        : min is not null ? $"desde {min:0.##}"
+        : max is not null ? $"hasta {max:0.##}"
+        : "s/l";
+
+    private static string ResumenReq(RequerimientoDto r)
+    {
+        var partes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(r.TipoInmueble)) partes.Add(TipoReqLabel(r.TipoInmueble));
+        if (r.RentaMin is not null || r.RentaMax is not null) partes.Add($"Renta {r.Moneda} {RangoReq(r.RentaMin, r.RentaMax)}");
+        if (r.MetrajeMin is not null || r.MetrajeMax is not null) partes.Add($"Area {RangoReq(r.MetrajeMin, r.MetrajeMax)} m2");
+        if (r.FrenteMinimo is not null) partes.Add($"Frente desde {r.FrenteMinimo:0.##} m");
+        if (partes.Count == 0) return string.IsNullOrWhiteSpace(r.Observaciones) ? "Perfil de busqueda" : r.Observaciones!;
+        return string.Join(" · ", partes);
+    }
+
+    private async Task CargarCoincidencias(long id)
+    {
+        if (_ficha?.RequerimientoActivo != true)
+        {
+            _coincidencias = null;
+            return;
+        }
+        _cargandoCoin = true;
+        _errCoin = null;
+        try
+        {
+            _coincidencias = await CoincidenciaSvc.PropiedadesParaClienteAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _errCoin = ex.Message;
+        }
+        finally
+        {
+            _cargandoCoin = false;
+        }
+    }
+
+    private async Task SeleccionarTab(string label)
+    {
+        var tab = TabsVisibles.FirstOrDefault(t => t.Label == label);
+        if (tab is null || tab.Key == _active)
+            return;
+        _active = tab.Key;
+        if (_ficha is not null && SeccionDebeCargar(_active))
+            await CargarSeccion(1);
+    }
+
+    private Task CambiarPagina(int page) => CargarSeccion(page);
+
+    private async Task CargarSeccion(int page)
+    {
+        if (_ficha is null || Persona.Id <= 0)
+            return;
+        _cargandoSeccion = true;
+        try
+        {
+            _ficha.Sections[_active] = await FichaSvc.ClienteSectionAsync(Persona.Id, _active, page, PageSize);
+        }
+        finally
+        {
+            _cargandoSeccion = false;
+        }
+    }
+
+    private string Total(string section) =>
+        _ficha?.Sections.TryGetValue(section, out var value) == true
+            ? TotalEtiqueta(value)
+            : "...";
+
+    private int? TotalTab(string section) =>
+        _ficha?.Sections.TryGetValue(section, out var value) == true
+            ? value.TotalRecords < 0 || value.Page <= 0
+                ? null
+                : (int)Math.Min(int.MaxValue, value.TotalRecords)
+            : null;
+
+    private bool SeccionDebeCargar(string section)
+    {
+        var ficha = _ficha;
+        return ficha is null
+            || !ficha.Sections.TryGetValue(section, out var value)
+            || value.Page <= 0
+            || value.TotalRecords < 0
+            || (value.TotalRecords > 0 && value.Items.Count == 0);
+    }
+
+    private static string TotalEtiqueta(FichaSectionDto section) =>
+        section.TotalRecords < 0 || section.Page <= 0
+            ? "..."
+            : Math.Min(int.MaxValue, section.TotalRecords).ToString();
+
+    private string DocumentoEtiqueta => TipoDocumentoEtiqueta(Persona.TipoDocumento);
+
+    private string FechaRegistro => Persona.FechaCreacion?.ToString("dd/MM/yyyy") ?? "No registrada";
+
+    private static string Texto(string? valor) => string.IsNullOrWhiteSpace(valor) || valor == "-" ? "No registrado" : valor;
+
+    private bool ColumnaConDatos(Func<FichaRowDto, string?> selector) =>
+        ActiveSection.Items.Any(row => TieneDato(selector(row)));
+
+    private static bool TieneDato(string? valor) =>
+        !string.IsNullOrWhiteSpace(valor) && valor.Trim() != "-";
+
+    private static string Fecha(string? valor) => string.IsNullOrWhiteSpace(valor)
+        ? "-"
+        : DateTime.TryParse(valor, out var fecha) ? fecha.ToString("dd/MM/yyyy") : valor;
+
+    private static string Href(string ruta) => string.IsNullOrWhiteSpace(ruta)
+        ? "#"
+        : ruta.StartsWith('/') ? ruta : "/" + ruta;
+
+    private static string TipoDocumentoEtiqueta(string? codigo) =>
+        (codigo ?? "").Trim().ToUpperInvariant() switch
+        {
+            "R" or "RUC" => "RUC",
+            "C" or "CE" => "CE",
+            "P" or "PASAPORTE" => "Pasaporte",
+            "D" or "DNI" => "DNI",
+            _ => "Documento",
+        };
+
+    private sealed record FichaTab(string Key, string Label);
 }

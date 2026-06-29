@@ -1,10 +1,9 @@
 @page "/dashboard"
 @inherits SafeComponentBase
-@using QuestPDF.Fluent
 @inject AppState App
 @inject IIndicadorService Indicadores
 @inject ICaptacionService CaptacionSvc
-@inject ExportacionService Exportar
+@inject ITareaService TareaSvc
 
 <PageTitle>@Title · ControlLocal</PageTitle>
 
@@ -19,9 +18,6 @@
                     <div class="cl-hero-sub">@Subtitle</div>
                 </div>
                 <div class="cl-hero-actions">
-                    <button class="cl-btn on-dark" disabled="@_exportando" @onclick="ExportarPdf">
-                        <Icon Name="download" Size="13" /> @(_exportando ? "Generando…" : "Exportar PDF")
-                    </button>
                     @if (IsAdmin)
                     {
                         <button class="cl-btn on-light" @onclick="@(() => App.Navigate("brokers"))"><Icon Name="briefcase" Size="13" /> Gestión de brokers</button>
@@ -100,19 +96,93 @@
         }
         else
         {
-
             @* ---------- Vista OPERATIVA ("ahora"): estado actual + acciones. Las
                tendencias históricas, el embudo y los comparativos viven en Reportes. ---------- *@
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:14px;">
+                <div class="cl-card">
+                    <div class="cl-card-head">
+                        <div>
+                            <div class="cl-card-title">@WorkTitle</div>
+                            <div class="cl-card-sub">@WorkSubtitle</div>
+                        </div>
+                        @if (!IsAdmin && !IsBroker && _bandeja.Count > 5)
+                        {
+                            <button class="cl-btn sm" @onclick="@(() => _verTodas = true)">Ver todas (@_bandeja.Count)</button>
+                        }
+                    </div>
+                    <div class="cl-card-body">
+                        @if (!IsAdmin && !IsBroker)
+                        {
+                            <BandejaAcciones Tareas="_topBandeja" OnCancelar="CancelarTareaAsync" />
+                        }
+                        else if (PrioridadesDashboard.Count == 0)
+                        {
+                            <div style="padding:26px;text-align:center;color:#5B6472;">
+                                <div style="font-weight:700;font-size:14px;color:var(--c-text);">Sin bloqueos críticos en este momento</div>
+                                <div style="font-size:12px;margin-top:4px;">El equipo no tiene focos vencidos ni aprobaciones pendientes dentro del tablero operativo.</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                @foreach (var p in PrioridadesDashboard)
+                                {
+                                    <div style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--c-border);border-radius:10px;background:linear-gradient(180deg,#fff,#F8FAFD);">
+                                        <span class="cl-badge @p.Tone" style="flex:0 0 auto;">@p.Valor</span>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:650;">@p.Titulo</div>
+                                            <div class="cl-flex cl-muted" style="font-size:12px;gap:8px;flex-wrap:wrap;">
+                                                <span>@p.Descripcion</span>
+                                                <span>· @p.DiasTexto</span>
+                                                <span class="cl-badge gray" style="font-size:11px;">@p.Vencimiento</span>
+                                            </div>
+                                        </div>
+                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate(p.Ruta))"><Icon Name="arrowDownRight" Size="12" /> Resolver</button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="cl-card">
+                    <div class="cl-card-head">
+                        <div>
+                            <div class="cl-card-title">@DecisionTitle</div>
+                            <div class="cl-card-sub">@DecisionSubtitle</div>
+                        </div>
+                    </div>
+                    <div class="cl-card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        @foreach (var s in SenalesDashboard)
+                        {
+                            <MetricCard Icon="@s.Icon" Label="@s.Label" Value="@s.Value" Tone="@s.Tone" Footer="@s.Footer" />
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @if (!IsAdmin && !IsBroker)
+            {
+                <Modal Open="_verTodas" Icon="checkCircle"
+                       Title="Tus acciones pendientes"
+                       Desc="Todo lo que requiere tu atención, priorizado."
+                       OnClose="@(() => _verTodas = false)">
+                    <ChildContent>
+                        <BandejaAcciones Tareas="_bandeja" OnCancelar="CancelarTareaAsync" />
+                    </ChildContent>
+                </Modal>
+            }
+
             <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
                 <div class="cl-card">
                     <div class="cl-card-head">
                         <div>
-                            <div class="cl-card-title">Pipeline actual</div>
-                            <div class="cl-card-sub">Estado de las captaciones por etapa, ahora mismo</div>
+                            <div class="cl-card-title">Cierres por etapa</div>
+                            <div class="cl-card-sub">Qué porcentaje de las captaciones llegó al cierre</div>
                         </div>
                     </div>
                     <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
-                        <DonutChart Segments="_donut" />
+                        <GaugeCierre Pct="CierrePct" Label="cerradas" />
                         <div style="flex:1;font-size:12px;">
                             @for (var i = 0; i < _ind.Etapas.Count; i++)
                             {
@@ -189,6 +259,7 @@
                     <button class="cl-btn sm" style="margin-left:auto;" @onclick="@(() => App.Navigate("reportes"))">Ver reportes <Icon Name="arrowRight" Size="12" /></button>
                 </div>
             }
+
         }
     </ChildContent>
 </AppShell>
@@ -197,10 +268,14 @@
     private bool IsAdmin => App.Role == Roles.Admin;
     private bool IsBroker => App.Role == Roles.Broker;
     private bool _cargando = true;
-    private bool _exportando;
     private IndicadoresDto _ind = IndicadoresDto.Vacio;
     // Propiedades (inmuebles distintos) captadas por el equipo del broker.
     private int _propiedadesEquipo;
+
+    // Bandeja de acciones del agente (Etapa 5): superficie principal, alimentada por el motor abstracto.
+    private IReadOnlyList<TareaDto> _bandeja = [];
+    private IReadOnlyList<TareaDto> _topBandeja => _bandeja.Take(5).ToList();
+    private bool _verTodas;
 
     // Identidad visual del hero por rol.
     private string RoleClass => IsAdmin ? "admin" : IsBroker ? "broker" : "agente";
@@ -210,6 +285,8 @@
     // Conversión propia del agente (su fila de desempeño, o derivada de cierres/captaciones).
     private int MiConversion => _ind.Desempeno.FirstOrDefault()?.Conversion
         ?? (_ind.CaptacionesTotales > 0 ? (int)Math.Round(_ind.Cierres * 100.0 / _ind.CaptacionesTotales) : 0);
+
+    private IndicadorOperativoDto Op => _ind.Operativo ?? IndicadorOperativoDto.Vacio;
 
     private string Title => IsAdmin ? "Panel administrativo global" : IsBroker ? "Panel del broker" : $"Buen día, {Nombre}";
 
@@ -223,34 +300,156 @@
 
     private string SideActive => IsAdmin ? "Dashboard global" : IsBroker ? "Dashboard de equipo" : "Dashboard";
 
+    private string WorkTitle => IsAdmin
+        ? "Bandeja ejecutiva"
+        : IsBroker
+            ? "Bandeja de supervisión"
+            : "Tu bandeja de trabajo";
+
+    private string WorkSubtitle => IsAdmin
+        ? "Cinco focos comerciales que pueden frenar ingresos o SLA"
+        : IsBroker
+            ? "Revisión, cierres y seguimiento del equipo ordenados por urgencia"
+            : "Máximo cinco operaciones priorizadas con vencimiento y días sin acción";
+
+    private string DecisionTitle => IsAdmin
+        ? "Lectura estratégica"
+        : IsBroker
+            ? "Salud del equipo"
+            : "Disciplina comercial";
+
+    private string DecisionSubtitle => IsAdmin
+        ? "Señales para decidir dónde intervenir"
+        : IsBroker
+            ? "Riesgo operativo y conversión del equipo"
+            : "Señales propias para cuidar seguimiento y cierres";
+
+    private IReadOnlyList<DashboardPriority> PrioridadesDashboard
+    {
+        get
+        {
+            var items = new List<DashboardPriority>();
+            if (IsAdmin || IsBroker)
+            {
+                AgregarPrioridad(items, _ind.SolicitudesPorEvaluar, "Solicitudes por evaluar",
+                    "Aprobación comercial pendiente", "solicitudes", "red", "vence hoy", 0, 100);
+                AgregarPrioridad(items, _ind.CaptacionesPorRevisar, "Captaciones por revisar",
+                    "Expedientes esperando decisión", "bandeja-captaciones", "amber", "vence hoy", 0, 92);
+                AgregarPrioridad(items, Op.SolicitudesSinCierre, "Solicitudes aprobadas sin cierre",
+                    "Ingreso comprometido sin contrato cerrado", "solicitudes", "amber", "en riesgo", Op.DiasPromedioSinSeguimiento, 86);
+                AgregarPrioridad(items, Op.RecontactosVencidos, "Recontactos vencidos",
+                    "Propietarios o clientes sin seguimiento a tiempo", "seguimiento-comercial", "red", "vencido", Op.DiasPromedioSinSeguimiento, 84);
+                AgregarPrioridad(items, Op.VisitasPendientes, "Visitas pendientes",
+                    "Visitas próximas o vencidas que necesitan resultado", "visitas", "blue", "próximo", 0, 72);
+            }
+            return items
+                .OrderByDescending(i => i.Score)
+                .ThenByDescending(i => i.ValorNumero)
+                .Take(5)
+                .ToList();
+        }
+    }
+
+    private IReadOnlyList<DashboardSignal> SenalesDashboard
+    {
+        get
+        {
+            if (IsAdmin)
+            {
+                return
+                [
+                    new("alert", "Recontactos vencidos", Op.RecontactosVencidos.ToString(), Op.RecontactosVencidos > 0 ? "red" : "green", "riesgo de enfriamiento"),
+                    new("fileText", "Sin cierre", Op.SolicitudesSinCierre.ToString(), Op.SolicitudesSinCierre > 0 ? "amber" : "green", "solicitudes aprobadas"),
+                    new("target", "Conversión prosp. → capt.", $"{Op.ConversionProspeccionCaptacion}%", ConvTone(Op.ConversionProspeccionCaptacion), "captación de inventario"),
+                    new("users", "Equipo activo", _ind.AgentesActivos.ToString(), "blue", $"{_ind.BrokersActivos} brokers"),
+                ];
+            }
+            if (IsBroker)
+            {
+                return
+                [
+                    new("pin", "Por revisar", _ind.CaptacionesPorRevisar.ToString(), _ind.CaptacionesPorRevisar > 0 ? "amber" : "green", "captaciones del equipo"),
+                    new("fileText", "Por evaluar", _ind.SolicitudesPorEvaluar.ToString(), _ind.SolicitudesPorEvaluar > 0 ? "red" : "green", "solicitudes"),
+                    new("alert", "Recontactos vencidos", Op.RecontactosVencidos.ToString(), Op.RecontactosVencidos > 0 ? "red" : "green", "seguimiento del equipo"),
+                    new("target", "Conversión prosp. → capt.", $"{Op.ConversionProspeccionCaptacion}%", ConvTone(Op.ConversionProspeccionCaptacion), "disciplina de captación"),
+                ];
+            }
+            return
+            [
+                new("alert", "Recontactos vencidos", Op.RecontactosVencidos.ToString(), Op.RecontactosVencidos > 0 ? "red" : "green", "atiéndelos primero"),
+                new("clock", "Días sin seguimiento", Op.DiasPromedioSinSeguimiento.ToString(), Op.DiasPromedioSinSeguimiento > 7 ? "amber" : "blue", "promedio vencido"),
+                new("calendar", "Visitas pendientes", Op.VisitasPendientes.ToString(), "blue", "prepara o cierra resultado"),
+                new("fileText", "Solicitudes sin cierre", Op.SolicitudesSinCierre.ToString(), Op.SolicitudesSinCierre > 0 ? "amber" : "green", "contrato pendiente"),
+            ];
+        }
+    }
+
     private double[] Cierres => _ind.CierresPorMes.Select(v => (double)v).ToArray();
     private string[] Meses => _ind.MesesEtiquetas.ToArray();
 
-    private DonutChart.Segment[] _donut => _ind.Etapas
-        .Select((e, i) => new DonutChart.Segment(e.Valor, ColoresEstado.PorEtapa(e.Nombre, i)))
-        .ToArray();
+    // % de captaciones que terminaron en cierre (estado Cerrada sobre el total de etapas).
+    private int CierrePct
+    {
+        get
+        {
+            var total = _ind.Etapas.Sum(e => e.Valor);
+            var cerradas = _ind.Etapas
+                .FirstOrDefault(e => e.Nombre.Contains("Cerrada", StringComparison.OrdinalIgnoreCase))?.Valor ?? 0;
+            return total > 0 ? (int)Math.Round(cerradas * 100.0 / total) : 0;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            _ind = await Indicadores.ObtenerAsync(DisposedToken);
+        // Las tres llamadas se lanzan en paralelo y cada respuesta se espera con su
+        // propio try/catch: si un endpoint tarda o falla, el dashboard se pinta con lo
+        // que si cargo (valores por defecto) en vez de tumbar el circuito entero.
+        var indicadoresTask = Indicadores.ObtenerAsync(DisposedToken);
+        var captacionesTask = IsBroker ? CaptacionSvc.RefrescarAsync(DisposedToken) : null;
+        var bandejaTask = !IsAdmin && !IsBroker ? TareaSvc.BandejaAsync(DisposedToken) : null;
 
-            // El broker ve el total de propiedades (inmuebles distintos) captadas por su equipo.
-            if (IsBroker)
+        try { _ind = await indicadoresTask; }
+        catch (OperationCanceledException) { }
+        catch { /* se queda en IndicadoresDto.Vacio: los paneles muestran ceros */ }
+
+        // El broker ve el total de propiedades (inmuebles distintos) captadas por su equipo.
+        if (captacionesTask is not null)
+        {
+            try
             {
-                var caps = await CaptacionSvc.RefrescarAsync(DisposedToken);
+                var caps = await captacionesTask;
                 _propiedadesEquipo = caps
                     .Select(c => c.LocalId > 0 ? c.LocalId : (long)(c.DireccionLocal ?? "").GetHashCode())
                     .Distinct().Count();
             }
+            catch (OperationCanceledException) { }
+            catch { /* sin el conteo de propiedades del equipo */ }
+        }
+
+        // Solo el agente tiene bandeja de acciones; se trae ya reconciliada del backend.
+        if (bandejaTask is not null)
+        {
+            try { _bandeja = await bandejaTask; }
+            catch (OperationCanceledException) { }
+            catch { /* la bandeja se mostrara vacia; se recarga en la proxima visita */ }
+        }
+
+        _cargando = false;
+    }
+
+    private async Task CancelarTareaAsync(TareaDto tarea)
+    {
+        try
+        {
+            await TareaSvc.CancelarAsync(tarea.Id, DisposedToken);
+            _bandeja = await TareaSvc.BandejaAsync(DisposedToken);
         }
         catch (OperationCanceledException)
         {
         }
-        finally
+        catch
         {
-            _cargando = false;
+            // best-effort: si falla la cancelacion, la bandeja se recargara en la proxima visita.
         }
     }
 
@@ -259,21 +458,51 @@
 
     private static string ConvTone(int pct) => pct >= 22 ? "green" : pct >= 18 ? "blue" : "red";
 
-    private async Task ExportarPdf()
+    private static void AgregarPrioridad(
+        List<DashboardPriority> items,
+        int valor,
+        string titulo,
+        string descripcion,
+        string ruta,
+        string tone,
+        string vencimiento,
+        int diasSinAccion,
+        int score)
     {
-        if (_exportando) return;
-        try
-        {
-            _exportando = true;
-            var datos = ReporteIndicadores.Desde(_ind, IsAdmin);
-            var titulo = IsAdmin ? "Panel administrativo · últimos 6 meses"
-                : IsBroker ? "Panel del broker · últimos 6 meses" : "Mi actividad · últimos 6 meses";
-            var pdf = new ReporteIndicadoresDocument(datos, titulo).GeneratePdf();
-            await Exportar.DescargarPdfAsync(IsAdmin ? "panel_administrativo" : IsBroker ? "panel_broker" : "panel_agente", pdf);
-        }
-        finally
-        {
-            _exportando = false;
-        }
+        if (valor <= 0)
+            return;
+
+        items.Add(new DashboardPriority(
+            titulo,
+            descripcion,
+            valor,
+            ruta,
+            tone,
+            vencimiento,
+            DiasTexto(diasSinAccion),
+            score + valor));
     }
+
+    private static string DiasTexto(int dias) => dias switch
+    {
+        <= 0 => "sin demora",
+        1 => "1 día sin acción",
+        _ => $"{dias} días sin acción",
+    };
+
+    private sealed record DashboardPriority(
+        string Titulo,
+        string Descripcion,
+        int ValorNumero,
+        string Ruta,
+        string Tone,
+        string Vencimiento,
+        string DiasTexto,
+        int Score)
+    {
+        public string Valor => ValorNumero.ToString();
+    }
+
+    private sealed record DashboardSignal(string Icon, string Label, string Value, string Tone, string Footer);
+
 }

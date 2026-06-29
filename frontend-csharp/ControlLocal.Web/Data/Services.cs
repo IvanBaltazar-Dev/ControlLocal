@@ -2,17 +2,23 @@ using ControlLocal.Web.Models.Agentes;
 using ControlLocal.Web.Models.Asignaciones;
 using ControlLocal.Web.Models.Brokers;
 using ControlLocal.Web.Models.Captaciones;
+using ControlLocal.Web.Models.Cartera;
 using ControlLocal.Web.Models.Clientes;
 using ControlLocal.Web.Models.Contratos;
+using ControlLocal.Web.Models.Fichas;
 using ControlLocal.Web.Models.Locales;
 using ControlLocal.Web.Models.Oportunidades;
 using ControlLocal.Web.Models.Propietarios;
+using ControlLocal.Web.Models.Reportes;
 using ControlLocal.Web.Models.Shared;
 using ControlLocal.Web.Models.Solicitudes;
+using ControlLocal.Web.Models.Tareas;
 using ControlLocal.Web.Models.Visitas;
 using ControlLocal.Web.Services;
 
 namespace ControlLocal.Web.Data;
+
+public sealed record PageResult<T>(IReadOnlyList<T> Items, long TotalRecords, int Page, int PageSize);
 
 // Contratos de servicios de dominio. Las pantallas dependen solo de estas
 // interfaces; la implementación activa (mock en memoria o cliente REST de
@@ -68,6 +74,8 @@ public interface IClienteService
 {
     IReadOnlyList<ClienteInteresadoDto> All();
     ClienteInteresadoDto? ById(long id);
+    Task<ClienteInteresadoDto?> ObtenerAsync(long id, CancellationToken ct = default) =>
+        Task.FromResult(ById(id));
     Task<IReadOnlyList<ClienteInteresadoDto>> RefrescarAsync(CancellationToken ct = default) =>
         Task.FromResult(All());
     ClienteInteresadoDto Agregar(ClienteInteresadoDto cliente);
@@ -77,6 +85,50 @@ public interface IClienteService
         Task.FromResult(Agregar(cliente));
     Task<ClienteInteresadoDto> ActualizarAsync(ClienteInteresadoDto cliente, CancellationToken ct = default) =>
         Task.FromResult(Actualizar(cliente));
+}
+
+public interface IFichaComercialService
+{
+    Task<FichaComercialDto?> ClienteAsync(long id, CancellationToken ct = default);
+
+    Task<FichaSectionDto> ClienteSectionAsync(long id, string section, int page, int pageSize = 8,
+        CancellationToken ct = default);
+
+    Task<FichaComercialDto?> PropietarioAsync(long id, CancellationToken ct = default);
+
+    Task<FichaSectionDto> PropietarioSectionAsync(long id, string section, int page, int pageSize = 8,
+        CancellationToken ct = default);
+}
+
+// Recomendacion de cartera (Etapa 8): cruza demanda (requerimientos) y oferta (captaciones) en ambos sentidos.
+public interface ICoincidenciaCarteraService
+{
+    Task<CoincidenciasDto> PropiedadesParaClienteAsync(long idCliente, CancellationToken ct = default);
+
+    Task<CoincidenciasDto> ClientesParaCaptacionAsync(string idOrCodigo, CancellationToken ct = default);
+
+    Task<CoincidenciasDto> ClientesParaProspeccionAsync(long idProspeccion, CancellationToken ct = default);
+}
+
+// Reporte periódico al propietario (Etapa 8). Vive en el expediente de la captación; el agente
+// dueño lo registra y reinicia su tarea automática; broker/admin lo consultan en su alcance.
+public interface IReportePropietarioService
+{
+    Task<IReadOnlyList<ReportePropietarioDto>> ListarPorCaptacionAsync(long idCaptacion, CancellationToken ct = default);
+
+    Task<ReportePropietarioDto> CrearAsync(long idCaptacion, ReportePropietarioDto reporte, CancellationToken ct = default);
+}
+
+// Requerimientos de cliente (perfil de busqueda). Crear/actualizar vincula al cliente y entra al matching.
+public interface IRequerimientoService
+{
+    Task<IReadOnlyList<RequerimientoDto>> ListarPorClienteAsync(long idCliente, CancellationToken ct = default);
+
+    Task<RequerimientoDto> CrearAsync(RequerimientoDto requerimiento, CancellationToken ct = default);
+
+    Task<RequerimientoDto> ActualizarAsync(RequerimientoDto requerimiento, CancellationToken ct = default);
+
+    Task<RequerimientoDto> CambiarEstadoAsync(long id, string estado, CancellationToken ct = default);
 }
 
 public interface ILocalService
@@ -104,28 +156,65 @@ public interface IPrecioLocalService
 public interface IPublicacionService
 {
     Task<IReadOnlyList<PublicacionDto>> ListarPorLocalAsync(long idLocal, CancellationToken ct = default);
+
+    // Etapa 7: gestion de publicacion desde el detalle.
+    Task<PublicacionDto> CrearAsync(long idLocal, PublicacionDto publicacion, CancellationToken ct = default);
+
+    Task<PublicacionDto> ActualizarAsync(long idLocal, PublicacionDto publicacion, CancellationToken ct = default);
+
+    Task<PublicacionDto> CambiarEstadoAsync(long idLocal, long idPublicacion, string estado, CancellationToken ct = default);
 }
 
 // Prospección (pre-captación): el agente persigue al propietario hasta captar el
-// local. Espejo, del lado de la oferta, de la oportunidad. Incluye el embudo y el
-// seguimiento de recontacto (≤15 días) tras un "por ahora no".
+// local. Espejo, del lado de la oferta, de la oportunidad. El recontacto es automático:
+// cada acción reinicia el reloj a 7 días; desde el día 8 sin acción la prospección queda vencida.
 public interface IProspeccionService
 {
     IReadOnlyList<ProspeccionDto> All();
     ProspeccionDto? ById(long id);
+    Task<ProspeccionDto?> ObtenerAsync(long id, CancellationToken ct = default) =>
+        Task.FromResult(ById(id));
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<ProspeccionDto>> RefrescarAsync(CancellationToken ct = default);
-    // En seguimiento cuyo recontacto vence dentro de diasAviso (o ya venció).
+    Task<PageResult<ProspeccionDto>> ListarPaginaAsync(
+        int pagina, int tamano = 8, string? estado = null, string? distrito = null,
+        string? query = null, CancellationToken ct = default, long? idCaptacion = null, long? idLocal = null,
+        long? idAgente = null, long? idBrokerSupervisor = null) =>
+        Task.FromResult(new PageResult<ProspeccionDto>(All(), All().Count, 1, All().Count));
+    Task<PageResult<ProspeccionDto>> ListarRecontactarPaginaAsync(
+        int pagina, int tamano = 8, int diasAviso = 7, CancellationToken ct = default) =>
+        Task.FromResult(new PageResult<ProspeccionDto>(PorRecontactar(diasAviso), PorRecontactar(diasAviso).Count, 1, tamano));
+    Task<long> ContarAsync(string? estado = null, string? distrito = null, string? query = null, CancellationToken ct = default) =>
+        Task.FromResult((long)All().Count(item =>
+            (string.IsNullOrEmpty(estado) || item.Estado == estado)
+            && (string.IsNullOrEmpty(distrito) || item.Distrito == distrito)
+            && (string.IsNullOrEmpty(query)
+                || TextoFiltro.Contiene(item.Direccion, query)
+                || TextoFiltro.Contiene(item.LocalCodigo, query)
+                || TextoFiltro.Contiene(item.CodigoProspeccion, query)
+                || TextoFiltro.Contiene(item.PropietarioNombre, query))));
+    Task<long> ContarRecontactarAsync(int diasAviso = 7, CancellationToken ct = default) =>
+        Task.FromResult((long)PorRecontactar(diasAviso).Count);
+    // En gestion cuya ultima accion de seguimiento tiene ya diasAviso dias o mas (recontacto pendiente).
     IReadOnlyList<ProspeccionDto> PorRecontactar(int diasAviso);
     ProspeccionDto Contactar(long id);
     ProspeccionDto RegistrarReunion(long id);
     ProspeccionDto EntregarPropuesta(long id);
-    ProspeccionDto Posponer(long id, DateOnly fechaRecontacto);
+    // Acción de seguimiento del propietario (un clic): reinicia el reloj de recontacto.
+    ProspeccionDto RegistrarSeguimiento(long id);
     ProspeccionDto Rechazar(long id, string motivo);
     ProspeccionDto Descartar(long id, string motivo);
     // El propietario acepta: marca Captado y simula la captación creada.
     ProspeccionDto Captar(long id, decimal comisionPactada);
     ProspeccionDto MarcarCaptado(long id, string codigoCaptacion);
+}
+
+// Bandeja "Acciones Pendientes" del agente (Etapa 5). Sin alta manual: las tareas se
+// derivan/reconcilian en backend; el agente solo resuelve (en su pantalla) o cancela.
+public interface ITareaService
+{
+    Task<IReadOnlyList<TareaDto>> BandejaAsync(CancellationToken ct = default);
+    Task CancelarAsync(long idTarea, CancellationToken ct = default);
 }
 
 public interface ICaptacionService
@@ -145,6 +234,8 @@ public interface ICaptacionService
     Task<IReadOnlyList<CaptacionDto>> RefrescarAsync(CancellationToken ct = default);
     Task<IReadOnlyList<BandejaCaptacionDto>> RefrescarBandejaAsync(CancellationToken ct = default);
     Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default);
+    Task<CaptacionDto?> ObtenerPorIdAsync(long id, CancellationToken ct = default) =>
+        Task.FromResult(All().FirstOrDefault(item => item.Id == id));
     Task ResolverBandejaAsync(string codigo, string decision, string? observacion, CancellationToken ct = default);
     Task ReasignarBandejaAsync(string codigo, long idNuevoAgente, string motivo, CancellationToken ct = default);
     Task CerrarAsync(long id, string motivo, CancellationToken ct = default);
@@ -155,6 +246,10 @@ public interface ISolicitudService
     IReadOnlyList<SolicitudAlquilerDto> All();
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<SolicitudAlquilerDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<SolicitudAlquilerDto>>(All().Where(item => item.CaptacionId == captacionId).ToList());
+    Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<SolicitudAlquilerDto>>(All().Where(item => item.OportunidadId == oportunidadId).ToList());
     SolicitudAlquilerDto? ByCodigo(string codigo);
     SolicitudAlquilerDto Agregar(SolicitudFormRequest request);
     Task<SolicitudAlquilerDto> AgregarAsync(SolicitudFormRequest request, CancellationToken ct = default) =>
@@ -186,6 +281,10 @@ public interface IContratoService
     ContratoAlquilerDto? ByOportunidad(long oportunidadId);
     // Crea el contrato a partir de la solicitud aprobada y cierra el trato.
     Task<ContratoAlquilerDto> RegistrarAsync(ContratoFormRequest request, CancellationToken ct = default);
+    // Etapa 2: el broker supervisor define el monto real del agente (la empresa se calcula sola).
+    Task<ContratoAlquilerDto> AsignarComisionAsync(long idContrato, decimal montoAgente, CancellationToken ct = default);
+    // Etapa 2: el broker administrador registra el cobro (estado COBRADA/ANULADA, fecha y forma de pago).
+    Task<ContratoAlquilerDto> RegistrarCobroAsync(long idContrato, string estado, DateOnly? fechaCobro, string? formaPago, CancellationToken ct = default);
 }
 
 // Documentos de una solicitud (espeja /solicitudes/{id}/documentos del backend Java):
@@ -206,6 +305,11 @@ public interface IDocumentoSolicitudService
         long idSolicitud, long idDocumento, string resultado, string? observaciones,
         CancellationToken ct = default);
 
+    // El broker deja conformes en bloque los documentos cargados aún pendientes de la solicitud
+    // ("Validar todos los documentos" en la evaluación). Devuelve la lista de documentos resultante.
+    Task<IReadOnlyList<DocumentoSolicitudDto>> ConformarTodosAsync(
+        long idSolicitud, CancellationToken ct = default);
+
     Task<EstadoAlmacen> EstadoAlmacenAsync(CancellationToken ct = default);
 }
 
@@ -217,6 +321,14 @@ public interface IInteraccionService
     // Variante async real (no bloquea el circuito de Blazor Server).
     Task<InteraccionComercialDto> AgregarAsync(InteraccionFormRequest request, CancellationToken ct = default) =>
         Task.FromResult(Agregar(request));
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.OportunidadId == oportunidadId).ToList());
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorProspeccionAsync(long prospeccionId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.ProspeccionId == prospeccionId).ToList());
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.CaptacionId == captacionId).ToList());
+    Task<IReadOnlyList<InteraccionComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<InteraccionComercialDto>>(All().Where(item => item.ClienteId == clienteId).ToList());
     InteraccionComercialDto Actualizar(long id, string? resultado = null, string? observaciones = null);
 }
 
@@ -232,6 +344,10 @@ public interface IOportunidadService
     Task<IReadOnlyList<OportunidadComercialDto>> RefrescarAsync(CancellationToken ct = default);
     // Todos los clientes interesados (oportunidades) de una captación.
     IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion);
+    Task<IReadOnlyList<OportunidadComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<OportunidadComercialDto>>(All().Where(item => item.CaptacionId == captacionId).ToList());
+    Task<IReadOnlyList<OportunidadComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<OportunidadComercialDto>>(All().Where(item => item.ClienteId == clienteId).ToList());
     OportunidadComercialDto Crear(OportunidadFormRequest request);
     Task<OportunidadComercialDto> CrearAsync(OportunidadFormRequest request, CancellationToken ct = default) =>
         Task.FromResult(Crear(request));

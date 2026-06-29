@@ -8,6 +8,7 @@ import java.util.List;
 import com.controllocal.dao.ComisionLiquidacionDAO;
 import com.controllocal.model.comercial.ComisionLiquidacion;
 import com.controllocal.model.comercial.enums.EstadoComision;
+import com.controllocal.model.comercial.enums.FormaPago;
 import com.controllocal.model.comercial.enums.Moneda;
 
 public class ComisionLiquidacionDAOImpl extends AbstractJdbcCrudDAO<ComisionLiquidacion>
@@ -15,17 +16,18 @@ public class ComisionLiquidacionDAOImpl extends AbstractJdbcCrudDAO<ComisionLiqu
     private static final String INSERT = """
             INSERT INTO comision_liquidacion (
                 id_contrato_alquiler, monto, moneda, monto_agente,
-                monto_empresa, fecha_cobro, estado
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                monto_empresa, fecha_cobro, forma_pago, estado
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String SELECT = """
             SELECT id_comision_liquidacion, id_contrato_alquiler, monto, moneda,
-                   monto_agente, monto_empresa, fecha_cobro, estado
+                   monto_agente, monto_empresa, fecha_cobro, forma_pago, estado
             FROM comision_liquidacion
             """;
     private static final String UPDATE = """
             UPDATE comision_liquidacion SET id_contrato_alquiler = ?, monto = ?,
-                moneda = ?, monto_agente = ?, monto_empresa = ?, fecha_cobro = ?, estado = ?
+                moneda = ?, monto_agente = ?, monto_empresa = ?, fecha_cobro = ?,
+                forma_pago = ?, estado = ?
             WHERE id_comision_liquidacion = ?
             """;
     private static final String DELETE =
@@ -46,7 +48,7 @@ public class ComisionLiquidacionDAOImpl extends AbstractJdbcCrudDAO<ComisionLiqu
     @Override protected void bindInsert(PreparedStatement ps, ComisionLiquidacion c) throws SQLException { bind(ps, c); }
     @Override protected void bindUpdate(PreparedStatement ps, ComisionLiquidacion c) throws SQLException {
         bind(ps, c);
-        ps.setLong(8, c.getIdComisionLiquidacion());
+        ps.setLong(9, c.getIdComisionLiquidacion());
     }
 
     private void bind(PreparedStatement ps, ComisionLiquidacion c) throws SQLException {
@@ -56,7 +58,8 @@ public class ComisionLiquidacionDAOImpl extends AbstractJdbcCrudDAO<ComisionLiqu
         ps.setBigDecimal(4, c.getMontoAgente());
         ps.setBigDecimal(5, c.getMontoEmpresa());
         JdbcSupport.setDate(ps, 6, c.getFechaCobro());
-        JdbcSupport.setEnum(ps, 7, c.getEstado());
+        JdbcSupport.setEnum(ps, 7, c.getFormaPago());
+        JdbcSupport.setEnum(ps, 8, c.getEstado());
     }
 
     @Override protected void bindDelete(PreparedStatement ps, Long id) throws SQLException { ps.setLong(1, id); }
@@ -70,6 +73,7 @@ public class ComisionLiquidacionDAOImpl extends AbstractJdbcCrudDAO<ComisionLiqu
         c.setMontoAgente(rs.getBigDecimal("monto_agente"));
         c.setMontoEmpresa(rs.getBigDecimal("monto_empresa"));
         c.setFechaCobro(JdbcSupport.toLocalDate(rs.getDate("fecha_cobro")));
+        c.setFormaPago(JdbcSupport.getNullableEnum(rs, "forma_pago", FormaPago.class));
         c.setEstado(JdbcSupport.getEnum(rs, "estado", EstadoComision.class));
         return c;
     }

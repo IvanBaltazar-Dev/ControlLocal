@@ -1,0 +1,33 @@
+@if (Framed)
+{
+    <div class="cl-card">
+        <div class="cl-card-body" style="@BodyStyle">
+            <Icon Name="@Icon" Size="@IconSize" style="margin-bottom:10px;" />
+            <div style="font-weight:600;margin-bottom:4px;">@Title</div>
+            @if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                <div style="font-size:12px;">@Subtitle</div>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div style="@BodyStyle">
+        <Icon Name="@Icon" Size="@IconSize" style="margin-bottom:10px;" />
+        <div style="font-weight:600;margin-bottom:4px;">@Title</div>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <div style="font-size:12px;">@Subtitle</div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public bool Framed { get; set; } = true;
+    [Parameter] public string Title { get; set; } = "Cargando...";
+    [Parameter] public string Subtitle { get; set; } = "Cargando los resultados de esta consulta.";
+    [Parameter] public string Icon { get; set; } = "refresh";
+    [Parameter] public int IconSize { get; set; } = 28;
+    [Parameter] public string BodyStyle { get; set; } = "padding:54px 20px;text-align:center;color:#7E8794;";
+}

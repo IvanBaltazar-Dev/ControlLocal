@@ -68,6 +68,10 @@ builder.Services.AddScoped<HttpPerfilService>();
 builder.Services.AddScoped<HttpAgenteService>();
 builder.Services.AddScoped<IPropietarioService, HttpPropietarioService>();
 builder.Services.AddScoped<IClienteService, HttpClienteService>();
+builder.Services.AddScoped<IFichaComercialService, HttpFichaComercialService>();
+builder.Services.AddScoped<ICoincidenciaCarteraService, HttpCoincidenciaCarteraService>();
+builder.Services.AddScoped<IRequerimientoService, HttpRequerimientoService>();
+builder.Services.AddScoped<IReportePropietarioService, HttpReportePropietarioService>();
 builder.Services.AddScoped<ILocalService, HttpLocalService>();
 builder.Services.AddScoped<IPrecioLocalService, HttpPrecioLocalService>();
 builder.Services.AddScoped<IPublicacionService, HttpPublicacionService>();
@@ -86,6 +90,7 @@ builder.Services.AddScoped<IAgenteService>(services =>
 builder.Services.AddScoped<ISolicitudService, HttpSolicitudService>();
 builder.Services.AddScoped<IDocumentoSolicitudService, HttpDocumentoSolicitudService>();
 builder.Services.AddScoped<IContratoService, HttpContratoService>();
+builder.Services.AddScoped<ITareaService, HttpTareaService>();
 
 // Todas las pantallas usan ya el backend REST (no quedan mocks en uso).
 builder.Services.AddScoped<IIndicadorService, HttpIndicadorService>();

@@ -1,6 +1,9 @@
 @page "/captacion-review/{CodigoParam?}"
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
+@inject ILocalService LocalSvc
+@inject IProspeccionService ProspeccionSvc
+@inject IInteraccionService InteraccionSvc
 @inject ControlLocal.Web.Services.Api.HttpAgenteService AgenteSvc
 @inject INotificacionService Notificaciones
 
@@ -8,7 +11,13 @@
 
 @if (_cargando)
 {
-    <div class="cl-card"><div class="cl-card-body">Cargando captacion...</div></div>
+    <div class="cl-card"><div class="cl-card-body" style="display:flex;align-items:center;gap:12px;padding:22px;">
+        <Icon Name="refresh" Size="20" />
+        <div>
+            <div style="font-weight:600;font-size:13px;">Cargando expediente@(string.IsNullOrWhiteSpace(CodigoParam) ? "" : $" {CodigoParam}")…</div>
+            <div style="font-size:12px;color:var(--c-text-2);">Recuperando la captación, su prospección de origen y el seguimiento del propietario.</div>
+        </div>
+    </div></div>
 }
 else if (_captacion is null)
 {
@@ -50,19 +59,24 @@ else
             <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;">
                 <div class="cl-stack">
                     <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Resumen de la captacion</div></div>
+                        <div class="cl-card-head">
+                            <div class="cl-card-title">Resumen de la captacion</div>
+                            <FichaLink Kind="owner" Id="@_local?.PropietarioId" Text="Ver propietario" Variant="button" />
+                        </div>
                         <div class="cl-card-body">
-                            <dl class="cl-kv">
-                                <dt>Codigo</dt><dd><span class="mono">@_captacion.CodigoCaptacion</span></dd>
-                                <dt>Direccion</dt><dd>@_captacion.DireccionLocal, @_captacion.DistritoLocal</dd>
-                                <dt>Propietario</dt><dd>@Texto(_captacion.PropietarioNombre)</dd>
-                                <dt>Area</dt><dd>@_captacion.AreaM2 m2</dd>
-                                <dt>Rubro</dt><dd>@Texto(_captacion.Rubro)</dd>
-                                <dt>Vigencia</dt><dd>@Vigencia</dd>
-                                <dt>Comision acordada</dt><dd>@_captacion.ComisionPactadaTexto%</dd>
-                                <dt>Agente responsable</dt><dd>@Texto(_captacion.NombreAgenteResponsable)</dd>
-                                <dt>Estado</dt><dd><StatusBadge Label="@_captacion.Estado" /></dd>
-                            </dl>
+                            <div class="cl-specs">
+                                <Spec Icon="folder" K="Codigo" V="@_captacion.CodigoCaptacion" />
+                                <Spec Icon="mapPin" K="Direccion" V="@($"{_captacion.DireccionLocal}, {_captacion.DistritoLocal}")" />
+                                <Spec Icon="user" K="Propietario" V="@Texto(_captacion.PropietarioNombre)" />
+                                <Spec Icon="layers" K="Area" V="@($"{_captacion.AreaM2} m2")" />
+                                <Spec Icon="store" K="Rubro" V="@Texto(_captacion.Rubro)" />
+                                <Spec Icon="calendar" K="Vigencia" V="@Vigencia" />
+                                <Spec Icon="activity" K="Comision" V="@($"{_captacion.ComisionPactadaTexto}%")" />
+                                <Spec Icon="briefcase" K="Agente" V="@Texto(_captacion.NombreAgenteResponsable)" />
+                            </div>
+                            <div style="margin-top:12px;">
+                                <StatusBadge Label="@_captacion.Estado" />
+                            </div>
                         </div>
                     </div>
 
@@ -91,6 +105,58 @@ else
                             <div class="cl-card-body">@_captacion.ObservacionRevision</div>
                         </div>
                     }
+
+                    @* Etapa 7: seguimiento del propietario via la prospeccion que origino la captacion. *@
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div class="cl-card-title">Seguimiento del propietario</div>
+                            @if (_prospeccion is not null)
+                            {
+                                <span class="cl-badge gray">@_prospeccion.CodigoProspeccion</span>
+                            }
+                        </div>
+                        <div class="cl-card-body">
+                            @if (_prospeccion is null)
+                            {
+                                <p style="font-size:12.5px;color:var(--c-text-2);margin:0;">Esta captación no tiene una prospección de origen registrada; no hay historial de seguimiento del propietario.</p>
+                            }
+                            else
+                            {
+                                <div class="cl-specs">
+                                    <Spec Icon="activity" K="Contactos" V="@_interacciones.Count.ToString()" />
+                                    <Spec Icon="users" K="Reuniones" V="@_nReuniones.ToString()" />
+                                    <Spec Icon="fileText" K="Propuestas" V="@_nPropuestas.ToString()" />
+                                    <Spec Icon="clock" K="Última acción" V="@Texto(_prospeccion.FechaRecontactoTexto)" />
+                                    <Spec Icon="calendar" K="Días sin contacto" V="@DiasSinContactoTexto" />
+                                    <Spec Icon="alert" K="Recontacto" V="@EstadoRecontactoTexto" />
+                                </div>
+                                <div style="margin-top:14px;">
+                                    <div style="font-size:12px;font-weight:600;color:var(--c-text-2);margin-bottom:8px;">Línea de tiempo</div>
+                                    @if (_interacciones.Count == 0)
+                                    {
+                                        <p style="font-size:12px;color:var(--c-text-2);margin:0;">Sin interacciones registradas en la prospección.</p>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var it in _interacciones)
+                                        {
+                                            <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--c-border);">
+                                                <Icon Name="activity" Size="14" />
+                                                <div style="min-width:0;">
+                                                    <div style="font-size:12px;font-weight:600;">@it.FechaHoraTexto</div>
+                                                    <div style="display:flex;gap:6px;align-items:center;margin-top:2px;"><CanalBadge Canal="@it.CanalContacto" /><ResultadoBadge Resultado="@it.Resultado" Contexto="@it.Contexto" /></div>
+                                                    @if (!string.IsNullOrWhiteSpace(it.Observaciones))
+                                                    {
+                                                        <div style="font-size:11.5px;color:var(--c-text-2);margin-top:3px;">@it.Observaciones</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
                 </div>
 
                 <div class="cl-stack">
@@ -199,6 +265,7 @@ else
     [Parameter] public string? CodigoParam { get; set; }
 
     private CaptacionDto? _captacion;
+    private LocalComercialDto? _local;
     private bool _cargando;
     private string? _modal;
     private string? _toast;
@@ -208,6 +275,11 @@ else
     private bool _procesando;
     private IReadOnlyList<AgenteDto> _agentes = [];
     private RevisionMessage? _mensajeRevision;
+
+    // Etapa 7: seguimiento del propietario (prospeccion de origen + sus interacciones).
+    private ProspeccionDto? _prospeccion;
+    private IReadOnlyList<InteraccionComercialDto> _interacciones = [];
+    private int _nReuniones, _nPropuestas;
 
     private string Vigencia => _captacion?.FechaInicioVigencia is { } inicio
         && _captacion.FechaFinVigencia is { } fin
@@ -239,6 +311,27 @@ else
         MensajeParaEstado(_captacion?.Estado)
         ?? new RevisionMessage("blue", "info", "La revision de esta captacion ya fue registrada.");
 
+    // Dias sin contacto / estado de recontacto: misma convencion de 7 dias de la prospeccion.
+    private string DiasSinContactoTexto
+    {
+        get
+        {
+            if (_prospeccion?.FechaRecontacto is not { } f) return "Sin registro";
+            var dias = DateOnly.FromDateTime(DateTime.Today).DayNumber - f.DayNumber;
+            return dias <= 0 ? "Hoy" : $"{dias} día(s)";
+        }
+    }
+
+    private string EstadoRecontactoTexto
+    {
+        get
+        {
+            if (_prospeccion?.FechaRecontacto is not { } f) return "No aplica";
+            var dias = DateOnly.FromDateTime(DateTime.Today).DayNumber - f.DayNumber;
+            return dias >= 7 ? "Recontacto pendiente" : "Al día";
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         _cargando = true;
@@ -253,9 +346,28 @@ else
             _captacion = await captacionTask;
             _agentes = await agentesTask;
             if (_captacion is null)
+            {
                 _error = "No se encontro la captacion solicitada.";
-            else if (EsEstadoFinal)
-                _mensajeRevision ??= MensajeParaEstado(_captacion.Estado);
+                _local = null;
+            }
+            else
+            {
+                _local = _captacion.LocalId > 0
+                    ? await Task.Run(() => LocalSvc.ById(_captacion.LocalId))
+                    : null;
+                if (EsEstadoFinal)
+                    _mensajeRevision ??= MensajeParaEstado(_captacion.Estado);
+
+                // Prospeccion que origino la captacion (1 sola) + sus interacciones, para el panel.
+                var prospPage = await ProspeccionSvc.ListarPaginaAsync(1, 1, ct: default, idCaptacion: _captacion.Id);
+                _prospeccion = prospPage.Items.FirstOrDefault();
+                if (_prospeccion is not null)
+                {
+                    _interacciones = await InteraccionSvc.ListarPorProspeccionAsync(_prospeccion.Id);
+                    _nReuniones = string.IsNullOrWhiteSpace(_prospeccion.FechaReunionTexto) ? 0 : 1;
+                    _nPropuestas = string.IsNullOrWhiteSpace(_prospeccion.FechaPropuestaTexto) ? 0 : 1;
+                }
+            }
         }
         catch (Exception error)
         {

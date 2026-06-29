@@ -10,13 +10,24 @@ import com.controllocal.bl.ProspeccionBusinessLogic;
 import com.controllocal.bl.support.BusinessValidations;
 import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.AgenteInmobiliarioDAO;
+import com.controllocal.dao.AlertaDAO;
 import com.controllocal.dao.CaptacionDAO;
+import com.controllocal.dao.InteraccionComercialDAO;
 import com.controllocal.dao.ProspeccionDAO;
 import com.controllocal.dao.impl.AgenteInmobiliarioDAOImpl;
+import com.controllocal.dao.impl.AlertaDAOImpl;
 import com.controllocal.dao.impl.CaptacionDAOImpl;
+import com.controllocal.dao.impl.InteraccionComercialDAOImpl;
 import com.controllocal.dao.impl.ProspeccionDAOImpl;
+import com.controllocal.model.comercial.Alerta;
 import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.InteraccionComercial;
 import com.controllocal.model.comercial.Prospeccion;
+import com.controllocal.model.comercial.enums.CanalContacto;
+import com.controllocal.model.comercial.enums.ResultadoInteraccion;
+import com.controllocal.model.comercial.enums.Severidad;
+import com.controllocal.model.comercial.enums.TipoAlerta;
+import com.controllocal.model.comercial.enums.TipoEntidad;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
@@ -24,9 +35,12 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
     private final ProspeccionDAO prospeccionDAO;
     private final CaptacionDAO captacionDAO;
     private final AgenteInmobiliarioDAO agenteDAO;
+    private final AlertaDAO alertaDAO;
+    private final InteraccionComercialDAO interaccionDAO;
 
     public ProspeccionBusinessLogicImpl() {
-        this(new ProspeccionDAOImpl(), new CaptacionDAOImpl(), new AgenteInmobiliarioDAOImpl());
+        this(new ProspeccionDAOImpl(), new CaptacionDAOImpl(), new AgenteInmobiliarioDAOImpl(),
+                new AlertaDAOImpl(), new InteraccionComercialDAOImpl());
     }
 
     public ProspeccionBusinessLogicImpl(
@@ -34,9 +48,30 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
             CaptacionDAO captacionDAO,
             AgenteInmobiliarioDAO agenteDAO
     ) {
+        this(prospeccionDAO, captacionDAO, agenteDAO, new AlertaDAOImpl(), new InteraccionComercialDAOImpl());
+    }
+
+    public ProspeccionBusinessLogicImpl(
+            ProspeccionDAO prospeccionDAO,
+            CaptacionDAO captacionDAO,
+            AgenteInmobiliarioDAO agenteDAO,
+            AlertaDAO alertaDAO
+    ) {
+        this(prospeccionDAO, captacionDAO, agenteDAO, alertaDAO, new InteraccionComercialDAOImpl());
+    }
+
+    public ProspeccionBusinessLogicImpl(
+            ProspeccionDAO prospeccionDAO,
+            CaptacionDAO captacionDAO,
+            AgenteInmobiliarioDAO agenteDAO,
+            AlertaDAO alertaDAO,
+            InteraccionComercialDAO interaccionDAO
+    ) {
         this.prospeccionDAO = prospeccionDAO;
         this.captacionDAO = captacionDAO;
         this.agenteDAO = agenteDAO;
+        this.alertaDAO = alertaDAO;
+        this.interaccionDAO = interaccionDAO;
     }
 
     public Long registrar(Prospeccion prospeccion) {
@@ -61,7 +96,33 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
     }
 
     public List<Prospeccion> listarPorRecontactar(int diasAviso) {
-        return prospeccionDAO.listarPorRecontactar(LocalDate.now().plusDays(Math.max(0, diasAviso)));
+        // Vencido = la ultima accion de seguimiento (fecha_recontacto) tiene ya diasAviso dias o mas.
+        return prospeccionDAO.listarPorRecontactar(LocalDate.now().minusDays(Math.max(0, diasAviso)));
+    }
+
+    public int sincronizarRecontacto() {
+        return TransactionRunner.write(conn -> {
+            LocalDate limite = LocalDate.now().minusDays(Prospeccion.DIAS_RECONTACTO);
+            int creadas = 0;
+            for (Prospeccion p : prospeccionDAO.listarPorRecontactar(limite)) {
+                if (p.getAgenteResponsable() == null || p.getAgenteResponsable().getIdAgente() == null) {
+                    continue;
+                }
+                boolean yaActiva = alertaDAO
+                        .listarActivasPorEntidad(TipoEntidad.PROSPECCION, p.getIdProspeccion())
+                        .stream().anyMatch(a -> a.getTipo() == TipoAlerta.SIN_RESPUESTA);
+                if (!yaActiva) {
+                    String codigo = p.getCodigoProspeccion() != null
+                            ? p.getCodigoProspeccion() : ("#" + p.getIdProspeccion());
+                    alertaDAO.crear(AlertaBusinessLogicImpl.construir(
+                            TipoAlerta.SIN_RESPUESTA, Severidad.MEDIA, TipoEntidad.PROSPECCION,
+                            p.getIdProspeccion(), p.getAgenteResponsable(),
+                            "Recontacta o evalua descartar la prospeccion " + codigo + "."));
+                    creadas++;
+                }
+            }
+            return creadas;
+        });
     }
 
     public boolean actualizar(Prospeccion prospeccion) {
@@ -83,7 +144,11 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
         return TransactionRunner.write(conn -> {
             Prospeccion p = prospeccionEnProceso(idProspeccion, "contactar");
             p.contactar();
-            return prospeccionDAO.actualizar(p);
+            registrarInteraccionHito(p, CanalContacto.LLAMADA, ResultadoInteraccion.CONTACTADO,
+                    "Contacto inicial registrado desde la prospeccion.");
+            boolean ok = prospeccionDAO.actualizar(p);
+            atenderRecontacto(idProspeccion);
+            return ok;
         });
     }
 
@@ -91,7 +156,11 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
         return TransactionRunner.write(conn -> {
             Prospeccion p = prospeccionEnProceso(idProspeccion, "registrar la reunion de");
             p.registrarReunion();
-            return prospeccionDAO.actualizar(p);
+            registrarInteraccionHito(p, CanalContacto.REUNION, ResultadoInteraccion.REUNION_AGENDADA,
+                    "Reunion registrada desde la prospeccion.");
+            boolean ok = prospeccionDAO.actualizar(p);
+            atenderRecontacto(idProspeccion);
+            return ok;
         });
     }
 
@@ -99,27 +168,47 @@ public class ProspeccionBusinessLogicImpl implements ProspeccionBusinessLogic {
         return TransactionRunner.write(conn -> {
             Prospeccion p = prospeccionEnProceso(idProspeccion, "entregar la propuesta de");
             p.entregarPropuesta();
-            return prospeccionDAO.actualizar(p);
+            registrarInteraccionHito(p, CanalContacto.EMAIL, ResultadoInteraccion.PROPUESTA_ENVIADA,
+                    "Propuesta entregada al propietario desde la prospeccion.");
+            boolean ok = prospeccionDAO.actualizar(p);
+            atenderRecontacto(idProspeccion);
+            return ok;
         });
     }
 
-    public boolean posponer(Long idProspeccion, LocalDate fechaRecontacto) {
+    public boolean registrarSeguimiento(Long idProspeccion) {
         return TransactionRunner.write(conn -> {
-            if (fechaRecontacto == null) {
-                throw new BusinessException("La fecha de recontacto es obligatoria.");
-            }
-            LocalDate hoy = LocalDate.now();
-            if (fechaRecontacto.isBefore(hoy)) {
-                throw new BusinessException("La fecha de recontacto no puede estar en el pasado.");
-            }
-            if (fechaRecontacto.isAfter(hoy.plusDays(Prospeccion.DIAS_MAX_RECONTACTO))) {
-                throw new BusinessException("El recontacto no puede superar los "
-                        + Prospeccion.DIAS_MAX_RECONTACTO + " dias.");
-            }
-            Prospeccion p = prospeccionEnProceso(idProspeccion, "recontactar");
-            p.posponer(fechaRecontacto);
-            return prospeccionDAO.actualizar(p);
+            Prospeccion p = prospeccionEnProceso(idProspeccion, "registrar el seguimiento de");
+            p.registrarSeguimiento();
+            boolean ok = prospeccionDAO.actualizar(p);
+            atenderRecontacto(idProspeccion);
+            return ok;
         });
+    }
+
+    // Al registrar una nueva accion, atiende la alerta SIN_RESPUESTA activa (reinicia el conteo).
+    private void atenderRecontacto(Long idProspeccion) {
+        for (Alerta a : alertaDAO.listarActivasPorEntidad(TipoEntidad.PROSPECCION, idProspeccion)) {
+            if (a.getTipo() == TipoAlerta.SIN_RESPUESTA && a.getIdAlerta() != null) {
+                alertaDAO.marcarAtendida(a.getIdAlerta());
+            }
+        }
+    }
+
+    private void registrarInteraccionHito(
+            Prospeccion prospeccion,
+            CanalContacto canal,
+            ResultadoInteraccion resultado,
+            String observaciones) {
+        InteraccionComercial interaccion = new InteraccionComercial();
+        interaccion.setContexto("PROSPECCION");
+        interaccion.setProspeccion(prospeccion);
+        interaccion.setAgenteResponsable(prospeccion.getAgenteResponsable());
+        interaccion.setCanalContacto(canal);
+        interaccion.setResultado(resultado);
+        interaccion.setObservaciones(observaciones);
+        interaccion.registrar();
+        interaccionDAO.crear(interaccion);
     }
 
     public boolean rechazar(Long idProspeccion, String motivo) {

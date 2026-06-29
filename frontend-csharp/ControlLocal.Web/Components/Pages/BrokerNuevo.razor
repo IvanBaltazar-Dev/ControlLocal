@@ -42,8 +42,9 @@
                 <FormSection Num="2" Title="Identificación" Sub="@(_tipoPersona == "N" ? "Datos de la persona física" : "Datos de la empresa")">
                     <div class="cl-grid c2">
                         <Field Label="Número de documento" Required="true">
-                            <input placeholder="@(_tipoDoc == "R" ? "20 ___ ___ ___" : "__ ___ ___")"
-                                   value="@_numDoc" @oninput="@(e => { _numDoc = e.Value?.ToString() ?? ""; _errors.Remove("numDoc"); })" />
+                            <input placeholder="@(_tipoDoc == "R" ? "20XXXXXXXXX" : "XXXXXXXX")"
+                                   inputmode="numeric" maxlength="@DocumentoMaxLength"
+                                   value="@_numDoc" @oninput="OnDocumentoInput" />
                             @if (Err("numDoc") is { } e2)
                             {
                                 <div class="cl-help" style="color:#D64550;">@e2</div>
@@ -63,7 +64,7 @@
                 <FormSection Num="3" Title="Contacto" Sub="Medios de contacto corporativo">
                     <div class="cl-grid c2">
                         <Field Label="Teléfono" Required="true">
-                            <input placeholder="+51 ___ ___ ___" value="@_telefono" @oninput="@(e => { _telefono = e.Value?.ToString() ?? ""; _errors.Remove("telefono"); })" />
+                            <input placeholder="999999999" inputmode="numeric" maxlength="9" value="@_telefono" @oninput="OnTelefonoInput" />
                             @if (Err("telefono") is { } e4)
                             {
                                 <div class="cl-help" style="color:#D64550;">@e4</div>
@@ -176,6 +177,7 @@
     private readonly Dictionary<string, string> _errors = new();
 
     private string? Err(string key) => _errors.TryGetValue(key, out var v) ? v : null;
+    private int DocumentoMaxLength => PeruInputRules.DocumentoMaxLength(_tipoDoc);
 
     // Progreso interactivo de las secciones del formulario.
     private bool IsStep1Complete => !string.IsNullOrEmpty(_tipoPersona) && !string.IsNullOrEmpty(_tipoDoc);
@@ -201,6 +203,7 @@
     {
         _tipoPersona = e.Value?.ToString() ?? "N";
         _tipoDoc = _tipoPersona == "N" ? "D" : "R";
+        _numDoc = "";
         _errors.Clear();
     }
 
@@ -210,7 +213,20 @@
         // Silent reject of incoherent combinations.
         if ((_tipoPersona == "N" && val == "R") || (_tipoPersona == "J" && val != "R")) return;
         _tipoDoc = val;
+        _numDoc = PeruInputRules.Documento(_numDoc, _tipoDoc);
         _errors.Remove("tipoDoc");
+    }
+
+    private void OnDocumentoInput(ChangeEventArgs e)
+    {
+        _numDoc = PeruInputRules.Documento(e.Value?.ToString(), _tipoDoc);
+        _errors.Remove("numDoc");
+    }
+
+    private void OnTelefonoInput(ChangeEventArgs e)
+    {
+        _telefono = PeruInputRules.Telefono(e.Value?.ToString());
+        _errors.Remove("telefono");
     }
 
     private bool Validate()
@@ -219,8 +235,10 @@
         if (string.IsNullOrEmpty(_tipoPersona)) _errors["tipoPersona"] = "Requerido";
         if (string.IsNullOrEmpty(_tipoDoc)) _errors["tipoDoc"] = "Requerido";
         if (string.IsNullOrWhiteSpace(_numDoc)) _errors["numDoc"] = "Requerido";
+        else if (PeruInputRules.ValidarDocumento(_tipoDoc, _numDoc) is { } documentoError) _errors["numDoc"] = documentoError;
         if (string.IsNullOrWhiteSpace(_nombre)) _errors["nombre"] = _tipoPersona == "N" ? "Nombre completo requerido" : "Razón social requerida";
         if (string.IsNullOrWhiteSpace(_telefono)) _errors["telefono"] = "Requerido";
+        else if (PeruInputRules.ValidarTelefono(_telefono) is { } telefonoError) _errors["telefono"] = telefonoError;
         if (string.IsNullOrWhiteSpace(_correo)) _errors["correo"] = "Requerido";
         else if (!Regex.IsMatch(_correo, @"^[^\s@]+@[^\s@]+\.[^\s@]+$")) _errors["correo"] = "Formato de correo inválido";
         if (string.IsNullOrWhiteSpace(_usuario)) _errors["usuario"] = "Requerido";
@@ -253,8 +271,8 @@
                 Nombre = _nombre.Trim(),
                 TipoPersona = _tipoPersona == "J" ? "Persona juridica" : "Persona natural",
                 TipoDocumento = _tipoDoc,
-                NumeroDocumento = _numDoc.Trim(),
-                Telefono = _telefono.Trim(),
+                NumeroDocumento = PeruInputRules.Documento(_numDoc, _tipoDoc),
+                Telefono = PeruInputRules.Telefono(_telefono),
                 Email = _correo.Trim(),
                 Usuario = _usuario.Trim(),
                 ContrasenaTemporal = _passwd,

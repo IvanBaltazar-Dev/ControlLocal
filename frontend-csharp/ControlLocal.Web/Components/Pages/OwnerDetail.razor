@@ -1,77 +1,293 @@
 @page "/owner-detail/{IdParam?}"
+@using ControlLocal.Web.Models.Fichas
 @inject AppState App
-@inject IPropietarioService OwnerSvc
+@inject IFichaComercialService FichaSvc
 
-<PageTitle>@_o.Nombre · ControlLocal</PageTitle>
+<PageTitle>@(_notFound ? "Propietario no disponible" : Persona.Nombre) - ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Registro", "Propietarios", _o.Nombre })"
-          Title="@_o.Nombre"
-          Subtitle="@($"Propietario · {_o.TipoPersona}")">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Fichas comerciales", Persona.Nombre })"
+          Title="@(_notFound ? "Propietario no disponible" : Persona.Nombre)"
+          Subtitle="@(_notFound ? "La ficha no esta dentro del alcance de tu rol" : "Ficha comercial de propietario")">
     <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("owners"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate($"owner-form/{_o.Id}"))"><Icon Name="edit" Size="13" /> Editar propietario</button>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate(_readOnly ? "seguimiento-comercial" : "owners"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        @if (_readOnly)
+        {
+            <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
+        else if (!_notFound && Persona.Id > 0)
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate($"owner-form/{Persona.Id}"))"><Icon Name="edit" Size="13" /> Editar propietario</button>
+        }
     </Actions>
     <ChildContent>
-        <div style="max-width:880px;">
-            <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;">
-                <div class="cl-stack">
+        @if (_cargando)
+        {
+            <LoadingBlock Title="Cargando ficha comercial..." Subtitle="Preparando resumen y primera seccion." />
+        }
+        else if (_notFound)
+        {
+            <div class="cl-alert amber"><Icon Name="alert" Size="15" /><span>@(_error ?? "No se encontro una ficha de propietario vinculada a las operaciones visibles.")</span></div>
+        }
+        else
+        {
+            <div class="cl-stack">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;">
                     <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Datos del propietario</div></div>
+                        <div class="cl-card-head">
+                            <div class="cl-card-title">Resumen comercial</div>
+                            <StatusBadge Label="@Persona.Estado" />
+                        </div>
                         <div class="cl-card-body">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                                <div>
-                                    <div class="cl-def-k">Nombre o razón social</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_o.Nombre</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Tipo de persona</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_o.TipoPersona</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Número de documento</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_o.NumeroDocumento</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Teléfono</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_o.Telefono</div>
-                                </div>
-                                <div>
-                                    <div class="cl-def-k">Correo</div>
-                                    <div style="font-weight:600;margin-top:4px;">@_o.Correo</div>
-                                </div>
+                            <div class="cl-specs">
+                                <Spec Icon="user" K="Propietario" V="@Persona.Nombre" />
+                                <Spec Icon="fileText" K="@DocumentoEtiqueta" V="@Texto(Persona.NumeroDocumento)" />
+                                <Spec Icon="phone" K="Telefono" V="@Texto(Persona.Telefono)" />
+                                <Spec Icon="mail" K="Correo" V="@Texto(Persona.Correo)" />
+                                <Spec Icon="calendar" K="Registro" V="@FechaRegistro" />
+                                <Spec Icon="store" K="Locales visibles" V='@Total("locales").ToString()' />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Alcance visible</div></div>
+                        <div class="cl-card-body">
+                            <div class="cl-stack" style="gap:10px;">
+                                <MetricMini Label="Prospecciones" Value='@Total("prospecciones")' Icon="store" />
+                                <MetricMini Label="Captaciones" Value='@Total("captaciones")' Icon="pin" />
+                                <MetricMini Label="Cierres" Value='@Total("cierres")' Icon="checkCircle" />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="cl-stack">
-                    <div class="cl-card">
-                        <div class="cl-card-head"><div class="cl-card-title">Estado</div></div>
-                        <div class="cl-card-body">
-                            <div style="text-align:center;padding:6px 0;">
-                                <StatusBadge Label="@_o.Estado" />
-                                <div class="cl-muted" style="font-size:12px;margin-top:8px;">@_o.CantidadLocales local(es) registrado(s)</div>
-                            </div>
-                        </div>
+                <Tabs Items="@TabItems" Active="@ActiveLabel" OnSelect="@SeleccionarTab" />
+
+                <div class="cl-card">
+                    <div class="cl-card-head">
+                        <div class="cl-card-title">@ActiveLabel</div>
+                        <span class="cl-badge gray">@TotalEtiqueta(ActiveSection)</span>
                     </div>
-                    <div class="cl-alert blue">
-                        <Icon Name="info" Size="15" />
-                        <span>Los locales de este propietario pueden registrarse como captaciones desde el módulo de locales.</span>
+                    <div class="cl-card-body" style="padding:0;">
+                        @if (_cargandoSeccion)
+                        {
+                            <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Actualizando ficha...</div>
+                        }
+                        else if (ActiveSection.Items.Count == 0)
+                        {
+                            <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Sin registros visibles para esta seccion.</div>
+                        }
+                        else
+                        {
+                            <table class="cl-table">
+                                <thead>
+                                    <tr>
+                                        <th>Proceso</th>
+                                        <th>Codigo</th>
+                                        <th>Detalle</th>
+                                        @if (MostrarLocal) { <th>Local</th> }
+                                        @if (MostrarDistrito) { <th>Distrito</th> }
+                                        @if (MostrarCliente) { <th>Cliente</th> }
+                                        @if (MostrarAgente) { <th>Agente</th> }
+                                        <th>Estado</th>
+                                        <th>Fecha</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in ActiveSection.Items)
+                                    {
+                                        <tr>
+                                            <td><span class="cl-flex" style="gap:7px;"><Icon Name="@row.Icono" Size="14" /> @row.Proceso</span></td>
+                                            <td><span class="mono">@Texto(row.Codigo)</span></td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(row.Ruta))
+                                                {
+                                                    <a href="@Href(row.Ruta)" style="font-weight:650;">@Texto(row.Titulo)</a>
+                                                }
+                                                else
+                                                {
+                                                    <span style="font-weight:650;">@Texto(row.Titulo)</span>
+                                                }
+                                                <div class="cl-muted" style="font-size:11.5px;margin-top:2px;">@Texto(row.Subtitulo)</div>
+                                            </td>
+                                            @if (MostrarLocal) { <td>@Texto(row.Local)</td> }
+                                            @if (MostrarDistrito) { <td>@Texto(row.Distrito)</td> }
+                                            @if (MostrarCliente)
+                                            {
+                                                <td>
+                                                    <FichaLink Kind="cliente" Id="@row.ClienteId" Text="@row.Cliente" />
+                                                </td>
+                                            }
+                                            @if (MostrarAgente) { <td>@Texto(row.Agente)</td> }
+                                            <td><StatusBadge Label="@Texto(row.Estado)" /></td>
+                                            <td style="font-size:12px;color:#7E8794;">@Fecha(row.Fecha)</td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(row.Ruta))
+                                                {
+                                                    <a class="cl-btn sm" href="@Href(row.Ruta)"><Icon Name="eye" Size="12" /> Ver detalle</a>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
                     </div>
                 </div>
+
+                <Pagination Total="@TotalActual" PageSize="@ActiveSection.PageSize" Page="@ActiveSection.Page" PageChanged="@CambiarPagina" />
             </div>
-        </div>
+        }
     </ChildContent>
 </AppShell>
 
 @code {
     [Parameter] public string? IdParam { get; set; }
 
-    private PropietarioDto _o = new();
+    private const int PageSize = 8;
+    private FichaComercialDto? _ficha;
+    private bool _cargando = true;
+    private bool _cargandoSeccion;
+    private bool _notFound;
+    private string? _error;
+    private string _active = "locales";
 
-    protected override void OnParametersSet()
+    private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private FichaPersonaDto Persona => _ficha?.Persona ?? new FichaPersonaDto { Nombre = "Propietario" };
+    private FichaSectionDto ActiveSection => _ficha?.Sections.TryGetValue(_active, out var section) == true ? section : new FichaSectionDto { Section = _active };
+    private int TotalActual => (int)Math.Max(0, Math.Min(int.MaxValue, ActiveSection.TotalRecords));
+    private string ActiveLabel => TabsVisibles.FirstOrDefault(t => t.Key == _active)?.Label ?? "Ficha";
+    private Tabs.TabItem[] TabItems => TabsVisibles.Select(t => new Tabs.TabItem(t.Label, TotalTab(t.Key))).ToArray();
+    private IEnumerable<FichaTab> TabsVisibles => App.Role == Roles.Agente
+        ? _tabs.Where(t => t.Key != "agentes")
+        : _tabs;
+
+    private bool MostrarLocal => ColumnaConDatos(row => row.Local);
+    private bool MostrarDistrito => ColumnaConDatos(row => row.Distrito);
+    private bool MostrarCliente => ColumnaConDatos(row => row.Cliente);
+    private bool MostrarAgente => App.Role is Roles.Broker or Roles.Admin && ColumnaConDatos(row => row.Agente);
+
+    private readonly FichaTab[] _tabs =
+    [
+        new("locales", "Locales"),
+        new("prospecciones", "Prospecciones"),
+        new("captaciones", "Captaciones"),
+        new("oportunidades", "Oportunidades"),
+        new("solicitudes", "Solicitudes"),
+        new("cierres", "Cierres"),
+        new("agentes", "Agentes"),
+    ];
+
+    protected override async Task OnParametersSetAsync()
     {
-        _o = (long.TryParse(IdParam, out var id) ? OwnerSvc.ById(id) : null)
-             ?? OwnerSvc.All().FirstOrDefault() ?? new();
+        _cargando = true;
+        _notFound = false;
+        _error = null;
+        try
+        {
+            if (!long.TryParse(IdParam, out var id) || id <= 0)
+            {
+                _notFound = true;
+                return;
+            }
+            _ficha = await FichaSvc.PropietarioAsync(id);
+            _notFound = _ficha is null;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _notFound = true;
+        }
+        finally
+        {
+            _cargando = false;
+        }
     }
+
+    private async Task SeleccionarTab(string label)
+    {
+        var tab = TabsVisibles.FirstOrDefault(t => t.Label == label);
+        if (tab is null || tab.Key == _active)
+            return;
+        _active = tab.Key;
+        if (_ficha is not null && SeccionDebeCargar(_active))
+            await CargarSeccion(1);
+    }
+
+    private Task CambiarPagina(int page) => CargarSeccion(page);
+
+    private async Task CargarSeccion(int page)
+    {
+        if (_ficha is null || Persona.Id <= 0)
+            return;
+        _cargandoSeccion = true;
+        try
+        {
+            _ficha.Sections[_active] = await FichaSvc.PropietarioSectionAsync(Persona.Id, _active, page, PageSize);
+        }
+        finally
+        {
+            _cargandoSeccion = false;
+        }
+    }
+
+    private string Total(string section) =>
+        _ficha?.Sections.TryGetValue(section, out var value) == true
+            ? TotalEtiqueta(value)
+            : "...";
+
+    private int? TotalTab(string section) =>
+        _ficha?.Sections.TryGetValue(section, out var value) == true
+            ? value.TotalRecords < 0 || value.Page <= 0
+                ? null
+                : (int)Math.Min(int.MaxValue, value.TotalRecords)
+            : null;
+
+    private bool SeccionDebeCargar(string section)
+    {
+        var ficha = _ficha;
+        return ficha is null
+            || !ficha.Sections.TryGetValue(section, out var value)
+            || value.Page <= 0
+            || value.TotalRecords < 0
+            || (value.TotalRecords > 0 && value.Items.Count == 0);
+    }
+
+    private static string TotalEtiqueta(FichaSectionDto section) =>
+        section.TotalRecords < 0 || section.Page <= 0
+            ? "..."
+            : Math.Min(int.MaxValue, section.TotalRecords).ToString();
+
+    private string DocumentoEtiqueta => TipoDocumentoEtiqueta(Persona.TipoDocumento);
+
+    private string FechaRegistro => Persona.FechaCreacion?.ToString("dd/MM/yyyy") ?? "No registrada";
+
+    private static string Texto(string? valor) => string.IsNullOrWhiteSpace(valor) || valor == "-" ? "No registrado" : valor;
+
+    private bool ColumnaConDatos(Func<FichaRowDto, string?> selector) =>
+        ActiveSection.Items.Any(row => TieneDato(selector(row)));
+
+    private static bool TieneDato(string? valor) =>
+        !string.IsNullOrWhiteSpace(valor) && valor.Trim() != "-";
+
+    private static string Fecha(string? valor) => string.IsNullOrWhiteSpace(valor)
+        ? "-"
+        : DateTime.TryParse(valor, out var fecha) ? fecha.ToString("dd/MM/yyyy") : valor;
+
+    private static string Href(string ruta) => string.IsNullOrWhiteSpace(ruta)
+        ? "#"
+        : ruta.StartsWith('/') ? ruta : "/" + ruta;
+
+    private static string TipoDocumentoEtiqueta(string? codigo) =>
+        (codigo ?? "").Trim().ToUpperInvariant() switch
+        {
+            "R" or "RUC" => "RUC",
+            "C" or "CE" => "CE",
+            "P" or "PASAPORTE" => "Pasaporte",
+            "D" or "DNI" => "DNI",
+            _ => "Documento",
+        };
+
+    private sealed record FichaTab(string Key, string Label);
 }

@@ -3,7 +3,7 @@
        Size="@(Size ?? "")" ChildContent="ChildContent">
     <Footer>
         <button class="cl-btn" @onclick="OnClose" disabled="@Busy">@CancelLabel</button>
-        <button class="cl-btn @BtnClass" @onclick="OnConfirmClick" disabled="@Busy">
+        <button class="cl-btn @BtnClass" @onclick="OnConfirmClick" disabled="@(Busy || ConfirmDisabled)">
             @(Busy ? "Procesando..." : ConfirmLabel)
         </button>
     </Footer>
@@ -22,6 +22,8 @@
     [Parameter] public string? ConfirmClass { get; set; }
     [Parameter] public string? Size { get; set; }
     [Parameter] public bool Busy { get; set; }
+    // Deshabilita el botón de confirmar sin mostrar "Procesando..." (bloqueo de regla de negocio).
+    [Parameter] public bool ConfirmDisabled { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private static readonly Dictionary<string, string> ToneToBtn = new()

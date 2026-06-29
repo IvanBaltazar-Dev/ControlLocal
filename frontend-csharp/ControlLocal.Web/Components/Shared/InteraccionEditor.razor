@@ -1,0 +1,131 @@
+@* Cuerpo reutilizable del registro de interacción: canal, resultado y notas + validación y guardado.
+   Lo comparten la página /interaccion-form y el modal de registro rápido del expediente de prospección,
+   para que ambos usen exactamente los mismos campos, reglas y endpoint. El contexto y la entidad ya
+   vienen resueltos por el contenedor; aquí solo se captura el contacto. *@
+@inject IInteraccionService InteraccionSvc
+
+<FormSection Num="@NumContacto" Title="Contacto" Sub="Canal y resultado registrados por el agente">
+    <div class="cl-grid c2">
+        <Field Label="Canal" Required="true">
+            <select @bind="_canal" @bind:after="Notificar">
+                <option value="">-- Seleccionar --</option>
+                @foreach (var opcion in EnumCatalog.CanalesContacto)
+                {
+                    <option value="@opcion.Code">@opcion.Label</option>
+                }
+            </select>
+        </Field>
+        <Field Label="Resultado" Required="true">
+            <select @bind="_resultado" @bind:after="Notificar">
+                <option value="">-- Seleccionar --</option>
+                @foreach (var opcion in ResultadosDisponibles)
+                {
+                    <option value="@opcion.Code">@opcion.Label</option>
+                }
+            </select>
+        </Field>
+    </div>
+</FormSection>
+
+<FormSection Num="@NumDetalle" Title="Detalle" Sub="Notas del contacto que se conservaran en el historial">
+    <div class="cl-grid c1">
+        <Field Label="Observaciones">
+            <textarea rows="@(Compacto ? 3 : 4)" @bind="_observaciones" placeholder="Acuerdos, objeciones o siguiente paso..."></textarea>
+        </Field>
+        <Field Label="Resumen o transcripcion">
+            <textarea rows="@(Compacto ? 2 : 3)" @bind="_transcripcion" placeholder="Resumen de llamada, transcripcion breve o nota de consentimiento..."></textarea>
+        </Field>
+    </div>
+</FormSection>
+
+@if (Error is not null)
+{
+    <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@Error</span></div>
+}
+
+@code {
+    // Contexto (PROSPECCION/CAPTACION/CLIENTE/OPORTUNIDAD) y entidad, ya resueltos por el contenedor.
+    [Parameter] public string Contexto { get; set; } = "OPORTUNIDAD";
+    [Parameter] public long EntidadId { get; set; }
+    [Parameter] public string NumContacto { get; set; } = "1";
+    [Parameter] public string NumDetalle { get; set; } = "2";
+    [Parameter] public bool Compacto { get; set; }
+    // Notifica al contenedor cuando cambia canal/resultado (para refrescar indicadores de pasos).
+    [Parameter] public EventCallback OnCambio { get; set; }
+
+    private string _canal = "";
+    private string _resultado = "";
+    private string _observaciones = "";
+    private string _transcripcion = "";
+
+    public string? Error { get; private set; }
+    public bool ContactoCompleto => _canal.Length > 0 && _resultado.Length > 0;
+
+    private IReadOnlyList<EnumOption> ResultadosDisponibles =>
+        EnumCatalog.ResultadosInteraccionPorContexto(Contexto);
+
+    private async Task Notificar() => await OnCambio.InvokeAsync();
+
+    // Valida entidad + canal + resultado (filtrado por contexto). Deja el mensaje en Error.
+    public bool Validar()
+    {
+        if (EntidadId <= 0)
+        {
+            Error = "Debes seleccionar una entidad comercial valida.";
+            return false;
+        }
+        if (!EnumCatalog.CanalesContacto.Any(item => item.Code == _canal))
+        {
+            Error = "Debes seleccionar un canal de contacto valido.";
+            return false;
+        }
+        if (!ResultadosDisponibles.Any(item => item.Code == _resultado))
+        {
+            Error = "Debes seleccionar un resultado valido para esta etapa.";
+            return false;
+        }
+        Error = null;
+        return true;
+    }
+
+    // Valida y registra la interacción. Devuelve true si se guardó. El contenedor decide qué hacer
+    // luego (cerrar modal, navegar, refrescar historial).
+    public async Task<bool> GuardarAsync(CancellationToken ct = default)
+    {
+        if (!Validar())
+        {
+            return false;
+        }
+        try
+        {
+            await InteraccionSvc.AgregarAsync(new InteraccionFormRequest
+            {
+                Contexto = Contexto,
+                OportunidadId = Contexto == "OPORTUNIDAD" ? EntidadId : 0,
+                ProspeccionId = Contexto == "PROSPECCION" ? EntidadId : 0,
+                CaptacionId = Contexto == "CAPTACION" ? EntidadId : 0,
+                ClienteId = Contexto == "CLIENTE" ? EntidadId : 0,
+                CanalContacto = _canal,
+                Resultado = _resultado,
+                Observaciones = string.IsNullOrWhiteSpace(_observaciones) ? null : _observaciones.Trim(),
+                TranscripcionNota = string.IsNullOrWhiteSpace(_transcripcion) ? null : _transcripcion.Trim(),
+            }, ct);
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+            return false;
+        }
+    }
+
+    // Limpia el formulario (al cambiar de contexto o tras guardar en un modal reutilizable).
+    public void Reiniciar()
+    {
+        _canal = "";
+        _resultado = "";
+        _observaciones = "";
+        _transcripcion = "";
+        Error = null;
+    }
+}

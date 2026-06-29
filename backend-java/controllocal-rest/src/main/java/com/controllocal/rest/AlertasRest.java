@@ -3,7 +3,9 @@ package com.controllocal.rest;
 import java.util.List;
 
 import com.controllocal.bl.AlertaBusinessLogic;
+import com.controllocal.bl.ProspeccionBusinessLogic;
 import com.controllocal.bl.impl.AlertaBusinessLogicImpl;
+import com.controllocal.bl.impl.ProspeccionBusinessLogicImpl;
 import com.controllocal.model.comercial.Alerta;
 import com.controllocal.rest.dto.Dtos;
 import com.controllocal.rest.http.ApiException;
@@ -29,6 +31,7 @@ import jakarta.ws.rs.core.MediaType;
 public class AlertasRest {
 
     private final AlertaBusinessLogic alertas = new AlertaBusinessLogicImpl();
+    private final ProspeccionBusinessLogic prospecciones = new ProspeccionBusinessLogicImpl();
 
     @Context
     private HttpServletRequest request;
@@ -37,7 +40,15 @@ public class AlertasRest {
     public PageResponse<Dtos.AlertaResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("20") int tamano) {
-        List<Alerta> fuente = alertasDelUsuario(SeguridadRest.usuario(request));
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        // Sin planificador: al consultar la campana, materializa las alertas de recontacto
+        // vencido (dia 8 sin accion). Best-effort: si falla, la campana igual responde.
+        try {
+            prospecciones.sincronizarRecontacto();
+        } catch (RuntimeException ignored) {
+            // no bloquear la campana por el barrido de recontacto
+        }
+        List<Alerta> fuente = alertasDelUsuario(usuario);
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
         int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());

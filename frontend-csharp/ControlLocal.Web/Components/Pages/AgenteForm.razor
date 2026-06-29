@@ -36,7 +36,8 @@
                         <div class="cl-grid c2">
                             <Field Label="Razón social" Required="true"><input @bind="_razonSocial" @bind:event="oninput" placeholder="Ej. Gestión Comercial S.A.C." /></Field>
                             <Field Label="RUC" Required="true">
-                                <input @bind="_documento" @bind:event="oninput" placeholder="20 ___ ___ ___" disabled="@_isEdit" />
+                                <input value="@_documento" inputmode="numeric" maxlength="@DocumentoMaxLength"
+                                       placeholder="20XXXXXXXXX" disabled="@_isEdit" @oninput="OnDocumentoInput" />
                                 @if (_isEdit)
                                 {
                                     <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El RUC no se puede modificar.</div>
@@ -50,7 +51,8 @@
                             <Field Label="Nombre completo" Required="true"><input @bind="_nombreNatural" @bind:event="oninput" placeholder="Nombres y apellidos" /></Field>
                             <DocumentTypeSelector PersonType="natural" SelectedDocType="@_tipoDoc" OnChange="OnTipoDocChange" Disabled="@_isEdit" />
                             <Field Label="Número de documento" Required="true">
-                                <input @bind="_documento" @bind:event="oninput" placeholder="__ ___ ___" disabled="@_isEdit" />
+                                <input value="@_documento" inputmode="numeric" maxlength="@DocumentoMaxLength"
+                                       placeholder="XXXXXXXX" disabled="@_isEdit" @oninput="OnDocumentoInput" />
                                 @if (_isEdit)
                                 {
                                     <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El documento de identidad no se puede modificar.</div>
@@ -63,7 +65,7 @@
                 <FormSection Num="3" Title="Cuenta de acceso y asignación" Sub="Credenciales del sistema y zona de operación">
                     <div class="cl-grid c2">
                         <Field Label="Correo corporativo" Required="true"><input @bind="_correo" @bind:event="oninput" placeholder="agente@@controllocal.pe" /></Field>
-                        <Field Label="Teléfono" Required="true"><input @bind="_telefono" @bind:event="oninput" placeholder="+51 ___ ___ ___" /></Field>
+                        <Field Label="Teléfono" Required="true"><input value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" @oninput="OnTelefonoInput" /></Field>
                         <Field Label="Usuario" Required="true">
                             <input @bind="_usuario" @bind:event="oninput" placeholder="nombre.apellido" disabled="@_isEdit" />
                             @if (_isEdit)
@@ -179,6 +181,8 @@
                                     && !string.IsNullOrWhiteSpace(_usuario) && !string.IsNullOrWhiteSpace(_zona)
                                     && (_isEdit || _passwd.Length >= 8);
     private bool IsStep4Complete => !_isEdit || !string.IsNullOrWhiteSpace(_estadoAdministrativo);
+    private string DocumentoActualTipo => _tipo == "juridica" ? "R" : _tipoDoc;
+    private int DocumentoMaxLength => PeruInputRules.DocumentoMaxLength(DocumentoActualTipo);
 
     private IReadOnlyList<FormStepsSidebar.Step> _pasos
     {
@@ -211,6 +215,19 @@
     private void OnTipoDocChange(string val)
     {
         _tipoDoc = val;
+        _documento = PeruInputRules.Documento(_documento, DocumentoActualTipo);
+        _err = null;
+    }
+
+    private void OnDocumentoInput(ChangeEventArgs e)
+    {
+        _documento = PeruInputRules.Documento(e.Value?.ToString(), DocumentoActualTipo);
+        _err = null;
+    }
+
+    private void OnTelefonoInput(ChangeEventArgs e)
+    {
+        _telefono = PeruInputRules.Telefono(e.Value?.ToString());
         _err = null;
     }
 
@@ -227,8 +244,8 @@
 
         _tipo = agente.TipoPersona.Contains("jur", StringComparison.OrdinalIgnoreCase) ? "juridica" : "natural";
         _tipoDoc = string.IsNullOrWhiteSpace(agente.TipoDocumento) ? ResolveTipoDocumento(agente.TipoPersona) : agente.TipoDocumento;
-        _documento = agente.NumeroDocumento;
-        _telefono = agente.Telefono;
+        _documento = PeruInputRules.Documento(agente.NumeroDocumento, _tipoDoc);
+        _telefono = PeruInputRules.Telefono(agente.Telefono);
         _correo = agente.Email;
         _usuario = string.IsNullOrWhiteSpace(agente.Usuario) ? UserFromEmail(agente.Email) : agente.Usuario;
         _zona = agente.Zona;
@@ -256,7 +273,9 @@
         if (_tipo == "natural" && string.IsNullOrWhiteSpace(_nombreNatural)) { _err = "El nombre completo es obligatorio."; return; }
         if (_tipo == "natural" && string.IsNullOrWhiteSpace(_tipoDoc)) { _err = "Debes seleccionar un tipo de documento."; return; }
         if (string.IsNullOrWhiteSpace(_documento)) { _err = "El número de documento es obligatorio."; return; }
+        if (PeruInputRules.ValidarDocumento(DocumentoActualTipo, _documento) is { } documentoError) { _err = documentoError; return; }
         if (string.IsNullOrWhiteSpace(_telefono)) { _err = "El teléfono es obligatorio."; return; }
+        if (PeruInputRules.ValidarTelefono(_telefono) is { } telefonoError) { _err = telefonoError; return; }
         if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo corporativo es obligatorio."; return; }
         if (string.IsNullOrWhiteSpace(_usuario)) { _err = "El usuario es obligatorio."; return; }
         if (!_isEdit && _passwd.Length < 8) { _err = "La contraseña temporal debe tener al menos 8 caracteres."; return; }
@@ -281,8 +300,8 @@
             Nombre = _nombreMostrar.Trim(),
             TipoPersona = _tipo == "juridica" ? "Persona juridica" : "Persona natural",
             TipoDocumento = _tipo == "juridica" ? "R" : _tipoDoc,
-            NumeroDocumento = _documento.Trim(),
-            Telefono = _telefono.Trim(),
+            NumeroDocumento = PeruInputRules.Documento(_documento, _tipo == "juridica" ? "R" : _tipoDoc),
+            Telefono = PeruInputRules.Telefono(_telefono),
             Email = _correo.Trim(),
             Usuario = _usuario.Trim(),
             ContrasenaTemporal = _isEdit ? anterior?.ContrasenaTemporal ?? "" : _passwd,

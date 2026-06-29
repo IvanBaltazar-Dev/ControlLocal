@@ -9,7 +9,14 @@
           Title="Clientes interesados"
           Subtitle="Prospectos comerciales que registro para vincular a una captación">
     <Actions>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("cliente-form"))"><Icon Name="plus" Size="13" /> Registrar cliente</button>
+        @if (App.Role == Roles.Agente)
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("cliente-form"))"><Icon Name="plus" Size="13" /> Registrar cliente</button>
+        }
+        else
+        {
+            <span class="cl-badge blue"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
     </Actions>
     <ChildContent>
         @{
@@ -54,9 +61,19 @@
                                 <td><StatusBadge Label="@c.RubroInteres" ToneOverride="blue" Plain="true" /></td>
                                 <td>@(c.ConsentimientoContacto == true ? "Sí" : "No")</td>
                                 <td><StatusBadge Label="@c.Estado" /></td>
-                                <td><RowActions Items="@(new[] { "view", "edit" })"
-                                                OnView="@(() => App.Navigate($"cliente-detail/{c.Id}"))"
-                                                OnEdit="@(() => App.Navigate($"cliente-form/{c.Id}"))" /></td>
+                                <td>
+                                    @if (App.Role == Roles.Agente)
+                                    {
+                                        <RowActions Items="@(new[] { "view", "edit" })"
+                                                    OnView="@(() => App.Navigate($"cliente-detail/{c.Id}"))"
+                                                    OnEdit="@(() => App.Navigate($"cliente-form/{c.Id}"))" />
+                                    }
+                                    else
+                                    {
+                                        <RowActions Items="@(new[] { "view" })"
+                                                    OnView="@(() => App.Navigate($"cliente-detail/{c.Id}"))" />
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>

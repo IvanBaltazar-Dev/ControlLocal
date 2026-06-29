@@ -9,6 +9,10 @@ public interface InteraccionComercialDAO extends CrudDAO<InteraccionComercial> {
     Long crear(InteraccionComercial interaccion);
     Optional<InteraccionComercial> buscarPorId(Long id);
     List<InteraccionComercial> listarTodos();
+    List<InteraccionComercial> listarPorOportunidad(Long idOportunidad);
+    List<InteraccionComercial> listarPorProspeccion(Long idProspeccion);
+    List<InteraccionComercial> listarPorCaptacion(Long idCaptacion);
+    List<InteraccionComercial> listarPorCliente(Long idCliente);
     boolean actualizar(InteraccionComercial interaccion);
     boolean eliminar(Long id);
 }

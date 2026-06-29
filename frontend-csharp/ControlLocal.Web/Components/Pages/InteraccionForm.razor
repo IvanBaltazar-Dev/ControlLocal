@@ -1,80 +1,172 @@
 @page "/interaccion-form"
 @page "/interaccion-form/{OportunidadIdParam:long}"
+@page "/interaccion-form/prospeccion/{ProspeccionIdParam:long}"
+@page "/interaccion-form/captacion/{CaptacionIdParam:long}"
+@page "/interaccion-form/cliente/{ClienteIdParam:long}"
 @inherits SafeComponentBase
 @inject AppState App
 @inject IOportunidadService OportunidadSvc
-@inject IInteraccionService InteraccionSvc
+@inject IProspeccionService ProspeccionSvc
+@inject ICaptacionService CaptacionSvc
+@inject IClienteService ClienteSvc
+@using ControlLocal.Web.Models.Captaciones
+@using ControlLocal.Web.Models.Clientes
+@using ControlLocal.Web.Models.Locales
 @using ControlLocal.Web.Models.Oportunidades
 
-<PageTitle>Registrar interacción · ControlLocal</PageTitle>
+<PageTitle>@TituloPagina - ControlLocal</PageTitle>
 
-<AppShell Crumbs="@(new[] { "ControlLocal", "Operación", "Nueva interacción" })"
-          Title="Registrar interacción comercial"
-          Subtitle="Registra el contacto sobre una oportunidad comercial existente">
+<AppShell Crumbs="@(new[] { "ControlLocal", "Operacion", "Nueva interaccion" })"
+          Title="@TituloPagina"
+          Subtitle="@SubtituloPagina">
     <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("interacciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate(RutaRetorno))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
     </Actions>
     <ChildContent>
-        <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:14px;">
             <div>
-                <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad determina la captación y el cliente relacionados">
-                    <Field Label="Oportunidad" Required="true">
-                        <select @bind="_oportunidadId" disabled="@_cargando">
-                            <option value="0">@(_cargando ? "Cargando oportunidades…" : "— Seleccionar —")</option>
-                            @foreach (var oportunidad in _oportunidades)
+                @if (EsGenerica)
+                {
+                    <FormSection Num="1" Title="Tipo de interaccion" Sub="Selecciona el proceso exacto donde se guardara el historial">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+                            @foreach (var tipo in _tipos)
                             {
-                                <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
+                                <button class="cl-btn ghost"
+                                        style="@TipoStyle(tipo.Contexto)"
+                                        @onclick="@(() => CambiarContexto(tipo.Contexto))">
+                                    <Icon Name="@tipo.Icono" Size="15" />
+                                    <span style="font-weight:700;">@tipo.Titulo</span>
+                                    <span class="cl-muted" style="font-size:11.5px;">@tipo.Detalle</span>
+                                </button>
                             }
-                        </select>
-                    </Field>
-                    @if (OportunidadSeleccionada is not null)
-                    {
-                        <div class="cl-grid c2" style="margin-top:12px;">
-                            <Field Label="Local"><input value="@OportunidadSeleccionada.DireccionLocal" disabled /></Field>
-                            <Field Label="Cliente"><input value="@OportunidadSeleccionada.ClienteNombre" disabled /></Field>
                         </div>
-                    }
-                </FormSection>
+                    </FormSection>
+                }
 
-                <FormSection Num="2" Title="Contacto" Sub="Canal y resultado registrados por el agente">
-                    <div class="cl-grid c2">
-                        <Field Label="Canal" Required="true">
-                            <select @bind="_canalContacto">
-                                <option value="">— Seleccionar —</option>
-                                @foreach (var opcion in EnumCatalog.CanalesContacto)
+                @if (EsProspeccion)
+                {
+                    <FormSection Num="@NumEntidad" Title="Prospeccion de propiedad" Sub="Contacto con propietario y local antes de captar">
+                        @if (EsGenerica)
+                        {
+                            <Field Label="Prospeccion" Required="true">
+                                <select @bind="_prospeccionId" disabled="@_cargando">
+                                    <option value="0">@(_cargando ? "Cargando prospecciones..." : "-- Seleccionar prospeccion activa --")</option>
+                                    @foreach (var prospeccion in ProspeccionesDisponibles)
+                                    {
+                                        <option value="@prospeccion.Id">@prospeccion.CodigoProspeccion - @prospeccion.Direccion - @prospeccion.PropietarioNombre</option>
+                                    }
+                                </select>
+                            </Field>
+                        }
+                        @if (ProspeccionSeleccionada is not null)
+                        {
+                            <div class="cl-grid c2" style="margin-top:@(EsGenerica ? "12px" : "0");">
+                                <Field Label="Propietario"><input value="@ProspeccionSeleccionada.PropietarioNombre" disabled /></Field>
+                                <Field Label="Local"><input value="@($"{ProspeccionSeleccionada.Direccion} - {ProspeccionSeleccionada.Distrito}")" disabled /></Field>
+                                <Field Label="Prospeccion"><input value="@ProspeccionSeleccionada.CodigoProspeccion" disabled /></Field>
+                                <Field Label="Estado"><input value="@EstadoProspeccionTexto" disabled /></Field>
+                            </div>
+                        }
+                        else if (!EsGenerica)
+                        {
+                            <LoadingBlock Framed="false" Title="Cargando prospeccion..." />
+                        }
+                    </FormSection>
+                }
+                else if (EsCaptacion)
+                {
+                    <FormSection Num="@NumEntidad" Title="Captacion de propiedad" Sub="Comunicacion entre propietario y agente mientras se trabaja la propiedad">
+                        @if (EsGenerica)
+                        {
+                            <Field Label="Captacion" Required="true">
+                                <select @bind="_captacionId" disabled="@_cargando">
+                                    <option value="0">@(_cargando ? "Cargando captaciones..." : "-- Seleccionar captacion --")</option>
+                                    @foreach (var captacion in CaptacionesDisponibles)
+                                    {
+                                        <option value="@captacion.Id">@captacion.CodigoCaptacion - @captacion.DireccionLocal - @captacion.PropietarioNombre</option>
+                                    }
+                                </select>
+                            </Field>
+                        }
+                        @if (CaptacionSeleccionada is not null)
+                        {
+                            <div class="cl-grid c2" style="margin-top:@(EsGenerica ? "12px" : "0");">
+                                <Field Label="Propietario"><input value="@CaptacionSeleccionada.PropietarioNombre" disabled /></Field>
+                                <Field Label="Local"><input value="@($"{CaptacionSeleccionada.DireccionLocal} - {CaptacionSeleccionada.DistritoLocal}")" disabled /></Field>
+                                <Field Label="Captacion"><input value="@CaptacionSeleccionada.CodigoCaptacion" disabled /></Field>
+                                <Field Label="Estado"><input value="@CaptacionSeleccionada.Estado" disabled /></Field>
+                            </div>
+                        }
+                        else if (!EsGenerica)
+                        {
+                            <LoadingBlock Framed="false" Title="Cargando captacion..." />
+                        }
+                    </FormSection>
+                }
+                else if (EsCliente)
+                {
+                    <FormSection Num="@NumEntidad" Title="Cliente interesado" Sub="Contacto comercial general, sin propiedad asociada">
+                        @if (EsGenerica)
+                        {
+                            <Field Label="Cliente" Required="true">
+                                <select @bind="_clienteId" disabled="@_cargando">
+                                    <option value="0">@(_cargando ? "Cargando clientes..." : "-- Seleccionar cliente --")</option>
+                                    @foreach (var cliente in ClientesDisponibles)
+                                    {
+                                        <option value="@cliente.Id">@cliente.Nombre - @Texto(cliente.RubroInteres)</option>
+                                    }
+                                </select>
+                            </Field>
+                        }
+                        @if (ClienteSeleccionado is not null)
+                        {
+                            <div class="cl-grid c2" style="margin-top:@(EsGenerica ? "12px" : "0");">
+                                <Field Label="Cliente"><input value="@ClienteSeleccionado.Nombre" disabled /></Field>
+                                <Field Label="Telefono"><input value="@Texto(ClienteSeleccionado.Telefono)" disabled /></Field>
+                                <Field Label="Rubro de interes"><input value="@Texto(ClienteSeleccionado.RubroInteres)" disabled /></Field>
+                                <Field Label="Estado"><input value="@Texto(ClienteSeleccionado.Estado)" disabled /></Field>
+                            </div>
+                        }
+                        else if (!EsGenerica)
+                        {
+                            <LoadingBlock Framed="false" Title="Cargando cliente..." />
+                        }
+                    </FormSection>
+                }
+                else
+                {
+                    <FormSection Num="@NumEntidad" Title="Oportunidad comercial" Sub="Contacto del agente con el cliente sobre una propiedad especifica">
+                        <Field Label="Oportunidad" Required="true">
+                            <select @bind="_oportunidadId" disabled="@_cargando">
+                                <option value="0">@(_cargando ? "Cargando oportunidades..." : "-- Seleccionar oportunidad --")</option>
+                                @foreach (var oportunidad in _oportunidades)
                                 {
-                                    <option value="@opcion.Code">@opcion.Label</option>
+                                    <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad - @oportunidad.CaptacionCodigo - @oportunidad.ClienteNombre</option>
                                 }
                             </select>
                         </Field>
-                        <Field Label="Resultado" Required="true">
-                            <select @bind="_resultado">
-                                <option value="">— Seleccionar —</option>
-                                @foreach (var opcion in EnumCatalog.ResultadosInteraccion)
-                                {
-                                    <option value="@opcion.Code">@opcion.Label</option>
-                                }
-                            </select>
-                        </Field>
-                    </div>
-                </FormSection>
+                        @if (OportunidadSeleccionada is not null)
+                        {
+                            <div class="cl-grid c2" style="margin-top:12px;">
+                                <Field Label="Local"><input value="@OportunidadSeleccionada.DireccionLocal" disabled /></Field>
+                                <Field Label="Cliente"><input value="@OportunidadSeleccionada.ClienteNombre" disabled /></Field>
+                            </div>
+                        }
+                    </FormSection>
+                }
 
-                <FormSection Num="3" Title="Detalle" Sub="Notas del contacto que se conservarán en el historial">
-                    <div class="cl-grid c1">
-                        <Field Label="Observaciones">
-                            <textarea rows="4" @bind="_observaciones" placeholder="Acuerdos, objeciones o siguiente paso..."></textarea>
-                        </Field>
-                    </div>
-                </FormSection>
+                <InteraccionEditor @ref="_editor" Contexto="@Contexto" EntidadId="@EntidadActualId"
+                                   NumContacto="@NumContacto" NumDetalle="@NumDetalle"
+                                   OnCambio="StateHasChanged" />
 
                 @if (_err is not null)
                 {
                     <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
                 }
 
-                <FormFooterBar OnCancel="@(() => App.Navigate("interacciones"))"
+                <FormFooterBar OnCancel="@(() => App.Navigate(RutaRetorno))"
                                OnSave="@TryConfirm"
-                               SaveLabel="Registrar interacción"
+                               SaveLabel="Registrar interaccion"
                                Busy="@_procesando"
                                BusyLabel="Registrando..." />
             </div>
@@ -85,39 +177,165 @@
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="target"
-                       Title="¿Registrar interacción comercial?"
-                       Desc="Se guardará el contacto en el historial de la oportunidad seleccionada."
+                       Title="Registrar interaccion comercial"
+                       Desc="@ConfirmacionTexto"
                        ConfirmLabel="Confirmar" CancelLabel="Revisar datos"
                        Busy="@_procesando"
                        OnClose="@(() => _confirm = false)"
                        OnConfirm="@OnConfirm" />
-        <Toast Show="_toast">Interacción registrada correctamente</Toast>
+        <Toast Show="_toast">Interaccion registrada correctamente</Toast>
     </ChildContent>
 </AppShell>
 
 @code {
     [Parameter] public long OportunidadIdParam { get; set; }
+    [Parameter] public long ProspeccionIdParam { get; set; }
+    [Parameter] public long CaptacionIdParam { get; set; }
+    [Parameter] public long ClienteIdParam { get; set; }
 
     private long _oportunidadId;
-    private string _canalContacto = "";
-    private string _resultado = "";
-    private string _observaciones = "";
+    private long _prospeccionId;
+    private long _captacionId;
+    private long _clienteId;
+    private string _contextoManual = "OPORTUNIDAD";
+    // El cuerpo del contacto (canal, resultado, notas), validación y guardado viven en el editor compartido.
+    private InteraccionEditor? _editor;
     private bool _confirm;
     private bool _toast;
     private bool _procesando;
     private bool _cargando = true;
     private string? _err;
     private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
+    private IReadOnlyList<ProspeccionDto> _prospecciones = [];
+    private IReadOnlyList<CaptacionDto> _captaciones = [];
+    private IReadOnlyList<ClienteInteresadoDto> _clientes = [];
+    private ProspeccionDto? _prospeccion;
+    private CaptacionDto? _captacion;
+    private ClienteInteresadoDto? _cliente;
 
+    private bool EsGenerica => OportunidadIdParam <= 0 && ProspeccionIdParam <= 0 && CaptacionIdParam <= 0 && ClienteIdParam <= 0;
+    private string Contexto => ProspeccionIdParam > 0 ? "PROSPECCION"
+        : CaptacionIdParam > 0 ? "CAPTACION"
+        : ClienteIdParam > 0 ? "CLIENTE"
+        : OportunidadIdParam > 0 ? "OPORTUNIDAD"
+        : _contextoManual;
+    private bool EsProspeccion => Contexto == "PROSPECCION";
+    private bool EsCaptacion => Contexto == "CAPTACION";
+    private bool EsCliente => Contexto == "CLIENTE";
+    private string NumEntidad => EsGenerica ? "2" : "1";
+    private string NumContacto => EsGenerica ? "3" : "2";
+    private string NumDetalle => EsGenerica ? "4" : "3";
+
+    private long ProspeccionSeleccionadaId => ProspeccionIdParam > 0 ? ProspeccionIdParam : _prospeccionId;
+    private long CaptacionSeleccionadaId => CaptacionIdParam > 0 ? CaptacionIdParam : _captacionId;
+    private long ClienteSeleccionadoId => ClienteIdParam > 0 ? ClienteIdParam : _clienteId;
+    private long OportunidadSeleccionadaId => _oportunidadId;
+
+    private ProspeccionDto? ProspeccionSeleccionada =>
+        _prospeccion ?? _prospecciones.FirstOrDefault(item => item.Id == ProspeccionSeleccionadaId);
+    private CaptacionDto? CaptacionSeleccionada =>
+        _captacion ?? _captaciones.FirstOrDefault(item => item.Id == CaptacionSeleccionadaId);
+    private ClienteInteresadoDto? ClienteSeleccionado =>
+        _cliente ?? _clientes.FirstOrDefault(item => item.Id == ClienteSeleccionadoId);
     private OportunidadComercialDto? OportunidadSeleccionada =>
-        _oportunidades.FirstOrDefault(item => item.Id == _oportunidadId);
+        _oportunidades.FirstOrDefault(item => item.Id == OportunidadSeleccionadaId);
 
-    private IReadOnlyList<FormStepsSidebar.Step> _pasos => new[]
+    private IEnumerable<ProspeccionDto> ProspeccionesDisponibles =>
+        _prospecciones.Where(item => item.Estado is not "T" and not "D")
+            .OrderByDescending(item => item.FechaRecontacto ?? DateOnly.MinValue);
+    private IEnumerable<CaptacionDto> CaptacionesDisponibles =>
+        _captaciones.Where(item => item.Estado is not "Cerrada" and not "Rechazada" and not "Vencida")
+            .OrderByDescending(item => item.FechaCaptacion);
+    private IEnumerable<ClienteInteresadoDto> ClientesDisponibles =>
+        _clientes.Where(item => item.Estado is "Activo" or "A")
+            .OrderBy(item => item.Nombre);
+
+    // Id de la entidad del contexto actual: la que el editor compartido usará para registrar.
+    private long EntidadActualId => Contexto switch
     {
-        new FormStepsSidebar.Step("Oportunidad", "Cliente y captación", _oportunidadId > 0),
-        new FormStepsSidebar.Step("Contacto", "Canal y resultado", _canalContacto.Length > 0 && _resultado.Length > 0),
-        new FormStepsSidebar.Step("Detalle", "Notas opcionales", true),
+        "PROSPECCION" => ProspeccionSeleccionadaId,
+        "CAPTACION" => CaptacionSeleccionadaId,
+        "CLIENTE" => ClienteSeleccionadoId,
+        _ => OportunidadSeleccionadaId,
     };
+
+    private string EntidadTitulo => Contexto switch
+    {
+        "PROSPECCION" => "Prospeccion",
+        "CAPTACION" => "Captacion",
+        "CLIENTE" => "Cliente",
+        _ => "Oportunidad",
+    };
+    private string TituloPagina => Contexto switch
+    {
+        "PROSPECCION" => "Seguimiento del propietario",
+        "CAPTACION" => "Seguimiento del propietario",
+        "CLIENTE" => "Seguimiento de relación",
+        _ => "Interacción con cliente",
+    };
+    private string SubtituloPagina => Contexto switch
+    {
+        "PROSPECCION" => "Contacto con propietario antes de captar la propiedad",
+        "CAPTACION" => "Comunicacion con propietario durante la gestion de la captacion",
+        "CLIENTE" => "Seguimiento agente-cliente sin propiedad obligatoria",
+        _ => "Contacto con cliente interesado sobre una propiedad especifica",
+    };
+    private string ConfirmacionTexto => Contexto switch
+    {
+        "PROSPECCION" => "Se guardara el contacto en el historial previo a la captacion.",
+        "CAPTACION" => "Se guardara el contacto dentro del historial de la captacion.",
+        "CLIENTE" => "Se guardara el contacto general del cliente, sin asociarlo a una propiedad.",
+        _ => "Se guardara el contacto en el historial de la oportunidad seleccionada.",
+    };
+    private string RutaRetorno => Contexto switch
+    {
+        "PROSPECCION" => ProspeccionSeleccionadaId > 0 ? $"prospeccion-detail/{ProspeccionSeleccionadaId}" : "prospecciones",
+        "CAPTACION" => CaptacionSeleccionada is not null ? $"captacion-detail/{CaptacionSeleccionada.CodigoCaptacion}" : "captaciones",
+        "CLIENTE" => ClienteSeleccionadoId > 0 ? $"cliente-contacto-detail/{ClienteSeleccionadoId}" : "clientes",
+        _ => OportunidadSeleccionadaId > 0 ? $"oportunidad-detail/{OportunidadSeleccionadaId}" : "interacciones",
+    };
+    private string EstadoProspeccionTexto => ProspeccionSeleccionada is null
+        ? ""
+        : EnumCatalog.LabelFor(EnumCatalog.EstadosProspeccion, ProspeccionSeleccionada.Estado);
+
+    private IReadOnlyList<FormStepsSidebar.Step> _pasos => EsGenerica
+        ? new[]
+        {
+            new FormStepsSidebar.Step("Tipo", EntidadTitulo, !string.IsNullOrWhiteSpace(Contexto)),
+            new FormStepsSidebar.Step(EntidadTitulo, PasoEntidadDetalle, EntidadSeleccionada),
+            new FormStepsSidebar.Step("Contacto", "Canal y resultado", _editor?.ContactoCompleto ?? false),
+            new FormStepsSidebar.Step("Detalle", "Notas opcionales", true),
+        }
+        : new[]
+        {
+            new FormStepsSidebar.Step(EntidadTitulo, PasoEntidadDetalle, EntidadSeleccionada),
+            new FormStepsSidebar.Step("Contacto", "Canal y resultado", _editor?.ContactoCompleto ?? false),
+            new FormStepsSidebar.Step("Detalle", "Notas opcionales", true),
+        };
+
+    private string PasoEntidadDetalle => Contexto switch
+    {
+        "PROSPECCION" => "Propietario y local",
+        "CAPTACION" => "Propiedad captada",
+        "CLIENTE" => "Sin propiedad",
+        _ => "Cliente y captacion",
+    };
+
+    private bool EntidadSeleccionada => Contexto switch
+    {
+        "PROSPECCION" => ProspeccionSeleccionadaId > 0,
+        "CAPTACION" => CaptacionSeleccionadaId > 0,
+        "CLIENTE" => ClienteSeleccionadoId > 0,
+        _ => OportunidadSeleccionadaId > 0,
+    };
+
+    private readonly TipoInteraccion[] _tipos =
+    [
+        new("PROSPECCION", "Seguimiento del propietario", "Propietario · antes de captar", "activity"),
+        new("CAPTACION", "Seguimiento del propietario", "Propietario · ya captado", "pin"),
+        new("OPORTUNIDAD", "Interacción con cliente", "Cliente con propiedad", "target"),
+        new("CLIENTE", "Seguimiento de relación", "Cliente sin propiedad fija", "users"),
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -126,7 +344,28 @@
 
         try
         {
-            _oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
+            if (ProspeccionIdParam > 0)
+                _prospeccion = await ProspeccionSvc.ObtenerAsync(ProspeccionIdParam, DisposedToken);
+            else if (CaptacionIdParam > 0)
+                _captacion = await CaptacionSvc.ObtenerPorIdAsync(CaptacionIdParam, DisposedToken);
+            else if (ClienteIdParam > 0)
+                _cliente = await ClienteSvc.ObtenerAsync(ClienteIdParam, DisposedToken);
+
+            if (EsGenerica)
+            {
+                var oportunidadesTask = OportunidadSvc.RefrescarAsync(DisposedToken);
+                var prospeccionesTask = ProspeccionSvc.RefrescarAsync(DisposedToken);
+                var captacionesTask = CaptacionSvc.RefrescarAsync(DisposedToken);
+                var clientesTask = ClienteSvc.RefrescarAsync(DisposedToken);
+                _oportunidades = await oportunidadesTask;
+                _prospecciones = await prospeccionesTask;
+                _captaciones = await captacionesTask;
+                _clientes = await clientesTask;
+            }
+            else if (OportunidadIdParam > 0)
+            {
+                _oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -141,43 +380,52 @@
         }
     }
 
+    private void CambiarContexto(string contexto)
+    {
+        _contextoManual = contexto;
+        _editor?.Reiniciar();
+        _err = null;
+    }
+
+    private string TipoStyle(string contexto)
+    {
+        var activo = Contexto == contexto;
+        return "height:auto;justify-content:flex-start;align-items:flex-start;flex-direction:column;gap:5px;padding:12px;"
+            + (activo ? "border-color:#005BFF;background:#EAF1FF;color:#0A275F;" : "");
+    }
+
     private void TryConfirm()
     {
         if (_procesando) return;
-        if (OportunidadSeleccionada is null) { _err = "Debes seleccionar una oportunidad comercial válida."; return; }
-        if (!EnumCatalog.CanalesContacto.Any(item => item.Code == _canalContacto)) { _err = "Debes seleccionar un canal de contacto válido."; return; }
-        if (!EnumCatalog.ResultadosInteraccion.Any(item => item.Code == _resultado)) { _err = "Debes seleccionar un resultado válido."; return; }
+        // La validación (entidad + canal + resultado por contexto) vive en el editor compartido.
+        if (_editor is null || !_editor.Validar()) return;
         _err = null;
         _confirm = true;
     }
 
     private async Task OnConfirm()
     {
-        if (_procesando) return;
+        if (_procesando || _editor is null) return;
         _confirm = false;
+        bool ok;
         try
         {
             _procesando = true;
             await RenderIfAliveAsync();
-            await InteraccionSvc.AgregarAsync(new InteraccionFormRequest
-            {
-                OportunidadId = _oportunidadId,
-                CanalContacto = _canalContacto,
-                Resultado = _resultado,
-                Observaciones = string.IsNullOrWhiteSpace(_observaciones) ? null : _observaciones.Trim(),
-            }, DisposedToken);
-        }
-        catch (InvalidOperationException error)
-        {
-            _err = error.Message;
-            return;
+            ok = await _editor.GuardarAsync(DisposedToken);
         }
         finally
         {
             _procesando = false;
         }
 
+        if (!ok) return;
         _toast = true;
-        App.Navigate("interacciones");
+        App.Navigate(RutaRetorno);
     }
+
+    private static string Texto(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? "No registrado" : valor;
+
+    private sealed record TipoInteraccion(string Contexto, string Titulo, string Detalle, string Icono);
 }

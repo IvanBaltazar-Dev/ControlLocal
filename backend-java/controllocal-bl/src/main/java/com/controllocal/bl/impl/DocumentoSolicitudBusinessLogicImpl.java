@@ -136,6 +136,29 @@ public class DocumentoSolicitudBusinessLogicImpl implements DocumentoSolicitudBu
         });
     }
 
+    // Deja conformes en bloque SOLO los documentos aun sin revisar (resultado Pendiente) de la
+    // solicitud, en una sola transaccion. Lo usa el broker en la evaluacion ("Validar todos los
+    // documentos") como atajo masivo de revisar(). RESPETA los OBSERVADOS: un documento observado
+    // es un hallazgo deliberado del broker y no se pisa; debe resolverse a mano (validarlo u
+    // observar la solicitud). Idempotente: los ya conformes tampoco se tocan.
+    @Override
+    public List<DocumentoSolicitud> conformarPendientes(Long idSolicitud) {
+        return TransactionRunner.write((TransactionRunner.TransactionalConnectionSupplier<List<DocumentoSolicitud>>) conn -> {
+            BusinessValidations.id(idSolicitud, "El id de solicitud");
+            List<DocumentoSolicitud> documentosSolicitud = documentoDAO.listarTodos().stream()
+                    .filter(doc -> doc.getSolicitudAlquiler() != null
+                            && idSolicitud.equals(doc.getSolicitudAlquiler().getIdSolicitud()))
+                    .toList();
+            for (DocumentoSolicitud documento : documentosSolicitud) {
+                if (documento.getResultadoRevision() == ResultadoRevisionDocumento.PENDIENTE) {
+                    documento.actualizarRevision(ResultadoRevisionDocumento.CONFORME, null);
+                    documentoDAO.actualizar(documento);
+                }
+            }
+            return documentosSolicitud;
+        });
+    }
+
     // SOLICITUD_DOCUMENTO_REVISADO: el broker observo un documento puntual -> aviso real al
     // agente. Se ata al agente (que la ve como propia) y a la solicitud (id de entidad) para
     // que la campana lo lleve al expediente de documentos a subsanar.

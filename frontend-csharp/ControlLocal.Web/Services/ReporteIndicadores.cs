@@ -30,7 +30,7 @@ public static class ReporteIndicadores
 
     // Construye los datos del reporte (pantalla + PDF) a partir del resumen REAL del
     // backend (GET /indicadores/resumen). Reemplaza a los antiguos datos de ejemplo.
-    public static DatosReporte Desde(IndicadoresDto ind, bool esAdmin)
+    public static DatosReporte Desde(IndicadoresDto ind, bool esAdmin, bool esAgente = false)
     {
         var indicadores = esAdmin
             ? new[]
@@ -40,6 +40,14 @@ public static class ReporteIndicadores
                 new IndicadorReporte("target", "Tasa de conversión", $"{Conversion(ind.Cierres, ind.CaptacionesTotales)}%", "cierres / captaciones", "blue"),
                 new IndicadorReporte("users", "Agentes activos", ind.AgentesActivos.ToString(), $"{ind.BrokersActivos} brokers", "blue"),
             }
+            : esAgente
+                ? new[]
+                {
+                    new IndicadorReporte("pin", "Mis captaciones", ind.CaptacionesTotales.ToString(), $"{ind.CaptacionesActivas} activas", "navy"),
+                    new IndicadorReporte("check", "Mis cierres", ind.Cierres.ToString(), "en el periodo", "green"),
+                    new IndicadorReporte("target", "Conversión propia", $"{Conversion(ind.Cierres, ind.CaptacionesTotales)}%", "cierres / captaciones", "blue"),
+                    new IndicadorReporte("calendar", "Mis visitas", ind.Visitas.ToString(), "en el periodo", "blue"),
+                }
             : new[]
             {
                 new IndicadorReporte("pin", "Captaciones del equipo", ind.CaptacionesTotales.ToString(), $"{ind.CaptacionesActivas} activas", "navy"),
@@ -121,7 +129,7 @@ public class ReporteIndicadoresDocument : IDocument
                 col.Item().Element(c => Bloque(c, "Cierres por mes", Barras));
                 col.Item().Row(row =>
                 {
-                    row.RelativeItem().Element(c => Bloque(c, "Pipeline por etapa", Dona));
+                    row.RelativeItem().Element(c => Bloque(c, "Cierres por etapa", Dona));
                     row.ConstantItem(16);
                     row.RelativeItem().Element(c => Bloque(c, "Embudo de conversión", Embudo));
                 });
@@ -227,6 +235,15 @@ public class ReporteIndicadoresDocument : IDocument
             col.Item().Text("Sin etapas registradas.").FontSize(9).FontColor(Muted);
             return;
         }
+        // Encabezado: % de captaciones que terminaron en cierre (estado Cerrada).
+        var cerrada = _d.Etapas.FirstOrDefault(e => e.Nombre.Contains("Cerrada", StringComparison.OrdinalIgnoreCase));
+        var pctCierre = (int)Math.Round(100.0 * (cerrada != null ? ParseInt(cerrada.Valor) : 0) / total);
+        col.Item().PaddingBottom(10).Row(r =>
+        {
+            r.ConstantItem(60).AlignMiddle().Text($"{pctCierre}%").FontSize(26).Bold().FontColor(Verde);
+            r.ConstantItem(8);
+            r.RelativeItem().AlignMiddle().Text("de las captaciones llegó al cierre").FontSize(9.5f).FontColor(Muted);
+        });
         col.Item().Height(20).Background(Soft).Row(row =>
         {
             foreach (var e in _d.Etapas)

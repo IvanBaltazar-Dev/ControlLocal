@@ -1,6 +1,8 @@
 package com.controllocal.rest;
 
+import java.text.Normalizer;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -41,6 +43,7 @@ public class ProspeccionesRest {
     private final ProspeccionBusinessLogic prospecciones = new ProspeccionBusinessLogicImpl();
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
+    private final CoincidenciaCarteraSupport coincidencias = new CoincidenciaCarteraSupport();
 
     @Context
     private HttpServletRequest request;
@@ -48,14 +51,58 @@ public class ProspeccionesRest {
     @GET
     public PageResponse<Dtos.ProspeccionResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
-            @QueryParam("tamano") @DefaultValue("10") int tamano) {
-        return pagina(prospeccionesDelUsuario(SeguridadRest.usuario(request)), pagina, tamano);
+            @QueryParam("tamano") @DefaultValue("10") int tamano,
+            @QueryParam("estado") String estado,
+            @QueryParam("distrito") String distrito,
+            @QueryParam("idCaptacion") Long idCaptacion,
+            @QueryParam("idLocal") Long idLocal,
+            @QueryParam("idAgente") Long idAgente,
+            @QueryParam("idBrokerSupervisor") Long idBrokerSupervisor,
+            @QueryParam("q") String query) {
+        // null = sin filtro de broker; en otro caso, los agentes que supervisa ese broker.
+        Set<Long> agentesDelBroker = agentesDeBroker(idBrokerSupervisor);
+        List<Prospeccion> fuente = prospeccionesDelUsuario(SeguridadRest.usuario(request)).stream()
+                .filter(item -> coincideEstado(item, estado))
+                .filter(item -> coincideDistrito(item, distrito))
+                .filter(item -> coincideCaptacion(item, idCaptacion))
+                .filter(item -> coincideLocal(item, idLocal))
+                .filter(item -> coincideAgente(item, idAgente))
+                .filter(item -> coincideBrokerSupervisor(item, agentesDelBroker))
+                .filter(item -> coincideBusqueda(item, query))
+                .toList();
+        return pagina(fuente, pagina, tamano);
+    }
+
+    // Agentes supervisados por el broker indicado; null cuando no se filtra por broker.
+    private Set<Long> agentesDeBroker(Long idBrokerSupervisor) {
+        if (idBrokerSupervisor == null || idBrokerSupervisor <= 0) {
+            return null;
+        }
+        return brokers.listarAgentesSupervisados(idBrokerSupervisor).stream()
+                .map(BrokerAgente::getIdAgente)
+                .collect(Collectors.toSet());
+    }
+
+    private static boolean coincideAgente(Prospeccion p, Long idAgente) {
+        if (idAgente == null || idAgente <= 0) {
+            return true;
+        }
+        return p.getAgenteResponsable() != null
+                && idAgente.equals(p.getAgenteResponsable().getIdAgente());
+    }
+
+    private static boolean coincideBrokerSupervisor(Prospeccion p, Set<Long> agentesDelBroker) {
+        if (agentesDelBroker == null) {
+            return true;
+        }
+        return p.getAgenteResponsable() != null
+                && agentesDelBroker.contains(p.getAgenteResponsable().getIdAgente());
     }
 
     @GET
     @Path("recontactar")
     public PageResponse<Dtos.ProspeccionResponse> recontactar(
-            @QueryParam("dias") @DefaultValue("15") int dias,
+            @QueryParam("dias") @DefaultValue("7") int dias,
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("10") int tamano) {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
@@ -72,6 +119,12 @@ public class ProspeccionesRest {
     @Path("{id}")
     public Dtos.ProspeccionResponse obtener(@PathParam("id") long id) {
         return Dtos.ProspeccionResponse.desde(obtenerConAcceso(id, SeguridadRest.usuario(request)));
+    }
+
+    @GET
+    @Path("{id}/coincidencias")
+    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(@PathParam("id") long id) {
+        return coincidencias.clientesParaProspeccion(id, SeguridadRest.usuario(request));
     }
 
     @POST
@@ -123,15 +176,14 @@ public class ProspeccionesRest {
         return Dtos.ProspeccionResponse.desde(obtenerConAcceso(id, usuario));
     }
 
+    // Etapa 4: una accion de seguimiento (un clic) reinicia el reloj de recontacto a 7 dias
+    // y atiende la alerta SIN_RESPUESTA activa. Reemplaza el agendar manual de fecha.
     @POST
-    @Path("{id}/recontactar")
-    public Dtos.ProspeccionResponse recontactar(@PathParam("id") long id, Dtos.RecontactoRequest dto) {
+    @Path("{id}/seguimiento")
+    public Dtos.ProspeccionResponse registrarSeguimiento(@PathParam("id") long id) {
         UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "AGENTE");
         obtenerConAcceso(id, usuario);
-        if (dto == null) {
-            throw ApiException.badRequest("La fecha de recontacto es obligatoria.");
-        }
-        prospecciones.posponer(id, dto.fechaRecontacto());
+        prospecciones.registrarSeguimiento(id);
         return Dtos.ProspeccionResponse.desde(obtenerConAcceso(id, usuario));
     }
 
@@ -246,5 +298,55 @@ public class ProspeccionesRest {
                 .map(Dtos.ProspeccionResponse::desde)
                 .toList();
         return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+    }
+
+    private static boolean coincideEstado(Prospeccion p, String estado) {
+        if (estado != null && "GESTION".equalsIgnoreCase(estado)) {
+            return p.getEstado() != null && Set.of("P", "C", "R", "E", "S").contains(p.getEstado().getCodigo());
+        }
+        return estado == null || estado.isBlank()
+                || (p.getEstado() != null && estado.equalsIgnoreCase(p.getEstado().getCodigo()));
+    }
+
+    private static boolean coincideDistrito(Prospeccion p, String distrito) {
+        if (distrito == null || distrito.isBlank()) {
+            return true;
+        }
+        LocalComercial local = p.getLocalComercial();
+        return local != null && normalizar(local.getDistrito()).equals(normalizar(distrito));
+    }
+
+    private static boolean coincideCaptacion(Prospeccion p, Long idCaptacion) {
+        return idCaptacion == null
+                || (p.getCaptacion() != null && idCaptacion.equals(p.getCaptacion().getIdCaptacion()));
+    }
+
+    private static boolean coincideLocal(Prospeccion p, Long idLocal) {
+        return idLocal == null
+                || (p.getLocalComercial() != null && idLocal.equals(p.getLocalComercial().getIdLocal()));
+    }
+
+    private static boolean coincideBusqueda(Prospeccion p, String query) {
+        if (query == null || query.isBlank()) {
+            return true;
+        }
+        String q = normalizar(query);
+        LocalComercial local = p.getLocalComercial();
+        String propietario = local != null && local.getPropietario() != null
+                ? local.getPropietario().getNombresORazonSocial()
+                : "";
+        return normalizar(p.getCodigoProspeccion()).contains(q)
+                || (local != null && normalizar(local.getCodigoLocal()).contains(q))
+                || (local != null && normalizar(local.getDireccion()).contains(q))
+                || normalizar(propietario).contains(q);
+    }
+
+    private static String normalizar(String texto) {
+        if (texto == null) {
+            return "";
+        }
+        String sinAcentos = Normalizer.normalize(texto, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        return sinAcentos.toLowerCase(Locale.ROOT).trim();
     }
 }

@@ -15,24 +15,85 @@
     <div class="cl-login__sheen"></div>
 
     <div class="cl-login__stage">
+        @* ===== Columna de marca (izquierda) sobre la imagen ===== *@
+        <aside class="cl-login__brand">
+            <div class="cl-brand__logo">
+                <img src="img/logo.webp?v=2" alt="ControlLocal" />
+            </div>
+
+            <h2 class="cl-brand__tagline">
+                <span>Gestión y trazabilidad</span>
+                <span class="cl-brand__tagline-2">del alquiler de locales comerciales.</span>
+            </h2>
+
+            <div class="cl-brand__demos">
+                <div class="cl-brand__demos-head">
+                    <Icon Name="user" Size="13" />
+                    <span>Cuentas de demostración</span>
+                    <span class="cl-brand__demos-hint">clic para autocompletar</span>
+                </div>
+
+                <button type="button" class="cl-democard@(_cuentaSel == "admin" ? " is-active" : "")"
+                        style="animation-delay:.50s" @onclick='() => UsarCuenta("admin", "admin@controllocal.test", "Admin2026")'>
+                    <span class="cl-democard__ic"><Icon Name="settings" Size="18" /></span>
+                    <span class="cl-democard__body">
+                        <span class="cl-democard__role">Broker Administrador</span>
+                        <span class="cl-democard__user">admin@controllocal.test</span>
+                        <span class="cl-democard__pass"><Icon Name="unlock" Size="11" Color="#ff5d5d" /> Admin2026</span>
+                    </span>
+                    <span class="cl-democard__go"><Icon Name="arrowRight" Size="15" /></span>
+                </button>
+
+                <button type="button" class="cl-democard@(_cuentaSel == "super" ? " is-active" : "")"
+                        style="animation-delay:.58s" @onclick='() => UsarCuenta("super", "rsalas", "Broker2026")'>
+                    <span class="cl-democard__ic"><Icon Name="users" Size="18" /></span>
+                    <span class="cl-democard__body">
+                        <span class="cl-democard__role">Broker supervisor</span>
+                        <span class="cl-democard__user">rsalas</span>
+                        <span class="cl-democard__pass"><Icon Name="unlock" Size="11" Color="#ff5d5d" /> Broker2026</span>
+                    </span>
+                    <span class="cl-democard__go"><Icon Name="arrowRight" Size="15" /></span>
+                </button>
+
+                <button type="button" class="cl-democard@(_cuentaSel == "agente" ? " is-active" : "")"
+                        style="animation-delay:.66s" @onclick='() => UsarCuenta("agente", "vmora", "Agente2026")'>
+                    <span class="cl-democard__ic"><Icon Name="user" Size="18" /></span>
+                    <span class="cl-democard__body">
+                        <span class="cl-democard__role">Agente Inmobiliario</span>
+                        <span class="cl-democard__user">vmora</span>
+                        <span class="cl-democard__pass"><Icon Name="unlock" Size="11" Color="#ff5d5d" /> Agente2026</span>
+                    </span>
+                    <span class="cl-democard__go"><Icon Name="arrowRight" Size="15" /></span>
+                </button>
+            </div>
+
+            <ul class="cl-brand__benefits" aria-label="Beneficios principales">
+                <li style="--d:.92s">
+                    <span class="cl-benefit__ic cl-benefit__ic--ops"><Icon Name="component" Size="18" /></span>
+                    <span class="cl-benefit__text">Organización eficiente</span>
+                </li>
+                <li style="--d:1.00s">
+                    <span class="cl-benefit__ic cl-benefit__ic--track"><Icon Name="chartBar" Size="18" /></span>
+                    <span class="cl-benefit__text">Seguimiento centralizado</span>
+                </li>
+                <li style="--d:1.08s">
+                    <span class="cl-benefit__ic cl-benefit__ic--control"><Icon Name="history" Size="18" /></span>
+                    <span class="cl-benefit__text">Trazabilidad y control</span>
+                </li>
+            </ul>
+
+            @* Línea con destello de luz que la recorre (ultra premium). *@
+            <div class="cl-brand__beam" aria-hidden="true"></div>
+        </aside>
+
         <div class="cl-loginbox">
             <span class="cl-loginbox__shield" title="Conexión protegida">
                 <Icon Name="lock" Size="15" Color="#5b6b86" />
             </span>
 
-            @* Marca tipo "app icon" (glifo de circuito ControlLocal) *@
+            @* Marca corporativa. *@
             <div class="cl-loginbox__logo">
-                <svg width="34" height="34" viewBox="0 0 40 40" fill="none"
-                     stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M27 9.5a13 13 0 1 0 0 21" />
-                    <path d="M23.2 15a7 7 0 1 0 0 10" />
-                    <path d="M20 5.5V18" />
-                    <circle cx="20" cy="20" r="2.5" fill="#fff" stroke="none" />
-                    <circle cx="20" cy="5.5" r="2.4" fill="#fff" stroke="none" />
-                    <circle cx="27" cy="9.5" r="2.1" fill="#fff" stroke="none" />
-                    <circle cx="27" cy="30.5" r="2.1" fill="#fff" stroke="none" />
-                    <circle cx="10.5" cy="27" r="2.1" fill="#fff" stroke="none" />
-                </svg>
+                <ControlLocalLogo Class="cl-loginbox__logo-mark" Size="48" />
             </div>
 
             <div class="cl-loginbox__hello">Bienvenido</div>
@@ -50,9 +111,9 @@
 
             <div class="cl-loginfield" style="animation-delay:.52s">
                 <span class="cl-loginfield__ic"><Icon Name="user" Size="17" /></span>
-                <input class="cl-loginfield__in" placeholder="Usuario o correo corporativo"
+                <input class="cl-loginfield__in" placeholder="Usuario"
                        value="@_usuario" @oninput="OnUser" @onkeydown="OnKey"
-                       autocomplete="username" aria-label="Usuario o correo corporativo" />
+                       autocomplete="username" aria-label="Ingresa tu Usuario" />
                 <span class="cl-loginfield__ok@(_userOk ? " is-on" : "")"><Icon Name="checkCircle" Size="16" /></span>
             </div>
 
@@ -105,12 +166,24 @@
     private bool _loading;
     private bool _shake;
     private string? _error;
+    private string? _cuentaSel;
+
+    // Autocompleta el formulario al hacer clic en una tarjeta de cuenta demo.
+    private void UsarCuenta(string key, string usuario, string password)
+    {
+        _cuentaSel = key;
+        _usuario = usuario;
+        _password = password;
+        _userOk = _usuario.Trim().Length >= 3;
+        _error = null;
+    }
 
     private void OnUser(ChangeEventArgs e)
     {
         _usuario = e.Value?.ToString() ?? "";
         _userOk = _usuario.Trim().Length >= 3;
         _error = null;
+        _cuentaSel = null;
     }
 
     private void OnPass(ChangeEventArgs e)

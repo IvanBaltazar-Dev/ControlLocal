@@ -36,7 +36,8 @@
                         <div class="cl-grid c2">
                             <Field Label="Razón social" Required="true"><input @bind="_razonSocial" @bind:event="oninput" placeholder="Ej. Inversiones Trébol S.A.C." /></Field>
                             <Field Label="RUC" Required="true">
-                                <input @bind="_documento" @bind:event="oninput" placeholder="20XXXXXXXX" disabled="@_isEdit" />
+                                <input value="@_documento" inputmode="numeric" maxlength="@DocumentoMaxLength"
+                                       placeholder="20XXXXXXXX" disabled="@_isEdit" @oninput="OnDocumentoInput" />
                                 @if (_isEdit)
                                 {
                                     <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El RUC no se puede modificar.</div>
@@ -50,7 +51,8 @@
                             <Field Label="Nombre completo" Required="true"><input @bind="_nombreNatural" @bind:event="oninput" placeholder="Nombres y apellidos" /></Field>
                             <DocumentTypeSelector PersonType="natural" SelectedDocType="@_tipoDoc" OnChange="OnTipoDocChange" Disabled="@_isEdit" />
                             <Field Label="Número de documento" Required="true">
-                                <input @bind="_documento" @bind:event="oninput" placeholder="XXXXXXXX" disabled="@_isEdit" />
+                                <input value="@_documento" inputmode="numeric" maxlength="@DocumentoMaxLength"
+                                       placeholder="XXXXXXXX" disabled="@_isEdit" @oninput="OnDocumentoInput" />
                                 @if (_isEdit)
                                 {
                                     <div class="cl-muted" style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:6px;"><Icon Name="lock" Size="11" /> El documento de identidad no se puede modificar.</div>
@@ -65,7 +67,7 @@
                         <Field Label="Teléfono principal" Required="true">
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <span style="color:var(--cl-text-muted); font-weight:500;">+51</span>
-                                <input type="tel" @bind="_telefono" @bind:event="oninput" maxlength="9" placeholder="999 999 999" style="width: 100%;" />
+                                <input type="tel" value="@_telefono" inputmode="numeric" maxlength="9" placeholder="999999999" style="width: 100%;" @oninput="OnTelefonoInput" />
                             </div>
                         </Field>
                         <Field Label="Correo electrónico" Required="true"><input @bind="_correo" @bind:event="oninput" placeholder="cliente@correo.com" /></Field>
@@ -116,14 +118,6 @@
                                SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar cliente")"
                                Busy="@_procesando" BusyLabel="Guardando..." />
             </div>
-
-            <div class="cl-stack">
-                <FormStepsSidebar Steps="_pasos" />
-                <div class="cl-alert blue">
-                    <Icon Name="info" Size="15" />
-                    <span>Solo el <b>agente</b> registra clientes. Al vincular el cliente a una captación activa, esa captación inicia su etapa comercial.</span>
-                </div>
-            </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"
@@ -157,6 +151,7 @@
     private bool _consentimientoUsoDato = true;
     private string _estado = "Activo";
     private string? _err;
+    private bool _documentoEntradaNoNumerica;
 
     private string _nombreMostrar => _tipo == "juridica" ? _razonSocial : _nombreNatural;
     private IReadOnlyList<string> Rubros => OpcionConValorActual(EnumCatalog.RubrosComerciales, _rubro);
@@ -168,6 +163,8 @@
     private bool IsStep3Complete => !string.IsNullOrWhiteSpace(_telefono) && _telefono.Length == 9 && !string.IsNullOrWhiteSpace(_correo);
     private bool IsStep4Complete => !string.IsNullOrWhiteSpace(_rubro);
     private bool IsStep5Complete => !_isEdit || !string.IsNullOrEmpty(_estado);
+    private string DocumentoActualTipo => _tipo == "juridica" ? "R" : _tipoDoc;
+    private int DocumentoMaxLength => PeruInputRules.DocumentoMaxLength(DocumentoActualTipo);
 
     private IReadOnlyList<FormStepsSidebar.Step> _pasos
     {
@@ -195,12 +192,34 @@
         _tipo = tipo;
         _tipoDoc = tipo == "juridica" ? "R" : "";
         _documento = "";
+        _documentoEntradaNoNumerica = false;
         _err = null;
     }
 
     private void OnTipoDocChange(string val)
     {
         _tipoDoc = val;
+        _documento = PeruInputRules.Documento(_documento, DocumentoActualTipo);
+        _documentoEntradaNoNumerica = false;
+        _err = null;
+    }
+
+    private void OnDocumentoInput(ChangeEventArgs e)
+    {
+        var entrada = e.Value?.ToString();
+        _documento = PeruInputRules.Documento(entrada, DocumentoActualTipo);
+        _documentoEntradaNoNumerica =
+            !string.IsNullOrWhiteSpace(entrada)
+            && string.IsNullOrWhiteSpace(_documento)
+            && PeruInputRules.ContieneCaracteresNoNumericos(entrada);
+        _err = _documentoEntradaNoNumerica
+            ? PeruInputRules.DocumentoSoloNumerosMensaje(DocumentoActualTipo)
+            : null;
+    }
+
+    private void OnTelefonoInput(ChangeEventArgs e)
+    {
+        _telefono = PeruInputRules.Telefono(e.Value?.ToString());
         _err = null;
     }
 
@@ -219,10 +238,10 @@
         _tipoDoc = string.IsNullOrWhiteSpace(c.TipoDocumento)
             ? ResolveTipoDocumento(c.TipoPersona)
             : c.TipoDocumento;
-        _documento = c.NumeroDocumento;
+        _documento = PeruInputRules.Documento(c.NumeroDocumento, _tipoDoc);
         
         // Limpiamos el "+51" al editar para que solo se muestren los 9 dígitos en el input
-        _telefono = string.IsNullOrWhiteSpace(c.Telefono) ? "" : c.Telefono.Replace("+51 ", "").Trim();
+        _telefono = PeruInputRules.Telefono(c.Telefono);
         
         _correo = c.Correo;
         _rubro = string.IsNullOrWhiteSpace(c.RubroInteres) ? _rubro : c.RubroInteres;
@@ -247,15 +266,10 @@
         if (_tipo == "juridica" && string.IsNullOrWhiteSpace(_razonSocial)) { _err = "La razón social es obligatoria."; return; }
         if (_tipo == "natural" && string.IsNullOrWhiteSpace(_nombreNatural)) { _err = "El nombre completo es obligatorio."; return; }
         if (_tipo == "natural" && string.IsNullOrWhiteSpace(_tipoDoc)) { _err = "Debes seleccionar un tipo de documento."; return; }
+        if (_documentoEntradaNoNumerica) { _err = PeruInputRules.DocumentoSoloNumerosMensaje(DocumentoActualTipo); return; }
         if (string.IsNullOrWhiteSpace(_documento)) { _err = "El número de documento es obligatorio."; return; }
-        
-        // Nueva validación estricta de 9 dígitos para el teléfono
-        if (string.IsNullOrWhiteSpace(_telefono) || _telefono.Trim().Length != 9 || !_telefono.All(char.IsDigit))
-        {
-            _err = "El teléfono debe contener exactamente 9 números.";
-            return;
-        }
-
+        if (PeruInputRules.ValidarDocumento(DocumentoActualTipo, _documento) is { } documentoError) { _err = documentoError; return; }
+        if (PeruInputRules.ValidarTelefono(_telefono) is { } telefonoError) { _err = telefonoError; return; }
         if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo es obligatorio."; return; }
 
         _err = null;
@@ -277,9 +291,9 @@
                 Nombre = _nombreMostrar.Trim(),
                 TipoPersona = _tipo == "juridica" ? "Persona juridica" : "Persona natural",
                 TipoDocumento = _tipo == "juridica" ? "R" : _tipoDoc,
-                NumeroDocumento = _documento.Trim(),
+                NumeroDocumento = PeruInputRules.Documento(_documento, _tipo == "juridica" ? "R" : _tipoDoc),
                 // Se guarda en la BD con el código +51 incluido
-                Telefono = $"+51 {_telefono.Trim()}",
+                Telefono = $"+51 {PeruInputRules.Telefono(_telefono)}",
                 Correo = _correo.Trim(),
                 RubroInteres = _rubro,
                 Estado = _estado,

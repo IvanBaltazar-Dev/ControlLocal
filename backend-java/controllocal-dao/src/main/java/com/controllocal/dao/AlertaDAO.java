@@ -3,9 +3,13 @@ package com.controllocal.dao;
 import java.util.List;
 
 import com.controllocal.model.comercial.Alerta;
+import com.controllocal.model.comercial.enums.TipoEntidad;
 
 public interface AlertaDAO extends CrudDAO<Alerta> {
     List<Alerta> listarActivasPorAgente(Long idAgente);
+
+    // Alertas activas ligadas a una entidad concreta (para evitar duplicados y atenderlas).
+    List<Alerta> listarActivasPorEntidad(TipoEntidad entidadTipo, Long entidadId);
 
     // Alertas activas de todos los agentes que supervisa el broker (via broker_agente).
     List<Alerta> listarActivasPorBroker(Long idBroker);

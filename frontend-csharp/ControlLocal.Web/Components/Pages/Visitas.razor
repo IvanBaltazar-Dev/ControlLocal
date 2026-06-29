@@ -11,7 +11,14 @@
           Subtitle="Visitas a locales coordinadas con tus clientes interesados">
     <Actions>
         <button class="cl-btn" @onclick="ExportarAgenda"><Icon Name="download" Size="13" /> Exportar agenda</button>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("visita-form"))"><Icon Name="plus" Size="13" /> Programar visita</button>
+        @if (App.Role == Roles.Agente)
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("visita-form"))"><Icon Name="plus" Size="13" /> Programar visita</button>
+        }
+        else
+        {
+            <span class="cl-badge blue"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">
@@ -75,7 +82,9 @@
                 <div class="cl-card-body">
                     @if (_proximas.Length > 0)
                     {
-                        <Timeline Items="_proximas" />
+                        var proxVisibles = Paginador.Pagina(_proximas, ref _pagProximas).ToArray();
+                        <Timeline Items="proxVisibles" />
+                        <Pagination Total="_proximas.Length" @bind-Page="_pagProximas" />
                     }
                     else
                     {
@@ -103,7 +112,7 @@
                     <tbody>
                         @foreach (var v in VisitasFiltradas())
                         {
-                            <tr>
+                            <tr style="@FilaStyle(v)">
                                 <td><span style="font-size:12px;">@v.FechaTexto</span></td>
                                 <td><span class="mono">@v.HoraTexto</span></td>
                                 <td><span class="mono">@v.CodigoCaptacion</span></td>
@@ -254,7 +263,7 @@
                 <Field Label="Resultado" Required="true">
                     <select @bind="_resultadoTmp">
                         <option value="">— Seleccionar resultado —</option>
-                        @foreach (var opcion in EnumCatalog.ResultadosInteraccion)
+                        @foreach (var opcion in EnumCatalog.ResultadosVisita)
                         {
                             <option value="@opcion.Code">@opcion.Label</option>
                         }
@@ -350,11 +359,15 @@
 </AppShell>
 
 @code {
+    [SupplyParameterFromQuery(Name = "focus")]
+    public long? Focus { get; set; }
+
     private readonly string[] _dow = { "L", "M", "M", "J", "V", "S", "D" };
     private DateOnly _mes = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     // Visitas del mes visible agrupadas por día (para listarlas dentro del calendario).
     private Dictionary<int, List<VisitaDto>> _visitasPorDia = new();
     private Timeline.TimelineItem[] _proximas = Array.Empty<Timeline.TimelineItem>();
+    private int _pagProximas = 1;
 
     private List<VisitaDto> VisitasDelDia(int dia) =>
         _visitasPorDia.TryGetValue(dia, out var lista) ? lista : new();
@@ -399,6 +412,8 @@
     private string _motivoNoRealizadaTmp = "";
     private string _nivelInteresTmp = "", _objecionTmp = "", _opinionPrecioTmp = "", _proximaAccionTmp = "";
     private string? _err;
+    private long? _focusAplicado;
+    private long? _focusId;
 
     // El contrato REST viaja como texto; formateamos los selectores al confirmar.
     private static string FormatFecha(DateOnly? f) =>
@@ -424,6 +439,7 @@
         {
             _visitas = await VisitaSvc.RefrescarAsync(DisposedToken);
             Recalcular();
+            AplicarFocus();
         }
         catch (OperationCanceledException)
         {
@@ -438,11 +454,17 @@
         }
     }
 
+    protected override void OnParametersSet()
+    {
+        if (!_cargando && Focus != _focusAplicado)
+            AplicarFocus();
+    }
+
     private int Contar(string estado) => _visitas.Count(v => v.Estado == estado);
 
-    private static bool EsModificable(VisitaDto v) => v.Estado is "P" or "G";
-    private static bool AdmiteResultado(VisitaDto v) =>
-        v.Estado == "R" && string.IsNullOrWhiteSpace(v.Resultado);
+    private bool EsModificable(VisitaDto v) => App.Role == Roles.Agente && (v.Estado is "P" or "G");
+    private bool AdmiteResultado(VisitaDto v) =>
+        App.Role == Roles.Agente && v.Estado == "R" && string.IsNullOrWhiteSpace(v.Resultado);
 
     private static bool ImplicaNoContinuidad(string codigo) => codigo is "N" or "D";
     private static bool MantieneAbierta(string codigo) => codigo is "I" or "S" or "P";
@@ -465,6 +487,11 @@
             (string.IsNullOrEmpty(_filtroEstado) || v.Estado == _filtroEstado) &&
             (string.IsNullOrEmpty(_distrito) || v.DistritoLocal == _distrito) &&
             (string.IsNullOrEmpty(_query) || Coincide(v, _query)));
+
+    private string FilaStyle(VisitaDto v) =>
+        _focusId == v.Id
+            ? "background:var(--c-primary-50);outline:2px solid var(--c-primary);outline-offset:-2px;"
+            : "";
 
     private static bool Coincide(VisitaDto v, string q) =>
         TextoFiltro.Contiene(v.ClienteNombre, q)
@@ -506,6 +533,28 @@
         return null;
     }
 
+    private void AplicarFocus()
+    {
+        if (Focus is not > 0)
+            return;
+
+        var visita = _visitas.FirstOrDefault(item => item.Id == Focus.Value);
+        if (visita is null)
+            return;
+
+        _focusAplicado = Focus;
+        _focusId = Focus;
+        _query = "";
+        _distrito = "";
+        _filtroEstado = visita.Estado;
+        if (FechaDe(visita.FechaTexto) is { } fecha)
+            _mes = new DateOnly(fecha.Year, fecha.Month, 1);
+        Recalcular();
+
+        if (AdmiteResultado(visita))
+            AbrirResultado(visita);
+    }
+
     // Exporta la agenda visible (con los filtros aplicados) a CSV.
     private async Task ExportarAgenda()
     {
@@ -516,7 +565,7 @@
                 v.FechaTexto, v.HoraTexto, v.CodigoCaptacion, v.ClienteNombre, v.DireccionLocal,
                 v.DistritoLocal, v.NombreAgente,
                 EnumCatalog.LabelFor(EnumCatalog.EstadosVisita, v.Estado),
-                string.IsNullOrEmpty(v.Resultado) ? "" : EnumCatalog.LabelFor(EnumCatalog.ResultadosInteraccion, v.Resultado),
+                string.IsNullOrEmpty(v.Resultado) ? "" : EnumCatalog.LabelFor(EnumCatalog.ResultadosVisita, v.Resultado),
                 v.Observaciones,
             }));
     }

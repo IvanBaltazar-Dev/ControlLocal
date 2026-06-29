@@ -182,16 +182,7 @@
             if (prospeccion.Estado is not ("E" or "S"))
                 _err = "La prospección debe tener propuesta entregada o estar en seguimiento.";
             _localId = prospeccion.LocalId;
-            _local = LocalSvc.ById(_localId) ?? new LocalComercialDto
-            {
-                Id = prospeccion.LocalId,
-                CodigoLocal = prospeccion.LocalCodigo,
-                Direccion = prospeccion.Direccion,
-                Distrito = prospeccion.Distrito,
-                AreaM2 = prospeccion.AreaM2,
-                Rubro = prospeccion.Rubro,
-                PropietarioNombre = prospeccion.PropietarioNombre,
-            };
+            _local = CompletarLocal(LocalSvc.ById(_localId), prospeccion);
             return;
         }
 
@@ -236,6 +227,21 @@
         _local = _localId > 0 ? LocalSvc.ById(_localId) : null;
         _err = _localId > 0 && _local is null ? "No se encontró el local seleccionado." : null;
     }
+
+    private static LocalComercialDto CompletarLocal(LocalComercialDto? local, ProspeccionDto prospeccion)
+    {
+        local ??= new LocalComercialDto { Id = prospeccion.LocalId };
+        local.CodigoLocal = Texto(local.CodigoLocal, prospeccion.LocalCodigo);
+        local.Direccion = Texto(local.Direccion, prospeccion.Direccion);
+        local.Distrito = Texto(local.Distrito, prospeccion.Distrito);
+        local.AreaM2 = local.AreaM2 > 0 ? local.AreaM2 : prospeccion.AreaM2;
+        local.Rubro = Texto(local.Rubro, prospeccion.Rubro);
+        local.PropietarioNombre = Texto(local.PropietarioNombre, prospeccion.PropietarioNombre);
+        return local;
+    }
+
+    private static string Texto(string? actual, string? fallback) =>
+        string.IsNullOrWhiteSpace(actual) ? fallback ?? "" : actual;
 
     private void OnCancelar() => App.Navigate(_esCaptar ? "locales" : "captaciones");
 

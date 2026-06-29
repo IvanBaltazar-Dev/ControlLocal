@@ -1,14 +1,30 @@
 package com.controllocal.rest;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import com.controllocal.bl.BrokerBusinessLogic;
+import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.bl.ClienteInteresadoBusinessLogic;
+import com.controllocal.bl.OportunidadComercialBusinessLogic;
+import com.controllocal.bl.SolicitudAlquilerBusinessLogic;
+import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
+import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.ClienteInteresadoBusinessLogicImpl;
+import com.controllocal.bl.impl.OportunidadComercialBusinessLogicImpl;
+import com.controllocal.bl.impl.SolicitudAlquilerBusinessLogicImpl;
+import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.OportunidadComercial;
+import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.persona.ClienteInteresado;
+import com.controllocal.model.usuario.BrokerAgente;
 import com.controllocal.rest.dto.Dtos;
 import com.controllocal.rest.http.ApiException;
 import com.controllocal.rest.http.PageResponse;
+import com.controllocal.rest.seguridad.UsuarioAutenticado;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
@@ -19,6 +35,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -28,31 +45,78 @@ import jakarta.ws.rs.core.Response;
 public class ClientesRest {
 
     private final ClienteInteresadoBusinessLogic clientes = new ClienteInteresadoBusinessLogicImpl();
+    private final OportunidadComercialBusinessLogic oportunidades =
+            new OportunidadComercialBusinessLogicImpl();
+    private final SolicitudAlquilerBusinessLogic solicitudes = new SolicitudAlquilerBusinessLogicImpl();
+    private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
+    private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
+    private final FichaComercialSupport fichas = new FichaComercialSupport();
+    private final CoincidenciaCarteraSupport coincidencias = new CoincidenciaCarteraSupport();
+
+    @Context
+    private HttpServletRequest request;
 
     @GET
     public PageResponse<Dtos.ClienteResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("10") int tamano) {
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        List<Dtos.ClienteResponse> items = clientes
-                .listarPagina(tamanoValido, (paginaValida - 1) * tamanoValido)
-                .stream()
+        List<ClienteInteresado> permitidos = clientesPermitidos(usuario);
+        int desde = Math.min((paginaValida - 1) * tamanoValido, permitidos.size());
+        int hasta = Math.min(desde + tamanoValido, permitidos.size());
+        List<Dtos.ClienteResponse> items = permitidos.subList(desde, hasta).stream()
                 .map(Dtos.ClienteResponse::desde)
                 .toList();
-        return new PageResponse<>(items, clientes.contar(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, permitidos.size(), paginaValida, tamanoValido);
     }
 
     @GET
     @Path("{id}")
     public Dtos.ClienteResponse obtener(@PathParam("id") long id) {
-        return clientes.buscarPorId(id)
-                .map(Dtos.ClienteResponse::desde)
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        ClienteInteresado cliente = clientes.buscarPorId(id)
                 .orElseThrow(() -> ApiException.noEncontrado("Cliente"));
+        if (!puedeVerCliente(cliente, usuario)) {
+            throw ApiException.prohibido();
+        }
+        return Dtos.ClienteResponse.desde(cliente);
+    }
+
+    @GET
+    @Path("{id}/ficha-comercial")
+    public FichaComercialSupport.ClienteFichaResponse fichaComercial(
+            @PathParam("id") long id,
+            @QueryParam("page_size") Integer pageSize,
+            @QueryParam("tamano") Integer tamano) {
+        int tamanoValido = pageSize != null ? pageSize : tamano != null ? tamano : FichaComercialSupport.DEFAULT_PAGE_SIZE;
+        return fichas.fichaCliente(id, SeguridadRest.usuario(request), tamanoValido);
+    }
+
+    @GET
+    @Path("{id}/ficha-comercial/{section}")
+    public FichaComercialSupport.FichaSectionResponse fichaComercialSection(
+            @PathParam("id") long id,
+            @PathParam("section") String section,
+            @QueryParam("page") Integer page,
+            @QueryParam("pagina") Integer pagina,
+            @QueryParam("page_size") Integer pageSize,
+            @QueryParam("tamano") Integer tamano) {
+        int paginaValida = page != null ? page : pagina != null ? pagina : 1;
+        int tamanoValido = pageSize != null ? pageSize : tamano != null ? tamano : FichaComercialSupport.DEFAULT_PAGE_SIZE;
+        return fichas.seccionCliente(id, section, SeguridadRest.usuario(request), paginaValida, tamanoValido);
+    }
+
+    @GET
+    @Path("{id}/coincidencias")
+    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(@PathParam("id") long id) {
+        return coincidencias.propiedadesParaCliente(id, SeguridadRest.usuario(request));
     }
 
     @POST
     public Response registrar(Dtos.ClienteRequest dto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
         validarDto(dto);
         ClienteInteresado cliente = dto.aEntidad();
         cliente.setIdCliente(clientes.registrar(cliente));
@@ -64,6 +128,7 @@ public class ClientesRest {
     @PUT
     @Path("{id}")
     public Dtos.ClienteResponse actualizar(@PathParam("id") long id, Dtos.ClienteRequest dto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
         validarDto(dto);
         ClienteInteresado actual = clientes.buscarPorId(id)
                 .orElseThrow(() -> ApiException.noEncontrado("Cliente"));
@@ -85,6 +150,7 @@ public class ClientesRest {
     @DELETE
     @Path("{id}")
     public Response eliminar(@PathParam("id") long id) {
+        SeguridadRest.exigirRol(request, "AGENTE");
         if (!clientes.desactivar(id)) {
             throw ApiException.noEncontrado("Cliente");
         }
@@ -95,5 +161,92 @@ public class ClientesRest {
         if (dto == null) {
             throw ApiException.badRequest("Los datos del cliente son obligatorios.");
         }
+    }
+
+    private List<ClienteInteresado> clientesPermitidos(UsuarioAutenticado usuario) {
+        if ("ADMIN".equals(usuario.rol()) || "AGENTE".equals(usuario.rol())) {
+            return clientes.listarTodos();
+        }
+        Set<Long> ids = idsClientesPermitidos(usuario);
+        return clientes.listarTodos().stream()
+                .filter(cliente -> cliente.getIdCliente() != null && ids.contains(cliente.getIdCliente()))
+                .toList();
+    }
+
+    private boolean puedeVerCliente(ClienteInteresado cliente, UsuarioAutenticado usuario) {
+        if ("ADMIN".equals(usuario.rol()) || "AGENTE".equals(usuario.rol())) {
+            return true;
+        }
+        return cliente.getIdCliente() != null && idsClientesPermitidos(usuario).contains(cliente.getIdCliente());
+    }
+
+    private Set<Long> idsClientesPermitidos(UsuarioAutenticado usuario) {
+        Set<Long> agentesBroker = agentesSupervisados(usuario);
+        Set<Long> captacionesBroker = captacionesPermitidasBroker(usuario).stream()
+                .map(Captacion::getIdCaptacion)
+                .collect(Collectors.toSet());
+
+        Set<Long> desdeOportunidades = oportunidades.listarTodos().stream()
+                .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
+                        || captacionPermitida(item.getCaptacion(), usuario, agentesBroker, captacionesBroker))
+                .map(OportunidadComercial::getClienteInteresado)
+                .filter(cliente -> cliente != null && cliente.getIdCliente() != null)
+                .map(ClienteInteresado::getIdCliente)
+                .collect(Collectors.toSet());
+
+        Set<Long> desdeSolicitudes = solicitudes.listarTodos().stream()
+                .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
+                        || captacionPermitida(item.getCaptacion(), usuario, agentesBroker, captacionesBroker))
+                .map(SolicitudAlquiler::getClienteInteresado)
+                .filter(cliente -> cliente != null && cliente.getIdCliente() != null)
+                .map(ClienteInteresado::getIdCliente)
+                .collect(Collectors.toSet());
+
+        desdeOportunidades.addAll(desdeSolicitudes);
+        return desdeOportunidades;
+    }
+
+    private Set<Long> agentesSupervisados(UsuarioAutenticado usuario) {
+        if (!"BROKER".equals(usuario.rol())) {
+            return Set.of();
+        }
+        return brokers.listarAgentesSupervisados(usuario.idDominio()).stream()
+                .map(BrokerAgente::getIdAgente)
+                .collect(Collectors.toSet());
+    }
+
+    private List<Captacion> captacionesPermitidasBroker(UsuarioAutenticado usuario) {
+        return "BROKER".equals(usuario.rol()) ? captaciones.listarPorBroker(usuario.idDominio()) : List.of();
+    }
+
+    private boolean permitidoPorAgente(
+            com.controllocal.model.usuario.AgenteInmobiliario agente,
+            UsuarioAutenticado usuario,
+            Set<Long> agentesBroker) {
+        if ("ADMIN".equals(usuario.rol())) {
+            return true;
+        }
+        if (agente == null || agente.getIdAgente() == null) {
+            return false;
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return usuario.idDominio() == agente.getIdAgente();
+        }
+        if ("BROKER".equals(usuario.rol())) {
+            return agentesBroker.contains(agente.getIdAgente());
+        }
+        return false;
+    }
+
+    private boolean captacionPermitida(
+            Captacion captacion,
+            UsuarioAutenticado usuario,
+            Set<Long> agentesBroker,
+            Set<Long> captacionesBroker) {
+        if (captacion == null) {
+            return false;
+        }
+        return permitidoPorAgente(captacion.getAgenteResponsable(), usuario, agentesBroker)
+                || (captacion.getIdCaptacion() != null && captacionesBroker.contains(captacion.getIdCaptacion()));
     }
 }

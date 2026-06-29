@@ -1,0 +1,493 @@
+@page "/comisiones"
+@inherits SafeComponentBase
+@inject AppState App
+@inject IContratoService ContratoSvc
+
+<PageTitle>Comisiones · ControlLocal</PageTitle>
+
+<AppShell Active="Comisiones" Crumbs="@(new[] { "ControlLocal", "Comisiones" })"
+          Title="Comisiones"
+          Subtitle="@_subtitle">
+    <Actions>
+        <button class="cl-btn" @onclick="RecargarAsync"><Icon Name="refresh" Size="13" /> Actualizar</button>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="target" Label="Total" Value="@_todos.Count.ToString()" Tone="gray"
+                        Active="@(_estado == "")" OnClick="@(() => FiltrarEstado(""))" />
+            <MetricCard Icon="clock" Label="Pendientes" Value="@Cuenta("Pendiente").ToString()" Tone="amber"
+                        Active="@(_estado == "Pendiente")" OnClick="@(() => FiltrarEstado("Pendiente"))" />
+            <MetricCard Icon="checkCircle" Label="Cobradas" Value="@Cuenta("Cobrada").ToString()" Tone="green"
+                        Active="@(_estado == "Cobrada")" OnClick="@(() => FiltrarEstado("Cobrada"))" />
+            <MetricCard Icon="x" Label="Anuladas" Value="@Cuenta("Anulada").ToString()" Tone="gray"
+                        Active="@(_estado == "Anulada")" OnClick="@(() => FiltrarEstado("Anulada"))" />
+        </div>
+
+        <FilterBar Search="Buscar por código, local, propietario, inquilino, agente..."
+                   Value="@_query" ValueChanged="OnBuscar" ResultCount="@_filtrados.Count"
+                   HasActiveFilters="@HayFiltros" OnClear="Limpiar">
+            @if (_verNeto)
+            {
+                <FilterSelect Placeholder="Todos los agentes" Options="_agentes" Value="@_agente" ValueChanged="OnAgente" />
+            }
+            <FilterSelect Placeholder="Ordenar por" Options="_ordenOpciones" Value="@_orden" ValueChanged="OnOrden" />
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                @{
+                    var comFiltrados = _filtrados;
+                    var comVisibles = Paginador.Pagina(comFiltrados, ref _pagina);
+                }
+                @if (_cargando)
+                {
+                    <div style="padding:48px;text-align:center;color:#7E8794;">
+                        <Icon Name="refresh" Size="26" style="margin-bottom:8px;" />
+                        <div style="font-weight:600;">Cargando comisiones...</div>
+                    </div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (comFiltrados.Count == 0)
+                {
+                    <div style="padding:42px;text-align:center;color:#7E8794;">
+                        <Icon Name="target" Size="26" style="margin-bottom:8px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin comisiones en este filtro</div>
+                        <div style="font-size:12px;">Las comisiones nacen al cerrar un alquiler.</div>
+                    </div>
+                }
+                else
+                {
+                    <table class="cl-table">
+                        <thead>
+                            <tr>
+                                <th>Operación</th>
+                                <th>Local</th>
+                                <th>Propietario</th>
+                                <th>Inquilino</th>
+                                @if (_verNeto)
+                                {
+                                    <th>Agente</th>
+                                }
+                                <th>Comisión bruta</th>
+                                @if (_verNeto)
+                                {
+                                    <th>Agente (neto)</th>
+                                    <th>Empresa</th>
+                                }
+                                <th>Estado</th>
+                                <th>Cobro</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in comVisibles)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="mono" style="font-weight:650;">@Texto(c.CodigoSolicitud, c.CodigoOportunidad)</span>
+                                        <div class="cl-muted" style="font-size:11px;">@Texto(c.CodigoCaptacion)</div>
+                                    </td>
+                                    <td>
+                                        <div style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@c.DireccionLocal">@Texto(c.DireccionLocal)</div>
+                                        <div class="cl-muted" style="font-size:11px;">@Texto(c.DistritoLocal)</div>
+                                    </td>
+                                    <td><FichaLink Kind="owner" Id="@c.PropietarioId" Text="@c.PropietarioNombre" /></td>
+                                    <td>@Texto(c.ClienteNombre)</td>
+                                    @if (_verNeto)
+                                    {
+                                        <td>@Texto(c.AgenteNombre)</td>
+                                    }
+                                    <td style="font-weight:700;color:var(--c-primary);">@Moneda(c) @c.ComisionGeneradaTexto</td>
+                                    @if (_verNeto)
+                                    {
+                                        <td>@(c.ComisionAsignada ? $"{Moneda(c)} {c.MontoAgenteTexto}" : "—")</td>
+                                        <td>@(c.MontoEmpresa.HasValue ? $"{Moneda(c)} {c.MontoEmpresaTexto}" : "—")</td>
+                                    }
+                                    <td><StatusBadge Label="@c.ComisionEstado" /></td>
+                                    <td style="font-size:12px;color:#7E8794;">
+                                        @if (!string.IsNullOrWhiteSpace(c.FechaCobroTexto))
+                                        {
+                                            <div>@c.FechaCobroTexto</div>
+                                        }
+                                        <div>@(string.IsNullOrWhiteSpace(c.FormaPago) ? "—" : c.FormaPago)</div>
+                                    </td>
+                                    <td>
+                                        <div class="cl-flex" style="gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+                                            @if (_puedeAsignar && c.ComisionEstado == "Pendiente")
+                                            {
+                                                <button class="cl-btn sm" @onclick="@(() => AbrirAsignar(c))">
+                                                    <Icon Name="target" Size="12" /> @(c.ComisionAsignada ? "Reasignar" : "Asignar")
+                                                </button>
+                                            }
+                                            @if (_puedeCobrar && c.ComisionEstado == "Pendiente")
+                                            {
+                                                <button class="cl-btn sm primary" disabled="@(!c.ComisionAsignada)"
+                                                        title="@(c.ComisionAsignada ? "" : "Falta que el supervisor asigne el monto del agente")"
+                                                        @onclick="@(() => AbrirCobro(c))">
+                                                    <Icon Name="checkCircle" Size="12" /> Registrar cobro
+                                                </button>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(c.CodigoSolicitud))
+                                            {
+                                                <button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"solicitud-detail/{c.CodigoSolicitud}"))">
+                                                    <Icon Name="eye" Size="12" /> Ver
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+        <Pagination Total="comFiltrados.Count" @bind-Page="_pagina" />
+    </ChildContent>
+</AppShell>
+
+@* ---------- Modal: asignar monto del agente (broker supervisor) ---------- *@
+<Modal Open="@(_asignar is not null)" Size="sm" Tone="blue" Icon="target"
+       Title="Asignar comisión del agente"
+       Desc="Define el monto real del agente; la empresa se calcula sola."
+       OnClose="CerrarModales">
+    <ChildContent>
+        @if (_asignar is not null)
+        {
+            <dl class="cl-kv">
+                <dt>Operación</dt><dd>@Texto(_asignar.CodigoSolicitud, _asignar.CodigoOportunidad)</dd>
+                <dt>Inquilino</dt><dd>@Texto(_asignar.ClienteNombre)</dd>
+                <dt>Comisión bruta</dt><dd><b>@Moneda(_asignar) @_asignar.ComisionGeneradaTexto</b></dd>
+            </dl>
+            <div class="cl-divider"></div>
+            <Field Label="Monto del agente" Required="true" Hint="No puede superar la comisión bruta.">
+                <input type="number" step="0.01" min="0" @bind="_montoAgente" placeholder="0.00" />
+            </Field>
+            <div class="cl-flex" style="justify-content:space-between;margin-top:6px;">
+                <span class="cl-muted" style="font-size:12px;">Empresa (calculado)</span>
+                <span style="font-weight:700;">@Moneda(_asignar) @EmpresaPreviewTexto</span>
+            </div>
+            @if (_errorModal is not null)
+            {
+                <div class="cl-alert red" style="margin-top:10px;"><Icon Name="alert" Size="15" /><span>@_errorModal</span></div>
+            }
+        }
+    </ChildContent>
+    <Footer>
+        <button class="cl-btn ghost" disabled="@_procesando" @onclick="CerrarModales">Cancelar</button>
+        <button class="cl-btn primary" disabled="@_procesando" @onclick="GuardarAsignacionAsync">
+            <Icon Name="save" Size="13" /> @(_procesando ? "Guardando..." : "Guardar")
+        </button>
+    </Footer>
+</Modal>
+
+@* ---------- Modal: registrar cobro (broker administrador) ---------- *@
+<Modal Open="@(_cobro is not null)" Size="sm" Tone="green" Icon="checkCircle"
+       Title="Registrar cobro de comisión"
+       Desc="Registra el desenlace: Cobrada (con fecha y forma de pago) o Anulada."
+       OnClose="CerrarModales">
+    <ChildContent>
+        @if (_cobro is not null)
+        {
+            <dl class="cl-kv">
+                <dt>Operación</dt><dd>@Texto(_cobro.CodigoSolicitud, _cobro.CodigoOportunidad)</dd>
+                <dt>Comisión bruta</dt><dd>@Moneda(_cobro) @_cobro.ComisionGeneradaTexto</dd>
+                <dt>Monto del agente</dt><dd>@(_cobro.ComisionAsignada ? $"{Moneda(_cobro)} {_cobro.MontoAgenteTexto}" : "—")</dd>
+            </dl>
+            <div class="cl-divider"></div>
+            <Field Label="Desenlace" Required="true">
+                <select @bind="_cobroEstado">
+                    <option value="COBRADA">Cobrada</option>
+                    <option value="ANULADA">Anulada</option>
+                </select>
+            </Field>
+            @if (_cobroEstado == "COBRADA")
+            {
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <Field Label="Fecha de cobro" Required="true">
+                        <input type="date" @bind="_cobroFecha" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </Field>
+                    <Field Label="Forma de pago" Required="true">
+                        <select @bind="_cobroForma">
+                            <option value="">Selecciona...</option>
+                            @foreach (var f in _formas)
+                            {
+                                <option value="@f.Code">@f.Label</option>
+                            }
+                        </select>
+                    </Field>
+                </div>
+            }
+            @if (_errorModal is not null)
+            {
+                <div class="cl-alert red" style="margin-top:10px;"><Icon Name="alert" Size="15" /><span>@_errorModal</span></div>
+            }
+        }
+    </ChildContent>
+    <Footer>
+        <button class="cl-btn ghost" disabled="@_procesando" @onclick="CerrarModales">Cancelar</button>
+        <button class="cl-btn success" disabled="@_procesando" @onclick="GuardarCobroAsync">
+            <Icon Name="checkCircle" Size="13" /> @(_procesando ? "Guardando..." : "Registrar")
+        </button>
+    </Footer>
+</Modal>
+
+@code {
+    private List<ContratoAlquilerDto> _todos = [];
+    private bool _cargando = true;
+    private string? _error;
+
+    private string _query = "";
+    private string _estado = "";
+    private string _agente = "";
+    private string _orden = OrdenBrutaDesc;
+
+    private const string OrdenBrutaDesc = "Comisión bruta (mayor a menor)";
+    private const string OrdenBrutaAsc = "Comisión bruta (menor a mayor)";
+    private const string OrdenNetaDesc = "Comisión agente (mayor a menor)";
+    private const string OrdenNetaAsc = "Comisión agente (menor a mayor)";
+
+    private bool _verNeto => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private bool _puedeAsignar => App.Role == Roles.Broker;
+    private bool _puedeCobrar => App.Role == Roles.Broker;
+
+    private string _subtitle => App.Role switch
+    {
+        Roles.Admin => "Todas las comisiones (solo lectura): bruto, neto, estado, cobro y forma de pago",
+        Roles.Broker => "Comisiones de tus agentes: asigna el monto del agente y registra el cobro",
+        _ => "Registro tus comisiones, producto de tu esfuerzo constante",
+    };
+
+    private IReadOnlyList<string> _ordenOpciones => _verNeto
+        ? [OrdenBrutaDesc, OrdenBrutaAsc, OrdenNetaDesc, OrdenNetaAsc]
+        : [OrdenBrutaDesc, OrdenBrutaAsc];
+
+    private IReadOnlyList<string> _agentes => _todos
+        .Select(c => c.AgenteNombre)
+        .Where(n => !string.IsNullOrWhiteSpace(n))
+        .Distinct()
+        .OrderBy(n => n)
+        .ToList();
+
+    private static readonly (string Code, string Label)[] _formas =
+    [
+        ("TRANSFERENCIA", "Transferencia"),
+        ("DEPOSITO_BANCARIO", "Depósito bancario"),
+        ("EFECTIVO", "Efectivo"),
+        ("CHEQUE", "Cheque"),
+        ("OTRO", "Otro"),
+    ];
+
+    // Estado de los modales.
+    private ContratoAlquilerDto? _asignar;
+    private ContratoAlquilerDto? _cobro;
+    private decimal? _montoAgente;
+    private string _cobroEstado = "COBRADA";
+    private DateTime? _cobroFecha = DateTime.Today;
+    private string _cobroForma = "";
+    private bool _procesando;
+    private string? _errorModal;
+    private int _pagina = 1;
+
+    private bool HayFiltros => !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_estado)
+        || !string.IsNullOrEmpty(_agente) || _orden != OrdenBrutaDesc;
+
+    private List<ContratoAlquilerDto> _filtrados => Ordenar(_todos.Where(Coincide)).ToList();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _todos = (await ContratoSvc.RefrescarAsync(DisposedToken)).ToList();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _todos = [];
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task RecargarAsync() => await CargarAsync();
+
+    private bool Coincide(ContratoAlquilerDto c)
+    {
+        if (!string.IsNullOrEmpty(_estado) && c.ComisionEstado != _estado)
+            return false;
+        if (!string.IsNullOrEmpty(_agente) && c.AgenteNombre != _agente)
+            return false;
+        if (string.IsNullOrWhiteSpace(_query))
+            return true;
+        var q = _query.Trim();
+        return Contiene(c.CodigoSolicitud, q) || Contiene(c.CodigoOportunidad, q)
+            || Contiene(c.CodigoCaptacion, q) || Contiene(c.DireccionLocal, q)
+            || Contiene(c.DistritoLocal, q) || Contiene(c.PropietarioNombre, q)
+            || Contiene(c.ClienteNombre, q) || Contiene(c.AgenteNombre, q);
+    }
+
+    private static bool Contiene(string? valor, string q) =>
+        !string.IsNullOrEmpty(valor) && valor.Contains(q, StringComparison.OrdinalIgnoreCase);
+
+    private IEnumerable<ContratoAlquilerDto> Ordenar(IEnumerable<ContratoAlquilerDto> fuente) => _orden switch
+    {
+        OrdenBrutaAsc => fuente.OrderBy(c => c.ComisionGenerada),
+        OrdenNetaDesc => fuente.OrderByDescending(c => c.MontoAgente ?? -1),
+        OrdenNetaAsc => fuente.OrderBy(c => c.MontoAgente ?? decimal.MaxValue),
+        _ => fuente.OrderByDescending(c => c.ComisionGenerada),
+    };
+
+    private int Cuenta(string estado) => _todos.Count(c => c.ComisionEstado == estado);
+
+    private void OnBuscar(string valor) => _query = valor;
+    private void OnAgente(string valor) => _agente = valor;
+    private void OnOrden(string valor) => _orden = string.IsNullOrEmpty(valor) ? OrdenBrutaDesc : valor;
+    private void FiltrarEstado(string estado) => _estado = estado;
+
+    private void Limpiar()
+    {
+        _query = "";
+        _estado = "";
+        _agente = "";
+        _orden = OrdenBrutaDesc;
+    }
+
+    private void AbrirAsignar(ContratoAlquilerDto c)
+    {
+        _errorModal = null;
+        _montoAgente = c.MontoAgente;
+        _asignar = c;
+    }
+
+    private void AbrirCobro(ContratoAlquilerDto c)
+    {
+        _errorModal = null;
+        _cobroEstado = "COBRADA";
+        _cobroFecha = DateTime.Today;
+        _cobroForma = "";
+        _cobro = c;
+    }
+
+    private void CerrarModales()
+    {
+        _asignar = null;
+        _cobro = null;
+        _errorModal = null;
+    }
+
+    private string EmpresaPreviewTexto
+    {
+        get
+        {
+            if (_asignar is null)
+                return "—";
+            var bruto = _asignar.ComisionGenerada;
+            var agente = _montoAgente ?? 0m;
+            if (agente < 0 || agente > bruto)
+                return "—";
+            return (bruto - agente).ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("es-PE"));
+        }
+    }
+
+    private async Task GuardarAsignacionAsync()
+    {
+        if (_asignar is null)
+            return;
+        if (_montoAgente is not decimal monto || monto < 0)
+        {
+            _errorModal = "Indica un monto del agente válido (cero o positivo).";
+            return;
+        }
+        if (monto > _asignar.ComisionGenerada)
+        {
+            _errorModal = "El monto del agente no puede superar la comisión bruta.";
+            return;
+        }
+        _procesando = true;
+        _errorModal = null;
+        try
+        {
+            var actualizado = await ContratoSvc.AsignarComisionAsync(_asignar.Id, monto, DisposedToken);
+            Reemplazar(actualizado);
+            CerrarModales();
+        }
+        catch (Exception ex)
+        {
+            _errorModal = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+
+    private async Task GuardarCobroAsync()
+    {
+        if (_cobro is null)
+            return;
+        DateOnly? fecha = null;
+        string? forma = null;
+        if (_cobroEstado == "COBRADA")
+        {
+            if (_cobroFecha is null)
+            {
+                _errorModal = "Registra la fecha de cobro.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_cobroForma))
+            {
+                _errorModal = "Selecciona la forma de pago.";
+                return;
+            }
+            fecha = DateOnly.FromDateTime(_cobroFecha.Value);
+            forma = _cobroForma;
+        }
+        _procesando = true;
+        _errorModal = null;
+        try
+        {
+            var actualizado = await ContratoSvc.RegistrarCobroAsync(_cobro.Id, _cobroEstado, fecha, forma, DisposedToken);
+            Reemplazar(actualizado);
+            CerrarModales();
+        }
+        catch (Exception ex)
+        {
+            _errorModal = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+
+    private void Reemplazar(ContratoAlquilerDto actualizado)
+    {
+        var i = _todos.FindIndex(x => x.Id == actualizado.Id);
+        if (i >= 0)
+            _todos[i] = actualizado;
+    }
+
+    private static string Moneda(ContratoAlquilerDto c) => string.IsNullOrWhiteSpace(c.Moneda) ? "USD" : c.Moneda;
+
+    private static string Texto(params string?[] valores)
+    {
+        foreach (var v in valores)
+        {
+            if (!string.IsNullOrWhiteSpace(v) && v != "-")
+                return v!;
+        }
+        return "—";
+    }
+}

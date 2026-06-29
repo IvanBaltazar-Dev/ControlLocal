@@ -24,9 +24,9 @@ else
           Title="@($"{_s.CodigoSolicitud} · {_s.ClienteNombre}")"
           Subtitle="@($"Solicitud de alquiler · operación {_s.CodigoOperacion} · {_s.DireccionLocal}, {_s.DistritoLocal}")">
     <Actions>
-        <button class="cl-btn ghost" @onclick="@(() => App.Navigate("solicitudes"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        <button class="cl-btn ghost" @onclick="@(() => App.Navigate(App.Role == Roles.Agente ? "solicitudes" : "seguimiento-comercial"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
         @* Solo-lectura tras el cierre: con contrato registrado ya no se editan documentos. *@
-        @if (_contrato is null)
+        @if (_contrato is null && App.Role == Roles.Agente)
         {
             <button class="cl-btn" @onclick="@(() => App.Navigate($"documentos/{_s.CodigoSolicitud}"))"><Icon Name="folder" Size="13" /> Gestionar documentos</button>
         }
@@ -102,7 +102,7 @@ else
                                 <div class="cl-alert red" style="margin-top:10px;"><Icon Name="alert" Size="15" /><span>@_errorContrato</span></div>
                             }
                             <div style="margin-top:12px;display:flex;justify-content:flex-end;">
-                                <button class="cl-btn success" disabled="@_procesandoContrato" @onclick="@(() => _confirmAlquiler = true)"><Icon Name="checkCircle" Size="13" /> Marcar como alquilada</button>
+                                <button class="cl-btn success" disabled="@_procesandoContrato" @onclick="AbrirFormularioCierre"><Icon Name="checkCircle" Size="13" /> Cerrar el alquiler</button>
                             </div>
                         </div>
                     </div>
@@ -119,7 +119,9 @@ else
                                 <div class="cl-flex" style="gap:9px;margin-top:8px;">
                                     <span class="cl-avatar" style="width:30px;height:30px;font-size:11px;background:#2F7D52;">@Initials(_s.ClienteNombre)</span>
                                     <div>
-                                        <div style="font-weight:600;font-size:13px;">@_s.ClienteNombre</div>
+                                        <div style="font-weight:600;font-size:13px;">
+                                            <FichaLink Kind="cliente" Id="@_s.ClienteId" Text="@_s.ClienteNombre" />
+                                        </div>
                                         <div class="cl-muted" style="font-size:11px;">Operación @_s.CodigoOperacion</div>
                                     </div>
                                 </div>
@@ -157,10 +159,13 @@ else
                 <div class="cl-card">
                     <div class="cl-card-head">
                         <div class="cl-card-title">La propiedad</div>
-                        @if (_local is not null && !string.IsNullOrWhiteSpace(_local.Estado))
-                        {
-                            <span class="cl-badge gray">@_local.Estado</span>
-                        }
+                        <div class="cl-flex" style="gap:8px;">
+                            <FichaLink Kind="owner" Id="@_local?.PropietarioId" Text="Ver propietario" Variant="button" />
+                            @if (_local is not null && !string.IsNullOrWhiteSpace(_local.Estado))
+                            {
+                                <span class="cl-badge gray">@_local.Estado</span>
+                            }
+                        </div>
                     </div>
                     <div class="cl-card-body">
                         <div class="cl-specs">
@@ -258,7 +263,9 @@ else
                         <div class="cl-flex" style="gap:10px;">
                             <span class="cl-avatar" style="width:34px;height:34px;font-size:12px;background:#2F7D52;">@Initials(_s.ClienteNombre)</span>
                             <div>
-                                <div style="font-weight:600;font-size:13px;">@_s.ClienteNombre</div>
+                                <div style="font-weight:600;font-size:13px;">
+                                    <FichaLink Kind="cliente" Id="@_s.ClienteId" Text="@_s.ClienteNombre" />
+                                </div>
                                 <div class="cl-muted" style="font-size:11px;">Operación @_s.CodigoOperacion</div>
                             </div>
                         </div>
@@ -276,13 +283,52 @@ else
                         Url="@UrlDoc" Incrustable="@IncrustableDoc"
                         OnClose="@(() => _docVer = null)" />
 
-        <ConfirmDialog Open="_confirmAlquiler" Tone="green" Icon="checkCircle"
-                       Title="Marcar como alquilada"
-                       Desc="Se registrará el contrato de alquiler y la propiedad quedará cerrada como alquilada."
-                       ConfirmLabel="Confirmar alquiler" CancelLabel="Cancelar"
-                       Busy="@_procesandoContrato"
-                       OnClose="@(() => _confirmAlquiler = false)"
-                       OnConfirm="@ConfirmarAlquilerAsync" />
+        <Modal Open="_confirmAlquiler" Size="lg" Tone="green" Icon="checkCircle"
+               Title="Cerrar el alquiler"
+               Desc="Formaliza el contrato a partir de la solicitud aprobada. El resumen no es editable."
+               OnClose="@CerrarFormularioCierre">
+            <ChildContent>
+                @* Resumen NO editable: condiciones del trato + comisión calculada. *@
+                <div class="cl-def-k" style="margin-bottom:6px;">Resumen de la operación</div>
+                <dl class="cl-kv">
+                    <dt>Inquilino</dt><dd>@_s.ClienteNombre</dd>
+                    <dt>Local</dt><dd>@_s.DireccionLocal@(string.IsNullOrWhiteSpace(_s.DistritoLocal) ? "" : $" · {_s.DistritoLocal}")</dd>
+                    <dt>Renta mensual</dt><dd>USD @_s.MontoMensualTexto /mes</dd>
+                    <dt>Plazo</dt><dd>@(_s.PlazoMeses > 0 ? $"{_s.PlazoMeses} meses" : PlazoSolicitud)</dd>
+                    <dt>Comisión pactada</dt><dd>@ComisionPctTexto%</dd>
+                    <dt>Comisión bruta calculada</dt><dd><b>USD @ComisionEstimadaTexto</b></dd>
+                </dl>
+
+                <div class="cl-divider"></div>
+
+                @* Campos editables de la formalización. *@
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <Field Label="Fecha de cierre" Required="true">
+                        <input type="date" @bind="_fechaCierre" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </Field>
+                    <Field Label="Estado del contrato" Required="true">
+                        <select @bind="_estadoContrato">
+                            <option value="V">Vigente</option>
+                            <option value="D">Firmado</option>
+                        </select>
+                    </Field>
+                </div>
+                <Field Label="Incidencias" Hint="Opcional: observaciones de la formalización.">
+                    <textarea rows="3" @bind="_incidencias" placeholder="Por ejemplo, condiciones pendientes o acuerdos verbales..."></textarea>
+                </Field>
+
+                @if (_errorContrato is not null)
+                {
+                    <div class="cl-alert red" style="margin-top:10px;"><Icon Name="alert" Size="15" /><span>@_errorContrato</span></div>
+                }
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" disabled="@_procesandoContrato" @onclick="CerrarFormularioCierre">Cancelar</button>
+                <button class="cl-btn success" disabled="@_procesandoContrato" @onclick="ConfirmarAlquilerAsync">
+                    <Icon Name="checkCircle" Size="13" /> @(_procesandoContrato ? "Cerrando..." : "Confirmar cierre")
+                </button>
+            </Footer>
+        </Modal>
 
         <CierreExitosoOverlay Open="_alquilada"
                               Icon="handshake"
@@ -325,6 +371,12 @@ else
     private string? _errorContrato;
     private string _subtituloAlquiler = "";
     private IReadOnlyList<CierreExitosoOverlay.Fila> _resumenAlquiler = [];
+
+    // Formulario de cierre (reemplaza la confirmación simple): formalización capturada por el agente.
+    // El agente NO gestiona documentos aquí; esa validación la hace el broker en la evaluación.
+    private DateOnly _fechaCierre = DateOnly.FromDateTime(DateTime.Today);
+    private string _estadoContrato = "V";
+    private string _incidencias = "";
 
     // Refresca primero (evita el crash de .First() con cache fria al abrir desde
     // una notificacion) y luego resuelve la solicitud, su oportunidad y captacion.
@@ -495,6 +547,23 @@ else
     private string ComisionEstimadaTexto => MontoEs(ComisionEstimada);
     private string ComisionPctTexto => ComisionPct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
 
+    // Abre el formulario de cierre con valores por defecto (cierre = hoy, estado = Vigente).
+    private void AbrirFormularioCierre()
+    {
+        if (_procesandoContrato) return;
+        _errorContrato = null;
+        _fechaCierre = DateOnly.FromDateTime(DateTime.Today);
+        _estadoContrato = "V";
+        _incidencias = "";
+        _confirmAlquiler = true;
+    }
+
+    private void CerrarFormularioCierre()
+    {
+        if (_procesandoContrato) return;
+        _confirmAlquiler = false;
+    }
+
     private async Task ConfirmarAlquilerAsync()
     {
         if (_procesandoContrato) return;
@@ -506,6 +575,9 @@ else
             var creado = await ContratoSvc.RegistrarAsync(new ContratoFormRequest
             {
                 SolicitudId = _s.Id,
+                FechaCierre = _fechaCierre,
+                EstadoContrato = _estadoContrato,
+                Incidencias = string.IsNullOrWhiteSpace(_incidencias) ? null : _incidencias.Trim(),
             }, DisposedToken);
             _contrato = creado;
             _confirmAlquiler = false;

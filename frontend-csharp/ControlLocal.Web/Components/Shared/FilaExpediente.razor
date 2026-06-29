@@ -1,0 +1,15 @@
+<div class="cl-filerow">
+    <div class="cl-fileicon"><Icon Name="@Icon" Size="15" /></div>
+    <div class="cl-grow">
+        <div style="font-weight:600;font-size:13px;">@Titulo</div>
+        <div class="cl-muted" style="font-size:11.5px;">@Estado</div>
+    </div>
+    @Accion
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "fileText";
+    [Parameter] public string Titulo { get; set; } = "";
+    [Parameter] public string Estado { get; set; } = "";
+    [Parameter] public RenderFragment? Accion { get; set; }
+}

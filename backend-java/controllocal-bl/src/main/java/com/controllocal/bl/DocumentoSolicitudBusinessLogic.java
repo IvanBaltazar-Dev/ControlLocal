@@ -19,5 +19,11 @@ public interface DocumentoSolicitudBusinessLogic {
     // responsable de la solicitud para que sepa que debe subsanar ese documento.
     public DocumentoSolicitud revisar(Long idSolicitud, Long idDocumento,
             ResultadoRevisionDocumento resultado, String observaciones);
+
+    // Deja conformes (Validados) en bloque SOLO los documentos aun sin revisar (resultado Pendiente)
+    // de una solicitud. Lo usa el broker durante la evaluacion ("Validar todos los documentos"): es
+    // la contraparte masiva de revisar(). RESPETA los observados (no los pisa). Idempotente.
+    // Devuelve la lista de documentos resultante.
+    public List<DocumentoSolicitud> conformarPendientes(Long idSolicitud);
 }
 

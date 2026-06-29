@@ -236,13 +236,55 @@ public static class EnumCatalog
         new("X", "Caida")
     ];
 
-    public static readonly IReadOnlyList<EnumOption> ResultadosInteraccion =
+    public static readonly IReadOnlyList<EnumOption> ResultadosVisita =
     [
         new("P", "Pendiente"),
         new("I", "Interesado"),
         new("N", "No interesado"),
         new("S", "Seguimiento"),
         new("D", "Descartado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ResultadosInteraccion = ResultadosVisita;
+
+    public static readonly IReadOnlyList<EnumOption> ResultadosProspeccionInteraccion =
+    [
+        new("CONTACTADO", "Contactado"),
+        new("REUNION_AGENDADA", "Reunion agendada"),
+        new("PROPUESTA_ENVIADA", "Propuesta enviada"),
+        new("ACEPTA_CAPTAR", "Acepta captar"),
+        new("NO_ACEPTA", "No acepta"),
+        new("RECONTACTAR", "Recontactar")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ResultadosCaptacionInteraccion =
+    [
+        new("DOCS_SOLICITADOS", "Docs solicitados"),
+        new("CONDICIONES_AJUSTADAS", "Condiciones ajustadas"),
+        new("PUBLICACION_COORDINADA", "Publicacion coordinada"),
+        new("PROPIETARIO_OBSERVA", "Propietario observa"),
+        new("LISTO_PARA_PUBLICAR", "Listo para publicar"),
+        new("PAUSAR_GESTION", "Pausar gestion")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ResultadosOportunidadInteraccion =
+    [
+        new("INTERESADO", "Interesado"),
+        new("VISITA_AGENDADA", "Visita agendada"),
+        new("OFERTA_SOLICITADA", "Oferta solicitada"),
+        new("NEGOCIANDO", "Negociando"),
+        new("NO_INTERESADO", "No interesado"),
+        new("DESCARTADO", "Descartado")
+    ];
+
+    public static readonly IReadOnlyList<EnumOption> ResultadosClienteInteraccion =
+    [
+        new("BUSQUEDA_LEVANTADA", "Busqueda levantada"),
+        new("PROPUESTA_ENVIADA", "Propuesta enviada"),
+        new("REQUIERE_OPCIONES", "Requiere opciones"),
+        new("NO_RESPONDE", "No responde"),
+        new("SEGUIMIENTO", "Seguimiento"),
+        new("DESCARTADO", "Descartado")
     ];
 
     public static readonly IReadOnlyList<EnumOption> EstadosProspeccion =
@@ -340,4 +382,19 @@ public static class EnumCatalog
 
     public static string LabelFor(IEnumerable<EnumOption> options, string? code) =>
         options.FirstOrDefault(x => x.Code == code)?.Label ?? code ?? "";
+
+    public static IReadOnlyList<EnumOption> ResultadosInteraccionPorContexto(string? contexto) =>
+        (contexto ?? "OPORTUNIDAD").ToUpperInvariant() switch
+        {
+            "PROSPECCION" => ResultadosProspeccionInteraccion,
+            "CAPTACION" => ResultadosCaptacionInteraccion,
+            "CLIENTE" => ResultadosClienteInteraccion,
+            _ => ResultadosOportunidadInteraccion,
+        };
+
+    public static string LabelResultadoInteraccion(string? contexto, string? code)
+    {
+        var label = LabelFor(ResultadosInteraccionPorContexto(contexto), code);
+        return label == code ? LabelFor(ResultadosVisita, code) : label;
+    }
 }

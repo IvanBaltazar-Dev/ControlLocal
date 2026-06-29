@@ -44,7 +44,7 @@
 
                 <FormSection Num="2" Title="Contacto y estado" Sub="Medios de contacto y estado administrativo">
                     <div class="cl-grid c2">
-                        <Field Label="Teléfono" Required="true"><input @bind="_telefono" @bind:event="oninput" /></Field>
+                        <Field Label="Teléfono" Required="true"><input value="@_telefono" inputmode="numeric" maxlength="9" @oninput="OnTelefonoInput" /></Field>
                         <Field Label="Correo" Required="true"><input type="email" @bind="_correo" @bind:event="oninput" /></Field>
                         <Field Label="Zona o ámbito" Required="true"><input @bind="_zona" @bind:event="oninput" /></Field>
                         <Field Label="Estado" Required="true">
@@ -138,7 +138,7 @@
         _usuario = broker.Usuario;
         _tipoDocumento = NormalizarTipoDocumento(broker.TipoDocumento);
         _numeroDocumento = broker.NumeroDocumento;
-        _telefono = broker.Telefono;
+        _telefono = PeruInputRules.Telefono(broker.Telefono);
         _correo = broker.Email;
         _zona = broker.Zona;
         _estado = string.IsNullOrWhiteSpace(broker.EstadoAdministrativo) ? "Activo" : broker.EstadoAdministrativo;
@@ -150,6 +150,7 @@
     private void TryConfirm()
     {
         if (string.IsNullOrWhiteSpace(_telefono)) { _err = "El teléfono es obligatorio."; return; }
+        if (PeruInputRules.ValidarTelefono(_telefono) is { } telefonoError) { _err = telefonoError; return; }
         if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo es obligatorio."; return; }
         if (string.IsNullOrWhiteSpace(_zona)) { _err = "La zona o ámbito es obligatorio."; return; }
 
@@ -171,7 +172,7 @@
             TipoPersona = anterior.TipoPersona,
             TipoDocumento = _tipoDocumento,
             NumeroDocumento = anterior.NumeroDocumento,
-            Telefono = _telefono.Trim(),
+            Telefono = PeruInputRules.Telefono(_telefono),
             Email = _correo.Trim(),
             Usuario = anterior.Usuario,
             ContrasenaTemporal = anterior.ContrasenaTemporal,
@@ -205,4 +206,10 @@
         "PAS" => "P",
         _ => valor,
     };
+
+    private void OnTelefonoInput(ChangeEventArgs e)
+    {
+        _telefono = PeruInputRules.Telefono(e.Value?.ToString());
+        _err = null;
+    }
 }

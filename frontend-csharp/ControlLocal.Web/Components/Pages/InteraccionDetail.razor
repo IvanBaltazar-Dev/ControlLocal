@@ -109,14 +109,14 @@
                         <div class="cl-card-head"><div class="cl-card-title">Resultado</div></div>
                         <div class="cl-card-body">
                             <div style="text-align:center;padding:12px 0;margin-bottom:16px;">
-                                <ResultadoBadge Resultado="@_resultado" />
+                                <ResultadoBadge Resultado="@_resultado" Contexto="@_contexto" />
                             </div>
                             <div class="cl-divider"></div>
                             <div style="margin-top:16px;">
                                 <div class="cl-def-k" style="margin-bottom:10px;">Cambiar resultado</div>
                                 <select @bind="_nuevoResultado" style="width:100%;padding:10px;border:1px solid #E2E6EC;border-radius:6px;font-size:13px;margin-bottom:10px;">
                                     <option value="">— Seleccionar —</option>
-                                    @foreach (var resultado in EnumCatalog.ResultadosInteraccion)
+                                    @foreach (var resultado in ResultadosDisponibles)
                                     {
                                         <option value="@resultado.Code">@resultado.Label</option>
                                     }
@@ -174,6 +174,7 @@
     private string _cliente = "";
     private string _telefonoCliente = "";
     private string _canalContacto = "";
+    private string _contexto = "OPORTUNIDAD";
     private string _resultado = "";
     private string _observaciones = "";
     private string _agente = "";
@@ -195,6 +196,7 @@
             _fechaHora = inter.FechaHoraTexto;
             _cliente = inter.ClienteNombre;
             _canalContacto = inter.CanalContacto;
+            _contexto = inter.Contexto;
             _resultado = inter.Resultado;
             _observaciones = inter.Observaciones;
             _agente = inter.NombreAgenteResponsable;
@@ -239,4 +241,7 @@
 
     private static string GetCanalLabel(string canal) =>
         EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, canal);
+
+    private IReadOnlyList<EnumOption> ResultadosDisponibles =>
+        EnumCatalog.ResultadosInteraccionPorContexto(_contexto);
 }

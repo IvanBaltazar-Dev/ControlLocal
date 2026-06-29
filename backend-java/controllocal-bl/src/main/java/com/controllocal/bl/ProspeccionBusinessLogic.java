@@ -1,7 +1,6 @@
 package com.controllocal.bl;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,15 +18,23 @@ public interface ProspeccionBusinessLogic {
     boolean actualizar(Prospeccion prospeccion);
     boolean eliminar(Long idProspeccion);
 
-    /** Prospecciones en seguimiento cuyo recontacto vence dentro de {@code diasAviso} (o ya vencio). */
+    /** Prospecciones vivas cuya ultima accion de seguimiento tiene ya {@code diasAviso} dias o mas (recontacto vencido). */
     List<Prospeccion> listarPorRecontactar(int diasAviso);
 
-    // Transiciones del embudo (solo si la prospeccion sigue en proceso).
+    /**
+     * Crea las alertas SIN_RESPUESTA de las prospecciones con recontacto vencido
+     * (desde el dia 8 sin nueva accion), sin duplicar las ya activas. Sustituye al
+     * planificador: se invoca al consultar las alertas. Devuelve cuantas creo.
+     */
+    int sincronizarRecontacto();
+
+    // Transiciones del embudo (solo si la prospeccion sigue en proceso). Cada accion
+    // reinicia el reloj de recontacto y atiende la alerta SIN_RESPUESTA activa.
     boolean contactar(Long idProspeccion);
     boolean registrarReunion(Long idProspeccion);
     boolean entregarPropuesta(Long idProspeccion);
-    /** "Por ahora no": deja en seguimiento; el recontacto no puede superar 15 dias. */
-    boolean posponer(Long idProspeccion, LocalDate fechaRecontacto);
+    /** Accion de seguimiento del propietario: reinicia el reloj de recontacto (reemplaza el agendar manual). */
+    boolean registrarSeguimiento(Long idProspeccion);
     boolean rechazar(Long idProspeccion, String motivo);
     boolean descartar(Long idProspeccion, String motivo);
 

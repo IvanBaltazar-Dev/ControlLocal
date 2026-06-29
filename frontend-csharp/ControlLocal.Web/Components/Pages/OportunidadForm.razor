@@ -5,6 +5,7 @@
 @inject IOportunidadService OportunidadSvc
 @inject IClienteService ClienteSvc
 @inject ICaptacionService CaptacionSvc
+@inject IPublicacionService PublicacionSvc
 
 <PageTitle>Nueva oportunidad - ControlLocal</PageTitle>
 
@@ -85,7 +86,7 @@
                                     var sel = _captacionId == captacion.Id;
                                     <div role="button" tabindex="0"
                                          style="@PickStyle(sel)"
-                                         @onclick="@(() => SeleccionarCaptacion(captacion.Id))">
+                                         @onclick="@(() => SeleccionarCaptacionAsync(captacion.Id))">
                                         <div style="flex:1;min-width:0;">
                                             <div style="font-weight:600;font-size:13px;">@captacion.CodigoCaptacion · @captacion.DireccionLocal</div>
                                             <div class="cl-muted" style="font-size:11px;">@captacion.DistritoLocal</div>
@@ -115,6 +116,18 @@
                             }
                         </div>
                     </Field>
+                    @if (_captacionId > 0 && _publicaciones.Count > 0)
+                    {
+                        <Field Label="Publicación de origen (opcional)" Hint="Anuncio por el que el cliente llegó a esta propiedad.">
+                            <select @bind="_publicacionOrigenId">
+                                <option value="0">Sin atribuir</option>
+                                @foreach (var pub in _publicaciones)
+                                {
+                                    <option value="@pub.Id">@PublicacionLabel(pub)</option>
+                                }
+                            </select>
+                        </Field>
+                    }
                 </FormSection>
 
                 <FormSection Num="3" Title="Primer contexto" Sub="Notas iniciales del interes del cliente">
@@ -162,12 +175,18 @@
 
 @code {
     [Parameter] public string? CaptacionCodigo { get; set; }
+    [SupplyParameterFromQuery] public long ClienteId { get; set; }
+    [SupplyParameterFromQuery] public long CaptacionId { get; set; }
+    [SupplyParameterFromQuery] public long PublicacionId { get; set; }
 
     private IReadOnlyList<ClienteInteresadoDto> _clientes = [];
     private IReadOnlyList<CaptacionDto> _captaciones = [];
-    
+    // Publicaciones del local de la captación seleccionada, para atribuir la oportunidad a su origen.
+    private IReadOnlyList<PublicacionDto> _publicaciones = [];
+
     private long _clienteId;
     private long _captacionId;
+    private long _publicacionOrigenId;
     
     // Banderas para controlar el estado de "desplegado" de las listas
     private bool _desplegarClientes = false;
@@ -240,11 +259,43 @@
         _desplegarCaptaciones = true;
     }
 
-    private void SeleccionarCaptacion(long id)
+    private async Task SeleccionarCaptacionAsync(long id)
     {
         _captacionId = id;
         _desplegarCaptaciones = false;
         _busquedaCaptacion = "";
+        _publicacionOrigenId = 0;
+        await CargarPublicacionesAsync();
+    }
+
+    // Publicaciones del local de la captación elegida (para atribuir la oportunidad a su origen).
+    private async Task CargarPublicacionesAsync()
+    {
+        var localId = CaptacionSeleccionada?.LocalId ?? 0;
+        if (localId <= 0)
+        {
+            _publicaciones = [];
+            return;
+        }
+        try
+        {
+            _publicaciones = await PublicacionSvc.ListarPorLocalAsync(localId, DisposedToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+            _publicaciones = [];
+        }
+    }
+
+    private static string PublicacionLabel(PublicacionDto p)
+    {
+        var canal = string.IsNullOrWhiteSpace(p.CanalTexto) ? p.Canal : p.CanalTexto;
+        var titulo = string.IsNullOrWhiteSpace(p.TituloAnuncio) ? "" : $" · {p.TituloAnuncio}";
+        var estado = string.IsNullOrWhiteSpace(p.EstadoTexto) ? "" : $" ({p.EstadoTexto})";
+        return $"{canal}{titulo}{estado}";
     }
 
     protected override async Task OnParametersSetAsync()
@@ -258,13 +309,23 @@
             _clientes = await clientesTask;
             _captaciones = await captacionesTask;
 
+            if (ClienteId > 0 && _clientes.Any(item => item.Id == ClienteId))
+                SeleccionarCliente(ClienteId);
+
             if (!string.IsNullOrWhiteSpace(CaptacionCodigo))
             {
                 var captacion = _captaciones.FirstOrDefault(item =>
                     item.CodigoCaptacion.Equals(CaptacionCodigo, StringComparison.OrdinalIgnoreCase));
                 if (captacion is not null)
-                    SeleccionarCaptacion(captacion.Id);
+                    await SeleccionarCaptacionAsync(captacion.Id);
             }
+            else if (CaptacionId > 0 && _captaciones.Any(item => item.Id == CaptacionId))
+            {
+                await SeleccionarCaptacionAsync(CaptacionId);
+            }
+
+            if (PublicacionId > 0 && _publicaciones.Any(item => item.Id == PublicacionId))
+                _publicacionOrigenId = PublicacionId;
         }
         catch (OperationCanceledException)
         {
@@ -295,6 +356,7 @@
                 ClienteId = _clienteId,
                 CaptacionId = _captacionId,
                 Observaciones = _observaciones,
+                PublicacionOrigenId = _publicacionOrigenId,
             }, DisposedToken);
             App.Navigate($"oportunidad-detail/{oportunidad.Id}");
         }

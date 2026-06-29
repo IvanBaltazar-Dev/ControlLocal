@@ -50,8 +50,16 @@ public class OportunidadesRest {
     @GET
     public PageResponse<Dtos.OportunidadResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
-            @QueryParam("tamano") @DefaultValue("10") int tamano) {
-        List<OportunidadComercial> fuente = oportunidadesDelUsuario(SeguridadRest.usuario(request));
+            @QueryParam("tamano") @DefaultValue("10") int tamano,
+            @QueryParam("idCaptacion") Long idCaptacion,
+            @QueryParam("idCliente") Long idCliente) {
+        List<OportunidadComercial> fuente = oportunidadesDelUsuario(SeguridadRest.usuario(request)).stream()
+                .filter(item -> idCaptacion == null
+                        || (item.getCaptacion() != null && idCaptacion.equals(item.getCaptacion().getIdCaptacion())))
+                .filter(item -> idCliente == null
+                        || (item.getClienteInteresado() != null
+                                && idCliente.equals(item.getClienteInteresado().getIdCliente())))
+                .toList();
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
         int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
@@ -125,10 +133,8 @@ public class OportunidadesRest {
     public Dtos.OportunidadResponse cerrarExitoso(@PathParam("id") long id) {
         UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "AGENTE");
         obtenerConAcceso(id, usuario);
-        oportunidades.cerrarExitosa(id);
-        return Dtos.OportunidadResponse.desde(
-                oportunidades.buscarPorId(id)
-                        .orElseThrow(() -> ApiException.noEncontrado("Oportunidad")));
+        throw ApiException.badRequest(
+                "El cierre exitoso se registra desde la solicitud aprobada para crear el contrato de alquiler.");
     }
 
     private OportunidadComercial obtenerConAcceso(long id, UsuarioAutenticado usuario) {
@@ -150,7 +156,10 @@ public class OportunidadesRest {
                             && usuario.idDominio() == item.getAgenteResponsable().getIdAgente())
                     .toList();
         }
-        if (usuario.tieneRol("BROKER", "ADMIN")) {
+        if ("ADMIN".equals(usuario.rol())) {
+            return todas;
+        }
+        if ("BROKER".equals(usuario.rol())) {
             Set<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
                     .map(Captacion::getIdCaptacion)
                     .collect(Collectors.toSet());

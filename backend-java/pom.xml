@@ -15,7 +15,6 @@
         <module>controllocal-model</module>
         <module>controllocal-dao</module>
         <module>controllocal-db-manager</module>
-        <module>controllocal-app</module>
         <module>controllocal-bl</module>
         <module>controllocal-rest</module>
     </modules>

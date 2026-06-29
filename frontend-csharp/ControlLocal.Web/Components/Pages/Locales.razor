@@ -3,110 +3,99 @@
 @inject AppState App
 @inject IProspeccionService ProspeccionSvc
 
-<PageTitle>Locales en prospección · ControlLocal</PageTitle>
+<PageTitle>Locales comerciales - ControlLocal</PageTitle>
 
-<AppShell Active="Locales comerciales" Crumbs="@(new[] { "ControlLocal", "Captación", "Locales comerciales" })"
-          Title="Prospección de locales"
-          Subtitle="Seguimiento de inmuebles hasta captarlos · contacto con el propietario, propuesta y decisión">
+<AppShell Active="Locales comerciales" Crumbs="@(new[] { "ControlLocal", "Registro", "Locales comerciales" })"
+          Title="Gestion de locales"
+          Subtitle="Inventario de propiedades y su ciclo comercial">
     <Actions>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Registrar local</button>
+        @if (App.Role == Roles.Agente)
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("local-form"))"><Icon Name="plus" Size="13" /> Registrar local</button>
+        }
+        else
+        {
+            <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
     </Actions>
     <ChildContent>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            <MetricCard Icon="store" Label="En prospección" Value="@EnProspeccion.ToString()" Tone="blue" />
-            <MetricCard Icon="clock" Label="Por recontactar" Value="@_porRecontactar.Count.ToString()" Tone="blue" Footer="Seguimiento ≤ 15 días" />
-            <MetricCard Icon="pin" Label="Captados" Value="@Contar("T").ToString()" Tone="green"
-                        Active="@(_filtroEstado == "T")" OnClick="@(() => _filtroEstado = _filtroEstado == "T" ? "" : "T")" />
-            <MetricCard Icon="x" Label="Descartados" Value="@Contar("D").ToString()" Tone="red"
-                        Active="@(_filtroEstado == "D")" OnClick="@(() => _filtroEstado = _filtroEstado == "D" ? "" : "D")" />
+            <MetricCard Icon="store" Label="Activos" Value="@Activos.ToString()" Tone="blue" Footer="En cartera, sin alquilar"
+                        Active="@(_estadoBucket == "ACTIVOS")" OnClick="@(() => ToggleBucket("ACTIVOS"))" />
+            <MetricCard Icon="activity" Label="Por captar" Value="@PorCaptar.ToString()" Tone="amber" Footer="En prospeccion"
+                        Active="@(_estadoBucket == "POR_CAPTAR")" OnClick="@(() => ToggleBucket("POR_CAPTAR"))" />
+            <MetricCard Icon="pin" Label="Captados" Value="@Captados.ToString()" Tone="green" Footer="Captacion lograda"
+                        Active="@(_estadoBucket == "CAPTADOS")" OnClick="@(() => ToggleBucket("CAPTADOS"))" />
+            <MetricCard Icon="handshake" Label="@AlquiladosLabel" Value="@Alquilados.ToString()" Tone="green" Footer="Cierre exitoso"
+                        Active="@(_estadoBucket == "ALQUILADOS")" OnClick="@(() => ToggleBucket("ALQUILADOS"))" />
         </div>
 
-        @if (_porRecontactar.Count > 0)
-        {
-            var vencidos = _porRecontactar.Count(p => EsVencido(p));
-            <div class="cl-alert @(vencidos > 0 ? "red" : "blue")" style="margin-bottom:16px;">
-                <Icon Name="clock" Size="15" />
-                <span>
-                    Hay <b>@_porRecontactar.Count</b> local(es) en seguimiento por recontactar@(vencidos > 0 ? $" · {vencidos} vencido(s)" : "").
-                    @if (vencidos > 0)
-                    {
-                        <text> Atiende primero los recontactos vencidos.</text>
-                    }
-                    else
-                    {
-                        <text> Próximo recontacto: <b>@ProximoRecontacto</b>.</text>
-                    }
-                </span>
-            </div>
-        }
-
-        <FilterBar Search="Buscar por dirección, código, propietario…"
+        <FilterBar Search="Buscar por direccion, codigo, propietario..."
                    @bind-Value="_query" ResultCount="Filtradas().Count()"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
-            <select class="cl-select" @bind="_filtroEstado">
+            <select class="cl-select" @bind="_estadoBucket">
+                <option value="">Todos los estados</option>
+                <option value="ACTIVOS">Activos</option>
+                <option value="POR_CAPTAR">Por captar</option>
+                <option value="CAPTADOS">Captados</option>
+                <option value="ALQUILADOS">Alquilados</option>
+                <option value="INACTIVOS">Inactivos</option>
+            </select>
+            <select class="cl-select" @bind="_etapa">
                 <option value="">Todas las etapas</option>
-                @foreach (var e in EnumCatalog.EstadosProspeccion)
+                @foreach (var etapa in EtapasPipeline)
                 {
-                    <option value="@e.Code">@e.Label</option>
+                    <option value="@etapa.Code">@etapa.Label</option>
                 }
             </select>
             <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
+            <select class="cl-select" @bind="_disponibilidad">
+                <option value="">Disponibilidad</option>
+                @foreach (var disp in EnumCatalog.EstadosLocalComercial)
+                {
+                    <option value="@disp.Code">@disp.Label</option>
+                }
+            </select>
+            @if (App.Role is Roles.Broker or Roles.Admin)
+            {
+                <select class="cl-select" @bind="_idAgente">
+                    <option value="0">Todos los agentes</option>
+                    @foreach (var agente in _agentes)
+                    {
+                        <option value="@agente.Id">@agente.Nombre</option>
+                    }
+                </select>
+            }
         </FilterBar>
+
+        @{
+            var localesFiltrados = Filtradas().ToList();
+            var localesVisibles = Paginador.Pagina(localesFiltrados, ref _pagina);
+        }
 
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
                 <table class="cl-table">
                     <thead>
                         <tr>
-                            <th>Código</th><th>Dirección</th><th>Distrito</th><th>Propietario</th>
-                            <th>Etapa</th><th>Seguimiento</th><th></th>
+                            <th>Codigo</th><th>Direccion</th><th>Distrito</th><th>Propietario</th>
+                            <th>Disponibilidad</th><th>Estado</th><th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var p in Filtradas())
+                        @foreach (var p in localesVisibles)
                         {
                             <tr>
                                 <td><span class="mono">@p.LocalCodigo</span></td>
                                 <td style="font-weight:600;">@p.Direccion</td>
                                 <td>@p.Distrito</td>
                                 <td>@p.PropietarioNombre</td>
-                                <td><StatusBadge Label="@EnumCatalog.LabelFor(EnumCatalog.EstadosProspeccion, p.Estado)" /></td>
+                                <td><span class="cl-badge @DisponibilidadTono(p.Disponibilidad)">@DisponibilidadLabel(p.Disponibilidad)</span></td>
+                                <td><StatusBadge Label="@EstadoComercial(p)" /></td>
                                 <td>
-                                    @if (p.Estado == "S" && p.FechaRecontacto is not null)
-                                    {
-                                        var vencido = EsVencido(p);
-                                        <span class="cl-badge @(vencido ? "red" : "blue")">@(vencido ? $"Vencido · {p.FechaRecontactoTexto}" : $"Recontactar {p.FechaRecontactoTexto}")</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="cl-muted" style="font-size:12px;">@UltimoHito(p)</span>
-                                    }
-                                </td>
-                                <td>
-                                    <div class="cl-flex" style="gap:6px;justify-content:flex-end;">
-                                        @if (p.Estado == "P")
-                                        {
-                                            <button class="cl-btn sm primary" @onclick="@(() => Avanzar(p, ProspeccionSvc.Contactar, "Propietario contactado"))"><Icon Name="phone" Size="12" /> Contactar</button>
-                                        }
-                                        else if (p.Estado == "C")
-                                        {
-                                            <button class="cl-btn sm primary" @onclick="@(() => Avanzar(p, ProspeccionSvc.RegistrarReunion, "Reunión registrada"))"><Icon Name="users" Size="12" /> Reunión</button>
-                                        }
-                                        else if (p.Estado == "R")
-                                        {
-                                            <button class="cl-btn sm primary" @onclick="@(() => Avanzar(p, ProspeccionSvc.EntregarPropuesta, "Propuesta entregada"))"><Icon Name="fileText" Size="12" /> Entregar propuesta</button>
-                                        }
-                                        else if (p.Estado is "E" or "S")
-                                        {
-                                            <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"captacion-form/captar/{p.Id}"))"><Icon Name="pin" Size="12" /> Captar</button>
-                                            <button class="cl-btn sm" @onclick="@(() => AbrirPosponer(p))"><Icon Name="clock" Size="12" /> Recontactar</button>
-                                            <button class="cl-btn sm ghost" @onclick="@(() => AbrirRechazar(p))"><Icon Name="x" Size="12" /> Rechazar</button>
-                                        }
-                                        else if (p.Estado == "T")
-                                        {
-                                            <span class="cl-badge green plain"><Icon Name="check" Size="11" /> @p.CaptacionCodigo</span>
-                                        }
-                                        <button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"local-detail/{p.LocalId}"))"><Icon Name="eye" Size="12" /> Ver</button>
+                                    <div class="cl-flex" style="gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+                                        <button class="cl-btn sm" @onclick="@(() => App.Navigate($"prospeccion-detail/{p.Id}"))"><Icon Name="eye" Size="12" /> Prospección</button>
+                                        <button class="cl-btn sm ghost" @onclick="@(() => App.Navigate($"local-detail/{p.LocalId}"))"><Icon Name="eye" Size="12" /> Local</button>
                                     </div>
                                 </td>
                             </tr>
@@ -115,120 +104,75 @@
                 </table>
                 @if (_cargando)
                 {
-                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando prospecciones…</div>
+                    <LoadingBlock Framed="false" Title="Actualizando locales..." />
                 }
                 else if (_loadError is not null)
                 {
                     <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_loadError</span></div>
                 }
-                else if (!Filtradas().Any())
+                else if (localesFiltrados.Count == 0)
                 {
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="store" Size="28" style="margin-bottom:10px;" />
                         <div style="font-weight:600;margin-bottom:4px;">Sin locales en este filtro</div>
-                        <div style="font-size:12px;">Registra un local para iniciar su prospección.</div>
+                        <div style="font-size:12px;">Ajusta los filtros o registra un local para iniciar su prospeccion.</div>
                     </div>
                 }
             </div>
         </div>
-
-        @* ---------- Modal: Recontactar (≤15 días) ---------- *@
-        <Modal Open="_modalPosponer" Tone="blue" Icon="clock"
-               Title="Recontactar propietario"
-               Desc="@($"El propietario de {_target?.Direccion} pidió tiempo. Agenda el recontacto (máx. 15 días).")"
-               OnClose="@(() => _modalPosponer = false)">
-            <ChildContent>
-                <Field Label="Fecha de recontacto" Required="true"><input type="date" @bind="_fechaRecontactoPick" /></Field>
-                <div class="cl-help" style="margin-top:6px;">No puede superar 15 días desde hoy. El local quedará en <b>seguimiento</b> y aparecerá en la alerta de recontacto.</div>
-                @if (_err is not null)
-                {
-                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
-                }
-            </ChildContent>
-            <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalPosponer = false)">Cancelar</button>
-                <button class="cl-btn primary" @onclick="ConfirmarPosponer">Agendar recontacto</button>
-            </Footer>
-        </Modal>
-
-        @* ---------- Modal: Rechazar ---------- *@
-        <Modal Open="_modalRechazar" Tone="red" Icon="x"
-               Title="Rechazo del propietario"
-               Desc="@($"Registra por qué {_target?.PropietarioNombre} no acepta la captación de {_target?.Direccion}.")"
-               OnClose="@(() => _modalRechazar = false)">
-            <ChildContent>
-                <Field Label="Motivo del rechazo" Required="true">
-                    <textarea rows="3" placeholder="Ej. No acepta la comisión, prefiere alquilar por su cuenta…" @bind="_motivoTmp"></textarea>
-                </Field>
-                @if (_err is not null)
-                {
-                    <div class="cl-alert red" style="margin-top:12px;"><Icon Name="alert" Size="15" /><span>@_err</span></div>
-                }
-            </ChildContent>
-            <Footer>
-                <button class="cl-btn ghost" @onclick="@(() => _modalRechazar = false)">Volver</button>
-                <button class="cl-btn primary" @onclick="ConfirmarRechazar">Registrar rechazo</button>
-            </Footer>
-        </Modal>
-
-        <Toast Show="_toast">@_toastMsg</Toast>
+        <Pagination Total="localesFiltrados.Count" @bind-Page="_pagina" />
     </ChildContent>
 </AppShell>
 
 @code {
-    private string _filtroEstado = "";
+    private string _estadoBucket = "";
+    private string _etapa = "";
     private string _query = "";
     private string _distrito = "";
-    private IReadOnlyList<ProspeccionDto> _prospecciones = [];
-    private IReadOnlyList<ProspeccionDto> _porRecontactar = new List<ProspeccionDto>();
-
-    private IReadOnlyList<string> _distritos => _prospecciones.Select(p => p.Distrito)
-        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
-
-    private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
-
-    private void LimpiarFiltros() { _filtroEstado = ""; _query = ""; _distrito = ""; }
-
-    private bool _modalPosponer, _modalRechazar, _toast;
-    private ProspeccionDto? _target;
-    private DateOnly? _fechaRecontactoPick;
-    private string _motivoTmp = "", _toastMsg = "";
-    private string? _err;
+    private string _disponibilidad = "";
+    private long _idAgente;
+    private int _pagina = 1;
+    private IReadOnlyList<ProspeccionDto> _locales = [];
     private bool _cargando = true;
     private string? _loadError;
 
-    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
-    private string ProximoRecontacto => _porRecontactar
-        .Where(item => item.FechaRecontacto is not null)
-        .OrderBy(item => item.FechaRecontacto)
-        .Select(item => item.FechaRecontactoTexto ?? item.FechaRecontacto!.Value.ToString("dd MMM yyyy"))
-        .FirstOrDefault() ?? "sin fecha";
+    // Cada local tiene una prospeccion 1:1 (creada al registrarlo), ya acotada por rol en el backend.
+    // Sobre ese set derivamos el ciclo del local: por captar -> captado -> alquilado.
+    private IReadOnlyList<string> _distritos => _locales.Select(p => p.Distrito)
+        .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+    private IReadOnlyList<(long Id, string Nombre)> _agentes => _locales
+        .Where(p => p.AgenteId > 0 && !string.IsNullOrWhiteSpace(p.NombreAgente))
+        .Select(p => (Id: p.AgenteId, Nombre: p.NombreAgente))
+        .DistinctBy(x => x.Id).OrderBy(x => x.Nombre).ToList();
+
+    private bool HayFiltros => !string.IsNullOrEmpty(_estadoBucket) || !string.IsNullOrEmpty(_etapa)
+        || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito)
+        || !string.IsNullOrEmpty(_disponibilidad) || _idAgente > 0;
+
+    private string AlquiladosLabel => App.Role == Roles.Agente ? "Alquilados por mí" : "Alquileres exitosos";
+
+    // Disponibilidad "N" (No disponible) = local alquilado tras el cierre del contrato.
+    private static bool EsAlquilado(ProspeccionDto p) => p.Disponibilidad == "N";
+    private static bool EsCaptado(ProspeccionDto p) => p.Estado == "T" && !EsAlquilado(p);
+    private static bool EsPorCaptar(ProspeccionDto p) => p.Estado is "P" or "C" or "R" or "E" or "S" && !EsAlquilado(p);
+    private static bool EsInactivo(ProspeccionDto p) => !EsAlquilado(p) && (p.Estado == "D" || p.Disponibilidad == "I");
+    private static bool EsActivo(ProspeccionDto p) => EsPorCaptar(p) || EsCaptado(p);
+
+    private int Activos => _locales.Count(EsActivo);
+    private int PorCaptar => _locales.Count(EsPorCaptar);
+    private int Captados => _locales.Count(EsCaptado);
+    private int Alquilados => _locales.Count(EsAlquilado);
+
+    private static IEnumerable<EnumOption> EtapasPipeline =>
+        EnumCatalog.EstadosProspeccion.Where(e => e.Code is not ("T" or "D"));
 
     protected override async Task OnInitializedAsync() => await CargarAsync();
 
-    private int EnProspeccion => _prospecciones.Count(p => p.Estado is "P" or "C" or "R" or "E" or "S");
-    private int Contar(string estado) => _prospecciones.Count(p => p.Estado == estado);
-
-    private IEnumerable<ProspeccionDto> Filtradas() =>
-        _prospecciones.Where(p =>
-            (string.IsNullOrEmpty(_filtroEstado) || p.Estado == _filtroEstado) &&
-            (string.IsNullOrEmpty(_distrito) || p.Distrito == _distrito) &&
-            (string.IsNullOrEmpty(_query) || Coincide(p, _query)));
-
-    private static bool Coincide(ProspeccionDto p, string q) =>
-        TextoFiltro.Contiene(p.Direccion, q)
-        || TextoFiltro.Contiene(p.LocalCodigo, q)
-        || TextoFiltro.Contiene(p.PropietarioNombre, q);
-
-    private static bool EsVencido(ProspeccionDto p) =>
-        p.Estado == "S" && p.FechaRecontacto is { } f && f < Hoy;
-
-    // Recarga fresca desde el backend en cada navegacion (no bloquea el circuito).
     private async Task CargarAsync()
     {
         try
         {
-            _prospecciones = (await ProspeccionSvc.RefrescarAsync(DisposedToken)).ToList();
+            _locales = (await ProspeccionSvc.RefrescarAsync(DisposedToken)).ToList();
         }
         catch (OperationCanceledException)
         {
@@ -241,84 +185,58 @@
         {
             _cargando = false;
         }
-        Recalcular();
     }
 
-    private void Recalcular()
-    {
-        var limite = Hoy.AddDays(15);
-        _porRecontactar = _prospecciones
-            .Where(p => p.Estado == "S" && p.FechaRecontacto is { } fecha && fecha <= limite)
-            .OrderBy(p => p.FechaRecontacto)
-            .ToList();
-    }
+    private IEnumerable<ProspeccionDto> Filtradas() =>
+        _locales.Where(p =>
+            CoincideBucket(p)
+            && (string.IsNullOrEmpty(_etapa) || p.Estado == _etapa)
+            && (string.IsNullOrEmpty(_distrito) || p.Distrito == _distrito)
+            && (string.IsNullOrEmpty(_disponibilidad) || p.Disponibilidad == _disponibilidad)
+            && (_idAgente == 0 || p.AgenteId == _idAgente)
+            && (string.IsNullOrEmpty(_query) || Coincide(p, _query)));
 
-    private static string UltimoHito(ProspeccionDto p) => p.Estado switch
+    private bool CoincideBucket(ProspeccionDto p) => _estadoBucket switch
     {
-        "P" => "Sin contactar",
-        "C" => $"Contactado {p.FechaContactoTexto}",
-        "R" => $"Reunión {p.FechaReunionTexto}",
-        "E" => $"Propuesta {p.FechaPropuestaTexto}",
-        "T" => "Captado",
-        "D" => p.Observaciones ?? "Descartado",
-        _ => "—",
+        "ACTIVOS" => EsActivo(p),
+        "POR_CAPTAR" => EsPorCaptar(p),
+        "CAPTADOS" => EsCaptado(p),
+        "ALQUILADOS" => EsAlquilado(p),
+        "INACTIVOS" => EsInactivo(p),
+        _ => true,
     };
 
-    private void AbrirPosponer(ProspeccionDto p) { _target = p; _fechaRecontactoPick = null; _err = null; _modalPosponer = true; }
-    private void AbrirRechazar(ProspeccionDto p) { _target = p; _motivoTmp = ""; _err = null; _modalRechazar = true; }
+    private static bool Coincide(ProspeccionDto p, string q) =>
+        TextoFiltro.Contiene(p.Direccion, q)
+        || TextoFiltro.Contiene(p.LocalCodigo, q)
+        || TextoFiltro.Contiene(p.PropietarioNombre, q);
 
-    // Avanza una etapa simple del embudo (contactar / reunión / propuesta).
-    private void Avanzar(ProspeccionDto p, Func<long, ProspeccionDto> accion, string mensaje)
+    private void ToggleBucket(string bucket) =>
+        _estadoBucket = _estadoBucket == bucket ? "" : bucket;
+
+    private void LimpiarFiltros()
     {
-        try
-        {
-            ActualizarProspeccion(accion(p.Id));
-            Recalcular();
-            Notificar(mensaje);
-        }
-        catch (InvalidOperationException ex) { Notificar(ex.Message); }
+        _estadoBucket = "";
+        _etapa = "";
+        _query = "";
+        _distrito = "";
+        _disponibilidad = "";
+        _idAgente = 0;
     }
 
-    private void ConfirmarPosponer()
-    {
-        if (_target is null) return;
-        if (_fechaRecontactoPick is null) { _err = "Indica la fecha de recontacto."; return; }
-        try
-        {
-            ActualizarProspeccion(ProspeccionSvc.Posponer(_target.Id, _fechaRecontactoPick.Value));
-            _modalPosponer = false;
-            Recalcular();
-            Notificar("Recontacto agendado. Quedó en seguimiento.");
-        }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
-    }
+    private static string EstadoComercial(ProspeccionDto p) =>
+        EsAlquilado(p) ? "Alquilado"
+        : EsCaptado(p) ? "Captado"
+        : EsPorCaptar(p) ? "Por captar"
+        : "Inactivo";
 
-    private void ConfirmarRechazar()
-    {
-        if (_target is null) return;
-        try
-        {
-            ActualizarProspeccion(ProspeccionSvc.Rechazar(_target.Id, _motivoTmp));
-            _modalRechazar = false;
-            Recalcular();
-            Notificar("Prospección descartada por rechazo del propietario.");
-        }
-        catch (InvalidOperationException ex) { _err = ex.Message; }
-    }
+    private static string DisponibilidadLabel(string? code) =>
+        EnumCatalog.LabelFor(EnumCatalog.EstadosLocalComercial, code);
 
-    private void Notificar(string mensaje)
+    private static string DisponibilidadTono(string? code) => code switch
     {
-        _toastMsg = mensaje;
-        _toast = true;
-        _ = DelayThenRenderAsync(2600, () => _toast = false);
-    }
-
-    private void ActualizarProspeccion(ProspeccionDto actualizada)
-    {
-        var datos = _prospecciones.ToList();
-        var indice = datos.FindIndex(item => item.Id == actualizada.Id);
-        if (indice >= 0) datos[indice] = actualizada;
-        else datos.Insert(0, actualizada);
-        _prospecciones = datos;
-    }
+        "D" => "green",
+        "N" => "blue",
+        _ => "gray",
+    };
 }

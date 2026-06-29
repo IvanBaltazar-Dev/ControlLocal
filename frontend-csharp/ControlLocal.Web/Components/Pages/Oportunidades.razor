@@ -3,21 +3,22 @@
 @inject ExportacionService Exportar
 @inject IOportunidadService OportunidadSvc
 @inject ISolicitudService SolicitudSvc
+@inject ICaptacionService CaptacionSvc
 
-<PageTitle>@_title - ControlLocal</PageTitle>
+<PageTitle>Oportunidades comerciales - ControlLocal</PageTitle>
 
-<AppShell Active="@_sideActive" Crumbs="@_crumbs"
-          Title="@_title"
-          Subtitle="@_subtitle">
+<AppShell Active="Oportunidades comerciales" Crumbs="@(new[] { "ControlLocal", "Operacion", "Oportunidades comerciales" })"
+          Title="Oportunidades comerciales"
+          Subtitle="Clientes interesados vinculados a tus captaciones activas">
     <Actions>
         <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
-        @if (_isBroker)
+        @if (App.Role == Roles.Agente)
         {
-            <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("oportunidad-form"))"><Icon Name="plus" Size="13" /> Nueva oportunidad</button>
         }
         else
         {
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("oportunidad-form"))"><Icon Name="plus" Size="13" /> Nueva oportunidad</button>
+            <span class="cl-badge blue"><Icon Name="lock" Size="12" /> Solo lectura</span>
         }
     </Actions>
     <ChildContent>
@@ -37,24 +38,17 @@
 
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
-        <FilterBar Search="@(_isBroker ? "Buscar por operación, cliente, local, agente…" : "Buscar por operación, cliente, local…")"
+        <FilterBar Search="Buscar por operacion, cliente, local, agente, propietario..."
                    @bind-Value="_query" ResultCount="filtradas.Count"
-                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
-            @* El filtro por agente solo tiene sentido para el broker supervisor; el agente
-               solo ve sus propias oportunidades. *@
-            @if (_isBroker)
-            {
-                <FilterSelect Placeholder="Todos los agentes" Options="_agentes" @bind-Value="_agente" />
-            }
-        </FilterBar>
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros" />
 
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
                 <table class="cl-table">
                     <thead>
                         <tr>
-                            <th>Operación</th><th>Captación</th><th>Cliente</th><th>Local</th>
-                            <th>Agente</th><th>Etapa</th><th>Monto/mes</th><th>Última operación</th><th></th>
+                            <th>Operacion</th><th>Cliente</th><th>Local</th><th>Agente</th>
+                            <th>Propietario</th><th>Etapa</th><th>Monto/mes</th><th>Ultima operacion</th><th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -62,7 +56,6 @@
                         {
                             <tr>
                                 <td><span class="mono">@o.Op</span></td>
-                                <td><span class="mono">@o.Cap</span></td>
                                 <td style="font-weight:600;">@o.Client</td>
                                 <td>@o.Local</td>
                                 <td>
@@ -71,20 +64,21 @@
                                         <span>@o.Agent</span>
                                     </div>
                                 </td>
+                                <td>@o.Owner</td>
                                 <td><StatusBadge Label="@o.Stage" /></td>
-                                <td>@(o.Amount == "—" ? "—" : $"USD {o.Amount}")</td>
+                                <td>@(o.Amount == "-" ? "-" : $"USD {o.Amount}")</td>
                                 <td>
-                                    <div style="font-weight:600;font-size:12.5px;">@o.UltimaOp</div>
+                                    <div style="font-weight:600;font-size:12.5px;">@o.LastAction</div>
                                     <span class="cl-muted" style="font-size:11.5px;">@o.Updated</span>
                                 </td>
-                                <td><button class="cl-btn sm" @onclick="@(() => App.Navigate($"oportunidad-detail/{o.Id}"))">Ver seguimiento</button></td>
+                                <td><a class="cl-btn sm" href="@($"/oportunidad-detail/{o.Id}")">Ver seguimiento</a></td>
                             </tr>
                         }
                     </tbody>
                 </table>
                 @if (_cargando)
                 {
-                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando operaciones…</div>
+                    <div style="padding:40px;text-align:center;color:#7E8794;">Actualizando operaciones...</div>
                 }
                 else if (_error is not null)
                 {
@@ -95,96 +89,74 @@
                     <div style="padding:40px;text-align:center;color:#7E8794;">
                         <Icon Name="target" Size="28" style="margin-bottom:10px;" />
                         <div style="font-weight:600;margin-bottom:4px;">Sin operaciones en este filtro</div>
-                        <div style="font-size:12px;">Ajusta la búsqueda o limpia los filtros.</div>
+                        <div style="font-size:12px;">Ajusta la busqueda o limpia los filtros.</div>
                     </div>
                 }
             </div>
         </div>
         <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
-
-        @if (_isBroker)
-        {
-            <div class="cl-alert blue" style="margin-top:14px;">
-                <Icon Name="info" Size="15" />
-                <span>Como supervisor consultas las operaciones en <b>solo lectura</b>. El registro de interacciones, visitas y solicitudes lo realiza el agente a cargo.</span>
-            </div>
-        }
     </ChildContent>
 </AppShell>
 
 @code {
     private string _tab = "Todas";
     private string _query = "";
-    private string _agente = "";
     private int _pagina = 1;
-    private bool _isBroker => App.Role == Roles.Broker;
-    private string _title => _isBroker ? "Operaciones del equipo" : "Oportunidades comerciales";
-    private string _sideActive => _isBroker ? "Operaciones del equipo" : "Oportunidades comerciales";
-    private string _subtitle => _isBroker
-        ? "Seguimiento de las operaciones comerciales de los agentes que supervisas"
-        : "Clientes interesados vinculados a tus captaciones activas";
-    private string[] _crumbs => _isBroker
-        ? new[] { "ControlLocal", "Seguimiento", "Operaciones del equipo" }
-        : new[] { "ControlLocal", "Operacion", "Oportunidades comerciales" };
 
-    // Dimensiones derivadas de los datos (sin valores hardcodeados).
     private string[] _etapas => _ops.Select(o => o.Stage).Distinct().OrderBy(x => x).ToArray();
-    private IReadOnlyList<string> _agentes => _ops.Select(o => o.Agent).Distinct().OrderBy(x => x).ToList();
-
     private int CuentaEtapa(string e) => _ops.Count(o => o.Stage == e);
 
     private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", _ops.Count) }
         .Concat(_etapas.Select(e => new Tabs.TabItem(e, CuentaEtapa(e))))
         .ToArray();
 
-    private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_agente);
+    private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query);
 
-    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _agente = ""; _pagina = 1; }
+    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _pagina = 1; }
 
     private async Task ExportarCsv()
     {
-        await Exportar.DescargarCsvAsync("operaciones_equipo",
-            new[] { "Operación", "Captación", "Cliente", "Local", "Agente", "Etapa", "Monto mensual USD", "Última operación", "Actualizada" },
+        await Exportar.DescargarCsvAsync("oportunidades_comerciales",
+            new[] { "Operacion", "Cliente", "Local", "Agente", "Propietario", "Etapa", "Monto mensual USD", "Ultima operacion", "Actualizada" },
             Filtradas().Select(o => (IReadOnlyList<string?>)new[]
             {
-                o.Op, o.Cap, o.Client, o.Local, o.Agent, o.Stage, o.Amount, o.UltimaOp, o.Updated,
+                o.Op, o.Client, o.Local, o.Agent, o.Owner, o.Stage, o.Amount, o.LastAction, o.Updated,
             }));
     }
 
     private IEnumerable<OpRow> Filtradas() => _ops.Where(o =>
         (_tab == "Todas" || o.Stage == _tab) &&
-        (string.IsNullOrEmpty(_agente) || o.Agent == _agente) &&
         (string.IsNullOrEmpty(_query) || Coincide(o, _query)));
 
     private static bool Coincide(OpRow o, string q) =>
         TextoFiltro.Contiene(o.Op, q)
+        || TextoFiltro.Contiene(o.Cap, q)
         || TextoFiltro.Contiene(o.Client, q)
         || TextoFiltro.Contiene(o.Local, q)
         || TextoFiltro.Contiene(o.Agent, q)
-        || TextoFiltro.Contiene(o.Cap, q);
+        || TextoFiltro.Contiene(o.Owner, q);
 
     private static string TonoEtapa(string e) => e switch
     {
         "Alquilada" => "green",
         "Captada" => "blue",
-        "En evaluación" => "info",
+        "En evaluacion" => "info",
         _ => "blue",
     };
 
-    private record OpRow(long Id, string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Stage, string Amount, string Updated, string UltimaOp);
+    private record OpRow(long Id, string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Owner, string Stage, string Amount, string Updated, string LastAction);
 
     private IReadOnlyList<OpRow> _ops = [];
     private bool _cargando = true;
     private string? _error;
 
-    // Recarga oportunidades y solicitudes frescas del backend, luego construye las
-    // filas combinadas (no bloquea el circuito).
     protected override async Task OnInitializedAsync()
     {
         try
         {
             await OportunidadSvc.RefrescarAsync();
             await SolicitudSvc.RefrescarAsync();
+            await CaptacionSvc.RefrescarAsync();
             _ops = Construir();
         }
         catch (Exception ex)
@@ -199,6 +171,7 @@
 
     private IReadOnlyList<OpRow> Construir() => OportunidadSvc.All().Select(o =>
     {
+        var captacion = CaptacionSvc.ByCodigo(o.CaptacionCodigo);
         var solicitud = SolicitudSvc.All().FirstOrDefault(s =>
             s.OportunidadId == o.Id
             || s.CodigoOperacion == o.CodigoOportunidad
@@ -209,7 +182,7 @@
             .Take(2).Select(parte => char.ToUpperInvariant(parte[0])));
         var etapa = solicitud?.Estado switch
         {
-            "En revision" => "En evaluación",
+            "En revision" => "En evaluacion",
             "Observada" => "Solicitud observada",
             "Aprobada" => "Solicitud aprobada",
             "Rechazada" => "Solicitud rechazada",
@@ -225,40 +198,39 @@
             iniciales,
             "#3A6BB5",
             nombre,
+            string.IsNullOrWhiteSpace(captacion?.PropietarioNombre) ? "-" : captacion.PropietarioNombre,
             etapa,
-            solicitud?.MontoMensualTexto ?? "—",
+            solicitud?.MontoMensualTexto ?? "-",
             FormatearFecha(fechaEvento, o.FechaRegistroTexto),
             ultimaOp);
     }).ToList();
 
-    // Deriva la última operación real (acción + fecha) de la solicitud vinculada cuando existe,
-    // o de la propia oportunidad. Reemplaza la fecha de registro que se mostraba antes.
     private static (string Label, DateTime? Fecha) UltimaOperacion(OportunidadComercialDto o, SolicitudAlquilerDto? solicitud)
     {
         if (solicitud is not null)
         {
             var label = solicitud.Estado switch
             {
-                "Aprobada" => "Aprobación de solicitud",
+                "Aprobada" => "Aprobacion de solicitud",
                 "Rechazada" => "Rechazo de solicitud",
-                "Observada" => "Observación de solicitud",
-                "En revision" => "Solicitud en evaluación",
-                "Cerrada" => "Cierre de operación",
+                "Observada" => "Observacion de solicitud",
+                "En revision" => "Solicitud en evaluacion",
+                "Cerrada" => "Cierre de operacion",
                 _ => "Solicitud registrada",
             };
             return (label, solicitud.FechaActualizacionEstado ?? o.FechaActualizacion);
         }
         var opLabel = o.Estado switch
         {
-            "Alquilada" => "Operación cerrada",
+            "Alquilada" => "Operacion cerrada",
             "Captada" => "Oportunidad abierta",
-            "En evaluación" => "Oportunidad en evaluación",
+            "En evaluacion" => "Oportunidad en evaluacion",
             _ => "Oportunidad actualizada",
         };
         return (opLabel, o.FechaActualizacion);
     }
 
     private static string FormatearFecha(DateTime? fecha, string fallback) =>
-        fecha?.ToString("dd MMM yyyy · HH:mm", System.Globalization.CultureInfo.InvariantCulture)
-        ?? (string.IsNullOrWhiteSpace(fallback) ? "—" : fallback);
+        fecha?.ToString("dd MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+        ?? (string.IsNullOrWhiteSpace(fallback) ? "-" : fallback);
 }

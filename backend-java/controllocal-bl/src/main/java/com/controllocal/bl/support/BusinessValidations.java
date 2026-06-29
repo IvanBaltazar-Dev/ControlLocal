@@ -9,6 +9,7 @@ import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.persona.enums.EstadoActivoInactivo;
+import com.controllocal.model.persona.enums.TipoDocumentoIdentidad;
 import com.controllocal.model.persona.Persona;
 import com.controllocal.model.persona.Propietario;
 import com.controllocal.model.usuario.*;
@@ -53,9 +54,32 @@ public final class BusinessValidations {
             throw new BusinessException("El tipo de documento es obligatorio.");
         }
         texto(persona.getNumeroDocumento(), "El numero de documento");
+        documentoIdentidad(persona);
         texto(persona.getNombresORazonSocial(), "El nombre o razon social");
         if (persona.getEstado() == null) {
             throw new BusinessException("El estado de la persona es obligatorio.");
+        }
+    }
+
+    private static void documentoIdentidad(Persona persona) {
+        String numero = persona.getNumeroDocumento() != null ? persona.getNumeroDocumento().trim() : "";
+        TipoDocumentoIdentidad tipo = persona.getTipoDocumento();
+        if (tipo == TipoDocumentoIdentidad.RUC) {
+            exigirDigitos(numero, "El RUC");
+            if (numero.length() != 11) {
+                throw new BusinessException("El RUC debe tener 11 digitos.");
+            }
+        } else if (tipo == TipoDocumentoIdentidad.DNI) {
+            exigirDigitos(numero, "El DNI");
+            if (numero.length() != 8) {
+                throw new BusinessException("El DNI debe tener 8 digitos.");
+            }
+        }
+    }
+
+    private static void exigirDigitos(String valor, String campo) {
+        if (!valor.chars().allMatch(Character::isDigit)) {
+            throw new BusinessException(campo + " solo debe contener numeros.");
         }
     }
 
@@ -308,7 +332,28 @@ public final class BusinessValidations {
         if (interaccion.getCanalContacto() == null || interaccion.getResultado() == null) {
             throw new BusinessException("La interaccion debe tener canal y resultado.");
         }
-        id(idOportunidad(interaccion.getOportunidadComercial()), "La oportunidad comercial de la interaccion");
+        String contexto = interaccion.getContexto() == null || interaccion.getContexto().isBlank()
+                ? "OPORTUNIDAD"
+                : interaccion.getContexto().trim().toUpperCase();
+        int referencias = 0;
+        referencias += idOportunidad(interaccion.getOportunidadComercial()) != null ? 1 : 0;
+        referencias += idProspeccion(interaccion.getProspeccion()) != null ? 1 : 0;
+        referencias += idCaptacion(interaccion.getCaptacion()) != null ? 1 : 0;
+        referencias += idCliente(interaccion.getClienteInteresado()) != null ? 1 : 0;
+        if (referencias != 1) {
+            throw new BusinessException("La interaccion debe pertenecer exactamente a una entidad comercial.");
+        }
+        if ("PROSPECCION".equals(contexto)) {
+            id(idProspeccion(interaccion.getProspeccion()), "La prospeccion de la interaccion");
+        } else if ("OPORTUNIDAD".equals(contexto)) {
+            id(idOportunidad(interaccion.getOportunidadComercial()), "La oportunidad comercial de la interaccion");
+        } else if ("CAPTACION".equals(contexto)) {
+            id(idCaptacion(interaccion.getCaptacion()), "La captacion de la interaccion");
+        } else if ("CLIENTE".equals(contexto)) {
+            id(idCliente(interaccion.getClienteInteresado()), "El cliente interesado de la interaccion");
+        } else {
+            throw new BusinessException("Contexto de interaccion invalido.");
+        }
         id(idAgente(interaccion.getAgenteResponsable()), "El agente de la interaccion");
     }
 
@@ -370,6 +415,10 @@ public final class BusinessValidations {
 
     public static Long idOportunidad(OportunidadComercial oportunidad) {
         return oportunidad != null ? oportunidad.getIdOportunidad() : null;
+    }
+
+    public static Long idProspeccion(Prospeccion prospeccion) {
+        return prospeccion != null ? prospeccion.getIdProspeccion() : null;
     }
 
     private static void positivo(BigDecimal valor, String campo) {

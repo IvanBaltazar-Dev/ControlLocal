@@ -1,0 +1,340 @@
+@page "/seguimiento-comercial"
+@inherits SafeComponentBase
+@inject AppState App
+@inject ApiClient Api
+@inject ExportacionService Exportar
+
+<PageTitle>Operaciones del equipo - ControlLocal</PageTitle>
+
+<AppShell Active="Operaciones del equipo" Crumbs="@(new[] { "ControlLocal", "Seguimiento", "Operaciones del equipo" })"
+          Title="Operaciones del equipo"
+          Subtitle="@_subtitle">
+    <Actions>
+        <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
+        <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+    </Actions>
+    <ChildContent>
+        <div style="display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:12px;margin-bottom:16px;">
+            <MetricCard Icon="target" Label="Todos" Value="@_counts.Todos.ToString()" Tone="gray"
+                        Active="@(_tab == Todos)" OnClick="@(() => CambiarTabAsync(Todos))" />
+            @foreach (var proceso in Procesos)
+            {
+                <MetricCard Icon="@IconoProceso(proceso)" Label="@proceso" Value="@CuentaProceso(proceso).ToString()"
+                            Tone="@TonoProceso(proceso)" Active="@(_tab == proceso)" OnClick="@(() => CambiarTabAsync(proceso))" />
+            }
+        </div>
+
+        <Tabs Active="@_tab" OnSelect="CambiarTabAsync" Items="_tabs" />
+
+        <FilterBar Search="Buscar por codigo, local, agente, propietario, cliente..."
+                   Value="@_query" ValueChanged="CambiarBusquedaAsync" ResultCount="@((int)_total)"
+                   HasActiveFilters="HayFiltros" OnClear="LimpiarFiltrosAsync">
+            <FilterSelect Placeholder="Todos los agentes" Options="_options.Agentes" Value="@_agente" ValueChanged="CambiarAgenteAsync" />
+            <FilterSelect Placeholder="Todos los propietarios" Options="_options.Propietarios" Value="@_propietario" ValueChanged="CambiarPropietarioAsync" />
+            <FilterSelect Placeholder="Todos los estados" Options="_options.Estados" Value="@_estado" ValueChanged="CambiarEstadoAsync" />
+            <FilterSelect Placeholder="Todos los distritos" Options="_options.Distritos" Value="@_distrito" ValueChanged="CambiarDistritoAsync" />
+        </FilterBar>
+
+        <div class="cl-card">
+            <div class="cl-card-body" style="padding:0;">
+                @if (_cargando)
+                {
+                    <div style="padding:54px 20px;text-align:center;color:#7E8794;">
+                        <Icon Name="refresh" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Actualizando operaciones...</div>
+                        <div style="font-size:12px;">Cargando los resultados de esta consulta.</div>
+                    </div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="cl-alert red" style="margin:14px;"><Icon Name="alert" Size="15" /><span>@_error</span></div>
+                }
+                else if (_rows.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#7E8794;">
+                        <Icon Name="target" Size="28" style="margin-bottom:10px;" />
+                        <div style="font-weight:600;margin-bottom:4px;">Sin procesos en este filtro</div>
+                        <div style="font-size:12px;">Ajusta la busqueda o limpia los filtros.</div>
+                    </div>
+                }
+                else
+                {
+                    <table class="cl-table">
+                        <thead>
+                            <tr>
+                                <th>Proceso</th><th>Codigo</th><th>Cliente</th><th>Propietario</th>
+                                <th>Local</th><th>Distrito</th><th>Agente</th><th>Estado</th><th>Avance actual</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _rows)
+                            {
+                                <tr>
+                                    <td><span class="cl-badge @row.Tono plain"><Icon Name="@row.Icono" Size="11" /> @row.Proceso</span></td>
+                                    <td><span class="mono">@row.Codigo</span></td>
+                                    <td>
+                                        <div style="max-width:170px;" title="@row.Cliente">
+                                            <FichaLink Kind="cliente" Id="@row.ClienteId" Text="@row.Cliente" />
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="max-width:170px;" title="@row.Propietario">
+                                            <FichaLink Kind="owner" Id="@row.PropietarioId" Text="@row.Propietario" />
+                                        </div>
+                                    </td>
+                                    <td>@row.Local</td>
+                                    <td>@row.Distrito</td>
+                                    <td>@row.Agente</td>
+                                    <td><StatusBadge Label="@row.Estado" /></td>
+                                    <td><span class="cl-muted" style="font-size:12px;">@FechaLegible(row.UltimoHito)</span></td>
+                                    <td>
+                                        <div class="cl-flex" style="gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+                                            @if (App.Role == Roles.Broker && !string.IsNullOrWhiteSpace(row.RutaRevision))
+                                            {
+                                                <a class="cl-btn sm primary" href="@Href(row.RutaRevision)"><Icon Name="checkCircle" Size="12" /> Revisar ahora</a>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(row.Ruta))
+                                            {
+                                                <a class="cl-btn sm" href="@Href(row.Ruta)"><Icon Name="eye" Size="12" /> Ver detalle</a>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+        @if (!_cargando)
+        {
+            <Pagination Total="@((int)_total)" PageSize="@PageSize" Page="@_pagina" PageChanged="CambiarPaginaAsync" />
+        }
+    </ChildContent>
+</AppShell>
+
+@code {
+    private const string Todos = "Todos";
+    private const int PageSize = 8;
+    private static readonly string[] Procesos = ["Prospeccion", "Captacion", "Oportunidad", "Solicitud", "Cierre"];
+
+    private string _tab = Todos;
+    private string _query = "";
+    private string _agente = "";
+    private string _propietario = "";
+    private string _estado = "";
+    private string _distrito = "";
+    private int _pagina = 1;
+    private long _total;
+    private bool _cargando = true;
+    private string? _error;
+    private IReadOnlyList<SeguimientoRowApi> _rows = [];
+    private SeguimientoCountsApi _counts = new();
+    private SeguimientoOptionsApi _options = new();
+
+    private string _subtitle => App.Role == Roles.Admin
+        ? "Consulta global de prospecciones, captaciones, oportunidades, solicitudes y cierres"
+        : "Consulta de prospecciones, captaciones, oportunidades, solicitudes y cierres de tus agentes";
+
+    private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem(Todos, _counts.Todos) }
+        .Concat(Procesos.Select(p => new Tabs.TabItem(p, CuentaProceso(p))))
+        .ToArray();
+
+    private bool HayFiltros => _tab != Todos
+        || !string.IsNullOrEmpty(_query)
+        || !string.IsNullOrEmpty(_agente)
+        || !string.IsNullOrEmpty(_propietario)
+        || !string.IsNullOrEmpty(_estado)
+        || !string.IsNullOrEmpty(_distrito);
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        _rows = [];
+        _total = 0;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var ruta = RutaSeguimiento();
+            var pagina = await Api.GetAsync<SeguimientoPageApi>(ruta, DisposedToken);
+            _rows = pagina?.Items ?? [];
+            _total = pagina?.TotalRecords ?? 0;
+            _counts = pagina?.Counts ?? new();
+            _options = pagina?.Options ?? new();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _rows = [];
+            _total = 0;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private string RutaSeguimiento()
+    {
+        var partes = new List<string>
+        {
+            $"process__eq={Esc(_tab)}",
+            $"page={_pagina}",
+            $"page_size={PageSize}",
+        };
+        Agregar(partes, "query__contains", _query);
+        Agregar(partes, "agent__eq", _agente);
+        Agregar(partes, "owner__eq", _propietario);
+        Agregar(partes, "state__eq", _estado);
+        Agregar(partes, "district__eq", _distrito);
+        return "seguimiento-comercial?" + string.Join("&", partes);
+    }
+
+    private static void Agregar(List<string> partes, string nombre, string valor)
+    {
+        if (!string.IsNullOrWhiteSpace(valor))
+            partes.Add($"{nombre}={Esc(valor)}");
+    }
+
+    private static string Esc(string valor) => Uri.EscapeDataString(valor ?? "");
+
+    private async Task CambiarTabAsync(string tab)
+    {
+        _tab = tab;
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task CambiarPaginaAsync(int pagina)
+    {
+        _pagina = pagina;
+        await CargarAsync();
+    }
+
+    private async Task CambiarBusquedaAsync(string valor)
+    {
+        _query = valor;
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task CambiarAgenteAsync(string valor) => await CambiarFiltroAsync(v => _agente = v, valor);
+    private async Task CambiarPropietarioAsync(string valor) => await CambiarFiltroAsync(v => _propietario = v, valor);
+    private async Task CambiarEstadoAsync(string valor) => await CambiarFiltroAsync(v => _estado = v, valor);
+    private async Task CambiarDistritoAsync(string valor) => await CambiarFiltroAsync(v => _distrito = v, valor);
+
+    private async Task CambiarFiltroAsync(Action<string> asignar, string valor)
+    {
+        asignar(valor);
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task LimpiarFiltrosAsync()
+    {
+        _tab = Todos;
+        _query = "";
+        _agente = "";
+        _propietario = "";
+        _estado = "";
+        _distrito = "";
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task ExportarCsv()
+    {
+        await Exportar.DescargarCsvAsync("operaciones_equipo",
+            new[] { "Proceso", "Codigo", "Cliente", "Propietario", "Local", "Distrito", "Agente", "Estado", "Avance actual" },
+            _rows.Select(row => (IReadOnlyList<string?>)new[]
+            {
+                row.Proceso, row.Codigo, row.Cliente, row.Propietario, row.Local, row.Distrito, row.Agente, row.Estado, row.UltimoHito,
+            }));
+    }
+
+    private int CuentaProceso(string proceso) => proceso switch
+    {
+        "Prospeccion" => _counts.Prospeccion,
+        "Captacion" => _counts.Captacion,
+        "Oportunidad" => _counts.Oportunidad,
+        "Solicitud" => _counts.Solicitud,
+        "Cierre" => _counts.Cierre,
+        _ => 0,
+    };
+
+    private static string Href(string ruta) => "/" + ruta.TrimStart('/');
+
+    private static string FechaLegible(string valor)
+    {
+        if (DateTime.TryParse(valor, out var fecha))
+            return fecha.ToString("dd MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(valor) ? "-" : valor;
+    }
+
+    private static string IconoProceso(string proceso) => proceso switch
+    {
+        "Prospeccion" => "store",
+        "Captacion" => "pin",
+        "Oportunidad" => "target",
+        "Solicitud" => "fileText",
+        "Cierre" => "checkCircle",
+        _ => "target",
+    };
+
+    private static string TonoProceso(string proceso) => proceso switch
+    {
+        "Cierre" => "green",
+        "Solicitud" => "gray",
+        "Oportunidad" => "info",
+        _ => "blue",
+    };
+
+    private sealed record SeguimientoPageApi(
+        IReadOnlyList<SeguimientoRowApi>? Items,
+        long TotalRecords,
+        int Page,
+        int PageSize,
+        SeguimientoCountsApi? Counts,
+        SeguimientoOptionsApi? Options);
+
+    private sealed record SeguimientoRowApi(
+        string Proceso,
+        string Codigo,
+        string Cliente,
+        long? ClienteId,
+        string Local,
+        string Distrito,
+        string Agente,
+        string Propietario,
+        long? PropietarioId,
+        string Estado,
+        string UltimoHito,
+        string Ruta,
+        string RutaRevision,
+        string Icono,
+        string Tono,
+        DateTime? FechaOrden,
+        string Monto);
+
+    private sealed record SeguimientoCountsApi(
+        int Todos = 0,
+        int Prospeccion = 0,
+        int Captacion = 0,
+        int Oportunidad = 0,
+        int Solicitud = 0,
+        int Cierre = 0);
+
+    private sealed class SeguimientoOptionsApi
+    {
+        public IReadOnlyList<string> Agentes { get; init; } = [];
+        public IReadOnlyList<string> Propietarios { get; init; } = [];
+        public IReadOnlyList<string> Estados { get; init; } = [];
+        public IReadOnlyList<string> Distritos { get; init; } = [];
+    }
+}

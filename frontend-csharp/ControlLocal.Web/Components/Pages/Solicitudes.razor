@@ -1,19 +1,25 @@
 @page "/solicitudes"
+@page "/solicitudes-revisar"
 @inject AppState App
 @inject ISolicitudService SolicitudSvc
 @inject ExportacionService Exportar
+@inject NavigationManager Nav
 
 <PageTitle>@_title · ControlLocal</PageTitle>
 
 <AppShell Active="@_sideActive" Crumbs="@_crumbs" Title="@_title" Subtitle="@_subtitle">
     <Actions>
-        @if (_isBroker)
+        @if (App.Role == Roles.Agente)
         {
-            <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Nueva solicitud</button>
         }
         else
         {
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("solicitud-form"))"><Icon Name="plus" Size="13" /> Nueva solicitud</button>
+            <button class="cl-btn" @onclick="ExportarCsv"><Icon Name="download" Size="13" /> Exportar</button>
+            @if (App.Role == Roles.Admin)
+            {
+                <span class="cl-badge blue"><Icon Name="lock" Size="12" /> Solo lectura</span>
+            }
         }
     </Actions>
     <ChildContent>
@@ -44,7 +50,7 @@
                 <table class="cl-table">
                     <thead>
                         <tr>
-                            <th>Solicitud</th><th>Operación</th><th>Cliente</th><th>Local</th><th>Distrito</th>
+                            <th>Solicitud</th><th>Agente</th><th>Cliente</th><th>Local</th><th>Distrito</th>
                             <th>Monto/mes</th><th>Plazo</th><th>Documentos</th><th>Fecha</th><th>Estado</th><th></th>
                         </tr>
                     </thead>
@@ -53,7 +59,7 @@
                         {
                             <tr>
                                 <td><span class="mono">@s.CodigoSolicitud</span></td>
-                                <td><span class="mono">@s.CodigoOperacion</span></td>
+                                <td>@(string.IsNullOrWhiteSpace(s.AgenteNombre) ? "—" : s.AgenteNombre)</td>
                                 <td style="font-weight:600;">@s.ClienteNombre</td>
                                 <td>@s.DireccionLocal</td>
                                 <td>@s.DistritoLocal</td>
@@ -70,13 +76,18 @@
                                 <td><span class="cl-muted" style="font-size:12px;">@s.FechaRegistroTexto</span></td>
                                 <td><StatusBadge Label="@s.Estado" /></td>
                                 <td>
-                                    @if (_isBroker)
+                                    @if (_canEvaluate)
                                     {
                                         <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"evaluacion/{s.CodigoSolicitud}"))">Evaluar</button>
                                     }
-                                    else if (s.Estado == "Observada")
+                                    else if (App.Role == Roles.Agente && s.Estado == "Observada")
                                     {
                                         <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"documentos/{s.CodigoSolicitud}"))">Subsanar</button>
+                                    }
+                                    else if (App.Role == Roles.Agente && s.Estado == "Aprobada")
+                                    {
+                                        @* Etapa 5 (trigger 2): la accion de cierre aflora aqui, donde vive la solicitud. *@
+                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate($"solicitud-detail/{s.CodigoSolicitud}"))"><Icon Name="checkCircle" Size="12" /> Cerrar</button>
                                     }
                                     else
                                     {
@@ -110,7 +121,9 @@
 </AppShell>
 
 @code {
-    private bool _isBroker => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private bool _isBroker => App.Role == Roles.Broker;
+    private bool _canEvaluate => App.Role == Roles.Broker;
+    private string _defaultTab => App.Role == Roles.Broker ? "En revision" : "Todas";
     private string _tab = "Todas";
     private string _query = "", _distrito = "";
     private int _pagina = 1;
@@ -122,7 +135,7 @@
     // asi ve de inmediato lo que el agente acaba de enviar y el agente ve el resultado.
     protected override async Task OnInitializedAsync()
     {
-        _tab = _isBroker ? "En revision" : "Todas";
+        _tab = _defaultTab;
         try
         {
             Todas = await SolicitudSvc.RefrescarAsync();
@@ -145,10 +158,10 @@
 
     private int CuentaEstado(string e) => Todas.Count(s => s.Estado == e);
 
-    private bool HayFiltros => _tab != (_isBroker ? "En revision" : "Todas")
+    private bool HayFiltros => _tab != _defaultTab
                                || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
 
-    private void LimpiarFiltros() { _tab = _isBroker ? "En revision" : "Todas"; _query = ""; _distrito = ""; _pagina = 1; }
+    private void LimpiarFiltros() { _tab = _defaultTab; _query = ""; _distrito = ""; _pagina = 1; }
 
     private async Task ExportarCsv()
     {
@@ -195,14 +208,23 @@
     };
 
     private string _title => _isBroker ? "Solicitudes por evaluar" : "Solicitudes de alquiler";
-    private string _sideActive => _isBroker ? "Solicitudes por evaluar" : "Solicitudes de alquiler";
-    private string _subtitle => _isBroker
-        ? "Solicitudes enviadas por tus agentes · evalúa documentos y resuelve cada operación"
-        : "Solicitudes de alquiler que generé a partir de mis captaciones";
+    // Misma página, dos accesos: la cola de revisión (Supervisión) y la lista (Consulta).
+    // El item activo del sidebar depende de la ruta para no resaltar ambos.
+    private bool _esRevisar => Nav.Uri.Contains("solicitudes-revisar", StringComparison.OrdinalIgnoreCase);
+    private string _sideActive => _esRevisar ? "Solicitudes por revisar" : "Solicitudes de alquiler";
+    private string _subtitle => App.Role switch
+    {
+        Roles.Broker => "Solicitudes enviadas por tus agentes · evalúa documentos y resuelve cada operación",
+        Roles.Admin => "Consulta global de solicitudes de alquiler en solo lectura",
+        _ => "Solicitudes de alquiler que generé a partir de mis captaciones",
+    };
 
-    private string[] _crumbs => _isBroker
-        ? new[] { "ControlLocal", "Bandejas de revisión", "Solicitudes por evaluar" }
-        : new[] { "ControlLocal", "Operación", "Solicitudes de alquiler" };
+    private string[] _crumbs => App.Role switch
+    {
+        Roles.Broker => new[] { "ControlLocal", "Bandejas de revisión", "Solicitudes por evaluar" },
+        Roles.Admin => new[] { "ControlLocal", "Comercial", "Solicitudes de alquiler" },
+        _ => new[] { "ControlLocal", "Operación", "Solicitudes de alquiler" },
+    };
 
     private Tabs.TabItem[] _tabs => new[] { new Tabs.TabItem("Todas", Todas.Count) }
         .Concat(_estados.Select(e => new Tabs.TabItem(e, CuentaEstado(e))))

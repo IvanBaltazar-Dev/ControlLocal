@@ -1,0 +1,144 @@
+@* Panel de recomendacion de cartera (Etapa 8). Presenta alternativas (propiedades o
+   clientes) con su puntaje y el detalle de por que coinciden y que criterio no se cumple.
+   Es presentacional: la pagina padre carga los datos y los pasa por parametro. *@
+
+<div class="cl-card">
+    <div class="cl-card-head">
+        <div class="cl-card-title"><Icon Name="@Icono" Size="14" /> @Titulo</div>
+        @if (!Cargando && Error is null)
+        {
+            <span class="cl-badge gray">@(Items?.Count ?? 0)</span>
+        }
+    </div>
+    <div class="cl-card-body">
+        @if (!string.IsNullOrWhiteSpace(Descripcion))
+        {
+            <p style="margin:0 0 12px;color:#7E8794;font-size:12.5px;">@Descripcion</p>
+        }
+
+        @if (Cargando)
+        {
+            <div style="padding:22px;text-align:center;color:#7E8794;font-size:12.5px;">Buscando coincidencias...</div>
+        }
+        else if (Error is not null)
+        {
+            <div class="cl-alert amber"><Icon Name="alert" Size="15" /><span>@Error</span></div>
+        }
+        else if (Items is null || Items.Count == 0)
+        {
+            <div style="padding:22px;text-align:center;color:#7E8794;font-size:12.5px;">@TextoVacio</div>
+        }
+        else
+        {
+            <div class="cl-stack" style="gap:10px;">
+                @foreach (var item in Items)
+                {
+                    <div style="border:1px solid var(--c-border);border-radius:10px;padding:12px 13px;background:#fff;">
+                        <div style="display:flex;align-items:flex-start;gap:10px;">
+                            <div style="min-width:0;flex:1;">
+                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <span style="font-weight:600;font-size:13.5px;color:#1F2937;">@item.Titulo</span>
+                                    @if (Dato(item.Codigo))
+                                    {
+                                        <span class="cl-badge gray plain" style="font-size:11px;">@item.Codigo</span>
+                                    }
+                                </div>
+                                @if (Dato(item.Subtitulo))
+                                {
+                                    <div style="color:#7E8794;font-size:12px;margin-top:2px;">@item.Subtitulo</div>
+                                }
+                            </div>
+                            <span title="Criterios cumplidos" style="@PuntajeStyle(item.Puntaje)">@item.Puntaje%</span>
+                        </div>
+
+                        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:11.5px;color:#4B5563;">
+                            @if (Dato(item.Distrito))
+                            {
+                                <span><Icon Name="mapPin" Size="11" /> @item.Distrito</span>
+                            }
+                            @if (Dato(item.Renta))
+                            {
+                                <span>Renta: <b>@item.Renta</b></span>
+                            }
+                            @if (Dato(item.Area))
+                            {
+                                <span>Area: <b>@item.Area</b></span>
+                            }
+                            @if (Dato(item.Frente))
+                            {
+                                <span>Frente: <b>@item.Frente</b></span>
+                            }
+                        </div>
+
+                        @if (item.Cumple.Count > 0 || item.NoCumple.Count > 0)
+                        {
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
+                                @foreach (var razon in item.Cumple)
+                                {
+                                    <span style="@ChipStyle(true)"><Icon Name="check" Size="10" /> @razon</span>
+                                }
+                                @foreach (var razon in item.NoCumple)
+                                {
+                                    <span style="@ChipStyle(false)"><Icon Name="x" Size="10" /> @razon</span>
+                                }
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(item.ProponerRuta) || (MostrarVer && Dato(DetalleRuta(item))))
+                        {
+                            <div style="display:flex;gap:8px;margin-top:11px;">
+                                @if (!string.IsNullOrWhiteSpace(item.ProponerRuta))
+                                {
+                                    <a class="cl-btn sm primary" href="@Href(item.ProponerRuta)"><Icon Name="target" Size="12" /> @EtiquetaAccion</a>
+                                }
+                                @if (MostrarVer && Dato(DetalleRuta(item)))
+                                {
+                                    <a class="cl-btn sm ghost" href="@Href(DetalleRuta(item))"><Icon Name="arrowUpRight" Size="12" /> Ver ficha</a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = "Coincidencias de cartera";
+    [Parameter] public string? Descripcion { get; set; }
+    [Parameter] public string Icono { get; set; } = "target";
+    [Parameter] public IReadOnlyList<CoincidenciaDto>? Items { get; set; }
+    [Parameter] public bool Cargando { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string TextoVacio { get; set; } = "No hay coincidencias por ahora.";
+    [Parameter] public string EtiquetaAccion { get; set; } = "Proponer";
+    [Parameter] public bool MostrarVer { get; set; } = true;
+
+    private static bool Dato(string? valor) => !string.IsNullOrWhiteSpace(valor) && valor.Trim() != "-";
+
+    private static string Href(string ruta) => string.IsNullOrWhiteSpace(ruta)
+        ? "#"
+        : ruta.StartsWith('/') ? ruta : "/" + ruta;
+
+    private static string DetalleRuta(CoincidenciaDto item) => item.Tipo switch
+    {
+        "PROPIEDAD" => Dato(item.Codigo) ? "captacion-detail/" + item.Codigo : "",
+        "CLIENTE" => item.ClienteId is > 0 ? "cliente-detail/" + item.ClienteId : "",
+        _ => "",
+    };
+
+    private static string PuntajeStyle(int puntaje)
+    {
+        var (bg, fg) = puntaje >= 67 ? ("#E7F6EC", "#16A34A")
+            : puntaje >= 34 ? ("#FEF3E2", "#B45309")
+            : ("#F1F3F5", "#6B7280");
+        return $"flex:none;font-weight:700;font-size:12px;padding:3px 9px;border-radius:999px;background:{bg};color:{fg};";
+    }
+
+    private static string ChipStyle(bool cumple)
+    {
+        var (bg, fg) = cumple ? ("#E7F6EC", "#15803D") : ("#FEF3E2", "#B45309");
+        return $"display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:7px;background:{bg};color:{fg};";
+    }
+}

@@ -4,13 +4,17 @@ using ControlLocal.Web.Models.Agentes;
 using ControlLocal.Web.Models.Asignaciones;
 using ControlLocal.Web.Models.Brokers;
 using ControlLocal.Web.Models.Captaciones;
+using ControlLocal.Web.Models.Cartera;
 using ControlLocal.Web.Models.Clientes;
 using ControlLocal.Web.Models.Contratos;
+using ControlLocal.Web.Models.Fichas;
 using ControlLocal.Web.Models.Locales;
 using ControlLocal.Web.Models.Oportunidades;
 using ControlLocal.Web.Models.Propietarios;
+using ControlLocal.Web.Models.Reportes;
 using ControlLocal.Web.Models.Shared;
 using ControlLocal.Web.Models.Solicitudes;
+using ControlLocal.Web.Models.Tareas;
 using ControlLocal.Web.Models.Visitas;
 using ControlLocal.Web.Services;
 
@@ -41,6 +45,82 @@ internal sealed record ClienteApi(
     bool? ConsentimientoContacto,
     bool? ConsentimientoUsoDato,
     DateTime? FechaCreacion);
+
+internal sealed record FichaClienteApi(
+    ClienteApi Cliente,
+    bool RequerimientoActivo,
+    string? CtaRuta,
+    Dictionary<string, FichaSectionApi>? Sections);
+
+internal sealed record FichaPropietarioApi(
+    PropietarioApi Propietario,
+    Dictionary<string, FichaSectionApi>? Sections);
+
+internal sealed record FichaSectionApi(
+    string Section,
+    long TotalRecords,
+    int Page,
+    int PageSize,
+    IReadOnlyList<FichaRowApi>? Items);
+
+internal sealed record FichaRowApi(
+    string? Id,
+    string? Codigo,
+    string? Proceso,
+    string? Titulo,
+    string? Subtitulo,
+    string? Local,
+    string? Distrito,
+    string? Cliente,
+    long? ClienteId,
+    string? Propietario,
+    long? PropietarioId,
+    string? Agente,
+    string? Estado,
+    string? Fecha,
+    string? Ruta,
+    string? Icono,
+    string? Tono,
+    DateTime? FechaOrden);
+
+internal sealed record CoincidenciaApi(
+    string? Tipo,
+    long? Id,
+    string? Codigo,
+    string? Titulo,
+    string? Subtitulo,
+    string? Distrito,
+    string? Renta,
+    string? Area,
+    string? Frente,
+    int Puntaje,
+    IReadOnlyList<string>? Cumple,
+    IReadOnlyList<string>? NoCumple,
+    long? ClienteId,
+    long? CaptacionId,
+    string? ProponerRuta);
+
+internal sealed record CoincidenciasApi(
+    string? Origen,
+    int Total,
+    IReadOnlyList<CoincidenciaApi>? Items);
+
+internal sealed record RequerimientoApi(
+    long? Id,
+    long? IdCliente,
+    string? Rubro,
+    string? TipoInmueble,
+    decimal? RentaMin,
+    decimal? RentaMax,
+    string? Moneda,
+    decimal? MetrajeMin,
+    decimal? MetrajeMax,
+    decimal? FrenteMinimo,
+    string? Estado,
+    string? Observaciones,
+    IReadOnlyList<string>? Distritos,
+    DateTime? FechaCreacion,
+    DateTime? FechaActualizacion);
 
 internal sealed record LocalApi(
     long Id,
@@ -113,7 +193,8 @@ internal sealed record ProspeccionApi(
     DateOnly? FechaRecontacto,
     string? Observaciones,
     long? IdCaptacion,
-    string? CaptacionCodigo);
+    string? CaptacionCodigo,
+    string? Disponibilidad);
 
 internal sealed record CaptacionApi(
     long Id,
@@ -172,7 +253,8 @@ internal sealed record OportunidadApi(
     string? MotivoCierre,
     string? Observaciones,
     DateTime? FechaCierre,
-    DateTime? FechaActualizacion);
+    DateTime? FechaActualizacion,
+    long? IdPublicacionOrigen);
 
 internal sealed record VisitaApi(
     long Id,
@@ -243,7 +325,16 @@ internal sealed record ContratoApi(
     DateOnly? FechaFinContrato,
     DateOnly? FechaCierre,
     string? EstadoContrato,
-    string? ComisionEstado);
+    string? ComisionEstado,
+    string? Incidencias,
+    long? IdComision,
+    long? AgenteId,
+    long? PropietarioId,
+    string? PropietarioNombre,
+    decimal? MontoAgente,
+    decimal? MontoEmpresa,
+    string? FormaPago,
+    DateOnly? FechaCobro);
 
 internal sealed record DocumentoSolicitudApi(
     long Id,
@@ -285,7 +376,12 @@ internal sealed record AtenderAlertaApi(bool Atendida);
 
 internal sealed record InteraccionApi(
     long Id,
+    string? Contexto,
     long? IdOportunidad,
+    long? IdProspeccion,
+    long? IdCaptacion,
+    long? IdCliente,
+    string? CodigoProspeccion,
     DateTime? FechaHora,
     string? CanalContacto,
     string? Resultado,
@@ -367,8 +463,24 @@ public class HttpPropietarioService(ApiClient api) : IPropietarioService
         return _cache;
     }
 
-    public PropietarioDto? ById(long id) =>
-        All().FirstOrDefault(item => item.Id == id);
+    public PropietarioDto? ById(long id)
+    {
+        var cacheado = All().FirstOrDefault(item => item.Id == id);
+        if (cacheado is not null) return cacheado;
+        try
+        {
+            var remoto = Task.Run(() => api.GetAsync<PropietarioApi>($"propietarios/{id}"))
+                .GetAwaiter().GetResult();
+            if (remoto is null) return null;
+            var dto = Mapear(remoto);
+            (_cache ??= []).Add(dto);
+            return dto;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     public PropietarioDto Agregar(PropietarioDto propietario)
     {
@@ -455,8 +567,37 @@ public class HttpClienteService(ApiClient api) : IClienteService
     public IReadOnlyList<ClienteInteresadoDto> All() =>
         _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
 
-    public ClienteInteresadoDto? ById(long id) =>
-        All().FirstOrDefault(item => item.Id == id);
+    public ClienteInteresadoDto? ById(long id)
+    {
+        var cacheado = All().FirstOrDefault(item => item.Id == id);
+        if (cacheado is not null) return cacheado;
+        try
+        {
+            var remoto = Task.Run(() => api.GetAsync<ClienteApi>($"clientes/{id}"))
+                .GetAwaiter().GetResult();
+            if (remoto is null) return null;
+            var dto = Mapear(remoto);
+            (_cache ??= []).Add(dto);
+            return dto;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<ClienteInteresadoDto?> ObtenerAsync(long id, CancellationToken ct = default)
+    {
+        var remoto = await api.GetAsync<ClienteApi>($"clientes/{id}", ct);
+        if (remoto is null)
+            return null;
+        var dto = Mapear(remoto);
+        _cache ??= [];
+        var indice = _cache.FindIndex(item => item.Id == dto.Id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Add(dto);
+        return dto;
+    }
 
     public async Task<IReadOnlyList<ClienteInteresadoDto>> RefrescarAsync(CancellationToken ct = default)
     {
@@ -546,6 +687,303 @@ public class HttpClienteService(ApiClient api) : IClienteService
     };
 }
 
+public class HttpFichaComercialService(ApiClient api) : IFichaComercialService
+{
+    public async Task<FichaComercialDto?> ClienteAsync(long id, CancellationToken ct = default)
+    {
+        var ficha = await api.GetAsync<FichaClienteApi>(
+            $"clientes/{id}/ficha-comercial?page_size=8",
+            ct);
+        return ficha is null ? null : Mapear(ficha);
+    }
+
+    public async Task<FichaSectionDto> ClienteSectionAsync(
+        long id,
+        string section,
+        int page,
+        int pageSize = 8,
+        CancellationToken ct = default)
+    {
+        var seccion = await api.GetAsync<FichaSectionApi>(
+            $"clientes/{id}/ficha-comercial/{Uri.EscapeDataString(section)}?page={page}&page_size={pageSize}",
+            ct);
+        return Mapear(seccion);
+    }
+
+    public async Task<FichaComercialDto?> PropietarioAsync(long id, CancellationToken ct = default)
+    {
+        var ficha = await api.GetAsync<FichaPropietarioApi>(
+            $"propietarios/{id}/ficha-comercial?page_size=8",
+            ct);
+        return ficha is null ? null : Mapear(ficha);
+    }
+
+    public async Task<FichaSectionDto> PropietarioSectionAsync(
+        long id,
+        string section,
+        int page,
+        int pageSize = 8,
+        CancellationToken ct = default)
+    {
+        var seccion = await api.GetAsync<FichaSectionApi>(
+            $"propietarios/{id}/ficha-comercial/{Uri.EscapeDataString(section)}?page={page}&page_size={pageSize}",
+            ct);
+        return Mapear(seccion);
+    }
+
+    private static FichaComercialDto Mapear(FichaClienteApi api) => new()
+    {
+        Persona = new FichaPersonaDto
+        {
+            Id = api.Cliente.Id,
+            Tipo = "Cliente interesado",
+            Nombre = api.Cliente.Nombre,
+            TipoPersona = Codigos.DescribirPersona(api.Cliente.TipoPersona, api.Cliente.TipoDocumento),
+            TipoDocumento = api.Cliente.TipoDocumento,
+            NumeroDocumento = api.Cliente.NumeroDocumento,
+            Telefono = api.Cliente.Telefono,
+            Correo = api.Cliente.Correo,
+            RubroInteres = api.Cliente.RubroComercial,
+            Estado = Codigos.EstadoActivo(api.Cliente.Estado),
+            FechaCreacion = api.Cliente.FechaCreacion,
+        },
+        RequerimientoActivo = api.RequerimientoActivo,
+        CtaRuta = api.CtaRuta ?? "",
+        Sections = MapearSecciones(api.Sections),
+    };
+
+    private static FichaComercialDto Mapear(FichaPropietarioApi api) => new()
+    {
+        Persona = new FichaPersonaDto
+        {
+            Id = api.Propietario.Id,
+            Tipo = "Propietario",
+            Nombre = api.Propietario.Nombre,
+            TipoPersona = Codigos.DescribirPersona(api.Propietario.TipoPersona, api.Propietario.TipoDocumento),
+            TipoDocumento = api.Propietario.TipoDocumento,
+            NumeroDocumento = api.Propietario.NumeroDocumento,
+            Telefono = api.Propietario.Telefono,
+            Correo = api.Propietario.Correo,
+            Estado = Codigos.EstadoActivo(api.Propietario.Estado),
+            FechaCreacion = api.Propietario.FechaCreacion,
+        },
+        Sections = MapearSecciones(api.Sections),
+    };
+
+    private static Dictionary<string, FichaSectionDto> MapearSecciones(Dictionary<string, FichaSectionApi>? sections)
+    {
+        var resultado = new Dictionary<string, FichaSectionDto>(StringComparer.OrdinalIgnoreCase);
+        if (sections is null)
+            return resultado;
+
+        foreach (var (clave, valor) in sections)
+            resultado[clave] = Mapear(valor);
+        return resultado;
+    }
+
+    private static FichaSectionDto Mapear(FichaSectionApi? section) => section is null
+        ? new FichaSectionDto()
+        : new FichaSectionDto
+        {
+            Section = section.Section,
+            TotalRecords = section.TotalRecords,
+            Page = section.Page,
+            PageSize = section.PageSize,
+            Items = section.Items?.Select(Mapear).ToList() ?? [],
+        };
+
+    private static FichaRowDto Mapear(FichaRowApi item) => new()
+    {
+        Id = item.Id ?? "",
+        Codigo = item.Codigo ?? "",
+        Proceso = item.Proceso ?? "",
+        Titulo = item.Titulo ?? "",
+        Subtitulo = item.Subtitulo ?? "",
+        Local = item.Local ?? "",
+        Distrito = item.Distrito ?? "",
+        Cliente = item.Cliente ?? "",
+        ClienteId = item.ClienteId,
+        Propietario = item.Propietario ?? "",
+        PropietarioId = item.PropietarioId,
+        Agente = item.Agente ?? "",
+        Estado = item.Estado ?? "",
+        Fecha = item.Fecha ?? "",
+        Ruta = item.Ruta ?? "",
+        Icono = string.IsNullOrWhiteSpace(item.Icono) ? "activity" : item.Icono!,
+        Tono = string.IsNullOrWhiteSpace(item.Tono) ? "gray" : item.Tono!,
+        FechaOrden = item.FechaOrden,
+    };
+}
+
+public class HttpCoincidenciaCarteraService(ApiClient api) : ICoincidenciaCarteraService
+{
+    public async Task<CoincidenciasDto> PropiedadesParaClienteAsync(long idCliente, CancellationToken ct = default)
+    {
+        var resultado = await api.GetAsync<CoincidenciasApi>($"clientes/{idCliente}/coincidencias", ct);
+        return Mapear(resultado);
+    }
+
+    public async Task<CoincidenciasDto> ClientesParaCaptacionAsync(string idOrCodigo, CancellationToken ct = default)
+    {
+        var resultado = await api.GetAsync<CoincidenciasApi>(
+            $"captaciones/{Uri.EscapeDataString(idOrCodigo)}/coincidencias", ct);
+        return Mapear(resultado);
+    }
+
+    public async Task<CoincidenciasDto> ClientesParaProspeccionAsync(long idProspeccion, CancellationToken ct = default)
+    {
+        var resultado = await api.GetAsync<CoincidenciasApi>($"prospecciones/{idProspeccion}/coincidencias", ct);
+        return Mapear(resultado);
+    }
+
+    private static CoincidenciasDto Mapear(CoincidenciasApi? api) => api is null
+        ? new CoincidenciasDto()
+        : new CoincidenciasDto
+        {
+            Origen = api.Origen ?? "",
+            Total = api.Total,
+            Items = api.Items?.Select(Mapear).ToList() ?? [],
+        };
+
+    private static CoincidenciaDto Mapear(CoincidenciaApi item) => new()
+    {
+        Tipo = item.Tipo ?? "",
+        Id = item.Id,
+        Codigo = item.Codigo ?? "",
+        Titulo = item.Titulo ?? "",
+        Subtitulo = item.Subtitulo ?? "",
+        Distrito = item.Distrito ?? "",
+        Renta = item.Renta ?? "",
+        Area = item.Area ?? "",
+        Frente = item.Frente ?? "",
+        Puntaje = item.Puntaje,
+        Cumple = item.Cumple ?? [],
+        NoCumple = item.NoCumple ?? [],
+        ClienteId = item.ClienteId,
+        CaptacionId = item.CaptacionId,
+        ProponerRuta = item.ProponerRuta ?? "",
+    };
+}
+
+internal sealed record ReportePropietarioApi(
+    long Id,
+    long? IdCaptacion,
+    long? IdAgente,
+    DateTime? FechaReporte,
+    DateTime? PeriodoInicio,
+    DateTime? PeriodoFin,
+    int? ConsultasReportadas,
+    int? VisitasReportadas,
+    string? ObjecionesFrecuentes,
+    string? AjustesRecomendados,
+    string? CanalEnvio,
+    DateTime? FechaCreacion);
+
+// Reporte periódico al propietario (Etapa 8), anclado al expediente de la captación.
+public class HttpReportePropietarioService(ApiClient api) : IReportePropietarioService
+{
+    public async Task<IReadOnlyList<ReportePropietarioDto>> ListarPorCaptacionAsync(long idCaptacion, CancellationToken ct = default)
+    {
+        var items = await api.GetAsync<List<ReportePropietarioApi>>($"captaciones/{idCaptacion}/reportes-propietario", ct);
+        return items?.Select(Map).ToList() ?? [];
+    }
+
+    public async Task<ReportePropietarioDto> CrearAsync(long idCaptacion, ReportePropietarioDto reporte, CancellationToken ct = default)
+    {
+        var resp = await api.PostAsync<ReportePropietarioApi>(
+            $"captaciones/{idCaptacion}/reportes-propietario", Cuerpo(reporte), ct);
+        return resp is null ? reporte : Map(resp);
+    }
+
+    private static object Cuerpo(ReportePropietarioDto r) => new
+    {
+        periodoInicio = r.PeriodoInicio?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        periodoFin = r.PeriodoFin?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        consultasReportadas = r.ConsultasReportadas,
+        visitasReportadas = r.VisitasReportadas,
+        objecionesFrecuentes = r.ObjecionesFrecuentes,
+        ajustesRecomendados = r.AjustesRecomendados,
+        canalEnvio = r.CanalEnvio,
+    };
+
+    private static ReportePropietarioDto Map(ReportePropietarioApi a) => new()
+    {
+        Id = a.Id,
+        CaptacionId = a.IdCaptacion ?? 0,
+        AgenteId = a.IdAgente ?? 0,
+        FechaReporte = a.FechaReporte,
+        PeriodoInicio = a.PeriodoInicio,
+        PeriodoFin = a.PeriodoFin,
+        ConsultasReportadas = a.ConsultasReportadas,
+        VisitasReportadas = a.VisitasReportadas,
+        ObjecionesFrecuentes = a.ObjecionesFrecuentes,
+        AjustesRecomendados = a.AjustesRecomendados,
+        CanalEnvio = a.CanalEnvio ?? "E",
+        FechaCreacion = a.FechaCreacion,
+    };
+}
+
+public class HttpRequerimientoService(ApiClient api) : IRequerimientoService
+{
+    public async Task<IReadOnlyList<RequerimientoDto>> ListarPorClienteAsync(long idCliente, CancellationToken ct = default)
+    {
+        var lista = await api.GetAsync<List<RequerimientoApi>>($"requerimientos/cliente/{idCliente}", ct);
+        return lista is null ? [] : lista.Select(Mapear).ToList();
+    }
+
+    public async Task<RequerimientoDto> CrearAsync(RequerimientoDto requerimiento, CancellationToken ct = default)
+    {
+        var resp = await api.PostAsync<RequerimientoApi>("requerimientos", Cuerpo(requerimiento), ct);
+        return resp is null ? requerimiento : Mapear(resp);
+    }
+
+    public async Task<RequerimientoDto> ActualizarAsync(RequerimientoDto requerimiento, CancellationToken ct = default)
+    {
+        var resp = await api.PutAsync<RequerimientoApi>($"requerimientos/{requerimiento.Id}", Cuerpo(requerimiento), ct);
+        return resp is null ? requerimiento : Mapear(resp);
+    }
+
+    public async Task<RequerimientoDto> CambiarEstadoAsync(long id, string estado, CancellationToken ct = default)
+    {
+        var resp = await api.PostAsync<RequerimientoApi>($"requerimientos/{id}/estado", new { estado }, ct);
+        return resp is null ? new RequerimientoDto { Id = id, Estado = estado } : Mapear(resp);
+    }
+
+    private static object Cuerpo(RequerimientoDto r) => new
+    {
+        idCliente = r.ClienteId,
+        rubro = r.Rubro,
+        tipoInmueble = r.TipoInmueble,
+        rentaMin = r.RentaMin,
+        rentaMax = r.RentaMax,
+        moneda = r.Moneda,
+        metrajeMin = r.MetrajeMin,
+        metrajeMax = r.MetrajeMax,
+        frenteMinimo = r.FrenteMinimo,
+        estado = r.Estado,
+        observaciones = r.Observaciones,
+        distritos = r.Distritos,
+    };
+
+    private static RequerimientoDto Mapear(RequerimientoApi a) => new()
+    {
+        Id = a.Id ?? 0,
+        ClienteId = a.IdCliente ?? 0,
+        Rubro = a.Rubro ?? "",
+        TipoInmueble = a.TipoInmueble,
+        RentaMin = a.RentaMin,
+        RentaMax = a.RentaMax,
+        Moneda = string.IsNullOrWhiteSpace(a.Moneda) ? "PEN" : a.Moneda!,
+        MetrajeMin = a.MetrajeMin,
+        MetrajeMax = a.MetrajeMax,
+        FrenteMinimo = a.FrenteMinimo,
+        Estado = string.IsNullOrWhiteSpace(a.Estado) ? "ACTIVO" : a.Estado!,
+        Observaciones = a.Observaciones,
+        Distritos = a.Distritos?.ToList() ?? [],
+        FechaActualizacion = a.FechaActualizacion,
+    };
+}
+
 public class HttpLocalService(ApiClient api, HttpProspeccionService prospecciones) : ILocalService
 {
     private List<LocalComercialDto>? _cache;
@@ -558,8 +996,8 @@ public class HttpLocalService(ApiClient api, HttpProspeccionService prospeccione
 
     private async Task<List<LocalComercialDto>> Cargar()
     {
-        var pagina = await api.GetPaginaAsync<LocalApi>("locales", 1, 100);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        var items = await api.GetTodasPaginasAsync<LocalApi>("locales");
+        return items.Select(Mapear).ToList();
     }
 
     public LocalComercialDto Agregar(LocalComercialDto local)
@@ -712,6 +1150,37 @@ public class HttpPublicacionService(ApiClient api) : IPublicacionService
         return lista?.Select(Mapear).ToList() ?? [];
     }
 
+    public async Task<PublicacionDto> CrearAsync(long idLocal, PublicacionDto publicacion, CancellationToken ct = default)
+    {
+        var resp = await api.PostAsync<PublicacionApi>($"locales/{idLocal}/publicaciones", Cuerpo(publicacion), ct);
+        return resp is null ? publicacion : Mapear(resp);
+    }
+
+    public async Task<PublicacionDto> ActualizarAsync(long idLocal, PublicacionDto publicacion, CancellationToken ct = default)
+    {
+        var resp = await api.PutAsync<PublicacionApi>(
+            $"locales/{idLocal}/publicaciones/{publicacion.Id}", Cuerpo(publicacion), ct);
+        return resp is null ? publicacion : Mapear(resp);
+    }
+
+    public async Task<PublicacionDto> CambiarEstadoAsync(long idLocal, long idPublicacion, string estado, CancellationToken ct = default)
+    {
+        var resp = await api.PostAsync<PublicacionApi>(
+            $"locales/{idLocal}/publicaciones/{idPublicacion}/estado", new { estado }, ct);
+        return resp is null ? new PublicacionDto { Id = idPublicacion, Estado = estado } : Mapear(resp);
+    }
+
+    private static object Cuerpo(PublicacionDto p) => new
+    {
+        canal = p.Canal,
+        urlPublicacion = p.UrlPublicacion,
+        rentaPublicada = p.RentaPublicada,
+        moneda = p.Moneda,
+        tituloAnuncio = p.TituloAnuncio,
+        codigoOrigen = p.CodigoOrigen,
+        estado = p.Estado,
+    };
+
     private static PublicacionDto Mapear(PublicacionApi item) => new()
     {
         Id = item.Id,
@@ -747,12 +1216,64 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
     public ProspeccionDto? ById(long id) =>
         All().FirstOrDefault(item => item.Id == id);
 
+    public async Task<ProspeccionDto?> ObtenerAsync(long id, CancellationToken ct = default)
+    {
+        if (id <= 0)
+            return null;
+        var remoto = await api.GetAsync<ProspeccionApi>($"prospecciones/{id}", ct);
+        if (remoto is null)
+            return null;
+        var dto = Mapear(remoto);
+        ActualizarCache(dto);
+        return dto;
+    }
+
+    public async Task<PageResult<ProspeccionDto>> ListarPaginaAsync(
+        int pagina, int tamano = 8, string? estado = null, string? distrito = null,
+        string? query = null, CancellationToken ct = default, long? idCaptacion = null, long? idLocal = null,
+        long? idAgente = null, long? idBrokerSupervisor = null)
+    {
+        var respuesta = await api.GetPaginaAsync<ProspeccionApi>(
+            RutaProspecciones(estado, distrito, query, idCaptacion, idLocal, idAgente, idBrokerSupervisor), pagina, tamano, ct);
+        return new PageResult<ProspeccionDto>(
+            respuesta?.Items.Select(Mapear).ToList() ?? [],
+            respuesta?.TotalRecords ?? 0,
+            respuesta?.Page ?? pagina,
+            respuesta?.PageSize ?? tamano);
+    }
+
+    public async Task<long> ContarAsync(string? estado = null, string? distrito = null, string? query = null, CancellationToken ct = default)
+    {
+        var respuesta = await api.GetPaginaAsync<ProspeccionApi>(
+            RutaProspecciones(estado, distrito, query), 1, 1, ct);
+        return respuesta?.TotalRecords ?? 0;
+    }
+
+    public async Task<long> ContarRecontactarAsync(int diasAviso = 7, CancellationToken ct = default)
+    {
+        var respuesta = await api.GetPaginaAsync<ProspeccionApi>(
+            $"prospecciones/recontactar?dias={diasAviso}", 1, 1, ct);
+        return respuesta?.TotalRecords ?? 0;
+    }
+
+    public async Task<PageResult<ProspeccionDto>> ListarRecontactarPaginaAsync(
+        int pagina, int tamano = 8, int diasAviso = 7, CancellationToken ct = default)
+    {
+        var respuesta = await api.GetPaginaAsync<ProspeccionApi>(
+            $"prospecciones/recontactar?dias={diasAviso}", pagina, tamano, ct);
+        return new PageResult<ProspeccionDto>(
+            respuesta?.Items.Select(Mapear).ToList() ?? [],
+            respuesta?.TotalRecords ?? 0,
+            respuesta?.Page ?? pagina,
+            respuesta?.PageSize ?? tamano);
+    }
+
     public IReadOnlyList<ProspeccionDto> PorRecontactar(int diasAviso)
     {
-        var hoy = DateOnly.FromDateTime(DateTime.Today);
-        var limite = hoy.AddDays(Math.Max(0, diasAviso));
+        // Vencido = ultima accion de seguimiento hace diasAviso dias o mas (prospeccion viva).
+        var limite = DateOnly.FromDateTime(DateTime.Today).AddDays(-Math.Max(0, diasAviso));
         return All()
-            .Where(item => item.Estado == "S"
+            .Where(item => item.Estado is "C" or "R" or "E" or "S"
                 && item.FechaRecontacto is { } fecha
                 && fecha <= limite)
             .OrderBy(item => item.FechaRecontacto)
@@ -768,10 +1289,8 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
     public ProspeccionDto EntregarPropuesta(long id) =>
         Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/propuesta", new { }));
 
-    public ProspeccionDto Posponer(long id, DateOnly fechaRecontacto) =>
-        Actualizar(() => api.PostAsync<ProspeccionApi>(
-            $"prospecciones/{id}/recontactar",
-            new { fechaRecontacto }));
+    public ProspeccionDto RegistrarSeguimiento(long id) =>
+        Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/seguimiento", new { }));
 
     public ProspeccionDto Rechazar(long id, string motivo) =>
         Actualizar(() => api.PostAsync<ProspeccionApi>($"prospecciones/{id}/rechazar", new { motivo }));
@@ -791,8 +1310,22 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
 
     private async Task<List<ProspeccionDto>> Cargar(CancellationToken ct = default)
     {
-        var pagina = await api.GetPaginaAsync<ProspeccionApi>("prospecciones", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        var items = await api.GetTodasPaginasAsync<ProspeccionApi>("prospecciones", ct: ct);
+        return items.Select(Mapear).ToList();
+    }
+
+    private static string RutaProspecciones(string? estado, string? distrito, string? query,
+        long? idCaptacion = null, long? idLocal = null, long? idAgente = null, long? idBrokerSupervisor = null)
+    {
+        var filtros = new List<string>();
+        if (!string.IsNullOrWhiteSpace(estado)) filtros.Add($"estado={Uri.EscapeDataString(estado)}");
+        if (!string.IsNullOrWhiteSpace(distrito)) filtros.Add($"distrito={Uri.EscapeDataString(distrito)}");
+        if (!string.IsNullOrWhiteSpace(query)) filtros.Add($"q={Uri.EscapeDataString(query)}");
+        if (idCaptacion is > 0) filtros.Add($"idCaptacion={idCaptacion}");
+        if (idLocal is > 0) filtros.Add($"idLocal={idLocal}");
+        if (idAgente is > 0) filtros.Add($"idAgente={idAgente}");
+        if (idBrokerSupervisor is > 0) filtros.Add($"idBrokerSupervisor={idBrokerSupervisor}");
+        return filtros.Count == 0 ? "prospecciones" : $"prospecciones?{string.Join("&", filtros)}";
     }
 
     private ProspeccionDto Actualizar(Func<Task<ProspeccionApi?>> operacion)
@@ -828,6 +1361,7 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
         PrecioReferencialTexto = (item.PrecioReferencial ?? 0)
             .ToString("N0", CultureInfo.GetCultureInfo("es-PE")),
         PropietarioNombre = item.PropietarioNombre,
+        AgenteId = item.IdAgente ?? 0,
         NombreAgente = item.AgenteNombre ?? "",
         Estado = item.Estado,
         ResultadoPropuesta = item.ResultadoPropuesta,
@@ -837,11 +1371,56 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
         FechaRecontacto = item.FechaRecontacto,
         FechaRecontactoTexto = FormatearFecha(item.FechaRecontacto),
         Observaciones = item.Observaciones,
+        CaptacionId = item.IdCaptacion ?? 0,
         CaptacionCodigo = item.CaptacionCodigo,
+        Disponibilidad = item.Disponibilidad,
     };
 
     private static string? FormatearFecha(DateOnly? fecha) =>
         fecha?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+}
+
+internal sealed record TareaApi(
+    long Id,
+    string? Tipo,
+    string? EntidadTipo,
+    long? EntidadId,
+    string? EntidadCodigo,
+    string? RutaResolver,
+    string? Descripcion,
+    string? Estado,
+    string? Prioridad,
+    DateTime? FechaProgramada,
+    int? DiasSinAccion,
+    DateTime? FechaVencimiento);
+
+// Bandeja "Acciones Pendientes" del agente (Etapa 5): la trae ya reconciliada el backend.
+public class HttpTareaService(ApiClient api) : ITareaService
+{
+    public async Task<IReadOnlyList<TareaDto>> BandejaAsync(CancellationToken ct = default)
+    {
+        var items = await api.GetAsync<List<TareaApi>>("tareas", ct);
+        return items?.Select(Map).ToList() ?? [];
+    }
+
+    public Task CancelarAsync(long idTarea, CancellationToken ct = default) =>
+        api.PostAsync<object>($"tareas/{idTarea}/cancelar", new { }, ct);
+
+    private static TareaDto Map(TareaApi t) => new()
+    {
+        Id = t.Id,
+        Tipo = t.Tipo ?? "",
+        EntidadTipo = t.EntidadTipo ?? "",
+        EntidadId = t.EntidadId ?? 0,
+        EntidadCodigo = t.EntidadCodigo ?? "",
+        RutaResolver = t.RutaResolver ?? "",
+        Descripcion = t.Descripcion ?? "",
+        Estado = t.Estado ?? "",
+        Prioridad = t.Prioridad ?? "",
+        FechaProgramada = t.FechaProgramada,
+        DiasSinAccion = t.DiasSinAccion,
+        FechaVencimiento = t.FechaVencimiento,
+    };
 }
 
 public class HttpCaptacionService(ApiClient api) : ICaptacionService
@@ -920,6 +1499,17 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
 
     public async Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default)
     {
+        if (!string.IsNullOrWhiteSpace(codigo))
+        {
+            var remota = await api.GetAsync<CaptacionApi>($"captaciones/codigo/{Uri.EscapeDataString(codigo)}", ct);
+            if (remota is not null)
+            {
+                var dtoRemoto = Mapear(remota);
+                ActualizarCache(dtoRemoto);
+                return dtoRemoto;
+            }
+        }
+
         var encontrada = BuscarEnCache(codigo);
         if (encontrada is null)
         {
@@ -943,6 +1533,18 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
         if (actualizada is not null)
             ActualizarCache(actualizada);
         return actualizada;
+    }
+
+    public async Task<CaptacionDto?> ObtenerPorIdAsync(long id, CancellationToken ct = default)
+    {
+        if (id <= 0)
+            return null;
+        var respuesta = await api.GetAsync<CaptacionApi>($"captaciones/{id}", ct);
+        if (respuesta is null)
+            return _captaciones?.FirstOrDefault(item => item.Id == id);
+        var dto = Mapear(respuesta);
+        ActualizarCache(dto);
+        return dto;
     }
 
     public async Task ResolverBandejaAsync(
@@ -1002,8 +1604,8 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
 
     private async Task<List<CaptacionDto>> CargarCaptaciones(CancellationToken ct = default)
     {
-        var pagina = await api.GetPaginaAsync<CaptacionApi>("captaciones", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        var items = await api.GetTodasPaginasAsync<CaptacionApi>("captaciones", ct: ct);
+        return items.Select(Mapear).ToList();
     }
 
     private async Task<List<BandejaCaptacionDto>> CargarBandeja(CancellationToken ct = default)
@@ -1312,6 +1914,18 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
     public IReadOnlyList<OportunidadComercialDto> ByCaptacion(string codigoCaptacion) =>
         All().Where(item => item.CaptacionCodigo == codigoCaptacion).ToList();
 
+    public async Task<IReadOnlyList<OportunidadComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<OportunidadApi>($"oportunidades?idCaptacion={captacionId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<IReadOnlyList<OportunidadComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<OportunidadApi>($"oportunidades?idCliente={clienteId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
     public OportunidadComercialDto Crear(OportunidadFormRequest request)
     {
         return CrearAsync(request).GetAwaiter().GetResult();
@@ -1335,6 +1949,7 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
                 observaciones = string.IsNullOrWhiteSpace(request.Observaciones)
                     ? null
                     : request.Observaciones.Trim(),
+                idPublicacionOrigen = request.PublicacionOrigenId > 0 ? request.PublicacionOrigenId : (long?)null,
             },
             ct);
         var dto = creada is null
@@ -1401,8 +2016,8 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
 
     private async Task<List<OportunidadComercialDto>> Cargar(CancellationToken ct = default)
     {
-        var pagina = await api.GetPaginaAsync<OportunidadApi>("oportunidades", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        var items = await api.GetTodasPaginasAsync<OportunidadApi>("oportunidades", ct: ct);
+        return items.Select(Mapear).ToList();
     }
 
     private void ActualizarCache(OportunidadComercialDto actualizada)
@@ -1430,6 +2045,7 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
         MotivoCierre = item.MotivoCierre ?? "",
         Observaciones = item.Observaciones ?? "",
         FechaCierreTexto = item.FechaCierre?.ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture) ?? "",
+        PublicacionOrigenId = item.IdPublicacionOrigen ?? 0,
     };
 }
 
@@ -1444,6 +2060,18 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
     {
         _cache = await Cargar(ct);
         return _cache;
+    }
+
+    public async Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<SolicitudApi>($"solicitudes?idCaptacion={captacionId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<IReadOnlyList<SolicitudAlquilerDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<SolicitudApi>($"solicitudes?idOportunidad={oportunidadId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
     public SolicitudAlquilerDto? ByCodigo(string codigo) =>
@@ -1574,8 +2202,8 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
 
     private async Task<List<SolicitudAlquilerDto>> Cargar(CancellationToken ct = default)
     {
-        var pagina = await api.GetPaginaAsync<SolicitudApi>("solicitudes", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        var items = await api.GetTodasPaginasAsync<SolicitudApi>("solicitudes", ct: ct);
+        return items.Select(Mapear).ToList();
     }
 
     private void ActualizarCache(SolicitudAlquilerDto solicitud)
@@ -1592,6 +2220,8 @@ public class HttpSolicitudService(ApiClient api, HttpOportunidadService oportuni
         CodigoSolicitud = item.CodigoSolicitud,
         CodigoOperacion = item.CodigoOportunidad ?? $"OPO-{item.IdOportunidad:0000}",
         OportunidadId = item.IdOportunidad,
+        ClienteId = item.IdCliente ?? 0,
+        CaptacionId = item.IdCaptacion ?? 0,
         AgenteResponsableId = item.IdAgente,
         AgenteNombre = item.AgenteNombre ?? "",
         ClienteNombre = item.ClienteNombre ?? "",
@@ -1675,6 +2305,9 @@ public class HttpContratoService(ApiClient api) : IContratoService
         var creado = await api.PostAsync<ContratoApi>("contratos", new
             {
                 idSolicitud = request.SolicitudId,
+                fechaCierre = request.FechaCierre,
+                estadoContrato = request.EstadoContrato,
+                incidencias = request.Incidencias,
             },
             ct)
             ?? throw new InvalidOperationException("El API no devolvio el contrato registrado.");
@@ -1683,10 +2316,39 @@ public class HttpContratoService(ApiClient api) : IContratoService
         return dto;
     }
 
+    public async Task<ContratoAlquilerDto> AsignarComisionAsync(
+        long idContrato, decimal montoAgente, CancellationToken ct = default)
+    {
+        var actualizado = await api.PostAsync<ContratoApi>(
+                $"contratos/{idContrato}/comision/asignar", new { montoAgente }, ct)
+            ?? throw new InvalidOperationException("El API no devolvio el contrato actualizado.");
+        return ReemplazarEnCache(Mapear(actualizado));
+    }
+
+    public async Task<ContratoAlquilerDto> RegistrarCobroAsync(
+        long idContrato, string estado, DateOnly? fechaCobro, string? formaPago, CancellationToken ct = default)
+    {
+        var actualizado = await api.PostAsync<ContratoApi>(
+                $"contratos/{idContrato}/comision/cobro",
+                new { estado, fechaCobro, formaPago }, ct)
+            ?? throw new InvalidOperationException("El API no devolvio el contrato actualizado.");
+        return ReemplazarEnCache(Mapear(actualizado));
+    }
+
+    private ContratoAlquilerDto ReemplazarEnCache(ContratoAlquilerDto dto)
+    {
+        if (_cache is not null)
+        {
+            var i = _cache.FindIndex(x => x.Id == dto.Id);
+            if (i >= 0) _cache[i] = dto; else _cache.Insert(0, dto);
+        }
+        return dto;
+    }
+
     private async Task<List<ContratoAlquilerDto>> Cargar(CancellationToken ct = default)
     {
-        var pagina = await api.GetPaginaAsync<ContratoApi>("contratos", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        var items = await api.GetTodasPaginasAsync<ContratoApi>("contratos", ct: ct);
+        return items.Select(Mapear).ToList();
     }
 
     private static ContratoAlquilerDto Mapear(ContratoApi item) => new()
@@ -1718,6 +2380,25 @@ public class HttpContratoService(ApiClient api) : IContratoService
             "ANULADA" => "Anulada",
             _ => item.ComisionEstado ?? "",
         },
+        Incidencias = item.Incidencias ?? "",
+        IdComision = item.IdComision ?? 0,
+        AgenteId = item.AgenteId ?? 0,
+        PropietarioId = item.PropietarioId ?? 0,
+        PropietarioNombre = item.PropietarioNombre ?? "",
+        MontoAgente = item.MontoAgente,
+        MontoEmpresa = item.MontoEmpresa,
+        MontoAgenteTexto = item.MontoAgente?.ToString("N0", CultureInfo.GetCultureInfo("es-PE")) ?? "",
+        MontoEmpresaTexto = item.MontoEmpresa?.ToString("N0", CultureInfo.GetCultureInfo("es-PE")) ?? "",
+        FormaPago = item.FormaPago switch
+        {
+            "TRANSFERENCIA" => "Transferencia",
+            "DEPOSITO_BANCARIO" => "Depósito bancario",
+            "EFECTIVO" => "Efectivo",
+            "CHEQUE" => "Cheque",
+            "OTRO" => "Otro",
+            _ => item.FormaPago ?? "",
+        },
+        FechaCobroTexto = item.FechaCobro?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
     };
 }
 
@@ -1956,6 +2637,14 @@ public class HttpDocumentoSolicitudService(ApiClient api) : IDocumentoSolicitudS
         return Mapear(revisado);
     }
 
+    public async Task<IReadOnlyList<DocumentoSolicitudDto>> ConformarTodosAsync(
+        long idSolicitud, CancellationToken ct = default)
+    {
+        var lista = await api.PatchAsync<List<DocumentoSolicitudApi>>(
+            $"solicitudes/{idSolicitud}/documentos/conformar", new { }, ct);
+        return lista?.Select(Mapear).ToList() ?? [];
+    }
+
     public async Task<EstadoAlmacen> EstadoAlmacenAsync(CancellationToken ct = default)
     {
         var estado = await api.GetAsync<EstadoAlmacen>("documentos/salud", ct);
@@ -1984,18 +2673,23 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
     public IReadOnlyList<InteraccionComercialDto> All() =>
         _cache ??= Task.Run(() => Cargar()).GetAwaiter().GetResult();
 
-    public InteraccionComercialDto? ById(long id) =>
-        All().FirstOrDefault(item => item.Id == id);
+    public InteraccionComercialDto? ById(long id)
+    {
+        var item = Task.Run(() => api.GetAsync<InteraccionApi>($"interacciones/{id}"))
+            .GetAwaiter().GetResult();
+        if (item is null)
+            return null;
+        var dto = Mapear(item);
+        _cache ??= [];
+        var indice = _cache.FindIndex(actual => actual.Id == dto.Id);
+        if (indice >= 0) _cache[indice] = dto;
+        else _cache.Insert(0, dto);
+        return dto;
+    }
 
     public InteraccionComercialDto Agregar(InteraccionFormRequest request)
     {
-        var creada = Task.Run(() => api.PostAsync<InteraccionApi>("interacciones", new
-            {
-                idOportunidad = request.OportunidadId,
-                canalContacto = request.CanalContacto,
-                resultado = request.Resultado,
-                observaciones = request.Observaciones,
-            }))
+        var creada = Task.Run(() => api.PostAsync<InteraccionApi>("interacciones", Cuerpo(request)))
             .GetAwaiter().GetResult()
             ?? throw new InvalidOperationException("El API no devolvio la interaccion registrada.");
         var dto = Mapear(creada);
@@ -2005,17 +2699,39 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
 
     public async Task<InteraccionComercialDto> AgregarAsync(InteraccionFormRequest request, CancellationToken ct = default)
     {
-        var creada = await api.PostAsync<InteraccionApi>("interacciones", new
-            {
-                idOportunidad = request.OportunidadId,
-                canalContacto = request.CanalContacto,
-                resultado = request.Resultado,
-                observaciones = request.Observaciones,
-            }, ct)
+        var creada = await api.PostAsync<InteraccionApi>("interacciones", Cuerpo(request), ct)
             ?? throw new InvalidOperationException("El API no devolvio la interaccion registrada.");
         var dto = Mapear(creada);
         (_cache ??= []).Insert(0, dto);
         return dto;
+    }
+
+    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<InteraccionApi>(
+            $"interacciones?contexto=OPORTUNIDAD&idOportunidad={oportunidadId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorProspeccionAsync(long prospeccionId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<InteraccionApi>(
+            $"interacciones?contexto=PROSPECCION&idProspeccion={prospeccionId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<InteraccionApi>(
+            $"interacciones?contexto=CAPTACION&idCaptacion={captacionId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default)
+    {
+        var pagina = await api.GetPaginaAsync<InteraccionApi>(
+            $"interacciones?contexto=CLIENTE&idCliente={clienteId}", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
     public InteraccionComercialDto Actualizar(long id, string? resultado = null, string? observaciones = null)
@@ -2041,14 +2757,33 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
+    private static object Cuerpo(InteraccionFormRequest request) => new
+    {
+        contexto = string.IsNullOrWhiteSpace(request.Contexto) ? "OPORTUNIDAD" : request.Contexto,
+        idOportunidad = request.OportunidadId > 0 ? request.OportunidadId : (long?)null,
+        idProspeccion = request.ProspeccionId > 0 ? request.ProspeccionId : (long?)null,
+        idCaptacion = request.CaptacionId > 0 ? request.CaptacionId : (long?)null,
+        idCliente = request.ClienteId > 0 ? request.ClienteId : (long?)null,
+        canalContacto = request.CanalContacto,
+        resultado = request.Resultado,
+        observaciones = request.Observaciones,
+        transcripcionNota = request.TranscripcionNota,
+    };
+
     private static InteraccionComercialDto Mapear(InteraccionApi item) => new()
     {
         Id = item.Id,
+        Contexto = item.Contexto ?? "OPORTUNIDAD",
         OportunidadId = item.IdOportunidad ?? 0,
+        ProspeccionId = item.IdProspeccion ?? 0,
+        CaptacionId = item.IdCaptacion ?? 0,
+        ClienteId = item.IdCliente ?? 0,
+        CodigoProspeccion = item.CodigoProspeccion ?? "",
         FechaHoraTexto = item.FechaHora?.ToString("dd MMM yyyy · HH:mm", CultureInfo.GetCultureInfo("es-PE")) ?? "",
         CanalContacto = item.CanalContacto ?? "",
         Resultado = item.Resultado ?? "",
         Observaciones = item.Observaciones ?? "",
+        TranscripcionNota = item.TranscripcionNota ?? "",
         ClienteNombre = item.ClienteNombre ?? "",
         CaptacionCodigo = item.CodigoCaptacion ?? "",
         NombreAgenteResponsable = item.AgenteNombre ?? "",
@@ -2410,7 +3145,10 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
 
     private bool EsParaRolActivo(NotificacionDto item) =>
         item.DestinatarioRol == RolActivo
-        || (RolActivo == Roles.Admin && item.DestinatarioRol == Roles.Broker);
+        || (RolActivo == Roles.Admin && item.DestinatarioRol == Roles.Broker)
+        // El administrador (solo lectura) también es notificado cuando el supervisor
+        // marca una comisión como cobrada, aunque la alerta esté dirigida al agente.
+        || (RolActivo == Roles.Admin && item.Tipo == LabelComisionCobrada);
 
     public void MarcarLeida(long id)
     {
@@ -2505,6 +3243,9 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
             "CAPTACION_REVISADA" => "captaciones",
             "CAPTACION_CERRADA" => "captaciones",
             "OPORTUNIDAD_CERRADA" => $"oportunidad-detail/{id}",
+            // Etapa 3: avisos de comision -> el agente abre su lista de comisiones.
+            "COMISION_ASIGNADA" => "comisiones",
+            "COMISION_COBRADA" => "comisiones",
             _ => item.Ruta,
         };
     }
@@ -2519,8 +3260,13 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
         "CAPTACION_REVISADA" => Roles.Agente,
         "CAPTACION_CERRADA" => Roles.Agente,
         "OPORTUNIDAD_CERRADA" => Roles.Broker,
+        "COMISION_ASIGNADA" => Roles.Agente,
+        "COMISION_COBRADA" => Roles.Agente,
         _ => RolActivo,
     };
+
+    // Etiqueta de la alerta de comisión cobrada; el administrador (solo lectura) también la ve.
+    private const string LabelComisionCobrada = "Comisión cobrada";
 
     // El label debe coincidir EXACTO con el Tipo de la notificación in-app equivalente para
     // que la campana las deduplique (clave Tipo|EntidadRef|Rol) y no se vean dos veces.
@@ -2534,6 +3280,8 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
         "CAPTACION_REVISADA" => "Captación revisada",
         "CAPTACION_CERRADA" => "Captación cerrada",
         "OPORTUNIDAD_CERRADA" => "Trato cerrado",
+        "COMISION_ASIGNADA" => "Comisión lista para cobro",
+        "COMISION_COBRADA" => LabelComisionCobrada,
         _ => tipo.Replace('_', ' ').ToLowerInvariant(),
     };
 
@@ -2541,6 +3289,8 @@ public class HttpAlertaService(ApiClient api, AppState app, NotificacionStore st
     {
         if (item.Severidad == "ALTA")
             return "alert";
+        if (item.Tipo.StartsWith("COMISION", StringComparison.OrdinalIgnoreCase))
+            return "handshake";
         return item.Tipo.StartsWith("SOLICITUD", StringComparison.OrdinalIgnoreCase) ? "fileText" : "bell";
     }
 }
@@ -2617,13 +3367,13 @@ internal static class Codigos
 
     public static string EstadoContrato(string? codigo) => codigo switch
     {
-        "EN_PROCESO" => "En proceso",
-        "FIRMADO" => "Firmado",
-        "VIGENTE" => "Vigente",
-        "RENOVADO" => "Renovado",
-        "FINALIZADO" => "Finalizado",
-        "RESCINDIDO" => "Rescindido",
-        "ANULADO" => "Anulado",
+        "P" => "En proceso",
+        "D" => "Firmado",
+        "V" => "Vigente",
+        "R" => "Renovado",
+        "F" => "Finalizado",
+        "S" => "Rescindido",
+        "A" => "Anulado",
         _ => codigo ?? "",
     };
 

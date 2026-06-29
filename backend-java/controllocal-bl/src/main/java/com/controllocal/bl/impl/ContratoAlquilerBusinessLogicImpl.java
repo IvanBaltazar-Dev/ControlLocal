@@ -3,6 +3,7 @@ package com.controllocal.bl.impl;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,7 +18,9 @@ import com.controllocal.dao.ContratoAlquilerDAO;
 import com.controllocal.dao.LocalComercialDAO;
 import com.controllocal.dao.OportunidadComercialDAO;
 import com.controllocal.dao.PrecioLocalDAO;
+import com.controllocal.dao.PublicacionDAO;
 import com.controllocal.dao.SolicitudAlquilerDAO;
+import com.controllocal.dao.TareaDAO;
 import com.controllocal.dao.impl.AlertaDAOImpl;
 import com.controllocal.dao.impl.CaptacionDAOImpl;
 import com.controllocal.dao.impl.ComisionLiquidacionDAOImpl;
@@ -25,21 +28,27 @@ import com.controllocal.dao.impl.ContratoAlquilerDAOImpl;
 import com.controllocal.dao.impl.LocalComercialDAOImpl;
 import com.controllocal.dao.impl.OportunidadComercialDAOImpl;
 import com.controllocal.dao.impl.PrecioLocalDAOImpl;
+import com.controllocal.dao.impl.PublicacionDAOImpl;
 import com.controllocal.dao.impl.SolicitudAlquilerDAOImpl;
+import com.controllocal.dao.impl.TareaDAOImpl;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.ComisionLiquidacion;
 import com.controllocal.model.comercial.ContratoAlquiler;
 import com.controllocal.model.comercial.OportunidadComercial;
+import com.controllocal.model.comercial.Publicacion;
 import com.controllocal.model.comercial.SolicitudAlquiler;
+import com.controllocal.model.comercial.Tarea;
 import com.controllocal.model.comercial.enums.EstadoComision;
 import com.controllocal.model.comercial.enums.EstadoContrato;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.comercial.enums.EstadoSolicitudAlquiler;
+import com.controllocal.model.comercial.enums.EstadoTarea;
 import com.controllocal.model.comercial.enums.Moneda;
 import com.controllocal.model.comercial.enums.Severidad;
 import com.controllocal.model.comercial.enums.TipoAlerta;
 import com.controllocal.model.comercial.enums.TipoEntidad;
 import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
+import com.controllocal.model.inmueble.enums.EstadoPublicacion;
 
 public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusinessLogic {
 
@@ -51,6 +60,8 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
     private final ComisionLiquidacionDAO comisionDAO;
     private final PrecioLocalDAO precioLocalDAO;
     private final AlertaDAO alertaDAO;
+    private final PublicacionDAO publicacionDAO;
+    private final TareaDAO tareaDAO;
 
     public ContratoAlquilerBusinessLogicImpl() {
         this(new ContratoAlquilerDAOImpl(), new SolicitudAlquilerDAOImpl(),
@@ -79,6 +90,21 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
             ComisionLiquidacionDAO comisionDAO,
             PrecioLocalDAO precioLocalDAO,
             AlertaDAO alertaDAO) {
+        this(contratoDAO, solicitudDAO, oportunidadDAO, captacionDAO, localDAO, comisionDAO,
+                precioLocalDAO, alertaDAO, new PublicacionDAOImpl(), new TareaDAOImpl());
+    }
+
+    public ContratoAlquilerBusinessLogicImpl(
+            ContratoAlquilerDAO contratoDAO,
+            SolicitudAlquilerDAO solicitudDAO,
+            OportunidadComercialDAO oportunidadDAO,
+            CaptacionDAO captacionDAO,
+            LocalComercialDAO localDAO,
+            ComisionLiquidacionDAO comisionDAO,
+            PrecioLocalDAO precioLocalDAO,
+            AlertaDAO alertaDAO,
+            PublicacionDAO publicacionDAO,
+            TareaDAO tareaDAO) {
         this.contratoDAO = contratoDAO;
         this.solicitudDAO = solicitudDAO;
         this.oportunidadDAO = oportunidadDAO;
@@ -87,11 +113,29 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
         this.comisionDAO = comisionDAO;
         this.precioLocalDAO = precioLocalDAO;
         this.alertaDAO = alertaDAO;
+        this.publicacionDAO = publicacionDAO;
+        this.tareaDAO = tareaDAO;
     }
 
     @Override
     public Long registrarPorSolicitud(Long idSolicitud) {
+        return registrarPorSolicitud(idSolicitud, LocalDate.now(), EstadoContrato.VIGENTE, null);
+    }
+
+    @Override
+    public Long registrarPorSolicitud(Long idSolicitud, LocalDate fechaCierre,
+            EstadoContrato estadoContrato, String incidencias) {
         BusinessValidations.id(idSolicitud, "El id de solicitud");
+        LocalDate cierre = fechaCierre != null ? fechaCierre : LocalDate.now();
+        if (cierre.isAfter(LocalDate.now())) {
+            throw new BusinessException("La fecha de cierre no puede ser futura.");
+        }
+        EstadoContrato estado = estadoContrato != null ? estadoContrato : EstadoContrato.VIGENTE;
+        if (estado != EstadoContrato.FIRMADO && estado != EstadoContrato.VIGENTE) {
+            throw new BusinessException("El contrato solo puede cerrarse como Firmado o Vigente.");
+        }
+        String notas = incidencias != null && !incidencias.isBlank() ? incidencias.trim() : null;
+
         return TransactionRunner.write(conn -> {
             SolicitudAlquiler solicitud = solicitudDAO.buscarPorId(idSolicitud)
                     .orElseThrow(() -> new BusinessException("Solicitud de alquiler no encontrada."));
@@ -121,25 +165,24 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
             ContratoAlquiler contrato = new ContratoAlquiler();
             contrato.setOportunidad(oportunidad);
             contrato.setSolicitudAlquiler(solicitud);
-            contrato.setFechaCierre(LocalDate.now());
-            contrato.setEstadoContrato(EstadoContrato.VIGENTE);
+            contrato.setFechaCierre(cierre);
+            contrato.setEstadoContrato(estado);
+            contrato.setIncidencias(notas);
             Long idContrato = contratoDAO.crear(contrato);
             contrato.setIdContratoAlquiler(idContrato);
 
-            // Comision = % pactado x un mes de renta (= monto propuesto aprobado). Split 50/50.
+            // Comision bruta = % pactado x un mes de renta (= monto propuesto aprobado).
+            // Sin reparto automatico 50/50: el broker supervisor definira el monto del agente
+            // y el sistema calculara el de la empresa (Etapa 2). La liquidacion nace PENDIENTE.
             BigDecimal renta = solicitud.getMontoPropuesto();
-            BigDecimal comisionTotal = calcularComision(captacion.getComisionPactada(), renta);
-            BigDecimal montoAgente = comisionTotal.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
-            BigDecimal montoEmpresa = comisionTotal.subtract(montoAgente);
+            BigDecimal comisionBruta = calcularComision(captacion.getComisionPactada(), renta);
 
             ComisionLiquidacion comision = new ComisionLiquidacion();
             comision.setContratoAlquiler(contrato);
-            comision.setMonto(comisionTotal);
-            comision.setMontoAgente(montoAgente);
-            comision.setMontoEmpresa(montoEmpresa);
+            comision.setMonto(comisionBruta);
             comision.setMoneda(Moneda.USD);
             comision.setEstado(EstadoComision.PENDIENTE);
-            // fechaCobro queda NULL: el cobro se registra despues.
+            // montoAgente / montoEmpresa / fechaCobro / formaPago quedan NULL: se definen despues.
             comisionDAO.crear(comision);
 
             // Cierra la oportunidad como trato concretado (Finalizada exitosa).
@@ -151,7 +194,8 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
             solicitud.cerrar();
             solicitudDAO.actualizar(solicitud);
 
-            // El local alquilado deja de estar disponible + precio CERRADO real del local.
+            // El local alquilado deja de estar disponible + precio CERRADO real del local,
+            // y se dan de baja sus publicaciones.
             Long idLocal = captacion.getLocalComercial() != null
                     ? captacion.getLocalComercial().getIdLocal() : null;
             if (idLocal != null && idLocal > 0) {
@@ -160,7 +204,11 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
                     localDAO.actualizar(local);
                 });
                 precioLocalDAO.registrar(idLocal, "C", Moneda.USD.getCodigo(), renta, LocalDate.now());
+                cerrarPublicaciones(idLocal);
             }
+
+            // Resuelve (Completadas) las tareas abiertas atadas a la operacion ya cerrada.
+            resolverTareas(idOportunidad, idSolicitud, idCaptacion, idLocal);
 
             // Aviso real al broker supervisor: el agente concreto el alquiler (cierre exitoso).
             // Se ata al agente de la solicitud (siempre poblado); el broker lo ve via broker_agente.
@@ -174,6 +222,38 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
             }
             return idContrato;
         });
+    }
+
+    // Cierra (estado Cerrado + fecha de baja) las publicaciones aun vigentes del local alquilado.
+    private void cerrarPublicaciones(Long idLocal) {
+        for (Publicacion publicacion : publicacionDAO.listarPorInmueble(idLocal)) {
+            if (publicacion.getEstado() != EstadoPublicacion.CERRADO) {
+                publicacion.setEstado(EstadoPublicacion.CERRADO);
+                publicacion.setFechaBaja(LocalDateTime.now());
+                publicacionDAO.actualizar(publicacion);
+            }
+        }
+    }
+
+    // Marca como Completadas las tareas pendientes/en proceso atadas a las entidades de la operacion.
+    private void resolverTareas(Long idOportunidad, Long idSolicitud, Long idCaptacion, Long idLocal) {
+        resolverTareasDe(TipoEntidad.OPORTUNIDAD, idOportunidad);
+        resolverTareasDe(TipoEntidad.SOLICITUD_ALQUILER, idSolicitud);
+        resolverTareasDe(TipoEntidad.CAPTACION, idCaptacion);
+        resolverTareasDe(TipoEntidad.INMUEBLE, idLocal);
+    }
+
+    private void resolverTareasDe(TipoEntidad tipo, Long entidadId) {
+        if (entidadId == null || entidadId <= 0) {
+            return;
+        }
+        for (Tarea tarea : tareaDAO.listarPorEntidad(tipo, entidadId)) {
+            if (tarea.getEstado() == EstadoTarea.PENDIENTE || tarea.getEstado() == EstadoTarea.EN_PROCESO) {
+                tarea.setEstado(EstadoTarea.COMPLETADA);
+                tarea.setFechaCompletada(LocalDateTime.now());
+                tareaDAO.actualizar(tarea);
+            }
+        }
     }
 
     @Override

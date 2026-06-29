@@ -1,7 +1,9 @@
 package com.controllocal.rest;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -15,6 +17,7 @@ import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.bl.ContratoAlquilerBusinessLogic;
 import com.controllocal.bl.InteraccionComercialBusinessLogic;
 import com.controllocal.bl.OportunidadComercialBusinessLogic;
+import com.controllocal.bl.ProspeccionBusinessLogic;
 import com.controllocal.bl.SolicitudAlquilerBusinessLogic;
 import com.controllocal.bl.VisitaBusinessLogic;
 import com.controllocal.bl.impl.AgenteBusinessLogicImpl;
@@ -23,17 +26,21 @@ import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.ContratoAlquilerBusinessLogicImpl;
 import com.controllocal.bl.impl.InteraccionComercialBusinessLogicImpl;
 import com.controllocal.bl.impl.OportunidadComercialBusinessLogicImpl;
+import com.controllocal.bl.impl.ProspeccionBusinessLogicImpl;
 import com.controllocal.bl.impl.SolicitudAlquilerBusinessLogicImpl;
 import com.controllocal.bl.impl.VisitaBusinessLogicImpl;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.ContratoAlquiler;
 import com.controllocal.model.comercial.InteraccionComercial;
 import com.controllocal.model.comercial.OportunidadComercial;
+import com.controllocal.model.comercial.Prospeccion;
 import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.comercial.Visita;
 import com.controllocal.model.comercial.enums.EstadoCaptacion;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
+import com.controllocal.model.comercial.enums.EstadoProspeccion;
 import com.controllocal.model.comercial.enums.EstadoSolicitudAlquiler;
+import com.controllocal.model.comercial.enums.EstadoVisita;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
 import com.controllocal.rest.dto.Dtos;
@@ -44,6 +51,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 
@@ -67,6 +75,7 @@ public class IndicadoresRest {
     private final OportunidadComercialBusinessLogic oportunidades = new OportunidadComercialBusinessLogicImpl();
     private final ContratoAlquilerBusinessLogic contratos = new ContratoAlquilerBusinessLogicImpl();
     private final VisitaBusinessLogic visitas = new VisitaBusinessLogicImpl();
+    private final ProspeccionBusinessLogic prospecciones = new ProspeccionBusinessLogicImpl();
     private final InteraccionComercialBusinessLogic interacciones = new InteraccionComercialBusinessLogicImpl();
     private final AgenteBusinessLogic agentes = new AgenteBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
@@ -76,12 +85,15 @@ public class IndicadoresRest {
 
     @GET
     @Path("resumen")
-    public Dtos.IndicadoresResponse resumen() {
+    public Dtos.IndicadoresResponse resumen(@QueryParam("periodo") String periodoParam) {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
         boolean esAdmin = usuario.tieneRol("ADMIN");
         boolean esBroker = usuario.tieneRol("BROKER");
         // null = sin filtro (admin ve todo); en caso contrario, ids de agentes en alcance.
         Set<Long> alcance = agentesEnAlcance(usuario);
+        Periodo periodo = Periodo.desde(periodoParam);
+        LocalDate hoy = LocalDate.now();
+        LocalDate inicio = hoy.minusDays(periodo.dias() - 1L);
 
         List<Captacion> caps = captaciones.listarTodos().stream()
                 .filter(c -> enAlcance(alcance, idAgente(c.getAgenteResponsable())))
@@ -101,6 +113,31 @@ public class IndicadoresRest {
         List<ContratoAlquiler> conts = contratos.listarTodos().stream()
                 .filter(c -> enAlcance(alcance, idAgenteContrato(c)))
                 .toList();
+        List<Prospeccion> pros = prospecciones.listarTodos().stream()
+                .filter(p -> enAlcance(alcance, idAgente(p.getAgenteResponsable())))
+                .toList();
+
+        List<Captacion> capsPeriodo = caps.stream()
+                .filter(c -> enPeriodo(c.getFechaCaptacion(), inicio, hoy))
+                .toList();
+        List<OportunidadComercial> opsPeriodo = ops.stream()
+                .filter(o -> enPeriodo(o.getFechaRegistro(), inicio, hoy))
+                .toList();
+        List<SolicitudAlquiler> solsPeriodo = sols.stream()
+                .filter(s -> enPeriodo(s.getFechaRegistro(), inicio, hoy))
+                .toList();
+        List<Visita> visPeriodo = vis.stream()
+                .filter(v -> enPeriodo(v.getFechaVisita(), inicio, hoy))
+                .toList();
+        List<InteraccionComercial> intsPeriodo = ints.stream()
+                .filter(i -> enPeriodo(i.getFechaHora(), inicio, hoy))
+                .toList();
+        List<ContratoAlquiler> contsPeriodo = conts.stream()
+                .filter(c -> enPeriodo(c.getFechaCierre(), inicio, hoy))
+                .toList();
+        List<Prospeccion> prosPeriodo = pros.stream()
+                .filter(p -> enPeriodo(p.getFechaRegistro(), inicio, hoy))
+                .toList();
 
         int captacionesPorRevisar = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.PENDIENTE_REVISION).count();
         int captacionesObservadas = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.OBSERVADA).count();
@@ -110,7 +147,7 @@ public class IndicadoresRest {
                 .filter(o -> o.getEstado() == EstadoOportunidadComercial.ABIERTA
                         || o.getEstado() == EstadoOportunidadComercial.SOLICITUD_CREADA)
                 .count();
-        int cierres = conts.size();
+        int cierres = contsPeriodo.size();
 
         // Etapas (donut): captaciones por estado.
         List<Dtos.IndicadorConteo> etapas = List.of(
@@ -121,18 +158,18 @@ public class IndicadoresRest {
                 new Dtos.IndicadorConteo("Cerrada", (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.CERRADA).count()));
 
         // Embudo de conversion sobre las oportunidades en alcance.
-        Set<Long> oportunidadesConVisita = vis.stream()
+        Set<Long> oportunidadesConVisita = visPeriodo.stream()
                 .map(v -> idOportunidad(v.getOportunidadComercial()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        int base = ops.size();
-        int conVisita = (int) ops.stream().map(o -> o.getIdOportunidad())
+        int base = opsPeriodo.size();
+        int conVisita = (int) opsPeriodo.stream().map(o -> o.getIdOportunidad())
                 .filter(id -> id != null && oportunidadesConVisita.contains(id)).count();
-        int conSolicitud = (int) ops.stream()
+        int conSolicitud = (int) opsPeriodo.stream()
                 .filter(o -> o.getEstado() == EstadoOportunidadComercial.SOLICITUD_CREADA
                         || o.getEstado() == EstadoOportunidadComercial.FINALIZADA_EXITOSA)
                 .count();
-        int cerradasExitosas = (int) ops.stream()
+        int cerradasExitosas = (int) opsPeriodo.stream()
                 .filter(o -> o.getEstado() == EstadoOportunidadComercial.FINALIZADA_EXITOSA)
                 .count();
         List<Dtos.IndicadorEmbudo> embudo = List.of(
@@ -141,48 +178,109 @@ public class IndicadoresRest {
                 new Dtos.IndicadorEmbudo("Con solicitud creada", conSolicitud, porcentaje(conSolicitud, base)),
                 new Dtos.IndicadorEmbudo("Cerradas exitosas", cerradasExitosas, porcentaje(cerradasExitosas, base)));
 
-        // Cierres por mes (ultimos 6 meses) a partir de la fecha de cierre del contrato.
-        List<String> mesesEtiquetas = new ArrayList<>();
-        List<Integer> cierresPorMes = new ArrayList<>();
-        YearMonth actual = YearMonth.now();
-        for (int i = 5; i >= 0; i--) {
-            YearMonth ym = actual.minusMonths(i);
-            mesesEtiquetas.add(MESES[ym.getMonthValue() - 1]);
-            int n = (int) conts.stream().filter(c -> {
-                LocalDate f = c.getFechaCierre();
-                return f != null && f.getYear() == ym.getYear() && f.getMonthValue() == ym.getMonthValue();
-            }).count();
-            cierresPorMes.add(n);
-        }
+        Serie cierresSerie = cierresSerie(contsPeriodo, periodo, inicio, hoy);
 
         List<Dtos.IndicadorDesempeno> desempeno = esAdmin
-                ? desempenoPorBroker(caps, conts)
-                : desempenoPorAgente(alcance, caps, conts);
+                ? desempenoPorBroker(capsPeriodo, contsPeriodo)
+                : desempenoPorAgente(alcance, capsPeriodo, contsPeriodo);
 
         int agentesActivos = alcance != null ? alcance.size() : agentes.listarTodos().size();
         int brokersActivos = esAdmin ? brokers.listarTodos().size() : (esBroker ? 1 : 0);
 
         String ambito = esAdmin ? "Reportes globales" : esBroker ? "Reportes de equipo" : "Mi actividad";
 
+        Dtos.IndicadorOperativo operativo = operativo(prosPeriodo.isEmpty() ? pros : prosPeriodo, vis, sols);
+
         return new Dtos.IndicadoresResponse(
                 ambito,
                 captacionesPorRevisar,
                 solicitudesPorEvaluar,
-                caps.size(),
+                capsPeriodo.size(),
                 captacionesActivas,
                 captacionesPorRevisar,
                 captacionesObservadas,
                 oportunidadesActivas,
-                ints.size(),
-                vis.size(),
+                intsPeriodo.size(),
+                visPeriodo.size(),
                 cierres,
                 agentesActivos,
                 brokersActivos,
-                mesesEtiquetas,
-                cierresPorMes,
+                cierresSerie.etiquetas(),
+                cierresSerie.valores(),
                 etapas,
                 embudo,
-                desempeno);
+                desempeno,
+                operativo);
+    }
+
+    private Serie cierresSerie(
+            List<ContratoAlquiler> conts,
+            Periodo periodo,
+            LocalDate inicio,
+            LocalDate hoy) {
+        List<String> etiquetas = new ArrayList<>();
+        List<Integer> valores = new ArrayList<>();
+        if (periodo.dias() <= 31) {
+            LocalDate cursor = inicio;
+            while (!cursor.isAfter(hoy)) {
+                LocalDate dia = cursor;
+                etiquetas.add(String.format("%02d/%02d", dia.getDayOfMonth(), dia.getMonthValue()));
+                valores.add((int) conts.stream()
+                        .map(ContratoAlquiler::getFechaCierre)
+                        .filter(dia::equals)
+                        .count());
+                cursor = cursor.plusDays(1);
+            }
+            return new Serie(etiquetas, valores);
+        }
+
+        YearMonth cursor = YearMonth.from(inicio);
+        YearMonth fin = YearMonth.from(hoy);
+        while (!cursor.isAfter(fin)) {
+            YearMonth ym = cursor;
+            etiquetas.add(MESES[ym.getMonthValue() - 1] + " " + String.valueOf(ym.getYear()).substring(2));
+            valores.add((int) conts.stream().filter(c -> {
+                LocalDate f = c.getFechaCierre();
+                return f != null && f.getYear() == ym.getYear() && f.getMonthValue() == ym.getMonthValue();
+            }).count());
+            cursor = cursor.plusMonths(1);
+        }
+        return new Serie(etiquetas, valores);
+    }
+
+    // Indicadores operativos del seguimiento (Etapa 9): recontactos, atraso de seguimiento,
+    // visitas pendientes, solicitudes sin cierre y conversion prospeccion -> captacion.
+    private Dtos.IndicadorOperativo operativo(List<Prospeccion> pros, List<Visita> vis, List<SolicitudAlquiler> sols) {
+        LocalDate hoy = LocalDate.now();
+        int recontactosVencidos = 0;
+        int recontactosAlDia = 0;
+        long sumaAtraso = 0;
+        for (Prospeccion p : pros) {
+            if (p.getEstado() == EstadoProspeccion.CAPTADO || p.getEstado() == EstadoProspeccion.DESCARTADO) {
+                continue; // solo prospecciones en seguimiento activo
+            }
+            LocalDate fr = p.getFechaRecontacto();
+            if (fr == null) {
+                continue;
+            }
+            if (fr.isAfter(hoy)) {
+                recontactosAlDia++;
+            } else {
+                recontactosVencidos++;
+                sumaAtraso += ChronoUnit.DAYS.between(fr, hoy);
+            }
+        }
+        int diasPromedio = recontactosVencidos > 0 ? (int) Math.round((double) sumaAtraso / recontactosVencidos) : 0;
+        int visitasPendientes = (int) vis.stream()
+                .filter(v -> v.getEstado() == EstadoVisita.PROGRAMADA || v.getEstado() == EstadoVisita.REPROGRAMADA)
+                .count();
+        int solicitudesSinCierre = (int) sols.stream()
+                .filter(s -> s.getEstado() == EstadoSolicitudAlquiler.APROBADA)
+                .count();
+        int captadas = (int) pros.stream().filter(p -> p.getEstado() == EstadoProspeccion.CAPTADO).count();
+        int conversion = porcentaje(captadas, pros.size());
+        return new Dtos.IndicadorOperativo(recontactosVencidos, recontactosAlDia, diasPromedio,
+                visitasPendientes, solicitudesSinCierre, conversion);
     }
 
     // Desempeno por broker: para cada broker, captaciones y cierres de su equipo de agentes.
@@ -246,6 +344,14 @@ public class IndicadoresRest {
         return alcance == null || (idAgente != null && alcance.contains(idAgente));
     }
 
+    private static boolean enPeriodo(LocalDate fecha, LocalDate inicio, LocalDate fin) {
+        return fecha != null && !fecha.isBefore(inicio) && !fecha.isAfter(fin);
+    }
+
+    private static boolean enPeriodo(LocalDateTime fecha, LocalDate inicio, LocalDate fin) {
+        return fecha != null && enPeriodo(fecha.toLocalDate(), inicio, fin);
+    }
+
     private static Long idAgente(AgenteInmobiliario agente) {
         return agente != null ? agente.getIdAgente() : null;
     }
@@ -273,5 +379,22 @@ public class IndicadoresRest {
 
     private static int porcentaje(int parte, int total) {
         return total <= 0 ? 0 : (int) Math.round(parte * 100.0 / total);
+    }
+
+    private record Periodo(String codigo, int dias) {
+        static Periodo desde(String valor) {
+            String normal = valor == null ? "" : valor.trim().toLowerCase();
+            return switch (normal) {
+                case "7", "7d", "semana" -> new Periodo("7d", 7);
+                case "15", "15d" -> new Periodo("15d", 15);
+                case "1m", "30", "30d", "mes" -> new Periodo("1m", 30);
+                case "3m", "90", "90d" -> new Periodo("3m", 90);
+                case "1y", "12m", "365", "365d", "ano", "anio" -> new Periodo("1y", 365);
+                default -> new Periodo("6m", 180);
+            };
+        }
+    }
+
+    private record Serie(List<String> etiquetas, List<Integer> valores) {
     }
 }

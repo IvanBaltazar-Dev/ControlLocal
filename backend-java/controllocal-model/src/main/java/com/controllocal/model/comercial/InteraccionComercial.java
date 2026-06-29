@@ -10,11 +10,13 @@ import com.controllocal.model.usuario.AgenteInmobiliario;
 public class InteraccionComercial {
 
     private Long idInteraccion;
+    private String contexto;
     private LocalDateTime fechaHora;
     private CanalContacto canalContacto;
     private String observaciones;
     private ResultadoInteraccion resultado;
     private OportunidadComercial oportunidadComercial;
+    private Prospeccion prospeccion;
     private ClienteInteresado clienteInteresado;
     private Captacion captacion;
     private AgenteInmobiliario agenteResponsable;
@@ -28,6 +30,8 @@ public class InteraccionComercial {
 
     public Long getIdInteraccion() { return idInteraccion; }
     public void setIdInteraccion(Long idInteraccion) { this.idInteraccion = idInteraccion; }
+    public String getContexto() { return contexto; }
+    public void setContexto(String contexto) { this.contexto = contexto; }
     public LocalDateTime getFechaHora() { return fechaHora; }
     public void setFechaHora(LocalDateTime fechaHora) { this.fechaHora = fechaHora; }
     public CanalContacto getCanalContacto() { return canalContacto; }
@@ -38,6 +42,8 @@ public class InteraccionComercial {
     public void setResultado(ResultadoInteraccion resultado) { this.resultado = resultado; }
     public OportunidadComercial getOportunidadComercial() { return oportunidadComercial; }
     public void setOportunidadComercial(OportunidadComercial oportunidadComercial) { this.oportunidadComercial = oportunidadComercial; }
+    public Prospeccion getProspeccion() { return prospeccion; }
+    public void setProspeccion(Prospeccion prospeccion) { this.prospeccion = prospeccion; }
     public ClienteInteresado getClienteInteresado() { return clienteInteresado; }
     public void setClienteInteresado(ClienteInteresado clienteInteresado) { this.clienteInteresado = clienteInteresado; }
     public Captacion getCaptacion() { return captacion; }
@@ -51,8 +57,25 @@ public class InteraccionComercial {
         if (fechaHora == null) {
             fechaHora = LocalDateTime.now();
         }
+        if (contexto == null || contexto.isBlank()) {
+            if (prospeccion != null) {
+                contexto = "PROSPECCION";
+            } else if (captacion != null) {
+                contexto = "CAPTACION";
+            } else if (clienteInteresado != null) {
+                contexto = "CLIENTE";
+            } else {
+                contexto = "OPORTUNIDAD";
+            }
+        }
+        contexto = contexto.trim().toUpperCase();
         if (resultado == null) {
-            resultado = ResultadoInteraccion.PENDIENTE;
+            resultado = switch (contexto) {
+                case "PROSPECCION" -> ResultadoInteraccion.RECONTACTAR;
+                case "CAPTACION" -> ResultadoInteraccion.PAUSAR_GESTION;
+                case "CLIENTE" -> ResultadoInteraccion.SEGUIMIENTO_CLIENTE;
+                default -> ResultadoInteraccion.INTERESADO_OPORTUNIDAD;
+            };
         }
     }
 

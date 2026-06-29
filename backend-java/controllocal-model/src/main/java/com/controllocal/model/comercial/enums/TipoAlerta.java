@@ -15,7 +15,10 @@ public enum TipoAlerta implements CodigoEnum {
     CAPTACION_CREADA,      // agente registra/reenvia una captacion -> broker
     CAPTACION_REVISADA,    // broker aprueba/observa/rechaza la captacion -> agente
     CAPTACION_CERRADA,     // broker cierra la captacion -> agente
-    OPORTUNIDAD_CERRADA;   // agente concreta el alquiler (cierre exitoso) -> broker
+    OPORTUNIDAD_CERRADA,   // agente concreta el alquiler (cierre exitoso) -> broker
+    // Avisos de comision al agente. Nunca exponen el monto neto asignado.
+    COMISION_ASIGNADA,     // broker supervisor define el monto del agente -> agente (lista para cobro)
+    COMISION_COBRADA;      // broker administrador registra el cobro -> agente
 
     @Override public String getCodigo() { return name(); }
     @Override public String getDescripcion() { return name().replace('_', ' '); }

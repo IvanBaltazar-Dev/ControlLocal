@@ -90,8 +90,13 @@ public class SolicitudesRest {
     @GET
     public PageResponse<Dtos.SolicitudResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
-            @QueryParam("tamano") @DefaultValue("10") int tamano) {
-        List<SolicitudAlquiler> fuente = solicitudesDelUsuario(SeguridadRest.usuario(request));
+            @QueryParam("tamano") @DefaultValue("10") int tamano,
+            @QueryParam("idOportunidad") Long idOportunidad,
+            @QueryParam("idCaptacion") Long idCaptacion) {
+        List<SolicitudAlquiler> fuente = solicitudesDelUsuario(SeguridadRest.usuario(request)).stream()
+                .filter(item -> coincideOportunidad(item, idOportunidad))
+                .filter(item -> coincideCaptacion(item, idCaptacion))
+                .toList();
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
         int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
@@ -181,6 +186,19 @@ public class SolicitudesRest {
         // agente responsable (broker -> agente). La pertenencia a la solicitud se valida alli.
         DocumentoSolicitud revisado = documentos.revisar(id, idDoc, resultado, dto.observaciones());
         return Dtos.DocumentoSolicitudResponse.desde(revisado);
+    }
+
+    // El broker, durante la evaluacion, deja conformes en bloque todos los documentos cargados
+    // aun pendientes (atajo "Validar todos los documentos" del dialogo de aprobacion). Es la
+    // contraparte masiva de revisarDocumento. Devuelve la lista de documentos resultante.
+    @PATCH
+    @Path("{id}/documentos/conformar")
+    public List<Dtos.DocumentoSolicitudResponse> conformarDocumentos(@PathParam("id") long id) {
+        UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "BROKER", "ADMIN");
+        obtenerConAcceso(id, usuario);
+        return documentos.conformarPendientes(id).stream()
+                .map(Dtos.DocumentoSolicitudResponse::desde)
+                .toList();
     }
 
     // Historial de evaluaciones de la solicitud (trazabilidad). Accesible al agente
@@ -572,6 +590,23 @@ public class SolicitudesRest {
             return brokers.puedeSupervisarAgente(usuario.idDominio(), agente.getIdAgente());
         }
         return false;
+    }
+
+    private static boolean coincideOportunidad(SolicitudAlquiler solicitud, Long idOportunidad) {
+        return idOportunidad == null
+                || (solicitud.getOportunidadComercial() != null
+                        && idOportunidad.equals(solicitud.getOportunidadComercial().getIdOportunidad()));
+    }
+
+    private static boolean coincideCaptacion(SolicitudAlquiler solicitud, Long idCaptacion) {
+        if (idCaptacion == null) {
+            return true;
+        }
+        if (solicitud.getOportunidadComercial() == null
+                || solicitud.getOportunidadComercial().getCaptacion() == null) {
+            return false;
+        }
+        return idCaptacion.equals(solicitud.getOportunidadComercial().getCaptacion().getIdCaptacion());
     }
 
     private static String generarCodigoSolicitud() {

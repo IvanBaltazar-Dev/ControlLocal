@@ -37,4 +37,7 @@ public class OportunidadComercialDto
 
     // Fecha de cierre lista para mostrar (vacía si sigue abierta).
     public string FechaCierreTexto { get; set; } = string.Empty;
+
+    // Publicación por la que el cliente llegó a la propiedad (0 = sin atribuir).
+    public long PublicacionOrigenId { get; set; }
 }

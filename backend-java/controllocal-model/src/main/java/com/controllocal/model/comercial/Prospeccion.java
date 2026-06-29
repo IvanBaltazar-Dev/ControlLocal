@@ -16,7 +16,8 @@ import com.controllocal.model.usuario.AgenteInmobiliario;
  */
 public class Prospeccion {
 
-    public static final int DIAS_MAX_RECONTACTO = 15;
+    // Dias sin nueva accion de seguimiento tras los cuales toca recontactar (alerta el dia 8).
+    public static final int DIAS_RECONTACTO = 7;
 
     private Long idProspeccion;
     private String codigoProspeccion;
@@ -76,21 +77,34 @@ public class Prospeccion {
 
     public void contactar() {
         this.estado = EstadoProspeccion.CONTACTADO;
-        this.fechaContacto = LocalDate.now();
+        // fechaContacto registra solo el PRIMER contacto y nunca cambia.
+        if (this.fechaContacto == null) {
+            this.fechaContacto = LocalDate.now();
+        }
+        // Cada accion de seguimiento reinicia el reloj de recontacto.
+        this.fechaRecontacto = LocalDate.now();
         touch();
     }
 
     public void registrarReunion() {
         this.estado = EstadoProspeccion.REUNION;
         this.fechaReunion = LocalDate.now();
+        this.fechaRecontacto = LocalDate.now();
         touch();
     }
 
     public void entregarPropuesta() {
-        this.estado = EstadoProspeccion.PROPUESTA_ENTREGADA;
+        this.estado = EstadoProspeccion.EN_SEGUIMIENTO;
         this.fechaPropuesta = LocalDate.now();
         this.resultadoPropuesta = ResultadoPropuesta.PENDIENTE;
-        this.fechaRecontacto = null;
+        this.fechaRecontacto = LocalDate.now();
+        touch();
+    }
+
+    /** Accion de seguimiento del propietario: deja en seguimiento y reinicia el reloj de recontacto. */
+    public void registrarSeguimiento() {
+        this.estado = EstadoProspeccion.EN_SEGUIMIENTO;
+        this.fechaRecontacto = LocalDate.now();
         touch();
     }
 
@@ -111,14 +125,6 @@ public class Prospeccion {
         touch();
     }
 
-    /** "Por ahora no": queda en seguimiento con fecha de recontacto. */
-    public void posponer(LocalDate fechaRecontacto) {
-        this.resultadoPropuesta = ResultadoPropuesta.POSPUESTA;
-        this.estado = EstadoProspeccion.EN_SEGUIMIENTO;
-        this.fechaRecontacto = fechaRecontacto;
-        touch();
-    }
-
     public void descartar(String motivo) {
         this.estado = EstadoProspeccion.DESCARTADO;
         this.observaciones = motivo;
@@ -126,11 +132,14 @@ public class Prospeccion {
         touch();
     }
 
-    /** En seguimiento cuyo recontacto ya vencio o vence dentro de {@code diasAviso}. */
-    public boolean requiereRecontacto(LocalDate hoy, int diasAviso) {
-        return estado == EstadoProspeccion.EN_SEGUIMIENTO
+    /**
+     * Sigue viva y su ultima accion de seguimiento ya tiene {@link #DIAS_RECONTACTO}
+     * dias o mas (desde el dia 8 sin nueva accion): toca recontactar o descartar.
+     */
+    public boolean requiereRecontacto(LocalDate hoy) {
+        return estado.enProceso()
                 && fechaRecontacto != null
-                && !fechaRecontacto.isAfter(hoy.plusDays(diasAviso));
+                && !hoy.isBefore(fechaRecontacto.plusDays(DIAS_RECONTACTO));
     }
 
     private void touch() {

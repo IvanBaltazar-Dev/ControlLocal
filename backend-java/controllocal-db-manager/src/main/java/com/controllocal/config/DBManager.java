@@ -2,16 +2,33 @@ package com.controllocal.config;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.Properties;
 
 /**
- * Carga la configuracion de la base de datos y abre conexiones JDBC.
+ * Carga la configuracion de la base de datos y entrega conexiones JDBC desde un
+ * pool propio (solo java.sql, sin librerias externas).
+ *
+ * Antes cada consulta abria una conexion nueva con {@link DriverManager}. Contra
+ * un RDS remoto con SSL, ese handshake (TCP + TLS + autenticacion) cuesta cientos de
+ * ms por consulta; sumado a los patrones N+1 del dashboard saturaba el servidor y las
+ * peticiones tardaban minutos. El pool mantiene conexiones fisicas ya abiertas y las
+ * reutiliza: cada consulta paga solo el ida-vuelta de la query, no el de la conexion.
+ *
+ * {@link #openConnection()} entrega un envoltorio cuyo {@code close()} devuelve la
+ * conexion al pool en lugar de cerrarla. El resto del codigo (DAO con try-with-resources,
+ * {@link TransactionContext}) sigue igual: cierra "su" conexion y el pool la recicla.
  */
 public final class DBManager {
 
@@ -27,6 +44,14 @@ public final class DBManager {
     private final String url;
     private final String user;
     private final String password;
+
+    // --- Pool JDBC ---
+    private final Deque<Ociosa> ociosas = new ArrayDeque<>();
+    private int vivas;                 // conexiones fisicas abiertas (ociosas + en uso)
+    private boolean cerrado;           // el pool ya no entrega conexiones
+    private final int maxPool;         // tope de conexiones fisicas simultaneas
+    private final long esperaMaxMs;    // espera maxima por una conexion antes de fallar
+    private final long revalidarMs;    // re-valida una conexion ociosa pasado este tiempo
 
     private DBManager() {
         loadDriver();
@@ -46,6 +71,12 @@ public final class DBManager {
                 + "&fallbackToSystemTrustStore=false";
         this.user = required(properties, "db.user", "user");
         this.password = required(properties, "db.password", "password");
+
+        this.maxPool = Math.max(1, intProp(properties, "db.pool.max", 10));
+        this.esperaMaxMs = longProp(properties, "db.pool.timeoutMs", 10_000L);
+        this.revalidarMs = longProp(properties, "db.pool.revalidarMs", 30_000L);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(DBManager::shutdown, "controllocal-pool-shutdown"));
     }
 
     public static DBManager getInstance() {
@@ -59,8 +90,225 @@ public final class DBManager {
         return TransactionContext.currentConnectionOrNew();
     }
 
+    /** Cierra el pool y todas sus conexiones ociosas. Idempotente. */
+    public static void shutdown() {
+        INSTANCE.cerrarPool();
+    }
+
+    /**
+     * Toma una conexion del pool. Se devuelve al pool (no se cierra fisicamente)
+     * cuando el llamante hace close() via try-with-resources.
+     */
     Connection openConnection() throws SQLException {
-        return DriverManager.getConnection(url, user, password);
+        Connection real = tomarFisica();
+        return envolver(real);
+    }
+
+    // Reserva/crea una conexion fisica del pool. El handshake (crear conexion) y la
+    // validacion se hacen FUERA del lock para no serializar a los demas hilos.
+    private Connection tomarFisica() throws SQLException {
+        long limite = System.currentTimeMillis() + esperaMaxMs;
+        while (true) {
+            Ociosa candidata = null;
+            boolean crear = false;
+            synchronized (this) {
+                while (true) {
+                    if (cerrado) {
+                        throw new SQLException("El pool de conexiones esta cerrado.");
+                    }
+                    if (!ociosas.isEmpty()) {
+                        candidata = ociosas.pollFirst();
+                        break;
+                    }
+                    if (vivas < maxPool) {
+                        vivas++;        // reservo el cupo; creo la conexion fuera del lock
+                        crear = true;
+                        break;
+                    }
+                    long restante = limite - System.currentTimeMillis();
+                    if (restante <= 0) {
+                        throw new SQLException(
+                                "Pool de conexiones agotado (max " + maxPool + ").");
+                    }
+                    try {
+                        wait(restante);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new SQLException("Interrumpido esperando una conexion del pool.", e);
+                    }
+                }
+            }
+
+            if (crear) {
+                try {
+                    return DriverManager.getConnection(url, user, password);
+                } catch (SQLException e) {
+                    synchronized (this) {
+                        vivas--;
+                        notifyAll();
+                    }
+                    throw e;
+                }
+            }
+
+            // Reusar una ociosa: solo se valida (round-trip) si lleva rato parada.
+            boolean revisar = System.currentTimeMillis() - candidata.ociosaDesde >= revalidarMs;
+            if (!revisar || esValida(candidata.conexion)) {
+                return candidata.conexion;
+            }
+            cerrarSilencioso(candidata.conexion);
+            synchronized (this) {
+                vivas--;
+                notifyAll();
+            }
+            // descarto la rota y vuelvo a intentar (crear o tomar otra)
+        }
+    }
+
+    // Devuelve la conexion fisica al pool, restaurando autoCommit=true (las
+    // transacciones lo dejan en false). Si esta rota o el pool ya cerro, se descarta.
+    private void devolverFisica(Connection real) {
+        boolean conservar = false;
+        synchronized (this) {
+            if (cerrado) {
+                vivas--;
+            } else {
+                conservar = true;
+            }
+        }
+        if (!conservar) {
+            cerrarSilencioso(real);
+            synchronized (this) {
+                notifyAll();
+            }
+            return;
+        }
+        try {
+            if (real.isClosed()) {
+                throw new SQLException("conexion cerrada");
+            }
+            if (!real.getAutoCommit()) {
+                real.setAutoCommit(true);
+            }
+            synchronized (this) {
+                ociosas.addLast(new Ociosa(real));
+                notifyAll();
+            }
+        } catch (SQLException e) {
+            cerrarSilencioso(real);
+            synchronized (this) {
+                vivas--;
+                notifyAll();
+            }
+        }
+    }
+
+    private void cerrarPool() {
+        Deque<Ociosa> aCerrar;
+        synchronized (this) {
+            if (cerrado) {
+                return;
+            }
+            cerrado = true;
+            aCerrar = new ArrayDeque<>(ociosas);
+            ociosas.clear();
+            vivas = 0;
+            notifyAll();
+        }
+        for (Ociosa o : aCerrar) {
+            cerrarSilencioso(o.conexion);
+        }
+    }
+
+    private static boolean esValida(Connection c) {
+        try {
+            return !c.isClosed() && c.isValid(2);
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    private static void cerrarSilencioso(Connection c) {
+        try {
+            c.close();
+        } catch (SQLException ignored) {
+            // cierre mejor-esfeurzo
+        }
+    }
+
+    private Connection envolver(Connection real) {
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(),
+                new Class<?>[]{Connection.class},
+                new PooledConnectionHandler(real));
+    }
+
+    // Entrada del pool con marca de tiempo para decidir cuando revalidar.
+    private static final class Ociosa {
+        private final Connection conexion;
+        private final long ociosaDesde;
+
+        Ociosa(Connection conexion) {
+            this.conexion = conexion;
+            this.ociosaDesde = System.currentTimeMillis();
+        }
+    }
+
+    // Envoltorio cuyo close() devuelve la conexion al pool en vez de cerrarla.
+    private final class PooledConnectionHandler implements InvocationHandler {
+        private final Connection real;
+        private boolean devuelta;
+
+        PooledConnectionHandler(Connection real) {
+            this.real = real;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            String name = method.getName();
+            if ("close".equals(name)) {
+                if (!devuelta) {
+                    devuelta = true;
+                    devolverFisica(real);
+                }
+                return null;
+            }
+            if ("isClosed".equals(name)) {
+                return devuelta || real.isClosed();
+            }
+            if (devuelta) {
+                throw new SQLException("La conexion ya fue devuelta al pool.");
+            }
+            try {
+                return method.invoke(real, args);
+            } catch (InvocationTargetException error) {
+                throw error.getTargetException();
+            }
+        }
+    }
+
+    private static int intProp(Properties properties, String key, int defaultValue) {
+        String value = properties.getProperty(key);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
+    }
+
+    private static long longProp(Properties properties, String key, long defaultValue) {
+        String value = properties.getProperty(key);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
     }
 
     String getUrl() {

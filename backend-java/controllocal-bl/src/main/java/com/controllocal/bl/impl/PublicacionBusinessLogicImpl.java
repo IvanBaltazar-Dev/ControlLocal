@@ -2,7 +2,9 @@ package com.controllocal.bl.impl;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
+import com.controllocal.bl.BusinessException;
 import com.controllocal.bl.PublicacionBusinessLogic;
 import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.dao.PublicacionDAO;
@@ -71,6 +73,87 @@ public class PublicacionBusinessLogicImpl implements PublicacionBusinessLogic {
                 publicaciones.actualizar(publicacion);
             }
         });
+    }
+
+    @Override
+    public Optional<Publicacion> buscarPorId(Long idPublicacion) {
+        if (idPublicacion == null || idPublicacion <= 0) {
+            return Optional.empty();
+        }
+        return publicaciones.buscarPorId(idPublicacion);
+    }
+
+    @Override
+    public Publicacion crear(Long idLocal, Publicacion datos) {
+        if (idLocal == null || idLocal <= 0) {
+            throw new BusinessException("El local de la publicacion es obligatorio.");
+        }
+        if (datos == null || datos.getCanal() == null) {
+            throw new BusinessException("El canal de la publicacion es obligatorio.");
+        }
+        LocalComercial local = new LocalComercial();
+        local.setIdLocal(idLocal);
+        datos.setInmueble(local);
+        datos.setVersionAnuncio(1);
+        if (datos.getMoneda() == null) {
+            datos.setMoneda(Moneda.PEN);
+        }
+        if (datos.getEstado() == null) {
+            datos.setEstado(EstadoPublicacion.PUBLICADO);
+        }
+        if (datos.getTituloAnuncio() == null || datos.getTituloAnuncio().isBlank()) {
+            datos.setTituloAnuncio("Publicacion " + idLocal);
+        }
+        if (datos.getCodigoOrigen() == null || datos.getCodigoOrigen().isBlank()) {
+            datos.setCodigoOrigen(datos.getCanal().getCodigo() + "-" + idLocal);
+        }
+        datos.setFechaPublicacion(LocalDateTime.now());
+        datos.setFechaBaja(datos.getEstado() == EstadoPublicacion.CERRADO ? LocalDateTime.now() : null);
+        datos.setIdPublicacion(publicaciones.crear(datos));
+        return datos;
+    }
+
+    @Override
+    public Publicacion actualizar(Long idPublicacion, Publicacion datos) {
+        Publicacion actual = buscarPorId(idPublicacion)
+                .orElseThrow(() -> new BusinessException("Publicacion no encontrada."));
+        if (datos != null) {
+            if (datos.getCanal() != null) {
+                actual.setCanal(datos.getCanal());
+            }
+            actual.setUrlPublicacion(datos.getUrlPublicacion());
+            if (datos.getRentaPublicada() != null) {
+                actual.setRentaPublicada(datos.getRentaPublicada());
+            }
+            if (datos.getMoneda() != null) {
+                actual.setMoneda(datos.getMoneda());
+            }
+            if (datos.getTituloAnuncio() != null && !datos.getTituloAnuncio().isBlank()) {
+                actual.setTituloAnuncio(datos.getTituloAnuncio());
+            }
+            if (datos.getCodigoOrigen() != null && !datos.getCodigoOrigen().isBlank()) {
+                actual.setCodigoOrigen(datos.getCodigoOrigen());
+            }
+        }
+        actual.setVersionAnuncio((actual.getVersionAnuncio() == null ? 1 : actual.getVersionAnuncio()) + 1);
+        publicaciones.actualizar(actual);
+        return actual;
+    }
+
+    @Override
+    public Publicacion cambiarEstado(Long idPublicacion, EstadoPublicacion estado) {
+        if (estado == null) {
+            throw new BusinessException("El estado de la publicacion es obligatorio.");
+        }
+        Publicacion actual = buscarPorId(idPublicacion)
+                .orElseThrow(() -> new BusinessException("Publicacion no encontrada."));
+        actual.setEstado(estado);
+        actual.setFechaBaja(estado == EstadoPublicacion.CERRADO ? LocalDateTime.now() : null);
+        if (estado == EstadoPublicacion.PUBLICADO && actual.getFechaPublicacion() == null) {
+            actual.setFechaPublicacion(LocalDateTime.now());
+        }
+        publicaciones.actualizar(actual);
+        return actual;
     }
 
     private static Publicacion nuevaPublicacionWeb(LocalComercial local) {

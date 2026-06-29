@@ -19,6 +19,7 @@ import com.controllocal.model.comercial.Prospeccion;
 import com.controllocal.model.comercial.enums.EstadoProspeccion;
 import com.controllocal.model.comercial.enums.ResultadoPropuesta;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.inmueble.enums.EstadoLocalComercial;
 import com.controllocal.model.persona.Persona;
 import com.controllocal.model.persona.Propietario;
 import com.controllocal.model.usuario.AgenteInmobiliario;
@@ -39,7 +40,7 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
                    p.fecha_creacion, p.fecha_actualizacion,
                    l.codigo_local, l.direccion AS local_direccion, l.distrito AS local_distrito,
                    l.metraje AS local_metraje, l.rubro_permitido AS local_rubro,
-                   l.precio_referencial AS local_precio,
+                   l.precio_referencial AS local_precio, l.estado AS local_estado,
                    pr.id_propietario, pp.nombres_o_razon_social AS propietario_nombre,
                    ap.nombres_o_razon_social AS agente_nombre,
                    c.codigo_captacion
@@ -115,7 +116,7 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
         List<Prospeccion> prospecciones = new ArrayList<>();
         try (Connection conn = DBManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(
-                     SELECT_SQL + " WHERE p.estado = 'S' AND p.fecha_recontacto IS NOT NULL"
+                     SELECT_SQL + " WHERE p.estado NOT IN ('T', 'D') AND p.fecha_recontacto IS NOT NULL"
                              + " AND p.fecha_recontacto <= ? ORDER BY p.fecha_recontacto")) {
             ps.setDate(1, Date.valueOf(limite));
             try (ResultSet rs = ps.executeQuery()) {
@@ -189,6 +190,7 @@ public class ProspeccionDAOImpl implements ProspeccionDAO {
         local.setMetraje(rs.getBigDecimal("local_metraje"));
         local.setRubroPermitido(rs.getString("local_rubro"));
         local.setPrecioReferencial(rs.getBigDecimal("local_precio"));
+        local.setEstado(JdbcSupport.getEnum(rs, "local_estado", EstadoLocalComercial.class));
         Propietario propietario = JdbcSupport.propietario(rs.getLong("id_propietario"));
         propietario.setNombresORazonSocial(rs.getString("propietario_nombre"));
         local.setPropietario(propietario);

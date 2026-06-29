@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.controllocal.model.comercial.enums.EstadoComision;
+import com.controllocal.model.comercial.enums.FormaPago;
 import com.controllocal.model.comercial.enums.Moneda;
 
 public class ComisionLiquidacion {
@@ -14,6 +15,7 @@ public class ComisionLiquidacion {
     private BigDecimal montoAgente;
     private BigDecimal montoEmpresa;
     private LocalDate fechaCobro;
+    private FormaPago formaPago;
     private EstadoComision estado;
 
     public Long getIdComisionLiquidacion() { return idComisionLiquidacion; }
@@ -30,6 +32,8 @@ public class ComisionLiquidacion {
     public void setMontoEmpresa(BigDecimal montoEmpresa) { this.montoEmpresa = montoEmpresa; }
     public LocalDate getFechaCobro() { return fechaCobro; }
     public void setFechaCobro(LocalDate fechaCobro) { this.fechaCobro = fechaCobro; }
+    public FormaPago getFormaPago() { return formaPago; }
+    public void setFormaPago(FormaPago formaPago) { this.formaPago = formaPago; }
     public EstadoComision getEstado() { return estado; }
     public void setEstado(EstadoComision estado) { this.estado = estado; }
 }

@@ -70,7 +70,6 @@
                         <Field Label="Disponibilidad"><select @bind="_estado"><option>Disponible</option><option>No disponible</option><option>Inactivo</option></select></Field>
                         <Field Label="Tipo de inmueble"><select @bind="_tipoInmueble">@foreach (var opcion in EnumCatalog.TiposInmueble) { <option value="@opcion.Code">@opcion.Label</option> }</select></Field>
                         <Field Label="Uso"><input value="Comercial" disabled /></Field>
-                        <Field Label="Estado de publicación"><select @bind="_estadoPublicacion">@foreach (var opcion in EnumCatalog.EstadosPublicacion) { <option value="@opcion.Code">@opcion.Label</option> }</select></Field>
                         <Field Label="Antigüedad (en años)"><input placeholder="Ej. 5" @bind="_antiguedad" /></Field>
                         <Field Label="N.° de ambientes"><input placeholder="Ej. 3" @bind="_ambientes" /></Field>
                     </div>
@@ -112,10 +111,11 @@
                 }
                 else
                 {
-                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@(() => _confirm = true)" SaveLabel="Registrar local"
+                    <FormFooterBar OnCancel="@(() => App.Navigate("locales"))" OnSave="@OnOnlyRegister" SaveLabel="Registrar local"
                                    Busy="@_procesando" BusyLabel="Guardando...">
                         <Extra>
-                            <button class="cl-btn ghost" disabled="@_procesando" @onclick="GuardarBorrador"><Icon Name="save" Size="13" /> Guardar sin publicar</button>
+                            <button class="cl-btn ghost" disabled="@_procesando" @onclick="GuardarYProspectar"><Icon Name="activity" Size="13" /> Guardar y comenzar prospección</button>
+                            <button class="cl-btn ghost" disabled="@_procesando" @onclick="GuardarYCaptar"><Icon Name="pin" Size="13" /> Continuar a captación</button>
                         </Extra>
                     </FormFooterBar>
                 }
@@ -125,21 +125,11 @@
                 <FormStepsSidebar Steps="_pasos" />
                 <div class="cl-alert blue">
                     <Icon Name="info" Size="15" />
-                    <span>Al registrar el local puedes <b>crear la captación</b> de inmediato o solo guardar el inmueble para captarlo más tarde.</span>
+                    <span>Registrar el local <b>no lo publica</b>. Luego puedes <b>comenzar su prospección</b> (contacto con el propietario) o <b>continuar a captación</b>.</span>
                 </div>
             </div>
         </div>
 
-        @if (!_isEdit)
-        {
-            <ConfirmDialog Open="_confirm" Tone="blue" Icon="store"
-                           Title="¿Registrar local comercial?"
-                           Desc="El local quedará registrado. Puedes crear su captación ahora para iniciar el proceso comercial, o solo guardarlo."
-                           ConfirmLabel="Registrar y crear captación" CancelLabel="Solo registrar"
-                           Busy="@_procesando"
-                           OnClose="@OnOnlyRegister"
-                           OnConfirm="@OnRegisterAndCreate" />
-        }
         <Toast Show="_toast">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
@@ -177,7 +167,6 @@
     private IReadOnlyList<string> Distritos => OpcionConValorActual(EnumCatalog.DistritosLima, _distrito);
     private IReadOnlyList<string> Rubros => OpcionConValorActual(EnumCatalog.RubrosComerciales, _rubro);
 
-    private bool _confirm;
     private bool _toast;
     private string _toastMsg = "Local registrado correctamente";
     private string? _err;
@@ -232,7 +221,6 @@
     private async Task OnOnlyRegister()
     {
         if (_procesando) return;
-        _confirm = false;
         try
         {
             _procesando = true;
@@ -264,34 +252,35 @@
         finally { _procesando = false; StateHasChanged(); }
     }
 
-    private async Task GuardarBorrador()
+    // Registrar un local NO lo publica; nace como borrador. Estas dos acciones encadenan el siguiente
+    // paso del flujo. El backend crea la prospeccion inicial al registrar el local, así que la
+    // buscamos (tras refrescar) para abrirla o para captar desde ella.
+    private async Task GuardarYProspectar()
     {
         if (_procesando) return;
-        try
-        {
-            _procesando = true;
-            _estadoPublicacion = "B";
-            StateHasChanged();
-            if (!await GuardarLocalAsync()) return;
-            _toastMsg = "Local guardado sin publicar.";
-            _toast = true;
-            StateHasChanged();
-            await Task.Delay(300);
-            App.Navigate("locales");
-        }
-        finally { _procesando = false; StateHasChanged(); }
-    }
-
-    private async Task OnRegisterAndCreate()
-    {
-        if (_procesando) return;
-        _confirm = false;
         try
         {
             _procesando = true;
             StateHasChanged();
             if (!await GuardarLocalAsync()) return;
             await Task.Yield();
+            await ProspeccionSvc.RefrescarAsync();
+            var prospeccion = ProspeccionSvc.All().FirstOrDefault(item => item.LocalId == _l.Id);
+            App.Navigate(prospeccion is not null ? $"prospeccion-detail/{prospeccion.Id}" : "prospecciones");
+        }
+        finally { _procesando = false; StateHasChanged(); }
+    }
+
+    private async Task GuardarYCaptar()
+    {
+        if (_procesando) return;
+        try
+        {
+            _procesando = true;
+            StateHasChanged();
+            if (!await GuardarLocalAsync()) return;
+            await Task.Yield();
+            await ProspeccionSvc.RefrescarAsync();
             var prospeccion = ProspeccionSvc.All().FirstOrDefault(item => item.LocalId == _l.Id);
             App.Navigate(prospeccion is null ? $"captacion-form/local/{_l.Id}" : $"captacion-form/captar/{prospeccion.Id}");
         }

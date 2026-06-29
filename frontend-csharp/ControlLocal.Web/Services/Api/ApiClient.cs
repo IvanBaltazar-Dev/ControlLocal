@@ -85,6 +85,31 @@ public class ApiClient
         return GetAsync<PaginaApi<T>>($"{ruta}{separador}pagina={pagina}&tamano={tamano}", ct);
     }
 
+    public async Task<IReadOnlyList<T>> GetTodasPaginasAsync<T>(
+        string ruta,
+        int tamano = 100,
+        CancellationToken ct = default)
+    {
+        var pagina = 1;
+        var resultado = new List<T>();
+        var tamanoSeguro = Math.Clamp(tamano, 1, 500);
+
+        while (true)
+        {
+            var respuesta = await GetPaginaAsync<T>(ruta, pagina, tamanoSeguro, ct);
+            if (respuesta?.Items is null || respuesta.Items.Count == 0)
+                break;
+
+            resultado.AddRange(respuesta.Items);
+            if (resultado.Count >= respuesta.TotalRecords || respuesta.Items.Count < tamanoSeguro)
+                break;
+
+            pagina++;
+        }
+
+        return resultado;
+    }
+
     // Descarga binaria (sin deserializar JSON): trae los bytes de una foto/documento
     // (p.ej. documentos/contenido?clave=) para incrustarlos en un PDF generado en el circuito.
     public async Task<byte[]?> GetBytesAsync(string ruta, CancellationToken ct = default)

@@ -1,9 +1,11 @@
 package com.controllocal.bl;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.controllocal.model.comercial.Publicacion;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.inmueble.enums.EstadoPublicacion;
 
 public interface PublicacionBusinessLogic {
 
@@ -15,4 +17,16 @@ public interface PublicacionBusinessLogic {
 
     // Publicaciones del local, mas recientes primero.
     List<Publicacion> listarPorInmueble(Long idLocal);
+
+    Optional<Publicacion> buscarPorId(Long idPublicacion);
+
+    // Etapa 7: gestion de publicacion desde el detalle (canal/URL/renta + estados).
+    // Crea una publicacion para el local (estado PUBLICADO por defecto, version 1).
+    Publicacion crear(Long idLocal, Publicacion datos);
+
+    // Actualiza canal/URL/renta/titulo y autoincrementa la version del anuncio.
+    Publicacion actualizar(Long idPublicacion, Publicacion datos);
+
+    // Publicar / pausar / reanudar / cerrar un anuncio.
+    Publicacion cambiarEstado(Long idPublicacion, EstadoPublicacion estado);
 }

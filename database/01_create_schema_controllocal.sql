@@ -435,27 +435,48 @@ CREATE TABLE oportunidad_comercial (
 
 -- =========================================================
 -- 11) Tabla de interacciones comerciales
--- Se relaciona con oportunidad y agente que realiza la interaccion.
+-- Se relaciona con una unica entidad operativa: oportunidad, prospeccion,
+-- captacion o cliente interesado. Una fila no puede mezclar contextos.
 -- =========================================================
 CREATE TABLE interaccion_comercial (
     id_interaccion BIGINT AUTO_INCREMENT PRIMARY KEY,
+    contexto VARCHAR(30) NOT NULL DEFAULT 'OPORTUNIDAD',
     fecha_hora DATETIME NOT NULL,
     canal_contacto CHAR(1) NOT NULL,
     observaciones TEXT,
-    resultado CHAR(1) NOT NULL,
-    id_oportunidad BIGINT NOT NULL,
+    resultado VARCHAR(30) NOT NULL,
+    id_oportunidad BIGINT NULL,
+    id_prospeccion BIGINT NULL,
+    id_captacion BIGINT NULL,
+    id_cliente BIGINT NULL,
     id_agente BIGINT NOT NULL,
     transcripcion_nota TEXT NULL,
     fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_interaccion_oportunidad
         FOREIGN KEY (id_oportunidad) REFERENCES oportunidad_comercial(id_oportunidad),
+    CONSTRAINT fk_interaccion_captacion
+        FOREIGN KEY (id_captacion) REFERENCES captacion(id_captacion),
+    CONSTRAINT fk_interaccion_cliente
+        FOREIGN KEY (id_cliente) REFERENCES cliente_interesado(id_cliente),
     CONSTRAINT fk_interaccion_agente
         FOREIGN KEY (id_agente) REFERENCES agente_inmobiliario(id_agente),
     CONSTRAINT ck_interaccion_canal CHECK (
         canal_contacto IN ('L', 'W', 'E', 'P', 'R', 'T', 'O')
     ),
+    CONSTRAINT ck_interaccion_contexto CHECK (
+        contexto IN ('OPORTUNIDAD', 'PROSPECCION', 'CAPTACION', 'CLIENTE')
+    ),
     CONSTRAINT ck_interaccion_resultado CHECK (
-        resultado IN ('P', 'I', 'N', 'S', 'D')
+        (contexto = 'PROSPECCION' AND resultado IN ('CONTACTADO', 'REUNION_AGENDADA', 'PROPUESTA_ENVIADA', 'ACEPTA_CAPTAR', 'NO_ACEPTA', 'RECONTACTAR'))
+        OR (contexto = 'CAPTACION' AND resultado IN ('DOCS_SOLICITADOS', 'CONDICIONES_AJUSTADAS', 'PUBLICACION_COORDINADA', 'PROPIETARIO_OBSERVA', 'LISTO_PARA_PUBLICAR', 'PAUSAR_GESTION'))
+        OR (contexto = 'OPORTUNIDAD' AND resultado IN ('INTERESADO', 'VISITA_AGENDADA', 'OFERTA_SOLICITADA', 'NEGOCIANDO', 'NO_INTERESADO', 'DESCARTADO'))
+        OR (contexto = 'CLIENTE' AND resultado IN ('BUSQUEDA_LEVANTADA', 'PROPUESTA_ENVIADA', 'REQUIERE_OPCIONES', 'NO_RESPONDE', 'SEGUIMIENTO', 'DESCARTADO'))
+    ),
+    CONSTRAINT ck_interaccion_entidad CHECK (
+        (contexto = 'OPORTUNIDAD' AND id_oportunidad IS NOT NULL AND id_prospeccion IS NULL AND id_captacion IS NULL AND id_cliente IS NULL)
+        OR (contexto = 'PROSPECCION' AND id_prospeccion IS NOT NULL AND id_oportunidad IS NULL AND id_captacion IS NULL AND id_cliente IS NULL)
+        OR (contexto = 'CAPTACION' AND id_captacion IS NOT NULL AND id_oportunidad IS NULL AND id_prospeccion IS NULL AND id_cliente IS NULL)
+        OR (contexto = 'CLIENTE' AND id_cliente IS NOT NULL AND id_oportunidad IS NULL AND id_prospeccion IS NULL AND id_captacion IS NULL)
     )
 ) ENGINE=InnoDB;
 
@@ -521,7 +542,7 @@ CREATE TABLE prospeccion (
     fecha_contacto DATE NULL,
     fecha_reunion DATE NULL,
     fecha_propuesta DATE NULL,
-    -- "Por ahora no": recontactar en un lapso no mayor a 15 dias.
+    -- Ultima accion de seguimiento con el propietario; desde el dia 8 sin accion genera alerta.
     fecha_recontacto DATE NULL,
     observaciones TEXT,
     id_local BIGINT NOT NULL,
@@ -542,9 +563,13 @@ CREATE TABLE prospeccion (
         resultado_propuesta IS NULL OR resultado_propuesta IN ('P', 'A', 'R', 'S')
     ),
     CONSTRAINT ck_prospeccion_recontacto CHECK (
-        fecha_recontacto IS NULL OR estado = 'S'
+        fecha_recontacto IS NULL OR estado IN ('C', 'R', 'E', 'S')
     )
 ) ENGINE=InnoDB;
+
+ALTER TABLE interaccion_comercial
+    ADD CONSTRAINT fk_interaccion_prospeccion
+        FOREIGN KEY (id_prospeccion) REFERENCES prospeccion(id_prospeccion);
 
 -- =========================================================
 -- 13) Tabla de solicitudes de alquiler
@@ -786,6 +811,7 @@ CREATE INDEX idx_captacion_local ON captacion(id_local);
 CREATE INDEX idx_captacion_agente ON captacion(id_agente);
 CREATE INDEX idx_captacion_broker ON captacion(id_broker_revisor);
 CREATE INDEX idx_captacion_estado ON captacion(estado);
+CREATE INDEX idx_captacion_codigo_estado ON captacion(codigo_captacion, estado);
 
 CREATE INDEX idx_cliente_persona ON cliente_interesado(id_persona);
 
@@ -793,23 +819,39 @@ CREATE INDEX idx_oportunidad_cliente ON oportunidad_comercial(id_cliente);
 CREATE INDEX idx_oportunidad_captacion ON oportunidad_comercial(id_captacion);
 CREATE INDEX idx_oportunidad_agente ON oportunidad_comercial(id_agente);
 CREATE INDEX idx_oportunidad_estado ON oportunidad_comercial(estado);
+CREATE INDEX idx_oportunidad_captacion_estado_fecha ON oportunidad_comercial(id_captacion, estado, fecha_registro);
+CREATE INDEX idx_oportunidad_agente_estado_fecha ON oportunidad_comercial(id_agente, estado, fecha_registro);
 
 CREATE INDEX idx_interaccion_oportunidad ON interaccion_comercial(id_oportunidad);
+CREATE INDEX idx_interaccion_prospeccion ON interaccion_comercial(id_prospeccion);
+CREATE INDEX idx_interaccion_captacion ON interaccion_comercial(id_captacion);
+CREATE INDEX idx_interaccion_cliente ON interaccion_comercial(id_cliente);
+CREATE INDEX idx_interaccion_contexto ON interaccion_comercial(contexto);
 CREATE INDEX idx_interaccion_agente ON interaccion_comercial(id_agente);
 CREATE INDEX idx_interaccion_fecha ON interaccion_comercial(fecha_hora);
+CREATE INDEX idx_interaccion_contexto_oportunidad_fecha ON interaccion_comercial(contexto, id_oportunidad, fecha_hora);
+CREATE INDEX idx_interaccion_contexto_prospeccion_fecha ON interaccion_comercial(contexto, id_prospeccion, fecha_hora);
+CREATE INDEX idx_interaccion_contexto_captacion_fecha ON interaccion_comercial(contexto, id_captacion, fecha_hora);
+CREATE INDEX idx_interaccion_contexto_cliente_fecha ON interaccion_comercial(contexto, id_cliente, fecha_hora);
 
 CREATE INDEX idx_visita_oportunidad ON visita(id_oportunidad);
 CREATE INDEX idx_visita_agente ON visita(id_agente);
 CREATE INDEX idx_visita_estado ON visita(estado);
+CREATE INDEX idx_visita_oportunidad_fecha ON visita(id_oportunidad, fecha_visita, hora_visita);
 
 CREATE INDEX idx_prospeccion_local ON prospeccion(id_local);
 CREATE INDEX idx_prospeccion_agente ON prospeccion(id_agente);
 CREATE INDEX idx_prospeccion_estado ON prospeccion(estado);
 CREATE INDEX idx_prospeccion_recontacto ON prospeccion(fecha_recontacto);
+CREATE INDEX idx_prospeccion_captacion ON prospeccion(id_captacion);
+CREATE INDEX idx_prospeccion_estado_recontacto ON prospeccion(estado, fecha_recontacto);
+CREATE INDEX idx_prospeccion_agente_estado_recontacto ON prospeccion(id_agente, estado, fecha_recontacto);
+CREATE INDEX idx_prospeccion_local_estado ON prospeccion(id_local, estado);
 
 CREATE INDEX idx_solicitud_oportunidad ON solicitud_alquiler(id_oportunidad);
 CREATE INDEX idx_solicitud_agente ON solicitud_alquiler(id_agente);
 CREATE INDEX idx_solicitud_estado ON solicitud_alquiler(estado);
+CREATE INDEX idx_solicitud_oportunidad_estado_fecha ON solicitud_alquiler(id_oportunidad, estado, fecha_registro);
 
 CREATE INDEX idx_documento_solicitud ON documento_solicitud(id_solicitud);
 
@@ -844,8 +886,7 @@ CREATE TABLE contrato_alquiler (
     CONSTRAINT fk_contrato_oportunidad FOREIGN KEY (id_oportunidad) REFERENCES oportunidad_comercial(id_oportunidad),
     CONSTRAINT fk_contrato_solicitud FOREIGN KEY (id_solicitud) REFERENCES solicitud_alquiler(id_solicitud),
     CONSTRAINT ck_contrato_estado CHECK (
-        estado_contrato IN ('EN_PROCESO', 'FIRMADO', 'VIGENTE', 'RENOVADO',
-                            'FINALIZADO', 'RESCINDIDO', 'ANULADO')
+        estado_contrato IN ('P', 'D', 'V', 'R', 'F', 'S', 'A')
     )
 ) ENGINE=InnoDB;
 
@@ -932,12 +973,12 @@ CREATE TABLE tarea (
     CONSTRAINT ck_tarea_tipo CHECK (
         tipo IN ('SEGUIMIENTO', 'LLAMADA', 'VISITA', 'ENVIO_INFO', 'RECONTACTO',
                  'REPORTE_PROPIETARIO', 'ENVIAR_REVISION', 'SUBIR_DOCUMENTOS',
-                 'REGISTRAR_CAPTACION', 'REGISTRAR_INTERACCION', 'OTRO')
+                 'REGISTRAR_CAPTACION', 'REGISTRAR_INTERACCION', 'PROPONER_OPORTUNIDAD', 'OTRO')
     ),
     CONSTRAINT ck_tarea_tipo_entidad CHECK (
         entidad_tipo IN ('PROSPECCION', 'CAPTACION', 'OPORTUNIDAD', 'INTERACCION',
                          'VISITA', 'SOLICITUD_ALQUILER', 'INMUEBLE', 'PUBLICACION',
-                         'CONTRATO_ALQUILER')
+                         'CONTRATO_ALQUILER', 'CLIENTE_INTERESADO', 'PROPIETARIO', 'REQUERIMIENTO')
     ),
     CONSTRAINT ck_tarea_estado CHECK (estado IN ('PENDIENTE', 'EN_PROCESO', 'COMPLETADA', 'VENCIDA', 'CANCELADA')),
     CONSTRAINT ck_tarea_prioridad CHECK (prioridad IN ('BAJA', 'MEDIA', 'ALTA')),
@@ -954,10 +995,14 @@ CREATE TABLE comision_liquidacion (
     monto_agente DECIMAL(12,2) NULL,
     monto_empresa DECIMAL(12,2) NULL,
     fecha_cobro DATE NULL,
+    forma_pago VARCHAR(20) NULL,
     estado VARCHAR(20) NOT NULL,
     CONSTRAINT fk_comision_contrato FOREIGN KEY (id_contrato_alquiler) REFERENCES contrato_alquiler(id_contrato_alquiler),
     CONSTRAINT ck_comision_moneda CHECK (moneda IN ('PEN', 'USD')),
     CONSTRAINT ck_comision_estado CHECK (estado IN ('PENDIENTE', 'PARCIAL', 'COBRADA', 'ANULADA')),
+    CONSTRAINT ck_comision_forma_pago CHECK (
+        forma_pago IS NULL OR forma_pago IN ('TRANSFERENCIA', 'DEPOSITO_BANCARIO', 'EFECTIVO', 'CHEQUE', 'OTRO')
+    ),
     CONSTRAINT ck_comision_montos CHECK (
         monto >= 0 AND (monto_agente IS NULL OR monto_agente >= 0)
         AND (monto_empresa IS NULL OR monto_empresa >= 0)
@@ -1007,7 +1052,9 @@ CREATE TABLE alerta (
                  -- documento/captacion/oportunidad que el backend persiste como alerta.
                  'SOLICITUD_DOCUMENTO', 'SOLICITUD_DOCUMENTO_REVISADO',
                  'CAPTACION_CREADA', 'CAPTACION_REVISADA',
-                 'CAPTACION_CERRADA', 'OPORTUNIDAD_CERRADA')
+                 'CAPTACION_CERRADA', 'OPORTUNIDAD_CERRADA',
+                 -- Etapa 3: avisos de comision al agente (sin exponer el monto neto).
+                 'COMISION_ASIGNADA', 'COMISION_COBRADA')
     ),
     CONSTRAINT ck_alerta_severidad CHECK (severidad IN ('INFO', 'MEDIA', 'ALTA')),
     CONSTRAINT ck_alerta_tipo_entidad CHECK (

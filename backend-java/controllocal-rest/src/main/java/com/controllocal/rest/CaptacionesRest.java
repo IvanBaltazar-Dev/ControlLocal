@@ -36,6 +36,7 @@ public class CaptacionesRest {
     private static final RateLimiter LIMITADOR_SENSIBLE = new RateLimiter(30);
 
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
+    private final CoincidenciaCarteraSupport coincidencias = new CoincidenciaCarteraSupport();
 
     @Context
     private HttpServletRequest request;
@@ -55,13 +56,34 @@ public class CaptacionesRest {
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("10") int tamano) {
         UsuarioAutenticado usuario = SeguridadRest.exigirRol(request, "BROKER", "ADMIN");
-        return pagina(captaciones.listPendingReviews(usuario.idDominio()), pagina, tamano);
+        List<Captacion> fuente = "ADMIN".equals(usuario.rol())
+                ? captaciones.listPendingReviews()
+                : captaciones.listPendingReviews(usuario.idDominio());
+        return pagina(fuente, pagina, tamano);
     }
 
     @GET
     @Path("{id}")
     public Dtos.CaptacionResponse obtener(@PathParam("id") long id) {
         return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, SeguridadRest.usuario(request)));
+    }
+
+    @GET
+    @Path("codigo/{codigo}")
+    public Dtos.CaptacionResponse obtenerPorCodigo(@PathParam("codigo") String codigo) {
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        return captacionesDelUsuario(usuario).stream()
+                .filter(item -> item.getCodigoCaptacion() != null
+                        && item.getCodigoCaptacion().equalsIgnoreCase(codigo))
+                .findFirst()
+                .map(Dtos.CaptacionResponse::desde)
+                .orElseThrow(() -> ApiException.noEncontrado("Captacion"));
+    }
+
+    @GET
+    @Path("{idOrCodigo}/coincidencias")
+    public CoincidenciaCarteraSupport.CoincidenciasResponse coincidencias(@PathParam("idOrCodigo") String idOrCodigo) {
+        return coincidencias.clientesParaCaptacion(idOrCodigo, SeguridadRest.usuario(request));
     }
 
     @POST
@@ -190,7 +212,10 @@ public class CaptacionesRest {
         if ("AGENTE".equals(usuario.rol())) {
             return captaciones.listarPorAgente(usuario.idDominio());
         }
-        if (usuario.tieneRol("BROKER", "ADMIN")) {
+        if ("ADMIN".equals(usuario.rol())) {
+            return captaciones.listarTodos();
+        }
+        if ("BROKER".equals(usuario.rol())) {
             return captaciones.listarPorBroker(usuario.idDominio());
         }
         throw ApiException.prohibido();

@@ -14,6 +14,7 @@ import com.controllocal.model.comercial.Prospeccion;
 import com.controllocal.model.inmueble.FotoLocal;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.inmueble.PrecioLocal;
+import com.controllocal.model.inmueble.enums.EstadoPublicacion;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
 import com.controllocal.rest.almacen.AlmacenDocumentos;
@@ -200,6 +201,48 @@ public class LocalesRest {
         return publicacionBL.listarPorInmueble(id).stream()
                 .map(Dtos.PublicacionResponse::desde)
                 .toList();
+    }
+
+    // Etapa 7: gestion de publicacion del local (publicar / actualizar / pausar / cerrar).
+    @POST
+    @Path("{id}/publicaciones")
+    public Response crearPublicacion(@PathParam("id") long id, Dtos.PublicacionRequest dto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
+        if (dto == null) {
+            throw ApiException.badRequest("Los datos de la publicacion son obligatorios.");
+        }
+        var creada = publicacionBL.crear(id, dto.aEntidad());
+        return Response.status(Response.Status.CREATED)
+                .entity(Dtos.PublicacionResponse.desde(creada))
+                .build();
+    }
+
+    @PUT
+    @Path("{id}/publicaciones/{idPublicacion}")
+    public Dtos.PublicacionResponse actualizarPublicacion(@PathParam("id") long id,
+            @PathParam("idPublicacion") long idPublicacion, Dtos.PublicacionRequest dto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
+        if (dto == null) {
+            throw ApiException.badRequest("Los datos de la publicacion son obligatorios.");
+        }
+        return Dtos.PublicacionResponse.desde(publicacionBL.actualizar(idPublicacion, dto.aEntidad()));
+    }
+
+    @POST
+    @Path("{id}/publicaciones/{idPublicacion}/estado")
+    public Dtos.PublicacionResponse cambiarEstadoPublicacion(@PathParam("id") long id,
+            @PathParam("idPublicacion") long idPublicacion, Dtos.EstadoPublicacionRequest dto) {
+        SeguridadRest.exigirRol(request, "AGENTE");
+        if (dto == null || dto.estado() == null || dto.estado().isBlank()) {
+            throw ApiException.badRequest("El estado de la publicacion es obligatorio.");
+        }
+        EstadoPublicacion estado;
+        try {
+            estado = EstadoPublicacion.fromCodigo(dto.estado());
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest("Estado de publicacion no valido: " + dto.estado());
+        }
+        return Dtos.PublicacionResponse.desde(publicacionBL.cambiarEstado(idPublicacion, estado));
     }
 
     // =========================================================

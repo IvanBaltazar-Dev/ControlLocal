@@ -1,0 +1,260 @@
+@page "/cliente-contacto-detail/{IdParam:long}"
+@inherits SafeComponentBase
+@inject AppState App
+@inject IClienteService ClienteSvc
+@inject IInteraccionService InteraccionSvc
+@inject IOportunidadService OportunidadSvc
+@using ControlLocal.Web.Models.Clientes
+@using ControlLocal.Web.Models.Oportunidades
+
+<PageTitle>Seguimiento cliente - @(_cliente?.Nombre ?? "ControlLocal")</PageTitle>
+
+@if (_cargando)
+{
+    <AppShell Title="Seguimiento comercial del cliente" Crumbs="@(new[] { "ControlLocal", "Clientes" })">
+        <ChildContent>
+            <LoadingBlock Title="Cargando seguimiento..." Subtitle="Preparando cliente, interacciones y propuestas." />
+        </ChildContent>
+    </AppShell>
+}
+else if (_cliente is null)
+{
+    <AppShell Title="Seguimiento comercial del cliente" Crumbs="@(new[] { "ControlLocal", "Clientes" })">
+        <ChildContent>
+            <div class="cl-alert amber">
+                <Icon Name="alert" Size="15" />
+                <span>@(_error ?? "No se encontro el cliente solicitado.")</span>
+            </div>
+        </ChildContent>
+    </AppShell>
+}
+else
+{
+    <AppShell Crumbs="@(new[] { "ControlLocal", "Clientes", _cliente.Nombre })"
+              Title="@($"Seguimiento comercial - {_cliente.Nombre}")"
+              Subtitle="Relacion agente-cliente sin propiedad obligatoria">
+        <Actions>
+            <button class="cl-btn ghost" @onclick="@(() => App.Navigate($"cliente-detail/{_cliente.Id}"))"><Icon Name="chevronLeft" Size="13" /> Ficha cliente</button>
+            @if (_readOnly)
+            {
+                <span class="cl-badge info plain"><Icon Name="lock" Size="12" /> Solo lectura</span>
+            }
+            else
+            {
+                <button class="cl-btn" @onclick="@(() => App.Navigate($"interaccion-form/cliente/{_cliente.Id}"))"><Icon Name="messageSquare" Size="13" /> Registrar interaccion</button>
+                <button class="cl-btn" @onclick="@(() => App.Navigate($"cliente-form/{_cliente.Id}"))"><Icon Name="edit" Size="13" /> Actualizar requerimiento</button>
+                <button class="cl-btn primary" @onclick="@(() => App.Navigate($"oportunidad-form?clienteId={_cliente.Id}"))"><Icon Name="plus" Size="13" /> Crear oportunidad con propiedad</button>
+            }
+        </Actions>
+        <ChildContent>
+            @if (_error is not null)
+            {
+                <div class="cl-alert red" style="margin-bottom:14px;">
+                    <Icon Name="alert" Size="15" />
+                    <span>@_error</span>
+                </div>
+            }
+
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(310px,360px);gap:16px;align-items:start;">
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">Cliente y agente visible</div>
+                                <div class="cl-card-sub">Contacto comercial general, sin propiedad obligatoria</div>
+                            </div>
+                            <StatusBadge Label="@_cliente.Estado" />
+                        </div>
+                        <div class="cl-card-body">
+                            <div class="cl-specs">
+                                <Spec Icon="user" K="Cliente" V="@_cliente.Nombre" />
+                                <Spec Icon="fileText" K="@DocumentoEtiqueta" V="@Texto(_cliente.NumeroDocumento)" />
+                                <Spec Icon="phone" K="Telefono" V="@Texto(_cliente.Telefono)" />
+                                <Spec Icon="mail" K="Correo" V="@Texto(_cliente.Correo)" />
+                                <Spec Icon="briefcase" K="Rubro de interes" V="@Texto(_cliente.RubroInteres)" />
+                                <Spec Icon="users" K="Agente visible" V="@AgenteVisible" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">Interacciones agente-cliente</div>
+                                <div class="cl-card-sub">Historial sin propiedad asociada</div>
+                            </div>
+                            <span class="cl-badge blue">@_interacciones.Count</span>
+                        </div>
+                        <div class="cl-card-body" style="padding:0;">
+                            @if (_interacciones.Count == 0)
+                            {
+                                <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Aun no hay interacciones generales con este cliente.</div>
+                            }
+                            else
+                            {
+                                <table class="cl-table">
+                                    <thead><tr><th>Fecha</th><th>Canal</th><th>Resultado</th><th>Observaciones</th><th>Agente</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var interaccion in _interacciones)
+                                        {
+                                            <tr>
+                                                <td style="font-size:12px;color:#7E8794;">@interaccion.FechaHoraTexto</td>
+                                                <td><CanalBadge Canal="@interaccion.CanalContacto" /></td>
+                                                <td><ResultadoBadge Resultado="@interaccion.Resultado" Contexto="@interaccion.Contexto" /></td>
+                                                <td>@Texto(interaccion.Observaciones)</td>
+                                                <td>@Texto(interaccion.NombreAgenteResponsable)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head">
+                            <div>
+                                <div class="cl-card-title">Propuestas realizadas</div>
+                                <div class="cl-card-sub">Propiedades y oportunidades vinculadas al cliente</div>
+                            </div>
+                            <span class="cl-badge blue">@_oportunidades.Count</span>
+                        </div>
+                        <div class="cl-card-body" style="padding:0;">
+                            @if (_oportunidades.Count == 0)
+                            {
+                                <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Todavia no se registran propiedades propuestas.</div>
+                            }
+                            else
+                            {
+                                <table class="cl-table">
+                                    <thead><tr><th>Oportunidad</th><th>Propiedad</th><th>Agente</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
+                                    <tbody>
+                                        @foreach (var oportunidad in _oportunidades)
+                                        {
+                                            <tr>
+                                                <td><span class="mono">@oportunidad.CodigoOportunidad</span></td>
+                                                <td>
+                                                    <div style="font-weight:650;">@Texto(oportunidad.DireccionLocal)</div>
+                                                    <div class="cl-muted" style="font-size:11.5px;margin-top:2px;">@Texto(oportunidad.CaptacionCodigo)</div>
+                                                </td>
+                                                <td>@Texto(oportunidad.NombreAgenteResponsable)</td>
+                                                <td><StatusBadge Label="@oportunidad.Estado" /></td>
+                                                <td style="font-size:12px;color:#7E8794;">@Texto(oportunidad.FechaRegistroTexto)</td>
+                                                <td><a class="cl-btn sm" href="@($"/oportunidad-detail/{oportunidad.Id}")"><Icon Name="arrowRight" Size="12" /> Seguimiento</a></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cl-stack">
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Lectura comercial</div></div>
+                        <div class="cl-card-body">
+                            <dl class="cl-kv" style="grid-template-columns:1fr auto;">
+                                <dt>Ultimo contacto</dt><dd>@UltimoContacto</dd>
+                                <dt>Interacciones</dt><dd>@_interacciones.Count</dd>
+                                <dt>Propuestas</dt><dd>@_oportunidades.Count</dd>
+                                <dt>Activas</dt><dd>@OportunidadesActivas</dd>
+                                <dt>Agente visible</dt><dd>@AgenteVisible</dd>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Siguiente accion</div></div>
+                        <div class="cl-card-body cl-stack">
+                            <FilaExpediente Icon="messageSquare" Titulo="Registrar contacto general" Estado="@UltimoContacto">
+                                <Accion>
+                                    @if (!_readOnly)
+                                    {
+                                        <a class="cl-btn sm" href="@($"/interaccion-form/cliente/{_cliente.Id}")"><Icon Name="plus" Size="12" /> Registrar</a>
+                                    }
+                                </Accion>
+                            </FilaExpediente>
+                            <FilaExpediente Icon="target" Titulo="Crear oportunidad con propiedad" Estado="@($"{_oportunidades.Count} propuestas")">
+                                <Accion>
+                                    @if (!_readOnly)
+                                    {
+                                        <a class="cl-btn sm primary" href="@($"/oportunidad-form?clienteId={_cliente.Id}")"><Icon Name="arrowRight" Size="12" /> Crear</a>
+                                    }
+                                </Accion>
+                            </FilaExpediente>
+                            <FilaExpediente Icon="briefcase" Titulo="Actualizar requerimiento" Estado="@Texto(_cliente.RubroInteres)">
+                                <Accion>
+                                    @if (!_readOnly)
+                                    {
+                                        <a class="cl-btn sm" href="@($"/cliente-form/{_cliente.Id}")"><Icon Name="edit" Size="12" /> Editar</a>
+                                    }
+                                </Accion>
+                            </FilaExpediente>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </ChildContent>
+    </AppShell>
+}
+
+@code {
+    [Parameter] public long IdParam { get; set; }
+
+    private ClienteInteresadoDto? _cliente;
+    private IReadOnlyList<InteraccionComercialDto> _interacciones = [];
+    private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
+    private bool _cargando = true;
+    private string? _error;
+
+    private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
+    private int OportunidadesActivas => _oportunidades.Count(item => item.Estado is "Abierta" or "Solicitud creada");
+    private string UltimoContacto => _interacciones.FirstOrDefault()?.FechaHoraTexto ?? "Sin contacto";
+    private string AgenteVisible =>
+        _interacciones.FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.NombreAgenteResponsable))?.NombreAgenteResponsable
+        ?? _oportunidades.FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.NombreAgenteResponsable))?.NombreAgenteResponsable
+        ?? "No asignado";
+    private string DocumentoEtiqueta => TipoDocumentoEtiqueta(_cliente?.TipoDocumento);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            _cliente = await ClienteSvc.ObtenerAsync(IdParam, DisposedToken);
+            if (_cliente is null)
+                return;
+
+            var interaccionesTask = InteraccionSvc.ListarPorClienteAsync(IdParam, DisposedToken);
+            var oportunidadesTask = OportunidadSvc.ListarPorClienteAsync(IdParam, DisposedToken);
+            _interacciones = await interaccionesTask;
+            _oportunidades = await oportunidadesTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private static string Texto(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) || valor == "-" ? "No registrado" : valor;
+
+    private static string TipoDocumentoEtiqueta(string? codigo) =>
+        (codigo ?? "").Trim().ToUpperInvariant() switch
+        {
+            "R" or "RUC" => "RUC",
+            "C" or "CE" => "CE",
+            "P" or "PASAPORTE" => "Pasaporte",
+            "D" or "DNI" => "DNI",
+            _ => "Documento",
+        };
+}

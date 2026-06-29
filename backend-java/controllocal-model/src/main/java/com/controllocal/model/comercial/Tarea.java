@@ -1,5 +1,6 @@
 package com.controllocal.model.comercial;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.controllocal.model.comercial.enums.EstadoTarea;
@@ -22,6 +23,24 @@ public class Tarea {
     private Prioridad prioridad;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
+
+    // Derivados (no persistidos): el código de la entidad y la ruta exacta de "Resolver".
+    // Los calcula la BL para que el front navegue directo al item que disparó la tarea.
+    private String entidadCodigo;
+    private String rutaResolver;
+    // Derivados (no persistidos, Etapa 9): días que la acción lleva sin atención y fecha de
+    // vencimiento (cuando la entidad de origen impone un plazo: recontacto, visita, oferta).
+    private Integer diasSinAccion;
+    private LocalDate fechaVencimiento;
+
+    public String getEntidadCodigo() { return entidadCodigo; }
+    public void setEntidadCodigo(String entidadCodigo) { this.entidadCodigo = entidadCodigo; }
+    public String getRutaResolver() { return rutaResolver; }
+    public void setRutaResolver(String rutaResolver) { this.rutaResolver = rutaResolver; }
+    public Integer getDiasSinAccion() { return diasSinAccion; }
+    public void setDiasSinAccion(Integer diasSinAccion) { this.diasSinAccion = diasSinAccion; }
+    public LocalDate getFechaVencimiento() { return fechaVencimiento; }
+    public void setFechaVencimiento(LocalDate fechaVencimiento) { this.fechaVencimiento = fechaVencimiento; }
 
     public Long getIdTarea() { return idTarea; }
     public void setIdTarea(Long idTarea) { this.idTarea = idTarea; }

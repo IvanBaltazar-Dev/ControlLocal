@@ -5,7 +5,7 @@ import com.controllocal.model.CodigoEnum;
 /**
  * Decision del propietario sobre el documento de condiciones y terminos
  * entregado durante la prospeccion.
- * POSPUESTA = "por ahora no": obliga a recontactar en un lapso no mayor a 15 dias.
+ * POSPUESTA = "por ahora no": mantiene viva la prospeccion y exige nueva accion de seguimiento.
  */
 public enum ResultadoPropuesta implements CodigoEnum {
     PENDIENTE("P", "Pendiente"),

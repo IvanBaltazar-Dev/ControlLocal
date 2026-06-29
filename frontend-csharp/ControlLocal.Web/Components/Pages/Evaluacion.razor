@@ -141,10 +141,48 @@
         <ConfirmDialog Open="@(_modal == "aprobar")" Tone="green" Icon="check"
                        Title="¿Aprobar esta solicitud?"
                        Desc="La solicitud quedará aprobada y lista para continuar hacia el cierre."
-                       ConfirmLabel="Aprobar solicitud" CancelLabel="Cancelar"
+                       ConfirmLabel="@(_docsSinRevisar > 0 && _docsObservados.Count == 0 ? "Aprobar de todos modos" : "Aprobar solicitud")"
+                       CancelLabel="Cancelar"
                        Busy="@_procesando"
+                       ConfirmDisabled="@(_docsObservados.Count > 0)"
                        OnClose="@CerrarModal"
                        OnConfirm="@(() => ConfirmarAsync("A"))">
+            @if (_docsObservados.Count > 0)
+            {
+                <div class="cl-alert red" style="margin-bottom:12px;">
+                    <Icon Name="alert" Size="15" />
+                    <span><b>¡Cuidado!</b> Esta solicitud tiene <b>@_docsObservados.Count</b> documento(s) observado(s). No puedes aprobarla hasta resolverlos: <b>valídalos</b> si ya están bien, u <b>observa la solicitud</b> para devolverla al agente y que los subsane.</span>
+                </div>
+                <div class="cl-def-k" style="margin-bottom:4px;">Documentos observados</div>
+                <ul style="margin:0 0 12px;padding-left:18px;font-size:12px;color:var(--c-text-2);">
+                    @foreach (var doc in _docsObservados)
+                    {
+                        <li style="margin-bottom:4px;">
+                            <b>@doc.Name</b>@(string.IsNullOrWhiteSpace(doc.Observaciones) ? "" : $" — {doc.Observaciones}")
+                        </li>
+                    }
+                </ul>
+                <div class="cl-flex" style="gap:8px;margin-bottom:12px;">
+                    <button class="cl-btn sm" disabled="@_procesando" @onclick="CerrarModal">
+                        <Icon Name="folder" Size="13" /> Revisar documentos
+                    </button>
+                </div>
+            }
+            else if (_docsSinRevisar > 0)
+            {
+                <div class="cl-alert amber" style="margin-bottom:12px;">
+                    <Icon Name="alert" Size="15" />
+                    <span>Aún no has revisado todos los documentos: <b>@_docsSinRevisar</b> cargado(s) sin revisar. Valídalos todos de una vez, revísalos uno por uno, o aprueba de todos modos.</span>
+                </div>
+                <div class="cl-flex" style="gap:8px;margin-bottom:12px;">
+                    <button class="cl-btn sm success" disabled="@_procesando" @onclick="ValidarTodosAsync">
+                        <Icon Name="check" Size="13" /> Validar todos los documentos (@_docsSinRevisar)
+                    </button>
+                    <button class="cl-btn sm" disabled="@_procesando" @onclick="CerrarModal">
+                        <Icon Name="folder" Size="13" /> Revisar documentos
+                    </button>
+                </div>
+            }
             <Field Label="Nota opcional">
                 <textarea rows="3" @bind="_observaciones" placeholder="Comentario para el agente (opcional)..."></textarea>
             </Field>
@@ -261,6 +299,14 @@
             _err = "Las observaciones son obligatorias al observar o rechazar.";
             return;
         }
+        // Bloqueo duro: no se aprueba con documentos observados sin resolver (respaldo del botón
+        // deshabilitado, por si el estado cambió entre el render y el clic).
+        if (resultado == "A" && _docsObservados.Count > 0)
+        {
+            _err = $"No puedes aprobar: hay {_docsObservados.Count} documento(s) observado(s) sin resolver. "
+                + "Valídalos u observa la solicitud para devolverla al agente.";
+            return;
+        }
 
         try
         {
@@ -355,6 +401,16 @@
     private List<Doc> _docs = new();
     private record Doc(long Id, string Tipo, string Name, string Status, string? Clave, string? Observaciones);
 
+    // Documentos cargados aún sin revisar (Registrado): los que "Validar todos" puede conformar.
+    // Los no cargados no cuentan (los sube el agente); los Validados ya están conformes.
+    private int _docsSinRevisar => _docs.Count(d =>
+        !string.IsNullOrWhiteSpace(d.Clave) && d.Status == "Registrado");
+
+    // Documentos observados por el broker: hallazgos reales sin resolver. Bloquean la aprobación
+    // (bloqueo duro) y no se tocan con "Validar todos".
+    private IReadOnlyList<Doc> _docsObservados =>
+        _docs.Where(d => d.Status == "Observado").ToList();
+
     private void AbrirObservarDoc(Doc doc)
     {
         _docObservar = doc;
@@ -382,6 +438,31 @@
             _toastMsg = resultado == "C"
                 ? $"Documento «{doc.Name}» validado."
                 : $"Documento «{doc.Name}» observado. Se notificó al agente.";
+            _toast = true;
+            _ = DelayThenRenderAsync(2200, () => _toast = false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _err = ex.Message; }
+        finally
+        {
+            _procesando = false;
+            await RenderIfAliveAsync();
+        }
+    }
+
+    // "Validar todos los documentos": deja conformes en bloque SOLO los cargados sin revisar
+    // (respeta los observados; el backend tampoco los toca). Refresca para que el aviso desaparezca.
+    private async Task ValidarTodosAsync()
+    {
+        if (_procesando || _solicitud is null) return;
+        try
+        {
+            _procesando = true;
+            _err = null;
+            await RenderIfAliveAsync();
+            await DocSvc.ConformarTodosAsync(_solicitud.Id, DisposedToken);
+            await CargarDocumentosAsync();
+            _toastMsg = "Documentos sin revisar validados.";
             _toast = true;
             _ = DelayThenRenderAsync(2200, () => _toast = false);
         }

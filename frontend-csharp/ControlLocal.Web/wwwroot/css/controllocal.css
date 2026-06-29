@@ -82,7 +82,20 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  border-bottom: 1px solid var(--c-border-2);
+  border-bottom: none;
+}
+.cl-sidebar > .cl-brand {
+  position: relative;
+  z-index: 1;
+  width: auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 11px;
+  padding: 20px 18px 16px;
+  color: var(--c-text-2);
+  transform: none;
 }
 .cl-brand-mark {
   width: 28px; height: 28px;
@@ -101,6 +114,7 @@
   color: var(--c-text); font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em;
 }
 .cl-brand-sub { font-size: 10px; color: var(--c-text-3); letter-spacing: 0.07em; text-transform: uppercase; margin-top: 2px; }
+.cl-sidebar__logo { display: block; width: 36px; height: 36px; flex: 0 0 36px; object-fit: contain; }
 
 .cl-nav { padding: 12px 12px; flex: 1; overflow: auto; }
 .cl-nav-section { margin-top: 16px; }
@@ -123,6 +137,27 @@
 .cl-nav-item.active .cl-ico { color: #fff; opacity: 1; }
 .cl-nav-item .cl-pill { margin-left: auto; font-size: 10px; font-weight: 600; background: var(--c-primary-50); color: var(--c-primary); padding: 2px 7px; border-radius: 999px; }
 .cl-nav-item.active .cl-pill { background: rgba(255,255,255,0.26); color: #fff; }
+
+/* Encabezado de seccion colapsable (p. ej. "Consulta comercial"). */
+.cl-nav-group-head {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px; border-radius: 8px; color: var(--c-text-2);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+  user-select: none; transition: background .14s ease, color .14s ease;
+}
+.cl-nav-group-head:hover { background: var(--c-bg); color: var(--c-text); }
+.cl-nav-group-head .cl-ico { width: 16px; height: 16px; flex: 0 0 16px; color: var(--c-text-3); transition: color .14s ease; }
+.cl-nav-group-head:hover .cl-ico { color: var(--c-primary); }
+.cl-nav-group-head.open { color: var(--c-text); }
+.cl-nav-group-head.open .cl-ico { color: var(--c-primary); }
+.cl-nav-group-head .cl-nav-caret { margin-left: auto; color: var(--c-text-3); transition: transform .16s ease; }
+.cl-nav-group-head.open .cl-nav-caret { transform: rotate(90deg); }
+.cl-nav-subgroup {
+  margin-top: 4px; margin-left: 9px; padding-left: 9px;
+  border-left: 1px solid rgba(126,135,148,.18);
+}
+.cl-nav-subgroup .cl-nav-label { padding-left: 5px; opacity: .82; }
+.cl-nav-subgroup .cl-nav-item { padding-left: 9px; }
 
 .cl-sidebar-foot {
   border-top: 1px solid var(--c-border-2);
@@ -202,6 +237,7 @@
   white-space: nowrap; box-shadow: var(--shadow-xs);
   transition: background .12s, border-color .12s, box-shadow .12s, transform .04s;
 }
+a.cl-btn { text-decoration: none; }
 .cl-btn:hover { background: var(--c-surface-2); border-color: var(--c-border); }
 .cl-btn:active { transform: translateY(0.5px); }
 .cl-btn.primary { background: var(--c-primary); color: #fff; border-color: var(--c-primary); box-shadow: 0 1px 2px rgba(0,91,255,0.28); }
@@ -217,6 +253,22 @@
 .cl-btn.sm { padding: 6px 11px; font-size: 12px; border-radius: 8px; }
 .cl-btn.lg { padding: 11px 18px; font-size: 13.5px; }
 .cl-btn.icon-only { padding: 8px; }
+
+/* ============ FICHA LINK (chip propietario / cliente) ============ */
+.cl-ficha-link {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 3px 10px; border: 1px solid var(--c-border-2); border-radius: 999px;
+  background: #fff; color: var(--c-navy); font: inherit; font-size: 12.5px; font-weight: 600;
+  line-height: 1.45; cursor: pointer; vertical-align: middle;
+  transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+.cl-ficha-link:hover {
+  background: var(--c-primary-50); border-color: var(--c-primary); color: var(--c-primary);
+  box-shadow: 0 1px 3px rgba(0,91,255,0.14);
+}
+.cl-ficha-link:active { transform: translateY(0.5px); }
+.cl-ficha-link svg { flex: 0 0 auto; color: var(--c-primary); }
+.cl-ficha-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ============ CARD ============ */
 .cl-card {
@@ -735,14 +787,14 @@
 .cl-gallery .shot .more { font-size: 13px; font-weight: 600; color: var(--c-text-2); }
 
 /* ============ SPEC GRID (características con icono) ============ */
-.cl-specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-.cl-spec { display: flex; gap: 11px; align-items: flex-start; }
+.cl-specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 14px; }
+.cl-spec { display: flex; gap: 11px; align-items: flex-start; min-width: 0; }
 .cl-spec-ic {
   width: 34px; height: 34px; border-radius: 9px; flex: 0 0 34px;
   background: var(--c-primary-50); color: var(--c-primary); display: grid; place-items: center;
 }
 .cl-spec-k { font-size: 11px; color: var(--c-text-3); font-weight: 600; }
-.cl-spec-v { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.cl-spec-v { font-size: 14px; font-weight: 600; margin-top: 2px; line-height: 1.25; overflow-wrap: anywhere; word-break: normal; }
 
 /* ============ PRICE BLOCK (condiciones) ============ */
 .cl-price { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--c-text); }
@@ -792,8 +844,9 @@
 .cl-login__scrim {
   position: absolute; inset: 0; pointer-events: none;
   background:
-    linear-gradient(95deg, rgba(2,11,36,0) 36%, rgba(2,11,36,0.32) 54%, rgba(2,11,36,0.70) 76%, rgba(2,11,36,0.82) 100%),
-    linear-gradient(0deg, rgba(2,8,24,0.55), transparent 42%),
+    linear-gradient(95deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.05) 16%, rgba(255,255,255,0) 38%),
+    linear-gradient(95deg, rgba(2,11,36,0.64) 0%, rgba(2,11,36,0.34) 22%, rgba(2,11,36,0) 44%, rgba(2,11,36,0.34) 60%, rgba(2,11,36,0.70) 80%, rgba(2,11,36,0.84) 100%),
+    linear-gradient(0deg, rgba(2,8,24,0.58), transparent 46%),
     radial-gradient(140% 90% at 50% -12%, rgba(0,40,110,0.28), transparent 60%);
 }
 
@@ -830,8 +883,8 @@
 /* Escenario: empuja la tarjeta a la derecha (como el mockup). */
 .cl-login__stage {
   position: absolute; inset: 0; z-index: 2;
-  display: flex; align-items: center; justify-content: flex-end;
-  padding: 40px clamp(24px, 6vw, 96px);
+  display: flex; align-items: center; justify-content: space-between; gap: 32px;
+  padding: 40px clamp(28px, 6vw, 104px);
 }
 
 /* Tarjeta de acceso (vidrio esmerilado). */
@@ -861,15 +914,13 @@
 }
 
 .cl-loginbox__logo {
-  width: 60px; height: 60px; border-radius: 17px; margin: 2px auto 0;
-  display: grid; place-items: center; position: relative;
-  background: linear-gradient(150deg, #2a7bff, #0a3fd0 72%);
-  box-shadow: 0 12px 26px rgba(0,73,204,0.50), inset 0 1px 0 rgba(255,255,255,0.4);
+  width: 64px; height: 64px; box-sizing: border-box; padding: 8px; border-radius: 16px; margin: 2px auto 0;
+  display: grid; place-items: center;
+  background: #fff;
+  border: 1px solid #e3e8f0;
+  box-shadow: 0 5px 12px rgba(2,11,36,0.08);
 }
-.cl-loginbox__logo::after {
-  content: ''; position: absolute; inset: 5px; border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.22);
-}
+.cl-loginbox__logo > svg { display: block; width: 100%; height: 100%; }
 
 .cl-loginbox__hello {
   margin-top: 14px; text-align: center;
@@ -984,7 +1035,7 @@
 }
 
 /* Entrada escalonada de los elementos de la tarjeta (dinamismo). */
-.cl-loginbox__logo  { animation: cl-pop .6s cubic-bezier(.2,.8,.2,1.25) .12s both, cl-logoglow 3.2s ease-in-out 1.2s infinite; }
+.cl-loginbox__logo  { animation: cl-pop .6s cubic-bezier(.2,.8,.2,1.25) .12s both; }
 .cl-loginbox__hello { animation: cl-rise .5s ease .26s both; }
 .cl-loginbox__title { animation: cl-rise .5s ease .32s both; }
 .cl-loginbox__rule  { animation: cl-rise .5s ease .38s both; }
@@ -995,15 +1046,276 @@
 .cl-loginbox__foot  { animation: cl-rise .5s ease .84s both; }
 @keyframes cl-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes cl-pop  { 0% { opacity: 0; transform: scale(.55) rotate(-10deg); } 100% { opacity: 1; transform: none; } }
-@keyframes cl-logoglow {
-  0%, 100% { box-shadow: 0 12px 26px rgba(0,73,204,0.50), inset 0 1px 0 rgba(255,255,255,0.4); }
-  50%      { box-shadow: 0 16px 36px rgba(0,120,255,0.80), inset 0 1px 0 rgba(255,255,255,0.5); }
+/* ============================================================== */
+/* ===== Columna de marca (overlay izquierdo sobre la foto) ===== */
+/* Todo el contenido (logo, tagline, cuentas demo, beneficios) vive */
+/* como HTML/CSS encima de login.webp; la imagen no se edita.       */
+/* ============================================================== */
+.cl-login__brand,
+.cl-login__stage > .cl-brand {
+    position: relative;
+    z-index: 2;
+    width: min(64vw, 700px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+    color: #fff;
+    transform: translateY(-30px);
+}
+
+/* Logo en chip esmerilado claro: legible sea cual sea el fondo del .webp. */
+.cl-brand__logo {
+    display: inline-flex;
+    min-width: 260px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    margin-left: -10px;
+    animation: cl-rise .6s cubic-bezier(.2,.7,.2,1) .15s both, cl-brandfloat 6.5s ease-in-out 1.1s infinite;
+}
+.cl-brand__logo img { display: block; width: clamp(230px, 24vw, 340px); height: auto; }
+@keyframes cl-brandfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+/* Tagline a dos líneas; segunda línea con degradado de marca. */
+.cl-brand__tagline {
+  margin: 0; max-width: 440px;
+  font-size: clamp(25px, 2.5vw, 37px); line-height: 1.12; font-weight: 800; letter-spacing: -.02em;
+  text-shadow: 0 2px 22px rgba(2,11,36,0.6), 0 1px 3px rgba(2,11,36,0.55);
+  animation: cl-rise .6s cubic-bezier(.2,.7,.2,1) .28s both;
+}
+.cl-brand__tagline span:first-child { display: block; }
+.cl-brand__tagline-2 {
+    position: relative;
+    display: inline-block;
+    margin-top: 0px;
+    padding: 3px 2px 6px;
+    font-weight: 900;
+    line-height: 1.18;
+    letter-spacing: -0.8px;
+    color: #0b51de;
+    -webkit-text-fill-color: #0a3fd0;
+    text-shadow: -1px -1px 0 rgba(255,255,255,0.95), 1px -1px 0 rgba(255,255,255,0.95), -1px 1px 0 rgba(255,255,255,0.95), 1px 1px 0 rgba(255,255,255,0.95), 0 0 4px rgba(255,255,255,0.85), 0 2px 5px rgba(2,11,36,0.35);
+    background: none;
+    animation: cl-tagline-enter 0.9s cubic-bezier(.16, 1, .3, 1) 0.25s both;
+    will-change: transform, opacity;
+}
+@keyframes cl-tagline-enter {
+    0% {
+        opacity: 0;
+        transform: translateX(-18px);
+        filter: blur(2px);
+    }
+
+    70% {
+        opacity: 1;
+        transform: translateX(2px);
+        filter: blur(0.3px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+        filter: blur(0);
+    }
+}
+
+/* Bloque de cuentas demo (tarjetas clicables que autocompletan el login). */
+.cl-brand__demos { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; }
+.cl-brand__demos-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #ffffff;
+    -webkit-text-fill-color: #ffffff;
+    background: linear-gradient(160deg, rgba(15,44,108,0.66), rgba(8,27,74,0.72));
+    border: 1px solid rgba(124,179,255,0.22);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.65);
+    animation: cl-rise .5s ease .42s both;
+}
+.cl-brand__demos-head svg { opacity: .9; }
+.cl-brand__demos-hint {
+  margin-left: auto; display: inline-block; text-transform: none; letter-spacing: 0;
+  font-weight: 700; font-size: 11px; color: #eaf2ff;
+  background: linear-gradient(135deg, rgba(42,123,255,0.5), rgba(10,63,208,0.4));
+  border: 1px solid rgba(124,179,255,0.6);
+  padding: 3px 10px; border-radius: 999px;
+  box-shadow: 0 5px 14px rgba(2,11,36,0.32), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+
+.cl-democard {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+  padding: 12px 14px; border-radius: 15px; font: inherit; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.22);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 12px 30px rgba(2,11,36,0.38), inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .2s ease, border-color .2s ease, background .2s ease;
+  animation: cl-rise .55s ease both;
+}
+.cl-democard::before {
+  content: ''; position: absolute; top: 0; left: -75%; width: 55%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.20), transparent);
+  transform: skewX(-18deg); transition: left .55s ease; pointer-events: none;
+}
+.cl-democard:hover {
+  transform: translateY(-3px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.24), rgba(255,255,255,0.08));
+  border-color: rgba(123,176,255,0.7);
+  box-shadow: 0 18px 40px rgba(2,11,36,0.48), 0 0 0 1px rgba(123,176,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.cl-democard:hover::before { left: 140%; }
+.cl-democard:active { transform: translateY(-1px) scale(.99); }
+.cl-democard.is-active {
+  border-color: rgba(123,176,255,0.85);
+  box-shadow: 0 18px 40px rgba(2,11,36,0.52), 0 0 0 1.5px rgba(123,176,255,0.65), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.cl-democard__ic {
+  flex: 0 0 auto; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(150deg, #2a7bff, #0a3fd0 75%);
+  box-shadow: 0 8px 18px rgba(0,73,204,0.5), inset 0 1px 0 rgba(255,255,255,0.35);
+  transition: transform .2s ease;
+}
+.cl-democard:hover .cl-democard__ic { transform: scale(1.06) rotate(-3deg); }
+.cl-democard__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cl-democard__role { font-size: 13.5px; font-weight: 700; letter-spacing: -.01em; }
+.cl-democard__user {
+  font-size: 11.5px; font-weight: 600; color: #ffffff;
+  font-family: ui-monospace, Menlo, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cl-democard__pass {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; margin-top: 3px;
+  font-size: 12px; font-weight: 600; color: #c6cdd9;
+  font-family: ui-monospace, Menlo, monospace; letter-spacing: .04em;
+  background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.16);
+  padding: 2px 8px; border-radius: 7px;
+}
+.cl-democard__pass svg { opacity: 1; }
+.cl-democard__go {
+  flex: 0 0 auto; margin-left: auto; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  color: #cfe2ff; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+  transition: transform .2s ease, background .2s ease, color .2s ease;
+}
+.cl-democard:hover .cl-democard__go { transform: translateX(3px); background: rgba(123,176,255,0.32); color: #fff; }
+
+/* Beneficios. */
+.cl-brand__benefits {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch; gap: 10px;
+  width: 100%; max-width: 420px;
+}
+.cl-brand__benefits li {
+  position: relative;
+  display: grid; grid-template-rows: 42px auto; justify-items: center; align-content: start; gap: 10px;
+  min-width: 0; min-height: 84px; padding: 13px 10px 14px;
+  border-radius: 15px;
+  background: linear-gradient(160deg, rgba(15,44,108,0.66), rgba(8,27,74,0.72));
+  box-shadow: 0 14px 30px rgba(2,11,36,0.36), inset 0 1px 0 rgba(255,255,255,0.10);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  font-size: 13.2px; line-height: 1.18; font-weight: 800; letter-spacing: 0; color: #fff; text-align: center;
+  text-shadow: 0 1px 4px rgba(2,11,36,0.52);
+  transition: transform .2s ease, box-shadow .2s ease;
+  animation: cl-rise .5s ease both; animation-delay: var(--d, .9s);
+}
+.cl-brand__benefits li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px rgba(2,11,36,0.44), inset 0 1px 0 rgba(255,255,255,0.14);
+}
+.cl-benefit__ic {
+    --benefit-accent: #8bd6ff;
+    --benefit-deep: #0a3fd0;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+    display: grid;
+    place-items: center;
+    color: var(--benefit-accent);
+    background: linear-gradient(160deg, rgba(26,76,190,0.95), rgba(14,44,128,0.95));
+    box-shadow: inset 0 2px 6px rgba(2,8,30,0.5), inset 0 -1px 0 rgba(255,255,255,0.12), 0 2px 6px rgba(2,11,36,0.22);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+.cl-benefit__ic svg {
+  stroke-width: 1.9;
+}
+.cl-benefit__ic--ops { --benefit-accent: #9be7ff; --benefit-deep: #1458ff; }
+.cl-benefit__ic--track { --benefit-accent: #9cf6c8; --benefit-deep: #087a70; }
+.cl-benefit__ic--control { --benefit-accent: #ffe18a; --benefit-deep: #8f5dff; }
+.cl-benefit__text {
+  display: block; max-width: 120px;
+  text-wrap: balance;
+}
+.cl-brand__benefits li:hover .cl-benefit__ic {
+  box-shadow:
+    inset 0 2px 6px rgba(2,8,30,0.5),
+    inset 0 -1px 0 rgba(255,255,255,0.16),
+    0 4px 10px rgba(2,11,36,0.28);
+}
+
+/* Línea bajo los beneficios: un destello de luz la dibuja UNA sola vez (de ida)
+   y la línea queda marcada de forma permanente. */
+.cl-brand__beam {
+  position: relative; width: 100%; max-width: 420px; height: 2px; margin-top: 8px;
+  animation: cl-rise .5s ease 1.15s both;
+}
+/* Trazo que crece de izquierda a derecha y permanece (fill: both → se queda al 100%). */
+.cl-brand__beam::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 0; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.72), #ffffff 55%, rgba(255,255,255,0.9));
+  box-shadow: 0 0 10px rgba(255,255,255,0.55), 0 0 4px rgba(255,255,255,0.85);
+  animation: cl-beam-draw 1.5s cubic-bezier(.45,0,.15,1) 1.35s both;
+}
+/* Núcleo brillante (cometa) que va por delante dibujando la línea y se apaga al final. */
+.cl-brand__beam::after {
+  content: ''; position: absolute; top: 50%; left: 0; transform: translate(-50%, -50%);
+  width: 30px; height: 8px; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(closest-side, #eaf2ff, rgba(91,157,255,0.7) 52%, transparent 78%);
+  box-shadow: 0 0 16px 4px rgba(42,123,255,0.85), 0 0 34px 10px rgba(10,63,208,0.5);
+  animation: cl-beam-head 1.5s cubic-bezier(.45,0,.15,1) 1.35s forwards;
+}
+@keyframes cl-beam-draw { from { width: 0; } to { width: 100%; } }
+@keyframes cl-beam-head {
+  0%   { left: 0;    opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
 }
 
 /* Responsive: en pantallas angostas la tarjeta se centra y el scrim oscurece
    de forma uniforme para que la escena siga visible pero legible detrás. */
+/* Pantallas intermedias: comprimir la columna de marca para que ambas quepan. */
+@media (max-width: 1200px) {
+  .cl-login__stage { padding: 32px clamp(20px, 4vw, 56px); }
+  .cl-login__brand,
+  .cl-login__stage > .cl-brand { width: min(40vw, 372px); gap: 18px; }
+  .cl-brand__demos-hint { display: none; }
+}
+
 @media (max-width: 980px) {
   .cl-login__stage { justify-content: center; padding: 24px; }
+  .cl-login__brand,
+  .cl-login__stage > .cl-brand { display: none; }
   .cl-login__scrim {
     background:
       linear-gradient(180deg, rgba(2,11,36,0.55), rgba(2,8,24,0.86)),
@@ -1019,7 +1331,12 @@
   .cl-login, .cl-login__bg, .cl-login__glow, .cl-login__orb, .cl-login__sheen, .cl-loginbox,
   .cl-loginbox__logo, .cl-loginbox__hello, .cl-loginbox__title, .cl-loginbox__rule,
   .cl-loginbox__sub, .cl-loginfield, .cl-loginbox__cta, .cl-loginbox__help,
-  .cl-loginbox__foot, .cl-loginbox__cta::before, .cl-livedot { animation: none; }
+  .cl-loginbox__foot, .cl-loginbox__cta::before, .cl-livedot,
+  .cl-brand__logo, .cl-brand__tagline, .cl-brand__tagline-2, .cl-brand__demos-head, .cl-democard,
+  .cl-brand__benefits li, .cl-brand__beam, .cl-brand__beam::before, .cl-brand__beam::after { animation: none; }
+  /* Sin animación: la línea se muestra ya marcada y el cometa se oculta. */
+  .cl-brand__beam::before { width: 100%; }
+  .cl-brand__beam::after  { display: none; }
 }
 .cl-prop-card {
   background: #fff; border: 1px solid var(--c-border); border-radius: var(--r-lg);
@@ -1240,3 +1557,60 @@
 .cl-dropzone.is-busy { opacity: 0.7; pointer-events: none; }
 .cl-dropzone-title { font-weight: 650; font-size: 13.5px; color: var(--c-text); }
 .cl-dropzone-sub { font-size: 11.5px; color: var(--c-text-3); }
+
+/* ================================
+   Sidebar - Subgrupos compactos
+   Consulta Comercial
+================================ */
+
+.cl-nav-subgroup {
+    position: relative;
+    margin-top: 6px;
+    padding-left: 12px;
+    border-left: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+    .cl-nav-subgroup + .cl-nav-subgroup {
+        margin-top: 12px;
+    }
+
+.cl-nav-subgroup-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 30px;
+    padding: 6px 8px 6px 2px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    border-radius: 10px;
+    user-select: none;
+}
+
+    .cl-nav-subgroup-head:hover {
+        background: rgba(37, 99, 235, 0.055);
+    }
+
+.cl-nav-subgroup-title {
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: #9aa3b2;
+}
+
+.cl-nav-subgroup-caret {
+    flex: 0 0 auto;
+    color: #9aa3b2;
+    transition: transform 0.18s ease;
+}
+
+.cl-nav-subgroup-head.open .cl-nav-subgroup-caret {
+    transform: rotate(90deg);
+}
+
+.cl-nav-subgroup .cl-nav-item {
+    margin-left: 0;
+    padding-left: 8px;
+}

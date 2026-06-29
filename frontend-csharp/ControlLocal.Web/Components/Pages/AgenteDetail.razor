@@ -172,7 +172,7 @@
             var interacciones = _actividad.Select(i => new ActividadItem(
                 i.FechaHoraTexto,
                 string.IsNullOrWhiteSpace(i.ClienteNombre) ? "Interacción" : i.ClienteNombre,
-                $"{EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, i.CanalContacto)} · {EnumCatalog.LabelFor(EnumCatalog.ResultadosInteraccion, i.Resultado)}"));
+                $"{EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, i.CanalContacto)} · {EnumCatalog.LabelResultadoInteraccion(i.Contexto, i.Resultado)}"));
             return visitas.Concat(interacciones).ToList();
         }
     }

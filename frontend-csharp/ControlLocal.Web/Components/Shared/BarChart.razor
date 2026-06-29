@@ -1,5 +1,8 @@
-@* Simple bar chart with gridlines and optional x-axis labels. *@
-<svg width="100%" height="@H" viewBox="0 0 @W @H">
+@* Grafico de barras con gridlines y etiquetas opcionales en X.
+   El ancho de cada barra es proporcional al hueco disponible (no fijo), asi las
+   barras nunca se solapan ni quedan con ancho negativo cuando hay muchos puntos.
+   Las etiquetas se ralean para que no se amontonen. *@
+<svg width="100%" height="@H" viewBox="0 0 @W @H" preserveAspectRatio="none">
     @foreach (var t in Grid)
     {
         var gy = F(Pad + (H - Pad * 2) * t);
@@ -8,15 +11,18 @@
     @for (var i = 0; i < Data.Length; i++)
     {
         var bh = Max == 0 ? 0 : (Data[i] / Max) * (H - Pad * 2);
-        var x = F(Pad + i * Bw + 4);
+        var x = F(Pad + i * Bw + (Bw - BarW) / 2);
         var y = F(H - Pad - bh);
-        var w = F(Bw - 8);
-        <rect x="@x" y="@y" width="@w" height="@F(bh)" fill="@Color" opacity="@(i == Data.Length - 1 ? "1" : "0.7")" rx="2" />
+        <rect x="@x" y="@y" width="@F(BarW)" height="@F(bh)" fill="@Color"
+              opacity="@(i == Data.Length - 1 ? "1" : "0.72")" rx="2" />
     }
     @for (var i = 0; i < Labels.Length; i++)
     {
-        var lx = F(Pad + i * Bw + Bw / 2);
-        @((MarkupString)$"<text x='{lx}' y='{H - 4}' font-size='9' fill='#7E8794' text-anchor='middle'>{Labels[i]}</text>")
+        if (PasoEtiqueta > 0 && i % PasoEtiqueta == 0)
+        {
+            var lx = F(Pad + i * Bw + Bw / 2);
+            @((MarkupString)$"<text x='{lx}' y='{H - 4}' font-size='9' fill='#7E8794' text-anchor='middle'>{Labels[i]}</text>")
+        }
     }
 </svg>
 
@@ -26,11 +32,20 @@
     [Parameter] public int Height { get; set; } = 120;
     [Parameter] public string[] Labels { get; set; } = System.Array.Empty<string>();
 
-    private const int W = 320;
+    // Lienzo mas ancho: con preserveAspectRatio="none" se estira al ancho real del
+    // contenedor, pero un viewBox mayor da mas resolucion horizontal a los huecos.
+    private const int W = 560;
     private const int Pad = 18;
     private int H => Height;
     private double Max => Data.Length == 0 ? 0 : Data.Max();
+
+    // Ancho del hueco por barra y ancho real de la barra (55% del hueco, con tope
+    // para que pocas barras no salgan gigantes). El resto del hueco es separacion.
     private double Bw => Data.Length == 0 ? 0 : (W - Pad * 2) / (double)Data.Length;
+    private double BarW => Math.Clamp(Bw * 0.55, 2, 46);
+
+    // Raleo de etiquetas: como mucho ~10 visibles para que no se amontonen.
+    private int PasoEtiqueta => Labels.Length == 0 ? 0 : Math.Max(1, (int)Math.Ceiling(Labels.Length / 10.0));
 
     private static readonly double[] Grid = { 0, 0.25, 0.5, 0.75, 1 };
 

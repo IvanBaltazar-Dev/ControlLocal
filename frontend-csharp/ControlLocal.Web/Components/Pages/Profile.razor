@@ -120,10 +120,12 @@
                         <div class="profile-phone-input">
                             <span>+51</span>
                             <input id="telefono"
-                                   @bind="_telefono"
-                                   inputmode="tel"
+                                   value="@_telefono"
+                                   inputmode="numeric"
+                                   maxlength="9"
                                    autocomplete="tel"
-                                   placeholder="999 999 999" />
+                                   placeholder="999999999"
+                                   @oninput="OnTelefonoInput" />
                         </div>
                         <button type="button" class="cl-btn primary" @onclick="GuardarTelefono">
                             <Icon Name="save" Size="14" />
@@ -263,7 +265,7 @@
             if (perfil is not null)
             {
                 if (!string.IsNullOrWhiteSpace(perfil.Telefono))
-                    _telefono = perfil.Telefono!;
+                    _telefono = PeruInputRules.Telefono(perfil.Telefono);
                 if (!string.IsNullOrWhiteSpace(perfil.FotoClave))
                     _fotoUrl = $"/documento?clave={Uri.EscapeDataString(perfil.FotoClave!)}";
             }
@@ -277,22 +279,27 @@
     private async Task GuardarTelefono()
     {
         _telefonoErr = null;
-        var digitos = _telefono.Count(char.IsDigit);
-        if (digitos is < 6 or > 15)
+        if (PeruInputRules.ValidarTelefono(_telefono) is { } telefonoError)
         {
-            _telefonoErr = "Ingresa un teléfono válido de entre 6 y 15 dígitos.";
+            _telefonoErr = telefonoError;
             return;
         }
 
         try
         {
-            await PerfilSvc.ActualizarTelefonoAsync(_telefono.Trim(), DisposedToken);
+            await PerfilSvc.ActualizarTelefonoAsync(PeruInputRules.Telefono(_telefono), DisposedToken);
             Notificar("Teléfono actualizado correctamente.");
         }
         catch (Exception ex)
         {
             _telefonoErr = ex.Message;
         }
+    }
+
+    private void OnTelefonoInput(ChangeEventArgs e)
+    {
+        _telefono = PeruInputRules.Telefono(e.Value?.ToString());
+        _telefonoErr = null;
     }
 
     private async Task CambiarFoto(InputFileChangeEventArgs e)

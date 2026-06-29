@@ -46,6 +46,18 @@ public class TareaDAOImpl extends AbstractJdbcCrudDAO<Tarea> implements TareaDAO
                 });
     }
 
+    @Override public List<Tarea> listarPorEntidad(TipoEntidad entidadTipo, Long entidadId) {
+        JdbcSupport.validarId(entidadId);
+        if (entidadTipo == null) {
+            throw new IllegalArgumentException("El tipo de entidad es obligatorio.");
+        }
+        return query(SELECT + " WHERE entidad_tipo = ? AND entidad_id = ? ORDER BY fecha_programada",
+                ps -> {
+                    JdbcSupport.setEnum(ps, 1, entidadTipo);
+                    ps.setLong(2, entidadId);
+                });
+    }
+
     @Override protected String insertSql() { return INSERT; }
     @Override protected String selectSql() { return SELECT; }
     @Override protected String updateSql() { return UPDATE; }

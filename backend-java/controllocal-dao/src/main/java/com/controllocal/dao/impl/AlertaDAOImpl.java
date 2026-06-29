@@ -63,6 +63,16 @@ public class AlertaDAOImpl extends AbstractJdbcCrudDAO<Alerta> implements Alerta
         return query(SELECT + " WHERE estado = 'ACTIVA' ORDER BY fecha_generacion DESC", ps -> { });
     }
 
+    @Override public List<Alerta> listarActivasPorEntidad(TipoEntidad entidadTipo, Long entidadId) {
+        JdbcSupport.validarId(entidadId);
+        return query(SELECT + " WHERE entidad_tipo = ? AND entidad_id = ? AND estado = 'ACTIVA'"
+                + " ORDER BY fecha_generacion DESC",
+                ps -> {
+                    JdbcSupport.setEnum(ps, 1, entidadTipo);
+                    ps.setLong(2, entidadId);
+                });
+    }
+
     @Override public boolean marcarAtendida(Long idAlerta) {
         JdbcSupport.validarId(idAlerta);
         try (Connection conn = DBManager.getConnection();

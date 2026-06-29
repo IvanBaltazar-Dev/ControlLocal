@@ -14,6 +14,10 @@ public class SolicitudAlquilerDto
 
     public long OportunidadId { get; set; }
 
+    public long ClienteId { get; set; }
+
+    public long CaptacionId { get; set; }
+
     public long AgenteResponsableId { get; set; }
 
     public string AgenteNombre { get; set; } = string.Empty;

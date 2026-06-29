@@ -6,10 +6,17 @@
 <PageTitle>Propietarios · ControlLocal</PageTitle>
 
 <AppShell Active="Propietarios" Crumbs="@(new[] { "ControlLocal", "Captación", "Propietarios" })"
-          Title="Propietarios"
-          Subtitle="Propietarios que registré para vincular a captaciones">
+          Title="Gestión de Propietarios"
+          Subtitle="Registro de Propietarios">
     <Actions>
-        <button class="cl-btn primary" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Registrar propietario</button>
+        @if (App.Role == Roles.Agente)
+        {
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Registrar propietario</button>
+        }
+        else
+        {
+            <span class="cl-badge blue"><Icon Name="lock" Size="12" /> Solo lectura</span>
+        }
     </Actions>
     <ChildContent>
         @{
@@ -45,9 +52,19 @@
                                 <td><span class="cl-muted">@o.Correo</span></td>
                                 <td><span><b>@o.CantidadLocales</b></span></td>
                                 <td><StatusBadge Label="@o.Estado" /></td>
-                                <td><RowActions Items="@(new[] { "view", "edit" })"
-                                                OnView="@(() => App.Navigate($"owner-detail/{o.Id}"))"
-                                                OnEdit="@(() => App.Navigate($"owner-form/{o.Id}"))" /></td>
+                                <td>
+                                    @if (App.Role == Roles.Agente)
+                                    {
+                                        <RowActions Items="@(new[] { "view", "edit" })"
+                                                    OnView="@(() => App.Navigate($"owner-detail/{o.Id}"))"
+                                                    OnEdit="@(() => App.Navigate($"owner-form/{o.Id}"))" />
+                                    }
+                                    else
+                                    {
+                                        <RowActions Items="@(new[] { "view" })"
+                                                    OnView="@(() => App.Navigate($"owner-detail/{o.Id}"))" />
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>

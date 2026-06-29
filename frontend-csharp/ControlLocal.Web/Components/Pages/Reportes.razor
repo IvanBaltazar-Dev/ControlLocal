@@ -6,13 +6,20 @@
 @inject ICaptacionService CaptacionSvc
 @inject ISolicitudService SolicitudSvc
 @inject ILocalService LocalSvc
+@inject IContratoService ContratoSvc
 @inject ExportacionService Exportar
 
 <PageTitle>@_title · ControlLocal</PageTitle>
 
 <AppShell Active="@_sideActive" Crumbs="@(new[] { "ControlLocal", _title })" Title="@_title" Subtitle="@_subtitle">
     <Actions>
-        <span class="cl-badge gray">Últimos 6 meses</span>
+        <select class="cl-select" style="width:150px;" value="@_periodo" @onchange="CambiarPeriodo">
+            @foreach (var periodo in Periodos)
+            {
+                <option value="@periodo.Codigo">@periodo.Label</option>
+            }
+        </select>
+        <span class="cl-badge gray">@PeriodoActual.Label</span>
         <button class="cl-btn primary" @onclick="ExportarPdf"><Icon Name="download" Size="13" /> Exportar PDF</button>
     </Actions>
     <ChildContent>
@@ -22,19 +29,60 @@
         }
         else
         {
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
-                @foreach (var i in Datos.Indicadores)
+            @* KPI principal del agente/broker: la conversión propia, destacada como tarjeta
+               grande con barra de progreso. Para el admin no aplica (ve la tasa global en la grilla). *@
+            @if (!_isAdmin)
+            {
+                <div class="cl-card cl-kpi-hero" style="margin-bottom:14px;">
+                    <div class="cl-card-body" style="display:flex;align-items:center;gap:28px;flex-wrap:wrap;">
+                        <div style="display:flex;align-items:flex-end;gap:12px;">
+                            <span style="font-size:48px;font-weight:800;line-height:.9;color:#005BFF;">@MiConversion<span style="font-size:24px;">%</span></span>
+                            <span style="font-size:13px;color:#515B6B;line-height:1.3;padding-bottom:6px;">
+                                Conversión @(_isAgente ? "propia" : "del equipo")<br />captación → cierre
+                            </span>
+                        </div>
+                        <div style="flex:1;min-width:220px;">
+                            <div style="height:10px;background:#E2E6EC;border-radius:5px;overflow:hidden;">
+                                <div style="width:@(Math.Clamp(MiConversion, 0, 100))%;height:100%;background:linear-gradient(90deg,#005BFF,#00AEEF);border-radius:5px;transition:width .4s ease;"></div>
+                            </div>
+                            <div style="margin-top:7px;font-size:12px;color:#7E8794;">
+                                <b style="color:#243043;">@_ind.Cierres</b> cierres sobre <b style="color:#243043;">@_ind.CaptacionesTotales</b> captaciones en el periodo
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            <div style="display:grid;grid-template-columns:repeat(@(_isAdmin ? 4 : 3),1fr);gap:14px;margin-bottom:14px;">
+                @foreach (var i in KpisSecundarios)
                 {
                     <MetricCard Icon="@i.Icono" Label="@i.Etiqueta" Value="@i.Valor" Delta="@i.Delta" Tone="@i.Tono" />
                 }
+            </div>
+
+            @* Etapa 9: disciplina operativa de seguimiento (vista personal del agente). *@
+            <div class="cl-card" style="margin-bottom:14px;">
+                <div class="cl-card-head">
+                    <div>
+                        <div class="cl-card-title">Indicadores operativos de seguimiento</div>
+                        <div class="cl-card-sub">@(_isAgente ? "Tu disciplina de seguimiento comercial" : "Seguimiento agregado en tu alcance")</div>
+                    </div>
+                </div>
+                <div class="cl-card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+                    <MetricCard Icon="alert" Label="Recontactos vencidos" Value="@Op.RecontactosVencidos.ToString()" Tone="@(Op.RecontactosVencidos > 0 ? "red" : "green")" />
+                    <MetricCard Icon="checkCircle" Label="Recontactos al día" Value="@Op.RecontactosAlDia.ToString()" Tone="green" />
+                    <MetricCard Icon="clock" Label="Días prom. sin seguimiento" Value="@Op.DiasPromedioSinSeguimiento.ToString()" Tone="@(Op.DiasPromedioSinSeguimiento > 7 ? "amber" : "blue")" />
+                    <MetricCard Icon="calendar" Label="Visitas pendientes" Value="@Op.VisitasPendientes.ToString()" Tone="blue" />
+                    <MetricCard Icon="fileText" Label="Solicitudes sin cierre" Value="@Op.SolicitudesSinCierre.ToString()" Tone="@(Op.SolicitudesSinCierre > 0 ? "amber" : "gray")" />
+                    <MetricCard Icon="target" Label="Conversión prosp. → capt." Value="@($"{Op.ConversionProspeccionCaptacion}%")" Tone="green" />
+                </div>
             </div>
 
             <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">
                 <div class="cl-card">
                     <div class="cl-card-head">
                         <div>
-                            <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas por mes" : "Cierres del equipo por mes")</div>
-                            <div class="cl-card-sub">Volumen de alquileres concretados</div>
+                            <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas en el periodo" : _isAgente ? "Mis cierres en el periodo" : "Cierres del equipo en el periodo")</div>
+                            <div class="cl-card-sub">@(_isAgente ? "Volumen de alquileres que concretaste en el rango seleccionado" : "Volumen de alquileres concretados según el rango seleccionado")</div>
                         </div>
                     </div>
                     <div class="cl-card-body">
@@ -42,9 +90,9 @@
                     </div>
                 </div>
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Captaciones por etapa</div></div>
+                    <div class="cl-card-head"><div class="cl-card-title">Cierres por etapa</div></div>
                     <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
-                        <DonutChart Segments="_donut" />
+                        <GaugeCierre Pct="CierrePct" Label="cerradas" />
                         <div style="flex:1;font-size:12px;">
                             @foreach (var e in Datos.Etapas)
                             {
@@ -77,9 +125,36 @@
                     </div>
                 </div>
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">@(_isAdmin ? "Desempeño por broker" : "Desempeño por agente")</div></div>
+                    <div class="cl-card-head"><div class="cl-card-title">@(_isAgente ? "Últimos cierres" : _isAdmin ? "Desempeño por broker" : "Desempeño por agente")</div></div>
                     <div class="cl-card-body" style="padding:0;">
-                        @if (Datos.Desempeno.Length == 0)
+                        @if (_isAgente)
+                        {
+                            @* Para el agente, una tabla comparativa solo lo mostraría a él: en su lugar,
+                               sus cierres más recientes (el contrato de mayor Id es el más nuevo). *@
+                            @if (UltimosCierres.Count == 0)
+                            {
+                                <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Aún no registras cierres.</div>
+                            }
+                            else
+                            {
+                                <table class="cl-table">
+                                    <thead><tr><th>Operación</th><th>Cliente</th><th>Local</th><th>Renta</th><th>Cierre</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var c in UltimosCierres)
+                                        {
+                                            <tr>
+                                                <td><span class="mono">@(string.IsNullOrWhiteSpace(c.CodigoOportunidad) ? c.CodigoSolicitud : c.CodigoOportunidad)</span></td>
+                                                <td style="font-weight:600;">@c.ClienteNombre</td>
+                                                <td>@c.DireccionLocal</td>
+                                                <td>@c.Moneda @c.RentaMensualTexto</td>
+                                                <td class="cl-muted" style="font-size:12px;">@c.FechaCierreTexto</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        }
+                        else if (Datos.Desempeno.Length == 0)
                         {
                             <div style="padding:24px;text-align:center;color:#7E8794;font-size:12.5px;">Sin actividad registrada todavía.</div>
                         }
@@ -227,12 +302,15 @@
 @code {
     private bool _isAdmin => App.Role == Roles.Admin;
     private bool _isBroker => App.Role == Roles.Broker;
+    private bool _isAgente => App.Role == Roles.Agente;
     private bool _cargando = true;
     private bool _cargandoReportes;
     private IndicadoresDto _ind = IndicadoresDto.Vacio;
+    private string _periodo = "6m";
 
     private IReadOnlyList<CaptacionDto> _captaciones = [];
     private IReadOnlyList<SolicitudAlquilerDto> _solicitudes = [];
+    private IReadOnlyList<ContratoAlquilerDto> _contratos = [];
     private Dictionary<long, decimal> _preciosPorLocal = new();
 
     private string _qCaptacion = "", _capDistrito = "", _capEstado = "", _capAgente = "";
@@ -243,26 +321,73 @@
     private DateOnly? _solDesde, _solHasta;
     private int _pagSolicitud = 1;
 
-    private string _title => _isAdmin ? "Reportes globales" : "Reportes de equipo";
-    private string _sideActive => _isAdmin ? "Reportes globales" : "Reportes de equipo";
+    private string _title => _isAdmin ? "Reportes globales" : _isAgente ? "Mi reporte" : "Reportes de equipo";
+    private string _sideActive => _isAdmin ? "Reportes globales" : _isAgente ? "Mi reporte" : "Reportes de equipo";
     private string _subtitle => _isAdmin
         ? "Indicadores de toda la corredora · desempeño por broker y conversión global"
-        : "Indicadores de los agentes a tu cargo · captaciones, cierres y conversión";
+        : _isAgente
+            ? "Mi actividad comercial · captaciones, cierres y conversión propios"
+            : "Indicadores de los agentes a tu cargo · captaciones, cierres y conversión";
 
-    private DatosReporte Datos => ReporteIndicadores.Desde(_ind, _isAdmin);
+    private DatosReporte Datos => ReporteIndicadores.Desde(_ind, _isAdmin, _isAgente);
 
-    private DonutChart.Segment[] _donut => Datos.Etapas
-        .Select(e => new DonutChart.Segment(double.Parse(e.Valor), e.Color))
-        .ToArray();
+    // Conversión propia (cierres / captaciones): KPI principal de agente y broker.
+    private int MiConversion => _ind.CaptacionesTotales > 0
+        ? (int)Math.Round(_ind.Cierres * 100.0 / _ind.CaptacionesTotales) : 0;
+
+    // En agente/broker la conversión se muestra grande aparte (cl-kpi-hero), así que
+    // aquí van los demás KPIs (se excluye la tarjeta de conversión, icono "target").
+    private IndicadorReporte[] KpisSecundarios => _isAdmin
+        ? Datos.Indicadores
+        : Datos.Indicadores.Where(i => i.Icono != "target").ToArray();
+
+    // Cierres más recientes del agente (mayor Id = más nuevo), para el panel "Últimos cierres".
+    private IReadOnlyList<ContratoAlquilerDto> UltimosCierres => _contratos
+        .OrderByDescending(c => c.Id).Take(6).ToList();
+
+    private IndicadorOperativoDto Op => _ind.Operativo ?? IndicadorOperativoDto.Vacio;
+
+    private static readonly PeriodOption[] Periodos =
+    [
+        new("7d", "7 días", 7),
+        new("15d", "15 días", 15),
+        new("1m", "1 mes", 30),
+        new("3m", "3 meses", 90),
+        new("6m", "6 meses", 180),
+        new("1y", "1 año", 365),
+    ];
+
+    private PeriodOption PeriodoActual =>
+        Periodos.FirstOrDefault(p => p.Codigo == _periodo) ?? Periodos[4];
+
+    private DateOnly PeriodoInicio =>
+        DateOnly.FromDateTime(DateTime.Today.AddDays(-(PeriodoActual.Dias - 1)));
+
+    private DateOnly PeriodoFin => DateOnly.FromDateTime(DateTime.Today);
+
+    // % de captaciones que terminaron en cierre (estado Cerrada sobre el total de etapas).
+    private int CierrePct
+    {
+        get
+        {
+            var total = _ind.Etapas.Sum(e => e.Valor);
+            var cerradas = _ind.Etapas
+                .FirstOrDefault(e => e.Nombre.Contains("Cerrada", StringComparison.OrdinalIgnoreCase))?.Valor ?? 0;
+            return total > 0 ? (int)Math.Round(cerradas * 100.0 / total) : 0;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        try
+        await CargarIndicadores();
+
+        // Cada carga de detalle va con su propio try/catch: si el backend tarda o falla,
+        // el reporte se muestra igual con los indicadores que sí llegaron (no se cae).
+        if (_isBroker)
         {
-            _ind = await Indicadores.ObtenerAsync(DisposedToken);
-            if (_isBroker)
+            _cargandoReportes = true;
+            try
             {
-                _cargandoReportes = true;
                 var capsTask = CaptacionSvc.RefrescarAsync(DisposedToken);
                 var solsTask = SolicitudSvc.RefrescarAsync(DisposedToken);
                 _captaciones = await capsTask;
@@ -270,14 +395,42 @@
                 _preciosPorLocal = LocalSvc.All()
                     .ToDictionary(l => l.Id, l => l.PrecioReferencial);
             }
+            catch (OperationCanceledException) { }
+            catch { /* el reporte se muestra sin las tablas de detalle */ }
+            finally { _cargandoReportes = false; }
         }
-        catch (OperationCanceledException)
+        else if (_isAgente)
         {
+            try { _contratos = await ContratoSvc.RefrescarAsync(DisposedToken); }
+            catch (OperationCanceledException) { }
+            catch { _contratos = []; }
+        }
+
+        _cargando = false;
+    }
+
+    private async Task CambiarPeriodo(ChangeEventArgs e)
+    {
+        var nuevo = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(nuevo) || nuevo == _periodo)
+            return;
+
+        _periodo = nuevo;
+        _pagCaptacion = 1;
+        _pagSolicitud = 1;
+        await CargarIndicadores();
+    }
+
+    private async Task CargarIndicadores()
+    {
+        _cargando = true;
+        try
+        {
+            _ind = await Indicadores.ObtenerAsync(_periodo, DisposedToken);
         }
         finally
         {
             _cargando = false;
-            _cargandoReportes = false;
         }
     }
 
@@ -296,6 +449,7 @@
         valores.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()).Distinct().OrderBy(v => v).ToList();
 
     private List<CaptacionDto> CaptacionesFiltradas => _captaciones
+        .Where(c => EnPeriodo(c.FechaCaptacion))
         .Where(c => string.IsNullOrEmpty(_capDistrito) || c.DistritoLocal == _capDistrito)
         .Where(c => string.IsNullOrEmpty(_capEstado) || c.Estado == _capEstado)
         .Where(c => string.IsNullOrEmpty(_capAgente) || c.NombreAgenteResponsable == _capAgente)
@@ -309,6 +463,7 @@
         .ToList();
 
     private List<SolicitudAlquilerDto> SolicitudesFiltradas => _solicitudes
+        .Where(s => EnPeriodo(s.FechaRegistro))
         .Where(s => string.IsNullOrEmpty(_solEstado) || s.Estado == _solEstado)
         .Where(s => string.IsNullOrEmpty(_solLocal) || s.DireccionLocal == _solLocal)
         .Where(s => string.IsNullOrEmpty(_solAgente) || s.AgenteNombre == _solAgente)
@@ -378,7 +533,12 @@
 
     private async Task ExportarPdf()
     {
-        var pdf = new ReporteIndicadoresDocument(Datos, "Últimos 6 meses").GeneratePdf();
-        await Exportar.DescargarPdfAsync(_isAdmin ? "reporte_global" : "reporte_equipo", pdf);
+        var pdf = new ReporteIndicadoresDocument(Datos, PeriodoActual.Label).GeneratePdf();
+        await Exportar.DescargarPdfAsync(_isAdmin ? "reporte_global" : _isAgente ? "reporte_agente" : "reporte_equipo", pdf);
     }
+
+    private bool EnPeriodo(DateOnly? fecha) =>
+        fecha.HasValue && fecha.Value >= PeriodoInicio && fecha.Value <= PeriodoFin;
+
+    private sealed record PeriodOption(string Codigo, string Label, int Dias);
 }

@@ -52,6 +52,15 @@ public static class ColoresEstado
     private static readonly string[] Rojos = { "#DC2626", "#9F1239", "#E11D48", "#B91C1C" };
     private static readonly string[] Azules = { "#2563EB", "#3B82F6", "#6366F1", "#0EA5E9" };
 
+    // Paleta progresiva para el pipeline de captación (donut "Captaciones por etapa"): fluye de
+    // azul (recién captada) a verde (alquilada) para leerse como avance hacia el cierre. Las etapas
+    // son ordinales, así que el color va por posición, no por nombre.
+    public static readonly string[] PaletaPipeline =
+        { "#3B82F6", "#06B6D4", "#14B8A6", "#34D399", "#16A34A" };
+
+    public static string PorIndicePipeline(int indice) =>
+        PaletaPipeline[((indice % PaletaPipeline.Length) + PaletaPipeline.Length) % PaletaPipeline.Length];
+
     public static string PorEtapa(string? nombre, int indice = 0)
     {
         if (!string.IsNullOrWhiteSpace(nombre) && PorNombre.TryGetValue(nombre.Trim(), out var exacto))

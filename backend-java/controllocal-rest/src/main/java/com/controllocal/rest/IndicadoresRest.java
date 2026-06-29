@@ -6,7 +6,10 @@ import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -98,10 +101,12 @@ public class IndicadoresRest {
         List<Captacion> caps = captaciones.listarTodos().stream()
                 .filter(c -> enAlcance(alcance, idAgente(c.getAgenteResponsable())))
                 .toList();
-        List<OportunidadComercial> ops = oportunidades.listarTodos().stream()
+        List<OportunidadComercial> opsTodas = oportunidades.listarTodos();
+        List<OportunidadComercial> ops = opsTodas.stream()
                 .filter(o -> enAlcance(alcance, idAgente(o.getAgenteResponsable())))
                 .toList();
-        List<SolicitudAlquiler> sols = solicitudes.listarTodos().stream()
+        List<SolicitudAlquiler> solsTodas = solicitudes.listarTodos();
+        List<SolicitudAlquiler> sols = solsTodas.stream()
                 .filter(s -> enAlcance(alcance, idAgente(s.getAgenteResponsable())))
                 .toList();
         List<Visita> vis = visitas.listarTodos().stream()
@@ -110,7 +115,23 @@ public class IndicadoresRest {
         List<InteraccionComercial> ints = interacciones.listarTodos().stream()
                 .filter(i -> enAlcance(alcance, idAgente(i.getAgenteResponsable())))
                 .toList();
-        List<ContratoAlquiler> conts = contratos.listarTodos().stream()
+        // El DAO trae cada contrato con su solicitud/oportunidad "shallow" (solo el id, sin
+        // agenteResponsable). Se reemplazan por las instancias completas ya cargadas para poder
+        // resolver el agente del contrato; de lo contrario idAgenteContrato(c) devuelve null y
+        // los cierres del agente/broker se filtran a 0. (Mismo join en memoria que ContratosRest.)
+        Map<Long, SolicitudAlquiler> solPorId = new HashMap<>();
+        for (SolicitudAlquiler s : solsTodas) {
+            if (s.getIdSolicitud() != null) solPorId.putIfAbsent(s.getIdSolicitud(), s);
+        }
+        Map<Long, OportunidadComercial> opPorId = new HashMap<>();
+        for (OportunidadComercial o : opsTodas) {
+            if (o.getIdOportunidad() != null) opPorId.putIfAbsent(o.getIdOportunidad(), o);
+        }
+        List<ContratoAlquiler> conts = contratos.listarTodos();
+        for (ContratoAlquiler c : conts) {
+            enriquecerContrato(c, solPorId, opPorId);
+        }
+        conts = conts.stream()
                 .filter(c -> enAlcance(alcance, idAgenteContrato(c)))
                 .toList();
         List<Prospeccion> pros = prospecciones.listarTodos().stream()
@@ -149,13 +170,62 @@ public class IndicadoresRest {
                 .count();
         int cierres = contsPeriodo.size();
 
-        // Etapas (donut): captaciones por estado.
+        // Etapas (donut): particion EXCLUSIVA de las captaciones por su etapa mas avanzada en el
+        // embudo comercial (captada -> interesados -> con solicitud -> en evaluacion -> alquilada).
+        // Cada captacion cuenta UNA sola vez, de modo que las porciones suman el total y el centro
+        // del donut puede mostrar el % que llego a Alquilada. Solo entran las captaciones que
+        // llegaron al mercado (ACTIVA), mas las alquiladas (aunque su captacion ya este CERRADA);
+        // las que siguen en aprobacion del broker (pendiente/observada/rechazada) no son embudo.
+        Set<Long> capsConContrato = conts.stream()
+                .map(IndicadoresRest::idCaptacionDeContrato).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> capsConSolicitud = new HashSet<>();
+        Set<Long> capsEnEvaluacion = new HashSet<>();
+        for (SolicitudAlquiler s : sols) {
+            Long idCap = idCaptacion(s.getCaptacion());
+            if (idCap == null) {
+                continue;
+            }
+            capsConSolicitud.add(idCap);
+            EstadoSolicitudAlquiler es = s.getEstado();
+            if (es == EstadoSolicitudAlquiler.EN_REVISION || es == EstadoSolicitudAlquiler.OBSERVADA
+                    || es == EstadoSolicitudAlquiler.APROBADA) {
+                capsEnEvaluacion.add(idCap);
+            }
+        }
+        Set<Long> capsConOportunidad = ops.stream()
+                .map(o -> idCaptacion(o.getCaptacion())).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        int etCaptacion = 0, etInteresados = 0, etSolicitud = 0, etEvaluacion = 0, etAlquilada = 0;
+        for (Captacion c : caps) {
+            Long id = c.getIdCaptacion();
+            if (id == null) {
+                continue;
+            }
+            if (capsConContrato.contains(id)) {
+                etAlquilada++; // la alquilada cuenta aunque la captacion ya figure CERRADA
+                continue;
+            }
+            if (c.getEstado() != EstadoCaptacion.ACTIVA) {
+                continue; // solo las captaciones vivas en el mercado entran a las etapas intermedias
+            }
+            if (capsEnEvaluacion.contains(id)) {
+                etEvaluacion++;
+            } else if (capsConSolicitud.contains(id)) {
+                etSolicitud++;
+            } else if (capsConOportunidad.contains(id)) {
+                etInteresados++;
+            } else {
+                etCaptacion++;
+            }
+        }
         List<Dtos.IndicadorConteo> etapas = List.of(
-                new Dtos.IndicadorConteo("Activa", captacionesActivas),
-                new Dtos.IndicadorConteo("Pendiente de revision", captacionesPorRevisar),
-                new Dtos.IndicadorConteo("Observada", captacionesObservadas),
-                new Dtos.IndicadorConteo("Rechazada", (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.RECHAZADA).count()),
-                new Dtos.IndicadorConteo("Cerrada", (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.CERRADA).count()));
+                new Dtos.IndicadorConteo("Captacion activa", etCaptacion),
+                new Dtos.IndicadorConteo("Clientes interesados", etInteresados),
+                new Dtos.IndicadorConteo("Con solicitud", etSolicitud),
+                new Dtos.IndicadorConteo("En evaluacion", etEvaluacion),
+                new Dtos.IndicadorConteo("Alquilada", etAlquilada));
 
         // Embudo de conversion sobre las oportunidades en alcance.
         Set<Long> oportunidadesConVisita = visPeriodo.stream()
@@ -360,6 +430,24 @@ public class IndicadoresRest {
         return oportunidad != null ? oportunidad.getIdOportunidad() : null;
     }
 
+    private static Long idCaptacion(Captacion captacion) {
+        return captacion != null ? captacion.getIdCaptacion() : null;
+    }
+
+    // Captacion asociada a un contrato (via su solicitud y, en su defecto, su oportunidad);
+    // sirve para clasificar la captacion como "Alquilada" en el donut de etapas.
+    private static Long idCaptacionDeContrato(ContratoAlquiler contrato) {
+        if (contrato == null) {
+            return null;
+        }
+        SolicitudAlquiler solicitud = contrato.getSolicitudAlquiler();
+        if (solicitud != null && idCaptacion(solicitud.getCaptacion()) != null) {
+            return idCaptacion(solicitud.getCaptacion());
+        }
+        OportunidadComercial oportunidad = contrato.getOportunidad();
+        return oportunidad != null ? idCaptacion(oportunidad.getCaptacion()) : null;
+    }
+
     // El contrato no lleva agente directo: se resuelve via la solicitud (o la oportunidad).
     private static Long idAgenteContrato(ContratoAlquiler contrato) {
         if (contrato == null) {
@@ -371,6 +459,22 @@ public class IndicadoresRest {
         }
         OportunidadComercial oportunidad = contrato.getOportunidad();
         return oportunidad != null ? idAgente(oportunidad.getAgenteResponsable()) : null;
+    }
+
+    // Sustituye la solicitud/oportunidad "shallow" del contrato (solo id, sin relaciones) por
+    // las instancias completas ya cargadas, para poder leer su agente responsable y su estado.
+    private static void enriquecerContrato(ContratoAlquiler contrato,
+            Map<Long, SolicitudAlquiler> solPorId, Map<Long, OportunidadComercial> opPorId) {
+        SolicitudAlquiler sol = contrato.getSolicitudAlquiler();
+        if (sol != null && sol.getIdSolicitud() != null) {
+            SolicitudAlquiler full = solPorId.get(sol.getIdSolicitud());
+            if (full != null) contrato.setSolicitudAlquiler(full);
+        }
+        OportunidadComercial op = contrato.getOportunidad();
+        if (op != null && op.getIdOportunidad() != null) {
+            OportunidadComercial full = opPorId.get(op.getIdOportunidad());
+            if (full != null) contrato.setOportunidad(full);
+        }
     }
 
     private static String nombre(com.controllocal.model.persona.Persona persona) {

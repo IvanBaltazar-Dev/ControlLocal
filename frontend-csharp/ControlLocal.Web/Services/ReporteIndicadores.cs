@@ -57,7 +57,7 @@ public static class ReporteIndicadores
             };
 
         var etapas = ind.Etapas
-            .Select((e, i) => new EtapaReporte(ColoresEstado.PorEtapa(e.Nombre, i), e.Nombre, e.Valor.ToString()))
+            .Select((e, i) => new EtapaReporte(ColoresEstado.PorIndicePipeline(i), e.Nombre, e.Valor.ToString()))
             .ToArray();
 
         var embudo = ind.Embudo
@@ -129,7 +129,7 @@ public class ReporteIndicadoresDocument : IDocument
                 col.Item().Element(c => Bloque(c, "Cierres por mes", Barras));
                 col.Item().Row(row =>
                 {
-                    row.RelativeItem().Element(c => Bloque(c, "Cierres por etapa", Dona));
+                    row.RelativeItem().Element(c => Bloque(c, "Captaciones por etapa", Dona));
                     row.ConstantItem(16);
                     row.RelativeItem().Element(c => Bloque(c, "Embudo de conversión", Embudo));
                 });
@@ -235,9 +235,9 @@ public class ReporteIndicadoresDocument : IDocument
             col.Item().Text("Sin etapas registradas.").FontSize(9).FontColor(Muted);
             return;
         }
-        // Encabezado: % de captaciones que terminaron en cierre (estado Cerrada).
-        var cerrada = _d.Etapas.FirstOrDefault(e => e.Nombre.Contains("Cerrada", StringComparison.OrdinalIgnoreCase));
-        var pctCierre = (int)Math.Round(100.0 * (cerrada != null ? ParseInt(cerrada.Valor) : 0) / total);
+        // Encabezado: % de captaciones que terminaron alquiladas (etapa Alquilada).
+        var alquilada = _d.Etapas.FirstOrDefault(e => e.Nombre.Contains("Alquilada", StringComparison.OrdinalIgnoreCase));
+        var pctCierre = (int)Math.Round(100.0 * (alquilada != null ? ParseInt(alquilada.Valor) : 0) / total);
         col.Item().PaddingBottom(10).Row(r =>
         {
             r.ConstantItem(60).AlignMiddle().Text($"{pctCierre}%").FontSize(26).Bold().FontColor(Verde);

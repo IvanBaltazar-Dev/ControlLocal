@@ -15,6 +15,15 @@
                 transform="rotate(-90 @F(C) @F(C))" />
         offset += len;
     }
+    @if (!string.IsNullOrWhiteSpace(CenterValue))
+    {
+        <g>
+            <text x="@F(C)" y="@F(C)" text-anchor="middle" dominant-baseline="central"
+                  font-size="@F(Size / 4.2)" font-weight="800" fill="#243043">@CenterValue</text>
+            <text x="@F(C)" y="@F(C + Size / 4.4)" text-anchor="middle" dominant-baseline="central"
+                  font-size="@F(Size / 12.0)" fill="#7E8794">@CenterLabel</text>
+        </g>
+    }
 </svg>
 
 @code {
@@ -24,6 +33,8 @@
     [Parameter] public int Size { get; set; } = 130;
     [Parameter] public int Thickness { get; set; } = 22;
     [Parameter] public double? Total { get; set; }
+    [Parameter] public string? CenterValue { get; set; }
+    [Parameter] public string? CenterLabel { get; set; }
 
     private double R => (Size - Thickness) / 2.0;
     private double C => Size / 2.0;

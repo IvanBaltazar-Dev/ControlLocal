@@ -90,16 +90,23 @@
                     </div>
                 </div>
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Cierres por etapa</div></div>
-                    <div class="cl-card-body" style="display:flex;gap:16px;align-items:center;">
-                        <GaugeCierre Pct="CierrePct" Label="cerradas" />
+                    <div class="cl-card-head">
+                        <div>
+                            <div class="cl-card-title">Captaciones por etapa</div>
+                            <div class="cl-card-sub">En qué punto del proceso está cada captación</div>
+                        </div>
+                    </div>
+                    <div class="cl-card-body" style="display:flex;gap:18px;align-items:center;">
+                        <DonutChart Segments="EtapaSegmentos" Size="140" Thickness="22"
+                                    CenterValue="@TotalEtapas.ToString()" CenterLabel="captaciones" />
                         <div style="flex:1;font-size:12px;">
                             @foreach (var e in Datos.Etapas)
                             {
                                 <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
-                                    <span style="width:9px;height:9px;border-radius:2px;background:@e.Color;"></span>
+                                    <span style="width:10px;height:10px;border-radius:3px;background:@e.Color;"></span>
                                     <span style="flex:1;">@e.Nombre</span>
                                     <b>@e.Valor</b>
+                                    <span class="cl-muted" style="min-width:38px;text-align:right;">@PctEtapa(e.Valor)%</span>
                                 </div>
                             }
                         </div>
@@ -365,17 +372,16 @@
 
     private DateOnly PeriodoFin => DateOnly.FromDateTime(DateTime.Today);
 
-    // % de captaciones que terminaron en cierre (estado Cerrada sobre el total de etapas).
-    private int CierrePct
-    {
-        get
-        {
-            var total = _ind.Etapas.Sum(e => e.Valor);
-            var cerradas = _ind.Etapas
-                .FirstOrDefault(e => e.Nombre.Contains("Cerrada", StringComparison.OrdinalIgnoreCase))?.Valor ?? 0;
-            return total > 0 ? (int)Math.Round(cerradas * 100.0 / total) : 0;
-        }
-    }
+    // Dona "Captaciones por etapa": total al centro + una porción por etapa del pipeline.
+    private int TotalEtapas => Datos.Etapas.Sum(e => ParseValor(e.Valor));
+
+    private int PctEtapa(string valor) => TotalEtapas > 0 ? (int)Math.Round(ParseValor(valor) * 100.0 / TotalEtapas) : 0;
+
+    private DonutChart.Segment[] EtapaSegmentos => Datos.Etapas
+        .Select(e => new DonutChart.Segment(ParseValor(e.Valor), e.Color))
+        .ToArray();
+
+    private static int ParseValor(string? valor) => int.TryParse(valor, out var n) ? n : 0;
 
     protected override async Task OnInitializedAsync()
     {

@@ -85,7 +85,11 @@
                                                                    step="1"
                                                                    placeholder="Ej. 5"
                                                                    @bind="_antiguedad" /></Field>
-                        <Field Label="N.° de ambientes"><input placeholder="Ej. 3" @bind="_ambientes" /></Field>
+                        <Field Label="N.° de ambientes"><input type="number"
+                                                         min="1"
+                                                         step="1"
+                                                         placeholder="Ej. 3"
+                                                         @bind="_ambientes" /></Field>
                     </div>
                     <div style="margin-top:14px;">
                         <Field Label="Descripción y referencias" Hint="Características adicionales y referencias para ubicar el inmueble">

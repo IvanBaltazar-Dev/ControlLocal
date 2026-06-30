@@ -80,7 +80,11 @@
                         <Field Label="Disponibilidad"><select @bind="_estado"><option>Disponible</option><option>No disponible</option><option>Inactivo</option></select></Field>
                         <Field Label="Tipo de inmueble"><select @bind="_tipoInmueble">@foreach (var opcion in EnumCatalog.TiposInmueble) { <option value="@opcion.Code">@opcion.Label</option> }</select></Field>
                         <Field Label="Uso"><input value="Comercial" disabled /></Field>
-                        <Field Label="Antigüedad (en años)"><input placeholder="Ej. 5" @bind="_antiguedad" /></Field>
+                        <Field Label="Antigüedad (en años)"><input type="number"
+                                                                   min="0"
+                                                                   step="1"
+                                                                   placeholder="Ej. 5"
+                                                                   @bind="_antiguedad" /></Field>
                         <Field Label="N.° de ambientes"><input placeholder="Ej. 3" @bind="_ambientes" /></Field>
                     </div>
                     <div style="margin-top:14px;">

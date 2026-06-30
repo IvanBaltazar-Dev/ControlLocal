@@ -142,10 +142,12 @@
                                 <div class="cl-card-sub">@(_isAgente ? "Cierres mensuales y conversion propia" : "Cierres mensuales y conversion del alcance seleccionado")</div>
                             </div>
                         </div>
-                        <div class="cl-card-body">
+                        <div class="cl-card-body cl-report-histogram__body">
                             <ComboChart Bars="Datos.CierresPorMes.Valores"
-                                        Line="ConversionPorPeriodo"
+                                        Totals="CaptacionesPorMes"
                                         Labels="Datos.CierresPorMes.Etiquetas"
+                                        BarsLabel="Cierres"
+                                        TotalsLabel="Captaciones"
                                         Height="230" />
                         </div>
                     </div>
@@ -156,6 +158,7 @@
                             <div class="cl-commission-premium__eyebrow"><Icon Name="coins" Size="13" /> Comision bruta</div>
                             <div class="cl-commission-premium__value">@MonedaComision @ComisionBrutaTexto</div>
                             <div class="cl-commission-premium__scope">@ComisionScope</div>
+
                             <div class="cl-commission-premium__grid">
                                 <div>
                                     <span>Cierres</span>
@@ -164,6 +167,14 @@
                                 <div>
                                     <span>Promedio</span>
                                     <b>@MonedaComision @TicketPromedioComisionTexto</b>
+                                </div>
+                                <div>
+                                    <span>Ticket más alto</span>
+                                    <b>@MonedaComision @ComisionMaximaTexto</b>
+                                </div>
+                                <div>
+                                    <span>Último cierre</span>
+                                    <b>@UltimoCierreTexto</b>
                                 </div>
                             </div>
                             <div class="cl-commission-premium__foot">@PeriodoActual.Label · solo cierres formalizados</div>
@@ -404,6 +415,19 @@
 
     private string TicketPromedioComisionTexto => TicketPromedioComision.ToString("N0", CulturaPe);
 
+    // Comisión del cierre más alto del periodo (cuarta métrica de la ficha de comisión).
+    private decimal ComisionMaxima =>
+        CierresEnPeriodo.Count == 0 ? 0 : CierresEnPeriodo.Max(c => c.ComisionGenerada);
+
+    private string ComisionMaximaTexto => ComisionMaxima.ToString("N0", CulturaPe);
+
+    // Fecha del cierre más reciente del periodo (CierresEnPeriodo ya viene ordenado desc por fecha).
+    private string UltimoCierreTexto =>
+        CierresEnPeriodo.FirstOrDefault()?.FechaCierreTexto is { Length: > 0 } fecha ? fecha : "—";
+
+    // Captaciones por mes (denominador "fantasma" del histograma de cierres).
+    private double[] CaptacionesPorMes => _ind.CaptacionesPorPeriodo.Select(v => (double)v).ToArray();
+
     private string MonedaComision
     {
         get
@@ -463,8 +487,6 @@
     private DonutChart.Segment[] EtapaSegmentos => Datos.Etapas
         .Select(e => new DonutChart.Segment(ParseValor(e.Valor), e.Color))
         .ToArray();
-
-    private double[] ConversionPorPeriodo => _ind.ConversionPorPeriodo.Select(v => (double)v).ToArray();
 
     private static int ParseValor(string? valor) => int.TryParse(valor, out var n) ? n : 0;
 

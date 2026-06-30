@@ -112,7 +112,11 @@
             }, ct);
             return true;
         }
-        catch (InvalidOperationException ex)
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
         {
             Error = ex.Message;
             return false;

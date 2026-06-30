@@ -1,6 +1,7 @@
 package com.controllocal.rest;
 
 import java.util.List;
+import java.util.Map;
 
 import com.controllocal.bl.LocalComercialBusinessLogic;
 import com.controllocal.bl.PrecioLocalBusinessLogic;
@@ -64,11 +65,9 @@ public class LocalesRest {
         // Podrías agregar SeguridadRest.exigirRol(request, "ADMIN") si lo necesitas
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        List<Dtos.LocalResponse> items = locales
-                .listarPagina(tamanoValido, (paginaValida - 1) * tamanoValido)
-                .stream()
-                .map(this::respuesta)
-                .toList();
+        List<LocalComercial> paginaItems = locales
+                .listarPagina(tamanoValido, (paginaValida - 1) * tamanoValido);
+        List<Dtos.LocalResponse> items = respuestas(paginaItems);
         return new PageResponse<>(items, locales.contar(), paginaValida, tamanoValido);
     }
 
@@ -87,11 +86,9 @@ public class LocalesRest {
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
 
-        List<Dtos.LocalResponse> items = locales
-                .listarPaginaPorAgente(agente.idDominio(), tamanoValido, (paginaValida - 1) * tamanoValido)
-                .stream()
-                .map(this::respuesta)
-                .toList();
+        List<LocalComercial> paginaItems = locales
+                .listarPaginaPorAgente(agente.idDominio(), tamanoValido, (paginaValida - 1) * tamanoValido);
+        List<Dtos.LocalResponse> items = respuestas(paginaItems);
         
         return new PageResponse<>(items, locales.contar(), paginaValida, tamanoValido);
     }
@@ -358,6 +355,21 @@ public class LocalesRest {
         if (dto == null) {
             throw ApiException.badRequest("Los datos del local son obligatorios.");
         }
+    }
+
+    private List<Dtos.LocalResponse> respuestas(List<LocalComercial> items) {
+        List<Long> idsLocal = items.stream()
+                .map(LocalComercial::getIdLocal)
+                .filter(id -> id != null)
+                .toList();
+        Map<Long, String> portadas = locales.listarPortadas(idsLocal);
+        Map<Long, String> estadosPublicacion = publicacionBL.codigosEstadoPublicacion(idsLocal);
+        return items.stream()
+                .map(local -> Dtos.LocalResponse.desde(
+                        local,
+                        estadosPublicacion.get(local.getIdLocal()),
+                        portadas.get(local.getIdLocal())))
+                .toList();
     }
 
     private Dtos.LocalResponse respuesta(LocalComercial local) {

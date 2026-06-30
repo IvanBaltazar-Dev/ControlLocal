@@ -305,7 +305,10 @@ public class IndicadoresRest {
                 : desempenoPorAgente(alcance, capsPeriodo, contsPeriodo);
 
         int agentesActivos = alcance != null ? alcance.size() : agentes.listarTodos().size();
-        int brokersActivos = esAdmin ? brokers.listarTodos().size() : (esBroker ? 1 : 0);
+        // El admin es un Broker con esAdministrador=true; no se cuenta como broker productor.
+        int brokersActivos = esAdmin
+                ? (int) brokers.listarTodos().stream().filter(b -> !b.isEsAdministrador()).count()
+                : (esBroker ? 1 : 0);
 
         String ambito = esAdmin ? "Reportes globales" : esBroker ? "Reportes de equipo" : "Mi actividad";
 
@@ -618,7 +621,9 @@ public class IndicadoresRest {
     private List<Dtos.IndicadorDesempeno> desempenoPorBroker(List<Captacion> caps, List<ContratoAlquiler> conts) {
         List<Dtos.IndicadorDesempeno> filas = new ArrayList<>();
         for (Broker broker : brokers.listarTodos()) {
-            if (broker.getIdBroker() == null) {
+            // El admin tambien es un Broker (esAdministrador=true), pero es un supervisor global,
+            // no un broker productor: no debe aparecer comparandose a si mismo en "Carga del equipo".
+            if (broker.getIdBroker() == null || broker.isEsAdministrador()) {
                 continue;
             }
             Set<Long> equipo = agentes.listarPorBroker(broker.getIdBroker()).stream()

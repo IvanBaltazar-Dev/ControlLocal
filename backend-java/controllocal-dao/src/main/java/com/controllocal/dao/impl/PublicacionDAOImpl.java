@@ -1,10 +1,15 @@
 package com.controllocal.dao.impl;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+import com.controllocal.config.DBManager;
 import com.controllocal.dao.PublicacionDAO;
 import com.controllocal.model.comercial.Publicacion;
 import com.controllocal.model.comercial.enums.CanalPublicacion;
@@ -43,6 +48,39 @@ public class PublicacionDAOImpl extends AbstractJdbcCrudDAO<Publicacion> impleme
         JdbcSupport.validarId(idLocal);
         return query(SELECT + " WHERE id_local = ? ORDER BY fecha_publicacion DESC",
                 ps -> ps.setLong(1, idLocal));
+    }
+
+    @Override
+    public Map<Long, String> codigosEstadoPorLocales(Collection<Long> idsLocal) {
+        List<Long> ids = idsLocal == null ? List.of() : idsLocal.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, String> estados = new LinkedHashMap<>();
+        String sql = SELECT
+                + " WHERE id_local IN (" + JdbcSupport.placeholders(ids.size()) + ")"
+                + " ORDER BY id_local, fecha_publicacion DESC, id_publicacion DESC";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setLong(i + 1, ids.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Long idLocal = rs.getLong("id_local");
+                    EstadoPublicacion estado = JdbcSupport.getEnum(rs, "estado", EstadoPublicacion.class);
+                    estados.putIfAbsent(idLocal,
+                            estado != null ? estado.getCodigo() : EstadoPublicacion.BORRADOR.getCodigo());
+                }
+            }
+            return estados;
+        } catch (SQLException e) {
+            throw failure("listar estados por locales de", e);
+        }
     }
 
     @Override protected String insertSql() { return INSERT; }

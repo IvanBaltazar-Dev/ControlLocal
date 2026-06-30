@@ -1,6 +1,8 @@
 package com.controllocal.bl;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.controllocal.model.inmueble.FotoLocal;
@@ -23,6 +25,6 @@ public interface LocalComercialBusinessLogic {
     // Galeria de fotos del local (binario en el almacen; aqui solo la clave).
     public Long agregarFoto(Long idLocal, String clave, String nombreArchivo);
     public List<FotoLocal> listarFotos(Long idLocal);
+    public Map<Long, String> listarPortadas(Collection<Long> idsLocal);
     public boolean eliminarFoto(Long idFoto);
 }
-

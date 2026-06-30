@@ -968,13 +968,12 @@ public class HttpLocalService(ApiClient api, HttpProspeccionService prospeccione
         if (id <= 0)
             return null;
 
-        var lista = await _cache.ObtenerAsync(ct);
-        var cacheado = lista.FirstOrDefault(item => item.Id == id);
-        if (cacheado is not null)
-            return cacheado;
-
         var respuesta = await api.GetAsync<LocalApi>($"locales/{id}", ct);
-        return respuesta is null ? null : Mapear(respuesta);
+        if (respuesta is not null)
+            return Mapear(respuesta);
+
+        var lista = await _cache.ObtenerAsync(ct);
+        return lista.FirstOrDefault(item => item.Id == id);
     }
 
     public async Task<LocalComercialDto> AgregarAsync(LocalComercialDto local, CancellationToken ct = default)

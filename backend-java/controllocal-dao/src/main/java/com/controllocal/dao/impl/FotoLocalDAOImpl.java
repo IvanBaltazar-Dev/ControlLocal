@@ -6,7 +6,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.controllocal.config.DBManager;
@@ -64,6 +67,36 @@ public class FotoLocalDAOImpl implements FotoLocalDAO {
             return fotos;
         } catch (SQLException e) {
             throw new DAOException("Error al listar las fotos del local " + idLocal + ".", e);
+        }
+    }
+
+    @Override
+    public Map<Long, String> listarClavesPortada(Collection<Long> idsLocal) {
+        List<Long> ids = idsLocal == null ? List.of() : idsLocal.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, String> portadas = new LinkedHashMap<>();
+        String sql = SELECT_SQL
+                + " WHERE id_local IN (" + JdbcSupport.placeholders(ids.size()) + ")"
+                + " ORDER BY id_local, orden, id_foto";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setLong(i + 1, ids.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    portadas.putIfAbsent(rs.getLong("id_local"), rs.getString("clave"));
+                }
+            }
+            return portadas;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar las portadas de locales.", e);
         }
     }
 

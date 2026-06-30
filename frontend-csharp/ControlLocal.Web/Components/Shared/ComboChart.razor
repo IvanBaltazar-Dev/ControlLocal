@@ -1,119 +1,115 @@
-@* Histograma de cierres + linea de conversion. Las barras viven en SVG y las
-   etiquetas quedan en HTML para mantener nitidez al escalar. *@
+@* Histograma de cierres sobre captaciones + linea de conversion.
+   Las barras y etiquetas son HTML por columnas (nitidas y siempre alineadas);
+   la linea de conversion es un overlay SVG en coordenadas porcentuales. *@
 <div class="cl-combo">
     <div class="cl-combo-head">
-        <div>
-            <span class="cl-combo-dot bars"></span>
-            <span>Cierres</span>
-        </div>
-        <div>
-            <span class="cl-combo-dot line"></span>
-            <span>Conversion</span>
-        </div>
-        @if (IndicePico >= 0 && MaxBar > 0)
+        @if (TieneTotales)
         {
-            <div class="cl-combo-peak">Pico @($"{Bars[IndicePico]:0}")</div>
+            <div><span class="cl-combo-dot ghost"></span><span>@TotalsLabel</span></div>
+        }
+        <div><span class="cl-combo-dot bars"></span><span>@BarsLabel</span></div>
+        @if (Line.Length > 0)
+        {
+            <div><span class="cl-combo-dot line"></span><span>@LineLabel</span></div>
+        }
+        @if (IndicePico >= 0)
+        {
+            <div class="cl-combo-peak">Máxima cantidad de cierres @($"{Bars[IndicePico]:0}")</div>
         }
     </div>
 
-    <div class="cl-combo-plot">
+    <div class="cl-combo-plot" style="--cl-combo-h:@(PlotH)px;">
         <div class="cl-combo-axis">
-            <span>@($"{MaxBar:0}")</span>
-            <span>@($"{MaxBar / 2:0}")</span>
+            <span>@($"{MaxEscala:0}")</span>
+            <span>@($"{MaxEscala / 2:0}")</span>
             <span>0</span>
         </div>
-
-        <svg width="100%" height="@H" viewBox="0 0 @W @H" preserveAspectRatio="none" role="img" aria-label="@Title" class="cl-combo-svg">
-            <defs>
-                <linearGradient id="@BarGradientId" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stop-color="#0F6BFF" />
-                    <stop offset="100%" stop-color="#00AEEF" />
-                </linearGradient>
-                <linearGradient id="@SoftGradientId" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stop-color="#8BA5C8" />
-                    <stop offset="100%" stop-color="#D8E0EA" />
-                </linearGradient>
-                <filter id="@ShadowId" x="-20%" y="-20%" width="140%" height="150%">
-                    <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#123B73" flood-opacity="0.16" />
-                </filter>
-            </defs>
-
-            @foreach (var t in Grid)
-            {
-                var gy = F(Pad + (PlotH * t));
-                <line x1="0" x2="@W" y1="@gy" y2="@gy" stroke="#E8EDF5" stroke-width="1" vector-effect="non-scaling-stroke" />
-            }
-
-            @for (var i = 0; i < Bars.Length; i++)
-            {
-                var value = Bars[i];
-                var bh = MaxBar <= 0 ? 0 : value / MaxBar * PlotH;
-                var x = F(Pad + i * Bw + (Bw - BarW) / 2);
-                var y = F(H - Pad - bh);
-                var esPico = i == IndicePico;
-                <rect x="@x" y="@y" width="@F(BarW)" height="@F(bh)" fill="@BarColor(i)"
-                      rx="5" opacity="@(esPico ? "1" : "0.9")" filter="@(esPico ? $"url(#{ShadowId})" : null)">
-                    <title>@Tooltip(i)</title>
-                </rect>
-            }
-
+        <div class="cl-combo-stage">
+            <div class="cl-combo-grid">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="cl-combo-cols">
+                @for (var i = 0; i < Bars.Length; i++)
+                {
+                    var esPico = i == IndicePico;
+                    <div class="cl-combo-col">
+                        <div class="cl-combo-track" title="@Tooltip(i)">
+                            @if (TieneTotales)
+                            {
+                                <div class="cl-combo-ghost" style="height:@FP(Pct(GhostValor(i)))%;"></div>
+                            }
+                            <div class="cl-combo-bar @(esPico ? "is-peak" : "")" style="height:@FP(Pct(Bars[i]))%;"></div>
+                            @if (Bars[i] > 0)
+                            {
+                                <span class="cl-combo-barval" style="bottom:@FP(Pct(Bars[i]))%;">@($"{Bars[i]:0}")</span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
             @if (Line.Length > 0)
             {
-                <polyline points="@LinePoints" fill="none" stroke="@LineColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+                <svg class="cl-combo-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <polyline points="@LinePoints" fill="none" stroke="@LineColor" stroke-width="2.4"
+                              stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+                </svg>
                 @for (var i = 0; i < Line.Length && i < Bars.Length; i++)
                 {
-                    var cx = F(Pad + i * Bw + Bw / 2);
-                    var cy = F(LineY(Line[i]));
-                    <circle cx="@cx" cy="@cy" r="4" fill="#fff" stroke="@LineColor" stroke-width="2.3" vector-effect="non-scaling-stroke">
-                        <title>@Tooltip(i)</title>
-                    </circle>
+                    <span class="cl-combo-pt" style="left:@FP(Xpc(i))%;bottom:@FP(PctLinea(i))%;border-color:@LineColor;" title="@Tooltip(i)"></span>
                 }
             }
-        </svg>
-
-        @if (IndicePico >= 0 && MaxBar > 0)
-        {
-            <div class="cl-combo-peak-pin" style="left:@(PicoLeftPct)%;">
-                <span>@($"{Bars[IndicePico]:0}")</span>
-                <i></i>
-            </div>
-        }
+        </div>
     </div>
 
     <div class="cl-combo-labels">
-        @for (var i = 0; i < Bars.Length; i++)
-        {
-            var mostrar = i < Labels.Length && PasoEtiqueta > 0 && i % PasoEtiqueta == 0;
-            var esPico = i == IndicePico;
-            <div class="@(esPico ? "is-peak" : "")">
-                @(mostrar ? Labels[i] : "")
-            </div>
-        }
+        <div></div>
+        <div class="cl-combo-labels-track">
+            @for (var i = 0; i < Bars.Length; i++)
+            {
+                var mostrar = i < Labels.Length && PasoEtiqueta > 0 && i % PasoEtiqueta == 0;
+                <div class="@(i == IndicePico ? "is-peak" : "")">@(mostrar ? Labels[i] : "")</div>
+            }
+        </div>
     </div>
 </div>
 
 @code {
-    [Parameter] public string Title { get; set; } = "Grafico combinado";
-    [Parameter] public double[] Bars { get; set; } = [];
-    [Parameter] public double[] Line { get; set; } = [];
+    [Parameter] public double[] Bars { get; set; } = [];        // serie principal (cierres) — barra solida
+    [Parameter] public double[] Totals { get; set; } = [];      // denominador (captaciones) — barra "fantasma" detras
+    [Parameter] public double[] Line { get; set; } = [];        // conversion % (0..100)
     [Parameter] public string[] Labels { get; set; } = [];
     [Parameter] public int Height { get; set; } = 180;
-    [Parameter] public string LineColor { get; set; } = "#005BFF";
+    [Parameter] public string LineColor { get; set; } = "#0F766E";
+    [Parameter] public string BarsLabel { get; set; } = "Cierres";
+    [Parameter] public string TotalsLabel { get; set; } = "Captaciones";
+    [Parameter] public string LineLabel { get; set; } = "Conversion";
 
-    private readonly string _uid = "combo-" + Guid.NewGuid().ToString("N");
-    private const int W = 640;
-    private const int Pad = 16;
-    private const int TopGap = 18;
-    private int H => Height;
-    private int PlotH => H - Pad - TopGap;
-    private double MaxBar => Bars.Length == 0 ? 0 : Math.Max(1, Bars.Max());
-    private double Bw => Bars.Length == 0 ? 0 : (W - Pad * 2) / (double)Bars.Length;
-    private double BarW => Math.Clamp(Bw * 0.6, 4, 46);
+    private int PlotH => Height;
+    private bool TieneTotales => Totals.Length > 0;
+
+    private double GhostValor(int i) => i < Totals.Length ? Totals[i] : 0;
+
+    // Escala de las barras con "aire" para que quepan las etiquetas de valor sobre el pico,
+    // tomando el mayor entre cierres y captaciones (asi la barra fantasma entra completa).
+    private double MaxEscala
+    {
+        get
+        {
+            var maxBar = Bars.Length == 0 ? 0 : Bars.Max();
+            var maxTot = Totals.Length == 0 ? 0 : Totals.Max();
+            var bruto = Math.Max(maxBar, maxTot);
+            if (bruto <= 0) return 1;
+            var conAire = bruto * 1.15;
+            var paso = conAire <= 5 ? 1 : conAire <= 20 ? 2 : conAire <= 50 ? 5 : 10;
+            return Math.Ceiling(conAire / paso) * paso;
+        }
+    }
+
+    private double Pct(double v) => Math.Clamp(v / MaxEscala * 100.0, 0, 100);
+    private double Xpc(int i) => Bars.Length == 0 ? 0 : (i + 0.5) / Bars.Length * 100.0;
+    private double PctLinea(int i) => Math.Clamp(i < Line.Length ? Line[i] : 0, 0, 100);
+
     private int PasoEtiqueta => Labels.Length == 0 ? 0 : Math.Max(1, (int)Math.Ceiling(Labels.Length / 9.0));
-    private static readonly double[] Grid = { 0, 0.25, 0.5, 0.75, 1 };
-    private string BarGradientId => $"{_uid}-bar";
-    private string SoftGradientId => $"{_uid}-soft";
-    private string ShadowId => $"{_uid}-shadow";
 
     private int IndicePico
     {
@@ -122,43 +118,28 @@
             if (Bars.Length == 0 || Bars.Max() <= 0) return -1;
             var idx = 0;
             for (var i = 1; i < Bars.Length; i++)
-            {
                 if (Bars[i] > Bars[idx]) idx = i;
-            }
             return idx;
         }
     }
 
-    private double PicoLeftPct => IndicePico < 0 || Bars.Length == 0
-        ? 0
-        : (Pad + IndicePico * Bw + Bw / 2) / W * 100.0;
+    private string LinePoints => string.Join(" ", Line.Take(Bars.Length).Select((v, i) =>
+        $"{F(Xpc(i))},{F(100 - Math.Clamp(v, 0, 100))}"));
 
-    private string LinePoints => string.Join(" ", Line.Take(Bars.Length).Select((value, i) =>
-        $"{F(Pad + i * Bw + Bw / 2)},{F(LineY(value))}"));
-
-    private double LineY(double value)
+    private string Tooltip(int i)
     {
-        var pct = Math.Clamp(value, 0, 100);
-        return H - Pad - pct / 100.0 * PlotH;
+        var label = i < Labels.Length ? Labels[i] : $"Periodo {i + 1}";
+        var cierres = i < Bars.Length ? Bars[i] : 0;
+        var convText = i < Line.Length ? $" · {Line[i]:0}% conversion" : "";
+        if (TieneTotales)
+        {
+            var caps = GhostValor(i);
+            return $"{label}: {cierres:0} cierres de {caps:0} captaciones{convText}";
+        }
+        return $"{label}: {cierres:0} cierres{convText}";
     }
 
-    private string BarColor(int index)
-    {
-        if (index == IndicePico) return $"url(#{BarGradientId})";
-        if (index == 0) return $"url(#{SoftGradientId})";
-        var previous = Bars[index - 1];
-        var current = Bars[index];
-        if (current > previous) return "#2F7D52";
-        if (current < previous) return "#D64550";
-        return $"url(#{SoftGradientId})";
-    }
-
-    private string Tooltip(int index)
-    {
-        var label = index < Labels.Length ? Labels[index] : $"Periodo {index + 1}";
-        var conversion = index < Line.Length ? $"{Line[index]:0}% conversion" : "sin conversion";
-        return $"{label}: {Bars[index]:0} cierres, {conversion}";
-    }
-
+    // Porcentaje para estilos inline: siempre con punto decimal (cultura invariante).
+    private static string FP(double d) => d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     private static string F(double d) => d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }

@@ -1,6 +1,8 @@
 package com.controllocal.bl;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.controllocal.model.comercial.Publicacion;
@@ -11,6 +13,7 @@ public interface PublicacionBusinessLogic {
 
     // Codigo del estado de publicacion del inmueble (BORRADOR si no tiene).
     String codigoEstadoPublicacion(Long idLocal);
+    Map<Long, String> codigosEstadoPublicacion(Collection<Long> idsLocal);
 
     // Crea/actualiza la publicacion web del local segun el estado solicitado.
     void sincronizar(LocalComercial local, String codigoEstado);

@@ -88,50 +88,68 @@ else
                             </div>
                         </div>
 
-                        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;">
+                        @* Ficha comercial: condiciones pactadas (izquierda) con estado y continuidad al costado (derecha). *@
+                        <div style="display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:14px;align-items:start;">
                             <div class="cl-card">
-                                <div class="cl-card-head"><div class="cl-card-title">Condiciones comerciales</div></div>
+                                <div class="cl-card-head">
+                                    <div>
+                                        <div class="cl-card-title">Condiciones comerciales</div>
+                                        <div class="cl-card-sub">Terminos pactados del encargo</div>
+                                    </div>
+                                </div>
                                 <div class="cl-card-body">
-                                    <dl class="cl-kv">
-                                        <dt>Comision</dt><dd>@_cap.ComisionPactadaTexto%</dd>
-                                        <dt>Urgencia</dt><dd>@UrgenciaTexto</dd>
-                                        <dt>Exclusividad</dt><dd>@ExclusividadTexto</dd>
-                                        <dt>Vigencia</dt><dd>@_cap.VigenciaTexto</dd>
-                                        <dt>Estado captacion</dt><dd>@_cap.Estado</dd>
-                                    </dl>
+                                    <div class="cl-specs">
+                                        <Spec Icon="target" K="Comision" V="@($"{_cap.ComisionPactadaTexto}%")" />
+                                        <Spec Icon="flag" K="Urgencia" V="@UrgenciaTexto" />
+                                        <Spec Icon="lock" K="Exclusividad" V="@ExclusividadTexto" />
+                                        <Spec Icon="calendar" K="Vigencia" V="@_cap.VigenciaTexto" />
+                                    </div>
                                 </div>
                             </div>
-                            <div class="cl-card">
-                                <div class="cl-card-head"><div class="cl-card-title">Continuidad comercial</div></div>
-                                <div class="cl-card-body cl-stack">
-                                    <FilaExpediente Icon="store" Titulo="Local prospectado" Estado="@TextoLocal">
-                                        <Accion>
-                                            @if (_cap.LocalId > 0)
-                                            {
-                                                <a class="cl-btn sm" href="@($"/local-detail/{_cap.LocalId}")"><Icon Name="eye" Size="12" /> Ver</a>
-                                            }
-                                        </Accion>
-                                    </FilaExpediente>
-                                    @if (_prospeccion is not null)
-                                    {
-                                        <FilaExpediente Icon="history" Titulo="Seguimiento del propietario" Estado="@EstadoProspeccionTexto">
+                            <div class="cl-stack">
+                                <div class="cl-card">
+                                    <div class="cl-card-head"><div class="cl-card-title">Estado de la propiedad</div></div>
+                                    <div class="cl-card-body">
+                                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
+                                            <dt>Captacion</dt><dd><StatusBadge Label="@_cap.Estado" /></dd>
+                                            <dt>Clientes interesados</dt><dd>@_ops.Count</dd>
+                                            <dt>Con solicitud</dt><dd>@_solicitudes.Count</dd>
+                                            <dt>Etapa mas avanzada</dt><dd>@_stages[_current]</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                                <div class="cl-card">
+                                    <div class="cl-card-head"><div class="cl-card-title">Continuidad comercial</div></div>
+                                    <div class="cl-card-body cl-stack">
+                                        <FilaExpediente Icon="store" Titulo="Local prospectado" Estado="@TextoLocal">
                                             <Accion>
-                                                <a class="cl-btn sm" href="@($"/prospeccion-detail/{_prospeccion.Id}")"><Icon Name="activity" Size="12" /> Seguimiento</a>
+                                                @if (_cap.LocalId > 0)
+                                                {
+                                                    <a class="cl-btn sm" href="@($"/local-detail/{_cap.LocalId}")"><Icon Name="eye" Size="12" /> Ver</a>
+                                                }
                                             </Accion>
                                         </FilaExpediente>
-                                    }
-                                    <div class="cl-alert blue" style="margin:0;">
-                                        <Icon Name="flag" Size="15" />
-                                        <span><b>@ProximoPasoTitulo</b><br />@ProximoPasoDetalle</span>
+                                        @if (_prospeccion is not null)
+                                        {
+                                            <FilaExpediente Icon="history" Titulo="Seguimiento del propietario" Estado="@EstadoProspeccionTexto">
+                                                <Accion>
+                                                    <a class="cl-btn sm" href="@($"/prospeccion-detail/{_prospeccion.Id}")"><Icon Name="activity" Size="12" /> Seguimiento</a>
+                                                </Accion>
+                                            </FilaExpediente>
+                                        }
+                                        <div class="cl-alert blue" style="margin:0;">
+                                            <Icon Name="flag" Size="15" />
+                                            <span><b>@ProximoPasoTitulo</b><br />@ProximoPasoDetalle</span>
+                                        </div>
+                                        @if (!_readOnly && !string.IsNullOrWhiteSpace(ProximoPasoRuta))
+                                        {
+                                            <a class="cl-btn sm" href="@ProximoPasoRuta"><Icon Name="arrowRight" Size="12" /> Continuar</a>
+                                        }
+                                        else if (App.Role == Roles.Broker && !string.IsNullOrWhiteSpace(RutaRevisionBroker))
+                                        {
+                                            <a class="cl-btn sm primary" href="@RutaRevisionBroker"><Icon Name="checkCircle" Size="12" /> Revisar ahora</a>
+                                        }
                                     </div>
-                                    @if (!_readOnly && !string.IsNullOrWhiteSpace(ProximoPasoRuta))
-                                    {
-                                        <a class="cl-btn sm" href="@ProximoPasoRuta"><Icon Name="arrowRight" Size="12" /> Continuar</a>
-                                    }
-                                    else if (App.Role == Roles.Broker && !string.IsNullOrWhiteSpace(RutaRevisionBroker))
-                                    {
-                                        <a class="cl-btn sm primary" href="@RutaRevisionBroker"><Icon Name="checkCircle" Size="12" /> Revisar ahora</a>
-                                    }
                                 </div>
                             </div>
                         </div>
@@ -141,6 +159,13 @@ else
                                     <div>
                                         <div class="cl-card-title">Interacciones con propietario</div>
                                         <div class="cl-card-sub">Comunicacion registrada durante la captacion</div>
+                                    </div>
+                                    <div class="cl-flex" style="gap:8px;">
+                                        <span class="cl-badge blue">@_interaccionesCaptacion.Count</span>
+                                        @if (!_readOnly && _cap.Estado is "Activa" or "A" && _cap.Id > 0)
+                                        {
+                                            <button class="cl-btn sm primary" @onclick="AbrirInteraccion"><Icon Name="plus" Size="12" /> Registrar interaccion</button>
+                                        }
                                     </div>
                                 </div>
                                 <div class="cl-card-body" style="padding:0;">
@@ -183,13 +208,7 @@ else
                                     <div class="cl-card-title">Reporte al propietario</div>
                                     <div class="cl-card-sub">Consultas, visitas, objeciones y recomendaciones reportadas durante la captación</div>
                                 </div>
-                                <div class="cl-flex" style="gap:8px;">
-                                    <span class="cl-badge blue">@_reportes.Count</span>
-                                    @if (!_readOnly && _cap.Estado is "Activa" or "A" && _cap.Id > 0)
-                                    {
-                                        <button class="cl-btn sm primary" @onclick="AbrirReporte"><Icon Name="plus" Size="12" /> Registrar reporte</button>
-                                    }
-                                </div>
+                                <span class="cl-badge blue">@_reportes.Count</span>
                             </div>
                             <div class="cl-card-body" style="padding:0;">
                                 @if (_reportes.Count == 0)
@@ -351,24 +370,46 @@ else
             </div>
 
             <div class="cl-stack">
-                <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">Estado de la propiedad</div></div>
-                    <div class="cl-card-body">
-                        <dl class="cl-kv" style="grid-template-columns:1fr auto;">
-                            <dt>Captacion</dt><dd><StatusBadge Label="@_cap.Estado" /></dd>
-                            <dt>Clientes interesados</dt><dd>@_ops.Count</dd>
-                            <dt>Con solicitud</dt><dd>@_solicitudes.Count</dd>
-                            <dt>Vigencia</dt><dd>@_cap.VigenciaTexto</dd>
-                            <dt>Etapa mas avanzada</dt><dd>@_stages[_current]</dd>
-                        </dl>
+                @if (!_readOnly && _cap.Estado is "Activa" or "A" && _cap.Id > 0)
+                {
+                    <div class="cl-card">
+                        <div class="cl-card-head"><div class="cl-card-title">Acciones de captacion</div></div>
+                        <div class="cl-card-body">
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                <button class="cl-btn primary" @onclick="AbrirInteraccion"><Icon Name="activity" Size="13" /> Registrar interaccion</button>
+                                <a class="cl-btn success" href="@($"/oportunidad-form/{_cap.CodigoCaptacion}")"><Icon Name="plus" Size="13" /> Crear oportunidad</a>
+                                <button class="cl-btn" @onclick="AbrirReporte"><Icon Name="fileText" Size="13" /> Registrar reporte</button>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                }
                 <div class="cl-alert blue">
                     <Icon Name="info" Size="15" />
                     <span>Este expediente consolida la propiedad, sus etapas previas, clientes interesados, solicitudes y documentos reales.</span>
                 </div>
             </div>
         </div>
+
+        @* Registro rápido de interacción con el propietario sin salir del expediente (mismo cuerpo que /interaccion-form). *@
+        <Modal Open="_modalInteraccion" Tone="blue" Icon="activity"
+               Title="Registrar interacción con el propietario"
+               Desc="@($"Contacto con {_cap.PropietarioNombre} sobre {_cap.DireccionLocal}")"
+               OnClose="CerrarInteraccion">
+            <ChildContent>
+                @if (_errInteraccion is not null)
+                {
+                    <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_errInteraccion</span></div>
+                }
+                <InteraccionEditor @key="_interaccionEditorKey" @ref="_interaccionEditor" Contexto="CAPTACION" EntidadId="_cap.Id"
+                                   Compacto="true" NumContacto="1" NumDetalle="2" OnCambio="StateHasChanged" />
+            </ChildContent>
+            <Footer>
+                <button class="cl-btn ghost" disabled="@_guardandoInteraccion" @onclick="CerrarInteraccion">Cancelar</button>
+                <button class="cl-btn primary" disabled="@_guardandoInteraccion" @onclick="GuardarInteraccion">
+                    @(_guardandoInteraccion ? "Registrando..." : "Registrar interacción")
+                </button>
+            </Footer>
+        </Modal>
 
         <Modal Open="_modalReporte" Icon="fileText" Tone="blue"
                Title="Registrar reporte al propietario"
@@ -448,6 +489,13 @@ else
     private string _rObjeciones = "";
     private string _rAjustes = "";
     private string _rCanal = "E";
+
+    // Registro rápido de interacción con el propietario (reutiliza InteraccionEditor en contexto CAPTACION).
+    private bool _modalInteraccion;
+    private bool _guardandoInteraccion;
+    private int _interaccionEditorKey;
+    private InteraccionEditor? _interaccionEditor;
+    private string? _errInteraccion;
 
     private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
     private string _tab = "Resumen";
@@ -535,9 +583,11 @@ else
             _cap = !string.IsNullOrEmpty(CodigoParam)
                 ? await CaptacionSvc.ObtenerPorCodigoAsync(CodigoParam, DisposedToken) ?? new()
                 : (await CaptacionSvc.RefrescarAsync(DisposedToken)).FirstOrDefault() ?? new();
-            _local = _cap.LocalId > 0
-                ? await LocalSvc.ObtenerAsync(_cap.LocalId, DisposedToken)
-                : null;
+            // El local y las listas dependientes de la captación se piden en paralelo (un solo
+            // viaje de ida y vuelta) en vez de esperar el local antes de lanzar el resto.
+            var localTask = _cap.LocalId > 0
+                ? LocalSvc.ObtenerAsync(_cap.LocalId, DisposedToken)
+                : Task.FromResult<LocalComercialDto?>(null);
 
             var oportunidadesTask = _cap.Id > 0
                 ? OportunidadSvc.ListarPorCaptacionAsync(_cap.Id, DisposedToken)
@@ -555,6 +605,7 @@ else
                 ? ReporteSvc.ListarPorCaptacionAsync(_cap.Id, DisposedToken)
                 : Task.FromResult<IReadOnlyList<ReportePropietarioDto>>([]);
 
+            _local = await localTask;
             _ops = await oportunidadesTask;
             _solicitudes = await solicitudesTask;
             _interaccionesCaptacion = await interaccionesTask;
@@ -669,6 +720,53 @@ else
         var sufijo = r.FechaReporte?.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture)
                      ?? r.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         await Exportar.DescargarPdfAsync($"Reporte_propietario_{_cap.CodigoCaptacion}_{sufijo}", pdf);
+    }
+
+    private void AbrirInteraccion()
+    {
+        _errInteraccion = null;
+        _interaccionEditorKey++;
+        _modalInteraccion = true;
+    }
+
+    private void CerrarInteraccion()
+    {
+        if (_guardandoInteraccion)
+            return;
+        _errInteraccion = null;
+        _interaccionEditor?.Reiniciar();
+        _modalInteraccion = false;
+    }
+
+    private async Task GuardarInteraccion()
+    {
+        if (_cap.Id <= 0 || _interaccionEditor is null || _guardandoInteraccion)
+            return;
+        _guardandoInteraccion = true;
+        _errInteraccion = null;
+        try
+        {
+            var ok = await _interaccionEditor.GuardarAsync(DisposedToken);
+            if (!ok)
+            {
+                _errInteraccion = _interaccionEditor.Error ?? "No se pudo registrar la interaccion. Revisa los datos.";
+                return;
+            }
+            _interaccionesCaptacion = await InteraccionSvc.ListarPorCaptacionAsync(_cap.Id, DisposedToken);
+            _interaccionEditor.Reiniciar();
+            _modalInteraccion = false;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _errInteraccion = ex.Message;
+        }
+        finally
+        {
+            _guardandoInteraccion = false;
+        }
     }
 
     private async Task AbrirReporte()

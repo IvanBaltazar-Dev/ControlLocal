@@ -104,10 +104,6 @@
                             <div class="cl-card-title">@WorkTitle</div>
                             <div class="cl-card-sub">@WorkSubtitle</div>
                         </div>
-                        @if (!IsAdmin && !IsBroker && _bandejaTotal > 5)
-                        {
-                            <button class="cl-btn sm" @onclick="AbrirBandejaCompletaAsync">Ver todas (@_bandejaTotal)</button>
-                        }
                     </div>
                     <div class="cl-card-body">
                         @if (!IsAdmin && !IsBroker)
@@ -217,7 +213,15 @@
                     </div>
                 </div>
                 <div class="cl-card">
-                    <div class="cl-card-head"><div class="cl-card-title">@(IsAdmin || IsBroker ? "Carga del equipo" : "Mi rendimiento")</div></div>
+                    <div class="cl-card-head">
+                        <div>
+                            <div class="cl-card-title">@(IsAdmin || IsBroker ? "Carga del equipo" : "Mi rendimiento")</div>
+                            @if (IsAdmin || IsBroker)
+                            {
+                                <div class="cl-card-sub">Top 3 @(IsAdmin ? "brokers" : "agentes") por carga</div>
+                            }
+                        </div>
+                    </div>
                     @if (IsAdmin || IsBroker)
                     {
                         @* Foto operativa: quién carga cuántas captaciones/cierres ahora (sin la
@@ -241,12 +245,6 @@
                                         }
                                     </tbody>
                                 </table>
-                                @if (_ind.Desempeno.Count > DesempenoPageSize)
-                                {
-                                    <div style="padding:0 12px 12px;">
-                                        <Pagination Total="_ind.Desempeno.Count" PageSize="DesempenoPageSize" @bind-Page="_desempenoPage" />
-                                    </div>
-                                }
                             }
                         </div>
                     }
@@ -308,10 +306,16 @@
     private bool _bandejaError;
     // La bandeja carga aparte del resto del dashboard (su panel mas lento no bloquea el tablero).
     private bool _bandejaCargando;
-    private const int DesempenoPageSize = 5;
-    private int _desempenoPage = 1;
+    // "Carga del equipo": solo el top 3 por carga (captaciones), con cierres como desempate.
+    // Es un recorte en memoria sobre la lista que ya llega del backend (<=8 filas): no añade
+    // ninguna llamada ni costo de carga a la página.
+    private const int DesempenoTop = 3;
     private IReadOnlyList<IndicadorDesempenoDto> DesempenoVisible =>
-        Paginador.Pagina(_ind.Desempeno, ref _desempenoPage, DesempenoPageSize);
+        _ind.Desempeno
+            .OrderByDescending(d => d.Captaciones)
+            .ThenByDescending(d => d.Cierres)
+            .Take(DesempenoTop)
+            .ToList();
 
     // Identidad visual del hero por rol.
     private string RoleClass => IsAdmin ? "admin" : IsBroker ? "broker" : "agente";

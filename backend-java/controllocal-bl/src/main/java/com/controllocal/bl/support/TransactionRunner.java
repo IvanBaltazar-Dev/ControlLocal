@@ -28,13 +28,20 @@ public final class TransactionRunner {
             throw e;
         } catch (Exception e) {
             BusinessException businessError =
-                    new BusinessException("Error al ejecutar la operacion transaccional.", e);
+                    new BusinessException(mensajeTransaccional(e), e);
             failure = businessError;
             rollback(businessError);
             throw businessError;
         } finally {
             close(failure);
         }
+    }
+
+    private static String mensajeTransaccional(Exception error) {
+        String detalle = error.getMessage();
+        return detalle == null || detalle.isBlank()
+                ? "Error al ejecutar la operacion transaccional."
+                : "Error al ejecutar la operacion transaccional: " + detalle;
     }
 
     private static void rollback(Exception originalError) {

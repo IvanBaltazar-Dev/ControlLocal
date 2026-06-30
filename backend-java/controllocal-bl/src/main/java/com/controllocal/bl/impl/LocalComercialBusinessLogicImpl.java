@@ -1,6 +1,8 @@
 package com.controllocal.bl.impl;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.controllocal.bl.BusinessException;
@@ -212,6 +214,11 @@ public class LocalComercialBusinessLogicImpl implements LocalComercialBusinessLo
     }
 
     @Override
+    public Map<Long, String> listarPortadas(Collection<Long> idsLocal) {
+        return fotoLocalDAO.listarClavesPortada(idsLocal);
+    }
+
+    @Override
     public boolean eliminarFoto(Long idFoto) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(idFoto, "El id de la foto");
@@ -219,4 +226,3 @@ public class LocalComercialBusinessLogicImpl implements LocalComercialBusinessLo
         });
     }
 }
-

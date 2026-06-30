@@ -1,7 +1,10 @@
 package com.controllocal.bl.impl;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.controllocal.bl.BusinessException;
@@ -45,6 +48,25 @@ public class PublicacionBusinessLogicImpl implements PublicacionBusinessLogic {
                 .map(Publicacion::getEstado)
                 .map(EstadoPublicacion::getCodigo)
                 .orElse(EstadoPublicacion.BORRADOR.getCodigo());
+    }
+
+    @Override
+    public Map<Long, String> codigosEstadoPublicacion(Collection<Long> idsLocal) {
+        List<Long> ids = idsLocal == null ? List.of() : idsLocal.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+
+        String borrador = EstadoPublicacion.BORRADOR.getCodigo();
+        Map<Long, String> estados = new HashMap<>();
+        for (Long id : ids) {
+            estados.put(id, borrador);
+        }
+        estados.putAll(publicaciones.codigosEstadoPorLocales(ids));
+        return estados;
     }
 
     @Override

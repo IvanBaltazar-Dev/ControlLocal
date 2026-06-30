@@ -309,7 +309,14 @@ else
                    Desc="@($"Contacto con {_p.PropietarioNombre} sobre {_p.Direccion}")"
                    OnClose="CerrarInteraccion">
                 <ChildContent>
-                    <InteraccionEditor @ref="_interaccionEditor" Contexto="PROSPECCION" EntidadId="_p.Id"
+                    @if (_modalError is not null)
+                    {
+                        <div class="cl-alert red" style="margin-bottom:14px;">
+                            <Icon Name="alert" Size="15" />
+                            <span>@_modalError</span>
+                        </div>
+                    }
+                    <InteraccionEditor @key="_interaccionEditorKey" @ref="_interaccionEditor" Contexto="PROSPECCION" EntidadId="_p.Id"
                                        Compacto="true" NumContacto="1" NumDetalle="2" OnCambio="StateHasChanged" />
                 </ChildContent>
                 <Footer>
@@ -344,6 +351,7 @@ else
     private bool _procesando;
     private bool _modalDescartar;
     private bool _modalInteraccion;
+    private int _interaccionEditorKey;
     private InteraccionEditor? _interaccionEditor;
     private bool _guardandoInteraccion;
     private bool _toast;
@@ -555,9 +563,22 @@ else
         }
     }
 
-    private void AbrirInteraccion() => _modalInteraccion = true;
+    private void AbrirInteraccion()
+    {
+        _modalError = null;
+        _interaccionEditorKey++;
+        _modalInteraccion = true;
+    }
 
-    private void CerrarInteraccion() => _modalInteraccion = false;
+    private void CerrarInteraccion()
+    {
+        if (_guardandoInteraccion)
+            return;
+
+        _modalError = null;
+        _interaccionEditor?.Reiniciar();
+        _modalInteraccion = false;
+    }
 
     private async Task GuardarInteraccion()
     {
@@ -566,13 +587,18 @@ else
         try
         {
             _guardandoInteraccion = true;
+            _modalError = null;
             await RenderIfAliveAsync();
             var ok = await _interaccionEditor.GuardarAsync(DisposedToken);
             if (!ok)
+            {
+                _modalError = _interaccionEditor.Error ?? "No se pudo registrar la interaccion. Revisa los datos.";
                 return;
+            }
             // Registrar una interacción puede avanzar el estado/recontacto: recargamos el expediente.
             _p = await ProspeccionSvc.ObtenerAsync(_p.Id, DisposedToken) ?? _p;
             _interacciones = (await InteraccionSvc.ListarPorProspeccionAsync(_p.Id, DisposedToken)).ToList();
+            _interaccionEditor.Reiniciar();
             _modalInteraccion = false;
             Notificar("Interaccion registrada.");
         }
@@ -581,7 +607,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _modalError = ex.Message;
         }
         finally
         {

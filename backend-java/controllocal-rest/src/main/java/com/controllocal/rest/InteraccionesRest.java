@@ -95,7 +95,7 @@ public class InteraccionesRest {
             enriquecerDirectas(paginaItems);
             Map<Long, OportunidadComercial> ops = contieneOportunidades(paginaItems) ? mapaOportunidades(paginaItems) : Map.of();
             List<Dtos.InteraccionResponse> items = paginaItems.stream()
-                    .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
+                    .map(item -> Dtos.InteraccionResponse.desde(item, oportunidadDe(ops, item)))
                     .toList();
             return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
         }
@@ -392,6 +392,14 @@ public class InteraccionesRest {
         return interaccion.getOportunidadComercial() != null
                 ? interaccion.getOportunidadComercial().getIdOportunidad()
                 : null;
+    }
+
+    // ops puede ser un Map inmutable (Map.of() cuando la pagina no tiene ninguna interaccion de
+    // oportunidad) y su get(null) lanza NPE. Las interacciones de prospeccion/captacion/cliente no
+    // llevan oportunidad (idOportunidad == null), asi que solo se consulta el mapa cuando hay id.
+    private static OportunidadComercial oportunidadDe(Map<Long, OportunidadComercial> ops, InteraccionComercial item) {
+        Long id = idOportunidad(item);
+        return id != null ? ops.get(id) : null;
     }
 
     private static CanalContacto canal(String codigo) {

@@ -11,13 +11,18 @@
 
 @if (_cargando)
 {
-    <div class="cl-card"><div class="cl-card-body" style="display:flex;align-items:center;gap:12px;padding:22px;">
-        <Icon Name="refresh" Size="20" />
-        <div>
-            <div style="font-weight:600;font-size:13px;">Cargando expediente@(string.IsNullOrWhiteSpace(CodigoParam) ? "" : $" {CodigoParam}")…</div>
-            <div style="font-size:12px;color:var(--c-text-2);">Recuperando la captación, su prospección de origen y el seguimiento del propietario.</div>
-        </div>
-    </div></div>
+    <AppShell Active="Captaciones por revisar"
+              Crumbs="@(new[] { "ControlLocal", "Captaciones por revisar", "Revision" })"
+              Title="Revisando captacion"
+              Subtitle="Preparando el expediente para la decision del broker">
+        <Actions>
+            <button class="cl-btn ghost" @onclick="@(() => App.Navigate("bandeja-captaciones"))"><Icon Name="chevronLeft" Size="13" /> Volver</button>
+        </Actions>
+        <ChildContent>
+            <LoadingBlock Title="@($"Cargando expediente{(string.IsNullOrWhiteSpace(CodigoParam) ? "" : $" {CodigoParam}")}...")"
+                          Subtitle="Recuperando la captacion, su prospeccion de origen y el seguimiento del propietario." />
+        </ChildContent>
+    </AppShell>
 }
 else if (_captacion is null)
 {

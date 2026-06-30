@@ -81,7 +81,33 @@ else if (_esperandoSesion)
         await InvokeAsync(async () =>
         {
             await App.ReloadSessionAsync();
-            NavigationManager.NavigateTo(App.IsAuthenticated ? "/dashboard" : "/login");
+
+            // Idempotente: solo redirige si la sesion nueva dejo la pagina actual incompatible, y
+            // nunca navega a la pagina en la que ya estamos. Antes navegaba SIEMPRE a dashboard/login,
+            // y con eventos de sesion repetidos entre pestanas eso producia un ping-pong
+            // login<->dashboard que no terminaba nunca (habia que borrar el almacenamiento del sitio).
+            var enPublica = RouteAccess.IsPublic(RouteData.PageType);
+            if (App.IsAuthenticated && enPublica)
+            {
+                NavigationManager.NavigateTo("/dashboard");
+            }
+            else if (!App.IsAuthenticated && !enPublica)
+            {
+                NavigationManager.NavigateTo("/login");
+            }
+            else if (enPublica)
+            {
+                // Pagina publica (login/recover): el cambio de sesion no nos saca de aqui.
+                _permitido = true;
+                _esperandoSesion = false;
+                StateHasChanged();
+            }
+            else
+            {
+                // Pagina protegida y seguimos autenticados: re-evaluamos acceso por rol sin redirigir.
+                ResolverAcceso(redirigirSiFalla: false);
+                StateHasChanged();
+            }
         });
     }
 

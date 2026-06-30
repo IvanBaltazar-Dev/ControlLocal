@@ -2,11 +2,14 @@ package com.controllocal.rest;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import com.controllocal.bl.BrokerBusinessLogic;
 import com.controllocal.bl.CaptacionBusinessLogic;
+import com.controllocal.bl.LocalComercialBusinessLogic;
 import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
+import com.controllocal.bl.impl.LocalComercialBusinessLogicImpl;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.usuario.AgenteInmobiliario;
@@ -39,6 +42,7 @@ public class CaptacionesRest {
 
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
+    private final LocalComercialBusinessLogic locales = new LocalComercialBusinessLogicImpl();
     private final CoincidenciaCarteraSupport coincidencias = new CoincidenciaCarteraSupport();
 
     @Context
@@ -83,7 +87,7 @@ public class CaptacionesRest {
     @GET
     @Path("{id}")
     public Dtos.CaptacionResponse obtener(@PathParam("id") long id) {
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, SeguridadRest.usuario(request)));
+        return respuesta(obtenerConAcceso(id, SeguridadRest.usuario(request)));
     }
 
     @GET
@@ -95,7 +99,7 @@ public class CaptacionesRest {
         if (!puedeVer(usuario, captacion)) {
             throw ApiException.prohibido();
         }
-        return Dtos.CaptacionResponse.desde(captacion);
+        return respuesta(captacion);
     }
 
     @GET
@@ -140,8 +144,7 @@ public class CaptacionesRest {
         long id = captaciones.registrar(captacion);
 
         return Response.status(Response.Status.CREATED)
-                .entity(Dtos.CaptacionResponse.desde(
-                        captaciones.buscarPorId(id).orElseThrow(() -> ApiException.noEncontrado("Captacion"))))
+                .entity(respuesta(captaciones.buscarPorId(id).orElseThrow(() -> ApiException.noEncontrado("Captacion"))))
                 .build();
     }
 
@@ -175,7 +178,7 @@ public class CaptacionesRest {
         }
         captaciones.actualizar(captacion);
 
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return respuesta(obtenerConAcceso(id, usuario));
     }
 
     @POST
@@ -195,7 +198,7 @@ public class CaptacionesRest {
             case "RECHAZAR", "R" -> captaciones.rechazarCaptacion(id, usuario.idDominio(), dto.observacion());
             default -> throw ApiException.badRequest("Decision no valida.");
         }
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return respuesta(obtenerConAcceso(id, usuario));
     }
 
     @POST
@@ -208,7 +211,7 @@ public class CaptacionesRest {
             throw ApiException.badRequest("El agente destino es obligatorio.");
         }
         captaciones.reasignarCaptacion(id, dto.idAgenteNuevo(), usuario.idDominio(), dto.motivo());
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return respuesta(obtenerConAcceso(id, usuario));
     }
 
     @POST
@@ -221,7 +224,7 @@ public class CaptacionesRest {
             throw ApiException.badRequest("El motivo de cierre es obligatorio.");
         }
         captaciones.cerrarCaptacion(id, usuario.idDominio(), dto.motivo());
-        return Dtos.CaptacionResponse.desde(obtenerConAcceso(id, usuario));
+        return respuesta(obtenerConAcceso(id, usuario));
     }
 
     private Captacion obtenerConAcceso(long id, UsuarioAutenticado usuario) {
@@ -269,10 +272,36 @@ public class CaptacionesRest {
         int tamanoValido = SeguridadRest.tamano(tamano);
         int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
         int hasta = Math.min(desde + tamanoValido, fuente.size());
-        List<Dtos.CaptacionResponse> items = fuente.subList(desde, hasta).stream()
-                .map(Dtos.CaptacionResponse::desde)
+        List<Captacion> paginaItems = fuente.subList(desde, hasta);
+        Map<Long, String> portadas = locales.listarPortadas(paginaItems.stream()
+                .map(CaptacionesRest::idLocal)
+                .filter(id -> id != null)
+                .toList());
+        List<Dtos.CaptacionResponse> items = paginaItems.stream()
+                .map(captacion -> respuesta(captacion, portadas.get(idLocal(captacion))))
                 .toList();
         return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+    }
+
+    private Dtos.CaptacionResponse respuesta(Captacion captacion) {
+        return Dtos.CaptacionResponse.desde(captacion, fotoPortadaClave(captacion));
+    }
+
+    private Dtos.CaptacionResponse respuesta(Captacion captacion, String fotoPortadaClave) {
+        return Dtos.CaptacionResponse.desde(captacion, fotoPortadaClave);
+    }
+
+    private String fotoPortadaClave(Captacion captacion) {
+        Long idLocal = idLocal(captacion);
+        if (idLocal == null) {
+            return null;
+        }
+        return locales.listarPortadas(List.of(idLocal)).get(idLocal);
+    }
+
+    private static Long idLocal(Captacion captacion) {
+        LocalComercial local = captacion.getLocalComercial();
+        return local != null ? local.getIdLocal() : null;
     }
 
     private static boolean coincideReasignable(Captacion c, String q) {

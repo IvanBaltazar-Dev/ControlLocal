@@ -19,10 +19,15 @@
         }
     </Actions>
     <ChildContent>
-        @{
+        @if (_cargando)
+        {
+            <LoadingBlock Title="Cargando clientes..."
+                          Subtitle="Preparando la lista de clientes interesados y sus filtros." />
+        }
+        else
+        {
             var filtrados = Filtrados().ToList();
             var visibles = Paginador.Pagina(filtrados, ref _pagina);
-        }
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="users" Label="Clientes registrados" Value="@Todos.Count.ToString()" Tone="blue"
                         Active="true" />
@@ -89,19 +94,30 @@
             </div>
         </div>
         <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
+        }
     </ChildContent>
 </AppShell>
 
 @code {
     private string _query = "", _tipo = "", _rubro = "", _estado = "";
     private int _pagina = 1;
+    private bool _cargando = true;
 
     private IReadOnlyList<ClienteInteresadoDto> Todos = new List<ClienteInteresadoDto>();
 
     // Recarga fresca al volver del formulario y muestra lo más reciente primero (id desc),
     // así el cliente recién registrado aparece al inicio de la lista.
-    protected override async Task OnInitializedAsync() =>
-        Todos = (await ClienteSvc.RefrescarAsync()).OrderByDescending(c => c.Id).ToList();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Todos = (await ClienteSvc.RefrescarAsync()).OrderByDescending(c => c.Id).ToList();
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
 
     private int ContactoAutorizado => Todos.Count(c => c.ConsentimientoContacto == true);
     private int UsoDatoAutorizado => Todos.Count(c => c.ConsentimientoUsoDato == true);

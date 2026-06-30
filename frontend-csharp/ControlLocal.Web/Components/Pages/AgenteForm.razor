@@ -282,7 +282,7 @@
         if (PeruInputRules.ValidarDocumento(DocumentoActualTipo, _documento) is { } documentoError) { _err = documentoError; return; }
         if (string.IsNullOrWhiteSpace(_telefono)) { _err = "El teléfono es obligatorio."; return; }
         if (PeruInputRules.ValidarTelefono(_telefono) is { } telefonoError) { _err = telefonoError; return; }
-        if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo corporativo es obligatorio."; return; 
+        if (string.IsNullOrWhiteSpace(_correo)) { _err = "El correo corporativo es obligatorio."; return; }
         if (!PeruInputRules.EsCorreoValido(_correo))
         {
               _err = PeruInputRules.CorreoMensaje;

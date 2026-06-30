@@ -86,7 +86,14 @@ public class InteraccionesRest {
                                 Comparator.nullsLast(Comparator.naturalOrder()))
                         .reversed()
                         .thenComparing(InteraccionComercial::getIdInteraccion, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
+                // Map.of().get(null) lanza NPE (los mapas inmutables rechazan keys null);
+                // las interacciones de PROSPECCION/CAPTACION no tienen idOportunidad, asi
+                // que primero verificamos si hay id antes de consultar el cache.
+                .map(item -> {
+                    Long idOp = idOportunidad(item);
+                    OportunidadComercial oportunidad = idOp != null ? ops.get(idOp) : null;
+                    return Dtos.InteraccionResponse.desde(item, oportunidad);
+                })
                 .filter(item -> coincideGrupo(grupo, item))
                 .filter(item -> resultado == null || resultado.isBlank() || resultado.equalsIgnoreCase(item.resultado()))
                 .filter(item -> canal == null || canal.isBlank() || canal.equalsIgnoreCase(item.canalContacto()))

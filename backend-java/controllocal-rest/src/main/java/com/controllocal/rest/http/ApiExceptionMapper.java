@@ -1,5 +1,8 @@
 package com.controllocal.rest.http;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import com.controllocal.bl.BusinessException;
 
 import jakarta.ws.rs.WebApplicationException;
@@ -10,6 +13,10 @@ import jakarta.ws.rs.ext.Provider;
 
 @Provider
 public class ApiExceptionMapper implements ExceptionMapper<Throwable> {
+
+    // java.util.logging es el unico sink que GlassFish enruta a server.log;
+    // System.err se pierde en el stdout del proceso que arranca el dominio.
+    private static final Logger LOG = Logger.getLogger(ApiExceptionMapper.class.getName());
 
     @Override
     public Response toResponse(Throwable error) {
@@ -31,8 +38,7 @@ public class ApiExceptionMapper implements ExceptionMapper<Throwable> {
             return respuesta(estado, mensaje);
         }
 
-        System.err.println("[ControlLocal API] Error no controlado: " + error);
-        error.printStackTrace(System.err);
+        LOG.log(Level.SEVERE, "[ControlLocal API] Error no controlado", error);
         return respuesta(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
                 "No se pudo completar la operacion.");
     }

@@ -57,7 +57,12 @@
 
                 <FormSection Num="3" Title="Características del local" Sub="Datos que verán los clientes interesados en la ficha">
                     <div class="cl-grid c3">
-                        <Field Label="Área (m²)" Required="true"><input placeholder="Ej. 80" @bind="_areaMts" @bind:event="oninput" type="number" /></Field>
+                        <Field Label="Área (m²)" Required="true"><input type="number"
+                                                                   min="1"
+                                                                   step="1"
+                                                                   placeholder="Ej. 80"
+                                                                   @bind="_areaMts"
+                                                                   @bind:event="oninput" /></Field>
                         <Field Label="Rubro sugerido">
                             <select @bind="_rubro">
                                 @foreach (var rubro in Rubros)

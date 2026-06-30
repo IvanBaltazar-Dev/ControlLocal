@@ -136,13 +136,13 @@
                                     }
                                 </td>
                                 <td>
-                                    <div class="cl-flex" style="gap:6px;justify-content:flex-end;">
+                                    <div class="cl-flex cl-visit-actions" style="gap:6px;justify-content:flex-end;flex-wrap:wrap;">
                                         @if (EsModificable(v))
                                         {
                                             <button class="cl-btn sm primary" disabled="@_procesando" @onclick="@(() => AbrirRealizada(v))"><Icon Name="check" Size="12" /> Realizada</button>
-                                            <button class="cl-btn sm" disabled="@_procesando" @onclick="@(() => AbrirNoRealizada(v))"><Icon Name="alert" Size="12" /> No se realizó</button>
-                                            <button class="cl-btn sm" disabled="@_procesando" @onclick="@(() => AbrirReprogramar(v))"><Icon Name="clock" Size="12" /> Reprogramar</button>
-                                            <button class="cl-btn sm ghost" disabled="@_procesando" @onclick="@(() => AbrirCancelar(v))"><Icon Name="x" Size="12" /> Cancelar</button>
+                                            <button class="cl-btn sm icon-only" title="No se realizó" aria-label="No se realizó" disabled="@_procesando" @onclick="@(() => AbrirNoRealizada(v))"><Icon Name="alert" Size="13" /></button>
+                                            <button class="cl-btn sm icon-only" title="Reprogramar" aria-label="Reprogramar" disabled="@_procesando" @onclick="@(() => AbrirReprogramar(v))"><Icon Name="clock" Size="13" /></button>
+                                            <button class="cl-btn sm icon-only ghost" title="Cancelar" aria-label="Cancelar" disabled="@_procesando" @onclick="@(() => AbrirCancelar(v))"><Icon Name="x" Size="13" /></button>
                                         }
                                         else if (AdmiteResultado(v))
                                         {

@@ -2,7 +2,6 @@
 @inherits SafeComponentBase
 @inject AppState App
 @inject IIndicadorService Indicadores
-@inject IDashboardService DashboardSvc
 @inject ITareaService TareaSvc
 
 <PageTitle>@Title · ControlLocal</PageTitle>
@@ -41,7 +40,7 @@
                         <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("brokers"))">
                             <div class="cl-hero-stat-k">Brokers activos</div><div class="cl-hero-stat-v">@_ind.BrokersActivos</div>
                         </div>
-                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("agents"))">
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("reasignar"))">
                             <div class="cl-hero-stat-k">Agentes activos</div><div class="cl-hero-stat-v">@_ind.AgentesActivos</div>
                         </div>
                         <div class="cl-hero-stat">
@@ -56,8 +55,8 @@
                         <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("bandeja-captaciones"))">
                             <div class="cl-hero-stat-k">Captaciones por revisar</div><div class="cl-hero-stat-v">@_ind.CaptacionesPorRevisar</div>
                         </div>
-                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("solicitudes"))">
-                            <div class="cl-hero-stat-k">Solicitudes por evaluar</div><div class="cl-hero-stat-v">@_ind.SolicitudesPorEvaluar</div>
+                        <div class="cl-hero-stat clickable" @onclick="@(() => App.Navigate("solicitudes-revisar"))">
+                            <div class="cl-hero-stat-k">Solicitudes por revisar</div><div class="cl-hero-stat-v">@_ind.SolicitudesPorEvaluar</div>
                         </div>
                         <div class="cl-hero-stat">
                             <div class="cl-hero-stat-k">Operaciones activas</div><div class="cl-hero-stat-v">@_ind.OportunidadesActivas</div>
@@ -133,8 +132,8 @@
                         else if (PrioridadesDashboard.Count == 0)
                         {
                             <div style="padding:26px;text-align:center;color:#5B6472;">
-                                <div style="font-weight:700;font-size:14px;color:var(--c-text);">Sin bloqueos críticos en este momento</div>
-                                <div style="font-size:12px;margin-top:4px;">El equipo no tiene focos vencidos ni aprobaciones pendientes dentro del tablero operativo.</div>
+                                <div style="font-weight:700;font-size:14px;color:var(--c-text);">@(IsAdmin ? "Sin focos de auditoria en este momento" : "Sin bloqueos criticos en este momento")</div>
+                                <div style="font-size:12px;margin-top:4px;">@(IsAdmin ? "La lectura global no muestra desviaciones urgentes para revisar." : "El equipo no tiene focos vencidos ni aprobaciones pendientes dentro del tablero operativo.")</div>
                             </div>
                         }
                         else
@@ -152,7 +151,7 @@
                                                 <span class="cl-badge gray" style="font-size:11px;">@p.Vencimiento</span>
                                             </div>
                                         </div>
-                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate(p.Ruta))"><Icon Name="arrowDownRight" Size="12" /> Resolver</button>
+                                        <button class="cl-btn sm primary" @onclick="@(() => App.Navigate(p.Ruta))"><Icon Name="arrowDownRight" Size="12" /> @(IsAdmin ? "Revisar" : "Resolver")</button>
                                     </div>
                                 }
                             </div>
@@ -340,13 +339,13 @@
     private string SideActive => IsAdmin ? "Dashboard global" : IsBroker ? "Dashboard de equipo" : "Dashboard";
 
     private string WorkTitle => IsAdmin
-        ? "Bandeja ejecutiva"
+        ? "Panel de auditoria"
         : IsBroker
             ? "Centro de control del equipo"
             : "Tu bandeja de trabajo";
 
     private string WorkSubtitle => IsAdmin
-        ? "Cinco focos comerciales que pueden frenar ingresos o SLA"
+        ? "Lectura de carga, seguimiento y cierres sin cambiar estados"
         : IsBroker
             ? "Aprobaciones, cierres y seguimiento vencido ordenados por urgencia"
             : "Máximo cinco operaciones priorizadas con vencimiento y días sin acción";
@@ -368,10 +367,23 @@
         get
         {
             var items = new List<DashboardPriority>();
-            if (IsAdmin || IsBroker)
+            if (IsAdmin)
             {
-                AgregarPrioridad(items, _ind.SolicitudesPorEvaluar, "Solicitudes por evaluar",
-                    "Aprobación comercial pendiente", "solicitudes", "red", "vence hoy", 0, 100);
+                AgregarPrioridad(items, Op.RecontactosVencidos, "Seguimiento comercial en riesgo",
+                    "Audita recontactos vencidos y equipos con demora", "seguimiento-comercial", "red", "auditoria", Op.DiasPromedioSinSeguimiento, 96);
+                AgregarPrioridad(items, Op.SolicitudesSinCierre, "Cierres pendientes de formalizacion",
+                    "Solicitudes aprobadas que aun no generan contrato", "propiedades-alquiladas", "amber", "control", Op.DiasPromedioSinSeguimiento, 90);
+                AgregarPrioridad(items, _ind.Cierres, "Cierres registrados",
+                    "Revisa alquileres formalizados y comisiones brutas", "reportes", "green", "analisis", 0, 78);
+                AgregarPrioridad(items, _ind.AgentesActivos, "Carga de agentes",
+                    "Supervisa asignaciones y cobertura por broker", "reasignar", "blue", "gestion", 0, 72);
+                AgregarPrioridad(items, _ind.BrokersActivos, "Brokers activos",
+                    "Gestiona responsables y estructura de supervision", "brokers", "blue", "gestion", 0, 70);
+            }
+            else if (IsBroker)
+            {
+                AgregarPrioridad(items, _ind.SolicitudesPorEvaluar, "Solicitudes por revisar",
+                    "Revision comercial pendiente", "solicitudes-revisar", "red", "vence hoy", 0, 100);
                 AgregarPrioridad(items, _ind.CaptacionesPorRevisar, "Captaciones por revisar",
                     "Expedientes esperando decisión", "bandeja-captaciones", "amber", "vence hoy", 0, 92);
                 AgregarPrioridad(items, Op.SolicitudesSinCierre, "Solicitudes aprobadas sin cierre",
@@ -408,7 +420,7 @@
                 return
                 [
                     new("pin", "Por revisar", _ind.CaptacionesPorRevisar.ToString(), _ind.CaptacionesPorRevisar > 0 ? "amber" : "green", "captaciones del equipo"),
-                    new("fileText", "Por evaluar", _ind.SolicitudesPorEvaluar.ToString(), _ind.SolicitudesPorEvaluar > 0 ? "red" : "green", "solicitudes"),
+                    new("fileText", "Por revisar", _ind.SolicitudesPorEvaluar.ToString(), _ind.SolicitudesPorEvaluar > 0 ? "red" : "green", "solicitudes"),
                     new("alert", "Recontactos vencidos", Op.RecontactosVencidos.ToString(), Op.RecontactosVencidos > 0 ? "red" : "green", "seguimiento del equipo"),
                     new("target", "Conversión prosp. → capt.", $"{Op.ConversionProspeccionCaptacion}%", ConvTone(Op.ConversionProspeccionCaptacion), "disciplina de captación"),
                 ];
@@ -451,25 +463,42 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Una sola llamada agregada trae indicadores + primera pagina de la bandeja (antes eran dos
-        // round-trips). Best-effort: ante un fallo se pinta con valores por defecto sin tumbar el circuito.
-        DashboardDto? datos = null;
-        try { datos = await DashboardSvc.CargarAsync("6m", DisposedToken); }
+        try
+        {
+            _ind = await Indicadores.ObtenerAsync("6m", DisposedToken);
+        }
         catch (OperationCanceledException) { return; }
-        catch { /* se queda en IndicadoresDto.Vacio: los paneles muestran ceros */ }
+        catch { _ind = IndicadoresDto.Vacio; }
 
-        _ind = datos?.Indicadores ?? _ind;
         _cargando = false;
         _propiedadesEquipo = _ind.PropiedadesEquipo > 0 ? _ind.PropiedadesEquipo : _ind.CaptacionesActivas;
 
-        // Solo el agente tiene bandeja de acciones; viene ya reconciliada en la misma respuesta.
+        // La bandeja del agente reconcilia tareas y puede tardar mas que los KPIs. Se carga
+        // aparte para que el dashboard pinte rapido y luego rellene el panel operativo.
         if (!IsAdmin && !IsBroker)
         {
-            if (datos is not null) AplicarBandeja(datos.Bandeja);
-            else _bandejaError = true; // no se pudo cargar: se muestra estado de error, no "todo al dia"
+            _bandejaCargando = true;
+            _ = CargarBandejaInicialAsync();
         }
-        _bandejaCargando = false;
+        else
+            _bandejaCargando = false;
+
         StateHasChanged();
+    }
+
+    private async Task CargarBandejaInicialAsync()
+    {
+        _bandejaCargando = true;
+        _bandejaError = false;
+        await InvokeAsync(StateHasChanged);
+        try { await CargarBandejaPaginaAsync(5); }
+        catch (OperationCanceledException) { }
+        catch { _bandejaError = true; }
+        finally
+        {
+            _bandejaCargando = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     // Reintenta SOLO la bandeja (el resto del dashboard ya esta pintado).

@@ -179,7 +179,7 @@ public class IndicadoresRest {
         int captacionesPorRevisar = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.PENDIENTE_REVISION).count();
         int captacionesObservadas = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.OBSERVADA).count();
         int captacionesActivas = (int) caps.stream().filter(c -> c.getEstado() == EstadoCaptacion.ACTIVA).count();
-        int solicitudesPorEvaluar = (int) sols.stream().filter(s -> s.getEstado() == EstadoSolicitudAlquiler.EN_REVISION).count();
+        int solicitudesPorEvaluar = (int) sols.stream().filter(IndicadoresRest::solicitudPorRevisar).count();
         int oportunidadesActivas = (int) ops.stream()
                 .filter(o -> o.getEstado() == EstadoOportunidadComercial.ABIERTA
                         || o.getEstado() == EstadoOportunidadComercial.SOLICITUD_CREADA)
@@ -693,6 +693,15 @@ public class IndicadoresRest {
 
     private static Long idCaptacion(Captacion captacion) {
         return captacion != null ? captacion.getIdCaptacion() : null;
+    }
+
+    private static boolean solicitudPorRevisar(SolicitudAlquiler solicitud) {
+        if (solicitud == null) {
+            return false;
+        }
+        EstadoSolicitudAlquiler estado = solicitud.getEstado();
+        return estado == EstadoSolicitudAlquiler.EN_REVISION
+                || estado == EstadoSolicitudAlquiler.OBSERVADA;
     }
 
     // Captacion asociada a un contrato (via su solicitud y, en su defecto, su oportunidad);

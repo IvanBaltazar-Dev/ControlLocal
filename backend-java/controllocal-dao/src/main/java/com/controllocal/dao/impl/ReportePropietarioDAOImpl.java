@@ -3,6 +3,8 @@ package com.controllocal.dao.impl;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import com.controllocal.dao.ReportePropietarioDAO;
@@ -37,6 +39,20 @@ public class ReportePropietarioDAOImpl extends AbstractJdbcCrudDAO<ReportePropie
         JdbcSupport.validarId(idCaptacion);
         return query(SELECT + " WHERE id_captacion = ? ORDER BY fecha_reporte DESC",
                 ps -> ps.setLong(1, idCaptacion));
+    }
+
+    @Override public List<ReportePropietario> listarPorCaptaciones(Collection<Long> idsCaptacion) {
+        if (idsCaptacion == null || idsCaptacion.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Long> ids = new ArrayList<>(idsCaptacion);
+        String sql = SELECT + " WHERE id_captacion IN (" + JdbcSupport.placeholders(ids.size())
+                + ") ORDER BY fecha_reporte DESC";
+        return query(sql, ps -> {
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setLong(i + 1, ids.get(i));
+            }
+        });
     }
 
     @Override protected String insertSql() { return INSERT; }

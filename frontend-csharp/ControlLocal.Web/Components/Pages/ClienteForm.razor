@@ -137,6 +137,10 @@
                                SaveLabel="@(_isEdit ? "Guardar cambios" : "Registrar cliente")"
                                Busy="@_procesando" BusyLabel="Guardando..." />
             </div>
+
+            <div class="cl-stack">
+                <FormStepsSidebar Steps="_pasos" />
+            </div>
         </div>
 
         <ConfirmDialog Open="_confirm" Tone="blue" Icon="users"

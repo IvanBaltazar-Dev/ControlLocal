@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import com.controllocal.model.comercial.enums.CanalContacto;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
-public class    ReportePropietario {
+public class ReportePropietario {
     private Long idReportePropietario;
     private Captacion captacion;
     private AgenteInmobiliario agente;

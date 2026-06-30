@@ -1,5 +1,6 @@
 package com.controllocal.bl;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,12 @@ public interface RequerimientoClienteBusinessLogic {
     List<RequerimientoCliente> listarTodos();
 
     List<RequerimientoCliente> listarPorCliente(Long idCliente);
+
+    /**
+     * Requerimientos de varios clientes en una sola consulta (con distritos en bloque).
+     * La usa la bandeja del agente para el matching de cartera sin N+1 por cliente.
+     */
+    List<RequerimientoCliente> listarPorClientes(Collection<Long> idsCliente);
 
     /** Crea el requerimiento y lo vincula a su cliente (entra al matching de cartera). */
     Long crear(RequerimientoCliente requerimiento);

@@ -2,7 +2,10 @@ package com.controllocal.bl.impl;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.controllocal.bl.BusinessException;
 import com.controllocal.bl.ReportePropietarioBusinessLogic;
@@ -28,6 +31,23 @@ public class ReportePropietarioBusinessLogicImpl implements ReportePropietarioBu
     public List<ReportePropietario> listarPorCaptacion(Long idCaptacion) {
         BusinessValidations.id(idCaptacion, "El id de captacion");
         return reportes.listarPorCaptacion(idCaptacion);
+    }
+
+    @Override
+    public Map<Long, LocalDate> ultimoReportePorCaptaciones(Collection<Long> idsCaptacion) {
+        Map<Long, LocalDate> ultimo = new HashMap<>();
+        if (idsCaptacion == null || idsCaptacion.isEmpty()) {
+            return ultimo;
+        }
+        for (ReportePropietario r : reportes.listarPorCaptaciones(idsCaptacion)) {
+            Long idCaptacion = r.getCaptacion() != null ? r.getCaptacion().getIdCaptacion() : null;
+            LocalDate fecha = r.getFechaReporte();
+            if (idCaptacion == null || fecha == null) {
+                continue;
+            }
+            ultimo.merge(idCaptacion, fecha, (a, b) -> b.isAfter(a) ? b : a);
+        }
+        return ultimo;
     }
 
     @Override

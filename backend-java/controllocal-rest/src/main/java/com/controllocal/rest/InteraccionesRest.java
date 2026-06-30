@@ -77,26 +77,38 @@ public class InteraccionesRest {
         List<InteraccionComercial> fuente = base.stream()
                 .filter(item -> visiblePara(usuario, item, agentesPermitidos))
                 .filter(item -> coincideContexto(contexto, item))
-                .toList();
-        enriquecerDirectas(fuente);
-        Map<Long, OportunidadComercial> ops = contieneOportunidades(fuente) ? mapaOportunidades(fuente) : Map.of();
-
-        List<Dtos.InteraccionResponse> respuestas = fuente.stream()
+                .filter(item -> coincideGrupoEntidad(grupo, item))
+                .filter(item -> resultado == null || resultado.isBlank() || resultado.equalsIgnoreCase(codigo(item.getResultado())))
+                .filter(item -> canal == null || canal.isBlank() || canal.equalsIgnoreCase(codigo(item.getCanalContacto())))
                 .sorted(Comparator.comparing(InteraccionesRest::fechaHoraOrden,
                                 Comparator.nullsLast(Comparator.naturalOrder()))
                         .reversed()
                         .thenComparing(InteraccionComercial::getIdInteraccion, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
-                .filter(item -> coincideGrupo(grupo, item))
-                .filter(item -> resultado == null || resultado.isBlank() || resultado.equalsIgnoreCase(item.resultado()))
-                .filter(item -> canal == null || canal.isBlank() || canal.equalsIgnoreCase(item.canalContacto()))
-                .filter(item -> coincideBusqueda(q, item))
                 .toList();
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, respuestas.size());
-        int hasta = Math.min(desde + tamanoValido, respuestas.size());
-        return new PageResponse<>(respuestas.subList(desde, hasta), respuestas.size(), paginaValida, tamanoValido);
+        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
+        int hasta = Math.min(desde + tamanoValido, fuente.size());
+
+        if (q == null || q.isBlank()) {
+            List<InteraccionComercial> paginaItems = fuente.subList(desde, hasta);
+            enriquecerDirectas(paginaItems);
+            Map<Long, OportunidadComercial> ops = contieneOportunidades(paginaItems) ? mapaOportunidades(paginaItems) : Map.of();
+            List<Dtos.InteraccionResponse> items = paginaItems.stream()
+                    .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
+                    .toList();
+            return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+        }
+
+        enriquecerDirectas(fuente);
+        Map<Long, OportunidadComercial> ops = contieneOportunidades(fuente) ? mapaOportunidades(fuente) : Map.of();
+        List<Dtos.InteraccionResponse> respuestas = fuente.stream()
+                .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
+                .filter(item -> coincideBusqueda(q, item))
+                .toList();
+        int desdeBusqueda = Math.min((paginaValida - 1) * tamanoValido, respuestas.size());
+        int hastaBusqueda = Math.min(desdeBusqueda + tamanoValido, respuestas.size());
+        return new PageResponse<>(respuestas.subList(desdeBusqueda, hastaBusqueda), respuestas.size(), paginaValida, tamanoValido);
     }
 
     @GET
@@ -240,6 +252,19 @@ public class InteraccionesRest {
             return true;
         }
         return contexto.equalsIgnoreCase(contexto(interaccion));
+    }
+
+    private static boolean coincideGrupoEntidad(String grupo, InteraccionComercial interaccion) {
+        if (grupo == null || grupo.isBlank() || "TODAS".equalsIgnoreCase(grupo)) {
+            return true;
+        }
+        String contexto = contexto(interaccion);
+        boolean propietario = "PROSPECCION".equalsIgnoreCase(contexto) || "CAPTACION".equalsIgnoreCase(contexto);
+        return "PROPIETARIO".equalsIgnoreCase(grupo) ? propietario : !propietario;
+    }
+
+    private static String codigo(com.controllocal.model.CodigoEnum valor) {
+        return valor == null ? null : valor.getCodigo();
     }
 
     private static boolean coincideGrupo(String grupo, Dtos.InteraccionResponse item) {

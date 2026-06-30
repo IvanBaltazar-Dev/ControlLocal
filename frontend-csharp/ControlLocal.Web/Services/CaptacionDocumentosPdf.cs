@@ -1,5 +1,6 @@
 using ControlLocal.Web.Models.Captaciones;
 using ControlLocal.Web.Models.Locales;
+using ControlLocal.Web.Models.Reportes;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -76,6 +77,57 @@ public static class CaptacionDocumentosPdf
                 Footer(page);
             });
         }).GeneratePdf();
+
+    // Ficha de avance al propietario (Etapa 8): exporta un reporte ya registrado del expediente
+    // (consultas, visitas, objeciones y recomendaciones del periodo) como PDF descargable.
+    public static byte[] FichaAvancePropietario(CaptacionDto cap, LocalComercialDto? local, ReportePropietarioDto r, string canalTexto) =>
+        Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(34);
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily(Fonts.Calibri).FontColor("#1B2435"));
+                Header(page, "Reporte de avance al propietario", cap.CodigoCaptacion);
+                page.Content().Column(col =>
+                {
+                    Titulo(col, cap.DireccionLocal, cap.DistritoLocal);
+                    col.Item().PaddingTop(18).Grid(grid =>
+                    {
+                        grid.Columns(3);
+                        Key(grid, "Propietario", Texto(cap.PropietarioNombre));
+                        Key(grid, "Periodo", Texto(r.PeriodoTexto));
+                        Key(grid, "Fecha del reporte", Texto(r.FechaReporteTexto));
+                        Key(grid, "Canal de envio", Texto(canalTexto));
+                        Key(grid, "Area", Area(cap, local));
+                        Key(grid, "Rubro", Texto(cap.Rubro));
+                    });
+                    Seccion(col, "Resultados del periodo", new[]
+                    {
+                        ("Consultas recibidas", r.ConsultasReportadas?.ToString() ?? "-"),
+                        ("Visitas realizadas", r.VisitasReportadas?.ToString() ?? "-"),
+                    });
+                    if (!string.IsNullOrWhiteSpace(r.ObjecionesFrecuentes))
+                    {
+                        BloqueTexto(col, "Objeciones frecuentes", r.ObjecionesFrecuentes!);
+                    }
+                    if (!string.IsNullOrWhiteSpace(r.AjustesRecomendados))
+                    {
+                        BloqueTexto(col, "Ajustes recomendados", r.AjustesRecomendados!);
+                    }
+                });
+                Footer(page);
+            });
+        }).GeneratePdf();
+
+    private static void BloqueTexto(ColumnDescriptor col, string titulo, string texto)
+    {
+        col.Item().PaddingTop(18).Background(Soft).Border(1).BorderColor(Border).Padding(12).Column(block =>
+        {
+            block.Item().Text(titulo).FontSize(11).Bold().FontColor(Navy);
+            block.Item().PaddingTop(5).Text(texto).FontSize(10).LineHeight(1.35f);
+        });
+    }
 
     private static void Header(PageDescriptor page, string titulo, string codigo)
     {

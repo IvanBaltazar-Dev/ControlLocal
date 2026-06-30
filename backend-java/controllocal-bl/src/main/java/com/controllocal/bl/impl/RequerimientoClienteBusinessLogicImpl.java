@@ -2,6 +2,7 @@ package com.controllocal.bl.impl;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,6 +47,14 @@ public class RequerimientoClienteBusinessLogicImpl implements RequerimientoClien
     public List<RequerimientoCliente> listarPorCliente(Long idCliente) {
         BusinessValidations.id(idCliente, "El id de cliente");
         return requerimientos.listarPorCliente(idCliente);
+    }
+
+    @Override
+    public List<RequerimientoCliente> listarPorClientes(Collection<Long> idsCliente) {
+        if (idsCliente == null || idsCliente.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return requerimientos.listarPorClientes(idsCliente);
     }
 
     @Override

@@ -98,7 +98,10 @@
 
     private IReadOnlyList<ClienteInteresadoDto> Todos = new List<ClienteInteresadoDto>();
 
-    protected override async Task OnInitializedAsync() => Todos = await ClienteSvc.AllAsync();
+    // Recarga fresca al volver del formulario y muestra lo más reciente primero (id desc),
+    // así el cliente recién registrado aparece al inicio de la lista.
+    protected override async Task OnInitializedAsync() =>
+        Todos = (await ClienteSvc.RefrescarAsync()).OrderByDescending(c => c.Id).ToList();
 
     private int ContactoAutorizado => Todos.Count(c => c.ConsentimientoContacto == true);
     private int UsoDatoAutorizado => Todos.Count(c => c.ConsentimientoUsoDato == true);

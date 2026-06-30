@@ -1,5 +1,6 @@
 package com.controllocal.rest;
 
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -7,15 +8,25 @@ import java.util.Map;
 import com.controllocal.bl.BrokerBusinessLogic;
 import com.controllocal.bl.CaptacionBusinessLogic;
 import com.controllocal.bl.LocalComercialBusinessLogic;
+import com.controllocal.bl.PrecioLocalBusinessLogic;
+import com.controllocal.bl.PropietarioBusinessLogic;
+import com.controllocal.bl.ReportePropietarioBusinessLogic;
 import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.LocalComercialBusinessLogicImpl;
+import com.controllocal.bl.impl.PrecioLocalBusinessLogicImpl;
+import com.controllocal.bl.impl.PropietarioBusinessLogicImpl;
+import com.controllocal.bl.impl.ReportePropietarioBusinessLogicImpl;
 import com.controllocal.model.comercial.Captacion;
+import com.controllocal.model.comercial.ReportePropietario;
 import com.controllocal.model.inmueble.LocalComercial;
+import com.controllocal.model.persona.Propietario;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.rest.dto.Dtos;
 import com.controllocal.rest.http.ApiException;
 import com.controllocal.rest.http.PageResponse;
+import com.controllocal.rest.reports.CaptacionJasperMapper;
+import com.controllocal.rest.reports.JasperPdfService;
 import com.controllocal.rest.seguridad.RateLimiter;
 import com.controllocal.rest.seguridad.UsuarioAutenticado;
 
@@ -43,7 +54,11 @@ public class CaptacionesRest {
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
     private final LocalComercialBusinessLogic locales = new LocalComercialBusinessLogicImpl();
+    private final PrecioLocalBusinessLogic precios = new PrecioLocalBusinessLogicImpl();
+    private final PropietarioBusinessLogic propietarios = new PropietarioBusinessLogicImpl();
+    private final ReportePropietarioBusinessLogic reportes = new ReportePropietarioBusinessLogicImpl();
     private final CoincidenciaCarteraSupport coincidencias = new CoincidenciaCarteraSupport();
+    private final JasperPdfService jasper = new JasperPdfService();
 
     @Context
     private HttpServletRequest request;
@@ -100,6 +115,72 @@ public class CaptacionesRest {
             throw ApiException.prohibido();
         }
         return respuesta(captacion);
+    }
+
+    @GET
+    @Path("{codigo}/contrato-exclusividad/pdf")
+    @Produces("application/pdf")
+    public Response contratoExclusividadPdf(@PathParam("codigo") String codigo) {
+        Captacion captacion = obtenerPorCodigoConAcceso(codigo, SeguridadRest.usuario(request));
+        byte[] pdf = jasper.generarPdf(
+                "contrato_exclusividad.jasper",
+                Map.of(),
+                List.of(CaptacionJasperMapper.contrato(captacion)));
+        return pdf("Contrato_exclusividad_" + captacion.getCodigoCaptacion() + ".pdf", pdf);
+    }
+
+    @GET
+    @Path("{codigo}/ficha-captacion/pdf")
+    @Produces("application/pdf")
+    public Response fichaCaptacionPdf(@PathParam("codigo") String codigo) {
+        Captacion captacion = obtenerPorCodigoConAcceso(codigo, SeguridadRest.usuario(request));
+        byte[] pdf = jasper.generarPdf(
+                "ficha_captacion.jasper",
+                Map.of(),
+                List.of(CaptacionJasperMapper.ficha(captacion)));
+        return pdf("Ficha_captacion_" + captacion.getCodigoCaptacion() + ".pdf", pdf);
+    }
+
+    @GET
+    @Path("{codigo}/ficha-propiedad/pdf")
+    @Produces("application/pdf")
+    public Response fichaPropiedadPdf(@PathParam("codigo") String codigo) {
+        Captacion captacion = obtenerPorCodigoConAcceso(codigo, SeguridadRest.usuario(request));
+        LocalComercial local = captacion.getLocalComercial();
+        Propietario propietario = propietarioCompleto(local);
+        long idLocal = local != null && local.getIdLocal() != null ? local.getIdLocal() : 0;
+        int cantidadFotos = idLocal > 0 ? locales.listarFotos(idLocal).size() : 0;
+        byte[] pdf = jasper.generarPdf(
+                "ficha_propiedad.jasper",
+                Map.of(),
+                List.of(CaptacionJasperMapper.fichaPropiedad(
+                        captacion,
+                        propietario,
+                        idLocal > 0 ? precios.listarPorLocal(idLocal) : List.of(),
+                        cantidadFotos)));
+        return pdf("Ficha_propiedad_" + captacion.getCodigoCaptacion() + ".pdf", pdf);
+    }
+
+    @GET
+    @Path("{codigo}/reportes-propietario/{idReporte}/pdf")
+    @Produces("application/pdf")
+    public Response reportePropietarioPdf(
+            @PathParam("codigo") String codigo,
+            @PathParam("idReporte") long idReporte) {
+        Captacion captacion = obtenerPorCodigoConAcceso(codigo, SeguridadRest.usuario(request));
+        ReportePropietario reporte = reportes.listarPorCaptacion(captacion.getIdCaptacion()).stream()
+                .filter(item -> item.getIdReportePropietario() != null
+                        && item.getIdReportePropietario() == idReporte)
+                .findFirst()
+                .orElseThrow(() -> ApiException.noEncontrado("Reporte propietario"));
+        byte[] pdf = jasper.generarPdf(
+                "reporte_propietario.jasper",
+                Map.of(),
+                List.of(CaptacionJasperMapper.reporte(captacion, reporte)));
+        String sufijo = reporte.getFechaReporte() != null
+                ? DateTimeFormatter.BASIC_ISO_DATE.format(reporte.getFechaReporte())
+                : String.valueOf(idReporte);
+        return pdf("Reporte_propietario_" + captacion.getCodigoCaptacion() + "_" + sufijo + ".pdf", pdf);
     }
 
     @GET
@@ -236,6 +317,15 @@ public class CaptacionesRest {
         return captacion;
     }
 
+    private Captacion obtenerPorCodigoConAcceso(String codigo, UsuarioAutenticado usuario) {
+        Captacion captacion = captaciones.buscarPorCodigo(codigo)
+                .orElseThrow(() -> ApiException.noEncontrado("Captacion"));
+        if (!puedeVer(usuario, captacion)) {
+            throw ApiException.prohibido();
+        }
+        return captacion;
+    }
+
     private boolean puedeVer(UsuarioAutenticado usuario, Captacion captacion) {
         AgenteInmobiliario agente = captacion.getAgenteResponsable();
         Long idAgente = agente != null ? agente.getIdAgente() : null;
@@ -299,6 +389,13 @@ public class CaptacionesRest {
         return locales.listarPortadas(List.of(idLocal)).get(idLocal);
     }
 
+    private Propietario propietarioCompleto(LocalComercial local) {
+        if (local == null || local.getIdPropietario() == null) {
+            return local != null ? local.getPropietario() : null;
+        }
+        return propietarios.buscarPorId(local.getIdPropietario()).orElse(local.getPropietario());
+    }
+
     private static Long idLocal(Captacion captacion) {
         LocalComercial local = captacion.getLocalComercial();
         return local != null ? local.getIdLocal() : null;
@@ -334,5 +431,17 @@ public class CaptacionesRest {
             throw ApiException.badRequest("ControlLocal solo admite operaciones de alquiler comercial.");
         }
         return com.controllocal.model.comercial.enums.OperacionRequerimiento.ALQUILER;
+    }
+
+    private static Response pdf(String nombreArchivo, byte[] contenido) {
+        return Response.ok(contenido, "application/pdf")
+                .header("Content-Disposition", "attachment; filename=\"" + nombreSeguro(nombreArchivo) + "\"")
+                .build();
+    }
+
+    private static String nombreSeguro(String nombreArchivo) {
+        return nombreArchivo == null || nombreArchivo.isBlank()
+                ? "reporte.pdf"
+                : nombreArchivo.replaceAll("[^A-Za-z0-9._-]", "_");
     }
 }

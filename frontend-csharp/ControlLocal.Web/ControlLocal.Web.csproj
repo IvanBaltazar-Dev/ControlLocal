@@ -6,9 +6,4 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="QuestPDF" Version="2026.5.0" />
-  </ItemGroup>
-
 </Project>

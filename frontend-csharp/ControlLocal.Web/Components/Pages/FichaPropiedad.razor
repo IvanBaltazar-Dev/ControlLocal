@@ -1,6 +1,5 @@
 @page "/ficha-propiedad/{CodigoParam?}"
 @using ControlLocal.Web.Services
-@using QuestPDF.Fluent
 @inject AppState App
 @inject ICaptacionService CaptacionSvc
 @inject ILocalService LocalSvc
@@ -271,28 +270,9 @@
         try
         {
             _exportando = true;
-            var bytes = new List<byte[]>();
-            foreach (var foto in _fotos.Take(6))
-            {
-                try
-                {
-                    var b = await FotoSvc.DescargarBytesAsync(foto.Clave);
-                    if (b is { Length: > 0 }) bytes.Add(b);
-                }
-                catch { }
-            }
-            _m.Fotos = bytes;
-
-            byte[] pdf;
-            try
-            {
-                pdf = new FichaPropiedadDocument(_m).GeneratePdf();
-            }
-            catch
-            {
-                _m.Fotos = new();
-                pdf = new FichaPropiedadDocument(_m).GeneratePdf();
-            }
+            var pdf = await CaptacionSvc.DescargarFichaPropiedadPdfAsync(_m.Codigo);
+            if (pdf is null || pdf.Length == 0)
+                return;
             await Exportar.DescargarPdfAsync($"Ficha_{_m.Codigo}", pdf);
         }
         finally

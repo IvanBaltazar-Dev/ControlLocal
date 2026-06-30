@@ -70,6 +70,8 @@ public interface IIndicadorService
     Task<IndicadoresDto> ObtenerAsync(CancellationToken ct = default);
 
     Task<IndicadoresDto> ObtenerAsync(string periodo, CancellationToken ct = default);
+
+    Task<byte[]?> DescargarReportePdfAsync(string periodo, CancellationToken ct = default);
 }
 
 public sealed class HttpIndicadorService(ApiClient api) : IIndicadorService
@@ -101,6 +103,14 @@ public sealed class HttpIndicadorService(ApiClient api) : IIndicadorService
             _enVuelo[periodoSeguro] = tarea;
             return tarea;
         }
+    }
+
+    public Task<byte[]?> DescargarReportePdfAsync(string periodo, CancellationToken ct = default)
+    {
+        var periodoSeguro = string.IsNullOrWhiteSpace(periodo) ? "6m" : periodo.Trim();
+        return api.GetBytesAsync(
+            $"indicadores/reporte/pdf?periodo={Uri.EscapeDataString(periodoSeguro)}",
+            ct);
     }
 
     // No se liga a la cancelacion de un componente: la respuesta la comparten varios

@@ -50,6 +50,8 @@ import com.controllocal.model.comercial.enums.EstadoVisita;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 import com.controllocal.model.usuario.Broker;
 import com.controllocal.rest.dto.Dtos;
+import com.controllocal.rest.reports.IndicadoresJasperMapper;
+import com.controllocal.rest.reports.JasperPdfService;
 import com.controllocal.rest.seguridad.UsuarioAutenticado;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -60,6 +62,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 /**
  * Indicadores agregados para los paneles (dashboard / reportes) y los contadores del
@@ -86,6 +89,7 @@ public class IndicadoresRest {
     private final AgenteBusinessLogic agentes = new AgenteBusinessLogicImpl();
     private final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl();
     private final MotivoNoContinuidadBusinessLogic motivosNoContinuidad = new MotivoNoContinuidadBusinessLogicImpl();
+    private final JasperPdfService jasper = new JasperPdfService();
 
     @Context
     private HttpServletRequest request;
@@ -94,6 +98,22 @@ public class IndicadoresRest {
     @Path("resumen")
     public Dtos.IndicadoresResponse resumen(@QueryParam("periodo") String periodoParam) {
         return resumen(SeguridadRest.usuario(request), periodoParam);
+    }
+
+    @GET
+    @Path("reporte/pdf")
+    @Produces("application/pdf")
+    public Response reportePdf(@QueryParam("periodo") String periodoParam) {
+        UsuarioAutenticado usuario = SeguridadRest.usuario(request);
+        Dtos.IndicadoresResponse datos = resumen(usuario, periodoParam);
+        boolean esAdmin = usuario.tieneRol("ADMIN");
+        boolean esAgente = usuario.tieneRol("AGENTE");
+        byte[] pdf = jasper.generarPdf(
+                "reporte_indicadores.jasper",
+                Map.of(),
+                List.of(IndicadoresJasperMapper.desde(datos, esAdmin, esAgente, periodoParam)));
+        String nombre = esAdmin ? "reporte_global.pdf" : esAgente ? "reporte_agente.pdf" : "reporte_equipo.pdf";
+        return pdf(nombre, pdf);
     }
 
     // Reutilizable por DashboardRest: calcula el resumen para un usuario ya autenticado (sin tocar
@@ -760,6 +780,18 @@ public class IndicadoresRest {
     // clamp a 100 es una red de seguridad: ninguna tasa de conversion debe pintarse > 100%.
     private static int porcentaje(int parte, int total) {
         return total <= 0 ? 0 : Math.min(100, (int) Math.round(parte * 100.0 / total));
+    }
+
+    private static Response pdf(String nombreArchivo, byte[] contenido) {
+        return Response.ok(contenido, "application/pdf")
+                .header("Content-Disposition", "attachment; filename=\"" + nombreSeguro(nombreArchivo) + "\"")
+                .build();
+    }
+
+    private static String nombreSeguro(String nombreArchivo) {
+        return nombreArchivo == null || nombreArchivo.isBlank()
+                ? "reporte.pdf"
+                : nombreArchivo.replaceAll("[^A-Za-z0-9._-]", "_");
     }
 
     private record Periodo(String codigo, int dias) {

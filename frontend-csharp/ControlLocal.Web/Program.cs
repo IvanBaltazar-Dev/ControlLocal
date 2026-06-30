@@ -3,10 +3,6 @@ using ControlLocal.Web.Data;
 using ControlLocal.Web.Services;
 using ControlLocal.Web.Services.Api;
 using Microsoft.AspNetCore.DataProtection;
-using QuestPDF.Fluent;
-using QuestPDF.Infrastructure;
-
-QuestPDF.Settings.License = LicenseType.Community;
 
 // [DIAGNOSTICO TEMPORAL] Captura crashes no manejados a un archivo (%TEMP%/ControlLocal-crash.log).
 CrashLog.Breadcrumb("=== Arranque ControlLocal.Web ===");
@@ -119,9 +115,7 @@ app.Use(async (context, next) =>
 
 app.UseAntiforgery();
 
-// La ficha de propiedad se exporta a PDF desde el circuito Blazor (FichaPropiedad.razor),
-// donde la sesión (token JWT) y los datos ya están cargados. El antiguo endpoint
-// /ficha/{codigo}/pdf abría una request HTTP sin sesión y por eso fallaba al exportar.
+// Los PDFs comerciales se generan en el backend Java con JasperReports.
 
 // Proxy del contenido real de un documento del expediente. El archivo vive en el
 // almacén del backend (S3 o disco); este endpoint lo descarga del API REST (clave

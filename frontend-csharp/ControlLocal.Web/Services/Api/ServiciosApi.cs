@@ -858,6 +858,14 @@ public class HttpReportePropietarioService(ApiClient api) : IReportePropietarioS
             : new ReportePreviewDto(resp.Consultas, resp.Visitas, resp.Objeciones ?? "");
     }
 
+    public Task<byte[]?> DescargarReportePropietarioPdfAsync(
+        string codigoCaptacion,
+        long idReporte,
+        CancellationToken ct = default) =>
+        api.GetBytesAsync(
+            $"captaciones/{Uri.EscapeDataString(codigoCaptacion)}/reportes-propietario/{idReporte}/pdf",
+            ct);
+
     private static object Cuerpo(ReportePropietarioDto r) => new
     {
         periodoInicio = r.PeriodoInicio?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -1498,6 +1506,15 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
             return (await _captaciones.ObtenerAsync(ct)).FirstOrDefault(item => item.Id == id);
         return Mapear(respuesta);
     }
+
+    public Task<byte[]?> DescargarContratoExclusividadPdfAsync(string codigo, CancellationToken ct = default) =>
+        api.GetBytesAsync($"captaciones/{Uri.EscapeDataString(codigo)}/contrato-exclusividad/pdf", ct);
+
+    public Task<byte[]?> DescargarFichaCaptacionPdfAsync(string codigo, CancellationToken ct = default) =>
+        api.GetBytesAsync($"captaciones/{Uri.EscapeDataString(codigo)}/ficha-captacion/pdf", ct);
+
+    public Task<byte[]?> DescargarFichaPropiedadPdfAsync(string codigo, CancellationToken ct = default) =>
+        api.GetBytesAsync($"captaciones/{Uri.EscapeDataString(codigo)}/ficha-propiedad/pdf", ct);
 
     public async Task ResolverBandejaAsync(
         string codigo,

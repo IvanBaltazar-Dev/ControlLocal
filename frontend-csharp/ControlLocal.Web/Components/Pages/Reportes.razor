@@ -1,7 +1,6 @@
 @page "/reportes"
 @inherits SafeComponentBase
 @using System.Globalization
-@using QuestPDF.Fluent
 @inject AppState App
 @inject IIndicadorService Indicadores
 @inject ICaptacionService CaptacionSvc
@@ -21,9 +20,13 @@
             }
         </select>
         <span class="cl-badge gray">@PeriodoActual.Label</span>
-        <button class="cl-btn primary" @onclick="ExportarPdf"><Icon Name="download" Size="13" /> Exportar PDF</button>
+        <button class="cl-btn primary" disabled="@_exportandoPdf" @onclick="ExportarPdf"><Icon Name="download" Size="13" /> @(_exportandoPdf ? "Generando..." : "Exportar PDF")</button>
     </Actions>
     <ChildContent>
+        @if (_errorPdf is not null)
+        {
+            <div class="cl-alert red" style="margin-bottom:14px;"><Icon Name="alert" Size="15" /><span>@_errorPdf</span></div>
+        }
         @if (_cargando)
         {
             <div class="cl-card"><div class="cl-card-body" style="padding:40px;text-align:center;color:#7E8794;">Cargando indicadores…</div></div>
@@ -361,6 +364,8 @@
     private static readonly CultureInfo CulturaPe = CultureInfo.GetCultureInfo("es-PE");
     private bool _cargando = true;
     private bool _cargandoReportes;
+    private bool _exportandoPdf;
+    private string? _errorPdf;
     private IndicadoresDto _ind = IndicadoresDto.Vacio;
     private string _periodo = "6m";
 
@@ -654,8 +659,30 @@
 
     private async Task ExportarPdf()
     {
-        var pdf = new ReporteIndicadoresDocument(Datos, PeriodoActual.Label).GeneratePdf();
-        await Exportar.DescargarPdfAsync(_isAdmin ? "reporte_global" : _isAgente ? "reporte_agente" : "reporte_equipo", pdf);
+        if (_exportandoPdf)
+            return;
+
+        _exportandoPdf = true;
+        _errorPdf = null;
+        try
+        {
+            var pdf = await Indicadores.DescargarReportePdfAsync(_periodo, DisposedToken);
+            if (pdf is null || pdf.Length == 0)
+            {
+                _errorPdf = "El backend no devolvió contenido para el PDF.";
+                return;
+            }
+            await Exportar.DescargarPdfAsync(_isAdmin ? "reporte_global" : _isAgente ? "reporte_agente" : "reporte_equipo", pdf);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _errorPdf = $"No se pudo generar el PDF: {ex.Message}";
+        }
+        finally
+        {
+            _exportandoPdf = false;
+        }
     }
 
     private bool EnPeriodo(DateOnly? fecha) =>

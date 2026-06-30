@@ -702,21 +702,26 @@ else
 
     private async Task DescargarFichaCaptacion()
     {
-        var pdf = CaptacionDocumentosPdf.FichaCaptacion(_cap, _local);
+        var pdf = await CaptacionSvc.DescargarFichaCaptacionPdfAsync(_cap.CodigoCaptacion, DisposedToken);
+        if (pdf is null || pdf.Length == 0)
+            return;
         await Exportar.DescargarPdfAsync($"Ficha_captacion_{_cap.CodigoCaptacion}", pdf);
     }
 
     private async Task DescargarContratoExclusividad()
     {
-        var pdf = CaptacionDocumentosPdf.ContratoExclusividad(_cap, _local);
+        var pdf = await CaptacionSvc.DescargarContratoExclusividadPdfAsync(_cap.CodigoCaptacion, DisposedToken);
+        if (pdf is null || pdf.Length == 0)
+            return;
         await Exportar.DescargarPdfAsync($"Contrato_exclusividad_{_cap.CodigoCaptacion}", pdf);
     }
 
     // Exporta un reporte de avance ya registrado (persistido en el backend) como PDF descargable.
     private async Task DescargarReporte(ReportePropietarioDto r)
     {
-        var canal = EnumCatalog.LabelFor(EnumCatalog.CanalesContacto, r.CanalEnvio);
-        var pdf = CaptacionDocumentosPdf.FichaAvancePropietario(_cap, _local, r, canal);
+        var pdf = await ReporteSvc.DescargarReportePropietarioPdfAsync(_cap.CodigoCaptacion, r.Id, DisposedToken);
+        if (pdf is null || pdf.Length == 0)
+            return;
         var sufijo = r.FechaReporte?.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture)
                      ?? r.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         await Exportar.DescargarPdfAsync($"Reporte_propietario_{_cap.CodigoCaptacion}_{sufijo}", pdf);

@@ -101,6 +101,8 @@ public interface IReportePropietarioService
 
     // Valores derivados del periodo (consultas/visitas/objeciones) para previsualizar antes de registrar.
     Task<ReportePreviewDto> PreviewAsync(long idCaptacion, DateTime? desde, DateTime? hasta, CancellationToken ct = default);
+
+    Task<byte[]?> DescargarReportePropietarioPdfAsync(string codigoCaptacion, long idReporte, CancellationToken ct = default);
 }
 
 // Requerimientos de cliente (perfil de busqueda). Crear/actualizar vincula al cliente y entra al matching.
@@ -200,6 +202,9 @@ public interface ICaptacionService
     Task<IReadOnlyList<BandejaCaptacionDto>> RefrescarBandejaAsync(CancellationToken ct = default);
     Task<CaptacionDto?> ObtenerPorCodigoAsync(string codigo, CancellationToken ct = default);
     Task<CaptacionDto?> ObtenerPorIdAsync(long id, CancellationToken ct = default);
+    Task<byte[]?> DescargarContratoExclusividadPdfAsync(string codigo, CancellationToken ct = default);
+    Task<byte[]?> DescargarFichaCaptacionPdfAsync(string codigo, CancellationToken ct = default);
+    Task<byte[]?> DescargarFichaPropiedadPdfAsync(string codigo, CancellationToken ct = default);
     Task ResolverBandejaAsync(string codigo, string decision, string? observacion, CancellationToken ct = default);
     Task ReasignarBandejaAsync(string codigo, long idNuevoAgente, string motivo, CancellationToken ct = default);
     Task CerrarAsync(long id, string motivo, CancellationToken ct = default);

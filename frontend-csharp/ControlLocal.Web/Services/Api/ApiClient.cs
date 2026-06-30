@@ -118,6 +118,7 @@ public class ApiClient
     public async Task<byte[]?> GetBytesAsync(string ruta, CancellationToken ct = default)
     {
         using var solicitud = Solicitud(HttpMethod.Get, ruta);
+        solicitud.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
         using var respuesta = await EnviarAsync(solicitud, ct);
         await ValidarRespuestaAsync(respuesta, ct);
         return await respuesta.Content.ReadAsByteArrayAsync(ct);
@@ -265,8 +266,11 @@ public class ApiClient
             {
                 // La respuesta puede venir vacia o no ser JSON.
             }
+            var estado = $"HTTP {(int)respuesta.StatusCode} {respuesta.ReasonPhrase}".Trim();
+            var destino = respuesta.RequestMessage?.RequestUri?.ToString();
+            var detalle = string.IsNullOrWhiteSpace(mensaje) ? "No se pudo completar la operacion." : mensaje;
             throw new InvalidOperationException(
-                string.IsNullOrWhiteSpace(mensaje) ? "No se pudo completar la operacion." : mensaje);
+                string.IsNullOrWhiteSpace(destino) ? $"{estado}. {detalle}" : $"{estado}. {detalle} ({destino})");
         }
     }
 

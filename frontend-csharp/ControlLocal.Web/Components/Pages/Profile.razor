@@ -120,12 +120,14 @@
                         <div class="profile-phone-input">
                             <span>+51</span>
                             <input id="telefono"
-                                   value="@_telefono"
-                                   inputmode="numeric"
-                                   maxlength="9"
-                                   autocomplete="tel"
-                                   placeholder="999999999"
-                                   @oninput="OnTelefonoInput" />
+                                     type="text"
+                                     value="@_telefono"
+                                     inputmode="numeric"
+                                     pattern="[0-9]*"
+                                     maxlength="9"
+                                     autocomplete="tel"
+                                     placeholder="999999999"
+                                     @oninput="OnTelefonoInput" />
                         </div>
                         <button type="button" class="cl-btn primary" @onclick="GuardarTelefono">
                             <Icon Name="save" Size="14" />

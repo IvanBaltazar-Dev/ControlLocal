@@ -64,9 +64,16 @@
                                 <td>
                                     @if (App.Role == Roles.Agente)
                                     {
-                                        <RowActions Items="@(new[] { "view", "edit" })"
+                                        var acciones = c.Estado == "Activo"
+                                            ? new[] { "view", "edit", "disable" }
+                                            : new[] { "view", "edit", "enable" };
+                                        <RowActions Items="@acciones"
+                                                    DisableTitle="Desactivar cliente"
+                                                    EnableTitle="Reactivar cliente"
                                                     OnView="@(() => App.Navigate($"cliente-detail/{c.Id}"))"
-                                                    OnEdit="@(() => App.Navigate($"cliente-form/{c.Id}"))" />
+                                                    OnEdit="@(() => App.Navigate($"cliente-form/{c.Id}"))"
+                                                    OnDisable="@(() => SolicitarDesactivar(c))"
+                                                    OnEnable="@(() => SolicitarReactivar(c))" />
                                     }
                                     else
                                     {
@@ -89,6 +96,24 @@
             </div>
         </div>
         <Pagination Total="filtrados.Count" @bind-Page="_pagina" />
+
+        <ConfirmDialog Open="_confirmDesactivar" Tone="red" Icon="lock"
+                       Title="Desactivar cliente interesado"
+                       Desc="@($"Estás por desactivar a {_accion?.Nombre}. No aparecerá disponible para nuevas oportunidades comerciales. Sus oportunidades en curso seguirán visibles.")"
+                       ConfirmLabel="Desactivar" CancelLabel="Cancelar"
+                       Busy="@_procesandoEstado"
+                       OnClose="@(() => _confirmDesactivar = false)"
+                       OnConfirm="@(() => EjecutarCambioEstadoAsync("Inactivo"))" />
+
+        <ConfirmDialog Open="_confirmReactivar" Tone="green" Icon="check"
+                       Title="Reactivar cliente interesado"
+                       Desc="@($"Vas a reactivar a {_accion?.Nombre}. Volverá a estar disponible para asociar nuevas oportunidades.")"
+                       ConfirmLabel="Reactivar" CancelLabel="Cancelar"
+                       Busy="@_procesandoEstado"
+                       OnClose="@(() => _confirmReactivar = false)"
+                       OnConfirm="@(() => EjecutarCambioEstadoAsync("Activo"))" />
+
+        <Toast Show="_toast" Tone="@_toastTone">@_toastMsg</Toast>
     </ChildContent>
 </AppShell>
 
@@ -135,4 +160,83 @@
         TextoFiltro.Contiene(c.Nombre, q)
         || TextoFiltro.Contiene(c.NumeroDocumento, q)
         || TextoFiltro.Contiene(c.RubroInteres, q);
+
+    private ClienteInteresadoDto? _accion;
+    private bool _confirmDesactivar;
+    private bool _confirmReactivar;
+    private bool _procesandoEstado;
+    private bool _toast;
+    private string _toastTone = "green";
+    private string _toastMsg = "";
+
+    private void SolicitarDesactivar(ClienteInteresadoDto cliente)
+    {
+        _accion = cliente;
+        _confirmDesactivar = true;
+    }
+
+    private void SolicitarReactivar(ClienteInteresadoDto cliente)
+    {
+        _accion = cliente;
+        _confirmReactivar = true;
+    }
+
+    private async Task EjecutarCambioEstadoAsync(string nuevoEstado)
+    {
+        if (_accion is null || _procesandoEstado) return;
+        var objetivo = _accion;
+        _procesandoEstado = true;
+        try
+        {
+            StateHasChanged();
+            var dto = ClonarConEstado(objetivo, nuevoEstado);
+            await ClienteSvc.ActualizarAsync(dto);
+
+            _toastMsg = nuevoEstado == "Activo"
+                ? $"Cliente {objetivo.Nombre} reactivado correctamente."
+                : $"Cliente {objetivo.Nombre} desactivado correctamente.";
+            _toastTone = nuevoEstado == "Activo" ? "green" : "blue";
+            _toast = true;
+
+            Todos = await ClienteSvc.RefrescarAsync();
+        }
+        catch (Exception ex)
+        {
+            _toastMsg = $"No se pudo cambiar el estado: {ex.Message}";
+            _toastTone = "red";
+            _toast = true;
+        }
+        finally
+        {
+            _procesandoEstado = false;
+            _confirmDesactivar = false;
+            _confirmReactivar = false;
+            _accion = null;
+            StateHasChanged();
+            _ = OcultarToastAsync();
+        }
+    }
+
+    private async Task OcultarToastAsync()
+    {
+        await Task.Delay(2800);
+        _toast = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static ClienteInteresadoDto ClonarConEstado(ClienteInteresadoDto origen, string estado) => new()
+    {
+        Id = origen.Id,
+        Nombre = origen.Nombre,
+        TipoPersona = origen.TipoPersona,
+        TipoDocumento = origen.TipoDocumento,
+        NumeroDocumento = origen.NumeroDocumento,
+        Telefono = origen.Telefono,
+        Correo = origen.Correo,
+        RubroInteres = origen.RubroInteres,
+        Estado = estado,
+        ConsentimientoContacto = origen.ConsentimientoContacto,
+        ConsentimientoUsoDato = origen.ConsentimientoUsoDato,
+        FechaCreacion = origen.FechaCreacion,
+    };
 }

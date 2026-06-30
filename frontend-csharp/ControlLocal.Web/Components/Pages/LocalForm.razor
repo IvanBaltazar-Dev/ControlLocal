@@ -19,20 +19,69 @@
                 <FormSection Num="1" Title="Propietario del local" Sub="Vincula un propietario ya registrado o crea uno nuevo">
                     <div class="cl-grid c2">
                         <Field Label="Propietario" Required="true">
-                            <select @bind="_propietarioId" disabled="@_isEdit">
-                                <option value="0">— Selecciona un propietario —</option>
-                                @foreach (var p in _propietarios)
-                                {
-                                    <option value="@p.Id">@p.Nombre</option>
-                                }
-                            </select>
-                            @if (_isEdit)
+                            @if (_isEdit && PropietarioSeleccionado is not null)
                             {
+                                <div style="@PropPickStyle(true)">
+                                    <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@PropIniciales(PropietarioSeleccionado.Nombre)</span>
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@PropietarioSeleccionado.Nombre</div>
+                                        <div class="cl-muted" style="font-size:11px;">@PropietarioSeleccionado.TipoPersona · @PropietarioSeleccionado.NumeroDocumento</div>
+                                    </div>
+                                    <Icon Name="check" Size="15" Color="#005BFF" />
+                                </div>
                                 <div class="cl-muted" style="font-size:11px;margin-top:6px;">No se puede cambiar el propietario. Contacta con administración si necesitas reasignar.</div>
+                            }
+                            else
+                            {
+                                <input class="cl-input search" type="search"
+                                       placeholder="Escribe para buscar por nombre, razón social o documento…"
+                                       value="@_busquedaPropietario"
+                                       @oninput="OnBusquedaPropietario"
+                                       @onfocus="@(() => _desplegarPropietarios = true)" />
+
+                                <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                                    @if (_desplegarPropietarios || _propietarioId == 0)
+                                    {
+                                        @foreach (var p in PropietariosDisponibles)
+                                        {
+                                            var sel = _propietarioId == p.Id;
+                                            <div role="button" tabindex="0"
+                                                 style="@PropPickStyle(sel)"
+                                                 @onclick="@(() => SeleccionarPropietario(p.Id))">
+                                                <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@PropIniciales(p.Nombre)</span>
+                                                <div style="flex:1;min-width:0;">
+                                                    <div style="font-weight:600;font-size:13px;">@p.Nombre</div>
+                                                    <div class="cl-muted" style="font-size:11px;">@p.TipoPersona · @p.NumeroDocumento</div>
+                                                </div>
+                                                @if (sel)
+                                                {
+                                                    <Icon Name="check" Size="15" Color="#005BFF" />
+                                                }
+                                            </div>
+                                        }
+                                        @if (!PropietariosDisponibles.Any())
+                                        {
+                                            <div class="cl-help">No hay propietarios que coincidan con la búsqueda.</div>
+                                        }
+                                    }
+                                    else if (PropietarioSeleccionado is not null)
+                                    {
+                                        <div role="button" tabindex="0"
+                                             style="@PropPickStyle(true)"
+                                             @onclick="@(() => _desplegarPropietarios = true)">
+                                            <span class="cl-avatar" style="width:26px;height:26px;font-size:10px;flex:0 0 26px;">@PropIniciales(PropietarioSeleccionado.Nombre)</span>
+                                            <div style="flex:1;min-width:0;">
+                                                <div style="font-weight:600;font-size:13px;">@PropietarioSeleccionado.Nombre</div>
+                                                <div class="cl-muted" style="font-size:11px;">@PropietarioSeleccionado.TipoPersona · @PropietarioSeleccionado.NumeroDocumento</div>
+                                            </div>
+                                            <Icon Name="check" Size="15" Color="#005BFF" />
+                                        </div>
+                                    }
+                                </div>
                             }
                         </Field>
                         <Field Label="&nbsp;">
-                            <button class="cl-btn" @onclick="@(() => App.Navigate("owner-form"))"><Icon Name="plus" Size="13" /> Nuevo propietario</button>
+                            <button class="cl-btn" @onclick="@(() => App.Navigate("owner-form"))" disabled="@_isEdit"><Icon Name="plus" Size="13" /> Nuevo propietario</button>
                         </Field>
                     </div>
                 </FormSection>
@@ -42,12 +91,34 @@
                         <Field Label="Dirección" Required="true"><input placeholder="Av. / Calle, número" @bind="_direccion" @bind:event="oninput" /></Field>
                         <Field Label="Zona o urbanización"><input placeholder="Urbanización, sector o referencia" @bind="_zonaUrbanizacion" /></Field>
                         <Field Label="Distrito" Required="true">
-                            <select @bind="_distrito">
-                                @foreach (var distrito in Distritos)
-                                {
-                                    <option value="@distrito">@distrito</option>
-                                }
-                            </select>
+                            <input class="cl-input search" type="search"
+                                   placeholder="Escribe para buscar distrito…"
+                                   value="@(_desplegarDistritos ? _busquedaDistrito : _distrito)"
+                                   @oninput="OnBusquedaDistrito"
+                                   @onfocus="@(() => { _busquedaDistrito = string.Empty; _desplegarDistritos = true; })" />
+
+                            @if (_desplegarDistritos)
+                            {
+                                <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;border:1px solid var(--c-border);border-radius:10px;background:#fff;padding:6px;">
+                                    @foreach (var d in DistritosDisponibles)
+                                    {
+                                        var sel = _distrito == d;
+                                        <div role="button" tabindex="0"
+                                             style="@DistritoPickStyle(sel)"
+                                             @onclick="@(() => SeleccionarDistrito(d))">
+                                            <span style="flex:1;min-width:0;font-size:13px;@(sel ? "font-weight:600;" : "")">@d</span>
+                                            @if (sel)
+                                            {
+                                                <Icon Name="check" Size="14" Color="#005BFF" />
+                                            }
+                                        </div>
+                                    }
+                                    @if (!DistritosDisponibles.Any())
+                                    {
+                                        <div class="cl-help" style="padding:8px;">No hay distritos que coincidan.</div>
+                                    }
+                                </div>
+                            }
                         </Field>
                         <Field Label="Provincia"><input value="Lima" disabled="true" /></Field>
                         <Field Label="Latitud"><input type="number" step="0.0000001" @bind="_geoLat" placeholder="-12.1234567" /></Field>
@@ -172,9 +243,74 @@
     private string? _err;
     private IReadOnlyList<PropietarioDto> _propietarios = new List<PropietarioDto>();
 
+    private string _busquedaPropietario = "";
+    private bool _desplegarPropietarios = false;
+
+    private string _busquedaDistrito = "";
+    private bool _desplegarDistritos = false;
+
+    private IEnumerable<string> DistritosDisponibles =>
+        Distritos.Where(d => TextoFiltro.Contiene(d, _busquedaDistrito));
+
+    private void OnBusquedaDistrito(ChangeEventArgs e)
+    {
+        _busquedaDistrito = e.Value?.ToString() ?? "";
+        _desplegarDistritos = true;
+    }
+
+    private void SeleccionarDistrito(string distrito)
+    {
+        _distrito = distrito;
+        _busquedaDistrito = "";
+        _desplegarDistritos = false;
+    }
+
+    private static string DistritoPickStyle(bool sel)
+    {
+        var bg = sel ? "#EAF1FF" : "transparent";
+        return $"display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:{bg};cursor:pointer;";
+    }
+
+    private IEnumerable<PropietarioDto> PropietariosDisponibles =>
+        _propietarios
+            .Where(p => TextoFiltro.Contiene(p.Nombre, _busquedaPropietario)
+                || TextoFiltro.Contiene(p.NumeroDocumento, _busquedaPropietario)
+                || TextoFiltro.Contiene(p.TipoPersona, _busquedaPropietario))
+            .OrderBy(p => p.Nombre);
+
+    private PropietarioDto? PropietarioSeleccionado =>
+        _propietarios.FirstOrDefault(p => p.Id == _propietarioId);
+
+    private void OnBusquedaPropietario(ChangeEventArgs e)
+    {
+        _busquedaPropietario = e.Value?.ToString() ?? "";
+        _desplegarPropietarios = true;
+    }
+
+    private void SeleccionarPropietario(long id)
+    {
+        _propietarioId = id;
+        _desplegarPropietarios = false;
+        _busquedaPropietario = "";
+    }
+
+    private static string PropPickStyle(bool sel)
+    {
+        var border = sel ? "#005BFF" : "var(--c-border)";
+        var bg = sel ? "#EAF1FF" : "#fff";
+        return $"display:flex;align-items:center;gap:10px;padding:9px 11px;border:1.5px solid {border};border-radius:10px;background:{bg};cursor:pointer;";
+    }
+
+    private static string PropIniciales(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre)) return "?";
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(partes.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+
     protected override async Task OnInitializedAsync()
     {
-        _propietarios = await PropSvc.AllAsync();
+        _propietarios = await PropSvc.RefrescarAsync();
     }
 
     protected override async Task OnParametersSetAsync()

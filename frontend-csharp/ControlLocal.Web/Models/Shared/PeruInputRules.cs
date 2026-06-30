@@ -4,7 +4,10 @@ public static class PeruInputRules
 {
     public const string TelefonoMensaje = "El teléfono debe tener 9 dígitos.";
     public const string DniMensaje = "El DNI debe tener 8 dígitos.";
+    public const string DniInvalidoMensaje = "El DNI ingresado no es válido.";
     public const string RucMensaje = "El RUC debe tener 11 dígitos.";
+    public const string RucPrefijoMensaje = "El RUC debe iniciar con 10, 15, 17 o 20.";
+    public const string RucDigitoVerificadorMensaje = "El RUC ingresado no es válido (dígito verificador incorrecto).";
 
     public static string Digitos(string? valor, int maxLength)
     {
@@ -52,10 +55,44 @@ public static class PeruInputRules
         var digitos = new string((valor ?? "").Where(char.IsDigit).ToArray());
         return tipo switch
         {
-            "D" when digitos.Length != 8 => DniMensaje,
-            "R" when digitos.Length != 11 => RucMensaje,
+            "D" => ValidarDni(digitos),
+            "R" => ValidarRuc(digitos),
             _ => null,
         };
+    }
+
+    // DNI peruano: exactamente 8 dígitos, no todos iguales (00000000, 11111111, ...).
+    // SUNAT/RENIEC no expone un dígito verificador público, así que la validación
+    // estructural se limita a la longitud y a descartar el patrón trivial.
+    private static string? ValidarDni(string digitos)
+    {
+        if (digitos.Length != 8) return DniMensaje;
+        if (digitos.Distinct().Count() == 1) return DniInvalidoMensaje;
+        return null;
+    }
+
+    // RUC peruano (SUNAT): 11 dígitos, inicia con 10/15/17/20 y el último dígito es
+    // el verificador calculado por módulo 11 sobre los 10 primeros con los pesos
+    // 5,4,3,2,7,6,5,4,3,2.
+    private static string? ValidarRuc(string digitos)
+    {
+        if (digitos.Length != 11) return RucMensaje;
+
+        var prefijo = digitos[..2];
+        if (prefijo is not ("10" or "15" or "17" or "20"))
+            return RucPrefijoMensaje;
+
+        int[] pesos = { 5, 4, 3, 2, 7, 6, 5, 4, 3, 2 };
+        var suma = 0;
+        for (var i = 0; i < 10; i++)
+            suma += (digitos[i] - '0') * pesos[i];
+
+        var resto = suma % 11;
+        var esperado = 11 - resto;
+        if (esperado == 10) esperado = 0;
+        else if (esperado == 11) esperado = 1;
+
+        return (digitos[10] - '0') == esperado ? null : RucDigitoVerificadorMensaje;
     }
 
     private static string NormalizarTipoDocumento(string? tipoDocumento) =>

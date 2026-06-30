@@ -71,7 +71,12 @@
                                 }
                             </select>
                         </Field>
-                        <Field Label="Precio referencial (USD/mes)" Required="true"><input placeholder="1 500" @bind="_precioRef" @bind:event="oninput" type="number" /></Field>
+                        <Field Label="Precio referencial (USD/mes)" Required="true"><input type="number"
+                                                                                       min="0"
+                                                                                       step="0.01"
+                                                                                       placeholder="1500"
+                                                                                       @bind="_precioRef"
+                                                                                       @bind:event="oninput" /></Field>
                         <Field Label="Disponibilidad"><select @bind="_estado"><option>Disponible</option><option>No disponible</option><option>Inactivo</option></select></Field>
                         <Field Label="Tipo de inmueble"><select @bind="_tipoInmueble">@foreach (var opcion in EnumCatalog.TiposInmueble) { <option value="@opcion.Code">@opcion.Label</option> }</select></Field>
                         <Field Label="Uso"><input value="Comercial" disabled /></Field>

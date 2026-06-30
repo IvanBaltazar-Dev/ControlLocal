@@ -103,7 +103,7 @@ public class InteraccionesRest {
         enriquecerDirectas(fuente);
         Map<Long, OportunidadComercial> ops = contieneOportunidades(fuente) ? mapaOportunidades(fuente) : Map.of();
         List<Dtos.InteraccionResponse> respuestas = fuente.stream()
-                .map(item -> Dtos.InteraccionResponse.desde(item, ops.get(idOportunidad(item))))
+                .map(item -> Dtos.InteraccionResponse.desde(item, oportunidadDe(ops, item)))
                 .filter(item -> coincideBusqueda(q, item))
                 .toList();
         int desdeBusqueda = Math.min((paginaValida - 1) * tamanoValido, respuestas.size());

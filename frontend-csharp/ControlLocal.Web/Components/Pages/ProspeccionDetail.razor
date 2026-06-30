@@ -119,8 +119,22 @@ else
                                 <div class="cl-card-title">Interacciones</div>
                                 <div class="cl-card-sub">Llamadas, reuniones y acuerdos con el propietario</div>
                             </div>
-                            <span class="cl-badge blue">+ @_interacciones.Count</span>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span class="cl-badge blue">+ @_interacciones.Count</span>
+                                <button class="cl-btn sm" type="button" @onclick="RefrescarInteracciones" disabled="@_recargandoInteracciones">
+                                    <Icon Name="refresh" Size="12" /> @(_recargandoInteracciones ? "Cargando..." : "Recargar")
+                                </button>
+                            </div>
                         </div>
+                        @if (_errorInteracciones is not null)
+                        {
+                            <div class="cl-alert amber" style="margin:8px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <span>@_errorInteracciones</span>
+                                <button class="cl-btn sm" type="button" @onclick="RefrescarInteracciones" disabled="@_recargandoInteracciones">
+                                    Reintentar
+                                </button>
+                            </div>
+                        }
                         <div style="overflow:auto;">
                             <table class="cl-table">
                                 <thead>
@@ -143,7 +157,7 @@ else
                                     }
                                 </tbody>
                             </table>
-                            @if (_interacciones.Count == 0)
+                            @if (_interacciones.Count == 0 && _errorInteracciones is null)
                             {
                                 <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Aun no hay interacciones con este propietario.</div>
                             }
@@ -354,6 +368,8 @@ else
     private int _interaccionEditorKey;
     private InteraccionEditor? _interaccionEditor;
     private bool _guardandoInteraccion;
+    private bool _recargandoInteracciones;
+    private string? _errorInteracciones;
     private bool _toast;
     private string _motivo = "";
     private string _toastMsg = "";
@@ -397,14 +413,22 @@ else
     {
         _cargando = true;
         _error = null;
+        _errorInteracciones = null;
+        // Reset duro: si la nueva carga falla con 403/500, no podemos dejar
+        // visible la prospeccion previa (era la fuente del banner rojo con datos
+        // antiguos que confundian al usuario).
+        _p = null;
+        _local = null;
+        _interacciones = new List<InteraccionComercialDto>();
         try
         {
             _p = await ProspeccionSvc.ObtenerAsync(IdParam, DisposedToken);
             if (_p is not null)
             {
-                var interaccionesTask = InteraccionSvc.ListarPorProspeccionAsync(_p.Id, DisposedToken);
                 _local = _p.LocalId > 0 ? await LocalSvc.ByIdAsync(_p.LocalId, DisposedToken) : null;
-                _interacciones = (await interaccionesTask).ToList();
+                // El listado de interacciones tiene su propio manejo de errores: aunque
+                // el backend tarde o falle, la prospeccion y el local ya se renderizan.
+                await CargarInteraccionesAsync(silencioso: true);
             }
         }
         catch (OperationCanceledException)
@@ -422,6 +446,43 @@ else
         _coincidenciasOpen = false;
         _coincidencias = null;
         _coinPage = 1;
+    }
+
+    private async Task CargarInteraccionesAsync(bool silencioso)
+    {
+        if (_p is null) return;
+        _errorInteracciones = null;
+        try
+        {
+            _interacciones = (await InteraccionSvc.ListarPorProspeccionAsync(_p.Id, DisposedToken)).ToList();
+        }
+        catch (OperationCanceledException) when (DisposedToken.IsCancellationRequested)
+        {
+            // Cancelacion real (navego a otra pagina). No es un error visible.
+        }
+        catch (TaskCanceledException)
+        {
+            _errorInteracciones = "El servidor tardo en responder. Pulsa Reintentar para volver a cargar las interacciones.";
+        }
+        catch (Exception ex) when (silencioso)
+        {
+            _errorInteracciones = $"No se pudieron cargar las interacciones: {ex.Message}";
+        }
+    }
+
+    private async Task RefrescarInteracciones()
+    {
+        if (_p is null || _recargandoInteracciones) return;
+        _recargandoInteracciones = true;
+        try
+        {
+            await CargarInteraccionesAsync(silencioso: false);
+        }
+        finally
+        {
+            _recargandoInteracciones = false;
+            await RenderIfAliveAsync();
+        }
     }
 
     private async Task AbrirCoincidencias()
@@ -584,27 +645,44 @@ else
     {
         if (_p is null || _interaccionEditor is null || _guardandoInteraccion)
             return;
+
+        // Conteo previo: si el backend timeoutea pero la interaccion SI quedo registrada,
+        // verificamos contra el conteo despues de refrescar y damos la operacion por exitosa.
+        var conteoPrevio = _interacciones.Count;
+        var estadoPrevio = _p.Estado;
         try
         {
             _guardandoInteraccion = true;
             _modalError = null;
             await RenderIfAliveAsync();
             var ok = await _interaccionEditor.GuardarAsync(DisposedToken);
-            if (!ok)
+
+            // Refresco siempre: el conteo/estado nos dice si quedo guardado aunque el POST haya timeouteado.
+            try
             {
-                _modalError = _interaccionEditor.Error ?? "No se pudo registrar la interaccion. Revisa los datos.";
-                return;
+                _p = await ProspeccionSvc.ObtenerAsync(_p.Id, DisposedToken) ?? _p;
+                _interacciones = (await InteraccionSvc.ListarPorProspeccionAsync(_p.Id, DisposedToken)).ToList();
             }
-            // Registrar una interacción puede avanzar el estado/recontacto: recargamos el expediente.
-            _p = await ProspeccionSvc.ObtenerAsync(_p.Id, DisposedToken) ?? _p;
-            _interacciones = (await InteraccionSvc.ListarPorProspeccionAsync(_p.Id, DisposedToken)).ToList();
-            _interaccionEditor.Reiniciar();
-            _modalInteraccion = false;
-            Notificar("Interaccion registrada.");
+            catch (OperationCanceledException) { }
+            catch { /* si el refresh tambien timeoutea, seguimos con lo que tenemos en memoria */ }
+
+            var quedoGuardada = _interacciones.Count > conteoPrevio || (_p?.Estado != estadoPrevio);
+
+            if (ok || quedoGuardada)
+            {
+                _modalInteraccion = false;
+                _interaccionEditor?.Reiniciar();
+                Notificar("Interacción registrada.");
+            }
+            else
+            {
+                // El editor ya muestra su propio mensaje de error. Si fue por timeout,
+                // lo convertimos a un texto mas claro para el usuario.
+                _interaccionEditor?.DescribirTimeoutFriendly();
+                _modalError = _interaccionEditor?.Error ?? "No se pudo registrar la interaccion. Revisa los datos.";
+            }
         }
-        catch (OperationCanceledException)
-        {
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             _modalError = ex.Message;

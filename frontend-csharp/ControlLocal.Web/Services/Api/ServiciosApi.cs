@@ -2569,32 +2569,39 @@ public class HttpInteraccionService(ApiClient api) : IInteraccionService
         return Mapear(creada);
     }
 
-    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default)
-    {
-        var pagina = await api.GetPaginaAsync<InteraccionApi>(
-            $"interacciones?contexto=OPORTUNIDAD&idOportunidad={oportunidadId}", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
-    }
+    public Task<IReadOnlyList<InteraccionComercialDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default) =>
+        ListarPorContextoAsync("OPORTUNIDAD", "idOportunidad", oportunidadId, ct);
 
-    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorProspeccionAsync(long prospeccionId, CancellationToken ct = default)
-    {
-        var pagina = await api.GetPaginaAsync<InteraccionApi>(
-            $"interacciones?contexto=PROSPECCION&idProspeccion={prospeccionId}", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
-    }
+    public Task<IReadOnlyList<InteraccionComercialDto>> ListarPorProspeccionAsync(long prospeccionId, CancellationToken ct = default) =>
+        ListarPorContextoAsync("PROSPECCION", "idProspeccion", prospeccionId, ct);
 
-    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default)
-    {
-        var pagina = await api.GetPaginaAsync<InteraccionApi>(
-            $"interacciones?contexto=CAPTACION&idCaptacion={captacionId}", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
-    }
+    public Task<IReadOnlyList<InteraccionComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default) =>
+        ListarPorContextoAsync("CAPTACION", "idCaptacion", captacionId, ct);
 
-    public async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default)
+    public Task<IReadOnlyList<InteraccionComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default) =>
+        ListarPorContextoAsync("CLIENTE", "idCliente", clienteId, ct);
+
+    // El backend remoto (RDS) tarda en respondes en el primer GET tras un periodo inactivo
+    // y a veces dispara TaskCanceledException antes de que termine. Hacemos un reintento
+    // unico con un pequeno backoff: si el segundo intento responde, el usuario no ve la
+    // pagina con "0 interacciones" sin saber por que.
+    private async Task<IReadOnlyList<InteraccionComercialDto>> ListarPorContextoAsync(
+        string contexto, string parametroId, long valorId, CancellationToken ct)
     {
-        var pagina = await api.GetPaginaAsync<InteraccionApi>(
-            $"interacciones?contexto=CLIENTE&idCliente={clienteId}", 1, 100, ct);
-        return pagina?.Items.Select(Mapear).ToList() ?? [];
+        var ruta = $"interacciones?contexto={contexto}&{parametroId}={valorId}";
+        try
+        {
+            var pagina = await api.GetPaginaAsync<InteraccionApi>(ruta, 1, 100, ct);
+            return pagina?.Items.Select(Mapear).ToList() ?? [];
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Timeout del HttpClient (no cancelacion del usuario): un reintento corto
+            // suele bastar porque la 2da conexion ya esta caliente.
+            await Task.Delay(TimeSpan.FromMilliseconds(400), ct);
+            var pagina = await api.GetPaginaAsync<InteraccionApi>(ruta, 1, 100, ct);
+            return pagina?.Items.Select(Mapear).ToList() ?? [];
+        }
     }
 
     public async Task<InteraccionComercialDto> ActualizarAsync(long id, string? resultado = null, string? observaciones = null, CancellationToken ct = default)

@@ -346,13 +346,27 @@
     {
         get
         {
+            var nivel = OrdenEstadoProspeccion(_prospeccion?.Estado);
             yield return new PasoProspeccion("Local registrado", FechaRegistroTexto, _l.PropietarioNombre, true, false);
-            yield return new PasoProspeccion("Contacto con propietario", Txt(_prospeccion?.FechaContactoTexto), _prospeccion?.PropietarioNombre, !string.IsNullOrWhiteSpace(_prospeccion?.FechaContactoTexto), _prospeccion?.Estado == "C");
-            yield return new PasoProspeccion("Reunion registrada", Txt(_prospeccion?.FechaReunionTexto), _l.Direccion, !string.IsNullOrWhiteSpace(_prospeccion?.FechaReunionTexto), _prospeccion?.Estado == "R");
-            yield return new PasoProspeccion("Propuesta entregada", Txt(_prospeccion?.FechaPropuestaTexto), ResultadoPropuestaTexto, !string.IsNullOrWhiteSpace(_prospeccion?.FechaPropuestaTexto), _prospeccion?.Estado == "E" || _prospeccion?.Estado == "S");
-            yield return new PasoProspeccion("Captacion", Txt(_prospeccion?.CaptacionCodigo), _prospeccion?.CaptacionCodigo, !string.IsNullOrWhiteSpace(_prospeccion?.CaptacionCodigo), _prospeccion?.Estado == "T");
+            yield return new PasoProspeccion("Contacto con propietario", Txt(_prospeccion?.FechaContactoTexto), _prospeccion?.PropietarioNombre, nivel >= 1 || !string.IsNullOrWhiteSpace(_prospeccion?.FechaContactoTexto), _prospeccion?.Estado == "C");
+            yield return new PasoProspeccion("Reunion registrada", Txt(_prospeccion?.FechaReunionTexto), _l.Direccion, nivel >= 2 || !string.IsNullOrWhiteSpace(_prospeccion?.FechaReunionTexto), _prospeccion?.Estado == "R");
+            yield return new PasoProspeccion("Propuesta entregada", Txt(_prospeccion?.FechaPropuestaTexto), ResultadoPropuestaTexto, nivel >= 3 || !string.IsNullOrWhiteSpace(_prospeccion?.FechaPropuestaTexto), _prospeccion?.Estado == "E" || _prospeccion?.Estado == "S");
+            yield return new PasoProspeccion("Captacion", Txt(_prospeccion?.CaptacionCodigo), _prospeccion?.CaptacionCodigo, nivel >= 4 || !string.IsNullOrWhiteSpace(_prospeccion?.CaptacionCodigo), _prospeccion?.Estado == "T");
         }
     }
+
+    // Si una etapa posterior ya se cumplio (ej. "Reunion" => R), las anteriores
+    // implicitas ("Contactado") deben verse completas aunque el backend no haya
+    // seteado cada fecha intermedia explicitamente.
+    private static int OrdenEstadoProspeccion(string? estado) => estado switch
+    {
+        "C" => 1,
+        "R" => 2,
+        "E" => 3,
+        "S" => 3,
+        "T" => 4,
+        _ => 0,
+    };
 
     private string EtapaMasAvanzada => _prospeccion?.Estado switch
     {

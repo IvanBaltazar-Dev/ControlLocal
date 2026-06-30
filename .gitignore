@@ -77,3 +77,11 @@ Thumbs.db
 # MD PRUEBAS
 # ========================
 COMO_PROBAR.md
+
+# ========================
+# SCRIPTS LOCALES DE DESARROLLO
+# ========================
+# Cada dev maneja sus propios scripts (rutas absolutas, puertos, etc.)
+dev-start.sh
+dev-stop.sh
+dev-redeploy.sh

@@ -90,6 +90,12 @@
 
     // Valida y registra la interacción. Devuelve true si se guardó. El contenedor decide qué hacer
     // luego (cerrar modal, navegar, refrescar historial).
+    //
+    // Importante: el backend (RDS remoto) puede tardar mas que el timeout del HttpClient
+    // y disparar TaskCanceledException/OperationCanceledException aunque la operacion SI
+    // se haya procesado. El contenedor (p.ej. ProspeccionDetail) debe verificar el estado
+    // tras un PostTimeout para decidir si confirmar la operacion. Aqui marcamos un Error
+    // descriptivo y devolvemos false; el llamante decide consultar la lista actualizada.
     public async Task<bool> GuardarAsync(CancellationToken ct = default)
     {
         if (!Validar())
@@ -117,6 +123,26 @@
             Error = ex.Message;
             return false;
         }
+        catch (OperationCanceledException)
+        {
+            // Marker para que el contenedor pueda detectar este caso especifico
+            // y verificar contra el backend si la operacion quedo registrada.
+            Error = PostTimeoutMarker;
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            return false;
+        }
+    }
+
+    public const string PostTimeoutMarker = "__POST_TIMEOUT__";
+
+    public void DescribirTimeoutFriendly()
+    {
+        if (Error == PostTimeoutMarker)
+            Error = "El servidor tarda en responder. Si la operación no aparece, intenta de nuevo.";
     }
 
     // Limpia el formulario (al cambiar de contexto o tras guardar en un modal reutilizable).

@@ -11,7 +11,10 @@ public class ApiOptions
     public const string Seccion = "Api";
 
     public string BaseUrl { get; set; } = "http://localhost:8080/controllocal/Api";
-    public int TimeoutSeconds { get; set; } = 15;
+    // El backend (RDS remoto) puede tardar ~20-30s en la primera consulta tras un periodo
+    // inactivo (cold start). 15s era muy ajustado y provocaba TaskCanceledException en
+    // listados de interacciones y dashboards. Se sube a 45s para tolerar el calentamiento.
+    public int TimeoutSeconds { get; set; } = 45;
 }
 
 // Respuesta paginada estándar del API REST (espeja PageResponse del backend).

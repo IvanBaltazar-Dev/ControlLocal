@@ -5,13 +5,13 @@
 
 <PageTitle>Interacciones comerciales - ControlLocal</PageTitle>
 
-<AppShell Active="Interacciones comerciales" Crumbs="@(new[] { "ControlLocal", "Operacion", "Interacciones comerciales" })"
+<AppShell Active="Interacciones comerciales" Crumbs="@(new[] { "ControlLocal", "Operación", "Interacciones comerciales" })"
           Title="Registro de interacciones comerciales"
-          Subtitle="Historial separado por lado de la relacion: cliente y propietario">
+          Subtitle="Historial separado por lado de la relación: cliente y propietario">
     <Actions>
         @if (App.Role == Roles.Agente)
         {
-            <button class="cl-btn primary" @onclick="@(() => App.Navigate("interaccion-form"))"><Icon Name="plus" Size="13" /> Nueva interaccion</button>
+            <button class="cl-btn primary" @onclick="@(() => App.Navigate("interaccion-form"))"><Icon Name="plus" Size="13" /> Nueva interacción</button>
         }
         else
         {
@@ -24,7 +24,7 @@
                 <Tabs Active="@_grupo" OnSelect="CambiarGrupo" Items="_grupos" />
             </div>
             <div class="cl-card-body" style="padding-top:12px;">
-                <FilterBar Search="Buscar persona, codigo, observacion..."
+                <FilterBar Search="Buscar persona, codigo, observación..."
                            Value="@_query"
                            ValueChanged="CambiarBusqueda"
                            ResultCount="@_total"
@@ -55,7 +55,7 @@
                             <th>Cliente/Propietario</th>
                             <th>Canal</th>
                             <th>Resultado</th>
-                            <th>Accion</th>
+                            <th>Acción</th>
                         </tr>
                     </thead>
                     <tbody>

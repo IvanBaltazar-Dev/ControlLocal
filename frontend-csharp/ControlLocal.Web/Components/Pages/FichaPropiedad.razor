@@ -247,7 +247,7 @@
     private bool _exportando;
 
     private List<FotoLocalDto> _fotos = new();
-    
+
     // Variables para la simulación local de subida
     private List<ArchivoPendiente> _archivosPendientes = new();
     private int _fotosTotales => _fotos.Count + _archivosPendientes.Count;
@@ -339,7 +339,7 @@
                 await using var stream = archivo.OpenReadStream(ValidadorArchivos.TamanoMaximo);
                 using var memoria = new MemoryStream();
                 await stream.CopyToAsync(memoria);
-                
+
                 _archivosPendientes.Add(new ArchivoPendiente
                 {
                     Nombre = archivo.Name,
@@ -358,19 +358,18 @@
     {
         _subiendoFoto = true;
         _fotoErr = null;
-        
-        await Task.Delay(600); // Pequeña animación de espera realista
+
+        //await Task.Delay(600); // Pequeña animación de espera realista
 
         try
         {
             foreach (var pendiente in _archivosPendientes)
             {
                 // Código exacto que solucionó el error CS7036
-                _fotos.Add(new FotoLocalDto(
-                    Random.Shared.Next(100, 9999),
-                    pendiente.DataUrl,
-                    pendiente.Nombre
-                ));
+                var base64Data = pendiente.DataUrl.Substring(pendiente.DataUrl.IndexOf(",") + 1);
+                byte[] archivoBytes = Convert.FromBase64String(base64Data);
+                var fotoGuardadaDto = await FotoSvc.SubirAsync(_m.LocalId, pendiente.Nombre, archivoBytes);
+                _fotos.Add(fotoGuardadaDto);
             }
             
             _archivosPendientes.Clear();

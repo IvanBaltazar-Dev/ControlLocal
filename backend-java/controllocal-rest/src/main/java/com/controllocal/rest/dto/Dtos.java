@@ -262,14 +262,27 @@ public final class Dtos {
                                 BigDecimal geoLong, String estadoPublicacion, BigDecimal frente, String zonificacion,
                                 Boolean aptoLicenciaFuncionamiento, BigDecimal cargaElectricaKw,
                                 Integer numeroEstacionamientos, BigDecimal cuotaMantenimiento,
-                                Long idDistrito, LocalDateTime fechaRegistro) {
+                                Long idDistrito, LocalDateTime fechaRegistro,String fotoPortadaClave) {
 
         public static LocalResponse desde(LocalComercial l) {
-            return desde(l, null);
+            return desde(l, null, null);
         }
 
         public static LocalResponse desde(LocalComercial l, String estadoPublicacion) {
-            return new LocalResponse(l.getIdLocal(), l.getCodigoLocal(), l.getDireccion(), l.getDistrito(), l.getMetraje(), l.getPrecioReferencial(), l.getRubroPermitido(), l.getDescripcion(), codigo(l.getEstado()), l.getIdPropietario(), l.getPropietario() != null ? l.getPropietario().getNombresORazonSocial() : null, codigo(l.getTipoInmueble()), codigo(l.getUso()), l.getAmbientes(), l.getAntiguedadAnios(), l.getZonaUrbanizacion(), l.getGeoLat(), l.getGeoLong(), estadoPublicacion, l.getFrente(), l.getZonificacion(), l.getAptoLicenciaFuncionamiento(), l.getCargaElectricaKw(), l.getNumeroEstacionamientos(), l.getCuotaMantenimiento(), l.getIdDistrito(), l.getFechaRegistro());
+            return desde(l, estadoPublicacion, null);
+        }
+
+        public static LocalResponse desde(LocalComercial l, String estadoPublicacion, String fotoPortadaClave) {
+            return new LocalResponse(
+                    l.getIdLocal(), l.getCodigoLocal(), l.getDireccion(), l.getDistrito(), l.getMetraje(),
+                    l.getPrecioReferencial(), l.getRubroPermitido(), l.getDescripcion(), codigo(l.getEstado()),
+                    l.getIdPropietario(), l.getPropietario() != null ? l.getPropietario().getNombresORazonSocial() : null,
+                    codigo(l.getTipoInmueble()), codigo(l.getUso()), l.getAmbientes(), l.getAntiguedadAnios(),
+                    l.getZonaUrbanizacion(), l.getGeoLat(), l.getGeoLong(), estadoPublicacion, l.getFrente(),
+                    l.getZonificacion(), l.getAptoLicenciaFuncionamiento(), l.getCargaElectricaKw(),
+                    l.getNumeroEstacionamientos(), l.getCuotaMantenimiento(), l.getIdDistrito(), l.getFechaRegistro(),
+                    fotoPortadaClave
+            );
         }
     }
 
@@ -376,12 +389,26 @@ public final class Dtos {
                                     String observacionRevision, LocalDateTime fechaRevision, Long idLocal,
                                     String direccionLocal, String distritoLocal, BigDecimal areaM2, String rubro,
                                     String propietarioNombre, Long idAgente, String agenteNombre,
-                                    Long idBrokerRevisor) {
+                                    Long idBrokerRevisor,String fotoPortadaClave) {
 
-        public static CaptacionResponse desde(Captacion c) {
+        public static CaptacionResponse desde(Captacion c, String fotoPortadaClave) {
             LocalComercial local = c.getLocalComercial();
             var agente = c.getAgenteResponsable();
-            return new CaptacionResponse(c.getIdCaptacion(), c.getCodigoCaptacion(), c.getFechaCaptacion(), c.getFechaInicioVigencia(), c.getFechaFinVigencia(), c.getComisionPactada(), c.getObservaciones(), codigo(c.getEstado()), codigo(c.getMotivoOperacion()), c.getUrgencia(), c.getExclusividad(), c.getObservacionRevision(), c.getFechaRevision(), local != null ? local.getIdLocal() : null, local != null ? local.getDireccion() : null, local != null ? local.getDistrito() : null, local != null ? local.getMetraje() : null, local != null ? local.getRubroPermitido() : null, local != null && local.getPropietario() != null ? local.getPropietario().getNombresORazonSocial() : null, agente != null ? agente.getIdAgente() : null, agente != null ? agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null : null, c.getBrokerRevisor() != null ? c.getBrokerRevisor().getIdBroker() : null);
+            return new CaptacionResponse(
+                    c.getIdCaptacion(), c.getCodigoCaptacion(), c.getFechaCaptacion(), c.getFechaInicioVigencia(), c.getFechaFinVigencia(),
+                    c.getComisionPactada(), c.getObservaciones(), codigo(c.getEstado()), codigo(c.getMotivoOperacion()), c.getUrgencia(),
+                    c.getExclusividad(), c.getObservacionRevision(), c.getFechaRevision(),
+                    local != null ? local.getIdLocal() : null,
+                    local != null ? local.getDireccion() : null,
+                    local != null ? local.getDistrito() : null,
+                    local != null ? local.getMetraje() : null,
+                    local != null ? local.getRubroPermitido() : null,
+                    local != null && local.getPropietario() != null ? local.getPropietario().getNombresORazonSocial() : null,
+                    agente != null ? agente.getIdAgente() : null,
+                    agente != null ? agente.getPersona() != null ? agente.getPersona().getNombresORazonSocial() : null : null,
+                    c.getBrokerRevisor() != null ? c.getBrokerRevisor().getIdBroker() : null,
+                    fotoPortadaClave
+            );
         }
     }
 

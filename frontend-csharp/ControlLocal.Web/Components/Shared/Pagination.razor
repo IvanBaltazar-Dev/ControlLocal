@@ -3,20 +3,20 @@
     <span>Mostrando @ShownFrom–@ShownTo de @Total resultados</span>
     <div style="display:flex;gap:4px;">
         <button class="cl-btn sm" disabled="@(PaginaActual == 1)" @onclick="@(() => Ir(PaginaActual - 1))"><Icon Name="chevronLeft" Size="12" /></button>
-        @for (var p = 1; p <= Math.Min(LastPage, 3); p++)
+        
+        @foreach (var p in ObtenerPaginas())
         {
-            var pCopy = p;
-            <button class="cl-btn sm @(PaginaActual == pCopy ? "primary" : "")" @onclick="@(() => Ir(pCopy))">@pCopy</button>
+            if (p < 0)
+            {
+                <button class="cl-btn sm" disabled>…</button>
+            }
+            else
+            {
+                <button class="@(PaginaActual == p ? "cl-btn sm primary" : "cl-btn sm")" @onclick="@(() => Ir(p))">@p</button>
+            }
         }
-        @if (LastPage > 4)
-        {
-            <button class="cl-btn sm" disabled>…</button>
-        }
-        @if (LastPage > 3)
-        {
-            <button class="cl-btn sm @(PaginaActual == LastPage ? "primary" : "")" @onclick="@(() => Ir(LastPage))">@LastPage</button>
-        }
-        <button class="cl-btn sm" disabled="@(PaginaActual == LastPage)" @onclick="@(() => Ir(PaginaActual + 1))"><Icon Name="chevronRight" Size="12" /></button>
+        
+        <button class="cl-btn sm" disabled="@(PaginaActual == LastPage || LastPage == 0)" @onclick="@(() => Ir(PaginaActual + 1))"><Icon Name="chevronRight" Size="12" /></button>
     </div>
 </div>
 
@@ -37,5 +37,40 @@
         if (destino == Page) return;
         Page = destino;
         await PageChanged.InvokeAsync(destino);
+    }
+
+    // Calcula dinámicamente qué botones dibujar
+    private List<int> ObtenerPaginas()
+    {
+        var paginas = new List<int>();
+        
+        if (LastPage <= 5)
+        {
+            for (int i = 1; i <= LastPage; i++) paginas.Add(i);
+            return paginas;
+        }
+
+        int inicio = PaginaActual - 1;
+        int fin = PaginaActual + 1;
+
+        if (PaginaActual == 1) fin = 3;
+        else if (PaginaActual == LastPage) inicio = LastPage - 2;
+
+        inicio = Math.Max(2, inicio);
+        fin = Math.Min(LastPage - 1, fin);
+
+        paginas.Add(1);
+
+        if (inicio == 3) paginas.Add(2);
+        else if (inicio > 3) paginas.Add(-1);
+
+        for (int i = inicio; i <= fin; i++) paginas.Add(i);
+
+        if (fin == LastPage - 2) paginas.Add(LastPage - 1);
+        else if (fin < LastPage - 2) paginas.Add(-1);
+
+        paginas.Add(LastPage);
+
+        return paginas;
     }
 }

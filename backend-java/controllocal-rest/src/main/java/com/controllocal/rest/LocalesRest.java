@@ -361,7 +361,18 @@ public class LocalesRest {
     }
 
     private Dtos.LocalResponse respuesta(LocalComercial local) {
-        return Dtos.LocalResponse.desde(local, publicacionBL.codigoEstadoPublicacion(local.getIdLocal()));
+
+        List<FotoLocal> fotos = locales.listarFotos(local.getIdLocal());
+
+
+        String clavePortada = fotos.isEmpty() ? null : fotos.get(0).getClave();
+
+
+        return Dtos.LocalResponse.desde(
+                local,
+                publicacionBL.codigoEstadoPublicacion(local.getIdLocal()),
+                clavePortada // ¡Aquí pasamos la clave!
+        );
     }
 
     private void registrarProspeccionInicial(LocalComercial local, long idAgente) {

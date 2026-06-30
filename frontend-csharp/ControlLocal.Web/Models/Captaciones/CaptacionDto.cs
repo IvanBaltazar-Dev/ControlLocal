@@ -63,4 +63,5 @@ public class CaptacionDto
     public DateTime? FechaRevision { get; set; }
 
     public string ObservacionRevision { get; set; } = string.Empty;
+    public string? FotoPortadaClave { get; set; }
 }

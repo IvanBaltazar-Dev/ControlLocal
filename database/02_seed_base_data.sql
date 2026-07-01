@@ -684,7 +684,7 @@ CREATE TEMPORARY TABLE seed_captacion_operativo (
 -- y el contrato calcula comision = renta * %comision_pactada.
 INSERT INTO seed_captacion_operativo VALUES
     ('CAP-LIM-2026-001', 'LOC-LIM-2026-001', 'AGE-001', 'BRK-001', '2026-01-10', '2026-01-10', '2026-12-31', 5.00, 'Captacion activa de Valentina Mora.', 'A', '2026-01-11 10:00:00', 'Documentacion conforme.', 3, TRUE),
-    ('CAP-LIM-2026-002', 'LOC-LIM-2026-002', 'AGE-001', 'BRK-001', '2026-02-01', '2026-02-01', '2027-01-31', 5.00, 'Captacion asociada a contrato cerrado.', 'A', '2026-02-02 09:30:00', 'Aprobada para publicacion.', 4, TRUE),
+    ('CAP-LIM-2026-002', 'LOC-LIM-2026-002', 'AGE-001', 'BRK-001', '2026-02-01', '2026-02-01', '2026-03-20', 5.00, 'Captacion asociada a contrato cerrado.', 'C', '2026-03-20 17:00:00', 'Cerrada por alquiler concretado.', 4, TRUE),
     ('CAP-LIM-2026-003', 'LOC-LIM-2026-003', 'AGE-002', 'BRK-001', '2026-04-01', '2026-04-01', '2027-03-31', 4.50, 'Captacion reasignada de Valentina a Javier.', 'A', '2026-04-02 15:00:00', 'Reasignada por capacidad comercial.', 5, TRUE),
     ('CAP-LIM-2026-004', 'LOC-LIM-2026-004', 'AGE-003', NULL, '2026-04-10', '2026-04-10', '2027-04-09', 5.00, 'Pendiente de revision del broker.', 'P', NULL, NULL, 2, FALSE),
     ('CAP-LIM-2026-005', 'LOC-LIM-2026-005', 'AGE-003', 'BRK-002', '2026-04-15', '2026-04-15', '2027-04-14', 4.00, 'Observada por fotos incompletas.', 'O', '2026-04-16 11:00:00', 'Completar fotos interiores y zonificacion.', 4, FALSE),
@@ -1939,8 +1939,8 @@ DROP PROCEDURE IF EXISTS seed_cartera_operativa_masiva$$
 
 CREATE PROCEDURE seed_cartera_operativa_masiva()
 BEGIN
-    DECLARE v_seed_today DATE DEFAULT '2026-06-28';
-    DECLARE v_seed_now DATETIME DEFAULT '2026-06-28 10:00:00';
+    DECLARE v_seed_today DATE DEFAULT '2026-07-01';
+    DECLARE v_seed_now DATETIME DEFAULT '2026-07-01 10:00:00';
     DECLARE v_i INT DEFAULT 1;
     DECLARE v_j INT DEFAULT 1;
     DECLARE v_owner_count INT DEFAULT 520;
@@ -1970,6 +1970,7 @@ BEGIN
     DECLARE v_fecha DATE;
     DECLARE v_fecha_fin DATE;
     DECLARE v_fecha_dt DATETIME;
+    DECLARE v_fecha_cierre DATETIME;
     DECLARE v_price DECIMAL(12,2);
     DECLARE v_amount DECIMAL(12,2);
     DECLARE v_commission_rate DECIMAL(6,2);
@@ -2967,46 +2968,80 @@ BEGIN
 
     SET v_i = 1;
     WHILE v_i <= v_oportunidad_count DO
-        SELECT id_oportunidad, id_agente, fecha_registro
-        INTO v_oportunidad_id, v_agente_id, v_fecha_dt
+        SELECT id_oportunidad, id_agente, fecha_registro, fecha_cierre, estado
+        INTO v_oportunidad_id, v_agente_id, v_fecha_dt, v_fecha_cierre, v_opp_estado
         FROM oportunidad_comercial
         WHERE codigo_oportunidad = CONCAT('OPO-CAR-2026-', LPAD(v_i, 4, '0'))
         LIMIT 1;
+
+        SET v_j = MOD(v_i - 1, 4);
+        SET v_fecha = CASE
+            WHEN v_i BETWEEN 621 AND 716 AND v_opp_estado IN ('A', 'S')
+                THEN DATE_ADD(v_seed_today, INTERVAL (1 + FLOOR((v_i - 621) / 4)) DAY)
+            WHEN v_fecha_cierre IS NOT NULL
+                THEN LEAST(
+                    DATE_ADD(DATE(v_fecha_dt), INTERVAL (2 + MOD(v_i, 5)) DAY),
+                    DATE_SUB(DATE(v_fecha_cierre), INTERVAL 1 DAY),
+                    DATE_SUB(v_seed_today, INTERVAL 1 DAY)
+                )
+            ELSE LEAST(
+                DATE_ADD(DATE(v_fecha_dt), INTERVAL (2 + MOD(v_i, 12)) DAY),
+                DATE_SUB(v_seed_today, INTERVAL 1 DAY)
+            )
+        END;
+        SET v_estado = CASE
+            WHEN v_i BETWEEN 621 AND 716 AND v_opp_estado IN ('A', 'S') THEN
+                CASE MOD(v_i, 8)
+                    WHEN 0 THEN 'C'
+                    WHEN 3 THEN 'G'
+                    WHEN 6 THEN 'G'
+                    ELSE 'P'
+                END
+            WHEN MOD(v_i, 17) = 0 THEN 'N'
+            WHEN MOD(v_i, 13) = 0 THEN 'C'
+            ELSE 'R'
+        END;
 
         INSERT INTO visita (
             fecha_visita, hora_visita, observaciones, estado, resultado,
             id_oportunidad, id_agente, nivel_interes, objecion_principal,
             opinion_precio, proxima_accion
         ) VALUES (
-            CASE WHEN MOD(v_i, 8) = 0 THEN DATE_ADD(v_seed_today, INTERVAL (1 + MOD(v_i, 14)) DAY)
-                 ELSE DATE_ADD(DATE(v_fecha_dt), INTERVAL (4 + MOD(v_i, 18)) DAY)
-            END,
-            MAKETIME(9 + MOD(v_i, 8), CASE WHEN MOD(v_i, 2) = 0 THEN 0 ELSE 30 END, 0),
-            CONCAT('Visita CAR-2026 con seguimiento comercial del interesado.'),
+            v_fecha,
             CASE
-                WHEN MOD(v_i, 8) = 0 THEN 'P'
-                WHEN MOD(v_i, 17) = 0 THEN 'N'
-                WHEN MOD(v_i, 13) = 0 THEN 'C'
-                WHEN MOD(v_i, 11) = 0 THEN 'G'
-                ELSE 'R'
+                WHEN v_i BETWEEN 621 AND 716 AND v_opp_estado IN ('A', 'S') THEN
+                    CASE v_j
+                        WHEN 0 THEN '09:00:00'
+                        WHEN 1 THEN '10:30:00'
+                        WHEN 2 THEN '12:15:00'
+                        ELSE '14:30:00'
+                    END
+                ELSE MAKETIME(9 + MOD(v_i, 8), CASE MOD(v_i, 4) WHEN 0 THEN 0 WHEN 1 THEN 15 WHEN 2 THEN 30 ELSE 45 END, 0)
             END,
-            -- Solo las visitas realizadas (estado 'R') llevan desenlace; el resto va NULL para
-            -- respetar ck_visita_resultado y ck_visita_desenlace_estado. 'R' <=> v_i no divisible
-            -- por 8, 17, 13 ni 11 (mismo criterio que el CASE de estado de arriba).
-            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+            CASE v_estado
+                WHEN 'P' THEN CONCAT('Visita programada para oportunidad ', CONCAT('OPO-CAR-2026-', LPAD(v_i, 4, '0')), ': validar distribucion, frente comercial, aforo y condiciones para licencia.')
+                WHEN 'G' THEN CONCAT('Visita reprogramada para oportunidad ', CONCAT('OPO-CAR-2026-', LPAD(v_i, 4, '0')), ': cliente solicito ajustar horario y mantener evaluacion del local.')
+                WHEN 'C' THEN CONCAT('Visita cancelada para oportunidad ', CONCAT('OPO-CAR-2026-', LPAD(v_i, 4, '0')), ': cliente posterga decision y queda comentario en seguimiento.')
+                WHEN 'N' THEN CONCAT('Visita no realizada para oportunidad ', CONCAT('OPO-CAR-2026-', LPAD(v_i, 4, '0')), ': no se concreto asistencia y se deja trazabilidad comercial.')
+                ELSE CONCAT('Visita realizada para oportunidad ', CONCAT('OPO-CAR-2026-', LPAD(v_i, 4, '0')), ': se revisaron condiciones del inmueble antes del cierre o continuidad de la oportunidad.')
+            END,
+            v_estado,
+            -- Solo las visitas realizadas (estado 'R') llevan desenlace; el resto va NULL
+            -- para respetar ck_visita_resultado y ck_visita_desenlace_estado.
+            CASE WHEN v_estado = 'R'
                  THEN (CASE WHEN MOD(v_i, 5) = 0 THEN 'S' WHEN MOD(v_i, 7) = 0 THEN 'N' ELSE 'I' END)
                  ELSE NULL END,
             v_oportunidad_id,
             v_agente_id,
-            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+            CASE WHEN v_estado = 'R'
                  THEN 1 + MOD(v_i, 5) ELSE NULL END,
-            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+            CASE WHEN v_estado = 'R'
                  THEN (CASE WHEN MOD(v_i, 7) = 0 THEN 'P' WHEN MOD(v_i, 5) = 0 THEN 'C' ELSE 'E' END)
                  ELSE NULL END,
-            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+            CASE WHEN v_estado = 'R'
                  THEN (CASE WHEN MOD(v_i, 6) = 0 THEN 'B' WHEN MOD(v_i, 4) = 0 THEN 'A' ELSE 'J' END)
                  ELSE NULL END,
-            CASE WHEN MOD(v_i, 8) <> 0 AND MOD(v_i, 17) <> 0 AND MOD(v_i, 13) <> 0 AND MOD(v_i, 11) <> 0
+            CASE WHEN v_estado = 'R'
                  THEN (CASE WHEN MOD(v_i, 5) = 0 THEN 'O' WHEN MOD(v_i, 7) = 0 THEN 'D' ELSE 'S' END)
                  ELSE NULL END
         );

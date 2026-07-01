@@ -1834,8 +1834,28 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
 
     public async Task<OportunidadComercialDto?> ByIdAsync(long id, CancellationToken ct = default)
     {
-        var lista = await _cache.ObtenerAsync(ct);
-        return lista.FirstOrDefault(item => item.Id == id);
+        if (id <= 0)
+            return null;
+        var item = await api.GetAsync<OportunidadApi>($"oportunidades/{id}", ct);
+        return item is null ? null : Mapear(item);
+    }
+
+    public async Task<PageResult<OportunidadComercialDto>> ListarPaginaAsync(
+        int pagina = 1,
+        int tamano = 8,
+        CancellationToken ct = default,
+        string? query = null)
+    {
+        var ruta = "oportunidades";
+        if (!string.IsNullOrWhiteSpace(query))
+            ruta += $"?query={Uri.EscapeDataString(query.Trim())}";
+        var page = await api.GetPaginaAsync<OportunidadApi>(ruta, pagina, tamano, ct);
+        var items = page?.Items.Select(Mapear).ToList() ?? [];
+        return new PageResult<OportunidadComercialDto>(
+            items,
+            page?.TotalRecords ?? items.Count,
+            page?.Page ?? pagina,
+            page?.PageSize ?? tamano);
     }
 
     public async Task<IReadOnlyList<OportunidadComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default)
@@ -1922,8 +1942,8 @@ public class HttpOportunidadService(ApiClient api) : IOportunidadService
 
     private static async Task<IReadOnlyList<OportunidadComercialDto>> CargarAsync(ApiClient api, CancellationToken ct)
     {
-        var items = await api.GetTodasPaginasAsync<OportunidadApi>("oportunidades", ct: ct);
-        return items.Select(Mapear).ToList();
+        var pagina = await api.GetPaginaAsync<OportunidadApi>("oportunidades", 1, 100, ct);
+        return pagina?.Items.Select(Mapear).ToList() ?? [];
     }
 
     private static OportunidadComercialDto Mapear(OportunidadApi item) => new()
@@ -2324,8 +2344,55 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
 
     public async Task<VisitaDto?> ByIdAsync(long id, CancellationToken ct = default)
     {
-        var lista = await _cache.ObtenerAsync(ct);
-        return lista.FirstOrDefault(item => item.Id == id);
+        if (id <= 0)
+            return null;
+        var item = await api.GetAsync<VisitaApi>($"visitas/{id}", ct);
+        return item is null ? null : Mapear(item);
+    }
+
+    public async Task<PageResult<VisitaDto>> ListarPaginaAsync(
+        int pagina = 1,
+        int tamano = 8,
+        CancellationToken ct = default,
+        string? estado = null,
+        string? distrito = null,
+        string? query = null)
+    {
+        var page = await api.GetPaginaAsync<VisitaApi>(
+            RutaVisitas(null, estado, distrito, query), pagina, tamano, ct);
+        var items = page?.Items.Select(Mapear).ToList() ?? [];
+        return new PageResult<VisitaDto>(
+            items,
+            page?.TotalRecords ?? items.Count,
+            page?.Page ?? pagina,
+            page?.PageSize ?? tamano);
+    }
+
+    public async Task<IReadOnlyList<VisitaDto>> ListarProximasAsync(
+        int tamano = 8,
+        CancellationToken ct = default)
+    {
+        var page = await api.GetPaginaAsync<VisitaApi>("visitas/proximas", 1, Math.Min(tamano, 8), ct);
+        return page?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<IReadOnlyList<VisitaDto>> ListarMesAsync(
+        int anio,
+        int mes,
+        CancellationToken ct = default)
+    {
+        var page = await api.GetPaginaAsync<VisitaApi>($"visitas/mes?anio={anio}&mes={mes}", 1, 500, ct);
+        return page?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    public async Task<IReadOnlyList<VisitaDto>> ListarPorOportunidadAsync(
+        long oportunidadId,
+        CancellationToken ct = default)
+    {
+        if (oportunidadId <= 0)
+            return [];
+        var page = await api.GetPaginaAsync<VisitaApi>(RutaVisitas(oportunidadId), 1, 100, ct);
+        return page?.Items.Select(Mapear).ToList() ?? [];
     }
 
     public async Task<VisitaDto> ProgramarAsync(VisitaFormRequest request, CancellationToken ct = default)
@@ -2409,6 +2476,24 @@ public class HttpVisitaService(ApiClient api, HttpOportunidadService oportunidad
     {
         var pagina = await api.GetPaginaAsync<VisitaApi>("visitas", 1, 100, ct);
         return pagina?.Items.Select(Mapear).ToList() ?? [];
+    }
+
+    private static string RutaVisitas(
+        long? idOportunidad = null,
+        string? estado = null,
+        string? distrito = null,
+        string? query = null)
+    {
+        var filtros = new List<string>();
+        if (idOportunidad is > 0)
+            filtros.Add($"idOportunidad={idOportunidad.Value}");
+        if (!string.IsNullOrWhiteSpace(estado))
+            filtros.Add($"estado={Uri.EscapeDataString(estado.Trim())}");
+        if (!string.IsNullOrWhiteSpace(distrito))
+            filtros.Add($"distrito={Uri.EscapeDataString(distrito.Trim())}");
+        if (!string.IsNullOrWhiteSpace(query))
+            filtros.Add($"query={Uri.EscapeDataString(query.Trim())}");
+        return filtros.Count == 0 ? "visitas" : $"visitas?{string.Join("&", filtros)}";
     }
 
     private async Task<VisitaDto> ActualizarAsync(long id, Func<Task<VisitaApi?>> operacion, CancellationToken ct = default)

@@ -307,6 +307,8 @@ public interface IOportunidadService
     Task<OportunidadComercialDto?> ByIdAsync(long id, CancellationToken ct = default);
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<OportunidadComercialDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<PageResult<OportunidadComercialDto>> ListarPaginaAsync(
+        int pagina = 1, int tamano = 8, CancellationToken ct = default, string? query = null);
     Task<IReadOnlyList<OportunidadComercialDto>> ListarPorCaptacionAsync(long captacionId, CancellationToken ct = default);
     Task<IReadOnlyList<OportunidadComercialDto>> ListarPorClienteAsync(long clienteId, CancellationToken ct = default);
     Task<OportunidadComercialDto> CrearAsync(OportunidadFormRequest request, CancellationToken ct = default);
@@ -324,6 +326,12 @@ public interface IVisitaService
     Task<VisitaDto?> ByIdAsync(long id, CancellationToken ct = default);
     // Recarga fresca desde el backend (no bloqueante) e invalida la cache de sesion.
     Task<IReadOnlyList<VisitaDto>> RefrescarAsync(CancellationToken ct = default);
+    Task<PageResult<VisitaDto>> ListarPaginaAsync(
+        int pagina = 1, int tamano = 8, CancellationToken ct = default,
+        string? estado = null, string? distrito = null, string? query = null);
+    Task<IReadOnlyList<VisitaDto>> ListarProximasAsync(int tamano = 8, CancellationToken ct = default);
+    Task<IReadOnlyList<VisitaDto>> ListarMesAsync(int anio, int mes, CancellationToken ct = default);
+    Task<IReadOnlyList<VisitaDto>> ListarPorOportunidadAsync(long oportunidadId, CancellationToken ct = default);
     // POST /visitas — programa una nueva visita (estado inicial PROGRAMADA).
     Task<VisitaDto> ProgramarAsync(VisitaFormRequest request, CancellationToken ct = default);
     // PATCH /visitas/{id}/reprogramar — mueve fecha/hora (estado REPROGRAMADA).

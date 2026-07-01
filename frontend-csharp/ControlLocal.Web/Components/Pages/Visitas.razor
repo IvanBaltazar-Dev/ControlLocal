@@ -60,7 +60,7 @@
                             var bg = isToday ? "background:var(--c-primary-50);border-color:var(--c-primary);" : "";
                             <div class="cl-cal-cell" style="@bg">
                                 <span class="cl-cal-day" style="@(isToday ? "font-weight:700;color:var(--c-primary);" : "")">@day</span>
-                                @foreach (var v in visitasDia.Take(3))
+                                @foreach (var v in visitasDia)
                                 {
                                     <button class="cl-cal-visit @EstadoClase(v.Estado)"
                                             title="@($"{v.HoraTexto} · {v.ClienteNombre} · {v.DireccionLocal}")"
@@ -68,23 +68,17 @@
                                         <span class="h">@v.HoraTexto</span> <span class="c">@v.ClienteNombre</span>
                                     </button>
                                 }
-                                @if (visitasDia.Count > 3)
-                                {
-                                    <span class="cl-cal-more">+@(visitasDia.Count - 3) más</span>
-                                }
                             </div>
                         }
                     </div>
                 </div>
             </div>
             <div class="cl-card">
-                <div class="cl-card-head"><div class="cl-card-title">Próximas visitas</div><span class="cl-badge blue">@_proximas.Length</span></div>
+                <div class="cl-card-head"><div class="cl-card-title">Las siguientes 8 visitas</div><span class="cl-badge blue">@_proximas.Length</span></div>
                 <div class="cl-card-body">
                     @if (_proximas.Length > 0)
                     {
-                        var proxVisibles = Paginador.Pagina(_proximas, ref _pagProximas).ToArray();
-                        <Timeline Items="proxVisibles" />
-                        <Pagination Total="_proximas.Length" @bind-Page="_pagProximas" />
+                        <Timeline Items="_proximas" />
                     }
                     else
                     {
@@ -95,16 +89,15 @@
         </div>
 
         <FilterBar Search="Buscar por cliente, local, captación, agente…"
-                   @bind-Value="_query" ResultCount="VisitasFiltradas().Count()"
+                   Value="_query" ValueChanged="OnQueryChanged" ResultCount="_totalVisitas"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
-            <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
+            <FilterSelect Placeholder="Distrito" Options="_distritos" Value="_distrito" ValueChanged="OnDistritoChanged" />
         </FilterBar>
 
         <div class="cl-card">
             <div class="cl-card-body" style="padding:0;">
                 @{
                     var visitasFiltradas = VisitasFiltradas().ToList();
-                    var visitasVisibles = Paginador.Pagina(visitasFiltradas, ref _pagVisitas).ToList();
                 }
                 <table class="cl-table">
                     <thead>
@@ -114,7 +107,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var v in visitasVisibles)
+                        @foreach (var v in visitasFiltradas)
                         {
                             <tr style="@FilaStyle(v)">
                                 <td><span style="font-size:12px;">@v.FechaTexto</span></td>
@@ -172,7 +165,7 @@
                     </div>
                 }
                 <div style="padding:0 14px 14px;">
-                    <Pagination Total="visitasFiltradas.Count" @bind-Page="_pagVisitas" />
+                    <Pagination Total="_totalVisitas" Page="_pagVisitas" PageChanged="CambiarPaginaVisitas" />
                 </div>
             </div>
         </div>
@@ -374,8 +367,9 @@
     // Visitas del mes visible agrupadas por día (para listarlas dentro del calendario).
     private Dictionary<int, List<VisitaDto>> _visitasPorDia = new();
     private Timeline.TimelineItem[] _proximas = Array.Empty<Timeline.TimelineItem>();
-    private int _pagProximas = 1;
     private int _pagVisitas = 1;
+    private int _totalVisitas;
+    private Dictionary<string, int> _conteosPorEstado = new();
 
     private List<VisitaDto> VisitasDelDia(int dia) =>
         _visitasPorDia.TryGetValue(dia, out var lista) ? lista : new();
@@ -404,10 +398,10 @@
     private bool EsHoy(int dia) =>
         _mes.Year == DateTime.Today.Year && _mes.Month == DateTime.Today.Month && dia == DateTime.Today.Day;
 
-    private void CambiarMes(int delta)
+    private async Task CambiarMes(int delta)
     {
         _mes = _mes.AddMonths(delta);
-        Recalcular();
+        await CargarMesAsync();
     }
 
     // Estado de modales y acción en curso. Programar una visita vive en su propia
@@ -435,19 +429,37 @@
 
     private string _filtroEstado = "";
     private IReadOnlyList<VisitaDto> _visitas = [];
+    private IReadOnlyList<VisitaDto> _visitasMes = [];
     private bool _cargando = true;
     private string? _loadError;
 
-    // Recarga fresca desde el backend en cada navegacion (no bloquea el circuito).
-    // _visitas referencia la cache del servicio, asi las mutaciones por fila
-    // (realizar / reprogramar / resultado) se reflejan sin volver a pedir la lista.
     protected override async Task OnInitializedAsync()
+    {
+        await CargarPaginaVisitas(1);
+        await CargarMesAsync();
+        await CargarProximasAsync();
+        await CargarConteosAsync();
+        await AplicarFocusAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_cargando && Focus != _focusAplicado)
+            await AplicarFocusAsync();
+    }
+
+    private async Task CargarPaginaVisitas(int pagina)
     {
         try
         {
-            _visitas = await VisitaSvc.RefrescarAsync(DisposedToken);
-            Recalcular();
-            AplicarFocus();
+            _cargando = true;
+            _loadError = null;
+            var resultado = await VisitaSvc.ListarPaginaAsync(
+                pagina, Paginador.TamanoPagina, DisposedToken,
+                estado: _filtroEstado, distrito: _distrito, query: _query);
+            _visitas = resultado.Items;
+            _totalVisitas = (int)Math.Min(resultado.TotalRecords, int.MaxValue);
+            _pagVisitas = resultado.Page;
         }
         catch (OperationCanceledException)
         {
@@ -459,16 +471,85 @@
         finally
         {
             _cargando = false;
+            await RenderIfAliveAsync();
         }
     }
 
-    protected override void OnParametersSet()
+    private async Task CambiarPaginaVisitas(int pagina)
     {
-        if (!_cargando && Focus != _focusAplicado)
-            AplicarFocus();
+        await CargarPaginaVisitas(pagina);
     }
 
-    private int Contar(string estado) => _visitas.Count(v => v.Estado == estado);
+    private async Task CargarProximasAsync()
+    {
+        try
+        {
+            var proximas = await VisitaSvc.ListarProximasAsync(8, DisposedToken);
+            _proximas = proximas
+                .Select(v => new Timeline.TimelineItem(
+                    $"{v.FechaTexto} · {v.HoraTexto}", v.ClienteNombre, $"{v.DireccionLocal} · {v.CodigoCaptacion}"))
+                .ToArray();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+            _proximas = [];
+        }
+    }
+
+    private async Task CargarConteosAsync()
+    {
+        try
+        {
+            var conteos = new Dictionary<string, int>();
+            foreach (var estado in new[] { "P", "R", "G", "C", "N" })
+            {
+                var pagina = await VisitaSvc.ListarPaginaAsync(1, 1, DisposedToken, estado: estado);
+                conteos[estado] = (int)Math.Min(pagina.TotalRecords, int.MaxValue);
+            }
+            _conteosPorEstado = conteos;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+            _conteosPorEstado = new();
+        }
+    }
+
+    private async Task CargarMesAsync()
+    {
+        try
+        {
+            _visitasMes = await VisitaSvc.ListarMesAsync(_mes.Year, _mes.Month, DisposedToken);
+            Recalcular();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+            _visitasMes = [];
+            Recalcular();
+        }
+    }
+
+    private void ReemplazarVisita(VisitaDto actualizada)
+    {
+        var lista = _visitas.ToList();
+        var idx = lista.FindIndex(item => item.Id == actualizada.Id);
+        if (idx >= 0)
+            lista[idx] = actualizada;
+        _visitas = lista;
+    }
+
+    private int Contar(string estado) =>
+        _conteosPorEstado.TryGetValue(estado, out var total)
+            ? total
+            : _visitas.Count(v => v.Estado == estado);
 
     private bool EsModificable(VisitaDto v) => App.Role == Roles.Agente && (v.Estado is "P" or "G");
     private bool AdmiteResultado(VisitaDto v) =>
@@ -481,20 +562,38 @@
     private string _query = "";
     private string _distrito = "";
 
-    private IReadOnlyList<string> _distritos => _visitas.Select(v => v.DistritoLocal)
+    private IReadOnlyList<string> _distritos => _visitas.Concat(_visitasMes).Select(v => v.DistritoLocal)
         .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
 
     private bool HayFiltros => !string.IsNullOrEmpty(_filtroEstado) || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
 
-    private void LimpiarFiltros() { _filtroEstado = ""; _query = ""; _distrito = ""; _pagVisitas = 1; }
+    private async Task LimpiarFiltros()
+    {
+        _filtroEstado = "";
+        _query = "";
+        _distrito = "";
+        await CargarPaginaVisitas(1);
+    }
 
-    private void ToggleEstado(string code) { _filtroEstado = _filtroEstado == code ? "" : code; _pagVisitas = 1; }
+    private async Task ToggleEstado(string code)
+    {
+        _filtroEstado = _filtroEstado == code ? "" : code;
+        await CargarPaginaVisitas(1);
+    }
 
-    private IEnumerable<VisitaDto> VisitasFiltradas() =>
-        _visitas.Where(v =>
-            (string.IsNullOrEmpty(_filtroEstado) || v.Estado == _filtroEstado) &&
-            (string.IsNullOrEmpty(_distrito) || v.DistritoLocal == _distrito) &&
-            (string.IsNullOrEmpty(_query) || Coincide(v, _query)));
+    private async Task OnQueryChanged(string valor)
+    {
+        _query = valor;
+        await CargarPaginaVisitas(1);
+    }
+
+    private async Task OnDistritoChanged(string valor)
+    {
+        _distrito = valor;
+        await CargarPaginaVisitas(1);
+    }
+
+    private IEnumerable<VisitaDto> VisitasFiltradas() => _visitas;
 
     private string FilaStyle(VisitaDto v) =>
         _focusId == v.Id
@@ -507,17 +606,12 @@
         || TextoFiltro.Contiene(v.CodigoCaptacion, q)
         || TextoFiltro.Contiene(v.NombreAgente, q);
 
-    // Recalcula la agenda (calendario + próximas) a partir de las visitas cargadas.
+    // Recalcula el calendario a partir de todas las visitas del mes visible.
     private void Recalcular()
     {
-        var vivas = _visitas.Where(EsModificable).ToList();
-        _proximas = vivas
-            .Select(v => new Timeline.TimelineItem(
-                $"{v.FechaTexto} · {v.HoraTexto}", v.ClienteNombre, $"{v.DireccionLocal} · {v.CodigoCaptacion}"))
-            .ToArray();
-        // Todas las visitas del mes visible, agrupadas por día y ordenadas por hora,
+        // Visitas del mes visible, agrupadas por día y ordenadas por hora,
         // para listarlas dentro de cada celda del calendario.
-        _visitasPorDia = _visitas
+        _visitasPorDia = _visitasMes
             .Select(v => (Fecha: FechaDe(v.FechaTexto), Visita: v))
             .Where(x => x.Fecha is not null && x.Fecha.Value.Year == _mes.Year && x.Fecha.Value.Month == _mes.Month)
             .GroupBy(x => x.Fecha!.Value.Day)
@@ -541,7 +635,7 @@
         return null;
     }
 
-    private void AplicarFocus()
+    private async Task AplicarFocusAsync()
     {
         if (Focus is not > 0)
             return;
@@ -556,7 +650,13 @@
         _distrito = "";
         _filtroEstado = visita.Estado;
         if (FechaDe(visita.FechaTexto) is { } fecha)
-            _mes = new DateOnly(fecha.Year, fecha.Month, 1);
+        {
+            var mesFocus = new DateOnly(fecha.Year, fecha.Month, 1);
+            var cambioMes = mesFocus != _mes;
+            _mes = mesFocus;
+            if (cambioMes)
+                await CargarMesAsync();
+        }
         Recalcular();
 
         if (AdmiteResultado(visita))
@@ -628,9 +728,13 @@
         {
             _procesando = true;
             await RenderIfAliveAsync();
-            await VisitaSvc.ReprogramarAsync(_target.Id, FormatFecha(_fechaPick), FormatHora(_horaPick), DisposedToken);
+            var actualizada = await VisitaSvc.ReprogramarAsync(_target.Id, FormatFecha(_fechaPick), FormatHora(_horaPick), DisposedToken);
+            ReemplazarVisita(actualizada);
             _modalReprogramar = false;
-            Recalcular();
+            await CargarProximasAsync();
+            await CargarMesAsync();
+            await CargarConteosAsync();
+            await CargarPaginaVisitas(_pagVisitas);
             Notificar("Visita reprogramada correctamente.");
         }
         catch (OperationCanceledException) { }
@@ -649,9 +753,13 @@
         {
             _procesando = true;
             await RenderIfAliveAsync();
-            await VisitaSvc.CancelarAsync(_target.Id, _motivoTmp, DisposedToken);
+            var actualizada = await VisitaSvc.CancelarAsync(_target.Id, _motivoTmp, DisposedToken);
+            ReemplazarVisita(actualizada);
             _modalCancelar = false;
-            Recalcular();
+            await CargarProximasAsync();
+            await CargarMesAsync();
+            await CargarConteosAsync();
+            await CargarPaginaVisitas(_pagVisitas);
             Notificar("Visita cancelada.");
         }
         catch (OperationCanceledException) { }
@@ -670,9 +778,13 @@
         {
             _procesando = true;
             await RenderIfAliveAsync();
-            await VisitaSvc.MarcarRealizadaAsync(_target.Id, DisposedToken);
+            var actualizada = await VisitaSvc.MarcarRealizadaAsync(_target.Id, DisposedToken);
+            ReemplazarVisita(actualizada);
             _modalRealizada = false;
-            Recalcular();
+            await CargarProximasAsync();
+            await CargarMesAsync();
+            await CargarConteosAsync();
+            await CargarPaginaVisitas(_pagVisitas);
             Notificar("Visita marcada como realizada. Ya puedes registrar el resultado.");
         }
         catch (OperationCanceledException) { }
@@ -691,9 +803,13 @@
         {
             _procesando = true;
             await RenderIfAliveAsync();
-            await VisitaSvc.MarcarNoRealizadaAsync(_target.Id, _motivoNoRealizadaTmp, DisposedToken);
+            var actualizada = await VisitaSvc.MarcarNoRealizadaAsync(_target.Id, _motivoNoRealizadaTmp, DisposedToken);
+            ReemplazarVisita(actualizada);
             _modalNoRealizada = false;
-            Recalcular();
+            await CargarProximasAsync();
+            await CargarMesAsync();
+            await CargarConteosAsync();
+            await CargarPaginaVisitas(_pagVisitas);
             Notificar("Visita marcada como no realizada.");
         }
         catch (OperationCanceledException) { }
@@ -717,7 +833,7 @@
         {
             _procesando = true;
             await RenderIfAliveAsync();
-            await VisitaSvc.RegistrarResultadoAsync(_target.Id, new VisitaResultadoRequest
+            var actualizada = await VisitaSvc.RegistrarResultadoAsync(_target.Id, new VisitaResultadoRequest
             {
                 Resultado = _resultadoTmp,
                 Observaciones = string.IsNullOrWhiteSpace(_obsTmp) ? null : _obsTmp.Trim(),
@@ -729,8 +845,12 @@
                 ProximaAccion = MantieneAbierta(_resultadoTmp)
                     && !string.IsNullOrWhiteSpace(_proximaAccionTmp) ? _proximaAccionTmp : null,
             }, DisposedToken);
+            ReemplazarVisita(actualizada);
             _modalResultado = false;
-            Recalcular();
+            await CargarProximasAsync();
+            await CargarMesAsync();
+            await CargarConteosAsync();
+            await CargarPaginaVisitas(_pagVisitas);
             var msg = ImplicaNoContinuidad(_resultadoTmp)
                 ? "Resultado registrado. Motivo de no continuidad guardado y oportunidad cerrada."
                 : "Resultado registrado. La oportunidad sigue en seguimiento.";

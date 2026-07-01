@@ -10,6 +10,7 @@ import com.controllocal.bl.VisitaBusinessLogic;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.OportunidadComercialBusinessLogicImpl;
 import com.controllocal.bl.impl.VisitaBusinessLogicImpl;
+import com.controllocal.dao.impl.VisitaDAOImpl;
 import com.controllocal.model.CodigoEnum;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.OportunidadComercial;
@@ -45,6 +46,7 @@ import jakarta.ws.rs.core.Response;
 public class VisitasRest {
 
     private final VisitaBusinessLogic visitas = new VisitaBusinessLogicImpl();
+    private final VisitaDAOImpl visitasDao = new VisitaDAOImpl();
     private final OportunidadComercialBusinessLogic oportunidades =
             new OportunidadComercialBusinessLogicImpl();
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
@@ -55,16 +57,47 @@ public class VisitasRest {
     @GET
     public PageResponse<Dtos.VisitaResponse> listar(
             @QueryParam("pagina") @DefaultValue("1") int pagina,
-            @QueryParam("tamano") @DefaultValue("10") int tamano) {
-        List<Visita> fuente = visitasDelUsuario(SeguridadRest.usuario(request));
+            @QueryParam("tamano") @DefaultValue("10") int tamano,
+            @QueryParam("idOportunidad") Long idOportunidad,
+            @QueryParam("estado") String estado,
+            @QueryParam("distrito") String distrito,
+            @QueryParam("query") String query) {
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
-        int hasta = Math.min(desde + tamanoValido, fuente.size());
-        List<Dtos.VisitaResponse> items = fuente.subList(desde, hasta).stream()
+        Listado<Visita> listado = visitasDelUsuarioPagina(
+                SeguridadRest.usuario(request), paginaValida, tamanoValido,
+                idOportunidad, estado, distrito, query);
+        List<Dtos.VisitaResponse> items = listado.items().stream()
                 .map(Dtos.VisitaResponse::desde)
                 .toList();
-        return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, listado.total(), paginaValida, tamanoValido);
+    }
+
+    @GET
+    @Path("proximas")
+    public PageResponse<Dtos.VisitaResponse> proximas(
+            @QueryParam("tamano") @DefaultValue("8") int tamano) {
+        int tamanoValido = Math.min(SeguridadRest.tamano(tamano), 8);
+        List<Visita> fuente = visitasProximasDelUsuario(SeguridadRest.usuario(request), tamanoValido);
+        List<Dtos.VisitaResponse> items = fuente.stream()
+                .map(Dtos.VisitaResponse::desde)
+                .toList();
+        return new PageResponse<>(items, items.size(), 1, tamanoValido);
+    }
+
+    @GET
+    @Path("mes")
+    public PageResponse<Dtos.VisitaResponse> mes(
+            @QueryParam("anio") int anio,
+            @QueryParam("mes") int mes) {
+        if (anio < 2000 || anio > 2100 || mes < 1 || mes > 12) {
+            throw ApiException.badRequest("El mes solicitado no es valido.");
+        }
+        List<Visita> fuente = visitasDelMes(SeguridadRest.usuario(request), anio, mes);
+        List<Dtos.VisitaResponse> items = fuente.stream()
+                .map(Dtos.VisitaResponse::desde)
+                .toList();
+        return new PageResponse<>(items, items.size(), 1, Math.max(items.size(), 1));
     }
 
     @GET
@@ -189,9 +222,7 @@ public class VisitasRest {
     private Visita obtenerConAcceso(long id, UsuarioAutenticado usuario) {
         Visita visita = visitas.buscarPorId(id)
                 .orElseThrow(() -> ApiException.noEncontrado("Visita"));
-        boolean permitido = visitasDelUsuario(usuario).stream()
-                .anyMatch(item -> item.getIdVisita().equals(visita.getIdVisita()));
-        if (!permitido) {
+        if (!visitaEnAlcance(visita, usuario)) {
             throw ApiException.prohibido();
         }
         return visita;
@@ -207,24 +238,93 @@ public class VisitasRest {
         return oportunidad;
     }
 
-    private List<Visita> visitasDelUsuario(UsuarioAutenticado usuario) {
-        // Alcance acotado en SQL (no se escanea toda la tabla):
-        // - AGENTE: sus propias visitas.
-        // - ADMIN: todas (para consultar el equipo de cualquier broker desde su ficha).
-        // - BROKER: las de las captaciones que supervisa (semantica por captacion).
+    private Listado<Visita> visitasDelUsuarioPagina(
+            UsuarioAutenticado usuario,
+            int pagina,
+            int tamano,
+            Long idOportunidad,
+            String estado,
+            String distrito,
+            String query) {
+        int offset = (pagina - 1) * tamano;
         if ("AGENTE".equals(usuario.rol())) {
-            return visitas.listarPorAgentes(List.of(usuario.idDominio()));
+            List<Long> agentes = List.of(usuario.idDominio());
+            return new Listado<>(
+                    visitasDao.listarPagina(agentes, null, idOportunidad, estado, distrito, query, offset, tamano),
+                    visitasDao.contar(agentes, null, idOportunidad, estado, distrito, query));
         }
         if (usuario.tieneRol("ADMIN")) {
-            return visitas.listarTodos();
+            return new Listado<>(
+                    visitasDao.listarPagina(null, null, idOportunidad, estado, distrito, query, offset, tamano),
+                    visitasDao.contar(null, null, idOportunidad, estado, distrito, query));
         }
         if (usuario.tieneRol("BROKER")) {
             List<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
                     .map(Captacion::getIdCaptacion)
                     .toList();
-            return visitas.listarPorCaptaciones(permitidas);
+            return new Listado<>(
+                    visitasDao.listarPagina(null, permitidas, idOportunidad, estado, distrito, query, offset, tamano),
+                    visitasDao.contar(null, permitidas, idOportunidad, estado, distrito, query));
         }
         throw ApiException.prohibido();
+    }
+
+    private List<Visita> visitasProximasDelUsuario(UsuarioAutenticado usuario, int tamano) {
+        if ("AGENTE".equals(usuario.rol())) {
+            return visitasDao.listarProximas(List.of(usuario.idDominio()), null, tamano);
+        }
+        if (usuario.tieneRol("ADMIN")) {
+            return visitasDao.listarProximas(null, null, tamano);
+        }
+        if (usuario.tieneRol("BROKER")) {
+            List<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
+                    .map(Captacion::getIdCaptacion)
+                    .toList();
+            return visitasDao.listarProximas(null, permitidas, tamano);
+        }
+        throw ApiException.prohibido();
+    }
+
+    private List<Visita> visitasDelMes(UsuarioAutenticado usuario, int anio, int mes) {
+        if ("AGENTE".equals(usuario.rol())) {
+            return visitasDao.listarMes(List.of(usuario.idDominio()), null, anio, mes);
+        }
+        if (usuario.tieneRol("ADMIN")) {
+            return visitasDao.listarMes(null, null, anio, mes);
+        }
+        if (usuario.tieneRol("BROKER")) {
+            List<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
+                    .map(Captacion::getIdCaptacion)
+                    .toList();
+            return visitasDao.listarMes(null, permitidas, anio, mes);
+        }
+        throw ApiException.prohibido();
+    }
+
+    private boolean visitaEnAlcance(Visita visita, UsuarioAutenticado usuario) {
+        if (usuario.tieneRol("ADMIN")) {
+            return true;
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return visita.getAgenteResponsable() != null
+                    && Long.valueOf(usuario.idDominio())
+                            .equals(visita.getAgenteResponsable().getIdAgente());
+        }
+        if (usuario.tieneRol("BROKER")) {
+            Long idCaptacion = visita.getCaptacion() != null ? visita.getCaptacion().getIdCaptacion() : null;
+            if (idCaptacion == null && visita.getOportunidadComercial() != null
+                    && visita.getOportunidadComercial().getCaptacion() != null) {
+                idCaptacion = visita.getOportunidadComercial().getCaptacion().getIdCaptacion();
+            }
+            Long captacionId = idCaptacion;
+            return captacionId != null
+                    && captaciones.listarPorBroker(usuario.idDominio()).stream()
+                            .anyMatch(item -> item.getIdCaptacion().equals(captacionId));
+        }
+        return false;
+    }
+
+    private record Listado<T>(List<T> items, long total) {
     }
 
     private static <E extends Enum<E> & CodigoEnum> E enumOpcional(Class<E> tipo, String codigo) {

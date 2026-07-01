@@ -5,7 +5,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,6 +56,47 @@ public class VisitaDAOImpl implements VisitaDAO {
             INNER JOIN agente_inmobiliario a ON a.id_agente = v.id_agente
             INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
             INNER JOIN persona ap ON ap.id_persona = au.id_persona
+            """;
+    private static final String COUNT_SQL = """
+            SELECT COUNT(*)
+            FROM visita v
+            INNER JOIN oportunidad_comercial o ON v.id_oportunidad = o.id_oportunidad
+            INNER JOIN cliente_interesado ci ON ci.id_cliente = o.id_cliente
+            INNER JOIN persona cp ON cp.id_persona = ci.id_persona
+            INNER JOIN captacion c ON c.id_captacion = o.id_captacion
+            INNER JOIN local_comercial l ON l.id_local = c.id_local
+            INNER JOIN agente_inmobiliario a ON a.id_agente = v.id_agente
+            INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
+            INNER JOIN persona ap ON ap.id_persona = au.id_persona
+            """;
+    private static final String ORDEN_AGENDA_SQL = """
+             ORDER BY
+                CASE
+                    WHEN v.fecha_visita > CURRENT_DATE
+                        OR (v.fecha_visita = CURRENT_DATE AND v.hora_visita >= CURRENT_TIME)
+                    THEN 0 ELSE 1
+                END ASC,
+                CASE
+                    WHEN v.fecha_visita > CURRENT_DATE
+                        OR (v.fecha_visita = CURRENT_DATE AND v.hora_visita >= CURRENT_TIME)
+                    THEN v.fecha_visita
+                END ASC,
+                CASE
+                    WHEN v.fecha_visita > CURRENT_DATE
+                        OR (v.fecha_visita = CURRENT_DATE AND v.hora_visita >= CURRENT_TIME)
+                    THEN v.hora_visita
+                END ASC,
+                CASE
+                    WHEN v.fecha_visita < CURRENT_DATE
+                        OR (v.fecha_visita = CURRENT_DATE AND v.hora_visita < CURRENT_TIME)
+                    THEN v.fecha_visita
+                END DESC,
+                CASE
+                    WHEN v.fecha_visita < CURRENT_DATE
+                        OR (v.fecha_visita = CURRENT_DATE AND v.hora_visita < CURRENT_TIME)
+                    THEN v.hora_visita
+                END DESC,
+                v.id_visita DESC
             """;
     private static final String UPDATE_SQL = """
             UPDATE visita
@@ -192,6 +235,127 @@ public class VisitaDAOImpl implements VisitaDAO {
         }
     }
 
+    public List<Visita> listarPagina(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacion,
+            int offset,
+            int limit) {
+        return listarPagina(idsAgente, idsCaptacion, null, null, null, null, offset, limit);
+    }
+
+    public List<Visita> listarPagina(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacion,
+            Long idOportunidad,
+            int offset,
+            int limit) {
+        return listarPagina(idsAgente, idsCaptacion, idOportunidad, null, null, null, offset, limit);
+    }
+
+    public List<Visita> listarPagina(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacion,
+            Long idOportunidad,
+            String estado,
+            String distrito,
+            String query,
+            int offset,
+            int limit) {
+        if (alcanceVacio(idsAgente, idsCaptacion)) {
+            return new ArrayList<>();
+        }
+        List<Long> parametros = new ArrayList<>();
+        List<String> textos = new ArrayList<>();
+        String where = whereListado(idsAgente, idsCaptacion, idOportunidad, estado, distrito, query, parametros, textos);
+        return listarSql(where + ORDEN_AGENDA_SQL + " LIMIT ? OFFSET ?",
+                parametros, textos, offset, limit);
+    }
+
+    public long contar(Collection<Long> idsAgente, Collection<Long> idsCaptacion) {
+        return contar(idsAgente, idsCaptacion, null);
+    }
+
+    public long contar(Collection<Long> idsAgente, Collection<Long> idsCaptacion, Long idOportunidad) {
+        return contar(idsAgente, idsCaptacion, idOportunidad, null, null, null);
+    }
+
+    public long contar(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacion,
+            Long idOportunidad,
+            String estado,
+            String distrito,
+            String query) {
+        if (alcanceVacio(idsAgente, idsCaptacion)) {
+            return 0L;
+        }
+        List<Long> parametros = new ArrayList<>();
+        List<String> textos = new ArrayList<>();
+        String where = whereListado(idsAgente, idsCaptacion, idOportunidad, estado, distrito, query, parametros, textos);
+        return contarSql(where, parametros, textos);
+    }
+
+    public List<Visita> listarProximas(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacion,
+            int limit) {
+        if (alcanceVacio(idsAgente, idsCaptacion)) {
+            return new ArrayList<>();
+        }
+        List<Long> parametros = new ArrayList<>();
+        List<String> textos = new ArrayList<>();
+        String where = whereListado(idsAgente, idsCaptacion, null, null, null, null, parametros, textos);
+        String condicionProximas = """
+                v.estado IN ('P','G')
+                AND (
+                    v.fecha_visita > CURRENT_DATE
+                    OR (v.fecha_visita = CURRENT_DATE AND v.hora_visita >= CURRENT_TIME)
+                )
+                """;
+        where = where.isBlank()
+                ? " WHERE " + condicionProximas
+                : where + " AND " + condicionProximas;
+        return listarSql(where + " ORDER BY v.fecha_visita ASC, v.hora_visita ASC, v.id_visita DESC LIMIT ? OFFSET ?",
+                parametros, textos, 0, limit);
+    }
+
+    public List<Visita> listarMes(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacion,
+            int anio,
+            int mes) {
+        if (alcanceVacio(idsAgente, idsCaptacion)) {
+            return new ArrayList<>();
+        }
+        LocalDate desde = LocalDate.of(anio, mes, 1);
+        LocalDate hasta = desde.plusMonths(1);
+        List<Long> parametros = new ArrayList<>();
+        List<String> textos = new ArrayList<>();
+        String where = whereListado(idsAgente, idsCaptacion, null, null, null, null, parametros, textos);
+        String condicionMes = "v.fecha_visita >= ? AND v.fecha_visita < ?";
+        where = where.isBlank()
+                ? " WHERE " + condicionMes
+                : where + " AND " + condicionMes;
+
+        List<Visita> resultado = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+            PreparedStatement ps = conn.prepareStatement(
+                     SELECT_SQL + where + " ORDER BY v.fecha_visita ASC, v.hora_visita ASC, v.id_visita DESC")) {
+            int idx = bindLongs(ps, parametros, 1);
+            idx = bindStrings(ps, textos, idx);
+            JdbcSupport.setDate(ps, idx++, desde);
+            JdbcSupport.setDate(ps, idx, hasta);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar visitas del mes.", e);
+        }
+    }
+
     @Override
     public boolean actualizar(Visita visita) {
         validar(visita, true);
@@ -269,6 +433,106 @@ public class VisitaDAOImpl implements VisitaDAO {
         visita.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_creacion")));
         visita.setFechaActualizacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_actualizacion")));
         return visita;
+    }
+
+    private List<Visita> listarSql(String sufijoSql, List<Long> parametros, List<String> textos, int offset, int limit) {
+        List<Visita> resultado = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + sufijoSql)) {
+            int idx = bindLongs(ps, parametros, 1);
+            idx = bindStrings(ps, textos, idx);
+            ps.setInt(idx++, Math.max(1, Math.min(limit, 500)));
+            ps.setInt(idx, Math.max(0, offset));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar visitas paginadas.", e);
+        }
+    }
+
+    private long contarSql(String where, List<Long> parametros, List<String> textos) {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(COUNT_SQL + where)) {
+            int idx = bindLongs(ps, parametros, 1);
+            bindStrings(ps, textos, idx);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0L;
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar visitas.", e);
+        }
+    }
+
+    private static int bindLongs(PreparedStatement ps, List<Long> parametros, int idx) throws SQLException {
+        for (Long id : parametros) {
+            ps.setLong(idx++, id);
+        }
+        return idx;
+    }
+
+    private static int bindStrings(PreparedStatement ps, List<String> parametros, int idx) throws SQLException {
+        for (String valor : parametros) {
+            ps.setString(idx++, valor);
+        }
+        return idx;
+    }
+
+    private static boolean alcanceVacio(Collection<Long> idsAgente, Collection<Long> idsCaptacion) {
+        return (idsAgente != null && idsAgente.isEmpty())
+                || (idsCaptacion != null && idsCaptacion.isEmpty());
+    }
+
+    private static String whereListado(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacion,
+            Long idOportunidad,
+            String estado,
+            String distrito,
+            String query,
+            List<Long> parametros,
+            List<String> textos) {
+        List<String> condiciones = new ArrayList<>();
+        if (idsAgente != null) {
+            condiciones.add("v.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ")");
+            parametros.addAll(idsAgente);
+        }
+        if (idsCaptacion != null) {
+            condiciones.add("o.id_captacion IN (" + JdbcSupport.placeholders(idsCaptacion.size()) + ")");
+            parametros.addAll(idsCaptacion);
+        }
+        if (idOportunidad != null) {
+            condiciones.add("v.id_oportunidad = ?");
+            parametros.add(idOportunidad);
+        }
+        if (estado != null && !estado.isBlank()) {
+            condiciones.add("v.estado = ?");
+            textos.add(estado.trim());
+        }
+        if (distrito != null && !distrito.isBlank()) {
+            condiciones.add("LOWER(l.distrito) = ?");
+            textos.add(distrito.trim().toLowerCase());
+        }
+        if (query != null && !query.isBlank()) {
+            condiciones.add("""
+                    (
+                        LOWER(o.codigo_oportunidad) LIKE ?
+                        OR LOWER(c.codigo_captacion) LIKE ?
+                        OR LOWER(cp.nombres_o_razon_social) LIKE ?
+                        OR LOWER(l.direccion) LIKE ?
+                        OR LOWER(l.distrito) LIKE ?
+                        OR LOWER(ap.nombres_o_razon_social) LIKE ?
+                    )
+                    """);
+            String patron = "%" + query.trim().toLowerCase() + "%";
+            for (int i = 0; i < 6; i++) {
+                textos.add(patron);
+            }
+        }
+        return condiciones.isEmpty() ? "" : " WHERE " + String.join(" AND ", condiciones);
     }
 
     private void validar(Visita visita, boolean requiereId) {

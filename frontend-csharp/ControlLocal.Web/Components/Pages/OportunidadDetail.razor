@@ -299,17 +299,16 @@ else
         _err = null;
         try
         {
-            var oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
             _op = (long.TryParse(IdParam, out var id)
-                    ? oportunidades.FirstOrDefault(item => item.Id == id)
+                    ? await OportunidadSvc.ByIdAsync(id, DisposedToken)
                     : null)
-                  ?? oportunidades.FirstOrDefault();
+                  ?? (await OportunidadSvc.ListarPaginaAsync(1, 1, DisposedToken)).Items.FirstOrDefault();
             if (_op is null)
                 return;
 
             var captacionTask = CaptacionSvc.ObtenerPorCodigoAsync(_op.CaptacionCodigo, DisposedToken);
-            var visitasTask = VisitaSvc.RefrescarAsync(DisposedToken);
-            var solicitudesTask = SolicitudSvc.RefrescarAsync(DisposedToken);
+            var visitasTask = VisitaSvc.ListarPorOportunidadAsync(_op.Id, DisposedToken);
+            var solicitudesTask = SolicitudSvc.ListarPorOportunidadAsync(_op.Id, DisposedToken);
 
             _cap = await captacionTask;
             _local = _cap is { LocalId: > 0 }
@@ -319,12 +318,8 @@ else
             _publicaciones = _op.PublicacionOrigenId > 0 && _cap is { LocalId: > 0 }
                 ? await PublicacionSvc.ListarPorLocalAsync(_cap.LocalId, DisposedToken)
                 : [];
-            _visitas = (await visitasTask).Where(v => v.OportunidadId == _op.Id).ToList();
-            // Prioriza el vínculo real con la oportunidad; el nombre queda como tolerancia para datos antiguos.
-            _solicitud = (await solicitudesTask).FirstOrDefault(s =>
-                s.OportunidadId == _op.Id
-                || _op.ClienteNombre.Contains(s.ClienteNombre)
-                || s.ClienteNombre.Contains(_op.ClienteNombre));
+            _visitas = (await visitasTask).ToList();
+            _solicitud = (await solicitudesTask).FirstOrDefault();
             _interacciones = (await InteraccionSvc.ListarPorOportunidadAsync(_op.Id, DisposedToken)).ToList();
 
             (_current, _noContinua) = EtapaDe(_op.Estado);

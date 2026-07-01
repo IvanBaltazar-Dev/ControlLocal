@@ -141,16 +141,20 @@
                     <div class="cl-card cl-report-histogram">
                         <div class="cl-card-head">
                             <div>
-                                <div class="cl-card-title">@(_isAdmin ? "Operaciones cerradas en el periodo" : _isAgente ? "Mis cierres en el periodo" : "Cierres del equipo en el periodo")</div>
-                                <div class="cl-card-sub">@(_isAgente ? "Cierres mensuales y conversion propia" : "Cierres mensuales y conversion del alcance seleccionado")</div>
+                                <div class="cl-card-title">@(_isAgente ? "Precio captado vs. precio aceptado, en tus cierres" : "Precio captado vs. precio aceptado, en cierres")</div>
+                                <div class="cl-card-sub">@(_isAgente ? "Solo considera tus cierres: compara la renta final aceptada con el precio referencial de cada captacion" : "Solo considera cierres del alcance: compara la renta final aceptada con el precio referencial de cada captacion")</div>
                             </div>
                         </div>
                         <div class="cl-card-body cl-report-histogram__body">
-                            <ComboChart Bars="Datos.CierresPorMes.Valores"
-                                        Totals="CaptacionesPorMes"
+                            <ComboChart Bars="AceptacionPrecioSerie.AceptadoVisual"
+                                        Totals="AceptacionPrecioSerie.PrecioCaptado"
+                                        BarDisplayValues="AceptacionPrecioSerie.AceptadoReal"
+                                        Tooltips="AceptacionPrecioSerie.Tooltips"
                                         Labels="Datos.CierresPorMes.Etiquetas"
-                                        BarsLabel="Cierres"
-                                        TotalsLabel="Captaciones"
+                                        BarsLabel="Precio aceptado"
+                                        TotalsLabel="Precio captado"
+                                        ValueSuffix="%"
+                                        PeakLabel="Aceptacion mas alta"
                                         Height="230" />
                         </div>
                     </div>
@@ -187,7 +191,7 @@
             </div>
 
             <div class="cl-card" style="margin-top:14px;">
-                <div class="cl-card-head"><div class="cl-card-title">@(_isAgente ? "Ultimos cierres" : _isAdmin ? "Desempeno por broker" : "Desempeno por agente")</div></div>
+                <div class="cl-card-head"><div class="cl-card-title">@(_isAgente ? "Ultimos cierres del periodo" : _isAdmin ? "Desempeno por broker" : "Desempeno por agente")</div></div>
                 <div class="cl-card-body" style="padding:0;">
                     @if (_isAgente)
                     {
@@ -402,9 +406,13 @@
         ? Datos.Indicadores
         : Datos.Indicadores.Where(i => i.Icono != "target").ToArray();
 
-    // Cierres más recientes del agente (mayor Id = más nuevo), para el panel "Últimos cierres".
+    // Cierres mas recientes dentro del periodo visible, coherentes con los KPIs del reporte.
     private IReadOnlyList<ContratoAlquilerDto> UltimosCierres => _contratos
-        .OrderByDescending(c => c.Id).Take(6).ToList();
+        .Where(c => EnPeriodo(c.FechaCierre))
+        .OrderByDescending(c => c.FechaCierre)
+        .ThenByDescending(c => c.Id)
+        .Take(6)
+        .ToList();
 
     private List<ContratoAlquilerDto> CierresEnPeriodo => _contratos
         .Where(c => EnPeriodo(c.FechaCierre))
@@ -430,8 +438,7 @@
     private string UltimoCierreTexto =>
         CierresEnPeriodo.FirstOrDefault()?.FechaCierreTexto is { Length: > 0 } fecha ? fecha : "—";
 
-    // Captaciones por mes (denominador "fantasma" del histograma de cierres).
-    private double[] CaptacionesPorMes => _ind.CaptacionesPorPeriodo.Select(v => (double)v).ToArray();
+    private AceptacionPrecioMensual AceptacionPrecioSerie => ConstruirAceptacionPrecioSerie();
 
     private string MonedaComision
     {
@@ -451,6 +458,81 @@
         : _isAgente
             ? "Generada por tus cierres"
             : "Comisiones brutas del equipo";
+
+    private AceptacionPrecioMensual ConstruirAceptacionPrecioSerie()
+    {
+        var n = Datos.CierresPorMes.Valores.Length;
+        if (n == 0 || _captaciones.Count == 0 || _preciosPorLocal.Count == 0)
+            return new AceptacionPrecioMensual(new double[n], new double[n], new double[n], new string[n]);
+
+        var captacionesPorCodigo = _captaciones
+            .Where(c => !string.IsNullOrWhiteSpace(c.CodigoCaptacion))
+            .GroupBy(c => c.CodigoCaptacion.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var sumAceptacion = new decimal[n];
+        var conteos = new int[n];
+
+        foreach (var contrato in CierresEnPeriodo)
+        {
+            if (!contrato.FechaCierre.HasValue
+                || string.IsNullOrWhiteSpace(contrato.CodigoCaptacion)
+                || contrato.RentaMensual <= 0
+                || !captacionesPorCodigo.TryGetValue(contrato.CodigoCaptacion.Trim(), out var captacion)
+                || captacion.LocalId <= 0
+                || !_preciosPorLocal.TryGetValue(captacion.LocalId, out var precioReferencial)
+                || precioReferencial <= 0)
+            {
+                continue;
+            }
+
+            var idx = IndicePeriodo(contrato.FechaCierre.Value, n);
+            if (idx < 0)
+                continue;
+
+            sumAceptacion[idx] += contrato.RentaMensual / precioReferencial * 100m;
+            conteos[idx]++;
+        }
+
+        var precioCaptado = new double[n];
+        var aceptadoVisual = new double[n];
+        var aceptadoReal = new double[n];
+        var tooltips = new string[n];
+        for (var i = 0; i < n; i++)
+        {
+            if (conteos[i] == 0)
+                continue;
+
+            var aceptacion = (double)(sumAceptacion[i] / conteos[i]);
+            precioCaptado[i] = 100;
+            aceptadoReal[i] = aceptacion;
+            aceptadoVisual[i] = Math.Min(aceptacion, 100);
+            tooltips[i] = TooltipAceptacionPrecio(i, aceptacion, conteos[i]);
+        }
+        return new AceptacionPrecioMensual(precioCaptado, aceptadoVisual, aceptadoReal, tooltips);
+    }
+
+    private string TooltipAceptacionPrecio(int indice, double aceptacion, int cierres)
+    {
+        var etiqueta = indice < Datos.CierresPorMes.Etiquetas.Length
+            ? Datos.CierresPorMes.Etiquetas[indice]
+            : $"Periodo {indice + 1}";
+        var variacion = aceptacion - 100;
+        var variacionTexto = variacion.ToString("+0;-0;0", CulturaPe);
+        var cierreTexto = cierres == 1 ? "cierre" : "cierres";
+        return $"{etiqueta}: mercado acepto {aceptacion.ToString("N0", CulturaPe)}% del precio captado ({variacionTexto}% vs precio ref.) · {cierres} {cierreTexto}";
+    }
+
+    private int IndicePeriodo(DateOnly fecha, int total)
+    {
+        if (PeriodoActual.Dias <= 31)
+        {
+            var idx = fecha.DayNumber - PeriodoInicio.DayNumber;
+            return idx >= 0 && idx < total ? idx : -1;
+        }
+
+        var idxMes = ((fecha.Year - PeriodoInicio.Year) * 12) + fecha.Month - PeriodoInicio.Month;
+        return idxMes >= 0 && idxMes < total ? idxMes : -1;
+    }
 
     private IndicadorOperativoDto Op => _ind.Operativo ?? IndicadorOperativoDto.Vacio;
 
@@ -509,10 +591,11 @@
                 var contratosTask = ContratoSvc.RefrescarAsync(DisposedToken);
                 var capsTask = CaptacionSvc.RefrescarAsync(DisposedToken);
                 var solsTask = SolicitudSvc.RefrescarAsync(DisposedToken);
+                var localesTask = LocalSvc.AllAsync(DisposedToken);
                 _contratos = await contratosTask;
                 _captaciones = await capsTask;
                 _solicitudes = await solsTask;
-                _preciosPorLocal = (await LocalSvc.AllAsync(DisposedToken))
+                _preciosPorLocal = (await localesTask)
                     .ToDictionary(l => l.Id, l => l.PrecioReferencial);
             }
             catch (OperationCanceledException) { }
@@ -521,15 +604,41 @@
         }
         else if (_isAgente)
         {
-            try { _contratos = await ContratoSvc.RefrescarAsync(DisposedToken); }
+            try
+            {
+                var contratosTask = ContratoSvc.RefrescarAsync(DisposedToken);
+                var capsTask = CaptacionSvc.RefrescarAsync(DisposedToken);
+                var localesTask = LocalSvc.AllAsync(DisposedToken);
+                _contratos = await contratosTask;
+                _captaciones = await capsTask;
+                _preciosPorLocal = (await localesTask)
+                    .ToDictionary(l => l.Id, l => l.PrecioReferencial);
+            }
             catch (OperationCanceledException) { }
-            catch { _contratos = []; }
+            catch
+            {
+                _captaciones = [];
+                _preciosPorLocal = new();
+            }
         }
         else
         {
-            try { _contratos = await ContratoSvc.RefrescarAsync(DisposedToken); }
+            try
+            {
+                var contratosTask = ContratoSvc.RefrescarAsync(DisposedToken);
+                var capsTask = CaptacionSvc.RefrescarAsync(DisposedToken);
+                var localesTask = LocalSvc.AllAsync(DisposedToken);
+                _contratos = await contratosTask;
+                _captaciones = await capsTask;
+                _preciosPorLocal = (await localesTask)
+                    .ToDictionary(l => l.Id, l => l.PrecioReferencial);
+            }
             catch (OperationCanceledException) { }
-            catch { _contratos = []; }
+            catch
+            {
+                _captaciones = [];
+                _preciosPorLocal = new();
+            }
         }
 
         _cargando = false;
@@ -689,4 +798,9 @@
         fecha.HasValue && fecha.Value >= PeriodoInicio && fecha.Value <= PeriodoFin;
 
     private sealed record PeriodOption(string Codigo, string Label, int Dias);
+    private sealed record AceptacionPrecioMensual(
+        double[] PrecioCaptado,
+        double[] AceptadoVisual,
+        double[] AceptadoReal,
+        string[] Tooltips);
 }

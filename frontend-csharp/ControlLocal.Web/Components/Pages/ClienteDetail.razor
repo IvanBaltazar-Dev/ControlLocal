@@ -181,6 +181,13 @@
                         {
                             <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Actualizando ficha...</div>
                         }
+                        else if (!string.IsNullOrWhiteSpace(_errorSeccion))
+                        {
+                            <div class="cl-alert amber" style="margin:16px;">
+                                <Icon Name="alert" Size="15" />
+                                <span>@_errorSeccion</span>
+                            </div>
+                        }
                         else if (ActiveSection.Items.Count == 0)
                         {
                             <div style="padding:28px;text-align:center;color:#7E8794;font-size:12.5px;">Sin registros visibles para esta seccion.</div>
@@ -275,6 +282,7 @@
     private bool _cargandoSeccion;
     private bool _notFound;
     private string? _error;
+    private string? _errorSeccion;
     private string _active = "requerimientos";
 
     private bool _readOnly => App.Role == Roles.Broker || App.Role == Roles.Admin;
@@ -516,6 +524,7 @@
         if (tab is null || tab.Key == _active)
             return;
         _active = tab.Key;
+        _errorSeccion = null;
         if (_ficha is not null && SeccionDebeCargar(_active))
             await CargarSeccion(1);
     }
@@ -527,9 +536,14 @@
         if (_ficha is null || Persona.Id <= 0)
             return;
         _cargandoSeccion = true;
+        _errorSeccion = null;
         try
         {
             _ficha.Sections[_active] = await FichaSvc.ClienteSectionAsync(Persona.Id, _active, page, PageSize);
+        }
+        catch (Exception ex)
+        {
+            _errorSeccion = ex.Message;
         }
         finally
         {

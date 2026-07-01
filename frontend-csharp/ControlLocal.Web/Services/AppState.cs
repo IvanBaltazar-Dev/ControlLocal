@@ -95,6 +95,18 @@ public class AppState
         _ = LimpiarSesionAsync();
     }
 
+    // Igual que SignOut pero espera a limpiar el almacenamiento del navegador antes de
+    // continuar. Lo usa el manejo de 401 del ApiClient: hay que dejar IsAuthenticated en
+    // false Y borrar localStorage ANTES de navegar a /login, o RouteGuard/Login rebotan de
+    // vuelta a /dashboard (sesion aun "valida") y se produce un ping-pong infinito.
+    public async Task SignOutAsync()
+    {
+        CurrentUser = null;
+        Role = Roles.Agente;
+        _apiSession.Token = null;
+        await LimpiarSesionAsync();
+    }
+
     public void Navigate(string route, string? role = null)
     {
         if (!string.IsNullOrEmpty(role)) Role = role;

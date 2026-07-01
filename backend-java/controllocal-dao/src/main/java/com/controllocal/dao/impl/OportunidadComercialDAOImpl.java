@@ -48,6 +48,21 @@ public class OportunidadComercialDAOImpl implements OportunidadComercialDAO {
             INNER JOIN persona cp ON cp.id_persona = ci.id_persona
             INNER JOIN captacion c ON c.id_captacion = o.id_captacion
             INNER JOIN local_comercial l ON l.id_local = c.id_local
+            INNER JOIN propietario p ON p.id_propietario = l.id_propietario
+            INNER JOIN persona pp ON pp.id_persona = p.id_persona
+            INNER JOIN agente_inmobiliario a ON a.id_agente = o.id_agente
+            INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
+            INNER JOIN persona ap ON ap.id_persona = au.id_persona
+            """;
+    private static final String COUNT_SQL = """
+            SELECT COUNT(*)
+            FROM oportunidad_comercial o
+            INNER JOIN cliente_interesado ci ON ci.id_cliente = o.id_cliente
+            INNER JOIN persona cp ON cp.id_persona = ci.id_persona
+            INNER JOIN captacion c ON c.id_captacion = o.id_captacion
+            INNER JOIN local_comercial l ON l.id_local = c.id_local
+            INNER JOIN propietario p ON p.id_propietario = l.id_propietario
+            INNER JOIN persona pp ON pp.id_persona = p.id_persona
             INNER JOIN agente_inmobiliario a ON a.id_agente = o.id_agente
             INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
             INNER JOIN persona ap ON ap.id_persona = au.id_persona
@@ -231,6 +246,39 @@ public class OportunidadComercialDAOImpl implements OportunidadComercialDAO {
         }
     }
 
+    public List<OportunidadComercial> listarPagina(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacionAlcance,
+            Long idCaptacion,
+            Long idCliente,
+            String query,
+            int offset,
+            int limit) {
+        if (alcanceVacio(idsAgente, idsCaptacionAlcance)) {
+            return new ArrayList<>();
+        }
+        List<Long> parametros = new ArrayList<>();
+        List<String> textos = new ArrayList<>();
+        String where = whereListado(idsAgente, idsCaptacionAlcance, idCaptacion, idCliente, query, parametros, textos);
+        return listarSql(where + " ORDER BY o.id_oportunidad DESC LIMIT ? OFFSET ?",
+                parametros, textos, offset, limit);
+    }
+
+    public long contar(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacionAlcance,
+            Long idCaptacion,
+            Long idCliente,
+            String query) {
+        if (alcanceVacio(idsAgente, idsCaptacionAlcance)) {
+            return 0L;
+        }
+        List<Long> parametros = new ArrayList<>();
+        List<String> textos = new ArrayList<>();
+        String where = whereListado(idsAgente, idsCaptacionAlcance, idCaptacion, idCliente, query, parametros, textos);
+        return contarSql(where, parametros, textos);
+    }
+
     @Override
     public boolean actualizar(OportunidadComercial oportunidad) {
         validar(oportunidad, true);
@@ -318,6 +366,107 @@ public class OportunidadComercialDAOImpl implements OportunidadComercialDAO {
         oportunidad.setFechaCreacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_creacion")));
         oportunidad.setFechaActualizacion(JdbcSupport.toLocalDateTime(rs.getTimestamp("fecha_actualizacion")));
         return oportunidad;
+    }
+
+    private List<OportunidadComercial> listarSql(
+            String sufijoSql,
+            List<Long> parametros,
+            List<String> textos,
+            int offset,
+            int limit) {
+        List<OportunidadComercial> resultado = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_SQL + sufijoSql)) {
+            int idx = bindLongs(ps, parametros, 1);
+            idx = bindStrings(ps, textos, idx);
+            ps.setInt(idx++, Math.max(1, Math.min(limit, 500)));
+            ps.setInt(idx, Math.max(0, offset));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(mapRow(rs));
+                }
+            }
+            return resultado;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar oportunidades comerciales paginadas.", e);
+        }
+    }
+
+    private long contarSql(String where, List<Long> parametros, List<String> textos) {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(COUNT_SQL + where)) {
+            int idx = bindLongs(ps, parametros, 1);
+            bindStrings(ps, textos, idx);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0L;
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar oportunidades comerciales.", e);
+        }
+    }
+
+    private static int bindLongs(PreparedStatement ps, List<Long> parametros, int idx) throws SQLException {
+        for (Long id : parametros) {
+            ps.setLong(idx++, id);
+        }
+        return idx;
+    }
+
+    private static int bindStrings(PreparedStatement ps, List<String> parametros, int idx) throws SQLException {
+        for (String valor : parametros) {
+            ps.setString(idx++, valor);
+        }
+        return idx;
+    }
+
+    private static boolean alcanceVacio(Collection<Long> idsAgente, Collection<Long> idsCaptacionAlcance) {
+        return (idsAgente != null && idsAgente.isEmpty())
+                || (idsCaptacionAlcance != null && idsCaptacionAlcance.isEmpty());
+    }
+
+    private static String whereListado(
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacionAlcance,
+            Long idCaptacion,
+            Long idCliente,
+            String query,
+            List<Long> parametros,
+            List<String> textos) {
+        List<String> condiciones = new ArrayList<>();
+        if (idsAgente != null) {
+            condiciones.add("o.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ")");
+            parametros.addAll(idsAgente);
+        }
+        if (idsCaptacionAlcance != null) {
+            condiciones.add("o.id_captacion IN (" + JdbcSupport.placeholders(idsCaptacionAlcance.size()) + ")");
+            parametros.addAll(idsCaptacionAlcance);
+        }
+        if (idCaptacion != null) {
+            condiciones.add("o.id_captacion = ?");
+            parametros.add(idCaptacion);
+        }
+        if (idCliente != null) {
+            condiciones.add("o.id_cliente = ?");
+            parametros.add(idCliente);
+        }
+        if (query != null && !query.isBlank()) {
+            condiciones.add("""
+                    (
+                        LOWER(o.codigo_oportunidad) LIKE ?
+                        OR LOWER(c.codigo_captacion) LIKE ?
+                        OR LOWER(cp.nombres_o_razon_social) LIKE ?
+                        OR LOWER(l.direccion) LIKE ?
+                        OR LOWER(l.distrito) LIKE ?
+                        OR LOWER(ap.nombres_o_razon_social) LIKE ?
+                        OR LOWER(pp.nombres_o_razon_social) LIKE ?
+                    )
+                    """);
+            String patron = "%" + query.trim().toLowerCase() + "%";
+            for (int i = 0; i < 7; i++) {
+                textos.add(patron);
+            }
+        }
+        return condiciones.isEmpty() ? "" : " WHERE " + String.join(" AND ", condiciones);
     }
 
     private void validar(OportunidadComercial oportunidad, boolean requiereId) {

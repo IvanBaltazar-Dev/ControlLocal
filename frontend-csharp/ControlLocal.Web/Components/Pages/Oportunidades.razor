@@ -24,7 +24,6 @@
     <ChildContent>
         @{
             var filtradas = Filtradas().ToList();
-            var visibles = Paginador.Pagina(filtradas, ref _pagina);
         }
         <div style="display:grid;grid-template-columns:repeat(@(_etapas.Length + 1),1fr);gap:12px;margin-bottom:16px;">
             <MetricCard Icon="target" Label="Total" Value="@_ops.Count.ToString()" Tone="gray"
@@ -39,7 +38,7 @@
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
         <FilterBar Search="Buscar por operacion, cliente, local, agente, propietario..."
-                   @bind-Value="_query" ResultCount="filtradas.Count"
+                   Value="_query" ValueChanged="OnQueryChanged" ResultCount="_totalOps"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros" />
 
         <div class="cl-card">
@@ -52,7 +51,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var o in visibles)
+                        @foreach (var o in filtradas)
                         {
                             <tr>
                                 <td><span class="mono">@o.Op</span></td>
@@ -94,7 +93,7 @@
                 }
             </div>
         </div>
-        <Pagination Total="filtradas.Count" @bind-Page="_pagina" />
+        <Pagination Total="_totalOps" Page="_pagina" PageChanged="CambiarPagina" />
     </ChildContent>
 </AppShell>
 
@@ -112,7 +111,18 @@
 
     private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query);
 
-    private void LimpiarFiltros() { _tab = "Todas"; _query = ""; _pagina = 1; }
+    private async Task LimpiarFiltros()
+    {
+        _tab = "Todas";
+        _query = "";
+        await CargarPagina(1);
+    }
+
+    private async Task OnQueryChanged(string valor)
+    {
+        _query = valor;
+        await CargarPagina(1);
+    }
 
     private async Task ExportarCsv()
     {
@@ -125,8 +135,7 @@
     }
 
     private IEnumerable<OpRow> Filtradas() => _ops.Where(o =>
-        (_tab == "Todas" || o.Stage == _tab) &&
-        (string.IsNullOrEmpty(_query) || Coincide(o, _query)));
+        _tab == "Todas" || o.Stage == _tab);
 
     private static bool Coincide(OpRow o, string q) =>
         TextoFiltro.Contiene(o.Op, q)
@@ -147,17 +156,31 @@
     private record OpRow(long Id, string Op, string Cap, string Client, string Local, string Ini, string Color, string Agent, string Owner, string Stage, string Amount, string Updated, string LastAction);
 
     private IReadOnlyList<OpRow> _ops = [];
+    private int _totalOps;
     private bool _cargando = true;
     private string? _error;
 
     protected override async Task OnInitializedAsync()
     {
+        await CargarPagina(1);
+    }
+
+    private async Task CambiarPagina(int pagina)
+    {
+        await CargarPagina(pagina);
+    }
+
+    private async Task CargarPagina(int pagina)
+    {
         try
         {
-            var oportunidades = await OportunidadSvc.RefrescarAsync();
-            var solicitudes = await SolicitudSvc.RefrescarAsync();
-            var captaciones = await CaptacionSvc.RefrescarAsync();
-            _ops = Construir(oportunidades, solicitudes, captaciones);
+            _cargando = true;
+            _error = null;
+            var oportunidades = await OportunidadSvc.ListarPaginaAsync(
+                pagina, Paginador.TamanoPagina, query: _query);
+            _ops = await ConstruirAsync(oportunidades.Items);
+            _totalOps = (int)Math.Min(oportunidades.TotalRecords, int.MaxValue);
+            _pagina = oportunidades.Page;
         }
         catch (Exception ex)
         {
@@ -169,14 +192,23 @@
         }
     }
 
-    private IReadOnlyList<OpRow> Construir(IReadOnlyList<OportunidadComercialDto> oportunidades, IReadOnlyList<SolicitudAlquilerDto> solicitudes, IReadOnlyList<CaptacionDto> captaciones) => oportunidades.Select(o =>
+    private async Task<IReadOnlyList<OpRow>> ConstruirAsync(IReadOnlyList<OportunidadComercialDto> oportunidades)
     {
-        var captacion = captaciones.FirstOrDefault(c => c.CodigoCaptacion.Equals(o.CaptacionCodigo, StringComparison.OrdinalIgnoreCase));
-        var solicitud = solicitudes.FirstOrDefault(s =>
-            s.OportunidadId == o.Id
-            || s.CodigoOperacion == o.CodigoOportunidad
-            || o.ClienteNombre.Contains(s.ClienteNombre)
-            || s.ClienteNombre.Contains(o.ClienteNombre));
+        var filas = new List<OpRow>();
+        foreach (var oportunidad in oportunidades)
+            filas.Add(await ConstruirFilaAsync(oportunidad));
+        return filas;
+    }
+
+    private async Task<OpRow> ConstruirFilaAsync(OportunidadComercialDto o)
+    {
+        var captacionTask = CaptacionSvc.ObtenerPorIdAsync(o.CaptacionId);
+        var solicitudesTask = SolicitudSvc.ListarPorOportunidadAsync(o.Id);
+        await Task.WhenAll(captacionTask, solicitudesTask);
+        var captacion = await captacionTask;
+        var solicitud = (await solicitudesTask)
+            .OrderByDescending(FechaSolicitud)
+            .FirstOrDefault();
         var nombre = string.IsNullOrWhiteSpace(o.NombreAgenteResponsable) ? "Sin asignar" : o.NombreAgenteResponsable;
         var iniciales = string.Concat(nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Take(2).Select(parte => char.ToUpperInvariant(parte[0])));
@@ -203,7 +235,7 @@
             solicitud?.MontoMensualTexto ?? "-",
             FormatearFecha(fechaEvento, o.FechaRegistroTexto),
             ultimaOp);
-    }).ToList();
+    }
 
     private static (string Label, DateTime? Fecha) UltimaOperacion(OportunidadComercialDto o, SolicitudAlquilerDto? solicitud)
     {
@@ -229,6 +261,11 @@
         };
         return (opLabel, o.FechaActualizacion);
     }
+
+    private static DateTime FechaSolicitud(SolicitudAlquilerDto solicitud) =>
+        solicitud.FechaActualizacionEstado
+        ?? solicitud.FechaRegistro?.ToDateTime(TimeOnly.MinValue)
+        ?? DateTime.MinValue;
 
     private static string FormatearFecha(DateTime? fecha, string fallback) =>
         fecha?.ToString("dd MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture)

@@ -44,17 +44,20 @@ public class ApiClient
     private readonly HttpClient _http;
     private readonly ApiSession _sesion;
     private readonly NavigationManager _navegacion;
+    private readonly ControlLocal.Web.Services.AppState _appState;
     private static readonly JsonSerializerOptions JsonOpciones = new(JsonSerializerDefaults.Web);
 
     public ApiClient(
         HttpClient http,
         IOptions<ApiOptions> opciones,
         ApiSession sesion,
-        NavigationManager navegacion)
+        NavigationManager navegacion,
+        ControlLocal.Web.Services.AppState appState)
     {
         _http = http;
         _sesion = sesion;
         _navegacion = navegacion;
+        _appState = appState;
         _http.BaseAddress = new Uri(opciones.Value.BaseUrl.TrimEnd('/') + "/");
         _http.Timeout = TimeSpan.FromSeconds(Math.Clamp(opciones.Value.TimeoutSeconds, 5, 120));
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -246,7 +249,10 @@ public class ApiClient
     {
         if (respuesta.StatusCode == HttpStatusCode.Unauthorized)
         {
-            _sesion.Token = null;
+            // Cierre COMPLETO (CurrentUser + token + localStorage), no solo el token en
+            // memoria: si IsAuthenticated sigue true, Login/RouteGuard rebotan a /dashboard,
+            // el dashboard vuelve a pegar 401 y se entra en un ping-pong infinito.
+            await _appState.SignOutAsync();
             _navegacion.NavigateTo("/login");
             throw new InvalidOperationException("La sesion expiro. Inicia sesion nuevamente.");
         }

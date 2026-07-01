@@ -10,6 +10,7 @@ import com.controllocal.bl.OportunidadComercialBusinessLogic;
 import com.controllocal.bl.impl.CaptacionBusinessLogicImpl;
 import com.controllocal.bl.impl.MotivoNoContinuidadBusinessLogicImpl;
 import com.controllocal.bl.impl.OportunidadComercialBusinessLogicImpl;
+import com.controllocal.dao.impl.OportunidadComercialDAOImpl;
 import com.controllocal.model.comercial.Captacion;
 import com.controllocal.model.comercial.MotivoNoContinuidad;
 import com.controllocal.model.comercial.OportunidadComercial;
@@ -40,6 +41,8 @@ public class OportunidadesRest {
 
     private final OportunidadComercialBusinessLogic oportunidades =
             new OportunidadComercialBusinessLogicImpl();
+    private final OportunidadComercialDAOImpl oportunidadesDao =
+            new OportunidadComercialDAOImpl();
     private final MotivoNoContinuidadBusinessLogic motivos =
             new MotivoNoContinuidadBusinessLogicImpl();
     private final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl();
@@ -52,22 +55,16 @@ public class OportunidadesRest {
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("10") int tamano,
             @QueryParam("idCaptacion") Long idCaptacion,
-            @QueryParam("idCliente") Long idCliente) {
-        List<OportunidadComercial> fuente = oportunidadesDelUsuario(SeguridadRest.usuario(request)).stream()
-                .filter(item -> idCaptacion == null
-                        || (item.getCaptacion() != null && idCaptacion.equals(item.getCaptacion().getIdCaptacion())))
-                .filter(item -> idCliente == null
-                        || (item.getClienteInteresado() != null
-                                && idCliente.equals(item.getClienteInteresado().getIdCliente())))
-                .toList();
+            @QueryParam("idCliente") Long idCliente,
+            @QueryParam("query") String query) {
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
-        int hasta = Math.min(desde + tamanoValido, fuente.size());
-        List<Dtos.OportunidadResponse> items = fuente.subList(desde, hasta).stream()
+        Listado<OportunidadComercial> listado = oportunidadesDelUsuarioPagina(
+                SeguridadRest.usuario(request), paginaValida, tamanoValido, idCaptacion, idCliente, query);
+        List<Dtos.OportunidadResponse> items = listado.items().stream()
                 .map(Dtos.OportunidadResponse::desde)
                 .toList();
-        return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, listado.total(), paginaValida, tamanoValido);
     }
 
     @GET
@@ -140,31 +137,62 @@ public class OportunidadesRest {
     private OportunidadComercial obtenerConAcceso(long id, UsuarioAutenticado usuario) {
         OportunidadComercial oportunidad = oportunidades.buscarPorId(id)
                 .orElseThrow(() -> ApiException.noEncontrado("Oportunidad"));
-        boolean permitido = oportunidadesDelUsuario(usuario).stream()
-                .anyMatch(item -> item.getIdOportunidad().equals(oportunidad.getIdOportunidad()));
-        if (!permitido) {
+        if (!oportunidadEnAlcance(oportunidad, usuario)) {
             throw ApiException.prohibido();
         }
         return oportunidad;
     }
 
-    private List<OportunidadComercial> oportunidadesDelUsuario(UsuarioAutenticado usuario) {
-        // Alcance acotado en SQL (no se escanea toda la tabla):
-        // - AGENTE: sus propias oportunidades.
-        // - BROKER: las de las captaciones que supervisa (semantica por captacion).
-        // - ADMIN: todas (gobierno).
+    private Listado<OportunidadComercial> oportunidadesDelUsuarioPagina(
+            UsuarioAutenticado usuario,
+            int pagina,
+            int tamano,
+            Long idCaptacion,
+            Long idCliente,
+            String query) {
+        int offset = (pagina - 1) * tamano;
         if ("AGENTE".equals(usuario.rol())) {
-            return oportunidades.listarPorAgentes(List.of(usuario.idDominio()));
+            List<Long> agentes = List.of(usuario.idDominio());
+            return new Listado<>(
+                    oportunidadesDao.listarPagina(agentes, null, idCaptacion, idCliente, query, offset, tamano),
+                    oportunidadesDao.contar(agentes, null, idCaptacion, idCliente, query));
         }
         if ("ADMIN".equals(usuario.rol())) {
-            return oportunidades.listarTodos();
+            return new Listado<>(
+                    oportunidadesDao.listarPagina(null, null, idCaptacion, idCliente, query, offset, tamano),
+                    oportunidadesDao.contar(null, null, idCaptacion, idCliente, query));
         }
         if ("BROKER".equals(usuario.rol())) {
             List<Long> permitidas = captaciones.listarPorBroker(usuario.idDominio()).stream()
                     .map(Captacion::getIdCaptacion)
                     .toList();
-            return oportunidades.listarPorCaptaciones(permitidas);
+            return new Listado<>(
+                    oportunidadesDao.listarPagina(null, permitidas, idCaptacion, idCliente, query, offset, tamano),
+                    oportunidadesDao.contar(null, permitidas, idCaptacion, idCliente, query));
         }
         throw ApiException.prohibido();
+    }
+
+    private boolean oportunidadEnAlcance(OportunidadComercial oportunidad, UsuarioAutenticado usuario) {
+        if ("ADMIN".equals(usuario.rol())) {
+            return true;
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return oportunidad.getAgenteResponsable() != null
+                    && Long.valueOf(usuario.idDominio())
+                            .equals(oportunidad.getAgenteResponsable().getIdAgente());
+        }
+        if ("BROKER".equals(usuario.rol())) {
+            Long idCaptacion = oportunidad.getCaptacion() != null
+                    ? oportunidad.getCaptacion().getIdCaptacion()
+                    : null;
+            return idCaptacion != null
+                    && captaciones.listarPorBroker(usuario.idDominio()).stream()
+                            .anyMatch(item -> item.getIdCaptacion().equals(idCaptacion));
+        }
+        return false;
+    }
+
+    private record Listado<T>(List<T> items, long total) {
     }
 }

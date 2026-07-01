@@ -21,6 +21,7 @@ import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.comercial.SolicitudAlquiler;
 import com.controllocal.model.persona.ClienteInteresado;
 import com.controllocal.model.persona.Persona;
+import com.controllocal.model.persona.Propietario;
 import com.controllocal.model.usuario.AgenteInmobiliario;
 
 public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
@@ -45,7 +46,8 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
                    cp.nombres_o_razon_social AS cliente_nombre,
                    c.codigo_captacion,
                    l.id_local, l.codigo_local, l.direccion AS local_direccion,
-                   l.distrito AS local_distrito,
+                   l.distrito AS local_distrito, l.id_propietario,
+                   pp.nombres_o_razon_social AS propietario_nombre,
                    ap.nombres_o_razon_social AS agente_nombre
             FROM solicitud_alquiler s
             INNER JOIN oportunidad_comercial o ON s.id_oportunidad = o.id_oportunidad
@@ -53,6 +55,8 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
             INNER JOIN persona cp ON cp.id_persona = ci.id_persona
             INNER JOIN captacion c ON c.id_captacion = o.id_captacion
             INNER JOIN local_comercial l ON l.id_local = c.id_local
+            INNER JOIN propietario pr ON pr.id_propietario = l.id_propietario
+            INNER JOIN persona pp ON pp.id_persona = pr.id_persona
             INNER JOIN agente_inmobiliario a ON a.id_agente = s.id_agente
             INNER JOIN usuario_interno au ON au.id_usuario = a.id_usuario
             INNER JOIN persona ap ON ap.id_persona = au.id_persona
@@ -332,6 +336,9 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
         local.setCodigoLocal(rs.getString("codigo_local"));
         local.setDireccion(rs.getString("local_direccion"));
         local.setDistrito(rs.getString("local_distrito"));
+        Propietario propietario = JdbcSupport.propietario(rs.getLong("id_propietario"));
+        propietario.setNombresORazonSocial(rs.getString("propietario_nombre"));
+        local.setPropietario(propietario);
         Captacion captacion = JdbcSupport.captacion(rs.getLong("id_captacion"));
         captacion.setCodigoCaptacion(rs.getString("codigo_captacion"));
         captacion.setLocalComercial(local);

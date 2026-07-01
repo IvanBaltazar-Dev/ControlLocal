@@ -21,6 +21,12 @@
             <div>
                 <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad relaciona al cliente con la captación">
                     <Field Label="Oportunidad" Required="true">
+                        <input class="cl-input search" type="search"
+                               placeholder="Buscar por operacion, cliente, captacion o local..."
+                               value="@_busquedaOportunidad"
+                               @oninput="OnBusquedaOportunidad"
+                               disabled="@(_cargando || _procesando)"
+                               style="margin-bottom:8px;" />
                         <select @bind="_oportunidadId" disabled="@(_cargando || _procesando)">
                             <option value="0">— Seleccionar —</option>
                             @foreach (var oportunidad in _oportunidades
@@ -98,6 +104,7 @@
     private bool _procesando;
     private string? _err;
     private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
+    private string _busquedaOportunidad = "";
 
     private OportunidadComercialDto? OportunidadSeleccionada =>
         _oportunidades.FirstOrDefault(item => item.Id == _oportunidadId);
@@ -116,9 +123,9 @@
     {
         try
         {
-            _oportunidades = await OportunidadSvc.RefrescarAsync(DisposedToken);
             if (OportunidadIdParam > 0)
                 _oportunidadId = OportunidadIdParam;
+            await CargarOportunidadesAsync();
         }
         catch (OperationCanceledException)
         {
@@ -130,6 +137,25 @@
         finally
         {
             _cargando = false;
+        }
+    }
+
+    private async Task OnBusquedaOportunidad(ChangeEventArgs e)
+    {
+        _busquedaOportunidad = e.Value?.ToString() ?? "";
+        await CargarOportunidadesAsync();
+    }
+
+    private async Task CargarOportunidadesAsync()
+    {
+        var pagina = await OportunidadSvc.ListarPaginaAsync(
+            1, 100, DisposedToken, _busquedaOportunidad);
+        _oportunidades = pagina.Items;
+        if (_oportunidadId > 0
+            && _oportunidades.All(item => item.Id != _oportunidadId)
+            && await OportunidadSvc.ByIdAsync(_oportunidadId, DisposedToken) is { } oportunidad)
+        {
+            _oportunidades = _oportunidades.Append(oportunidad).ToList();
         }
     }
 

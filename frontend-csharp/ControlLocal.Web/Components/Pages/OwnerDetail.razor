@@ -55,7 +55,6 @@
                             <div class="cl-stack" style="gap:10px;">
                                 <MetricMini Label="Prospecciones" Value='@Total("prospecciones")' Icon="store" />
                                 <MetricMini Label="Captaciones" Value='@Total("captaciones")' Icon="pin" />
-                                <MetricMini Label="Cierres" Value='@Total("cierres")' Icon="checkCircle" />
                             </div>
                         </div>
                     </div>
@@ -85,6 +84,7 @@
                                         <th>Proceso</th>
                                         <th>Codigo</th>
                                         <th>Detalle</th>
+                                        @if (MostrarResultadoCaptacion) { <th>Resultado</th> }
                                         @if (MostrarLocal) { <th>Local</th> }
                                         @if (MostrarDistrito) { <th>Distrito</th> }
                                         @if (MostrarCliente) { <th>Cliente</th> }
@@ -111,6 +111,13 @@
                                                 }
                                                 <div class="cl-muted" style="font-size:11.5px;margin-top:2px;">@Texto(row.Subtitulo)</div>
                                             </td>
+                                            @if (MostrarResultadoCaptacion)
+                                            {
+                                                <td>
+                                                    <div style="font-weight:650;">@ResultadoCaptacion(row)</div>
+                                                    <div class="cl-muted" style="font-size:11.5px;margin-top:2px;">@DetalleResultadoCaptacion(row)</div>
+                                                </td>
+                                            }
                                             @if (MostrarLocal) { <td>@Texto(row.Local)</td> }
                                             @if (MostrarDistrito) { <td>@Texto(row.Distrito)</td> }
                                             @if (MostrarCliente)
@@ -159,14 +166,15 @@
     private int TotalActual => (int)Math.Max(0, Math.Min(int.MaxValue, ActiveSection.TotalRecords));
     private string ActiveLabel => TabsVisibles.FirstOrDefault(t => t.Key == _active)?.Label ?? "Ficha";
     private Tabs.TabItem[] TabItems => TabsVisibles.Select(t => new Tabs.TabItem(t.Label, TotalTab(t.Key))).ToArray();
-    private IEnumerable<FichaTab> TabsVisibles => App.Role == Roles.Agente
-        ? _tabs.Where(t => t.Key != "agentes")
-        : _tabs;
+    private IEnumerable<FichaTab> TabsVisibles => _tabs
+        .Where(t => !EsTabClienteOcultaEnPropietario(t.Key))
+        .Where(t => App.Role != Roles.Agente || t.Key != "agentes");
 
     private bool MostrarLocal => ColumnaConDatos(row => row.Local);
     private bool MostrarDistrito => ColumnaConDatos(row => row.Distrito);
-    private bool MostrarCliente => ColumnaConDatos(row => row.Cliente);
+    private bool MostrarCliente => !MostrarResultadoCaptacion && ColumnaConDatos(row => row.Cliente);
     private bool MostrarAgente => App.Role is Roles.Broker or Roles.Admin && ColumnaConDatos(row => row.Agente);
+    private bool MostrarResultadoCaptacion => string.Equals(_active, "captaciones", StringComparison.OrdinalIgnoreCase);
 
     private readonly FichaTab[] _tabs =
     [
@@ -184,6 +192,7 @@
         _cargando = true;
         _notFound = false;
         _error = null;
+        AsegurarTabVisible();
         try
         {
             if (!long.TryParse(IdParam, out var id) || id <= 0)
@@ -216,6 +225,13 @@
     }
 
     private Task CambiarPagina(int page) => CargarSeccion(page);
+
+    private void AsegurarTabVisible()
+    {
+        if (TabsVisibles.Any(t => t.Key == _active))
+            return;
+        _active = TabsVisibles.FirstOrDefault()?.Key ?? "locales";
+    }
 
     private async Task CargarSeccion(int page)
     {
@@ -264,6 +280,48 @@
     private string FechaRegistro => Persona.FechaCreacion?.ToString("dd/MM/yyyy") ?? "No registrada";
 
     private static string Texto(string? valor) => string.IsNullOrWhiteSpace(valor) || valor == "-" ? "No registrado" : valor;
+
+    private static bool EsTabClienteOcultaEnPropietario(string key) =>
+        key is "oportunidades" or "solicitudes" or "cierres";
+
+    private static string ResultadoCaptacion(FichaRowDto row)
+    {
+        if (TieneDato(row.Cliente))
+        {
+            return "Alquiler cerrado";
+        }
+
+        var estado = (row.Estado ?? "").Trim();
+        return estado switch
+        {
+            "Activa" or "Vigente" => "Disponible",
+            "Reservada" => "Con avance comercial",
+            "Alquilada" or "Cerrada" => "Alquiler cerrado",
+            "Vencida" => "Vigencia vencida",
+            "Cancelada" or "Rechazada" or "Inactiva" => "Sin continuidad",
+            "" or "-" => "Por definir",
+            _ => estado,
+        };
+    }
+
+    private static string DetalleResultadoCaptacion(FichaRowDto row)
+    {
+        if (TieneDato(row.Cliente))
+        {
+            return $"Esta propiedad fue alquilada a {row.Cliente}. La operacion quedo cerrada.";
+        }
+
+        var estado = (row.Estado ?? "").Trim();
+        return estado switch
+        {
+            "Activa" or "Vigente" => "Sigue disponible para oportunidades.",
+            "Reservada" => "Con oportunidad en evaluacion.",
+            "Alquilada" or "Cerrada" => "La operacion quedo cerrada.",
+            "Vencida" => "Requiere renovar vigencia.",
+            "Cancelada" or "Rechazada" or "Inactiva" => "Proceso detenido.",
+            _ => "Sin resultado final registrado.",
+        };
+    }
 
     private bool ColumnaConDatos(Func<FichaRowDto, string?> selector) =>
         ActiveSection.Items.Any(row => TieneDato(selector(row)));

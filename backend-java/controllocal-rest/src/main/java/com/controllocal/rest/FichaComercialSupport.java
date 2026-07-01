@@ -104,6 +104,8 @@ public final class FichaComercialSupport {
         int tamano = tamano(pageSize);
         Map<String, FichaSectionResponse> sections = new LinkedHashMap<>();
         sections.put("locales", seccionPropietarioInterna(idPropietario, "locales", contexto, 1, tamano));
+        sections.put("prospecciones", resumenPropietarioInterna(idPropietario, "prospecciones", contexto, tamano));
+        sections.put("captaciones", resumenPropietarioInterna(idPropietario, "captaciones", contexto, tamano));
         for (String section : SECCIONES_PROPIETARIO) {
             sections.putIfAbsent(section, pendiente(section, tamano));
         }
@@ -226,11 +228,8 @@ public final class FichaComercialSupport {
         return oportunidades.listarPorCliente(idCliente).stream().anyMatch(o -> mismoCliente(o, idCliente) && visible(o, contexto))
                 || solicitudes.listarPorCliente(idCliente).stream().anyMatch(s -> mismoCliente(s, idCliente) && visible(s, contexto))
                 || visitas.listarPorCliente(idCliente).stream().anyMatch(v -> mismoCliente(v, idCliente) && visible(v, contexto))
-                || interacciones.listarTodos().stream().anyMatch(i -> mismoCliente(i, idCliente) && visible(i, contexto))
-                || contratos.listarTodos().stream().anyMatch(c -> {
-                    SolicitudAlquiler solicitud = solicitudContrato(c);
-                    return solicitud != null && mismoCliente(solicitud, idCliente) && visible(solicitud, contexto);
-                });
+                || !interaccionesCliente(idCliente, contexto).isEmpty()
+                || !cierresCliente(idCliente, contexto).isEmpty();
     }
 
     private boolean propietarioTieneHistoriaVisible(long idPropietario, Contexto contexto) {
@@ -282,8 +281,7 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasInteraccionesCliente(long idCliente, Contexto contexto) {
-        return interacciones.listarTodos().stream()
-                .filter(i -> mismoCliente(i, idCliente) && visible(i, contexto))
+        return interaccionesCliente(idCliente, contexto).stream()
                 .map(this::filaInteraccion)
                 .sorted(orden())
                 .toList();
@@ -306,12 +304,28 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasCierresCliente(long idCliente, Contexto contexto) {
-        return contratos.listarTodos().stream()
-                .map(c -> filaContrato(c, contexto))
+        return cierresCliente(idCliente, contexto).stream()
+                .map(c -> filaContrato(c.contrato(), c.solicitud(), contexto))
                 .filter(Objects::nonNull)
-                .filter(row -> Objects.equals(row.clienteId(), idCliente))
                 .sorted(orden())
                 .toList();
+    }
+
+    private List<CierreCliente> cierresCliente(long idCliente, Contexto contexto) {
+        List<CierreCliente> filas = new ArrayList<>();
+        solicitudes.listarPorCliente(idCliente).stream()
+                .filter(s -> mismoCliente(s, idCliente) && visible(s, contexto))
+                .forEach(s -> {
+                    Long idOportunidad = s.getOportunidadComercial() != null
+                            ? s.getOportunidadComercial().getIdOportunidad()
+                            : null;
+                    if (idOportunidad == null) {
+                        return;
+                    }
+                    contratos.buscarPorOportunidad(idOportunidad)
+                            .ifPresent(c -> filas.add(new CierreCliente(c, s)));
+                });
+        return filas;
     }
 
     private List<FichaRowResponse> filasAgentesCliente(long idCliente, Contexto contexto) {
@@ -325,22 +339,42 @@ public final class FichaComercialSupport {
         visitas.listarPorCliente(idCliente).stream()
                 .filter(v -> mismoCliente(v, idCliente) && visible(v, contexto))
                 .forEach(v -> putAgente(agentes, v.getAgenteResponsable(), "Visita", fechaOrden(v.getFechaVisita())));
-        interacciones.listarTodos().stream()
-                .filter(i -> mismoCliente(i, idCliente) && visible(i, contexto))
+        interaccionesCliente(idCliente, contexto).stream()
                 .forEach(i -> putAgente(agentes, agente(i), "Interaccion", i.getFechaHora()));
         return agentes.values().stream().sorted(orden()).toList();
     }
 
+    private List<InteraccionComercial> interaccionesCliente(long idCliente, Contexto contexto) {
+        Map<Long, InteraccionComercial> filas = new LinkedHashMap<>();
+        interacciones.listarPorCliente(idCliente).stream()
+                .filter(i -> visible(i, contexto))
+                .forEach(i -> putInteraccion(filas, i));
+        oportunidades.listarPorCliente(idCliente).stream()
+                .filter(o -> mismoCliente(o, idCliente) && visible(o, contexto))
+                .map(OportunidadComercial::getIdOportunidad)
+                .filter(Objects::nonNull)
+                .forEach(idOportunidad -> interacciones.listarPorOportunidad(idOportunidad).stream()
+                        .filter(i -> visible(i, contexto))
+                        .forEach(i -> putInteraccion(filas, i)));
+        return new ArrayList<>(filas.values());
+    }
+
+    private static void putInteraccion(Map<Long, InteraccionComercial> filas, InteraccionComercial interaccion) {
+        if (interaccion != null && interaccion.getIdInteraccion() != null) {
+            filas.putIfAbsent(interaccion.getIdInteraccion(), interaccion);
+        }
+    }
+
     private List<FichaRowResponse> filasLocalesPropietario(long idPropietario, Contexto contexto) {
         Map<Long, FichaRowResponse> filas = new LinkedHashMap<>();
+        Map<Long, CierreCaptacion> cierrePorCaptacion = cierresPorCaptacionPropietario(idPropietario, contexto);
+        captaciones.listarPorPropietario(idPropietario).stream()
+                .filter(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
+                .forEach(c -> putLocalCaptacionPropietario(filas, c, cierrePorCaptacion.get(c.getIdCaptacion())));
         prospecciones.listarPorPropietario(idPropietario).stream()
                 .filter(p -> mismoPropietario(p.getLocalComercial(), idPropietario) && visible(p, contexto))
                 .forEach(p -> putLocal(filas, p.getLocalComercial(), p.getCaptacion(), p.getAgenteResponsable(),
                         "Local en prospeccion", rutaLocal(p.getLocalComercial()), p.getFechaRegistro()));
-        captaciones.listarPorPropietario(idPropietario).stream()
-                .filter(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
-                .forEach(c -> putLocal(filas, c.getLocalComercial(), c, c.getAgenteResponsable(),
-                        "Local captado", rutaCaptacion(c), fechaOrden(c.getFechaCaptacion())));
         return filas.values().stream().sorted(orden()).toList();
     }
 
@@ -353,11 +387,48 @@ public final class FichaComercialSupport {
     }
 
     private List<FichaRowResponse> filasCaptacionesPropietario(long idPropietario, Contexto contexto) {
+        Map<Long, CierreCaptacion> cierrePorCaptacion = cierresPorCaptacionPropietario(idPropietario, contexto);
         return captaciones.listarPorPropietario(idPropietario).stream()
                 .filter(c -> mismoPropietario(c.getLocalComercial(), idPropietario) && visible(c, contexto))
-                .map(this::filaCaptacion)
+                .map(c -> filaCaptacion(c, cierrePorCaptacion.get(c.getIdCaptacion())))
                 .sorted(orden())
                 .toList();
+    }
+
+    private Map<Long, CierreCaptacion> cierresPorCaptacionPropietario(long idPropietario, Contexto contexto) {
+        Map<Long, CierreCaptacion> filas = new LinkedHashMap<>();
+        Map<Long, SolicitudAlquiler> solicitudesPorId = solicitudes.listarPorPropietario(idPropietario).stream()
+                .filter(s -> s.getIdSolicitud() != null)
+                .filter(s -> visible(s, contexto))
+                .filter(s -> mismoPropietario(local(s), idPropietario))
+                .collect(Collectors.toMap(
+                        SolicitudAlquiler::getIdSolicitud,
+                        s -> s,
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+        if (solicitudesPorId.isEmpty()) {
+            return filas;
+        }
+
+        contratos.listarTodos().stream()
+                .sorted(Comparator
+                        .comparing((ContratoAlquiler c) -> fechaOrden(c.getFechaCierre()),
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .reversed())
+                .forEach(contrato -> {
+                    Long idSolicitud = contrato.getSolicitudAlquiler() != null
+                            ? contrato.getSolicitudAlquiler().getIdSolicitud()
+                            : null;
+                    SolicitudAlquiler s = solicitudesPorId.get(idSolicitud);
+                    if (s == null) {
+                        return;
+                    }
+                    Long idCaptacion = captacionId(s);
+                    if (idCaptacion != null) {
+                        filas.putIfAbsent(idCaptacion, new CierreCaptacion(s, contrato.getFechaCierre()));
+                    }
+                });
+        return filas;
     }
 
     private List<FichaRowResponse> filasOportunidadesPropietario(long idPropietario, Contexto contexto) {
@@ -447,22 +518,27 @@ public final class FichaComercialSupport {
                 fecha);
     }
 
-    private FichaRowResponse filaCaptacion(Captacion c) {
+    private FichaRowResponse filaCaptacion(Captacion c, CierreCaptacion cierre) {
         LocalComercial local = c.getLocalComercial();
+        ClienteInteresado cliente = cierre != null ? cierre.solicitud().getClienteInteresado() : null;
+        String clienteCierre = cierre != null ? clienteNombre(cliente) : null;
+        String subtitulo = cierre != null
+                ? ("-".equals(clienteCierre) ? "Alquiler cerrado" : "Alquilada a " + clienteCierre)
+                : vigencia(c);
         return filaBase(
                 textoId(c.getIdCaptacion()),
                 texto(c.getCodigoCaptacion()),
                 "Captacion",
                 "Expediente de captacion",
-                vigencia(c),
+                subtitulo,
                 local,
-                null,
+                cliente,
                 c.getAgenteResponsable(),
-                estado(c.getEstado()),
+                cierre != null ? "Cerrada" : estado(c.getEstado()),
                 fecha(c.getFechaCaptacion()),
                 rutaCaptacion(c),
                 "pin",
-                "blue",
+                cierre != null ? "green" : "blue",
                 fechaOrden(c.getFechaCaptacion(), c.getFechaInicioVigencia()));
     }
 
@@ -552,23 +628,30 @@ public final class FichaComercialSupport {
     }
 
     private FichaRowResponse filaContrato(ContratoAlquiler c, Contexto contexto) {
-        SolicitudAlquiler solicitud = solicitudContrato(c);
+        return filaContrato(c, solicitudContrato(c), contexto);
+    }
+
+    private FichaRowResponse filaContrato(ContratoAlquiler c, SolicitudAlquiler solicitud, Contexto contexto) {
         if (solicitud == null || !visible(solicitud, contexto)) {
             return null;
         }
         LocalComercial local = local(solicitud);
         ClienteInteresado cliente = solicitud.getClienteInteresado();
+        String estadoContrato = c.getEstadoContrato() != null ? c.getEstadoContrato().getDescripcion() : "Vigente";
+        String clienteCierre = clienteNombre(cliente);
         return filaBase(
                 textoId(c.getIdContratoAlquiler()),
                 texto(solicitud.getCodigoSolicitud(),
                         solicitud.getOportunidadComercial() != null ? solicitud.getOportunidadComercial().getCodigoOportunidad() : null),
                 "Cierre",
-                clienteNombre(cliente),
-                c.getEstadoContrato() != null ? c.getEstadoContrato().getDescripcion() : "Alquilada",
+                "Alquiler cerrado",
+                "-".equals(clienteCierre)
+                        ? "Contrato " + estadoContrato.toLowerCase(Locale.ROOT) + "."
+                        : clienteCierre + " alquilo este local. Contrato " + estadoContrato.toLowerCase(Locale.ROOT) + ".",
                 local,
                 cliente,
                 solicitud.getAgenteResponsable(),
-                c.getEstadoContrato() != null ? c.getEstadoContrato().getDescripcion() : "Alquilada",
+                "Alquiler cerrado",
                 fecha(c.getFechaCierre()),
                 solicitud.getCodigoSolicitud() != null ? "solicitud-detail/" + solicitud.getCodigoSolicitud() : "",
                 "checkCircle",
@@ -641,6 +724,40 @@ public final class FichaComercialSupport {
                 "store",
                 "blue",
                 fechaOrden));
+    }
+
+    private void putLocalCaptacionPropietario(
+            Map<Long, FichaRowResponse> filas,
+            Captacion captacion,
+            CierreCaptacion cierre) {
+        LocalComercial local = captacion != null ? captacion.getLocalComercial() : null;
+        if (local == null || local.getIdLocal() == null) {
+            return;
+        }
+
+        ClienteInteresado cliente = cierre != null ? cierre.solicitud().getClienteInteresado() : null;
+        String clienteNombre = clienteNombre(cliente);
+        boolean alquilada = cierre != null;
+        LocalDateTime fechaCierre = cierre != null ? fechaOrden(cierre.fechaCierre()) : null;
+        filas.putIfAbsent(local.getIdLocal(), filaBase(
+                textoId(local.getIdLocal()),
+                texto(captacion.getCodigoCaptacion(), codigoLocal(local)),
+                "Propiedad",
+                alquilada ? "Alquiler cerrado" : "Local captado",
+                alquilada && !"-".equals(clienteNombre)
+                        ? "Alquilada a " + clienteNombre
+                        : texto(local.getRubroPermitido(), local.getDescripcion()),
+                local,
+                cliente,
+                captacion.getAgenteResponsable(),
+                alquilada ? "Alquilada" : estado(local.getEstado()),
+                fecha(alquilada && fechaCierre != null ? fechaCierre : fechaOrden(captacion.getFechaCaptacion())),
+                texto(rutaLocal(local)),
+                "store",
+                alquilada ? "green" : "blue",
+                alquilada
+                        ? fechaOrden(fechaCierre, fechaOrden(captacion.getFechaCaptacion()))
+                        : fechaOrden(captacion.getFechaCaptacion())));
     }
 
     private void putAgente(Map<Long, FichaRowResponse> agentes, AgenteInmobiliario agente, String proceso, LocalDateTime fechaOrden) {
@@ -859,6 +976,12 @@ public final class FichaComercialSupport {
         return captacion != null ? captacion.getLocalComercial() : null;
     }
 
+    private static Long captacionId(SolicitudAlquiler solicitud) {
+        return solicitud != null && solicitud.getCaptacion() != null
+                ? solicitud.getCaptacion().getIdCaptacion()
+                : null;
+    }
+
     private LocalComercial local(Visita visita) {
         Captacion captacion = visita != null ? visita.getCaptacion() : null;
         if (captacion == null && visita != null && visita.getOportunidadComercial() != null) {
@@ -1047,6 +1170,12 @@ public final class FichaComercialSupport {
             UsuarioAutenticado usuario,
             Set<Long> agentesBroker,
             Set<Long> captacionesBroker) {
+    }
+
+    private record CierreCaptacion(SolicitudAlquiler solicitud, LocalDate fechaCierre) {
+    }
+
+    private record CierreCliente(ContratoAlquiler contrato, SolicitudAlquiler solicitud) {
     }
 
     public record ClienteFichaResponse(

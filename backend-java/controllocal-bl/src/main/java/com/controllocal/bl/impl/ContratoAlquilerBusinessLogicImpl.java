@@ -195,6 +195,11 @@ public class ContratoAlquilerBusinessLogicImpl implements ContratoAlquilerBusine
             solicitud.cerrar();
             solicitudDAO.actualizar(solicitud);
 
+            // La captacion ya cumplio su objetivo: queda cerrada por alquiler concretado.
+            captacion.cerrar();
+            captacion.setFechaFinVigencia(cierre);
+            captacionDAO.actualizar(captacion);
+
             // El local alquilado deja de estar disponible + precio CERRADO real del local,
             // y se dan de baja sus publicaciones.
             Long idLocal = captacion.getLocalComercial() != null

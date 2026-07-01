@@ -1,4 +1,4 @@
-@* Histograma de cierres sobre captaciones + linea de conversion.
+@* Histograma de una serie principal sobre una serie de referencia + linea opcional.
    Las barras y etiquetas son HTML por columnas (nitidas y siempre alineadas);
    la linea de conversion es un overlay SVG en coordenadas porcentuales. *@
 <div class="cl-combo">
@@ -14,15 +14,15 @@
         }
         @if (IndicePico >= 0)
         {
-            <div class="cl-combo-peak">Máxima cantidad de cierres @($"{Bars[IndicePico]:0}")</div>
+            <div class="cl-combo-peak">@PeakLabel @ValorTexto(BarValorMostrado(IndicePico))</div>
         }
     </div>
 
     <div class="cl-combo-plot" style="--cl-combo-h:@(PlotH)px;">
         <div class="cl-combo-axis">
-            <span>@($"{MaxEscala:0}")</span>
-            <span>@($"{MaxEscala / 2:0}")</span>
-            <span>0</span>
+            <span>@ValorTexto(MaxEscala)</span>
+            <span>@ValorTexto(MaxEscala / 2)</span>
+            <span>@ValorTexto(0)</span>
         </div>
         <div class="cl-combo-stage">
             <div class="cl-combo-grid">
@@ -41,7 +41,7 @@
                             <div class="cl-combo-bar @(esPico ? "is-peak" : "")" style="height:@FP(Pct(Bars[i]))%;"></div>
                             @if (Bars[i] > 0)
                             {
-                                <span class="cl-combo-barval" style="bottom:@FP(Pct(Bars[i]))%;">@($"{Bars[i]:0}")</span>
+                                <span class="cl-combo-barval" style="bottom:@FP(Pct(Bars[i]))%;">@ValorTexto(BarValorMostrado(i))</span>
                             }
                         </div>
                     </div>
@@ -76,18 +76,24 @@
 @code {
     [Parameter] public double[] Bars { get; set; } = [];        // serie principal (cierres) — barra solida
     [Parameter] public double[] Totals { get; set; } = [];      // denominador (captaciones) — barra "fantasma" detras
+    [Parameter] public double[] BarDisplayValues { get; set; } = [];
     [Parameter] public double[] Line { get; set; } = [];        // conversion % (0..100)
     [Parameter] public string[] Labels { get; set; } = [];
+    [Parameter] public string[] Tooltips { get; set; } = [];
     [Parameter] public int Height { get; set; } = 180;
     [Parameter] public string LineColor { get; set; } = "#0F766E";
     [Parameter] public string BarsLabel { get; set; } = "Cierres";
     [Parameter] public string TotalsLabel { get; set; } = "Captaciones";
     [Parameter] public string LineLabel { get; set; } = "Conversion";
+    [Parameter] public string ValuePrefix { get; set; } = "";
+    [Parameter] public string ValueSuffix { get; set; } = "";
+    [Parameter] public string PeakLabel { get; set; } = "Maximo";
 
     private int PlotH => Height;
     private bool TieneTotales => Totals.Length > 0;
 
     private double GhostValor(int i) => i < Totals.Length ? Totals[i] : 0;
+    private double BarValorMostrado(int i) => i < BarDisplayValues.Length ? BarDisplayValues[i] : i < Bars.Length ? Bars[i] : 0;
 
     // Escala de las barras con "aire" para que quepan las etiquetas de valor sobre el pico,
     // tomando el mayor entre cierres y captaciones (asi la barra fantasma entra completa).
@@ -118,7 +124,7 @@
             if (Bars.Length == 0 || Bars.Max() <= 0) return -1;
             var idx = 0;
             for (var i = 1; i < Bars.Length; i++)
-                if (Bars[i] > Bars[idx]) idx = i;
+                if (BarValorMostrado(i) > BarValorMostrado(idx)) idx = i;
             return idx;
         }
     }
@@ -128,16 +134,22 @@
 
     private string Tooltip(int i)
     {
+        if (i < Tooltips.Length && !string.IsNullOrWhiteSpace(Tooltips[i]))
+            return Tooltips[i];
+
         var label = i < Labels.Length ? Labels[i] : $"Periodo {i + 1}";
-        var cierres = i < Bars.Length ? Bars[i] : 0;
+        var barra = BarValorMostrado(i);
         var convText = i < Line.Length ? $" · {Line[i]:0}% conversion" : "";
         if (TieneTotales)
         {
-            var caps = GhostValor(i);
-            return $"{label}: {cierres:0} cierres de {caps:0} captaciones{convText}";
+            var total = GhostValor(i);
+            return $"{label}: {BarsLabel.ToLowerInvariant()} {ValorTexto(barra)}; {TotalsLabel.ToLowerInvariant()} {ValorTexto(total)}{convText}";
         }
-        return $"{label}: {cierres:0} cierres{convText}";
+        return $"{label}: {BarsLabel.ToLowerInvariant()} {ValorTexto(barra)}{convText}";
     }
+
+    private string ValorTexto(double valor) =>
+        $"{ValuePrefix}{valor.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("es-PE"))}{ValueSuffix}";
 
     // Porcentaje para estilos inline: siempre con punto decimal (cultura invariante).
     private static string FP(double d) => d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);

@@ -44,6 +44,19 @@ public class PropietarioBusinessLogicImpl implements PropietarioBusinessLogic {
         return propietarioDAO.listarPagina(limite, desplazamiento);
     }
 
+    @Override
+    public List<Propietario> listarPorIds(java.util.Collection<Long> ids) {
+        return propietarioDAO.listarPorIds(ids);
+    }
+
+    @Override
+    public java.util.Map<Long, Integer> contarLocalesEnSeguimiento(
+            java.util.Collection<Long> idsPropietario,
+            java.util.Collection<Long> idsAgente,
+            java.util.Collection<Long> idsCaptacionSupervisadas) {
+        return propietarioDAO.contarLocalesEnSeguimiento(idsPropietario, idsAgente, idsCaptacionSupervisadas);
+    }
+
     public long contar() {
         return propietarioDAO.contar();
     }

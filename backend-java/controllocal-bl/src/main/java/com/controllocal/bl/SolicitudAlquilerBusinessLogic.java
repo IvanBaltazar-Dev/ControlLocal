@@ -19,6 +19,12 @@ public interface SolicitudAlquilerBusinessLogic {
     public List<SolicitudAlquiler> listarPorIds(Collection<Long> ids);
     // Solicitudes acotadas a los agentes dados (alcance por rol del dashboard).
     public List<SolicitudAlquiler> listarPorAgentes(Collection<Long> idsAgente);
+    // Pagina de solicitudes (LIMIT/OFFSET en SQL) con alcance por rol y filtros opcionales:
+    // idsAgente == null => todas (admin); vacia => sin resultados (broker sin equipo).
+    public List<SolicitudAlquiler> listarPagina(
+            Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion, int offset, int limite);
+    // Conteo total con el mismo alcance y filtros que listarPagina (para la paginacion).
+    public long contar(Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion);
     public List<SolicitudAlquiler> listarPorCaptaciones(Collection<Long> idsCaptacion);
     public List<SolicitudAlquiler> listarPorCliente(Long idCliente);
     public List<SolicitudAlquiler> listarPorPropietario(Long idPropietario);

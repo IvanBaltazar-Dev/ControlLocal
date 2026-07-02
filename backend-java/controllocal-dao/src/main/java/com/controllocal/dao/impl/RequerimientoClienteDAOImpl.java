@@ -115,6 +115,13 @@ public class RequerimientoClienteDAOImpl extends AbstractJdbcCrudDAO<Requerimien
         return result;
     }
 
+    // Al paginar por SQL (LIMIT/OFFSET en la base), re-enriquece los distritos en bloque
+    // para que la pagina no pierda la relacion que listarTodos si cargaba.
+    @Override
+    protected void enriquecerPagina(List<RequerimientoCliente> pagina) {
+        cargarDistritosEnBloque(pagina);
+    }
+
     @Override
     public List<RequerimientoCliente> listarPorCliente(Long idCliente) {
         JdbcSupport.validarId(idCliente);

@@ -121,6 +121,17 @@ public class SolicitudAlquilerBusinessLogicImpl implements SolicitudAlquilerBusi
     }
 
     @Override
+    public List<SolicitudAlquiler> listarPagina(
+            java.util.Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion, int offset, int limite) {
+        return solicitudDAO.listarPagina(idsAgente, idOportunidad, idCaptacion, offset, limite);
+    }
+
+    @Override
+    public long contar(java.util.Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion) {
+        return solicitudDAO.contar(idsAgente, idOportunidad, idCaptacion);
+    }
+
+    @Override
     public List<SolicitudAlquiler> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
         return solicitudDAO.listarPorCaptaciones(idsCaptacion);
     }

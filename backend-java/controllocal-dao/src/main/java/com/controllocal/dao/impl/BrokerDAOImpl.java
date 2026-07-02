@@ -119,6 +119,36 @@ public class BrokerDAOImpl implements BrokerDAO {
     }
 
     @Override
+    public List<Broker> listarPagina(int limite, int desplazamiento) {
+        List<Broker> brokers = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     SELECT_SQL + " ORDER BY b.id_broker LIMIT ? OFFSET ?")) {
+            ps.setInt(1, Math.max(1, Math.min(limite, 500)));
+            ps.setInt(2, Math.max(0, desplazamiento));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    brokers.add(mapRow(rs));
+                }
+            }
+            return brokers;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar la pagina de brokers.", e);
+        }
+    }
+
+    @Override
+    public long contar() {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM broker");
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar brokers.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(Broker broker) {
         validar(broker, true);
         new UsuarioInternoDAOImpl().actualizar(broker);

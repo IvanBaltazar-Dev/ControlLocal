@@ -97,15 +97,15 @@ public class SolicitudesRest {
             @QueryParam("tamano") @DefaultValue("10") int tamano,
             @QueryParam("idOportunidad") Long idOportunidad,
             @QueryParam("idCaptacion") Long idCaptacion) {
-        List<SolicitudAlquiler> fuente = solicitudesDelUsuario(SeguridadRest.usuario(request)).stream()
-                .filter(item -> coincideOportunidad(item, idOportunidad))
-                .filter(item -> coincideCaptacion(item, idCaptacion))
-                .toList();
+        Collection<Long> alcance = alcanceAgentes(SeguridadRest.usuario(request));
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
-        int hasta = Math.min(desde + tamanoValido, fuente.size());
-        List<SolicitudAlquiler> paginaItems = fuente.subList(desde, hasta);
+        int offset = (paginaValida - 1) * tamanoValido;
+        // Paginacion y conteo REALES en SQL (LIMIT/OFFSET + COUNT): antes se traia todo el
+        // conjunto del usuario y se cortaba con subList en memoria.
+        long total = solicitudes.contar(alcance, idOportunidad, idCaptacion);
+        List<SolicitudAlquiler> paginaItems =
+                solicitudes.listarPagina(alcance, idOportunidad, idCaptacion, offset, tamanoValido);
         Map<Long, Set<String>> entregados = entregadosPorSolicitud(paginaItems.stream()
                 .map(SolicitudAlquiler::getIdSolicitud)
                 .filter(java.util.Objects::nonNull)
@@ -113,7 +113,7 @@ public class SolicitudesRest {
         List<Dtos.SolicitudResponse> items = paginaItems.stream()
                 .map(item -> aResponse(item, entregados))
                 .toList();
-        return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, total, paginaValida, tamanoValido);
     }
 
     @GET
@@ -576,22 +576,21 @@ public class SolicitudesRest {
         return solicitud;
     }
 
-    private List<SolicitudAlquiler> solicitudesDelUsuario(UsuarioAutenticado usuario) {
+    // Alcance de agentes por rol para la paginacion en SQL: AGENTE -> el mismo; BROKER -> su
+    // equipo (lista vacia si no supervisa a nadie -> 0 resultados); ADMIN/otros -> null (sin
+    // filtro de agente, ve todas). Sustituye al antiguo solicitudesDelUsuario() que hacia
+    // listarTodos()/listarPorAgentes completos y luego cortaba en memoria.
+    private Collection<Long> alcanceAgentes(UsuarioAutenticado usuario) {
         if (usuario.tieneRol("AGENTE")) {
-            return solicitudes.listarPorAgentes(List.of(usuario.idDominio())).stream()
-                    .filter(item -> puedeVer(usuario, item))
-                    .toList();
+            return List.of(usuario.idDominio());
         }
         if (usuario.tieneRol("BROKER")) {
-            List<Long> idsAgente = agentes.listarPorBroker(usuario.idDominio()).stream()
+            return agentes.listarPorBroker(usuario.idDominio()).stream()
                     .map(AgenteInmobiliario::getIdAgente)
                     .filter(java.util.Objects::nonNull)
                     .toList();
-            return solicitudes.listarPorAgentes(idsAgente);
         }
-        return solicitudes.listarTodos().stream()
-                .filter(item -> puedeVer(usuario, item))
-                .toList();
+        return null;
     }
 
     private boolean puedeVer(UsuarioAutenticado usuario, SolicitudAlquiler solicitud) {

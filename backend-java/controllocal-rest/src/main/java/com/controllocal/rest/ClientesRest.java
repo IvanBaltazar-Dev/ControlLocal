@@ -65,13 +65,27 @@ public class ClientesRest {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        List<ClienteInteresado> permitidos = clientesPermitidos(usuario);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, permitidos.size());
-        int hasta = Math.min(desde + tamanoValido, permitidos.size());
-        List<Dtos.ClienteResponse> items = permitidos.subList(desde, hasta).stream()
+        int offset = (paginaValida - 1) * tamanoValido;
+        long total;
+        List<ClienteInteresado> paginaClientes;
+        if ("ADMIN".equals(usuario.rol()) || "AGENTE".equals(usuario.rol())) {
+            // Paginacion y conteo REALES en SQL (antes: listarTodos() + subList en memoria).
+            total = clientes.contar();
+            paginaClientes = clientes.listarPagina(tamanoValido, offset);
+        } else {
+            // BROKER: el conjunto de clientes permitidos ya viene acotado en SQL (no toda la
+            // tabla); se pagina sobre esos ids y se cargan en bloque con listarPorIds.
+            List<Long> ids = new ArrayList<>(idsClientesPermitidos(usuario));
+            ids.sort(java.util.Comparator.reverseOrder());
+            total = ids.size();
+            int desde = Math.min(offset, ids.size());
+            int hasta = Math.min(desde + tamanoValido, ids.size());
+            paginaClientes = clientes.listarPorIds(ids.subList(desde, hasta));
+        }
+        List<Dtos.ClienteResponse> items = paginaClientes.stream()
                 .map(Dtos.ClienteResponse::desde)
                 .toList();
-        return new PageResponse<>(items, permitidos.size(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, total, paginaValida, tamanoValido);
     }
 
     @GET
@@ -172,16 +186,6 @@ public class ClientesRest {
         if (dto == null) {
             throw ApiException.badRequest("Los datos del cliente son obligatorios.");
         }
-    }
-
-    private List<ClienteInteresado> clientesPermitidos(UsuarioAutenticado usuario) {
-        if ("ADMIN".equals(usuario.rol()) || "AGENTE".equals(usuario.rol())) {
-            return clientes.listarTodos();
-        }
-        Set<Long> ids = idsClientesPermitidos(usuario);
-        return clientes.listarTodos().stream()
-                .filter(cliente -> cliente.getIdCliente() != null && ids.contains(cliente.getIdCliente()))
-                .toList();
     }
 
     private boolean puedeVerCliente(ClienteInteresado cliente, UsuarioAutenticado usuario) {

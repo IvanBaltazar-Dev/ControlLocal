@@ -136,6 +136,16 @@ public class BrokerBusinessLogicImpl implements BrokerBusinessLogic {
         return brokerDAO.listarTodos();
     }
 
+    @Override
+    public List<Broker> listarPagina(int limite, int desplazamiento) {
+        return brokerDAO.listarPagina(limite, desplazamiento);
+    }
+
+    @Override
+    public long contar() {
+        return brokerDAO.contar();
+    }
+
     public boolean actualizarBroker(Long idBrokerAdministrador, Broker broker) {
         return TransactionRunner.write(conn -> {
             validarBrokerAdministrador(idBrokerAdministrador);

@@ -5,6 +5,7 @@ import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 import com.controllocal.bl.impl.BrokerBusinessLogicImpl;
@@ -15,9 +16,11 @@ import com.controllocal.bl.support.TransactionRunner;
 import com.controllocal.config.DatabaseConfig;
 import com.controllocal.dao.*;
 import com.controllocal.model.comercial.*;
+import com.controllocal.model.comercial.enums.EstadoAlerta;
 import com.controllocal.model.comercial.enums.EstadoCaptacion;
 import com.controllocal.model.comercial.enums.EstadoOportunidadComercial;
 import com.controllocal.model.comercial.enums.MotivoNoContinuidadTipo;
+import com.controllocal.model.comercial.enums.TipoEntidad;
 import com.controllocal.model.inmueble.LocalComercial;
 import com.controllocal.model.persona.*;
 import com.controllocal.model.persona.enums.EstadoActivoInactivo;
@@ -26,6 +29,8 @@ import com.controllocal.model.usuario.enums.EstadoOperativoAgente;
 import com.controllocal.model.usuario.enums.RolUsuarioInterno;
 
 public class BusinessLogicManualTest {
+
+    private static final long TRES_SEGUNDOS_NANOS = 3_000_000_000L;
 
     public static void main(String[] args) {
         BusinessLogicManualTest runner = new BusinessLogicManualTest();
@@ -44,6 +49,7 @@ public class BusinessLogicManualTest {
         runner.ejecutar("Solo administrador registra brokers", runner::soloBrokerAdministradorPuedeRegistrarBrokers);
         runner.ejecutar("No permitir dos brokers administradores", runner::noPermiteMasDeUnBrokerAdministrador);
         runner.ejecutar("No solicitud sobre captacion no activa", runner::noPermiteSolicitudSobreCaptacionNoActiva);
+        runner.ejecutar("Consultas principales responden en maximo 3 segundos", runner::consultasPrincipalesRespondenEnMaximoTresSegundos);
         runner.ejecutar("Motivo de no continuidad con referencia unica", runner::noPermiteMotivoNoContinuidadConVariasReferencias);
         runner.ejecutar("Rollback ante error", runner::operacionConErrorEjecutaRollback);
         System.out.println();
@@ -233,6 +239,37 @@ public class BusinessLogicManualTest {
         assertThrows(BusinessException.class, () -> fx.solicitudes.registrar(solicitud));
     }
 
+    public void consultasPrincipalesRespondenEnMaximoTresSegundos() throws Exception {
+        Fixtures fx = new Fixtures();
+        final int totalSolicitudes = 5_000;
+
+        Long idOportunidadFiltro = null;
+        Long idCaptacionFiltro = null;
+        for (int i = 0; i < totalSolicitudes; i++) {
+            Captacion captacion = fx.guardarCaptacion(EstadoCaptacion.ACTIVA);
+            SolicitudAlquiler solicitud = fx.solicitud(captacion);
+            solicitud.setCodigoSolicitud(String.format("SOL-%05d", i));
+            fx.solicitudDAO.crear(solicitud);
+            if (i == totalSolicitudes - 1) {
+                idOportunidadFiltro = solicitud.getOportunidadComercial().getIdOportunidad();
+                idCaptacionFiltro = captacion.getIdCaptacion();
+            }
+        }
+
+        Long idOportunidad = idOportunidadFiltro;
+        Long idCaptacion = idCaptacionFiltro;
+        assertCompletaEnMaximoTresSegundos(() ->
+                assertEquals((long) totalSolicitudes, fx.solicitudes.contar(null, null, null)));
+        assertCompletaEnMaximoTresSegundos(() ->
+                assertEquals(25, fx.solicitudes.listarPagina(null, null, null, 0, 25).size()));
+        assertCompletaEnMaximoTresSegundos(() ->
+                assertEquals(1, fx.solicitudes.listarPagina(List.of(fx.agente.getIdAgente()), idOportunidad, idCaptacion, 0, 25).size()));
+        assertCompletaEnMaximoTresSegundos(() ->
+                assertTrue(fx.solicitudes.buscarPorCodigo("SOL-04999").isPresent()));
+        assertCompletaEnMaximoTresSegundos(() ->
+                assertEquals(totalSolicitudes, fx.solicitudes.listarPorAgentes(List.of(fx.agente.getIdAgente())).size()));
+    }
+
     public void noPermiteMotivoNoContinuidadConVariasReferencias() {
         Fixtures fx = new Fixtures();
         MotivoNoContinuidad motivo = fx.motivo();
@@ -303,6 +340,15 @@ public class BusinessLogicManualTest {
         throw new AssertionError("Se esperaba excepcion " + expectedType.getSimpleName() + ", pero no se lanzo ninguna.");
     }
 
+    private static void assertCompletaEnMaximoTresSegundos(CheckedRunnable runnable) throws Exception {
+        long inicio = System.nanoTime();
+        runnable.run();
+        long duracion = System.nanoTime() - inicio;
+        if (duracion > TRES_SEGUNDOS_NANOS) {
+            throw new AssertionError("La consulta supero el maximo de 3 segundos. Duracion ns: " + duracion);
+        }
+    }
+
     private static class Fixtures {
         final InMemoryCaptacionDAO captacionDAO = new InMemoryCaptacionDAO();
         final InMemoryAgenteDAO agenteDAO = new InMemoryAgenteDAO();
@@ -310,12 +356,13 @@ public class BusinessLogicManualTest {
         final InMemoryBrokerAgenteDAO brokerAgenteDAO = new InMemoryBrokerAgenteDAO();
         final InMemoryReasignacionDAO reasignacionDAO = new InMemoryReasignacionDAO();
         final InMemoryReasignacionAgenteBrokerDAO reasignacionAgenteBrokerDAO = new InMemoryReasignacionAgenteBrokerDAO();
+        final InMemoryAlertaDAO alertaDAO = new InMemoryAlertaDAO();
         final InMemorySolicitudDAO solicitudDAO = new InMemorySolicitudDAO();
         final InMemoryOportunidadDAO oportunidadDAO = new InMemoryOportunidadDAO();
-        final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO, brokerAgenteDAO);
+        final CaptacionBusinessLogic captaciones = new CaptacionBusinessLogicImpl(captacionDAO, agenteDAO, reasignacionDAO, brokerDAO, brokerAgenteDAO, alertaDAO);
         final BrokerBusinessLogic brokers = new BrokerBusinessLogicImpl(brokerDAO, agenteDAO, brokerAgenteDAO, reasignacionAgenteBrokerDAO);
         final AgenteBusinessLogic agentes = new AgenteBusinessLogicImpl(agenteDAO, brokerDAO, brokerAgenteDAO);
-        final SolicitudAlquilerBusinessLogic solicitudes = new SolicitudAlquilerBusinessLogicImpl(solicitudDAO, captacionDAO, oportunidadDAO, agenteDAO);
+        final SolicitudAlquilerBusinessLogic solicitudes = new SolicitudAlquilerBusinessLogicImpl(solicitudDAO, captacionDAO, oportunidadDAO, agenteDAO, alertaDAO, brokerAgenteDAO);
         final AgenteInmobiliario agente = agente(1L, EstadoOperativoAgente.DISPONIBLE);
         final AgenteInmobiliario agenteNuevo = agente(2L, EstadoOperativoAgente.DISPONIBLE);
         final Broker broker = broker(1L, true);
@@ -585,6 +632,54 @@ public class BusinessLogicManualTest {
         public boolean eliminar(Long id) { return items.remove(id) != null; }
     }
 
+    private static class InMemoryAlertaDAO implements AlertaDAO {
+        final Map<Long, Alerta> items = new LinkedHashMap<>();
+        long sequence = 1;
+        public Long crear(Alerta alerta) { alerta.setIdAlerta(sequence++); items.put(alerta.getIdAlerta(), alerta); return alerta.getIdAlerta(); }
+        public Optional<Alerta> buscarPorId(Long id) { return Optional.ofNullable(items.get(id)); }
+        public List<Alerta> listarTodos() { return new ArrayList<>(items.values()); }
+        public boolean actualizar(Alerta alerta) { items.put(alerta.getIdAlerta(), alerta); return true; }
+        public boolean eliminar(Long id) {
+            Alerta alerta = items.get(id);
+            if (alerta == null) {
+                return false;
+            }
+            alerta.setEstado(EstadoAlerta.DESCARTADA);
+            alerta.setFechaResolucion(LocalDateTime.now());
+            return true;
+        }
+        public List<Alerta> listarActivasPorAgente(Long idAgente) {
+            return listarActivas().stream()
+                    .filter(a -> a.getAgente() != null
+                            && java.util.Objects.equals(a.getAgente().getIdAgente(), idAgente))
+                    .toList();
+        }
+        public List<Alerta> listarActivasPorEntidad(TipoEntidad entidadTipo, Long entidadId) {
+            return listarActivas().stream()
+                    .filter(a -> a.getEntidadTipo() == entidadTipo
+                            && java.util.Objects.equals(a.getEntidadId(), entidadId))
+                    .toList();
+        }
+        public List<Alerta> listarActivasPorBroker(Long idBroker) { return listarActivas(); }
+        public List<Alerta> listarActivas() {
+            return items.values().stream()
+                    .filter(a -> a.getEstado() == EstadoAlerta.ACTIVA)
+                    .toList();
+        }
+        public boolean marcarAtendida(Long idAlerta) {
+            Alerta alerta = items.get(idAlerta);
+            if (alerta == null || alerta.getEstado() != EstadoAlerta.ACTIVA) {
+                return false;
+            }
+            alerta.setEstado(EstadoAlerta.ATENDIDA);
+            alerta.setFechaResolucion(LocalDateTime.now());
+            return true;
+        }
+        public void crearAlertaSensible(Long idLocal, Long idAgente, String mensaje) {
+            // No se usa en esta bateria manual; se conserva como no-op del doble en memoria.
+        }
+    }
+
     private static class InMemorySolicitudDAO implements SolicitudAlquilerDAO {
         final Map<Long, SolicitudAlquiler> items = new LinkedHashMap<>();
         long sequence = 1;
@@ -609,6 +704,26 @@ public class BusinessLogicManualTest {
                             && idsAgente.contains(s.getAgenteResponsable().getIdAgente()))
                     .toList();
         }
+        public List<SolicitudAlquiler> listarPagina(
+                java.util.Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion, int offset, int limite) {
+            if (idsAgente != null && idsAgente.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<SolicitudAlquiler> filtradas = filtrar(idsAgente, idOportunidad, idCaptacion);
+            int desde = Math.max(0, offset);
+            if (desde >= filtradas.size()) {
+                return new ArrayList<>();
+            }
+            int limiteSeguro = Math.max(1, Math.min(limite, 500));
+            int hasta = Math.min(filtradas.size(), desde + limiteSeguro);
+            return new ArrayList<>(filtradas.subList(desde, hasta));
+        }
+        public long contar(java.util.Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion) {
+            if (idsAgente != null && idsAgente.isEmpty()) {
+                return 0L;
+            }
+            return filtrar(idsAgente, idOportunidad, idCaptacion).size();
+        }
         public List<SolicitudAlquiler> listarPorCaptaciones(java.util.Collection<Long> idsCaptacion) {
             return items.values().stream()
                     .filter(s -> idsCaptacion != null && s.getCaptacion() != null
@@ -626,6 +741,29 @@ public class BusinessLogicManualTest {
                     .filter(s -> s.getCaptacion() != null && s.getCaptacion().getLocalComercial() != null
                             && java.util.Objects.equals(s.getCaptacion().getLocalComercial().getIdPropietario(), idPropietario))
                     .toList();
+        }
+        private List<SolicitudAlquiler> filtrar(
+                java.util.Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion) {
+            return items.values().stream()
+                    .filter(s -> idsAgente == null || (s.getAgenteResponsable() != null
+                            && idsAgente.contains(s.getAgenteResponsable().getIdAgente())))
+                    .filter(s -> idOportunidad == null || (s.getOportunidadComercial() != null
+                            && idOportunidad.equals(s.getOportunidadComercial().getIdOportunidad())))
+                    .filter(s -> idCaptacion == null || coincideCaptacion(s, idCaptacion))
+                    .sorted((a, b) -> Long.compare(idSeguro(b), idSeguro(a)))
+                    .toList();
+        }
+        private boolean coincideCaptacion(SolicitudAlquiler solicitud, Long idCaptacion) {
+            if (solicitud.getCaptacion() != null
+                    && idCaptacion.equals(solicitud.getCaptacion().getIdCaptacion())) {
+                return true;
+            }
+            return solicitud.getOportunidadComercial() != null
+                    && solicitud.getOportunidadComercial().getCaptacion() != null
+                    && idCaptacion.equals(solicitud.getOportunidadComercial().getCaptacion().getIdCaptacion());
+        }
+        private long idSeguro(SolicitudAlquiler solicitud) {
+            return solicitud.getIdSolicitud() != null ? solicitud.getIdSolicitud() : Long.MIN_VALUE;
         }
     }
 

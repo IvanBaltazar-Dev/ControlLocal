@@ -20,6 +20,15 @@ public interface SolicitudAlquilerDAO extends CrudDAO<SolicitudAlquiler> {
 
     // Solicitudes acotadas a los agentes dados (alcance por rol). Vacio si la coleccion viene vacia.
     List<SolicitudAlquiler> listarPorAgentes(Collection<Long> idsAgente);
+
+    // Pagina de solicitudes con LIMIT/OFFSET en SQL. Alcance por rol: idsAgente == null => todas
+    // (admin); vacia => sin resultados (broker sin equipo). Filtros opcionales por oportunidad y
+    // captacion (null = sin filtro). Reemplaza el "traer todo y cortar en memoria".
+    List<SolicitudAlquiler> listarPagina(
+            Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion, int offset, int limite);
+
+    // Conteo total (para la paginacion) con el mismo alcance y filtros que listarPagina.
+    long contar(Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion);
     // Solicitudes acotadas a las captaciones dadas (alcance del broker). Vacio si la coleccion viene vacia.
     List<SolicitudAlquiler> listarPorCaptaciones(Collection<Long> idsCaptacion);
     // Solicitudes de un cliente (ficha comercial). Vacio si el id viene nulo.

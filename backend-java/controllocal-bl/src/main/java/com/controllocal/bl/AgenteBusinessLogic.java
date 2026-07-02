@@ -16,6 +16,8 @@ public interface AgenteBusinessLogic {
     public Optional<AgenteInmobiliario> buscarPorId(Long idAgente);
     public Optional<AgenteInmobiliario> buscarPorUsuario(Long idUsuario);
     public List<AgenteInmobiliario> listarTodos();
+    // Conteo REAL en SQL (COUNT) para generar codigos secuenciales sin escanear la tabla.
+    public long contar();
     public List<AgenteInmobiliario> listarPorBroker(Long idBroker);
     public boolean actualizar(AgenteInmobiliario agente);
     public boolean actualizar(Long idBrokerSupervisor, AgenteInmobiliario agente);

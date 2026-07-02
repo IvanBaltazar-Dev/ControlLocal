@@ -178,7 +178,7 @@ public class AgentesRest {
     }
 
     private String generarCodigo() {
-        return String.format("AGE-%03d", agentes.listarTodos().size() + 1);
+        return String.format("AGE-%03d", agentes.contar() + 1);
     }
 
     private static EstadoActivoInactivo estadoAdmin(String codigo) {

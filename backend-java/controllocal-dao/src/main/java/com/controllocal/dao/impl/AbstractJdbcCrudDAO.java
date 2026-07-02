@@ -88,6 +88,75 @@ abstract class AbstractJdbcCrudDAO<T> implements CrudDAO<T> {
         return query(conn, selectSql() + " ORDER BY " + idColumn(), ps -> {});
     }
 
+    // Paginacion REAL en SQL (LIMIT/OFFSET): reemplaza el respaldo en memoria de CrudDAO,
+    // que traia toda la tabla. El limite se acota a [1, 500] para impedir consultas masivas.
+    @Override
+    public List<T> listarPagina(int limite, int desplazamiento) {
+        int lim = Math.max(1, Math.min(limite, 500));
+        int off = Math.max(0, desplazamiento);
+        try (Connection conn = DBManager.getConnection()) {
+            List<T> pagina = query(conn,
+                    selectSql() + " ORDER BY " + idColumn() + " LIMIT ? OFFSET ?",
+                    ps -> {
+                        ps.setInt(1, lim);
+                        ps.setInt(2, off);
+                    });
+            enriquecerPagina(pagina);
+            return pagina;
+        } catch (SQLException e) {
+            throw failure("paginar", e);
+        }
+    }
+
+    // Conteo REAL en SQL: cuenta las filas de selectSql() sin materializar la tabla.
+    // Como mapRow devuelve una entidad por fila, el conteo de filas = conteo de entidades.
+    @Override
+    public long contar() {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT COUNT(*) FROM (" + selectSql() + ") AS _conteo");
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw failure("contar", e);
+        }
+    }
+
+    // Gancho opcional para que un DAO enriquezca la pagina tras leerla (p. ej. cargar
+    // relaciones en bloque). Por defecto no hace nada.
+    protected void enriquecerPagina(List<T> pagina) {
+        // no-op
+    }
+
+    // Existencia via SQL (EXISTS): O(1) indexado en vez de traer y recorrer la tabla.
+    // Reemplaza los listarTodos().anyMatch() de las validaciones de negocio.
+    protected boolean existePor(String whereClause, SqlBinder binder) {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT EXISTS(" + selectSql() + " WHERE " + whereClause + ")")) {
+            binder.bind(ps);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean(1);
+            }
+        } catch (SQLException e) {
+            throw failure("verificar existencia en", e);
+        }
+    }
+
+    // Conteo filtrado via SQL (COUNT ... WHERE): para KPIs/validaciones sin traer filas.
+    protected long contarPor(String whereClause, SqlBinder binder) {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT COUNT(*) FROM (" + selectSql() + " WHERE " + whereClause + ") AS _conteo")) {
+            binder.bind(ps);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0L;
+            }
+        } catch (SQLException e) {
+            throw failure("contar en", e);
+        }
+    }
+
     @Override
     public boolean actualizar(T entity) {
         try (Connection conn = DBManager.getConnection()) {

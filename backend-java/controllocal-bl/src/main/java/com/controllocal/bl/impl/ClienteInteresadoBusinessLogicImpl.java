@@ -48,6 +48,11 @@ public class ClienteInteresadoBusinessLogicImpl implements ClienteInteresadoBusi
         return clienteDAO.contar();
     }
 
+    @Override
+    public List<ClienteInteresado> listarPorIds(java.util.Collection<Long> ids) {
+        return clienteDAO.listarPorIds(ids);
+    }
+
     public boolean actualizar(ClienteInteresado cliente) {
         return TransactionRunner.write(conn -> {
             BusinessValidations.id(cliente != null ? cliente.getIdCliente() : null, "El id de cliente interesado");

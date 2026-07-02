@@ -127,6 +127,31 @@ public class ClienteInteresadoDAOImpl implements ClienteInteresadoDAO {
     }
 
     @Override
+    public List<ClienteInteresado> listarPorIds(java.util.Collection<Long> ids) {
+        List<ClienteInteresado> clientes = new ArrayList<>();
+        if (ids == null || ids.isEmpty()) {
+            return clientes;
+        }
+        String sql = SELECT_SQL + " WHERE c.id_cliente IN (" + JdbcSupport.placeholders(ids.size())
+                + ") ORDER BY c.id_cliente DESC";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int i = 1;
+            for (Long id : ids) {
+                ps.setLong(i++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    clientes.add(mapRow(rs));
+                }
+            }
+            return clientes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar clientes interesados por ids.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(ClienteInteresado cliente) {
         validar(cliente, true);
         new PersonaDAOImpl().actualizar(cliente.getPersona());

@@ -17,8 +17,9 @@ public interface CrudDAO<T> {
 
     boolean eliminar(Long id);
 
-    // Paginacion. Las implementaciones con tablas grandes la resuelven con
-    // LIMIT/OFFSET en SQL; este respaldo en memoria cubre al resto.
+    // Paginacion. AbstractJdbcCrudDAO la resuelve con LIMIT/OFFSET reales en SQL; los DAOs
+    // hechos a mano exponen sus propios listarPagina/contar. Este respaldo en memoria es el
+    // ultimo recurso (catalogos pequenos) y NO debe usarse para tablas de crecimiento.
     default List<T> listarPagina(int limite, int desplazamiento) {
         return listarTodos().stream()
                 .skip(Math.max(0, desplazamiento))

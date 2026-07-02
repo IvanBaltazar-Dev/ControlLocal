@@ -130,6 +130,17 @@ public class AgenteInmobiliarioDAOImpl implements AgenteInmobiliarioDAO {
     }
 
     @Override
+    public long contar() {
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM agente_inmobiliario");
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar agentes inmobiliarios.", e);
+        }
+    }
+
+    @Override
     public boolean actualizar(AgenteInmobiliario agente) {
         validar(agente, true);
         new UsuarioInternoDAOImpl().actualizar(agente);

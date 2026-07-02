@@ -63,15 +63,31 @@ public class PropietariosRest {
         UsuarioAutenticado usuario = SeguridadRest.usuario(request);
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        List<Propietario> permitidos = propietariosPermitidos(usuario);
-        Map<Long, Integer> localesPorPropietario = contarLocalesPorPropietario(usuario);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, permitidos.size());
-        int hasta = Math.min(desde + tamanoValido, permitidos.size());
-        List<Dtos.PropietarioResponse> items = permitidos.subList(desde, hasta).stream()
+        int offset = (paginaValida - 1) * tamanoValido;
+        long total;
+        List<Propietario> paginaProps;
+        if ("ADMIN".equals(usuario.rol()) || "AGENTE".equals(usuario.rol())) {
+            // Paginacion y conteo REALES en SQL (antes: listarTodos() + subList en memoria).
+            total = propietarios.contar();
+            paginaProps = propietarios.listarPagina(tamanoValido, offset);
+        } else {
+            // BROKER: el conjunto permitido ya viene acotado en SQL; se pagina sobre esos ids.
+            List<Long> ids = new ArrayList<>(idsPropietariosPermitidos(usuario));
+            ids.sort(java.util.Comparator.reverseOrder());
+            total = ids.size();
+            int desde = Math.min(offset, ids.size());
+            int hasta = Math.min(desde + tamanoValido, ids.size());
+            paginaProps = propietarios.listarPorIds(ids.subList(desde, hasta));
+        }
+        // Conteo de locales en seguimiento SOLO para los propietarios de la pagina (no escanea todo).
+        List<Long> idsPagina = paginaProps.stream()
+                .map(Propietario::getIdPropietario).filter(Objects::nonNull).toList();
+        Map<Long, Integer> localesPorPropietario = localesEnSeguimiento(usuario, idsPagina);
+        List<Dtos.PropietarioResponse> items = paginaProps.stream()
                 .map(propietario -> Dtos.PropietarioResponse.desde(propietario,
                         localesPorPropietario.getOrDefault(propietario.getIdPropietario(), 0)))
                 .toList();
-        return new PageResponse<>(items, permitidos.size(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, total, paginaValida, tamanoValido);
     }
 
     @GET
@@ -85,7 +101,8 @@ public class PropietariosRest {
         }
         return Dtos.PropietarioResponse.desde(
                 propietario,
-                contarLocalesPorPropietario(usuario).getOrDefault(propietario.getIdPropietario(), 0));
+                localesEnSeguimiento(usuario, List.of(propietario.getIdPropietario()))
+                        .getOrDefault(propietario.getIdPropietario(), 0));
     }
 
     @GET
@@ -157,15 +174,26 @@ public class PropietariosRest {
         }
     }
 
-    private List<Propietario> propietariosPermitidos(UsuarioAutenticado usuario) {
-        if ("ADMIN".equals(usuario.rol()) || "AGENTE".equals(usuario.rol())) {
-            return propietarios.listarTodos();
+    // Conteo de locales en seguimiento por propietario, resuelto en SQL y acotado al alcance del
+    // rol, SOLO para los propietarios dados (la pagina). Reemplaza el escaneo en memoria de todas
+    // las captaciones/prospecciones que hacia el antiguo contarLocalesPorPropietario.
+    private Map<Long, Integer> localesEnSeguimiento(UsuarioAutenticado usuario, List<Long> idsPropietario) {
+        if (idsPropietario.isEmpty()) {
+            return Map.of();
         }
-        Set<Long> ids = idsPropietariosPermitidos(usuario);
-        return propietarios.listarTodos().stream()
-                .filter(propietario -> propietario.getIdPropietario() != null
-                        && ids.contains(propietario.getIdPropietario()))
-                .toList();
+        if ("ADMIN".equals(usuario.rol())) {
+            return propietarios.contarLocalesEnSeguimiento(idsPropietario, null, null);
+        }
+        if ("AGENTE".equals(usuario.rol())) {
+            return propietarios.contarLocalesEnSeguimiento(idsPropietario, List.of(usuario.idDominio()), null);
+        }
+        // BROKER: su equipo (por agente) union las captaciones que supervisa (por captacion).
+        Set<Long> equipo = agentesSupervisados(usuario);
+        Set<Long> supervisadas = captacionesPermitidasBroker(usuario).stream()
+                .map(Captacion::getIdCaptacion)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return propietarios.contarLocalesEnSeguimiento(idsPropietario, equipo, supervisadas);
     }
 
     private boolean puedeVerPropietario(Propietario propietario, UsuarioAutenticado usuario) {
@@ -224,40 +252,6 @@ public class PropietariosRest {
         List<Captacion> resultado = new ArrayList<>(captaciones.listarPorAgentes(agentesSupervisados(usuario)));
         resultado.addAll(captacionesPermitidasBroker(usuario));
         return resultado;
-    }
-
-    private Map<Long, Integer> contarLocalesPorPropietario(UsuarioAutenticado usuario) {
-        Set<Long> agentesBroker = agentesSupervisados(usuario);
-        Set<Long> captacionesBroker = captacionesPermitidasBroker(usuario).stream()
-                .map(Captacion::getIdCaptacion)
-                .collect(Collectors.toSet());
-        Map<Long, Set<String>> locales = new HashMap<>();
-
-        prospeccionesEnAlcance(usuario).stream()
-                .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker))
-                .map(Prospeccion::getLocalComercial)
-                .forEach(local -> agregarLocal(locales, local));
-
-        captacionesEnAlcance(usuario).stream()
-                .filter(item -> permitidoPorAgente(item.getAgenteResponsable(), usuario, agentesBroker)
-                        || (item.getIdCaptacion() != null && captacionesBroker.contains(item.getIdCaptacion())))
-                .map(Captacion::getLocalComercial)
-                .forEach(local -> agregarLocal(locales, local));
-
-        Map<Long, Integer> conteo = new HashMap<>();
-        locales.forEach((idPropietario, idsLocales) -> conteo.put(idPropietario, idsLocales.size()));
-        return conteo;
-    }
-
-    private void agregarLocal(Map<Long, Set<String>> locales, LocalComercial local) {
-        Long idPropietario = propietarioId(local);
-        if (idPropietario == null) {
-            return;
-        }
-        String claveLocal = local.getIdLocal() != null
-                ? "id:" + local.getIdLocal()
-                : "txt:" + Objects.toString(local.getDireccion(), "") + "|" + Objects.toString(local.getDistrito(), "");
-        locales.computeIfAbsent(idPropietario, key -> new HashSet<>()).add(claveLocal);
     }
 
     private Long propietarioId(LocalComercial local) {

@@ -273,6 +273,80 @@ public class SolicitudAlquilerDAOImpl implements SolicitudAlquilerDAO {
     }
 
     @Override
+    public List<SolicitudAlquiler> listarPagina(
+            Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion, int offset, int limite) {
+        if (idsAgente != null && idsAgente.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Long> params = new ArrayList<>();
+        String where = construirWhere(idsAgente, idOportunidad, idCaptacion, params);
+        String sql = SELECT_SQL + where + " ORDER BY s.id_solicitud DESC LIMIT ? OFFSET ?";
+        List<SolicitudAlquiler> solicitudes = new ArrayList<>();
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long p : params) {
+                ps.setLong(idx++, p);
+            }
+            ps.setInt(idx++, Math.max(1, Math.min(limite, 500)));
+            ps.setInt(idx, Math.max(0, offset));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    solicitudes.add(mapRow(rs));
+                }
+            }
+            return solicitudes;
+        } catch (SQLException e) {
+            throw new DAOException("Error al paginar solicitudes de alquiler.", e);
+        }
+    }
+
+    @Override
+    public long contar(Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion) {
+        if (idsAgente != null && idsAgente.isEmpty()) {
+            return 0L;
+        }
+        List<Long> params = new ArrayList<>();
+        String where = construirWhere(idsAgente, idOportunidad, idCaptacion, params);
+        // El INNER JOIN a oportunidad no altera el conteo (id_oportunidad es obligatorio y unico
+        // por solicitud) y habilita el filtro por id_captacion.
+        String sql = "SELECT COUNT(*) FROM solicitud_alquiler s "
+                + "INNER JOIN oportunidad_comercial o ON s.id_oportunidad = o.id_oportunidad" + where;
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long p : params) {
+                ps.setLong(idx++, p);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0L;
+            }
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar solicitudes de alquiler.", e);
+        }
+    }
+
+    // Arma el WHERE (y acumula los parametros) para listarPagina/contar. Alcance por agentes
+    // (null = sin filtro) y filtros opcionales por oportunidad/captacion.
+    private static String construirWhere(
+            Collection<Long> idsAgente, Long idOportunidad, Long idCaptacion, List<Long> params) {
+        List<String> conds = new ArrayList<>();
+        if (idsAgente != null) {
+            conds.add("s.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ")");
+            params.addAll(idsAgente);
+        }
+        if (idOportunidad != null) {
+            conds.add("s.id_oportunidad = ?");
+            params.add(idOportunidad);
+        }
+        if (idCaptacion != null) {
+            conds.add("o.id_captacion = ?");
+            params.add(idCaptacion);
+        }
+        return conds.isEmpty() ? "" : " WHERE " + String.join(" AND ", conds);
+    }
+
+    @Override
     public boolean actualizar(SolicitudAlquiler solicitud) {
         validar(solicitud, true);
         try (Connection conn = DBManager.getConnection();

@@ -14,6 +14,9 @@ public interface BrokerBusinessLogic {
     public Optional<Broker> buscarPorId(Long idBroker);
     public Optional<Broker> buscarPorUsuario(Long idUsuario);
     public List<Broker> listarTodos();
+    // Paginacion y conteo REALES en SQL (LIMIT/OFFSET + COUNT) para el listado de brokers.
+    public List<Broker> listarPagina(int limite, int desplazamiento);
+    public long contar();
     public boolean actualizarBroker(Long idBrokerAdministrador, Broker broker);
     // Alta/edicion atomica del broker con su persona y usuario interno (1 transaccion).
     public Long registrarBrokerCompleto(Long idBrokerAdministrador, Broker broker);

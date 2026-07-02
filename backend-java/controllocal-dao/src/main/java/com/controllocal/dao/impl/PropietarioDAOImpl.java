@@ -6,7 +6,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.controllocal.config.DBManager;
@@ -111,6 +114,101 @@ public class PropietarioDAOImpl implements PropietarioDAO {
             return rs.next() ? rs.getLong(1) : 0L;
         } catch (SQLException e) {
             throw new DAOException("Error al contar propietarios.", e);
+        }
+    }
+
+    @Override
+    public List<Propietario> listarPorIds(Collection<Long> ids) {
+        List<Propietario> propietarios = new ArrayList<>();
+        if (ids == null || ids.isEmpty()) {
+            return propietarios;
+        }
+        String sql = SELECT_SQL + " WHERE pr.id_propietario IN (" + JdbcSupport.placeholders(ids.size())
+                + ") ORDER BY pr.id_propietario DESC";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int i = 1;
+            for (Long id : ids) {
+                ps.setLong(i++, id);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    propietarios.add(mapRow(rs));
+                }
+            }
+            return propietarios;
+        } catch (SQLException e) {
+            throw new DAOException("Error al listar propietarios por ids.", e);
+        }
+    }
+
+    // Conteo, por propietario, de los locales distintos que aparecen "en seguimiento" (en alguna
+    // captacion o prospeccion) DENTRO del alcance del usuario, restringido a los propietarios dados
+    // (la pagina actual). Reemplaza el escaneo en memoria de todas las captaciones/prospecciones.
+    // Alcance: idsAgente == null => sin filtro de agente (admin); vacio => ningun agente casa;
+    // idsCaptacionSupervisadas => captaciones que el broker supervisa aunque el agente no sea suyo.
+    @Override
+    public Map<Long, Integer> contarLocalesEnSeguimiento(
+            Collection<Long> idsPropietario,
+            Collection<Long> idsAgente,
+            Collection<Long> idsCaptacionSupervisadas) {
+        Map<Long, Integer> conteo = new HashMap<>();
+        if (idsPropietario == null || idsPropietario.isEmpty()) {
+            return conteo;
+        }
+        List<Long> params = new ArrayList<>();
+        String propsPh = JdbcSupport.placeholders(idsPropietario.size());
+
+        // Rama captacion: locales del propietario con al menos una captacion en alcance.
+        StringBuilder cap = new StringBuilder()
+                .append("SELECT l.id_propietario AS id_propietario, l.id_local AS id_local ")
+                .append("FROM local_comercial l INNER JOIN captacion c ON c.id_local = l.id_local ")
+                .append("WHERE l.id_propietario IN (").append(propsPh).append(")");
+        params.addAll(idsPropietario);
+        if (idsAgente != null) {
+            List<String> ors = new ArrayList<>();
+            if (!idsAgente.isEmpty()) {
+                ors.add("c.id_agente IN (" + JdbcSupport.placeholders(idsAgente.size()) + ")");
+                params.addAll(idsAgente);
+            }
+            if (idsCaptacionSupervisadas != null && !idsCaptacionSupervisadas.isEmpty()) {
+                ors.add("c.id_captacion IN (" + JdbcSupport.placeholders(idsCaptacionSupervisadas.size()) + ")");
+                params.addAll(idsCaptacionSupervisadas);
+            }
+            cap.append(ors.isEmpty() ? " AND 1=0" : " AND (" + String.join(" OR ", ors) + ")");
+        }
+
+        // Rama prospeccion: locales del propietario con al menos una prospeccion en alcance.
+        StringBuilder pros = new StringBuilder()
+                .append("SELECT l.id_propietario, l.id_local ")
+                .append("FROM local_comercial l INNER JOIN prospeccion pr ON pr.id_local = l.id_local ")
+                .append("WHERE l.id_propietario IN (").append(propsPh).append(")");
+        params.addAll(idsPropietario);
+        if (idsAgente != null) {
+            if (!idsAgente.isEmpty()) {
+                pros.append(" AND pr.id_agente IN (").append(JdbcSupport.placeholders(idsAgente.size())).append(")");
+                params.addAll(idsAgente);
+            } else {
+                pros.append(" AND 1=0");
+            }
+        }
+
+        String sql = "SELECT id_propietario, COUNT(DISTINCT id_local) AS n FROM ("
+                + cap + " UNION " + pros + ") t GROUP BY id_propietario";
+        try (Connection conn = DBManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int idx = 1;
+            for (Long p : params) {
+                ps.setLong(idx++, p);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    conteo.put(rs.getLong("id_propietario"), rs.getInt("n"));
+                }
+            }
+            return conteo;
+        } catch (SQLException e) {
+            throw new DAOException("Error al contar locales en seguimiento por propietario.", e);
         }
     }
 

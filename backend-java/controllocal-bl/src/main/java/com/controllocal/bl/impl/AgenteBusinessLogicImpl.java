@@ -113,6 +113,11 @@ public class AgenteBusinessLogicImpl implements AgenteBusinessLogic {
         return agenteDAO.listarTodos();
     }
 
+    @Override
+    public long contar() {
+        return agenteDAO.contar();
+    }
+
     public List<AgenteInmobiliario> listarPorBroker(Long idBroker) {
         Broker broker = validarBroker(idBroker);
         if (broker.isEsAdministrador()) {

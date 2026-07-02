@@ -50,15 +50,15 @@ public class BrokersRest {
             @QueryParam("pagina") @DefaultValue("1") int pagina,
             @QueryParam("tamano") @DefaultValue("50") int tamano) {
         SeguridadRest.usuario(request);
-        List<Broker> fuente = brokers.listarTodos();
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
-        int hasta = Math.min(desde + tamanoValido, fuente.size());
-        List<Dtos.BrokerResponse> items = fuente.subList(desde, hasta).stream()
+        int offset = (paginaValida - 1) * tamanoValido;
+        // Paginacion y conteo REALES en SQL (antes: listarTodos() + subList en memoria).
+        long total = brokers.contar();
+        List<Dtos.BrokerResponse> items = brokers.listarPagina(tamanoValido, offset).stream()
                 .map(b -> Dtos.BrokerResponse.desde(b, agentesACargo(b.getIdBroker())))
                 .toList();
-        return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, total, paginaValida, tamanoValido);
     }
 
     @GET
@@ -147,7 +147,7 @@ public class BrokersRest {
     }
 
     private String generarCodigo() {
-        return String.format("BRK-%03d", brokers.listarTodos().size() + 1);
+        return String.format("BRK-%03d", brokers.contar() + 1);
     }
 
     private static boolean vacio(String valor) {

@@ -252,8 +252,9 @@ public class LocalesRest {
     @GET
     @Path("{id}/fotos")
     public List<FotoLocalResponse> listarFotos(@PathParam("id") long id) {
+        String proveedor = Almacenes.actual().proveedor();
         return locales.listarFotos(id).stream()
-                .map(f -> new FotoLocalResponse(f.getIdFoto(), f.getClave(), f.getNombreArchivo()))
+                .map(f -> new FotoLocalResponse(f.getIdFoto(), f.getClave(), f.getNombreArchivo(), proveedor))
                 .toList();
     }
 
@@ -288,11 +289,12 @@ public class LocalesRest {
             throw ApiException.badRequest("El archivo no es una imagen PNG o JPG valida.");
         }
         try {
-            AlmacenDocumentos.ArchivoGuardado guardado = Almacenes.actual().guardar(
+            AlmacenDocumentos almacen = Almacenes.actual();
+            AlmacenDocumentos.ArchivoGuardado guardado = almacen.guardar(
                     "locales/" + id, dto.nombreArchivo(), contenido, contentType);
             long idFoto = locales.agregarFoto(id, guardado.clave(), guardado.nombre());
             return Response.status(Response.Status.CREATED)
-                    .entity(new FotoLocalResponse(idFoto, guardado.clave(), guardado.nombre()))
+                    .entity(new FotoLocalResponse(idFoto, guardado.clave(), guardado.nombre(), almacen.proveedor()))
                     .build();
         } catch (AlmacenException error) {
             throw new ApiException(502, "No se pudo guardar la foto en el almacen: " + error.getMessage());
@@ -348,7 +350,7 @@ public class LocalesRest {
     public record FotoLocalRequest(String nombreArchivo, String contenidoBase64) {
     }
 
-    public record FotoLocalResponse(Long idFoto, String clave, String nombre) {
+    public record FotoLocalResponse(Long idFoto, String clave, String nombre, String proveedor) {
     }
 
     private void validarDto(Dtos.LocalRequest dto) {

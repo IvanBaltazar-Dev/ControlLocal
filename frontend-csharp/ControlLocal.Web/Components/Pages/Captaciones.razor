@@ -41,6 +41,10 @@
                    OnExport="@(() => ExportarCsv(filtradas))">
             <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
             <FilterSelect Placeholder="Vigencia" Options="_vigencias" @bind-Value="_vigencia" />
+            @if (App.Role is Roles.Broker or Roles.Admin)
+            {
+                <FilterSelect Placeholder="Agente" Options="_agentes" @bind-Value="_agente" />
+            }
         </FilterBar>
 
         <div class="cl-gallery-grid">
@@ -123,6 +127,7 @@
     private string _query = "";
     private string _distrito = "";
     private string _vigencia = "";
+    private string _agente = "";
     private int _pagina = 1;
     private bool _cargando = true;
     private string? _error;
@@ -150,6 +155,7 @@
     // Dimensiones derivadas de los datos (sin valores hardcodeados).
     private string[] _estados => Todas.Select(c => c.Estado).Distinct().OrderBy(x => x).ToArray();
     private IReadOnlyList<string> _distritos => Todas.Select(c => c.DistritoLocal).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+    private IReadOnlyList<string> _agentes => Todas.Select(c => c.NombreAgenteResponsable).Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().OrderBy(x => x).ToList();
     private readonly IReadOnlyList<string> _vigencias = new[] { "Por vencer", "Vigente" };
 
     private int CuentaEstado(string e) => Todas.Count(c => c.Estado == e);
@@ -159,11 +165,12 @@
         .ToArray();
 
     private bool HayFiltros => _tab != "Todas" || !string.IsNullOrEmpty(_query)
-                               || !string.IsNullOrEmpty(_distrito) || !string.IsNullOrEmpty(_vigencia);
+                               || !string.IsNullOrEmpty(_distrito) || !string.IsNullOrEmpty(_vigencia)
+                               || !string.IsNullOrEmpty(_agente);
 
     private void LimpiarFiltros()
     {
-        _tab = "Todas"; _query = ""; _distrito = ""; _vigencia = ""; _pagina = 1;
+        _tab = "Todas"; _query = ""; _distrito = ""; _vigencia = ""; _agente = ""; _pagina = 1;
     }
 
     private async Task ExportarCsv(IReadOnlyList<CaptacionDto> filtradas)
@@ -182,6 +189,7 @@
         (_tab == "Todas" || c.Estado == _tab) &&
         (string.IsNullOrEmpty(_distrito) || c.DistritoLocal == _distrito) &&
         (string.IsNullOrEmpty(_vigencia) || VigenciaCat(c) == _vigencia) &&
+        (string.IsNullOrEmpty(_agente) || c.NombreAgenteResponsable == _agente) &&
         (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
 
     private static bool Coincide(CaptacionDto c, string q) =>

@@ -85,30 +85,59 @@ public class InteraccionesRest {
                         .reversed()
                         .thenComparing(InteraccionComercial::getIdInteraccion, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+        // Búsqueda de texto: se filtra sobre el MODELO (campos ya cargados por el SELECT: código de
+        // prospección/captación, nombre de cliente/agente y observaciones) ANTES de paginar. Así el
+        // enriquecimiento costoso (una lectura por prospección/captación de la página) solo recae
+        // sobre la página visible y no sobre toda la fuente: antes se enriquecía toda la lista al
+        // buscar, lo que en RDS tardaba y hacía "fallar" (timeout / sin resultados) la búsqueda.
+        List<InteraccionComercial> encontrados = (q == null || q.isBlank())
+                ? fuente
+                : fuente.stream().filter(item -> coincideBusquedaModelo(q, item)).toList();
+
         int paginaValida = SeguridadRest.pagina(pagina);
         int tamanoValido = SeguridadRest.tamano(tamano);
-        int desde = Math.min((paginaValida - 1) * tamanoValido, fuente.size());
-        int hasta = Math.min(desde + tamanoValido, fuente.size());
-
-        if (q == null || q.isBlank()) {
-            List<InteraccionComercial> paginaItems = fuente.subList(desde, hasta);
-            enriquecerDirectas(paginaItems);
-            Map<Long, OportunidadComercial> ops = contieneOportunidades(paginaItems) ? mapaOportunidades(paginaItems) : Map.of();
-            List<Dtos.InteraccionResponse> items = paginaItems.stream()
-                    .map(item -> Dtos.InteraccionResponse.desde(item, oportunidadDe(ops, item)))
-                    .toList();
-            return new PageResponse<>(items, fuente.size(), paginaValida, tamanoValido);
-        }
-
-        enriquecerDirectas(fuente);
-        Map<Long, OportunidadComercial> ops = contieneOportunidades(fuente) ? mapaOportunidades(fuente) : Map.of();
-        List<Dtos.InteraccionResponse> respuestas = fuente.stream()
+        int desde = Math.min((paginaValida - 1) * tamanoValido, encontrados.size());
+        int hasta = Math.min(desde + tamanoValido, encontrados.size());
+        List<InteraccionComercial> paginaItems = encontrados.subList(desde, hasta);
+        enriquecerDirectas(paginaItems);
+        Map<Long, OportunidadComercial> ops = contieneOportunidades(paginaItems) ? mapaOportunidades(paginaItems) : Map.of();
+        List<Dtos.InteraccionResponse> items = paginaItems.stream()
                 .map(item -> Dtos.InteraccionResponse.desde(item, oportunidadDe(ops, item)))
-                .filter(item -> coincideBusqueda(q, item))
                 .toList();
-        int desdeBusqueda = Math.min((paginaValida - 1) * tamanoValido, respuestas.size());
-        int hastaBusqueda = Math.min(desdeBusqueda + tamanoValido, respuestas.size());
-        return new PageResponse<>(respuestas.subList(desdeBusqueda, hastaBusqueda), respuestas.size(), paginaValida, tamanoValido);
+        return new PageResponse<>(items, encontrados.size(), paginaValida, tamanoValido);
+    }
+
+    // Búsqueda sobre el modelo, con los campos que el SELECT ya trae (sin necesidad de enriquecer):
+    // código de prospección/captación, nombre del cliente (contexto cliente), nombre del agente y
+    // observaciones. Permite filtrar toda la fuente en memoria antes de paginar.
+    private static boolean coincideBusquedaModelo(String q, InteraccionComercial item) {
+        if (q == null || q.isBlank()) {
+            return true;
+        }
+        String aguja = q.trim().toLowerCase();
+        return contiene(codigoProspeccion(item), aguja)
+                || contiene(codigoCaptacion(item), aguja)
+                || contiene(clienteNombre(item), aguja)
+                || contiene(agenteNombre(item), aguja)
+                || contiene(item.getObservaciones(), aguja);
+    }
+
+    private static String codigoProspeccion(InteraccionComercial i) {
+        return i.getProspeccion() != null ? i.getProspeccion().getCodigoProspeccion() : null;
+    }
+
+    private static String codigoCaptacion(InteraccionComercial i) {
+        return i.getCaptacion() != null ? i.getCaptacion().getCodigoCaptacion() : null;
+    }
+
+    private static String clienteNombre(InteraccionComercial i) {
+        return i.getClienteInteresado() != null && i.getClienteInteresado().getPersona() != null
+                ? i.getClienteInteresado().getPersona().getNombresORazonSocial() : null;
+    }
+
+    private static String agenteNombre(InteraccionComercial i) {
+        return i.getAgenteResponsable() != null && i.getAgenteResponsable().getPersona() != null
+                ? i.getAgenteResponsable().getPersona().getNombresORazonSocial() : null;
     }
 
     @GET

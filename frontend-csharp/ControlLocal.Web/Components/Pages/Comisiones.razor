@@ -243,8 +243,10 @@
     private string _query = "";
     private string _estado = "";
     private string _agente = "";
-    private string _orden = OrdenBrutaDesc;
+    private string _orden = OrdenCobroReciente;
 
+    private const string OrdenCobroReciente = "Cobro (más reciente)";
+    private const string OrdenCobroAntiguo = "Cobro (más antiguo)";
     private const string OrdenBrutaDesc = "Comisión bruta (mayor a menor)";
     private const string OrdenBrutaAsc = "Comisión bruta (menor a mayor)";
     private const string OrdenNetaDesc = "Comisión agente (mayor a menor)";
@@ -262,8 +264,8 @@
     };
 
     private IReadOnlyList<string> _ordenOpciones => _verNeto
-        ? [OrdenBrutaDesc, OrdenBrutaAsc, OrdenNetaDesc, OrdenNetaAsc]
-        : [OrdenBrutaDesc, OrdenBrutaAsc];
+        ? [OrdenCobroReciente, OrdenCobroAntiguo, OrdenBrutaDesc, OrdenBrutaAsc, OrdenNetaDesc, OrdenNetaAsc]
+        : [OrdenCobroReciente, OrdenCobroAntiguo, OrdenBrutaDesc, OrdenBrutaAsc];
 
     private IReadOnlyList<string> _agentes => _todos
         .Select(c => c.AgenteNombre)
@@ -293,7 +295,7 @@
     private int _pagina = 1;
 
     private bool HayFiltros => !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_estado)
-        || !string.IsNullOrEmpty(_agente) || _orden != OrdenBrutaDesc;
+        || !string.IsNullOrEmpty(_agente) || _orden != OrdenCobroReciente;
 
     private List<ContratoAlquilerDto> _filtrados => Ordenar(_todos.Where(Coincide)).ToList();
 
@@ -350,6 +352,9 @@
 
     private IEnumerable<ContratoAlquilerDto> Ordenar(IEnumerable<ContratoAlquilerDto> fuente) => _orden switch
     {
+        // "Por cobro": el último cobrado primero; las que aún no se cobran (sin fecha) caen al final.
+        OrdenCobroReciente => fuente.OrderByDescending(c => c.FechaCobro ?? DateOnly.MinValue).ThenByDescending(c => c.Id),
+        OrdenCobroAntiguo => fuente.OrderBy(c => c.FechaCobro ?? DateOnly.MaxValue).ThenBy(c => c.Id),
         OrdenBrutaAsc => fuente.OrderBy(c => c.ComisionGenerada),
         OrdenNetaDesc => fuente.OrderByDescending(c => c.MontoAgente ?? -1),
         OrdenNetaAsc => fuente.OrderBy(c => c.MontoAgente ?? decimal.MaxValue),
@@ -360,7 +365,7 @@
 
     private void OnBuscar(string valor) => _query = valor;
     private void OnAgente(string valor) => _agente = valor;
-    private void OnOrden(string valor) => _orden = string.IsNullOrEmpty(valor) ? OrdenBrutaDesc : valor;
+    private void OnOrden(string valor) => _orden = string.IsNullOrEmpty(valor) ? OrdenCobroReciente : valor;
     private void FiltrarEstado(string estado) => _estado = estado;
 
     private void Limpiar()
@@ -368,7 +373,7 @@
         _query = "";
         _estado = "";
         _agente = "";
-        _orden = OrdenBrutaDesc;
+        _orden = OrdenCobroReciente;
     }
 
     private void AbrirAsignar(ContratoAlquilerDto c)

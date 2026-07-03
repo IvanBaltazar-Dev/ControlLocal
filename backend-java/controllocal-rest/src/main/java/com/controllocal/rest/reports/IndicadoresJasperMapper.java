@@ -36,6 +36,7 @@ public final class IndicadoresJasperMapper {
                 subtitulo,
                 periodoEtiqueta(periodoParam),
                 fechaGeneracion(),
+                resumen(datos),
                 kpis.get(0).etiqueta(), kpis.get(0).valor(), kpis.get(0).delta(),
                 kpis.get(1).etiqueta(), kpis.get(1).valor(), kpis.get(1).delta(),
                 kpis.get(2).etiqueta(), kpis.get(2).valor(), kpis.get(2).delta(),
@@ -43,9 +44,18 @@ public final class IndicadoresJasperMapper {
                 operativo(datos.operativo()),
                 serie(datos.mesesEtiquetas(), datos.cierresPorMes(), "cierres"),
                 serie(datos.mesesEtiquetas(), datos.captacionesPorPeriodo(), "captaciones"),
+                serie(datos.mesesEtiquetas(), datos.conversionPorPeriodo(), "% conversion"),
                 salud(datos.captacionesSalud()),
                 embudo(datos.embudo()),
-                desempeno(datos.desempeno(), esAdmin));
+                desempeno(datos.desempeno(), esAdmin),
+                ReportCharts.tendencia(
+                        datos.mesesEtiquetas(),
+                        datos.captacionesPorPeriodo(),
+                        datos.cierresPorMes(),
+                        datos.conversionPorPeriodo()),
+                ReportCharts.pie("Salud de captaciones", itemsSalud(datos.captacionesSalud())),
+                ReportCharts.funnel(itemsEmbudo(datos.embudo())),
+                ReportCharts.performance(itemsDesempeno(datos.desempeno(), esAdmin)));
     }
 
     public static String periodoEtiqueta(String periodoParam) {
@@ -104,6 +114,18 @@ public final class IndicadoresJasperMapper {
                 "Conversión prospección -> captación: " + op.conversionProspeccionCaptacion() + "%");
     }
 
+    private static String resumen(Dtos.IndicadoresResponse datos) {
+        return "Ambito: " + texto(datos.ambito(), "Sin ambito")
+                + " | Captaciones: " + datos.captacionesTotales()
+                + " | Cierres: " + datos.cierres()
+                + " | Visitas: " + datos.visitas()
+                + "\nInteracciones: " + datos.interacciones()
+                + " | Oportunidades: " + datos.oportunidadesActivas()
+                + " | Solicitudes: " + datos.solicitudesPorEvaluar()
+                + "\nPor revisar: " + datos.captacionesPorRevisar()
+                + " | Propiedades activas equipo: " + datos.propiedadesEquipo();
+    }
+
     private static String serie(List<String> etiquetas, List<Integer> valores, String sufijo) {
         if (etiquetas == null || etiquetas.isEmpty()) {
             return "Sin datos.";
@@ -155,8 +177,54 @@ public final class IndicadoresJasperMapper {
                 .orElse("Sin actividad registrada.");
     }
 
+    private static List<ReportCharts.Item> itemsSalud(List<Dtos.IndicadorConteo> items) {
+        if (items == null) {
+            return List.of();
+        }
+        int[] colores = { ReportCharts.green(), ReportCharts.blue(), ReportCharts.orange(), ReportCharts.red() };
+        List<ReportCharts.Item> out = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            Dtos.IndicadorConteo item = items.get(i);
+            out.add(ReportCharts.item(item.nombre(), item.valor(), "", colores[i % colores.length]));
+        }
+        return out;
+    }
+
+    private static List<ReportCharts.Item> itemsEmbudo(List<Dtos.IndicadorEmbudo> items) {
+        if (items == null) {
+            return List.of();
+        }
+        int[] colores = { ReportCharts.blue(), ReportCharts.cyan(), ReportCharts.purple(), ReportCharts.green() };
+        List<ReportCharts.Item> out = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            Dtos.IndicadorEmbudo item = items.get(i);
+            out.add(ReportCharts.item(item.etapa(), item.valor(), "(" + item.porcentaje() + "%)", colores[i % colores.length]));
+        }
+        return out;
+    }
+
+    private static List<ReportCharts.Item> itemsDesempeno(List<Dtos.IndicadorDesempeno> items, boolean esAdmin) {
+        if (items == null) {
+            return List.of();
+        }
+        String responsable = esAdmin ? "Broker " : "Agente ";
+        List<ReportCharts.Item> out = new ArrayList<>();
+        for (Dtos.IndicadorDesempeno item : items) {
+            out.add(ReportCharts.item(
+                    responsable + item.nombre(),
+                    item.cierres(),
+                    item.cierres() + " cierres | " + item.captaciones() + " caps. | " + item.conversion() + "%",
+                    ReportCharts.blue()));
+        }
+        return out;
+    }
+
     private static String numero(int valor) {
         return Integer.toString(valor);
+    }
+
+    private static String texto(String valor, String fallback) {
+        return valor == null || valor.isBlank() ? fallback : valor.trim();
     }
 
     private static String fechaGeneracion() {

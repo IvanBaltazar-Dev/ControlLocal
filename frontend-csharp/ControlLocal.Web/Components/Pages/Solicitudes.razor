@@ -41,6 +41,10 @@
                    @bind-Value="_query" ResultCount="filtradas.Count"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
             <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
+            @if (App.Role is Roles.Broker or Roles.Admin)
+            {
+                <FilterSelect Placeholder="Agente" Options="_agentes" @bind-Value="_agente" />
+            }
         </FilterBar>
 
         <div class="cl-card">
@@ -117,7 +121,7 @@
 @code {
     private const string _defaultTab = "Todas";
     private string _tab = "Todas";
-    private string _query = "", _distrito = "";
+    private string _query = "", _distrito = "", _agente = "";
     private int _pagina = 1;
 
     private bool _cargando = true;
@@ -129,7 +133,8 @@
     {
         try
         {
-            Todas = await SolicitudSvc.RefrescarAsync();
+            // Lo más reciente primero (id desc): la solicitud recién registrada aparece al inicio.
+            Todas = (await SolicitudSvc.RefrescarAsync()).OrderByDescending(s => s.Id).ToList();
         }
         catch (Exception ex)
         {
@@ -146,13 +151,16 @@
     private string[] _estados => Todas.Select(s => s.Estado).Distinct().OrderBy(x => x).ToArray();
     private IReadOnlyList<string> _distritos => Todas.Select(s => s.DistritoLocal)
         .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+    private IReadOnlyList<string> _agentes => Todas.Select(s => s.AgenteNombre)
+        .Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().OrderBy(x => x).ToList();
 
     private int CuentaEstado(string e) => Todas.Count(s => s.Estado == e);
 
     private bool HayFiltros => _tab != _defaultTab
-                               || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
+                               || !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito)
+                               || !string.IsNullOrEmpty(_agente);
 
-    private void LimpiarFiltros() { _tab = _defaultTab; _query = ""; _distrito = ""; _pagina = 1; }
+    private void LimpiarFiltros() { _tab = _defaultTab; _query = ""; _distrito = ""; _agente = ""; _pagina = 1; }
 
     private async Task ExportarCsv()
     {
@@ -168,6 +176,7 @@
     private IEnumerable<SolicitudAlquilerDto> Filtradas() => Todas.Where(s =>
         (_tab == "Todas" || s.Estado == _tab) &&
         (string.IsNullOrEmpty(_distrito) || s.DistritoLocal == _distrito) &&
+        (string.IsNullOrEmpty(_agente) || s.AgenteNombre == _agente) &&
         (string.IsNullOrEmpty(_query) || Coincide(s, _query)));
 
     private static bool Coincide(SolicitudAlquilerDto s, string q) =>
@@ -180,6 +189,7 @@
     {
         "Aprobada" => "green",
         "Rechazada" => "red",
+        "Desistida" => "red",
         "Observada" => "amber",
         "Pendiente de revision" => "amber",
         "Pendiente de revisión" => "amber",

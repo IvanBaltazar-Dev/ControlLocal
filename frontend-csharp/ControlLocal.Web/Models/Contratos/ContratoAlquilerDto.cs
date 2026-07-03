@@ -75,6 +75,9 @@ public class ContratoAlquilerDto
     // Forma de pago y fecha de cobro de la liquidación (visibles para todos los roles).
     public string FormaPago { get; set; } = string.Empty;
 
+    // Fecha real del cobro de la comisión (para ordenar "por cobro"); null si aún no se cobró.
+    public DateOnly? FechaCobro { get; set; }
+
     public string FechaCobroTexto { get; set; } = string.Empty;
 
     // True cuando el broker supervisor ya definió el monto del agente.

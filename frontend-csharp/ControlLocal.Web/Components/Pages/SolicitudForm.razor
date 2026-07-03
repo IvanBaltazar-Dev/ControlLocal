@@ -23,18 +23,58 @@
                 <FormSection Num="1" Title="Oportunidad comercial" Sub="La oportunidad determina el cliente y la captación">
                     <Field Label="Oportunidad" Required="true">
                         <input class="cl-input search" type="search"
-                               placeholder="Buscar por operacion, cliente, captacion o local..."
+                               placeholder="Escribe para buscar por codigo, cliente, captacion o local..."
                                value="@_busquedaOportunidad"
                                @oninput="OnBusquedaOportunidad"
-                               disabled="@(_cargando || _procesando)"
-                               style="margin-bottom:8px;" />
-                        <select @bind="_oportunidadId" disabled="@_cargando">
-                            <option value="0">@(_cargando ? "Cargando oportunidades…" : "— Seleccionar —")</option>
-                            @foreach (var oportunidad in _oportunidades)
+                               @onfocus="@(() => _desplegarOportunidades = true)"
+                               disabled="@(_cargando || _procesando)" />
+
+                        <div style="margin-top:6px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                            @if (_desplegarOportunidades || _oportunidadId == 0)
                             {
-                                <option value="@oportunidad.Id">@oportunidad.CodigoOportunidad · @oportunidad.CaptacionCodigo · @oportunidad.ClienteNombre</option>
+                                @if (_cargando)
+                                {
+                                    <div class="cl-help">Cargando oportunidades...</div>
+                                }
+                                else
+                                {
+                                    @foreach (var oportunidad in OportunidadesDisponibles)
+                                    {
+                                        var sel = _oportunidadId == oportunidad.Id;
+                                        <div role="button" tabindex="0"
+                                             style="@PickStyle(sel)"
+                                             @onclick="@(() => SeleccionarOportunidadAsync(oportunidad.Id))">
+                                            <Icon Name="target" Size="17" Color="@(sel ? "#005BFF" : "var(--c-text-3)")" />
+                                            <div style="flex:1;min-width:0;">
+                                                <div style="font-weight:600;font-size:13px;">@oportunidad.CodigoOportunidad · @oportunidad.ClienteNombre</div>
+                                                <div class="cl-muted" style="font-size:11px;">@oportunidad.CaptacionCodigo · @oportunidad.DireccionLocal</div>
+                                            </div>
+                                            @if (sel)
+                                            {
+                                                <Icon Name="check" Size="15" Color="#005BFF" />
+                                            }
+                                        </div>
+                                    }
+                                    @if (!OportunidadesDisponibles.Any())
+                                    {
+                                        <div class="cl-help">No hay oportunidades que coincidan con la busqueda.</div>
+                                    }
+                                }
                             }
-                        </select>
+                            else if (OportunidadSeleccionada is not null)
+                            {
+                                <div role="button" tabindex="0"
+                                     style="@PickStyle(true)"
+                                     @onclick="@(() => _desplegarOportunidades = true)">
+                                    <Icon Name="target" Size="17" Color="#005BFF" />
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-weight:600;font-size:13px;">@OportunidadSeleccionada.CodigoOportunidad · @OportunidadSeleccionada.ClienteNombre</div>
+                                        <div class="cl-muted" style="font-size:11px;">@OportunidadSeleccionada.CaptacionCodigo · @OportunidadSeleccionada.DireccionLocal</div>
+                                    </div>
+                                    <Icon Name="check" Size="15" Color="#005BFF" />
+                                </div>
+                            }
+                        </div>
                     </Field>
                     @if (OportunidadSeleccionada is not null)
                     {
@@ -165,6 +205,7 @@
     private string? _err;
     private IReadOnlyList<OportunidadComercialDto> _oportunidades = [];
     private string _busquedaOportunidad = "";
+    private bool _desplegarOportunidades;
 
     // Solicitud ya creada en un intento previo: se reutiliza para no duplicarla si la
     // subida de documentos o el envío fallan y el usuario reintenta.
@@ -186,6 +227,29 @@
 
     private OportunidadComercialDto? OportunidadSeleccionada =>
         _oportunidades.FirstOrDefault(item => item.Id == _oportunidadId);
+
+    private IEnumerable<OportunidadComercialDto> OportunidadesDisponibles =>
+        _oportunidades.Where(item => CoincideOportunidad(item, _busquedaOportunidad))
+            .OrderByDescending(item => item.FechaActualizacion ?? DateTime.MinValue);
+
+    private static bool CoincideOportunidad(OportunidadComercialDto item, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return true;
+        var terminos = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return terminos.All(termino =>
+            TextoFiltro.Contiene(item.CodigoOportunidad, termino)
+            || TextoFiltro.Contiene(item.ClienteNombre, termino)
+            || TextoFiltro.Contiene(item.CaptacionCodigo, termino)
+            || TextoFiltro.Contiene(item.DireccionLocal, termino)
+            || TextoFiltro.Contiene(item.Estado, termino));
+    }
+
+    private static string PickStyle(bool sel)
+    {
+        var border = sel ? "#005BFF" : "var(--c-border)";
+        var bg = sel ? "#EAF1FF" : "#fff";
+        return $"display:flex;align-items:center;gap:10px;padding:9px 11px;border:1.5px solid {border};border-radius:10px;background:{bg};cursor:pointer;";
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -212,6 +276,15 @@
     private async Task OnBusquedaOportunidad(ChangeEventArgs e)
     {
         _busquedaOportunidad = e.Value?.ToString() ?? "";
+        _desplegarOportunidades = true;
+        await CargarOportunidadesAsync();
+    }
+
+    private async Task SeleccionarOportunidadAsync(long id)
+    {
+        _oportunidadId = id;
+        _desplegarOportunidades = false;
+        _busquedaOportunidad = "";
         await CargarOportunidadesAsync();
     }
 

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -63,6 +64,15 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
     private static final int DIAS_REPORTE = 15;
     // Puntaje minimo de coincidencia para sugerir una oportunidad en la bandeja (evita ruido).
     private static final int UMBRAL_PROPUESTA = 60;
+
+    // Tope de acciones que muestra la bandeja: se priorizan las mas urgentes (prioridad y dias sin
+    // accion) y el resto queda fuera para que el dashboard cargue liviano y la lista sea accionable.
+    private static final int MAX_BANDEJA = 10;
+    // Orden de la bandeja: primero prioridad ALTA, luego las que llevan mas dias sin atencion.
+    private static final Comparator<Tarea> ORDEN_BANDEJA = Comparator
+            .comparingInt((Tarea t) -> ordenPrioridad(t.getPrioridad()))
+            .thenComparing(t -> t.getDiasSinAccion() == null ? 0 : t.getDiasSinAccion(),
+                    Comparator.reverseOrder());
 
     // entidad_tipo que gestiona este motor; solo estas se auto-resuelven al reconciliar.
     private static final Set<TipoEntidad> ENTIDADES_AUTO = Set.of(
@@ -154,7 +164,17 @@ public class TareaBusinessLogicImpl implements TareaBusinessLogic {
         return tareaDAO.listarPorAgente(idAgente, null).stream()
                 .filter(t -> t.getEstado() == EstadoTarea.PENDIENTE || t.getEstado() == EstadoTarea.EN_PROCESO)
                 .map(t -> enriquecer(t, datos))
+                .sorted(ORDEN_BANDEJA)
+                .limit(MAX_BANDEJA)
                 .toList();
+    }
+
+    // Orden de prioridad para la bandeja: ALTA (0) antes que MEDIA (1) y BAJA (2).
+    private static int ordenPrioridad(Prioridad prioridad) {
+        if (prioridad == Prioridad.ALTA) {
+            return 0;
+        }
+        return prioridad == Prioridad.MEDIA ? 1 : 2;
     }
 
     @Override

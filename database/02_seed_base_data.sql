@@ -3254,7 +3254,8 @@ BEGIN
             'PEN',
             v_agent_share,
             v_company_share,
-            CASE WHEN MOD(v_i, 7) = 0 THEN NULL ELSE DATE_ADD(v_fecha, INTERVAL (7 + MOD(v_i, 20)) DAY) END,
+            CASE WHEN MOD(v_i, 7) = 0 THEN NULL
+                 ELSE LEAST(DATE_ADD(v_fecha, INTERVAL (7 + MOD(v_i, 20)) DAY), v_seed_today) END,
             CASE WHEN MOD(v_i, 7) = 0 THEN NULL
                  WHEN MOD(v_i, 5) = 0 THEN 'DEPOSITO_BANCARIO'
                  ELSE 'TRANSFERENCIA'
@@ -3448,7 +3449,7 @@ BEGIN
     END WHILE;
 
     SET v_i = 1;
-    WHILE v_i <= 920 DO
+    WHILE v_i <= 150 DO
         SET v_cap_idx = 1 + MOD(v_i, v_captacion_count);
         SET v_client_idx = 1 + MOD(v_i, v_client_count);
         SET v_tarea_tipo = CASE MOD(v_i, 6)
@@ -3498,12 +3499,11 @@ BEGIN
             LIMIT 1;
         END IF;
 
-        SET v_tarea_estado = CASE
-            WHEN MOD(v_i, 10) = 0 THEN 'VENCIDA'
-            WHEN MOD(v_i, 9) = 0 THEN 'COMPLETADA'
-            WHEN MOD(v_i, 7) = 0 THEN 'EN_PROCESO'
-            ELSE 'PENDIENTE'
-        END;
+        -- Historial: las tareas sembradas nacen ya COMPLETADAS. La bandeja del agente se llena sola
+        -- con las acciones DERIVADAS del estado real del flujo (recontactos, cierres, cobros, docs
+        -- observados, visitas, reportes), así no arrastra tareas pendientes artificiales y el
+        -- dashboard carga liviano. El tope de la bandeja (MAX_BANDEJA) acota lo que se muestra.
+        SET v_tarea_estado = 'COMPLETADA';
 
         INSERT INTO tarea (
             tipo, entidad_tipo, entidad_id, id_agente, descripcion,
@@ -3514,7 +3514,15 @@ BEGIN
             v_entity_tipo,
             v_entity_id,
             v_agente_id,
-            CONCAT('Accion CAR-2026 ', v_tarea_tipo, ' para ', v_entity_tipo, ' ', v_entity_id, '.'),
+            CASE v_tarea_tipo
+                WHEN 'RECONTACTO' THEN 'Recontacta al propietario: registra una interaccion, crea la captacion o descartala con un motivo.'
+                WHEN 'SUBIR_DOCUMENTOS' THEN 'Sube los documentos observados y vuelve a enviar la solicitud a revision.'
+                WHEN 'ENVIAR_REVISION' THEN 'Envia la captacion a revision del broker.'
+                WHEN 'REPORTE_PROPIETARIO' THEN 'Reporta al propietario los avances de su captacion.'
+                WHEN 'PROPONER_OPORTUNIDAD' THEN 'Propon una propiedad compatible de tu cartera al cliente interesado.'
+                WHEN 'SEGUIMIENTO' THEN 'Da seguimiento a esta oportunidad.'
+                ELSE 'Revisa y resuelve esta accion pendiente.'
+            END,
             CASE
                 WHEN MOD(v_i, 10) = 0 THEN DATE_SUB(v_seed_now, INTERVAL (1 + MOD(v_i, 18)) DAY)
                 WHEN MOD(v_i, 8) = 0 THEN DATE_ADD(CAST(v_seed_today AS DATETIME), INTERVAL (1 + MOD(v_i, 14)) HOUR)

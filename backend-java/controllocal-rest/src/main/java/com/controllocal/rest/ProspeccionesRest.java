@@ -1,6 +1,8 @@
 package com.controllocal.rest;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -58,7 +60,8 @@ public class ProspeccionesRest {
             @QueryParam("idLocal") Long idLocal,
             @QueryParam("idAgente") Long idAgente,
             @QueryParam("idBrokerSupervisor") Long idBrokerSupervisor,
-            @QueryParam("q") String query) {
+            @QueryParam("q") String query,
+            @QueryParam("orden") String orden) {
         // null = sin filtro de broker; en otro caso, los agentes que supervisa ese broker.
         Set<Long> agentesDelBroker = agentesDeBroker(idBrokerSupervisor);
         List<Prospeccion> fuente = prospeccionesDelUsuario(SeguridadRest.usuario(request)).stream()
@@ -70,7 +73,31 @@ public class ProspeccionesRest {
                 .filter(item -> coincideBrokerSupervisor(item, agentesDelBroker))
                 .filter(item -> coincideBusqueda(item, query))
                 .toList();
-        return pagina(fuente, pagina, tamano);
+        return pagina(ordenar(fuente, orden), pagina, tamano);
+    }
+
+    // Orden por defecto: el mas reciente creado primero (las fuentes ya llegan por id desc). La
+    // opcion "ultimo_contacto" reordena por la fecha de contacto mas reciente (contacto, reunion,
+    // propuesta o recontacto), dejando al final las prospecciones sin ninguna fecha de interaccion.
+    private static List<Prospeccion> ordenar(List<Prospeccion> fuente, String orden) {
+        if (orden == null || !"ultimo_contacto".equalsIgnoreCase(orden.trim())) {
+            return fuente;
+        }
+        return fuente.stream()
+                .sorted(Comparator.comparing(ProspeccionesRest::ultimoContacto,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    private static LocalDate ultimoContacto(Prospeccion p) {
+        LocalDate max = null;
+        for (LocalDate fecha : new LocalDate[] {
+                p.getFechaContacto(), p.getFechaReunion(), p.getFechaPropuesta(), p.getFechaRecontacto() }) {
+            if (fecha != null && (max == null || fecha.isAfter(max))) {
+                max = fecha;
+            }
+        }
+        return max;
     }
 
     // Agentes supervisados por el broker indicado; null cuando no se filtra por broker.

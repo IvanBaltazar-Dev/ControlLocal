@@ -26,6 +26,10 @@
                    @bind-Value="_query" ResultCount="filtradas.Count"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
             <FilterSelect Placeholder="Distrito" Options="_distritos" @bind-Value="_distrito" />
+            @if (App.Role is Roles.Broker or Roles.Admin)
+            {
+                <FilterSelect Placeholder="Agente" Options="_agentes" @bind-Value="_agente" />
+            }
         </FilterBar>
 
         <div class="cl-card">
@@ -84,7 +88,7 @@
 </AppShell>
 
 @code {
-    private string _query = "", _distrito = "";
+    private string _query = "", _distrito = "", _agente = "";
     private int _pagina = 1;
 
     private bool _cargando = true;
@@ -95,7 +99,11 @@
     {
         try
         {
-            _todos = await ContratoSvc.RefrescarAsync();
+            // El último cierre primero: se ordena por fecha de cierre descendente (desempate por id).
+            _todos = (await ContratoSvc.RefrescarAsync())
+                .OrderByDescending(c => c.FechaCierre)
+                .ThenByDescending(c => c.Id)
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -109,18 +117,22 @@
 
     private IReadOnlyList<string> _distritos => _todos.Select(c => c.DistritoLocal)
         .Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(x => x).ToList();
+    private IReadOnlyList<string> _agentes => _todos.Select(c => c.AgenteNombre)
+        .Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().OrderBy(x => x).ToList();
 
     // Métricas data-driven del cierre (sin valores fijos).
     private string ComisionTotalTexto => _todos.Sum(c => c.ComisionGenerada)
         .ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("es-PE"));
     private int PorLiquidar => _todos.Count(c => c.ComisionEstado == "Pendiente");
 
-    private bool HayFiltros => !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito);
+    private bool HayFiltros => !string.IsNullOrEmpty(_query) || !string.IsNullOrEmpty(_distrito)
+        || !string.IsNullOrEmpty(_agente);
 
-    private void LimpiarFiltros() { _query = ""; _distrito = ""; _pagina = 1; }
+    private void LimpiarFiltros() { _query = ""; _distrito = ""; _agente = ""; _pagina = 1; }
 
     private IEnumerable<ContratoAlquilerDto> Filtradas() => _todos.Where(c =>
         (string.IsNullOrEmpty(_distrito) || c.DistritoLocal == _distrito) &&
+        (string.IsNullOrEmpty(_agente) || c.AgenteNombre == _agente) &&
         (string.IsNullOrEmpty(_query) || Coincide(c, _query)));
 
     private static bool Coincide(ContratoAlquilerDto c, string q) =>

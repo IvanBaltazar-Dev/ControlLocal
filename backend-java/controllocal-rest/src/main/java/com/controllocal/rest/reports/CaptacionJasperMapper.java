@@ -68,21 +68,33 @@ public final class CaptacionJasperMapper {
 
     public static ReportePropietarioJasperDto reporte(Captacion captacion, ReportePropietario reporte) {
         LocalComercial local = captacion.getLocalComercial();
+        int consultas = reporte.getConsultasReportadas() == null ? 0 : reporte.getConsultasReportadas();
+        int visitas = reporte.getVisitasReportadas() == null ? 0 : reporte.getVisitasReportadas();
+        String conversion = porcentaje(visitas, consultas) + "%";
         return new ReportePropietarioJasperDto(
                 texto(captacion.getCodigoCaptacion()),
                 texto(local != null ? local.getDireccion() : null),
                 texto(local != null ? local.getDistrito() : null),
                 propietario(local),
+                agente(captacion.getAgenteResponsable()),
+                descripcion(captacion.getEstado()),
                 periodo(reporte.getPeriodoInicio(), reporte.getPeriodoFin()),
                 fecha(reporte.getFechaReporte()),
                 descripcion(reporte.getCanalEnvio()),
                 area(local != null ? local.getMetraje() : null),
                 texto(local != null ? local.getRubroPermitido() : null, "No registrado"),
+                moneda(local != null ? local.getPrecioReferencial() : null),
+                porcentaje(captacion.getComisionPactada()),
+                vigencia(captacion.getFechaInicioVigencia(), captacion.getFechaFinVigencia()),
+                exclusividad(captacion.getExclusividad()),
                 numero(reporte.getConsultasReportadas()),
                 numero(reporte.getVisitasReportadas()),
+                conversion,
+                lecturaReporte(consultas, visitas, conversion),
                 texto(reporte.getObjecionesFrecuentes(), "Sin objeciones registradas"),
                 texto(reporte.getAjustesRecomendados(), "Sin ajustes recomendados"),
-                fechaGeneracion());
+                fechaGeneracion(),
+                ReportCharts.propietario(consultas, visitas));
     }
 
     public static FichaPropiedadReporteDto fichaPropiedad(
@@ -222,6 +234,21 @@ public final class CaptacionJasperMapper {
 
     private static String numero(Integer valor) {
         return valor == null ? "0" : valor.toString();
+    }
+
+    private static int porcentaje(int parte, int total) {
+        return total <= 0 ? 0 : Math.min(100, (int) Math.round(parte * 100.0 / total));
+    }
+
+    private static String lecturaReporte(int consultas, int visitas, String conversion) {
+        if (consultas <= 0 && visitas <= 0) {
+            return "No se registraron consultas ni visitas en el periodo. Conviene reforzar publicacion, precio y difusion.";
+        }
+        if (consultas > 0 && visitas <= 0) {
+            return "Hay interes inicial, pero aun no se concreta visita. Revisar disponibilidad, precio o material publicado.";
+        }
+        return "El periodo genero " + consultas + " consultas y " + visitas
+                + " visitas, con conversion a visita de " + conversion + ".";
     }
 
     private static String diasRestantes(LocalDate fin) {

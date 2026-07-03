@@ -27,6 +27,7 @@
                 <FilterBar Search="Buscar persona, codigo, observación..."
                            Value="@_query"
                            ValueChanged="CambiarBusqueda"
+                           DebounceMs="300"
                            ResultCount="@_total"
                            HasActiveFilters="HayFiltros"
                            OnClear="LimpiarFiltros">

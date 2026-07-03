@@ -38,7 +38,7 @@
         <Tabs Active="@_tab" OnSelect="@(t => _tab = t)" Items="_tabs" />
 
         <FilterBar Search="Buscar por operacion, cliente, local, agente, propietario..."
-                   Value="_query" ValueChanged="OnQueryChanged" ResultCount="_totalOps"
+                   Value="@_query" ValueChanged="OnQueryChanged" DebounceMs="300" ResultCount="_totalOps"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros" />
 
         <div class="cl-card">
@@ -194,10 +194,10 @@
 
     private async Task<IReadOnlyList<OpRow>> ConstruirAsync(IReadOnlyList<OportunidadComercialDto> oportunidades)
     {
-        var filas = new List<OpRow>();
-        foreach (var oportunidad in oportunidades)
-            filas.Add(await ConstruirFilaAsync(oportunidad));
-        return filas;
+        // Cada fila necesita su captación y su última solicitud. Se construyen en paralelo (Task.WhenAll
+        // preserva el orden de entrada) en lugar de secuencialmente, para no encadenar una espera por
+        // oportunidad y acelerar la carga de la página.
+        return await Task.WhenAll(oportunidades.Select(ConstruirFilaAsync));
     }
 
     private async Task<OpRow> ConstruirFilaAsync(OportunidadComercialDto o)

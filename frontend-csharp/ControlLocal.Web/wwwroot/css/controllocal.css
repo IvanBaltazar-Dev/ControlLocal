@@ -348,25 +348,37 @@ a.cl-btn { text-decoration: none; }
 
 /* ============ FILTERS ============ */
 .cl-filterbar {
-  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
   padding: 13px 14px; background: #fff; border: 1px solid var(--c-border);
   border-radius: var(--r-lg); margin-bottom: 16px; box-shadow: var(--shadow-sm);
 }
 .cl-input, .cl-select {
   height: 36px; padding: 0 12px; font: inherit; font-size: 13px;
-  border: 1px solid var(--c-border); border-radius: 9px; background: #fff;
+  border: 1px solid var(--c-border); border-radius: 9px; background-color: #fff;
   color: var(--c-text); outline: none; min-width: 0;
-  transition: border-color .12s, box-shadow .12s;
+  transition: border-color .12s, box-shadow .12s, background-color .12s, color .12s;
 }
+.cl-input:hover:not(:focus), .cl-select:hover:not(:focus) { border-color: var(--c-text-3); }
 .cl-input:focus, .cl-select:focus { border-color: var(--c-primary); box-shadow: 0 0 0 3px rgba(0,91,255,0.12); }
 .cl-input.search {
   padding-left: 34px;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%237E8794' stroke-width='2' viewBox='0 0 24 24'%3e%3ccircle cx='11' cy='11' r='7'/%3e%3cpath d='m20 20-3-3'/%3e%3c/svg%3e");
   background-repeat: no-repeat; background-position: 12px 50%;
 }
-.cl-select { appearance: none; padding-right: 30px;
+/* Búsqueda con texto = filtro activo: se resalta y el icono toma el color de acento. */
+.cl-input.search:not(:placeholder-shown) {
+  border-color: var(--c-primary); background-color: var(--c-primary-50);
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23005BFF' stroke-width='2' viewBox='0 0 24 24'%3e%3ccircle cx='11' cy='11' r='7'/%3e%3cpath d='m20 20-3-3'/%3e%3c/svg%3e");
+}
+.cl-select { appearance: none; cursor: pointer; padding-right: 30px;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%237E8794' stroke-width='2' viewBox='0 0 24 24'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
   background-repeat: no-repeat; background-position: right 11px center;
+}
+/* Select con una opción real elegida (no el placeholder "todos") = filtro activo. */
+.cl-select:has(option:checked:not([value=""]):not([value="0"])) {
+  border-color: var(--c-primary); background-color: var(--c-primary-50);
+  color: var(--c-primary-700); font-weight: 550;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23005BFF' stroke-width='2' viewBox='0 0 24 24'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
 }
 .cl-label { font-size: 12px; font-weight: 600; color: var(--c-text-2); margin-bottom: 7px; display: block; }
 .cl-help { font-size: 11px; color: var(--c-text-3); margin-top: 5px; line-height: 1.4; }

@@ -1,10 +1,13 @@
 package com.controllocal.rest.reports;
 
+import java.awt.Image;
+
 public record ReporteIndicadoresJasperDto(
         String titulo,
         String subtitulo,
         String periodo,
         String fechaGeneracion,
+        String resumenEjecutivo,
         String kpi1Etiqueta,
         String kpi1Valor,
         String kpi1Delta,
@@ -20,14 +23,20 @@ public record ReporteIndicadoresJasperDto(
         String operativoResumen,
         String cierresPorMes,
         String captacionesPorMes,
+        String conversionPorPeriodo,
         String saludCaptaciones,
         String embudo,
-        String desempeno) {
+        String desempeno,
+        Image graficoTendencia,
+        Image graficoSaludCaptaciones,
+        Image graficoEmbudo,
+        Image graficoDesempeno) {
 
     public String getTitulo() { return titulo; }
     public String getSubtitulo() { return subtitulo; }
     public String getPeriodo() { return periodo; }
     public String getFechaGeneracion() { return fechaGeneracion; }
+    public String getResumenEjecutivo() { return resumenEjecutivo; }
     public String getKpi1Etiqueta() { return kpi1Etiqueta; }
     public String getKpi1Valor() { return kpi1Valor; }
     public String getKpi1Delta() { return kpi1Delta; }
@@ -43,7 +52,12 @@ public record ReporteIndicadoresJasperDto(
     public String getOperativoResumen() { return operativoResumen; }
     public String getCierresPorMes() { return cierresPorMes; }
     public String getCaptacionesPorMes() { return captacionesPorMes; }
+    public String getConversionPorPeriodo() { return conversionPorPeriodo; }
     public String getSaludCaptaciones() { return saludCaptaciones; }
     public String getEmbudo() { return embudo; }
     public String getDesempeno() { return desempeno; }
+    public Image getGraficoTendencia() { return graficoTendencia; }
+    public Image getGraficoSaludCaptaciones() { return graficoSaludCaptaciones; }
+    public Image getGraficoEmbudo() { return graficoEmbudo; }
+    public Image getGraficoDesempeno() { return graficoDesempeno; }
 }

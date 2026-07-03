@@ -163,7 +163,7 @@ public interface IProspeccionService
     Task<PageResult<ProspeccionDto>> ListarPaginaAsync(
         int pagina, int tamano = 8, string? estado = null, string? distrito = null,
         string? query = null, CancellationToken ct = default, long? idCaptacion = null, long? idLocal = null,
-        long? idAgente = null, long? idBrokerSupervisor = null);
+        long? idAgente = null, long? idBrokerSupervisor = null, string? orden = null);
     Task<PageResult<ProspeccionDto>> ListarRecontactarPaginaAsync(
         int pagina, int tamano = 8, int diasAviso = 7, CancellationToken ct = default);
     Task<long> ContarAsync(string? estado = null, string? distrito = null, string? query = null, CancellationToken ct = default);

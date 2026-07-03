@@ -1,5 +1,7 @@
 @* Barra de filtros — búsqueda (two-way), filtros secundarios (ChildContent),
    contador de resultados, limpiar y exportar (cuando la pantalla lo provee). *@
+@using System.Threading
+@implements IDisposable
 <div class="cl-filterbar">
     <input class="cl-input search" placeholder="@Search" style="width:280px;"
            value="@Value" @oninput="OnInput" />
@@ -42,6 +44,35 @@
     [Parameter] public RenderFragment? Tail { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private async Task OnInput(ChangeEventArgs e) =>
-        await ValueChanged.InvokeAsync(e.Value?.ToString() ?? "");
+    // Antirebote de la búsqueda (ms). 0 = inmediato (por defecto, ideal para filtrado en memoria).
+    // En pantallas con paginación en el servidor conviene 250–350 ms para no llamar al API por tecla.
+    [Parameter] public int DebounceMs { get; set; }
+
+    private CancellationTokenSource _debounceCts = new();
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        var valor = e.Value?.ToString() ?? "";
+        if (DebounceMs <= 0)
+        {
+            await ValueChanged.InvokeAsync(valor);
+            return;
+        }
+        _debounceCts.Cancel();
+        _debounceCts.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+        try
+        {
+            await Task.Delay(DebounceMs, token);
+            await ValueChanged.InvokeAsync(valor);
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    public void Dispose()
+    {
+        _debounceCts.Cancel();
+        _debounceCts.Dispose();
+    }
 }

@@ -1189,10 +1189,10 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
     public async Task<PageResult<ProspeccionDto>> ListarPaginaAsync(
         int pagina, int tamano = 8, string? estado = null, string? distrito = null,
         string? query = null, CancellationToken ct = default, long? idCaptacion = null, long? idLocal = null,
-        long? idAgente = null, long? idBrokerSupervisor = null)
+        long? idAgente = null, long? idBrokerSupervisor = null, string? orden = null)
     {
         var respuesta = await api.GetPaginaAsync<ProspeccionApi>(
-            RutaProspecciones(estado, distrito, query, idCaptacion, idLocal, idAgente, idBrokerSupervisor), pagina, tamano, ct);
+            RutaProspecciones(estado, distrito, query, idCaptacion, idLocal, idAgente, idBrokerSupervisor, orden), pagina, tamano, ct);
         return new PageResult<ProspeccionDto>(
             respuesta?.Items.Select(Mapear).ToList() ?? [],
             respuesta?.TotalRecords ?? 0,
@@ -1261,7 +1261,8 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
     }
 
     private static string RutaProspecciones(string? estado, string? distrito, string? query,
-        long? idCaptacion = null, long? idLocal = null, long? idAgente = null, long? idBrokerSupervisor = null)
+        long? idCaptacion = null, long? idLocal = null, long? idAgente = null, long? idBrokerSupervisor = null,
+        string? orden = null)
     {
         var filtros = new List<string>();
         if (!string.IsNullOrWhiteSpace(estado)) filtros.Add($"estado={Uri.EscapeDataString(estado)}");
@@ -1271,6 +1272,7 @@ public class HttpProspeccionService(ApiClient api) : IProspeccionService
         if (idLocal is > 0) filtros.Add($"idLocal={idLocal}");
         if (idAgente is > 0) filtros.Add($"idAgente={idAgente}");
         if (idBrokerSupervisor is > 0) filtros.Add($"idBrokerSupervisor={idBrokerSupervisor}");
+        if (!string.IsNullOrWhiteSpace(orden)) filtros.Add($"orden={Uri.EscapeDataString(orden)}");
         return filtros.Count == 0 ? "prospecciones" : $"prospecciones?{string.Join("&", filtros)}";
     }
 
@@ -1508,13 +1510,21 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
     }
 
     public Task<byte[]?> DescargarContratoExclusividadPdfAsync(string codigo, CancellationToken ct = default) =>
-        api.GetBytesAsync($"captaciones/{Uri.EscapeDataString(codigo)}/contrato-exclusividad/pdf", ct);
+        DescargarCaptacionPdfAsync(codigo, "contrato-exclusividad/pdf", ct);
 
     public Task<byte[]?> DescargarFichaCaptacionPdfAsync(string codigo, CancellationToken ct = default) =>
-        api.GetBytesAsync($"captaciones/{Uri.EscapeDataString(codigo)}/ficha-captacion/pdf", ct);
+        DescargarCaptacionPdfAsync(codigo, "ficha-captacion/pdf", ct);
 
     public Task<byte[]?> DescargarFichaPropiedadPdfAsync(string codigo, CancellationToken ct = default) =>
-        api.GetBytesAsync($"captaciones/{Uri.EscapeDataString(codigo)}/ficha-propiedad/pdf", ct);
+        DescargarCaptacionPdfAsync(codigo, "ficha-propiedad/pdf", ct);
+
+    private Task<byte[]?> DescargarCaptacionPdfAsync(string codigo, string recurso, CancellationToken ct)
+    {
+        codigo = codigo?.Trim() ?? "";
+        if (codigo.Length == 0)
+            return Task.FromResult<byte[]?>(null);
+        return api.GetBytesAsync($"captaciones/{Uri.EscapeDataString(codigo)}/{recurso}", ct);
+    }
 
     public async Task ResolverBandejaAsync(
         string codigo,
@@ -2325,6 +2335,7 @@ public class HttpContratoService(ApiClient api) : IContratoService
             "OTRO" => "Otro",
             _ => item.FormaPago ?? "",
         },
+        FechaCobro = item.FechaCobro,
         FechaCobroTexto = item.FechaCobro?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
     };
 }
@@ -3350,7 +3361,7 @@ public class HttpPerfilService(ApiClient api)
 
 // Galeria de fotos de un local. La imagen viaja en base64 (el POST binario rompe el handler
 // de .NET contra GlassFish). Cada foto se sirve por "/documento?clave=".
-public sealed record FotoLocalDto(long IdFoto, string Clave, string Nombre);
+public sealed record FotoLocalDto(long IdFoto, string Clave, string Nombre, string? Proveedor = null);
 
 public class HttpFotoLocalService(ApiClient api)
 {

@@ -47,7 +47,8 @@ public static class FichaBuilder
         ILocalService localSvc,
         IPropietarioService propSvc)
     {
-        var cap = (string.IsNullOrEmpty(codigo) ? null : await capSvc.ByCodigoAsync(codigo))
+        var codigoBuscado = codigo?.Trim() ?? "";
+        var cap = (string.IsNullOrWhiteSpace(codigoBuscado) ? null : await capSvc.ByCodigoAsync(codigoBuscado))
                   ?? (await capSvc.AllAsync()).First();
 
         var local = (await localSvc.AllAsync()).FirstOrDefault(l => Loose(l.Direccion, cap.DireccionLocal));
@@ -61,7 +62,7 @@ public static class FichaBuilder
 
         return new FichaModel
         {
-            Codigo = cap.CodigoCaptacion,
+            Codigo = string.IsNullOrWhiteSpace(cap.CodigoCaptacion) ? codigoBuscado : cap.CodigoCaptacion,
             Direccion = cap.DireccionLocal,
             Distrito = cap.DistritoLocal,
             Estado = cap.Estado,

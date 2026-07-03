@@ -95,7 +95,7 @@
                     {
                         <PanelCoincidencias Titulo="Propiedades de cartera compatibles"
                                             Icono="store"
-                                            Descripcion="Captaciones activas de tu cartera que encajan con la busqueda de este cliente. Selecciona una propiedad y luego abre la oportunidad prellenada."
+                                            Descripcion="Captaciones activas de tu cartera que encajan con la busqueda de este cliente. Selecciona una propiedad y luego abre la oportunidad."
                                             Items="_coincidencias?.Items"
                                             Total="@(_coincidencias?.Total ?? 0)"
                                             Page="@_coinPage"
@@ -112,7 +112,7 @@
                             <button class="cl-btn sm ghost" @onclick="CerrarCoincidencias"><Icon Name="chevronLeft" Size="12" /> Ocultar propiedades</button>
                             <a class="cl-btn sm primary @(string.IsNullOrWhiteSpace(RutaCoincidenciaSeleccionada) ? "disabled" : "")"
                                href="@Href(RutaCoincidenciaSeleccionada)">
-                                <Icon Name="target" Size="12" /> Abrir oportunidad prellenada
+                                <Icon Name="target" Size="12" /> Proponer oportunidad
                             </a>
                         </div>
                     }

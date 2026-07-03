@@ -39,8 +39,8 @@
             </div>
         }
 
-        <FilterBar Search="Buscar por dirección, cdigo, propietario..."
-                   Value="@_query" ValueChanged="CambiarBusquedaAsync" ResultCount="@((int)_total)"
+        <FilterBar Search="Buscar por dirección, código, propietario..."
+                   Value="@_query" ValueChanged="CambiarBusquedaAsync" DebounceMs="300" ResultCount="@((int)_total)"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltrosAsync">
             <select class="cl-select" value="@_filtroEstado" @onchange="CambiarEstadoSelectAsync">
                 <option value="">Todos los estados</option>
@@ -76,6 +76,10 @@
                     }
                 </select>
             }
+            <select class="cl-select" value="@_orden" @onchange="CambiarOrdenAsync" title="Cambia el orden de la lista (no filtra)">
+                <option value="">Ordenar: más recientes primero</option>
+                <option value="ultimo_contacto">Ordenar: último contacto primero</option>
+            </select>
         </FilterBar>
 
         <div class="cl-card">
@@ -172,6 +176,8 @@
     private string _filtroEspecial = "";
     private string _query = "";
     private string _distrito = "";
+    // Orden de la lista: "" = más recientes creadas primero (por defecto); "ultimo_contacto" = por fecha de contacto.
+    private string _orden = "";
     private long _idAgente;
     private long _idBroker;
     private IReadOnlyList<(long Id, string Nombre)> _agentes = [];
@@ -308,6 +314,13 @@
         await CargarAsync();
     }
 
+    private async Task CambiarOrdenAsync(ChangeEventArgs e)
+    {
+        _orden = e.Value?.ToString() ?? "";
+        _pagina = 1;
+        await CargarAsync();
+    }
+
     private async Task LimpiarFiltrosAsync()
     {
         _filtroEstado = "";
@@ -317,6 +330,7 @@
         _distrito = "";
         _idAgente = 0;
         _idBroker = 0;
+        _orden = "";
         _pagina = 1;
         await CargarAsync();
     }
@@ -336,7 +350,8 @@
                 ? await ProspeccionSvc.ListarRecontactarPaginaAsync(_pagina, PageSize, DiasRecontacto, DisposedToken)
                 : await ProspeccionSvc.ListarPaginaAsync(_pagina, PageSize, EstadoParam(), _distrito, _query, DisposedToken,
                     idAgente: _idAgente > 0 ? _idAgente : null,
-                    idBrokerSupervisor: _idBroker > 0 ? _idBroker : null);
+                    idBrokerSupervisor: _idBroker > 0 ? _idBroker : null,
+                    orden: string.IsNullOrEmpty(_orden) ? null : _orden);
             _prospecciones = pagina.Items;
             _total = pagina.TotalRecords;
             _pagina = pagina.Page;

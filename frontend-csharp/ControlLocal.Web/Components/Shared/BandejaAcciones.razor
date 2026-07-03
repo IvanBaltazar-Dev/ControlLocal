@@ -18,7 +18,7 @@ else
             <div class="cl-flex" style="align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--c-border);border-radius:10px;">
                 <span class="cl-badge @PrioridadTono(t.Prioridad)" style="flex:0 0 auto;">@PrioridadLabel(t.Prioridad)</span>
                 <div style="flex:1;min-width:0;">
-                    <div style="font-weight:600;">@t.Descripcion</div>
+                    <div style="font-weight:600;">@Titulo(t)</div>
                     <div class="cl-flex cl-muted" style="font-size:12px;gap:8px;flex-wrap:wrap;align-items:center;">
                         <span>@EntidadLabel(t.EntidadTipo)@(string.IsNullOrWhiteSpace(t.EntidadCodigo) ? "" : $" · {t.EntidadCodigo}")</span>
                         <span>· @DiasTexto(t.DiasSinAccion)</span>
@@ -58,6 +58,39 @@ else
         "OPORTUNIDAD" => $"oportunidad-detail/{t.EntidadId}",
         _ => "dashboard",
     };
+
+    // Texto de la acción que el agente debe resolver, en lenguaje claro. El backend ya genera
+    // descripciones legibles ("Documentos observados: subsana la solicitud."); solo sustituimos las
+    // técnicas heredadas del seed ("Accion CAR-2026 SUBIR_DOCUMENTOS para SOLICITUD_ALQUILER 415.")
+    // por una instrucción entendible derivada del tipo de tarea. El código de la entidad aparece
+    // en la línea de contexto de abajo, así que aquí no hace falta repetirlo.
+    private static string Titulo(TareaDto t)
+    {
+        var desc = t.Descripcion?.Trim() ?? "";
+        if (desc.Length > 0
+            && !desc.StartsWith("Accion ", StringComparison.OrdinalIgnoreCase)
+            && !desc.StartsWith("Acción ", StringComparison.OrdinalIgnoreCase))
+            return desc;
+
+        return t.Tipo switch
+        {
+            "RECONTACTO" => "Recontacta al propietario: registra una interacción, crea la captación o descártala con un motivo.",
+            "SUBIR_DOCUMENTOS" => "Sube los documentos observados y vuelve a enviar la solicitud a revisión.",
+            "ENVIAR_REVISION" => "Envía la captación a revisión del bróker.",
+            "REPORTE_PROPIETARIO" => "Reporta al propietario los avances de su captación.",
+            "PROPONER_OPORTUNIDAD" => "Propón una propiedad compatible de tu cartera al cliente interesado.",
+            "REGISTRAR_CAPTACION" => "Registra la captación pendiente.",
+            "REGISTRAR_INTERACCION" => "Registra la interacción pendiente.",
+            "VISITA" => "Gestiona la visita: confírmala, reprográmala o registra su resultado.",
+            "SEGUIMIENTO" => t.EntidadTipo switch
+            {
+                "SOLICITUD_ALQUILER" => "Cierra la solicitud aprobada para generar el contrato de alquiler.",
+                "CONTRATO_ALQUILER" => "Registra el cobro de la comisión (ya tiene el monto del agente asignado).",
+                _ => "Da seguimiento a esta oportunidad.",
+            },
+            _ => "Revisa y resuelve esta acción pendiente.",
+        };
+    }
 
     private static string EntidadLabel(string entidadTipo) => entidadTipo switch
     {

@@ -89,9 +89,9 @@
         </div>
 
         <FilterBar Search="Buscar por cliente, local, captación, agente…"
-                   Value="_query" ValueChanged="OnQueryChanged" ResultCount="_totalVisitas"
+                   Value="@_query" ValueChanged="OnQueryChanged" ResultCount="_totalVisitas"
                    HasActiveFilters="HayFiltros" OnClear="LimpiarFiltros">
-            <FilterSelect Placeholder="Distrito" Options="_distritos" Value="_distrito" ValueChanged="OnDistritoChanged" />
+            <FilterSelect Placeholder="Distrito" Options="_distritos" Value="@_distrito" ValueChanged="OnDistritoChanged" />
         </FilterBar>
 
         <div class="cl-card">

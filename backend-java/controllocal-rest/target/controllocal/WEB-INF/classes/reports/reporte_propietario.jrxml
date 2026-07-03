@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="reporte_propietario" language="java" pageWidth="595" pageHeight="842"
+              columnWidth="531" leftMargin="32" rightMargin="32" topMargin="28" bottomMargin="28"
+              uuid="f174bfa7-3482-4dec-b83d-d72007193330">
+    <field name="codigoCaptacion" class="java.lang.String"/>
+    <field name="direccion" class="java.lang.String"/>
+    <field name="distrito" class="java.lang.String"/>
+    <field name="propietario" class="java.lang.String"/>
+    <field name="agente" class="java.lang.String"/>
+    <field name="estadoCaptacion" class="java.lang.String"/>
+    <field name="periodo" class="java.lang.String"/>
+    <field name="fechaReporte" class="java.lang.String"/>
+    <field name="canalEnvio" class="java.lang.String"/>
+    <field name="area" class="java.lang.String"/>
+    <field name="rubro" class="java.lang.String"/>
+    <field name="precioReferencial" class="java.lang.String"/>
+    <field name="comision" class="java.lang.String"/>
+    <field name="vigencia" class="java.lang.String"/>
+    <field name="exclusividad" class="java.lang.String"/>
+    <field name="consultasReportadas" class="java.lang.String"/>
+    <field name="visitasReportadas" class="java.lang.String"/>
+    <field name="conversionVisitas" class="java.lang.String"/>
+    <field name="lecturaEjecutiva" class="java.lang.String"/>
+    <field name="objecionesFrecuentes" class="java.lang.String"/>
+    <field name="ajustesRecomendados" class="java.lang.String"/>
+    <field name="fechaGeneracion" class="java.lang.String"/>
+    <field name="graficoInteres" class="java.awt.Image"/>
+
+    <title height="112">
+        <element kind="rectangle" mode="Opaque" x="0" y="0" width="531" height="88" backcolor="#071B4B"/>
+        <element kind="rectangle" mode="Opaque" x="0" y="88" width="531" height="5" backcolor="#0067FF"/>
+        <element kind="staticText" x="20" y="14" width="250" height="22" forecolor="#FFFFFF" fontSize="18" bold="true">
+            <text><![CDATA[ControlLocal]]></text>
+        </element>
+        <element kind="staticText" x="20" y="42" width="260" height="14" forecolor="#9DB9FF" fontSize="8" bold="true">
+            <text><![CDATA[REPORTE DE AVANCE AL PROPIETARIO]]></text>
+        </element>
+        <element kind="textField" x="20" y="59" width="330" height="18" forecolor="#FFFFFF" fontSize="13" bold="true">
+            <expression><![CDATA[$F{direccion}]]></expression>
+        </element>
+        <element kind="textField" x="20" y="78" width="330" height="12" forecolor="#D6E4FF" fontSize="8">
+            <expression><![CDATA[$F{distrito} + " - " + $F{rubro}]]></expression>
+        </element>
+        <element kind="staticText" x="356" y="18" width="155" height="12" forecolor="#9DB9FF" fontSize="8" hTextAlign="Right">
+            <text><![CDATA[CAPTACION]]></text>
+        </element>
+        <element kind="textField" x="356" y="33" width="155" height="18" forecolor="#FFFFFF" fontSize="12" bold="true" hTextAlign="Right">
+            <expression><![CDATA[$F{codigoCaptacion}]]></expression>
+        </element>
+        <element kind="textField" x="356" y="58" width="155" height="14" forecolor="#D6E4FF" fontSize="8" hTextAlign="Right">
+            <expression><![CDATA["Emitido el " + $F{fechaReporte}]]></expression>
+        </element>
+    </title>
+
+    <detail>
+        <band height="626" splitType="Stretch">
+            <element kind="rectangle" mode="Opaque" x="0" y="0" width="531" height="86" backcolor="#FFFFFF" forecolor="#E1E7F0"/>
+            <element kind="rectangle" mode="Opaque" x="0" y="0" width="531" height="26" backcolor="#F4F7FB" forecolor="#E1E7F0"/>
+            <element kind="staticText" x="14" y="7" width="220" height="14" forecolor="#071B4B" fontSize="11" bold="true">
+                <text><![CDATA[Resumen del inmueble y encargo]]></text>
+            </element>
+            <element kind="textField" x="14" y="36" width="298" height="16" forecolor="#071B4B" fontSize="13" bold="true">
+                <expression><![CDATA[$F{direccion}]]></expression>
+            </element>
+            <element kind="textField" x="14" y="57" width="298" height="12" forecolor="#667085" fontSize="8">
+                <expression><![CDATA[$F{distrito} + " - " + $F{rubro} + " - " + $F{area}]]></expression>
+            </element>
+            <element kind="staticText" x="330" y="34" width="84" height="12" forecolor="#667085" fontSize="8" bold="true">
+                <text><![CDATA[Propietario]]></text>
+            </element>
+            <element kind="textField" x="414" y="34" width="101" height="12" forecolor="#1B2435" fontSize="8" hTextAlign="Right">
+                <expression><![CDATA[$F{propietario}]]></expression>
+            </element>
+            <element kind="staticText" x="330" y="51" width="84" height="12" forecolor="#667085" fontSize="8" bold="true">
+                <text><![CDATA[Agente]]></text>
+            </element>
+            <element kind="textField" x="414" y="51" width="101" height="12" forecolor="#1B2435" fontSize="8" hTextAlign="Right">
+                <expression><![CDATA[$F{agente}]]></expression>
+            </element>
+            <element kind="staticText" x="330" y="68" width="84" height="12" forecolor="#667085" fontSize="8" bold="true">
+                <text><![CDATA[Estado]]></text>
+            </element>
+            <element kind="textField" x="414" y="68" width="101" height="12" forecolor="#1B2435" fontSize="8" hTextAlign="Right">
+                <expression><![CDATA[$F{estadoCaptacion}]]></expression>
+            </element>
+
+            <element kind="rectangle" mode="Opaque" x="0" y="106" width="124" height="76" backcolor="#F4F7FB" forecolor="#E1E7F0"/>
+            <element kind="rectangle" mode="Opaque" x="0" y="106" width="124" height="4" backcolor="#0067FF"/>
+            <element kind="rectangle" mode="Opaque" x="136" y="106" width="124" height="76" backcolor="#F4F7FB" forecolor="#E1E7F0"/>
+            <element kind="rectangle" mode="Opaque" x="136" y="106" width="124" height="4" backcolor="#2F7D52"/>
+            <element kind="rectangle" mode="Opaque" x="272" y="106" width="124" height="76" backcolor="#F4F7FB" forecolor="#E1E7F0"/>
+            <element kind="rectangle" mode="Opaque" x="272" y="106" width="124" height="4" backcolor="#F2994A"/>
+            <element kind="rectangle" mode="Opaque" x="407" y="106" width="124" height="76" backcolor="#F4F7FB" forecolor="#E1E7F0"/>
+            <element kind="rectangle" mode="Opaque" x="407" y="106" width="124" height="4" backcolor="#6C5CE7"/>
+
+            <element kind="staticText" x="12" y="121" width="100" height="12" forecolor="#667085" fontSize="7" bold="true">
+                <text><![CDATA[CONSULTAS]]></text>
+            </element>
+            <element kind="textField" x="12" y="136" width="100" height="24" forecolor="#071B4B" fontSize="17" bold="true">
+                <expression><![CDATA[$F{consultasReportadas}]]></expression>
+            </element>
+            <element kind="staticText" x="12" y="160" width="100" height="12" forecolor="#667085" fontSize="8">
+                <text><![CDATA[interesados]]></text>
+            </element>
+            <element kind="staticText" x="148" y="121" width="100" height="12" forecolor="#667085" fontSize="7" bold="true">
+                <text><![CDATA[VISITAS]]></text>
+            </element>
+            <element kind="textField" x="148" y="136" width="100" height="24" forecolor="#071B4B" fontSize="17" bold="true">
+                <expression><![CDATA[$F{visitasReportadas}]]></expression>
+            </element>
+            <element kind="staticText" x="148" y="160" width="100" height="12" forecolor="#667085" fontSize="8">
+                <text><![CDATA[recorridos]]></text>
+            </element>
+            <element kind="staticText" x="284" y="121" width="100" height="12" forecolor="#667085" fontSize="7" bold="true">
+                <text><![CDATA[CONVERSION]]></text>
+            </element>
+            <element kind="textField" x="284" y="136" width="100" height="24" forecolor="#071B4B" fontSize="17" bold="true">
+                <expression><![CDATA[$F{conversionVisitas}]]></expression>
+            </element>
+            <element kind="staticText" x="284" y="160" width="100" height="12" forecolor="#667085" fontSize="8">
+                <text><![CDATA[consulta a visita]]></text>
+            </element>
+            <element kind="staticText" x="419" y="121" width="100" height="12" forecolor="#667085" fontSize="7" bold="true">
+                <text><![CDATA[PRECIO REF.]]></text>
+            </element>
+            <element kind="textField" x="419" y="136" width="100" height="24" forecolor="#071B4B" fontSize="12" bold="true">
+                <expression><![CDATA[$F{precioReferencial}]]></expression>
+            </element>
+            <element kind="textField" x="419" y="160" width="100" height="12" forecolor="#667085" fontSize="8">
+                <expression><![CDATA["Comision " + $F{comision}]]></expression>
+            </element>
+
+            <element kind="image" x="5" y="202" width="520" height="142">
+                <expression><![CDATA[$F{graficoInteres}]]></expression>
+            </element>
+
+            <element kind="rectangle" mode="Opaque" x="0" y="362" width="531" height="54" backcolor="#EEF4FF" forecolor="#D7E2F2"/>
+            <element kind="staticText" x="14" y="375" width="76" height="12" forecolor="#667085" fontSize="8" bold="true">
+                <text><![CDATA[Periodo]]></text>
+            </element>
+            <element kind="textField" x="90" y="375" width="168" height="12" forecolor="#1B2435" fontSize="8">
+                <expression><![CDATA[$F{periodo}]]></expression>
+            </element>
+            <element kind="staticText" x="282" y="375" width="76" height="12" forecolor="#667085" fontSize="8" bold="true">
+                <text><![CDATA[Vigencia]]></text>
+            </element>
+            <element kind="textField" x="358" y="375" width="158" height="12" forecolor="#1B2435" fontSize="8" hTextAlign="Right">
+                <expression><![CDATA[$F{vigencia}]]></expression>
+            </element>
+            <element kind="staticText" x="14" y="395" width="76" height="12" forecolor="#667085" fontSize="8" bold="true">
+                <text><![CDATA[Canal envio]]></text>
+            </element>
+            <element kind="textField" x="90" y="395" width="168" height="12" forecolor="#1B2435" fontSize="8">
+                <expression><![CDATA[$F{canalEnvio}]]></expression>
+            </element>
+            <element kind="staticText" x="282" y="395" width="76" height="12" forecolor="#667085" fontSize="8" bold="true">
+                <text><![CDATA[Exclusividad]]></text>
+            </element>
+            <element kind="textField" x="358" y="395" width="158" height="12" forecolor="#1B2435" fontSize="8" hTextAlign="Right">
+                <expression><![CDATA[$F{exclusividad}]]></expression>
+            </element>
+
+            <element kind="rectangle" mode="Opaque" x="0" y="432" width="531" height="52" backcolor="#FFFFFF" forecolor="#E1E7F0"/>
+            <element kind="staticText" x="14" y="442" width="120" height="13" forecolor="#071B4B" fontSize="10" bold="true">
+                <text><![CDATA[Lectura ejecutiva]]></text>
+            </element>
+            <element kind="textField" x="14" y="459" width="503" height="18" forecolor="#1B2435" fontSize="8">
+                <expression><![CDATA[$F{lecturaEjecutiva}]]></expression>
+            </element>
+
+            <element kind="rectangle" mode="Opaque" x="0" y="500" width="258" height="112" backcolor="#FFFFFF" forecolor="#E1E7F0"/>
+            <element kind="rectangle" mode="Opaque" x="0" y="500" width="258" height="24" backcolor="#F4F7FB" forecolor="#E1E7F0"/>
+            <element kind="staticText" x="14" y="507" width="220" height="13" forecolor="#071B4B" fontSize="10" bold="true">
+                <text><![CDATA[Objeciones frecuentes]]></text>
+            </element>
+            <element kind="textField" x="14" y="536" width="230" height="58" forecolor="#1B2435" fontSize="8">
+                <expression><![CDATA[$F{objecionesFrecuentes}]]></expression>
+            </element>
+
+            <element kind="rectangle" mode="Opaque" x="273" y="500" width="258" height="112" backcolor="#FFFFFF" forecolor="#E1E7F0"/>
+            <element kind="rectangle" mode="Opaque" x="273" y="500" width="258" height="24" backcolor="#F4F7FB" forecolor="#E1E7F0"/>
+            <element kind="staticText" x="287" y="507" width="220" height="13" forecolor="#071B4B" fontSize="10" bold="true">
+                <text><![CDATA[Ajustes recomendados]]></text>
+            </element>
+            <element kind="textField" x="287" y="536" width="230" height="58" forecolor="#1B2435" fontSize="8">
+                <expression><![CDATA[$F{ajustesRecomendados}]]></expression>
+            </element>
+        </band>
+    </detail>
+
+    <pageFooter height="24">
+        <element kind="line" x="0" y="0" width="531" height="1" forecolor="#E2E6EC"/>
+        <element kind="textField" x="0" y="8" width="260" height="12" forecolor="#667085" fontSize="8">
+            <expression><![CDATA["Generado el " + $F{fechaGeneracion}]]></expression>
+        </element>
+        <element kind="staticText" x="360" y="8" width="171" height="12" forecolor="#667085" fontSize="8" hTextAlign="Right">
+            <text><![CDATA[Reporte al propietario]]></text>
+        </element>
+    </pageFooter>
+</jasperReport>

@@ -1,0 +1,17 @@
+com\controllocal\rest\OportunidadesRest$Listado.class
+com\controllocal\rest\reports\ReportCharts$Series.class
+com\controllocal\rest\reports\JasperPdfService.class
+com\controllocal\rest\reports\FichaPropiedadReporteDto.class
+com\controllocal\rest\FichaComercialSupport$CierreCliente.class
+com\controllocal\rest\reports\CaptacionJasperMapper.class
+com\controllocal\rest\reports\FichaCaptacionReporteDto.class
+com\controllocal\rest\VisitasRest$Listado.class
+com\controllocal\rest\reports\IndicadoresJasperMapper$Kpi.class
+com\controllocal\rest\reports\ReportCharts.class
+com\controllocal\rest\reports\ReporteIndicadoresJasperDto.class
+com\controllocal\rest\reports\ReportePropietarioJasperDto.class
+com\controllocal\rest\reports\IndicadoresJasperMapper.class
+com\controllocal\rest\reports\ReportCharts$Item.class
+com\controllocal\rest\reports\ContratoExclusividadReporteDto.class
+com\controllocal\rest\reports\ReportTemplateCompiler.class
+com\controllocal\rest\FichaComercialSupport$CierreCaptacion.class

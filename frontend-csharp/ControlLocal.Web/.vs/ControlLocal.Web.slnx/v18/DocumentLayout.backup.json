@@ -1,0 +1,470 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\clientedetail.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\clientedetail.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\captaciondetail.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\captaciondetail.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\dashboard.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\dashboard.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\models\\cartera\\coincidenciadto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:models\\cartera\\coincidenciadto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\comisiones.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\comisiones.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\propiedadesalquiladas.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\propiedadesalquiladas.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\cierre.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\cierre.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\services\\navigation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:services\\navigation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\services\\reporteindicadores.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:services\\reporteindicadores.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\services\\routeaccess.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:services\\routeaccess.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\shared\\combochart.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\shared\\combochart.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\reportes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\reportes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\wwwroot\\css\\controllocal.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:wwwroot\\css\\controllocal.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\routes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\routes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\amd64\\Microsoft.Common.CurrentVersion.targets||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\wwwroot\\css\\base.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:wwwroot\\css\\base.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\shared\\sidebar.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\shared\\sidebar.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\clienteform.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\clienteform.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\locales.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\locales.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\solicitudes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\solicitudes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\clientes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\clientes.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\bandejacaptaciones.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\bandejacaptaciones.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\owners.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\owners.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\seguimientocomercial.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\seguimientocomercial.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\oportunidades.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\oportunidades.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\pages\\login.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\pages\\login.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\components\\layout\\mainlayout.razor.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:components\\layout\\mainlayout.razor.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|d:\\init\\controllocal\\frontend-csharp\\controllocal.web\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{BA70C372-2F7B-F6DA-576F-F9DD0858800A}|ControlLocal.Web.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "CoincidenciaDto.cs",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Models\\Cartera\\CoincidenciaDto.cs",
+              "RelativeDocumentMoniker": "Models\\Cartera\\CoincidenciaDto.cs",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Models\\Cartera\\CoincidenciaDto.cs",
+              "RelativeToolTip": "Models\\Cartera\\CoincidenciaDto.cs",
+              "ViewState": "AgIAAAIAAAAAAAAAAAArwBUAAAAfAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-03T05:24:09.409Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "ClienteDetail.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\ClienteDetail.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\ClienteDetail.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\ClienteDetail.razor",
+              "RelativeToolTip": "Components\\Pages\\ClienteDetail.razor",
+              "ViewState": "AgIAAF8AAAAAAAAAAAArwHIAAABKAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-07-03T05:23:48.992Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Dashboard.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Dashboard.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Dashboard.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Dashboard.razor",
+              "RelativeToolTip": "Components\\Pages\\Dashboard.razor",
+              "ViewState": "AgIAABICAAAAAAAAAAAUwGUBAAAfAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-30T03:04:22.851Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "ComboChart.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Shared\\ComboChart.razor",
+              "RelativeDocumentMoniker": "Components\\Shared\\ComboChart.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Shared\\ComboChart.razor",
+              "RelativeToolTip": "Components\\Shared\\ComboChart.razor",
+              "ViewState": "AgIAABIAAAAAAAAAAAAAABAAAABBAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-30T02:37:12.035Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "Routes.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Routes.razor",
+              "RelativeDocumentMoniker": "Components\\Routes.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Routes.razor",
+              "RelativeToolTip": "Components\\Routes.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-29T05:16:20.724Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "Comisiones.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Comisiones.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Comisiones.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Comisiones.razor",
+              "RelativeToolTip": "Components\\Pages\\Comisiones.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAA6AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T17:07:12.243Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "ReporteIndicadores.cs",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Services\\ReporteIndicadores.cs",
+              "RelativeDocumentMoniker": "Services\\ReporteIndicadores.cs",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Services\\ReporteIndicadores.cs",
+              "RelativeToolTip": "Services\\ReporteIndicadores.cs",
+              "ViewState": "AgIAAD4AAAAAAAAAAAAswAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-01T15:50:11.853Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "base.css",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\wwwroot\\css\\base.css",
+              "RelativeDocumentMoniker": "wwwroot\\css\\base.css",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\wwwroot\\css\\base.css",
+              "RelativeToolTip": "wwwroot\\css\\base.css",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2026-06-29T00:16:42.279Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "CaptacionDetail.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\CaptacionDetail.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\CaptacionDetail.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\CaptacionDetail.razor",
+              "RelativeToolTip": "Components\\Pages\\CaptacionDetail.razor",
+              "ViewState": "AgIAAA0BAAAAAAAAAAArwCABAACpAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T16:21:42.672Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "RouteAccess.cs",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Services\\RouteAccess.cs",
+              "RelativeDocumentMoniker": "Services\\RouteAccess.cs",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Services\\RouteAccess.cs",
+              "RelativeToolTip": "Services\\RouteAccess.cs",
+              "ViewState": "AgIAADgAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-01T15:49:50.66Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "Cierre.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Cierre.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Cierre.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Cierre.razor",
+              "RelativeToolTip": "Components\\Pages\\Cierre.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-07-01T22:07:44.057Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "Navigation.cs",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Services\\Navigation.cs",
+              "RelativeDocumentMoniker": "Services\\Navigation.cs",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Services\\Navigation.cs",
+              "RelativeToolTip": "Services\\Navigation.cs",
+              "ViewState": "AgIAAAIAAAAAAAAAAAAxwPIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-28T20:31:20.204Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "PropiedadesAlquiladas.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\PropiedadesAlquiladas.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\PropiedadesAlquiladas.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\PropiedadesAlquiladas.razor",
+              "RelativeToolTip": "Components\\Pages\\PropiedadesAlquiladas.razor",
+              "ViewState": "AgIAABsAAAAAAAAAAAAAACMAAABNAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-07-01T22:08:03.211Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "Sidebar.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Shared\\Sidebar.razor",
+              "RelativeDocumentMoniker": "Components\\Shared\\Sidebar.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Shared\\Sidebar.razor",
+              "RelativeToolTip": "Components\\Shared\\Sidebar.razor",
+              "ViewState": "AgIAABUAAAAAAAAAAAAgwC0AAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T19:29:42.434Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 19,
+              "Title": "Solicitudes.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Solicitudes.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Solicitudes.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Solicitudes.razor",
+              "RelativeToolTip": "Components\\Pages\\Solicitudes.razor",
+              "ViewState": "AgIAAMQAAAAAAAAAAAAewM4AAABAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T17:08:58.333Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 20,
+              "Title": "Clientes.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Clientes.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Clientes.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Clientes.razor",
+              "RelativeToolTip": "Components\\Pages\\Clientes.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAASAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T17:05:45.635Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "Reportes.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Reportes.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Reportes.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Reportes.razor",
+              "RelativeToolTip": "Components\\Pages\\Reportes.razor",
+              "ViewState": "AgIAAKcAAAAAAAAAAAAYwKsAAAAWAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-29T19:04:18.633Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "controllocal.css",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\wwwroot\\css\\controllocal.css",
+              "RelativeDocumentMoniker": "wwwroot\\css\\controllocal.css",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\wwwroot\\css\\controllocal.css",
+              "RelativeToolTip": "wwwroot\\css\\controllocal.css",
+              "ViewState": "AgIAAPkFAAAAAAAAAAAgwBAGAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2026-06-26T03:12:16.993Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "Microsoft.Common.CurrentVersion.targets",
+              "DocumentMoniker": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\amd64\\Microsoft.Common.CurrentVersion.targets",
+              "ToolTip": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\amd64\\Microsoft.Common.CurrentVersion.targets",
+              "ViewState": "AgIAAAEVAAAAAAAAAAAgwBUVAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003801|",
+              "WhenOpened": "2026-06-29T00:35:06.394Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 21,
+              "Title": "BandejaCaptaciones.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\BandejaCaptaciones.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\BandejaCaptaciones.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\BandejaCaptaciones.razor",
+              "RelativeToolTip": "Components\\Pages\\BandejaCaptaciones.razor",
+              "ViewState": "AgIAAEwAAAAAAAAAAAAiwFoAAAALAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T17:03:59.736Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 22,
+              "Title": "Owners.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Owners.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Owners.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Owners.razor",
+              "RelativeToolTip": "Components\\Pages\\Owners.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T17:02:03.917Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "ClienteForm.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\ClienteForm.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\ClienteForm.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\ClienteForm.razor",
+              "RelativeToolTip": "Components\\Pages\\ClienteForm.razor",
+              "ViewState": "AgIAAHAAAAAAAAAAAAAhwHcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T16:59:12.653Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 18,
+              "Title": "Locales.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Locales.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Locales.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Locales.razor",
+              "RelativeToolTip": "Components\\Pages\\Locales.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAFoAAAByAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-27T17:56:27.101Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 23,
+              "Title": "SeguimientoComercial.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\SeguimientoComercial.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\SeguimientoComercial.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\SeguimientoComercial.razor",
+              "RelativeToolTip": "Components\\Pages\\SeguimientoComercial.razor",
+              "ViewState": "AgIAAGQAAAAAAAAAAAAnwHQAAAApAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-26T21:10:55.227Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 24,
+              "Title": "Oportunidades.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Oportunidades.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Oportunidades.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Oportunidades.razor",
+              "RelativeToolTip": "Components\\Pages\\Oportunidades.razor",
+              "ViewState": "AgIAADgAAAAAAAAAAAAgwEkAAABPAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-26T21:04:56.374Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 26,
+              "Title": "MainLayout.razor.css",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Layout\\MainLayout.razor.css",
+              "RelativeDocumentMoniker": "Components\\Layout\\MainLayout.razor.css",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Layout\\MainLayout.razor.css",
+              "RelativeToolTip": "Components\\Layout\\MainLayout.razor.css",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2026-06-26T03:31:46.795Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 25,
+              "Title": "Login.razor",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Login.razor",
+              "RelativeDocumentMoniker": "Components\\Pages\\Login.razor",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Components\\Pages\\Login.razor",
+              "RelativeToolTip": "Components\\Pages\\Login.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAnAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-26T03:07:26.407Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 27,
+              "Title": "Program.cs",
+              "DocumentMoniker": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "D:\\init\\ControlLocal\\frontend-csharp\\ControlLocal.Web\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-26T03:06:54.96Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

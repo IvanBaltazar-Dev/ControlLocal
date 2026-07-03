@@ -1,0 +1,5 @@
+com\controllocal\config\DatabaseConfig.class
+com\controllocal\config\DBManager$PooledConnectionHandler.class
+com\controllocal\config\DBManager$Ociosa.class
+com\controllocal\config\TransactionContext.class
+com\controllocal\config\DBManager.class

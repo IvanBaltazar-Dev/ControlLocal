@@ -221,7 +221,8 @@ internal sealed record CaptacionApi(
     string PropietarioNombre,
     long IdAgente,
     string AgenteNombre,
-    long? IdBrokerRevisor);
+    long? IdBrokerRevisor,
+    string? FotoPortadaClave);
 
 internal sealed record AgenteApi(
     long Id,
@@ -1633,6 +1634,7 @@ public class HttpCaptacionService(ApiClient api) : ICaptacionService
             ObservacionRevision = item.ObservacionRevision,
             FechaRevision = item.FechaRevision,
             BrokerRevisorId = item.IdBrokerRevisor,
+            FotoPortadaClave = item.FotoPortadaClave,
         };
     }
 

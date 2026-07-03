@@ -1,0 +1,8 @@
+com\controllocal\dao\PropietarioDAOImplIntegrationTest.class
+com\controllocal\dao\CaptacionDAOImplIntegrationTest.class
+com\controllocal\dao\AgenteInmobiliarioDAOImplIntegrationTest.class
+com\controllocal\dao\LocalComercialDAOImplIntegrationTest.class
+com\controllocal\dao\ControlLocalCrudManualIntegrationTest.class
+com\controllocal\dao\BrokerDAOImplIntegrationTest.class
+com\controllocal\dao\ManualTestSupport.class
+com\controllocal\dao\UsuarioInternoDAOImplManualTest.class

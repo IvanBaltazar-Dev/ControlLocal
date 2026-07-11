@@ -1,0 +1,122 @@
+# ============================================================
+# Secrets and local configuration
+# ============================================================
+
+.env
+.env.*
+*.env
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.ppk
+
+*.rdp
+
+secrets/
+credentials/
+private/
+keys/
+certs/
+
+.aws/
+.azure/
+.gcloud/
+
+secrets.properties
+credentials.properties
+local.properties
+database.local.properties
+aws.properties
+aws.local.properties
+
+*.token
+*.jwt
+*.secret
+
+# ============================================================
+# Java / Maven
+# ============================================================
+
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven Wrapper must remain versioned
+!.mvn/wrapper/maven-wrapper.jar
+
+.mvn/timing.properties
+dependency-reduced-pom.xml
+
+hs_err_pid*
+replay_pid*
+
+# ============================================================
+# .NET
+# ============================================================
+
+**/bin/
+**/obj/
+
+.vs/
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+TestResult*/
+TestResults/
+
+artifacts/
+publish/
+
+*.nupkg
+*.snupkg
+
+*.rsuser
+*.DotSettings.user
+
+appsettings.Local.json
+appsettings.*.local.json
+appsettings.Production.json
+
+# ============================================================
+# AI local tooling
+# ============================================================
+
+.claude/settings.local.json
+.claude/*.local.json
+.claude/logs/
+.claude/history/
+.claude/tmp/
+
+.serena/
+
+.codex/
+.codex-build/
+.codex-grade/
+
+.agents/cache/
+.agents/tmp/
+.agents/logs/
+
+.tmp_*
+
+# ============================================================
+# Terraform
+# ============================================================
+
+terraform.tfstate
+terraform.tfstate.*
+.terraform/
+
+*.tfvars
+*.tfvars.json
+
+cdk.out/

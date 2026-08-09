@@ -1,0 +1,204 @@
+﻿
+== Entorno E2E aislado 20260803074845-1329 ==
+Base: controllocal_e2e_20260803074845_1329
+powershell :  Network controllocal-e2e-20260803074845-1329_default Creating 
+En línea: 1 Carácter: 443
++ ... lyContinue; powershell -NoProfile -ExecutionPolicy Bypass -File D:\in ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Network contro...fault Creating :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Network controllocal-e2e-20260803074845-1329_default Created 
+ Container controllocal-postgres-e2e-20260803074845-1329 Creating 
+ Container controllocal-postgres-e2e-20260803074845-1329 Created 
+ Container controllocal-api-e2e-20260803074845-1329 Creating 
+ Container controllocal-api-e2e-20260803074845-1329 Created 
+ Container controllocal-postgres-e2e-20260803074845-1329 Starting 
+ Container controllocal-postgres-e2e-20260803074845-1329 Started 
+ Container controllocal-postgres-e2e-20260803074845-1329 Waiting 
+ Container controllocal-postgres-e2e-20260803074845-1329 Healthy 
+ Container controllocal-api-e2e-20260803074845-1329 Starting 
+ Container controllocal-api-e2e-20260803074845-1329 Started 
+ Container controllocal-api-e2e-20260803074845-1329 Waiting 
+ Container controllocal-postgres-e2e-20260803074845-1329 Waiting 
+ Container controllocal-api-e2e-20260803074845-1329 Healthy 
+ Container controllocal-postgres-e2e-20260803074845-1329 Healthy 
+
+== Suite diagnostico-vis-atribucion / corrida 20260803074845-1329 ==
+
+== 0. Login e instrumentacion ==
+
+== 1. Banco de 100000 filas (identico al del gate) ==
+  banco listo
+
+== 2. Calentamiento (5 llamadas, se descartan) ==
+
+== W. 60 llamadas desde Windows contra el puerto publicado ==
+   (cliente PowerShell + proxy de Docker Desktop + JVM + PostgreSQL)
+
+== D. 60 llamadas desde DENTRO de la red de Docker ==
+   (mismo JVM y misma BD, sin cliente Windows ni proxy de puerto)
+   muestras obtenidas: 60
+
+== S. 60 ejecuciones de las DOS consultas, dentro de la base ==
+   (sin HTTP y sin JVM: solo PostgreSQL)
+   muestras obtenidas: 0
+
+== Comparacion de los tres caminos ==
+
+Serie                           N Mejor  p50  p95 Peor PeorSobreP50 ExcesoMs SobreRC003
+-----                           - -----  ---  --- ---- ------------ -------- ----------
+W  Windows -> puerto publicado 60   640 1223 1510 2115         1.73      892          0
+D  dentro de Docker -> API     60  1150 1260 1600 1890          1.5      630          0
+
+
+
+
+-- serie W completa (las llamadas por encima del doble de su p50, marcadas) --
+
+ N InicioUtc      Ms Pico
+ - ---------      -- ----
+ 1 07:52:20.437  687     
+ 2 07:52:21.134  702     
+ 3 07:52:21.837  887     
+ 4 07:52:22.724  661     
+ 5 07:52:23.385  761     
+ 6 07:52:24.146  737     
+ 7 07:52:24.883  762     
+ 8 07:52:25.646  775     
+ 9 07:52:26.421  746     
+10 07:52:27.167  695     
+11 07:52:27.863  694     
+12 07:52:28.557  676     
+13 07:52:29.233  640     
+14 07:52:29.873  671     
+15 07:52:30.544  678     
+16 07:52:31.223  744     
+17 07:52:31.967  842     
+18 07:52:32.822  688     
+19 07:52:33.510  796     
+20 07:52:34.307  713     
+21 07:52:35.019  739     
+22 07:52:35.758  780     
+23 07:52:36.538  793     
+24 07:52:37.331  707     
+25 07:52:38.038  687     
+26 07:52:38.726  888     
+27 07:52:39.614 1200     
+28 07:52:40.815 1296     
+29 07:52:42.111 1353     
+30 07:52:43.464 1347     
+31 07:52:44.810 1306     
+32 07:52:46.117 1294     
+33 07:52:47.411 1257     
+34 07:52:48.669 1394     
+35 07:52:50.064 1223     
+36 07:52:51.287 1510     
+37 07:52:52.797 1193     
+38 07:52:53.990 1362     
+39 07:52:55.353 1308     
+40 07:52:56.661 1410     
+41 07:52:58.072 1433     
+42 07:52:59.505 1190     
+43 07:53:00.696 1328     
+44 07:53:02.024 2115     
+45 07:53:04.139 1410     
+46 07:53:05.550 1354     
+47 07:53:06.903 1453     
+48 07:53:08.356 1313     
+49 07:53:09.669 1402     
+50 07:53:11.071 1596     
+51 07:53:12.668 1256     
+52 07:53:13.925 1329     
+53 07:53:15.255 1378     
+54 07:53:16.633 1302     
+55 07:53:17.935 1203     
+56 07:53:19.139 1263     
+57 07:53:20.401 1261     
+58 07:53:21.663 1613     
+59 07:53:23.276 1358     
+60 07:53:24.634 1230     
+
+
+
+
+== Log de PostgreSQL durante la medicion ==
+-- sentencias registradas (> 300 ms): 227 --
+-- las 10 mas lentas que vio la BASE --
+
+Marca                          Ms
+-----                          --
+2026-08-03 07:51:43.537 45218.485
+2026-08-03 07:50:56.757 32610.529
+2026-08-03 07:52:12.176 28374.025
+2026-08-03 07:50:07.118 21543.854
+2026-08-03 07:50:23.767 16298.724
+2026-08-03 07:53:04.050  1207.343
+2026-08-03 07:53:53.350  1161.412
+2026-08-03 07:53:33.161  1015.531
+2026-08-03 07:53:31.359   993.335
+2026-08-03 07:53:12.607   974.569
+
+
+
+-- la sentencia mas lenta de la BASE fue 45218 ms; la llamada mas lenta del CLIENTE, 2115 ms --
+
+-- eventos de mantenimiento en la ventana de medicion --
+2026-08-03 07:54:28.422 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.334", size 212992
+2026-08-03 07:54:28.978 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.336", size 212992
+2026-08-03 07:54:29.645 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.338", size 2211840
+2026-08-03 07:54:29.647 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.337", size 212992
+2026-08-03 07:54:30.188 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.339", size 212992
+2026-08-03 07:54:30.847 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.341", size 2211840
+2026-08-03 07:54:30.848 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.340", size 212992
+2026-08-03 07:54:31.358 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.342", size 212992
+2026-08-03 07:54:32.083 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.344", size 2211840
+2026-08-03 07:54:32.084 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.343", size 212992
+2026-08-03 07:54:32.780 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.345", size 212992
+2026-08-03 07:54:33.434 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.347", size 2211840
+2026-08-03 07:54:33.435 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.346", size 212992
+2026-08-03 07:54:33.953 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.348", size 212992
+2026-08-03 07:54:34.636 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.350", size 2211840
+2026-08-03 07:54:34.637 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.349", size 212992
+2026-08-03 07:54:35.197 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.351", size 212992
+2026-08-03 07:54:35.860 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.353", size 2211840
+2026-08-03 07:54:35.861 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.352", size 212992
+2026-08-03 07:54:36.414 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.354", size 212992
+2026-08-03 07:54:37.143 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.356", size 2211840
+2026-08-03 07:54:37.144 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.355", size 212992
+2026-08-03 07:54:37.691 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.357", size 212992
+2026-08-03 07:54:38.362 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.359", size 2211840
+2026-08-03 07:54:38.362 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.358", size 212992
+2026-08-03 07:54:38.912 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.360", size 212992
+2026-08-03 07:54:39.614 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.362", size 2211840
+2026-08-03 07:54:39.615 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.361", size 212992
+2026-08-03 07:54:40.130 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.363", size 212992
+2026-08-03 07:54:40.778 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.365", size 2211840
+2026-08-03 07:54:40.779 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.364", size 212992
+2026-08-03 07:54:41.328 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.366", size 212992
+2026-08-03 07:54:42.027 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.368", size 2211840
+2026-08-03 07:54:42.028 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.367", size 212992
+2026-08-03 07:54:42.732 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.369", size 212992
+2026-08-03 07:54:43.390 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.371", size 2211840
+2026-08-03 07:54:43.391 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.370", size 212992
+2026-08-03 07:54:43.924 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.372", size 212992
+2026-08-03 07:54:44.611 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.374", size 2211840
+2026-08-03 07:54:44.612 UTC [112] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp112.373", size 212992
+
+-- log del API en la misma ventana (errores o avisos) --
+2026-08-03T07:49:34.963Z  WARN 1 --- [controllocal-api-v2] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
+
+  ventana de medicion W: 07:52:20 -> 07:53:25 UTC
+
+===== atribucion terminada =====
+ Container controllocal-api-e2e-20260803074845-1329 Stopping 
+ Container controllocal-api-e2e-20260803074845-1329 Stopped 
+ Container controllocal-api-e2e-20260803074845-1329 Removing 
+ Container controllocal-api-e2e-20260803074845-1329 Removed 
+ Container controllocal-postgres-e2e-20260803074845-1329 Stopping 
+ Container controllocal-postgres-e2e-20260803074845-1329 Stopped 
+ Container controllocal-postgres-e2e-20260803074845-1329 Removing 
+ Container controllocal-postgres-e2e-20260803074845-1329 Removed 
+ Network controllocal-e2e-20260803074845-1329_default Removing 
+ Network controllocal-e2e-20260803074845-1329_default Removed 
+Entorno 20260803074845-1329 eliminado: sin contenedores, volumenes, red ni filas E2E residuales.

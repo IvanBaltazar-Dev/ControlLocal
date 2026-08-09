@@ -1,0 +1,317 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Panel</p>
+    <h1>{{ titulo() }}</h1>
+    <p class="sub">
+      {{ subtitulo() }}
+      @if (indicadores(); as i) {
+        <span class="cl-badge">{{ i.ambito }}</span>
+      }
+    </p>
+  </div>
+
+  <div class="acciones">
+    <label class="periodo">
+      <span>Periodo</span>
+      <!--
+        `[selected]` en la opción, no solo `[value]` en el select: el `value`
+        del elemento se asigna antes de que existan las opciones, así que el
+        navegador cae a la primera y la pantalla mentiría sobre qué periodo
+        está mostrando.
+      -->
+      <select (change)="cambiarPeriodo($any($event.target).value)" [disabled]="cargando()">
+        @for (opcion of periodos; track opcion.valor) {
+          <option [value]="opcion.valor" [selected]="opcion.valor === periodo()">
+            {{ opcion.etiqueta }}
+          </option>
+        }
+      </select>
+    </label>
+    <button type="button" class="cl-btn" (click)="cargar()" [disabled]="cargando()">
+      Actualizar
+    </button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando tu panel…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && indicadores(); as i) {
+  <!--
+    Fila de KPI: números de cabecera, no un gráfico de barras. Cada uno es
+    además un atajo a la pantalla donde se trabajan, que es la convención de
+    listados del sistema.
+  -->
+  <section class="kpis">
+    @for (kpi of kpis(); track kpi.etiqueta) {
+      @if (kpi.ruta) {
+        <a [routerLink]="kpi.ruta" class="kpi-enlace">
+          <cl-kpi [etiqueta]="kpi.etiqueta" [valor]="kpi.valor" [tono]="kpi.tono" [pie]="kpi.pie" />
+        </a>
+      } @else {
+        <cl-kpi [etiqueta]="kpi.etiqueta" [valor]="kpi.valor" [tono]="kpi.tono" [pie]="kpi.pie" />
+      }
+    }
+  </section>
+
+  <div class="cl-columnas anchas">
+    <div>
+      <!-- Bandeja del agente / centro de control de quien supervisa -->
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>{{ esAgente() ? 'Tu bandeja de trabajo' : 'Centro de control' }}</h2>
+            <p>
+              @if (esAgente()) {
+                Lo que necesita tu acción, ordenado por prioridad y demora
+              } @else if (esBroker()) {
+                Decisiones y riesgos del equipo, ordenados por urgencia
+              } @else {
+                Focos de auditoría de toda la corredora
+              }
+            </p>
+          </div>
+          @if (esAgente() && totalBandeja() > 0) {
+            <span class="cl-badge">{{ totalBandeja() }} de hasta {{ maximoBandeja }}</span>
+          }
+        </header>
+
+        @if (avisoBandeja(); as aviso) {
+          <p class="cl-aviso">{{ aviso }}</p>
+        }
+
+        @if (esAgente()) {
+          @if (bandeja().length === 0) {
+            <p class="cl-vacio">
+              Todo al día: no tienes tareas pendientes. La bandeja se rearma sola con tu
+              seguimiento, tus visitas y tus expedientes.
+            </p>
+          } @else {
+            <ul class="tareas">
+              @for (tarea of bandeja(); track tarea.id) {
+                <li>
+                  <span class="cl-badge" [class]="tonoPrioridad(tarea.prioridad)">
+                    {{ tarea.prioridad }}
+                  </span>
+                  <div class="cuerpo">
+                    <p class="titulo">{{ tarea.descripcion }}</p>
+                    <p class="cl-menudo">
+                      @if (tarea.entidadCodigo) {
+                        <span>{{ tarea.entidadCodigo }}</span>
+                        <span aria-hidden="true"> · </span>
+                      }
+                      <span>{{ diasTexto(tarea.diasSinAccion) }}</span>
+                      @if (vencimiento(tarea)) {
+                        <span aria-hidden="true"> · </span>
+                        <span>{{ vencimiento(tarea) }}</span>
+                      }
+                    </p>
+                  </div>
+                  <div class="acciones-tarea">
+                    @if (puedeResolver(tarea)) {
+                      <button type="button" class="cl-btn primario" (click)="resolver(tarea)">
+                        Resolver
+                      </button>
+                    }
+                    <button type="button" class="cl-btn" (click)="pedirCancelacion(tarea)">
+                      Cancelar
+                    </button>
+                  </div>
+                </li>
+              }
+            </ul>
+
+            @if (!bandejaCompleta()) {
+              <button
+                type="button"
+                class="cl-btn ver-todas"
+                (click)="verTodas()"
+                [disabled]="ampliando()"
+              >
+                {{ ampliando() ? 'Cargando…' : 'Ver las ' + totalBandeja() + ' tareas' }}
+              </button>
+            }
+          }
+        } @else if (focos().length === 0) {
+          <p class="cl-vacio">
+            Sin focos abiertos ahora mismo: no hay revisiones pendientes ni seguimiento vencido en
+            tu alcance.
+          </p>
+        } @else {
+          <ul class="focos">
+            @for (foco of focos(); track foco.titulo) {
+              <li>
+                <span class="valor" [class]="'tono-' + foco.tono">{{ foco.valor }}</span>
+                <div class="cuerpo">
+                  <p class="titulo">{{ foco.titulo }}</p>
+                  <p class="cl-menudo">{{ foco.descripcion }}</p>
+                </div>
+                <a class="cl-btn primario" [routerLink]="foco.ruta">Revisar</a>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <!--
+        Parte-de-un-todo con cuatro/cinco clases y nombres largos: barra
+        apilada horizontal con leyenda, no una dona. Cada tramo lleva su
+        nombre y su valor, así que el color nunca es la única señal.
+      -->
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>{{ tituloCubos() }}</h2>
+            <p>{{ subtituloCubos() }}</p>
+          </div>
+          <span class="cl-badge">
+            {{ totalCubos() }} {{ totalCubos() === 1 ? 'captación' : 'captaciones' }}
+          </span>
+        </header>
+
+        @if (totalCubos() === 0) {
+          <p class="cl-vacio">Todavía no hay captaciones registradas en tu alcance.</p>
+        } @else {
+          <div
+            class="barra"
+            role="img"
+            [attr.aria-label]="'Distribución de ' + totalCubos() + ' captaciones por estado'"
+          >
+            @for (tramo of tramos(); track tramo.nombre) {
+              @if (tramo.valor > 0) {
+                <span
+                  class="tramo"
+                  [style.flex-grow]="tramo.valor"
+                  [style.background]="tramo.color"
+                  [title]="tramo.nombre + ': ' + tramo.valor"
+                ></span>
+              }
+            }
+          </div>
+
+          <ul class="leyenda">
+            @for (tramo of tramos(); track tramo.nombre) {
+              <li>
+                <span class="punto" [style.background]="tramo.color" aria-hidden="true"></span>
+                <span class="nombre">{{ tramo.nombre }}</span>
+                <b>{{ tramo.valor }}</b>
+                <span class="cl-menudo pct">{{ tramo.porcentaje }}%</span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+
+    <div>
+      <!-- Señales: cuatro lecturas de disciplina operativa -->
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>{{ esAgente() ? 'Disciplina comercial' : 'Riesgo operativo' }}</h2>
+            <p>Señales para decidir dónde intervenir</p>
+          </div>
+        </header>
+        <div class="senales">
+          @for (senal of senales(); track senal.etiqueta) {
+            <cl-kpi
+              [etiqueta]="senal.etiqueta"
+              [valor]="senal.valor"
+              [tono]="senal.tono"
+              [pie]="senal.pie"
+            />
+          }
+        </div>
+      </section>
+
+      @if (esAgente()) {
+        <!-- Un ratio contra un límite: medidor, no un gráfico de una barra. -->
+        <section class="cl-tarjeta">
+          <header>
+            <div>
+              <h2>Mi rendimiento</h2>
+              <p>Conversión de captación a cierre, por cohorte del periodo</p>
+            </div>
+          </header>
+          <p class="medidor-valor">{{ conversion() }}<span>%</span></p>
+          <div class="medidor" role="img" [attr.aria-label]="conversion() + ' por ciento de conversión'">
+            <i [style.width.%]="conversion()"></i>
+          </div>
+          <div class="cl-pares apiladas">
+            <div>
+              <span>Captaciones</span>
+              <strong>{{ i.captacionesTotales }}</strong>
+            </div>
+            <div>
+              <span>Cierres</span>
+              <strong>{{ i.cierres }}</strong>
+            </div>
+          </div>
+          <p class="cl-menudo">
+            @if (i.cierres === 0) {
+              Aún sin cierres en {{ etiquetaPeriodo().toLowerCase() }}. Cada visita y cada
+              solicitud acercan el primero.
+            } @else {
+              {{ i.cierres }} cierre(s) sobre {{ i.captacionesTotales }} captación(es) del periodo.
+            }
+          </p>
+        </section>
+      } @else {
+        <section class="cl-tarjeta">
+          <header>
+            <div>
+              <h2>Carga del equipo</h2>
+              <p>Top 3 {{ esAdmin() ? 'brokers' : 'agentes' }} por captaciones del periodo</p>
+            </div>
+          </header>
+          @if (desempeno().length === 0) {
+            <p class="cl-vacio">Sin actividad registrada en {{ etiquetaPeriodo().toLowerCase() }}.</p>
+          } @else {
+            <div class="cl-tabla-marco">
+              <table class="cl-tabla">
+                <thead>
+                  <tr>
+                    <th>{{ esAdmin() ? 'Broker' : 'Agente' }}</th>
+                    <th class="num">Captac.</th>
+                    <th class="num">Cierres</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (fila of desempeno(); track fila.nombre) {
+                    <tr>
+                      <td>
+                        <span class="avatar">{{ iniciales(fila.nombre) }}</span>
+                        {{ fila.nombre }}
+                      </td>
+                      <td class="num">
+                        <b>{{ fila.captaciones }}</b>
+                      </td>
+                      <td class="num">{{ fila.cierres }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      }
+    </div>
+  </div>
+}
+
+<cl-confirmacion
+  [abierto]="porCancelar() !== null"
+  titulo="Cancelar esta tarea"
+  descripcion="La cancelación es definitiva: el sistema no volverá a crear esta tarea para ese registro, aunque la situación siga abierta. Si solo quieres posponerla, ciérrala trabajándola."
+  tono="rojo"
+  etiquetaConfirmar="Cancelar la tarea"
+  etiquetaCancelar="Volver"
+  [ocupado]="cancelando()"
+  (confirmar)="confirmarCancelacion()"
+  (cerrar)="porCancelar.set(null)"
+/>

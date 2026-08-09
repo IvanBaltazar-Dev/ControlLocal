@@ -1,0 +1,125 @@
+:host {
+  display: block;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+}
+
+.totales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.montos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  b {
+    font-size: 1.15rem;
+    color: var(--cl-primario);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.totales p {
+  margin: 0.4rem 0 0;
+
+  span + span::before {
+    content: " · ";
+  }
+}
+
+.cl-tabla .ancho {
+  white-space: normal;
+  min-width: 10rem;
+
+  .principal {
+    display: block;
+  }
+}
+
+.cl-tabla .acciones {
+  display: flex;
+  gap: 0.3rem;
+  justify-content: flex-end;
+
+  .cl-btn {
+    padding: 0.28rem 0.55rem;
+    font-size: 0.76rem;
+  }
+}
+
+/* Diálogo de liquidación: el fondo cierra, igual que el resto del sistema. */
+.fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(16, 38, 47, 0.45);
+}
+
+.dialogo {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 41;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 1.1rem 1.2rem;
+  transform: translate(-50%, -50%);
+  background: var(--cl-superficie);
+  border-radius: var(--cl-radio);
+  box-shadow: var(--cl-sombra);
+
+  h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.05rem;
+    color: var(--cl-primario);
+  }
+
+  p {
+    margin: 0 0 0.8rem;
+  }
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.7rem;
+
+  span {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cl-tinta-suave);
+  }
+
+  input,
+  select {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 0.45rem;
+    background: var(--cl-superficie);
+    color: var(--cl-tinta);
+    font: inherit;
+    font-size: 0.9rem;
+  }
+}
+
+.botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}

@@ -1,0 +1,146 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Supervisión</p>
+    <h1>Reasignaciones de captaciones</h1>
+    <p class="sub">Mueve expedientes activos entre agentes de tu alcance y consulta la trazabilidad del cambio.</p>
+  </div>
+  <button type="button" class="cl-btn" (click)="recargar()">Actualizar</button>
+</header>
+
+<p class="cl-aviso">La reasignación cambia al agente responsable, pero no cambia el estado comercial de la captación.</p>
+@if (exito()) { <p class="cl-ok" role="status">{{ exito() }}</p> }
+@if (errorAccion()) { <p class="cl-aviso error" role="alert">{{ errorAccion() }}</p> }
+
+<section class="flujo" aria-label="Nueva reasignación">
+  <article class="cl-panel paso captaciones">
+    <header><span class="numero-paso">1</span><div><h2>Captación activa</h2><p>Elige el expediente que cambiará de responsable.</p></div></header>
+    <cl-barra-filtros
+      [busqueda]="filtros().texto"
+      (busquedaChange)="cambiarTexto($event)"
+      marcador="Buscar por código, local o agente…"
+      [debounceMs]="300"
+      [resultados]="paginaDatos().totalRecords"
+      [hayFiltros]="!!filtros().texto"
+      (limpiar)="limpiarCaptaciones()"
+    />
+    <cl-estado-listado
+      [cargando]="cargando()"
+      [error]="error()"
+      [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+      mensajeCarga="Buscando captaciones activas…"
+      mensajeVacio="No hay captaciones activas reasignables con esta búsqueda."
+      (reintentar)="recargar()"
+    />
+    @if (!cargando() && !error()) {
+      <div class="opciones">
+        @for (captacion of paginaDatos().items; track captacion.id) {
+          <label class="opcion" [class.seleccionada]="idCaptacion() === captacion.id">
+            <input type="radio" name="captacion" [checked]="idCaptacion() === captacion.id" (change)="seleccionarCaptacion(captacion.id)" />
+            <span><strong>{{ valor(captacion.codigoCaptacion) }}</strong><small>{{ valor(captacion.direccionLocal) }} · {{ valor(captacion.agenteNombre) }}</small></span>
+          </label>
+        }
+      </div>
+    }
+    @if (paginaDatos().totalRecords > porPagina) {
+      <cl-paginacion [total]="paginaDatos().totalRecords" [tamano]="porPagina" [pagina]="filtros().page" (paginaChange)="cambiarPagina($event)" />
+    }
+  </article>
+
+  <article class="cl-panel paso agentes">
+    <header><span class="numero-paso">2</span><div><h2>Nuevo responsable</h2><p>Solo agentes activos y disponibles.</p></div></header>
+    <label class="buscador"><span>Buscar agente</span><input type="search" placeholder="Nombre, código, documento o zona" [value]="busquedaAgente()" (input)="cambiarBusquedaAgente($any($event.target).value)" /></label>
+    @if (cargandoGobierno()) {
+      <p class="cl-menudo">Cargando agentes…</p>
+    } @else if (errorGobierno()) {
+      <p class="cl-aviso error">{{ errorGobierno() }}</p>
+    } @else if (agentesDestino().length === 0) {
+      <p class="cl-vacio">No hay otro agente activo y disponible que coincida.</p>
+    } @else {
+      <div class="opciones agentes-lista">
+        @for (agente of agentesDestino(); track agente.id) {
+          <label class="opcion" [class.seleccionada]="idAgente() === agente.id">
+            <input type="radio" name="agente" [checked]="idAgente() === agente.id" (change)="seleccionarAgente(agente.id)" />
+            <span><strong>{{ agente.nombre }}</strong><small>{{ valor(agente.codigoAgente) }} · {{ valor(agente.zona) }}</small></span>
+            <span class="cl-badge bien">Disponible</span>
+          </label>
+        }
+      </div>
+    }
+  </article>
+
+  <article class="cl-panel paso motivo">
+    <header><span class="numero-paso">3</span><div><h2>Motivo y confirmación</h2><p>Queda registrado en el historial.</p></div></header>
+    <label><span>Motivo *</span><textarea rows="5" maxlength="1000" [formControl]="motivo" placeholder="Explica por qué se mueve este expediente (mínimo 10 caracteres)"></textarea></label>
+    <dl class="resumen">
+      <dt>Captación</dt><dd>{{ valor(captacionSeleccionada()?.codigoCaptacion) }}</dd>
+      <dt>Agente actual</dt><dd>{{ valor(captacionSeleccionada()?.agenteNombre) }}</dd>
+      <dt>Nuevo agente</dt><dd>{{ agenteSeleccionado()?.nombre || 'Por seleccionar' }}</dd>
+    </dl>
+    <button type="button" class="cl-btn primario confirmar" [disabled]="procesando()" (click)="prepararReasignacion()">
+      {{ procesando() ? 'Reasignando…' : 'Confirmar reasignación' }}
+    </button>
+  </article>
+</section>
+
+<section class="historial">
+  <header class="titulo-seccion"><div><h2>Historial de reasignaciones</h2><p>Movimientos auditados del equipo, del más reciente al más antiguo.</p></div><button type="button" class="cl-btn" [disabled]="historialFiltrado().length === 0" (click)="exportarHistorial()">Exportar CSV</button></header>
+  @if (avisoExportacion()) { <p class="cl-ok" role="status">{{ avisoExportacion() }}</p> }
+  <div class="kpis">
+    <cl-kpi etiqueta="Reasignaciones" [valor]="historial().length" tono="azul" pie="Movimientos auditados" />
+    <cl-kpi etiqueta="Últimos 30 días" [valor]="recientes()" tono="ambar" pie="Actividad reciente" />
+    <cl-kpi etiqueta="Agentes involucrados" [valor]="agentesUnicos()" tono="verde" pie="Origen o destino" />
+    <cl-kpi etiqueta="Brokers responsables" [valor]="brokersUnicos()" tono="gris" pie="Autores del cambio" />
+  </div>
+  <cl-barra-filtros
+    [busqueda]="busquedaHistorial()"
+    (busquedaChange)="cambiarBusquedaHistorial($event)"
+    marcador="Buscar por captación, local, agente o motivo…"
+    [debounceMs]="300"
+    [resultados]="historialFiltrado().length"
+    [hayFiltros]="hayFiltrosHistorial()"
+    (limpiar)="limpiarHistorial()"
+  >
+    <cl-filtro-select marcador="Cualquier broker" [opciones]="opcionesBroker()" [valor]="brokerHistorial()" (valorChange)="cambiarBroker($event)" />
+    <cl-filtro-select marcador="Cualquier agente" [opciones]="opcionesAgenteHistorial()" [valor]="agenteHistorial()" (valorChange)="cambiarAgenteHistorial($event)" />
+  </cl-barra-filtros>
+  <cl-estado-listado
+    [cargando]="cargandoGobierno()"
+    [error]="errorGobierno()"
+    [vacio]="!cargandoGobierno() && !errorGobierno() && historialFiltrado().length === 0"
+    mensajeCarga="Cargando historial…"
+    mensajeVacio="Todavía no hay movimientos con estos filtros."
+    (reintentar)="recargar()"
+  />
+  @if (!cargandoGobierno() && !errorGobierno() && historialVisible().length > 0) {
+    <div class="cl-tabla-marco">
+      <table class="cl-tabla">
+        <thead><tr><th>Fecha</th><th>Captación / local</th><th>Agente anterior</th><th></th><th>Agente nuevo</th><th>Broker responsable</th><th>Motivo</th></tr></thead>
+        <tbody>
+          @for (evento of historialVisible(); track evento.idReasignacion) {
+            <tr>
+              <td class="fecha">{{ fecha(evento.fechaCambio) }}</td>
+              <td><strong>{{ valor(evento.codigoCaptacion) }}</strong><small>{{ valor(evento.direccionLocal) }}</small></td>
+              <td>{{ valor(evento.agenteAnteriorNombre) }}</td><td class="flecha">→</td>
+              <td><strong>{{ valor(evento.agenteNuevoNombre) }}</strong></td>
+              <td>{{ valor(evento.brokerNombre) }}</td><td>{{ valor(evento.motivo) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  @if (historialFiltrado().length > porPaginaHistorial) {
+    <cl-paginacion [total]="historialFiltrado().length" [tamano]="porPaginaHistorial" [pagina]="paginaHistorialActual()" (paginaChange)="cambiarPaginaHistorial($event)" />
+  }
+</section>
+
+<cl-confirmacion
+  [abierto]="dialogo()"
+  titulo="Confirmar reasignación"
+  [descripcion]="'Moverás ' + valor(captacionSeleccionada()?.codigoCaptacion) + ' de ' + valor(captacionSeleccionada()?.agenteNombre) + ' a ' + (agenteSeleccionado()?.nombre || sinDato) + '. El estado comercial no cambiará.'"
+  tono="azul"
+  etiquetaConfirmar="Reasignar"
+  [ocupado]="procesando()"
+  (cerrar)="cerrarDialogo()"
+  (confirmar)="confirmarReasignacion()"
+/>

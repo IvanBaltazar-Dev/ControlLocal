@@ -1,0 +1,18 @@
+<section class="aviso">
+  <span class="icono" aria-hidden="true">·</span>
+
+  <h1>Esta sección no está disponible para tu rol</h1>
+
+  @if (rol(); as etiqueta) {
+    <p>Entraste como <strong>{{ etiqueta }}</strong>, y esa pantalla pertenece a otro rol.</p>
+  } @else {
+    <p>No hay una sesión activa.</p>
+  }
+
+  <p class="pista">
+    Si necesitas acceder, pídelo a un broker administrador: los permisos se
+    asignan por rol, no por pantalla.
+  </p>
+
+  <a routerLink="/" class="volver">Volver al inicio</a>
+</section>

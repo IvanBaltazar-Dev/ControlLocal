@@ -1,0 +1,94 @@
+<div class="escena">
+  <div class="panel">
+    <div class="marca">
+      <span class="marca-logo">CL</span>
+      <div class="marca-texto">
+        <h1>Cambiar contraseña</h1>
+        <p>ControlLocal</p>
+      </div>
+    </div>
+
+    @if (listo()) {
+      <div class="exito" role="status">
+        <p><strong>Contraseña actualizada.</strong></p>
+        <p>
+          Por seguridad se cerraron todas las sesiones de tu cuenta. Entra otra vez con la
+          contraseña nueva.
+        </p>
+      </div>
+      <button type="button" (click)="irAlLogin()">Ir a iniciar sesión</button>
+    } @else {
+      @if (obligatorio) {
+        <!-- Sesión capada: el backend responde 403 en todo lo demás. Se dice
+             por qué está aquí, en vez de dejarle chocar contra la aplicación. -->
+        <div class="aviso" role="status">
+          <p><strong>Tienes una contraseña temporal.</strong></p>
+          <p>Elige una propia para poder usar el sistema.</p>
+        </div>
+      }
+
+      <p class="intro">
+        Al guardar se cerrarán <strong>todas las sesiones</strong> de tu cuenta, incluida esta.
+      </p>
+
+      <form [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+        <label for="actual">Contraseña actual</label>
+        <input
+          id="actual"
+          type="password"
+          formControlName="contrasenaActual"
+          autocomplete="current-password"
+          placeholder="••••••••"
+          [class.invalido]="
+            formulario.controls.contrasenaActual.touched &&
+            formulario.controls.contrasenaActual.invalid
+          "
+        />
+
+        <label for="nueva">Contraseña nueva</label>
+        <input
+          id="nueva"
+          type="password"
+          formControlName="contrasenaNueva"
+          autocomplete="new-password"
+          placeholder="••••••••••••"
+          [class.invalido]="
+            formulario.controls.contrasenaNueva.touched &&
+            formulario.controls.contrasenaNueva.invalid
+          "
+        />
+        <small class="ayuda">
+          Al menos {{ largoMinimo }} caracteres. No puede contener tu usuario ni repetir tus
+          últimas contraseñas.
+        </small>
+
+        <label for="repetir">Repite la contraseña nueva</label>
+        <input
+          id="repetir"
+          type="password"
+          formControlName="repetir"
+          autocomplete="new-password"
+          placeholder="••••••••••••"
+        />
+
+        @if (error(); as mensaje) {
+          <div class="alerta" role="alert">{{ mensaje }}</div>
+        }
+
+        <button type="submit" [disabled]="cargando()">
+          @if (cargando()) {
+            <span class="girando" aria-hidden="true"></span> Guardando…
+          } @else {
+            Cambiar contraseña
+          }
+        </button>
+      </form>
+
+      @if (!obligatorio) {
+        <p class="pie">
+          <button type="button" class="enlace" (click)="volver()">Volver a mi perfil</button>
+        </p>
+      }
+    }
+  </div>
+</div>

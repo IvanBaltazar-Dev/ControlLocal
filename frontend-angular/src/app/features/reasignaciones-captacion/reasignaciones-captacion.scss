@@ -1,0 +1,24 @@
+.flujo { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(16rem, .85fr); gap: 1rem; margin: 1rem 0 1.5rem; }
+.paso { min-width: 0; padding: 1rem; }
+.paso > header { display: flex; align-items: flex-start; gap: .65rem; margin-bottom: 1rem; }
+.paso h2, .titulo-seccion h2 { margin: 0; font-size: 1rem; }
+.paso p, .titulo-seccion p { margin: .2rem 0 0; color: var(--cl-tinta-suave); font-size: .78rem; }
+.numero-paso { display: grid; flex: 0 0 1.65rem; width: 1.65rem; height: 1.65rem; place-items: center; border-radius: 50%; background: var(--cl-primario); color: white; font-weight: 700; }
+.opciones { display: grid; gap: .45rem; max-height: 23rem; overflow: auto; }
+.opcion { display: flex; align-items: center; gap: .55rem; padding: .65rem; border: 1px solid var(--cl-borde); border-radius: .55rem; cursor: pointer; }
+.opcion.seleccionada { border-color: var(--cl-primario); background: color-mix(in srgb, var(--cl-primario) 6%, white); }
+.opcion span:nth-of-type(1) { min-width: 0; flex: 1; }
+.opcion strong, .opcion small, .cl-tabla small { display: block; }
+.opcion small, .cl-tabla small { margin-top: .15rem; color: var(--cl-tinta-suave); font-size: .72rem; }
+.buscador, .motivo label { display: grid; gap: .35rem; margin-bottom: .75rem; color: var(--cl-tinta-suave); font-size: .75rem; font-weight: 650; }
+.buscador input, .motivo textarea { width: 100%; border: 1px solid var(--cl-borde); border-radius: .45rem; padding: .65rem; background: white; color: var(--cl-tinta); font: inherit; box-sizing: border-box; }
+.motivo textarea { resize: vertical; }
+.resumen { display: grid; grid-template-columns: auto 1fr; gap: .4rem .65rem; padding: .75rem; border-radius: .5rem; background: var(--cl-fondo); font-size: .78rem; }
+.resumen dt { color: var(--cl-tinta-suave); }.resumen dd { margin: 0; font-weight: 600; }
+.confirmar { width: 100%; justify-content: center; margin-top: .8rem; }
+.titulo-seccion { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: .8rem; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+.cl-tabla td strong { display: block; }.fecha { white-space: nowrap; }.flecha { color: var(--cl-primario); font-weight: 700; text-align: center; }
+.cl-aviso.error { border-color: #dc2626; color: #991b1b; }
+@media (max-width: 1100px) { .flujo { grid-template-columns: 1fr 1fr; }.motivo { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .flujo { grid-template-columns: 1fr; }.motivo { grid-column: auto; }.titulo-seccion { flex-direction: column; } }

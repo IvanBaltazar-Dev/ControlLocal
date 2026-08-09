@@ -1,0 +1,369 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Visitas</p>
+    <h1>Agenda de visitas</h1>
+    <p class="sub">
+      Los indicadores filtran la lista al pulsarlos. Programar una visita se hace desde su
+      oportunidad: el backend exige que sea del propio agente.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (!puedeOperar()) { <span class="solo-lectura">Solo lectura</span> }
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="Total"
+    [valor]="resumen().total"
+    tono="gris"
+    pie="En tu alcance"
+    [clicable]="true"
+    [activa]="!filtros().estado"
+    (pulsar)="cambiarEstado('')"
+  />
+  <cl-kpi
+    etiqueta="Programadas"
+    [valor]="resumen().programadas"
+    tono="azul"
+    pie="Pendientes de realizar"
+    [clicable]="true"
+    [activa]="filtros().estado === 'P'"
+    (pulsar)="seleccionarEstado('P')"
+  />
+  <cl-kpi
+    etiqueta="Reprogramadas"
+    [valor]="resumen().reprogramadas"
+    tono="info"
+    pie="Movidas de fecha"
+    [clicable]="true"
+    [activa]="filtros().estado === 'G'"
+    (pulsar)="seleccionarEstado('G')"
+  />
+  <cl-kpi
+    etiqueta="Realizadas"
+    [valor]="resumen().realizadas"
+    tono="verde"
+    pie="Con o sin desenlace"
+    [clicable]="true"
+    [activa]="filtros().estado === 'R'"
+    (pulsar)="seleccionarEstado('R')"
+  />
+  <cl-kpi
+    etiqueta="No realizadas"
+    [valor]="resumen().noRealizadas"
+    tono="ambar"
+    pie="No llegaron a ocurrir"
+    [clicable]="true"
+    [activa]="filtros().estado === 'N'"
+    (pulsar)="seleccionarEstado('N')"
+  />
+  <cl-kpi
+    etiqueta="Canceladas"
+    [valor]="resumen().canceladas"
+    tono="rojo"
+    pie="Retiradas de la agenda"
+    [clicable]="true"
+    [activa]="filtros().estado === 'C'"
+    (pulsar)="seleccionarEstado('C')"
+  />
+</section>
+
+<!-- Agenda inmediata: el tope de 8 es duro en el backend, así que se dice.
+     Falla por su cuenta: si no responde, la bandeja se ve igual. -->
+<section class="cl-tarjeta agenda">
+  <header>
+    <div>
+      <h2>Próximas visitas</h2>
+      <p>Las 8 más cercanas que siguen vivas, de hoy en adelante.</p>
+    </div>
+    <span class="cl-badge">{{ proximas().length }}</span>
+  </header>
+  @if (proximas().length === 0) {
+    <p class="cl-vacio">No hay visitas pendientes en agenda.</p>
+  } @else {
+    <ul class="linea-agenda">
+      @for (v of proximas(); track v.id) {
+        <li>
+          <div class="cuando">
+            <strong>{{ fecha(v.fechaVisita) }}</strong>
+            <span>{{ hora(v.horaVisita) }}</span>
+          </div>
+          <div class="quien">
+            <strong>{{ valor(v.clienteNombre) }}</strong>
+            <span>{{ valor(v.direccionLocal) }} · {{ valor(v.distritoLocal) }}</span>
+          </div>
+          <button type="button" class="cl-btn pequeno" (click)="verSeguimiento(v)">Seguimiento</button>
+        </li>
+      }
+    </ul>
+  }
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por oportunidad, dirección o distrito…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los estados"
+    [opciones]="opcionesEstado"
+    [valor]="filtros().estado"
+    (valorChange)="cambiarEstado($event)"
+  />
+  <cl-filtro-select
+    marcador="Todos los distritos"
+    [opciones]="opcionesDistrito()"
+    [valor]="filtros().distrito"
+    (valorChange)="cambiarDistrito($event)"
+  />
+</cl-barra-filtros>
+
+@if (aviso()) { <p class="cl-ok" role="status">{{ aviso() }}</p> }
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando agenda…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Hora</th>
+          <th>Cliente</th>
+          <th>Propiedad</th>
+          <th>Agente</th>
+          <th>Estado / desenlace</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (v of paginaDatos().items; track v.id) {
+          <tr>
+            <td>{{ fecha(v.fechaVisita) }}</td>
+            <td class="hora">{{ hora(v.horaVisita) }}</td>
+            <td>
+              <strong>{{ valor(v.clienteNombre) }}</strong>
+              <span class="secundario">{{ valor(v.codigoOportunidad) }}</span>
+            </td>
+            <td>
+              {{ valor(v.direccionLocal) }}
+              <span class="secundario">{{ valor(v.distritoLocal) }} · {{ valor(v.codigoCaptacion) }}</span>
+            </td>
+            <td>{{ valor(v.agenteNombre) }}</td>
+            <td>
+              <span class="cl-badge" [class]="tonoEstado(v.estado)">
+                {{ etiquetaEstado(v.estado) }}
+              </span>
+              @if (v.resultado) {
+                <span class="secundario">
+                  {{ etiquetaResultado(v.resultado) }}
+                  {{ v.nivelInteres ? '· interés ' + v.nivelInteres + '/5' : '' }}
+                </span>
+              }
+              @if (v.observaciones) { <span class="secundario">{{ v.observaciones }}</span> }
+            </td>
+            <td class="acciones-fila">
+              @if (puedeOperar() && pendiente(v)) {
+                <button
+                  type="button"
+                  class="cl-btn pequeno primario"
+                  [disabled]="procesando()"
+                  (click)="abrir('realizar', v)"
+                >
+                  Realizada
+                </button>
+                <button
+                  type="button"
+                  class="cl-btn pequeno"
+                  [disabled]="procesando()"
+                  (click)="abrir('noRealizada', v)"
+                >
+                  No se realizó
+                </button>
+                <button
+                  type="button"
+                  class="cl-btn pequeno"
+                  [disabled]="procesando()"
+                  (click)="abrir('reprogramar', v)"
+                >
+                  Reprogramar
+                </button>
+                <button
+                  type="button"
+                  class="cl-btn pequeno peligro"
+                  [disabled]="procesando()"
+                  (click)="abrir('cancelar', v)"
+                >
+                  Cancelar
+                </button>
+              } @else if (puedeOperar() && admiteResultado(v)) {
+                <button
+                  type="button"
+                  class="cl-btn pequeno primario"
+                  [disabled]="procesando()"
+                  (click)="abrir('resultado', v)"
+                >
+                  Registrar desenlace
+                </button>
+              }
+              <button type="button" class="cl-btn pequeno" (click)="verSeguimiento(v)">
+                Seguimiento
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}
+
+<cl-confirmacion
+  [abierto]="accion() !== null"
+  [titulo]="tituloDialogo()"
+  [descripcion]="'Visita con ' + valor(objetivo()?.clienteNombre) + ' en ' + valor(objetivo()?.direccionLocal) + '.'"
+  [tono]="accion() === 'cancelar' || accion() === 'noRealizada' ? 'rojo' : 'azul'"
+  etiquetaConfirmar="Confirmar"
+  [ocupado]="procesando()"
+  [bloqueado]="bloqueado()"
+  (cerrar)="cerrarDialogo()"
+  (confirmar)="confirmar()"
+>
+  @switch (accion()) {
+    @case ('realizar') {
+      <p class="explicacion">
+        La visita pasará a <strong>realizada</strong>. El desenlace comercial —resultado, nivel de
+        interés, objeción— se registra después, en un solo envío y <strong>una sola vez</strong>.
+      </p>
+    }
+    @case ('noRealizada') {
+      <label class="campo-dialogo">
+        <span>Motivo <b>*</b></span>
+        <textarea
+          rows="3"
+          [formControl]="motivo"
+          maxlength="1000"
+          placeholder="Ej. el cliente no asistió o no se pudo ingresar al local."
+        ></textarea>
+      </label>
+      <p class="explicacion">
+        Una visita no realizada <strong>no admite desenlace</strong>: el motivo se guarda en sus
+        observaciones.
+      </p>
+    }
+    @case ('cancelar') {
+      <label class="campo-dialogo">
+        <span>Motivo <b>*</b></span>
+        <textarea rows="3" [formControl]="motivo" maxlength="1000"></textarea>
+      </label>
+      <p class="explicacion">Cancelar retira la visita de la agenda y limpia cualquier desenlace.</p>
+    }
+    @case ('reprogramar') {
+      <div class="cl-grid dos">
+        <label class="campo-dialogo">
+          <span>Nueva fecha <b>*</b></span>
+          <input type="date" [formControl]="nuevaFecha" />
+        </label>
+        <label class="campo-dialogo">
+          <span>Nueva hora <b>*</b></span>
+          <input type="time" [formControl]="nuevaHora" />
+        </label>
+      </div>
+    }
+    @case ('resultado') {
+      <form [formGroup]="desenlace" class="desenlace">
+        <label class="campo-dialogo">
+          <span>Resultado <b>*</b></span>
+          <select formControlName="resultado">
+            <option value="">— Selecciona un resultado —</option>
+            @for (o of opcionesResultado; track o.valor) {
+              <option [value]="o.valor">{{ o.etiqueta }}</option>
+            }
+          </select>
+        </label>
+
+        @if (exigeRazon()) {
+          <label class="campo-dialogo">
+            <span>Razón de no continuidad <b>*</b></span>
+            <select formControlName="razonNoContinuidad">
+              <option value="">— Selecciona una razón —</option>
+              @for (o of opcionesRazon; track o.valor) {
+                <option [value]="o.valor">{{ o.etiqueta }}</option>
+              }
+            </select>
+          </label>
+          <p class="explicacion aviso">
+            Este resultado <strong>cierra la oportunidad</strong> con la razón indicada. No se
+            deshace.
+          </p>
+        }
+
+        <div class="cl-grid dos">
+          <label class="campo-dialogo">
+            <span>Nivel de interés</span>
+            <select formControlName="nivelInteres">
+              <option [ngValue]="0">Sin indicar</option>
+              @for (nivel of [1, 2, 3, 4, 5]; track nivel) {
+                <option [ngValue]="nivel">{{ nivel }} / 5</option>
+              }
+            </select>
+          </label>
+          <label class="campo-dialogo">
+            <span>Objeción principal</span>
+            <select formControlName="objecionPrincipal">
+              <option value="">Sin objeción</option>
+              @for (o of opcionesObjecion; track o.valor) {
+                <option [value]="o.valor">{{ o.etiqueta }}</option>
+              }
+            </select>
+          </label>
+          <label class="campo-dialogo">
+            <span>Opinión sobre el precio</span>
+            <select formControlName="opinionPrecio">
+              <option value="">Sin indicar</option>
+              @for (o of opcionesOpinion; track o.valor) {
+                <option [value]="o.valor">{{ o.etiqueta }}</option>
+              }
+            </select>
+          </label>
+          <label class="campo-dialogo">
+            <span>Próxima acción</span>
+            <select formControlName="proximaAccion">
+              <option value="">Sin definir</option>
+              @for (o of opcionesProxima; track o.valor) {
+                <option [value]="o.valor">{{ o.etiqueta }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <label class="campo-dialogo">
+          <span>Observaciones</span>
+          <textarea rows="3" formControlName="observaciones" maxlength="1000"></textarea>
+        </label>
+      </form>
+    }
+  }
+
+  @if (errorAccion()) { <p class="alerta" role="alert">{{ errorAccion() }}</p> }
+</cl-confirmacion>

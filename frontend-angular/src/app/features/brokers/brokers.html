@@ -1,0 +1,92 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Personas</p>
+    <h1>Brokers</h1>
+    <p class="sub">
+      Supervisores de equipo. Los agentes a cargo son las supervisiones vigentes, no el
+      histórico.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (esAdmin()) {
+      <button type="button" class="cl-btn primario" (click)="nuevo()">Registrar broker</button>
+    } @else {
+      <span class="cl-badge">Solo lectura</span>
+    }
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && filas().length === 0"
+  mensajeCarga="Cargando brokers…"
+  mensajeVacio="No hay brokers registrados."
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && !error() && filas().length > 0) {
+  <div class="tabla-envoltorio">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th scope="col">Broker</th>
+          <th scope="col">Zona</th>
+          <th scope="col">Contacto</th>
+          <th scope="col" class="num">Agentes a cargo</th>
+          <th scope="col">Estado</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (broker of filas(); track broker.id) {
+          <tr>
+            <td>
+              <button type="button" class="enlace" (click)="abrir(broker)">
+                {{ texto(broker.nombre) }}
+              </button>
+              <span class="secundario">
+                {{ texto(broker.codigoBroker) }}
+                @if (broker.esAdministrador) {
+                  <span class="cl-badge admin">Administrador</span>
+                }
+              </span>
+            </td>
+            <td>{{ texto(broker.zona) }}</td>
+            <td>
+              <span>{{ texto(broker.telefono) }}</span>
+              <span class="secundario">{{ texto(broker.correo) }}</span>
+            </td>
+            <td class="num">{{ broker.agentesACargo ?? 0 }}</td>
+            <td>
+              <span class="cl-pastilla" [class.activa]="activo(broker)">
+                {{ activo(broker) ? 'Activo' : 'Inactivo' }}
+              </span>
+            </td>
+            <td class="acciones-fila">
+              @if (esAdmin()) {
+                <button type="button" class="cl-btn menor" (click)="editar(broker)">Editar</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (yaHayAdministrador() && esAdmin()) {
+    <p class="nota-admin">
+      Ya existe un broker administrador. Solo puede haber uno por organización, así que un alta
+      nueva con esa marca será rechazada.
+    </p>
+  }
+
+  @if (total() > porPagina) {
+    <cl-paginacion
+      [total]="total()"
+      [tamano]="porPagina"
+      [pagina]="pagina()"
+      (paginaChange)="irAPagina($event)"
+    />
+  }
+}

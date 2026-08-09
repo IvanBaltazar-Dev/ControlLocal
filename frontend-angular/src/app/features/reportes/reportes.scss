@@ -1,0 +1,35 @@
+:host {
+  display: block;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+
+.aclaracion {
+  margin: 0 0 1rem;
+}
+
+.cl-tabla .ancho {
+  white-space: normal;
+  min-width: 10rem;
+
+  .principal {
+    display: block;
+  }
+}
+
+/*
+ * Una propiedad sin ninguna oportunidad se atenúa en vez de esconderse: es
+ * justo la fila que hay que ver, pero no compite con las que sí se mueven.
+ */
+.cl-tabla tr.inerte td {
+  color: var(--cl-tinta-suave);
+}
+
+.nota {
+  margin-top: 0.8rem;
+}

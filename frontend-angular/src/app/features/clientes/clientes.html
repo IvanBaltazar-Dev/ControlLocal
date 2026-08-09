@@ -1,0 +1,174 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Clientes</p>
+    <h1>Clientes interesados</h1>
+    <p class="sub">Catálogo compartido de la corredora. Los indicadores filtran la lista al pulsarlos.</p>
+  </div>
+  <div class="acciones">
+    @if (puedeEditar()) {
+      <button type="button" class="cl-btn primario" (click)="nuevo()">Registrar cliente</button>
+    } @else {
+      <span class="cl-badge">Solo lectura</span>
+    }
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="En cartera"
+    [valor]="resumen().total"
+    tono="azul"
+    pie="Todos los clientes"
+    [clicable]="true"
+    [activa]="!filtros().estado"
+    (pulsar)="cambiarEstado('')"
+  />
+  <cl-kpi
+    etiqueta="Activos"
+    [valor]="resumen().activos"
+    tono="verde"
+    pie="En gestión comercial"
+    [clicable]="true"
+    [activa]="filtros().estado === 'A'"
+    (pulsar)="seleccionarEstado('A')"
+  />
+  <cl-kpi
+    etiqueta="Inactivos"
+    [valor]="resumen().inactivos"
+    tono="gris"
+    pie="Dados de baja"
+    [clicable]="true"
+    [activa]="filtros().estado === 'I'"
+    (pulsar)="seleccionarEstado('I')"
+  />
+  <cl-kpi
+    etiqueta="Contacto autorizado"
+    [valor]="resumen().contactoAutorizado"
+    tono="ambar"
+    pie="Se les puede contactar"
+  />
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por nombre, razón social, documento o rubro…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todo tipo de persona"
+    [opciones]="opcionesTipo"
+    [valor]="filtros().tipoPersona"
+    (valorChange)="cambiarTipo($event)"
+  />
+  <cl-filtro-select
+    marcador="Todos los rubros"
+    [opciones]="opcionesRubro()"
+    [valor]="filtros().rubro"
+    (valorChange)="cambiarRubro($event)"
+  />
+  <cl-filtro-select
+    marcador="Todos los estados"
+    [opciones]="opcionesEstado"
+    [valor]="filtros().estado"
+    (valorChange)="cambiarEstado($event)"
+  />
+</cl-barra-filtros>
+
+@if (aviso()) {
+  <p class="cl-ok" role="status">{{ aviso() }}</p>
+}
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando clientes…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Documento</th>
+          <th>Contacto</th>
+          <th>Rubro de interés</th>
+          <th>Consentimientos</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of paginaDatos().items; track c.id) {
+          <tr>
+            <td>
+              <strong>{{ valor(c.nombre) }}</strong>
+              <span class="secundario">{{ etiquetaTipo(c.tipoPersona) }}</span>
+            </td>
+            <td>{{ documento(c) }}</td>
+            <td>
+              {{ valor(c.telefono) }}
+              <span class="secundario">{{ valor(c.correo) }}</span>
+            </td>
+            <td>{{ valor(c.rubroComercial) }}</td>
+            <td class="consentimientos">
+              <!-- Se muestran por separado a propósito: el de contacto es del
+                   rol cliente y el de uso de dato es de la persona. -->
+              <span class="cl-badge" [class]="c.consentimientoContacto ? 'bien' : ''">
+                Contacto: {{ c.consentimientoContacto ? 'sí' : 'no' }}
+              </span>
+              <span class="cl-badge" [class]="c.consentimientoUsoDato ? 'bien' : ''">
+                Uso de datos: {{ c.consentimientoUsoDato ? 'sí' : 'no' }}
+              </span>
+            </td>
+            <td>
+              <span class="cl-badge" [class]="activo(c) ? 'bien' : 'mal'">
+                {{ activo(c) ? 'Activo' : 'Inactivo' }}
+              </span>
+            </td>
+            <td class="acciones-fila">
+              <!-- La ficha comercial la lee cualquier rol; editar y dar de baja
+                   son del agente (contrato F3 §2). -->
+              <button type="button" class="cl-btn pequeno" (click)="verFicha(c.id)">Ficha</button>
+              @if (puedeEditar()) {
+                <button type="button" class="cl-btn pequeno" (click)="editar(c.id)">Editar</button>
+                <button type="button" class="cl-btn pequeno" (click)="pedirCambioEstado(c)">
+                  {{ activo(c) ? 'Dar de baja' : 'Reactivar' }}
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}
+
+@if (enCambioEstado(); as cliente) {
+  <cl-confirmacion
+    [abierto]="true"
+    [titulo]="activo(cliente) ? 'Dar de baja al cliente' : 'Reactivar al cliente'"
+    [descripcion]="descripcionCambioEstado(cliente)"
+    [tono]="activo(cliente) ? 'rojo' : 'verde'"
+    [etiquetaConfirmar]="activo(cliente) ? 'Dar de baja' : 'Reactivar'"
+    [ocupado]="procesando()"
+    (confirmar)="confirmarCambioEstado()"
+    (cerrar)="cerrarCambioEstado()"
+  />
+}

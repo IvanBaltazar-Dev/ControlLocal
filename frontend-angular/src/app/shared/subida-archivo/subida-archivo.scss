@@ -1,0 +1,54 @@
+:host {
+  display: block;
+}
+
+.selector {
+  align-items: center;
+  border: 1px dashed #c9c0b4;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 12px 14px;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.selector:hover,
+.selector:focus-within {
+  background: #faf8f4;
+  border-color: #8d7e6c;
+}
+
+input {
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+}
+
+.accion {
+  color: #3e352d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ayuda {
+  color: #786e65;
+  font-size: 11px;
+  text-align: right;
+}
+
+.error {
+  color: #a63b32;
+  font-size: 12px;
+  margin: 7px 0 0;
+}
+
+:host.deshabilitado .selector {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

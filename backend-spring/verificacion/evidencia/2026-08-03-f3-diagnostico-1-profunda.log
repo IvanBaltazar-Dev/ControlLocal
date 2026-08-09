@@ -1,0 +1,566 @@
+﻿
+== Entorno E2E aislado 20260803073528-9056 ==
+Base: controllocal_e2e_20260803073528_9056
+powershell :  Network controllocal-e2e-20260803073528-9056_default Creating 
+En línea: 1 Carácter: 443
++ ... lyContinue; powershell -NoProfile -ExecutionPolicy Bypass -File D:\in ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Network contro...fault Creating :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Network controllocal-e2e-20260803073528-9056_default Created 
+ Container controllocal-postgres-e2e-20260803073528-9056 Creating 
+ Container controllocal-postgres-e2e-20260803073528-9056 Created 
+ Container controllocal-api-e2e-20260803073528-9056 Creating 
+ Container controllocal-api-e2e-20260803073528-9056 Created 
+ Container controllocal-postgres-e2e-20260803073528-9056 Starting 
+ Container controllocal-postgres-e2e-20260803073528-9056 Started 
+ Container controllocal-postgres-e2e-20260803073528-9056 Waiting 
+ Container controllocal-postgres-e2e-20260803073528-9056 Healthy 
+ Container controllocal-api-e2e-20260803073528-9056 Starting 
+ Container controllocal-api-e2e-20260803073528-9056 Started 
+ Container controllocal-api-e2e-20260803073528-9056 Waiting 
+ Container controllocal-postgres-e2e-20260803073528-9056 Waiting 
+ Container controllocal-postgres-e2e-20260803073528-9056 Healthy 
+ Container controllocal-api-e2e-20260803073528-9056 Healthy 
+
+== Suite diagnostico-vis-profunda / corrida 20260803073528-9056 ==
+
+== 0. Login e instrumentacion de PostgreSQL ==
+  instrumentacion activa: checkpoints, autovacuum, temp files, sentencias > 900 ms, E/S
+  work_mem=4MB  shared_buffers=128MB  checkpoint_timeout=5min
+
+== 1. Banco de 100000 filas (identico al del gate) ==
+  banco cargado y analizado: 07:36:20 -> 07:39:31 UTC
+
+== A. Serie completa JUSTO DESPUES de la carga (como el gate) ==
+   30 pares alternados: la MISMA pagina profunda con texto y sin texto.
+   Si el pico cae en las dos, el origen esta fuera de la consulta.
+
+Fase Escenario  N InicioUtc      Ms
+---- ---------  - ---------      --
+A    con texto  1 07:39:31.280 3001
+A    sin texto  1 07:39:34.309  439
+A    con texto  2 07:39:34.750  735
+A    sin texto  2 07:39:35.485  412
+A    con texto  3 07:39:35.897  769
+A    sin texto  3 07:39:36.667  551
+A    con texto  4 07:39:37.219  761
+A    sin texto  4 07:39:37.981  421
+A    con texto  5 07:39:38.403  709
+A    sin texto  5 07:39:39.112  388
+A    con texto  6 07:39:39.502  684
+A    sin texto  6 07:39:40.186  365
+A    con texto  7 07:39:40.551  847
+A    sin texto  7 07:39:41.399  574
+A    con texto  8 07:39:41.974  757
+A    sin texto  8 07:39:42.731  413
+A    con texto  9 07:39:43.144  799
+A    sin texto  9 07:39:43.944  447
+A    con texto 10 07:39:44.392  706
+A    sin texto 10 07:39:45.098 1056
+A    con texto 11 07:39:46.155  832
+A    sin texto 11 07:39:46.987 1132
+A    con texto 12 07:39:48.120  933
+A    sin texto 12 07:39:49.054  997
+A    con texto 13 07:39:50.052  776
+A    sin texto 13 07:39:50.829 2161
+A    con texto 14 07:39:52.991 1207
+A    sin texto 14 07:39:54.199 1626
+A    con texto 15 07:39:55.826  992
+A    sin texto 15 07:39:56.819 1055
+A    con texto 16 07:39:57.875  805
+A    sin texto 16 07:39:58.680 1076
+A    con texto 17 07:39:59.757  937
+A    sin texto 17 07:40:00.695 1746
+A    con texto 18 07:40:02.442  883
+A    sin texto 18 07:40:03.325 1379
+A    con texto 19 07:40:04.705  977
+A    sin texto 19 07:40:05.682 1334
+A    con texto 20 07:40:07.017 1230
+A    sin texto 20 07:40:08.247 1704
+A    con texto 21 07:40:09.953 1064
+A    sin texto 21 07:40:11.017 1573
+A    con texto 22 07:40:12.592  948
+A    sin texto 22 07:40:13.540 1282
+A    con texto 23 07:40:14.822 1048
+A    sin texto 23 07:40:15.870 1363
+A    con texto 24 07:40:17.235  890
+A    sin texto 24 07:40:18.126 1239
+A    con texto 25 07:40:19.366  880
+A    sin texto 25 07:40:20.247 2190
+A    con texto 26 07:40:22.437 1695
+A    sin texto 26 07:40:24.134 1927
+A    con texto 27 07:40:26.061 1445
+A    sin texto 27 07:40:27.508 1709
+A    con texto 28 07:40:29.217 1417
+A    sin texto 28 07:40:30.636 2301
+A    con texto 29 07:40:32.938 1578
+A    sin texto 29 07:40:34.517 1777
+A    con texto 30 07:40:36.295 1556
+A    sin texto 30 07:40:37.853 1779
+
+
+
+
+-- estado de la limpieza automatica DESPUES de la fase A --
+        relname        | n_live_tup | n_dead_tup | autovacuum_count | autoanalyze_count | ult_autovacuum | ult_autoanalyze 
+-----------------------+------------+------------+------------------+-------------------+----------------+-----------------
+ captacion             |     100001 |          1 |                1 |                 1 | 07:37:20       | 07:37:21
+ interaccion_comercial |     100001 |          0 |                1 |                 0 | 07:40:19       | 
+ oportunidad_comercial |     100001 |          0 |                1 |                 1 | 07:39:19       | 07:39:19
+ propiedad             |     100002 |          0 |                1 |                 1 | 07:37:19       | 07:37:20
+ prospeccion           |     100002 |          0 |                1 |                 1 | 07:38:19       | 07:38:19
+ visita                |     100001 |          0 |                1 |                 1 | 07:39:19       | 07:39:20
+(6 rows)
+
+ num_timed | num_requested | write_time | sync_time | buffers_written 
+-----------+---------------+------------+-----------+-----------------
+         0 |             2 |         18 |         1 |            6772
+(1 row)
+
+
+== B. El mismo banco ASENTADO (vacuum + espera de autovacuum) ==
+  asentado: 07:40:40 -> 07:40:47 UTC
+
+Fase Escenario  N InicioUtc      Ms
+---- ---------  - ---------      --
+B    con texto  1 07:40:47.556 1393
+B    sin texto  1 07:40:48.953 1859
+B    con texto  2 07:40:50.817 1978
+B    sin texto  2 07:40:52.797 1902
+B    con texto  3 07:40:54.700 1434
+B    sin texto  3 07:40:56.135 1816
+B    con texto  4 07:40:57.952 1435
+B    sin texto  4 07:40:59.388 1887
+B    con texto  5 07:41:01.276 1797
+B    sin texto  5 07:41:03.075 1916
+B    con texto  6 07:41:04.992 1556
+B    sin texto  6 07:41:06.549 1825
+B    con texto  7 07:41:08.375 1468
+B    sin texto  7 07:41:09.844 2400
+B    con texto  8 07:41:12.245 1745
+B    sin texto  8 07:41:13.991 1831
+B    con texto  9 07:41:15.823 1393
+B    sin texto  9 07:41:17.217 1635
+B    con texto 10 07:41:18.852 1250
+B    sin texto 10 07:41:20.106 1935
+B    con texto 11 07:41:22.042 1256
+B    sin texto 11 07:41:23.299 1612
+B    con texto 12 07:41:24.913 1353
+B    sin texto 12 07:41:26.266 1737
+B    con texto 13 07:41:28.004 1233
+B    sin texto 13 07:41:29.239 1529
+B    con texto 14 07:41:30.770 1484
+B    sin texto 14 07:41:32.254 1716
+B    con texto 15 07:41:33.972 1326
+B    sin texto 15 07:41:35.298 1655
+B    con texto 16 07:41:36.955 1252
+B    sin texto 16 07:41:38.208 1563
+B    con texto 17 07:41:39.772 1218
+B    sin texto 17 07:41:40.991 1890
+B    con texto 18 07:41:42.882 1336
+B    sin texto 18 07:41:44.220 1596
+B    con texto 19 07:41:45.816 1265
+B    sin texto 19 07:41:47.082 1509
+B    con texto 20 07:41:48.592 1220
+B    sin texto 20 07:41:49.812 1665
+B    con texto 21 07:41:51.479 3324
+B    sin texto 21 07:41:54.804 1610
+B    con texto 22 07:41:56.415 1249
+B    sin texto 22 07:41:57.666 1629
+B    con texto 23 07:41:59.295 1219
+B    sin texto 23 07:42:00.515 1829
+B    con texto 24 07:42:02.344 1213
+B    sin texto 24 07:42:03.559 1698
+B    con texto 25 07:42:05.257 1286
+B    sin texto 25 07:42:06.544 1651
+B    con texto 26 07:42:08.196 1209
+B    sin texto 26 07:42:09.407 1582
+B    con texto 27 07:42:10.989 1523
+B    sin texto 27 07:42:12.513 1814
+B    con texto 28 07:42:14.327 1257
+B    sin texto 28 07:42:15.585 1714
+B    con texto 29 07:42:17.300 1212
+B    sin texto 29 07:42:18.513 1593
+B    con texto 30 07:42:20.107 1226
+B    sin texto 30 07:42:21.337 1864
+
+
+
+
+== Comparacion de las cuatro series ==
+
+Serie                         N Mejor  p50  p95 Peor PeorSobreP50
+-----                         - -----  ---  --- ---- ------------
+A con texto (recien cargado) 30   684  933 1578 3001         3.22
+A sin texto (recien cargado) 30   365 1282 2161 2301         1.79
+B con texto (asentado)       30  1209 1326 1797 3324         2.51
+B sin texto (asentado)       30  1509 1716 1916 2400          1.4
+
+
+
+
+== C. Coste del OFFSET: la misma consulta a cinco profundidades ==
+
+Serie                       N Mejor  p50  p95 Peor PeorSobreP50
+-----                       - -----  ---  --- ---- ------------
+pagina 1 (offset 0)         8  1179 1309 1509 1509         1.15
+pagina 2500 (offset 24990)  8  1158 1206 1448 1448          1.2
+pagina 5000 (offset 49990)  8  1178 1256 1496 1496         1.19
+pagina 7500 (offset 74990)  8  1183 1244 1485 1485         1.19
+pagina 10000 (offset 99990) 8  1200 1298 1590 1590         1.22
+
+
+
+
+== D. Plan real de las DOS consultas de la llamada ==
+
+-- D.1 conteo del conjunto (contarPorTexto) --
+Aggregate  (cost=20334.50..20334.51 rows=1 width=8) (actual time=669.212..669.225 rows=1 loops=1)
+  Buffers: shared hit=6303, temp read=5 written=29
+  I/O Timings: temp read=0.045 write=0.306
+  ->  HashAggregate  (cost=18084.48..19084.49 rows=100001 width=8) (actual time=624.482..659.344 rows=100000 loops=1)
+        Group Key: v.id_visita
+        Batches: 5  Memory Usage: 10289kB  Disk Usage: 208kB
+        Buffers: shared hit=6303, temp read=5 written=29
+        I/O Timings: temp read=0.045 write=0.306
+        ->  Append  (cost=48.47..17834.48 rows=100001 width=8) (actual time=330.068..547.565 rows=100000 loops=1)
+              Buffers: shared hit=6303
+              ->  Nested Loop  (cost=48.47..254.91 rows=10 width=8) (actual time=0.063..0.067 rows=0 loops=1)
+                    Buffers: shared hit=11
+                    ->  Nested Loop  (cost=48.18..251.70 rows=10 width=16) (actual time=0.062..0.066 rows=0 loops=1)
+                          Buffers: shared hit=11
+                          ->  Nested Loop  (cost=47.89..168.60 rows=10 width=16) (actual time=0.062..0.064 rows=0 loops=1)
+                                Buffers: shared hit=11
+                                ->  Bitmap Heap Scan on oportunidad_comercial o  (cost=47.60..85.38 rows=10 width=16) (actual time=0.061..0.062 rows=0 loops=1)
+                                      Recheck Cond: (lower((codigo_oportunidad)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%')))
+                                      Buffers: shared hit=11
+                                      ->  Bitmap Index Scan on ix_oportunidad_codigo_trgm  (cost=0.00..47.59 rows=10 width=0) (actual time=0.051..0.052 rows=0 loops=1)
+                                            Index Cond: (lower((codigo_oportunidad)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%')))
+                                            Buffers: shared hit=11
+                                ->  Index Scan using ix_visita_oportunidad on visita v  (cost=0.29..8.31 rows=1 width=16) (never executed)
+                                      Index Cond: (id_oportunidad = o.id_oportunidad)
+                                      Filter: (organizacion_id = 1)
+                          ->  Index Scan using captacion_pkey on captacion cap  (cost=0.29..8.31 rows=1 width=16) (never executed)
+                                Index Cond: (id_captacion = o.id_captacion)
+                    ->  Index Only Scan using propiedad_pkey on propiedad prop  (cost=0.29..0.32 rows=1 width=8) (never executed)
+                          Index Cond: (id_propiedad = cap.id_propiedad)
+                          Heap Fetches: 0
+              ->  Hash Join  (cost=13613.00..17079.56 rows=99991 width=8) (actual time=330.003..533.403 rows=100000 loops=1)
+                    Hash Cond: (cap_1.id_propiedad = prop_1.id_propiedad)
+                    Buffers: shared hit=6292
+                    ->  Hash Join  (cost=7468.05..10672.08 rows=100001 width=16) (actual time=127.779..277.792 rows=100001 loops=1)
+                          Hash Cond: (o_1.id_captacion = cap_1.id_captacion)
+                          Buffers: shared hit=4397
+                          ->  Hash Join  (cost=3789.02..6730.55 rows=100001 width=16) (actual time=64.158..156.002 rows=100001 loops=1)
+                                Hash Cond: (v_1.id_oportunidad = o_1.id_oportunidad)
+                                Buffers: shared hit=2968
+                                ->  Seq Scan on visita v_1  (cost=0.00..2679.01 rows=100001 width=16) (actual time=0.022..29.315 rows=100001 loops=1)
+                                      Filter: (organizacion_id = 1)
+                                      Buffers: shared hit=1429
+                                ->  Hash  (cost=2539.01..2539.01 rows=100001 width=16) (actual time=63.180..63.181 rows=100001 loops=1)
+                                      Buckets: 131072  Batches: 1  Memory Usage: 5712kB
+                                      Buffers: shared hit=1539
+                                      ->  Seq Scan on oportunidad_comercial o_1  (cost=0.00..2539.01 rows=100001 width=16) (actual time=0.014..24.770 rows=100001 loops=1)
+                                            Buffers: shared hit=1539
+                          ->  Hash  (cost=2429.01..2429.01 rows=100001 width=16) (actual time=62.507..62.508 rows=100001 loops=1)
+                                Buckets: 131072  Batches: 1  Memory Usage: 5712kB
+                                Buffers: shared hit=1429
+                                ->  Seq Scan on captacion cap_1  (cost=0.00..2429.01 rows=100001 width=16) (actual time=0.023..25.360 rows=100001 loops=1)
+                                      Buffers: shared hit=1429
+                    ->  Hash  (cost=4895.06..4895.06 rows=99992 width=8) (actual time=200.923..200.924 rows=100000 loops=1)
+                          Buckets: 131072  Batches: 1  Memory Usage: 4931kB
+                          Buffers: shared hit=1895
+                          ->  Seq Scan on propiedad prop_1  (cost=0.00..4895.06 rows=99992 width=8) (actual time=0.063..158.178 rows=100000 loops=1)
+                                Filter: ((lower((direccion)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%'))) OR (lower((distrito)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%'))))
+                                Rows Removed by Filter: 2
+                                Buffers: shared hit=1895
+Planning:
+  Buffers: shared hit=830
+Planning Time: 22.209 ms
+Execution Time: 678.493 ms
+
+-- D.2 pagina profunda (idsPorTexto, offset 99990) --
+Limit  (cost=31580.91..31580.94 rows=10 width=12) (actual time=898.512..898.663 rows=10 loops=1)
+  Buffers: shared hit=7738, temp read=275 written=300
+  I/O Timings: temp read=0.830 write=3.901
+  ->  Sort  (cost=31330.94..31580.94 rows=100001 width=12) (actual time=873.799..891.982 rows=100000 loops=1)
+        Sort Key: v2.fecha_visita DESC, v.id_visita DESC
+        Sort Method: external merge  Disk: 2160kB
+        Buffers: shared hit=7738, temp read=275 written=300
+        I/O Timings: temp read=0.830 write=3.901
+        ->  Hash Join  (cost=20334.50..23026.02 rows=100001 width=12) (actual time=692.386..780.201 rows=100000 loops=1)
+              Hash Cond: (v2.id_visita = v.id_visita)
+              Buffers: shared hit=7732, temp read=5 written=29
+              I/O Timings: temp read=0.075 write=0.217
+              ->  Seq Scan on visita v2  (cost=0.00..2429.01 rows=100001 width=12) (actual time=0.023..16.031 rows=100001 loops=1)
+                    Buffers: shared hit=1429
+              ->  Hash  (cost=19084.49..19084.49 rows=100001 width=8) (actual time=691.528..691.540 rows=100000 loops=1)
+                    Buckets: 131072  Batches: 1  Memory Usage: 4931kB
+                    Buffers: shared hit=6303, temp read=5 written=29
+                    I/O Timings: temp read=0.075 write=0.217
+                    ->  HashAggregate  (cost=18084.48..19084.49 rows=100001 width=8) (actual time=620.853..656.744 rows=100000 loops=1)
+                          Group Key: v.id_visita
+                          Batches: 5  Memory Usage: 10289kB  Disk Usage: 208kB
+                          Buffers: shared hit=6303, temp read=5 written=29
+                          I/O Timings: temp read=0.075 write=0.217
+                          ->  Append  (cost=48.47..17834.48 rows=100001 width=8) (actual time=339.359..547.489 rows=100000 loops=1)
+                                Buffers: shared hit=6303
+                                ->  Nested Loop  (cost=48.47..254.91 rows=10 width=8) (actual time=0.061..0.065 rows=0 loops=1)
+                                      Buffers: shared hit=11
+                                      ->  Nested Loop  (cost=48.18..251.70 rows=10 width=16) (actual time=0.060..0.063 rows=0 loops=1)
+                                            Buffers: shared hit=11
+                                            ->  Nested Loop  (cost=47.89..168.60 rows=10 width=16) (actual time=0.060..0.062 rows=0 loops=1)
+                                                  Buffers: shared hit=11
+                                                  ->  Bitmap Heap Scan on oportunidad_comercial o  (cost=47.60..85.38 rows=10 width=16) (actual time=0.059..0.060 rows=0 loops=1)
+                                                        Recheck Cond: (lower((codigo_oportunidad)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%')))
+                                                        Buffers: shared hit=11
+                                                        ->  Bitmap Index Scan on ix_oportunidad_codigo_trgm  (cost=0.00..47.59 rows=10 width=0) (actual time=0.055..0.056 rows=0 loops=1)
+                                                              Index Cond: (lower((codigo_oportunidad)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%')))
+                                                              Buffers: shared hit=11
+                                                  ->  Index Scan using ix_visita_oportunidad on visita v  (cost=0.29..8.31 rows=1 width=16) (never executed)
+                                                        Index Cond: (id_oportunidad = o.id_oportunidad)
+                                                        Filter: (organizacion_id = 1)
+                                            ->  Index Scan using captacion_pkey on captacion cap  (cost=0.29..8.31 rows=1 width=16) (never executed)
+                                                  Index Cond: (id_captacion = o.id_captacion)
+                                      ->  Index Only Scan using propiedad_pkey on propiedad prop  (cost=0.29..0.32 rows=1 width=8) (never executed)
+                                            Index Cond: (id_propiedad = cap.id_propiedad)
+                                            Heap Fetches: 0
+                                ->  Hash Join  (cost=13613.00..17079.56 rows=99991 width=8) (actual time=339.295..532.192 rows=100000 loops=1)
+                                      Hash Cond: (cap_1.id_propiedad = prop_1.id_propiedad)
+                                      Buffers: shared hit=6292
+                                      ->  Hash Join  (cost=7468.05..10672.08 rows=100001 width=16) (actual time=134.077..276.162 rows=100001 loops=1)
+                                            Hash Cond: (o_1.id_captacion = cap_1.id_captacion)
+                                            Buffers: shared hit=4397
+                                            ->  Hash Join  (cost=3789.02..6730.55 rows=100001 width=16) (actual time=69.823..158.095 rows=100001 loops=1)
+                                                  Hash Cond: (v_1.id_oportunidad = o_1.id_oportunidad)
+                                                  Buffers: shared hit=2968
+                                                  ->  Seq Scan on visita v_1  (cost=0.00..2679.01 rows=100001 width=16) (actual time=0.018..25.858 rows=100001 loops=1)
+                                                        Filter: (organizacion_id = 1)
+                                                        Buffers: shared hit=1429
+                                                  ->  Hash  (cost=2539.01..2539.01 rows=100001 width=16) (actual time=69.019..69.020 rows=100001 loops=1)
+                                                        Buckets: 131072  Batches: 1  Memory Usage: 5712kB
+                                                        Buffers: shared hit=1539
+                                                        ->  Seq Scan on oportunidad_comercial o_1  (cost=0.00..2539.01 rows=100001 width=16) (actual time=0.011..28.971 rows=100001 loops=1)
+                                                              Buffers: shared hit=1539
+                                            ->  Hash  (cost=2429.01..2429.01 rows=100001 width=16) (actual time=63.404..63.405 rows=100001 loops=1)
+                                                  Buckets: 131072  Batches: 1  Memory Usage: 5712kB
+                                                  Buffers: shared hit=1429
+                                                  ->  Seq Scan on captacion cap_1  (cost=0.00..2429.01 rows=100001 width=16) (actual time=0.026..27.051 rows=100001 loops=1)
+                                                        Buffers: shared hit=1429
+                                      ->  Hash  (cost=4895.06..4895.06 rows=99992 width=8) (actual time=203.889..203.889 rows=100000 loops=1)
+                                            Buckets: 131072  Batches: 1  Memory Usage: 4931kB
+                                            Buffers: shared hit=1895
+                                            ->  Seq Scan on propiedad prop_1  (cost=0.00..4895.06 rows=99992 width=8) (actual time=0.055..161.901 rows=100000 loops=1)
+                                                  Filter: ((lower((direccion)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%'))) OR (lower((distrito)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%'))))
+                                                  Rows Removed by Filter: 2
+                                                  Buffers: shared hit=1895
+Planning:
+  Buffers: shared hit=842
+Planning Time: 20.572 ms
+Execution Time: 907.834 ms
+
+-- D.3 la misma pagina SIN offset, para aislar lo que cuesta saltar --
+Limit  (cost=24777.34..24778.49 rows=10 width=12) (actual time=782.958..796.850 rows=10 loops=1)
+  Buffers: shared hit=14056, temp read=10 written=58
+  I/O Timings: temp read=0.139 write=0.640
+  ->  Gather Merge  (cost=24777.34..31542.10 rows=58824 width=12) (actual time=782.956..796.844 rows=10 loops=1)
+        Workers Planned: 1
+        Workers Launched: 1
+        Buffers: shared hit=14056, temp read=10 written=58
+        I/O Timings: temp read=0.139 write=0.640
+        ->  Sort  (cost=23777.33..23924.39 rows=58824 width=12) (actual time=770.555..770.631 rows=7 loops=2)
+              Sort Key: v2.fecha_visita DESC, v.id_visita DESC
+              Sort Method: top-N heapsort  Memory: 25kB
+              Buffers: shared hit=14056, temp read=10 written=58
+              I/O Timings: temp read=0.139 write=0.640
+              Worker 0:  Sort Method: top-N heapsort  Memory: 25kB
+              ->  Hash Join  (cost=20334.50..22506.17 rows=58824 width=12) (actual time=721.610..760.265 rows=50000 loops=2)
+                    Hash Cond: (v2.id_visita = v.id_visita)
+                    Buffers: shared hit=14041, temp read=10 written=58
+                    I/O Timings: temp read=0.139 write=0.640
+                    ->  Parallel Seq Scan on visita v2  (cost=0.00..2017.24 rows=58824 width=12) (actual time=0.013..6.311 rows=50000 loops=2)
+                          Buffers: shared hit=1429
+                    ->  Hash  (cost=19084.49..19084.49 rows=100001 width=8) (actual time=720.473..720.546 rows=100000 loops=2)
+                          Buckets: 131072  Batches: 1  Memory Usage: 4931kB
+                          Buffers: shared hit=12609, temp read=10 written=58
+                          I/O Timings: temp read=0.139 write=0.640
+                          ->  HashAggregate  (cost=18084.48..19084.49 rows=100001 width=8) (actual time=640.259..680.265 rows=100000 loops=2)
+                                Group Key: v.id_visita
+                                Batches: 5  Memory Usage: 10289kB  Disk Usage: 208kB
+                                Buffers: shared hit=12609, temp read=10 written=58
+                                I/O Timings: temp read=0.139 write=0.640
+                                Worker 0:  Batches: 5  Memory Usage: 10289kB  Disk Usage: 208kB
+                                ->  Append  (cost=48.47..17834.48 rows=100001 width=8) (actual time=350.990..563.623 rows=100000 loops=2)
+                                      Buffers: shared hit=12609
+                                      ->  Nested Loop  (cost=48.47..254.91 rows=10 width=8) (actual time=0.182..0.245 rows=0 loops=2)
+                                            Buffers: shared hit=25
+                                            ->  Nested Loop  (cost=48.18..251.70 rows=10 width=16) (actual time=0.181..0.243 rows=0 loops=2)
+                                                  Buffers: shared hit=25
+                                                  ->  Nested Loop  (cost=47.89..168.60 rows=10 width=16) (actual time=0.180..0.241 rows=0 loops=2)
+                                                        Buffers: shared hit=25
+                                                        ->  Bitmap Heap Scan on oportunidad_comercial o  (cost=47.60..85.38 rows=10 width=16) (actual time=0.179..0.181 rows=0 loops=2)
+                                                              Recheck Cond: (lower((codigo_oportunidad)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%')))
+                                                              Buffers: shared hit=25
+                                                              ->  Bitmap Index Scan on ix_oportunidad_codigo_trgm  (cost=0.00..47.59 rows=10 width=0) (actual time=0.139..0.140 rows=0 loops=2)
+                                                                    Index Cond: (lower((codigo_oportunidad)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%')))
+                                                                    Buffers: shared hit=25
+                                                        ->  Index Scan using ix_visita_oportunidad on visita v  (cost=0.29..8.31 rows=1 width=16) (never executed)
+                                                              Index Cond: (id_oportunidad = o.id_oportunidad)
+                                                              Filter: (organizacion_id = 1)
+                                                  ->  Index Scan using captacion_pkey on captacion cap  (cost=0.29..8.31 rows=1 width=16) (never executed)
+                                                        Index Cond: (id_captacion = o.id_captacion)
+                                            ->  Index Only Scan using propiedad_pkey on propiedad prop  (cost=0.29..0.32 rows=1 width=8) (never executed)
+                                                  Index Cond: (id_propiedad = cap.id_propiedad)
+                                                  Heap Fetches: 0
+                                      ->  Hash Join  (cost=13613.00..17079.56 rows=99991 width=8) (actual time=350.805..548.774 rows=100000 loops=2)
+                                            Hash Cond: (cap_1.id_propiedad = prop_1.id_propiedad)
+                                            Buffers: shared hit=12584
+                                            ->  Hash Join  (cost=7468.05..10672.08 rows=100001 width=16) (actual time=125.990..272.886 rows=100001 loops=2)
+                                                  Hash Cond: (o_1.id_captacion = cap_1.id_captacion)
+                                                  Buffers: shared hit=8794
+                                                  ->  Hash Join  (cost=3789.02..6730.55 rows=100001 width=16) (actual time=66.040..157.313 rows=100001 loops=2)
+                                                        Hash Cond: (v_1.id_oportunidad = o_1.id_oportunidad)
+                                                        Buffers: shared hit=5936
+                                                        ->  Seq Scan on visita v_1  (cost=0.00..2679.01 rows=100001 width=16) (actual time=0.047..28.906 rows=100001 loops=2)
+                                                              Filter: (organizacion_id = 1)
+                                                              Buffers: shared hit=2858
+                                                        ->  Hash  (cost=2539.01..2539.01 rows=100001 width=16) (actual time=65.123..65.125 rows=100001 loops=2)
+                                                              Buckets: 131072  Batches: 1  Memory Usage: 5712kB
+                                                              Buffers: shared hit=3078
+                                                              ->  Seq Scan on oportunidad_comercial o_1  (cost=0.00..2539.01 rows=100001 width=16) (actual time=0.038..25.673 rows=100001 loops=2)
+                                                                    Buffers: shared hit=3078
+                                                  ->  Hash  (cost=2429.01..2429.01 rows=100001 width=16) (actual time=59.079..59.080 rows=100001 loops=2)
+                                                        Buckets: 131072  Batches: 1  Memory Usage: 5712kB
+                                                        Buffers: shared hit=2858
+                                                        ->  Seq Scan on captacion cap_1  (cost=0.00..2429.01 rows=100001 width=16) (actual time=0.066..25.075 rows=100001 loops=2)
+                                                              Buffers: shared hit=2858
+                                            ->  Hash  (cost=4895.06..4895.06 rows=99992 width=8) (actual time=223.802..223.802 rows=100000 loops=2)
+                                                  Buckets: 131072  Batches: 1  Memory Usage: 4931kB
+                                                  Buffers: shared hit=3790
+                                                  ->  Seq Scan on propiedad prop_1  (cost=0.00..4895.06 rows=99992 width=8) (actual time=0.062..180.480 rows=100000 loops=2)
+                                                        Filter: ((lower((direccion)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%'))) OR (lower((distrito)::text) ~~ lower(concat('%', 'Avenida'::character varying, '%'))))
+                                                        Rows Removed by Filter: 2
+                                                        Buffers: shared hit=3790
+Planning:
+  Buffers: shared hit=842
+Planning Time: 18.359 ms
+Execution Time: 805.144 ms
+
+== E. Actividad concurrente registrada por PostgreSQL ==
+-- checkpoints, autovacuum, ficheros temporales y sentencias > 900 ms --
+docker : sh: locale: not found
+En D:\init\ControlLocal\backend-spring\verificacion\e2e-diagnostico-vis-profunda.ps1: 355 Carácter: 9
++ $log = (docker logs $e2e.PostgresContainer 2>&1) -split "`n"
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (sh: locale: not found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+== Log del API E2E antes de limpiar ==
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-03T07:35:35.907Z  INFO 1 --- [controllocal-api-v2] [           main] c.c.app.ControlLocalApplication          : Starting ControlLocalApplication v2.0.0-SNAPSHOT using Java 21.0.11 with PID 1 (/app/app.jar started by root in /)
+2026-08-03T07:35:35.916Z  INFO 1 --- [controllocal-api-v2] [           main] c.c.app.ControlLocalApplication          : No active profile set, falling back to 1 default profile: "default"
+2026-08-03T07:35:40.080Z  INFO 1 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-03T07:35:40.381Z  INFO 1 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 276 ms. Found 33 JPA repository interfaces.
+2026-08-03T07:35:44.305Z  INFO 1 --- [controllocal-api-v2] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8090 (http)
+2026-08-03T07:35:44.353Z  INFO 1 --- [controllocal-api-v2] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-03T07:35:44.354Z  INFO 1 --- [controllocal-api-v2] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.48]
+2026-08-03T07:35:44.501Z  INFO 1 --- [controllocal-api-v2] [           main] o.a.c.c.C.[.[.[/controllocal/Api]        : Initializing Spring embedded WebApplicationContext
+2026-08-03T07:35:44.504Z  INFO 1 --- [controllocal-api-v2] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 8257 ms
+2026-08-03T07:35:45.363Z  INFO 1 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-03T07:35:47.423Z  INFO 1 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4540c7
+2026-08-03T07:35:47.436Z  INFO 1 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-03T07:35:47.622Z  INFO 1 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://postgres-e2e:5432/controllocal_e2e_20260803073528_9056 (PostgreSQL 17.10)
+2026-08-03T07:35:47.893Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-08-03T07:35:47.907Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 26 migrations (execution time 00:00.169s)
+2026-08-03T07:35:47.956Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-08-03T07:35:48.122Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-08-03T07:35:48.181Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - identidad party role"
+2026-08-03T07:35:48.307Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - auditoria universal"
+2026-08-03T07:35:48.372Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed identidad base"
+2026-08-03T07:35:48.459Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - oferta locales"
+2026-08-03T07:35:48.622Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - proceso prospeccion captacion"
+2026-08-03T07:35:49.009Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - nucleo multitenant"
+2026-08-03T07:35:49.406Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - demanda cliente oportunidad"
+2026-08-03T07:35:49.614Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - solicitud documentos contrato"
+2026-08-03T07:35:49.739Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "9 - alertas tareas"
+2026-08-03T07:35:49.816Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - reasignacion agente broker"
+2026-08-03T07:35:49.854Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - indices busqueda locales"
+2026-08-03T07:35:49.904Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - correccion comision cap 0001"
+2026-08-03T07:35:49.918Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "13 - contrato economico alquiler"
+2026-08-03T07:35:49.937Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "14 - saneamiento economico origen probado"
+2026-08-03T07:35:49.966Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "15 - expansion modelo economico y contractual"
+2026-08-03T07:35:50.037Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "16 - backfill modelo economico y contractual"
+2026-08-03T07:35:50.066Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.c.i.s.DefaultSqlScriptExecutor       : +--------+
+| setval |
++--------+
+| 1      |
++--------+
+
+2026-08-03T07:35:50.088Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "17 - restricciones finales modelo economico"
+2026-08-03T07:35:50.190Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "18 - normaliza estado requerimiento"
+2026-08-03T07:35:50.213Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "19 - normaliza codigos historial estado"
+2026-08-03T07:35:50.231Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20 - auditoria disponibilidad propiedad"
+2026-08-03T07:35:50.241Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "21 - encargo captacion obligatorio"
+2026-08-03T07:35:50.258Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "22 - indice listado locales estado registro"
+2026-08-03T07:35:50.269Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "23 - indice rubro busqueda locales"
+2026-08-03T07:35:50.278Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "24 - indices bandeja clientes"
+2026-08-03T07:35:50.293Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "25 - indices busqueda demanda"
+2026-08-03T07:35:50.316Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "26 - indices bandeja solicitudes"
+2026-08-03T07:35:50.335Z  INFO 1 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 26 migrations to schema "public", now at version v26 (execution time 00:01.614s)
+2026-08-03T07:35:50.593Z  INFO 1 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-03T07:35:50.873Z  INFO 1 --- [controllocal-api-v2] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.33.Final
+2026-08-03T07:35:51.077Z  INFO 1 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-03T07:35:52.397Z  INFO 1 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-03T07:35:52.611Z  INFO 1 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 17.10
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-03T07:35:58.917Z  INFO 1 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-03T07:35:59.054Z  INFO 1 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-03T07:36:00.246Z  INFO 1 --- [controllocal-api-v2] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-08-03T07:36:12.084Z  WARN 1 --- [controllocal-api-v2] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
+
+Using generated security password: 6f3a4844-0edb-48d0-a5f1-f912e5484197
+
+This generated password is for development use only. Your security configuration must be updated before running your application in production.
+
+2026-08-03T07:36:12.131Z  INFO 1 --- [controllocal-api-v2] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
+2026-08-03T07:36:13.398Z  INFO 1 --- [controllocal-api-v2] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8090 (http) with context path '/controllocal/Api'
+2026-08-03T07:36:13.419Z  INFO 1 --- [controllocal-api-v2] [           main] c.c.app.ControlLocalApplication          : Started ControlLocalApplication in 39.147 seconds (process running for 40.841)
+2026-08-03T07:36:13.864Z  INFO 1 --- [controllocal-api-v2] [nio-8090-exec-1] o.a.c.c.C.[.[.[/controllocal/Api]        : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-08-03T07:36:13.864Z  INFO 1 --- [controllocal-api-v2] [nio-8090-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-08-03T07:36:13.866Z  INFO 1 --- [controllocal-api-v2] [nio-8090-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+ Container controllocal-api-e2e-20260803073528-9056 Stopping 
+ Container controllocal-api-e2e-20260803073528-9056 Stopped 
+ Container controllocal-api-e2e-20260803073528-9056 Removing 
+ Container controllocal-api-e2e-20260803073528-9056 Removed 
+ Container controllocal-postgres-e2e-20260803073528-9056 Stopping 
+ Container controllocal-postgres-e2e-20260803073528-9056 Stopped 
+ Container controllocal-postgres-e2e-20260803073528-9056 Removing 
+ Container controllocal-postgres-e2e-20260803073528-9056 Removed 
+ Network controllocal-e2e-20260803073528-9056_default Removing 
+ Network controllocal-e2e-20260803073528-9056_default Removed 
+Entorno 20260803073528-9056 eliminado: sin contenedores, volumenes, red ni filas E2E residuales.
+La suite diagnostico-vis-profunda termino con codigo 1.
+En D:\init\ControlLocal\backend-spring\verificacion\Invoke-E2E.ps1: 82 Carácter: 40
++ ... DE -ne 0) { throw "La suite $nombre termino con codigo $LASTEXITCODE. ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (La suite diagno...o con codigo 1.:String) [], RuntimeException
+    + FullyQualifiedErrorId : La suite diagnostico-vis-profunda termino con codigo 1.
+ 

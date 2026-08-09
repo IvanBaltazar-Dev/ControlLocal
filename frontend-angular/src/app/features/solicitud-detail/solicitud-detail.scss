@@ -1,0 +1,150 @@
+/* Solo lo propio del expediente: el armazón (cabecera, columnas, tarjeta,
+   pares, tabla, badge, campo, avisos) es global (`styles.scss`, prefijo `cl-`). */
+
+:host { display: block; }
+
+/* Barra de etapas: registrada → en revisión → resuelta. */
+.etapas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+
+  li {
+    padding: 0.6rem 0.8rem;
+    background: var(--cl-superficie);
+    border: 1px solid var(--cl-borde);
+    border-left: 3px solid var(--cl-borde);
+    border-radius: 10px;
+
+    &.hecha {
+      border-left-color: var(--cl-exito);
+    }
+
+    &.actual {
+      border-left-color: var(--cl-acento);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--cl-acento) 18%, transparent);
+    }
+  }
+
+  .momento {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cl-tinta-suave);
+  }
+
+  .que {
+    display: block;
+    margin-top: 0.15rem;
+    font-weight: 650;
+    font-size: 0.88rem;
+  }
+}
+
+/* La tarjeta del cierre es la acción de la pantalla: se distingue del resto. */
+.destacada {
+  border-color: color-mix(in srgb, var(--cl-exito) 40%, var(--cl-borde));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cl-exito) 12%, transparent);
+}
+
+.comision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cl-primario-claro) 7%, white);
+
+  strong {
+    display: block;
+    margin: 0.1rem 0;
+    font-size: 1.15rem;
+    color: var(--cl-primario);
+  }
+}
+
+.desembolso {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--cl-borde);
+
+  h3 {
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+    color: var(--cl-primario);
+  }
+}
+
+.descripcion {
+  margin: 0.9rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--cl-borde);
+  font-size: 0.88rem;
+  color: var(--cl-tinta-suave);
+  line-height: 1.6;
+}
+
+.observacion {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: #8a5400;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.acciones-tarjeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+}
+
+.historial {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.8rem;
+
+  li {
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--cl-borde) 60%, transparent);
+
+    &:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+  }
+}
+
+.linea-historial {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+
+  strong {
+    font-size: 0.86rem;
+  }
+}
+
+/* Dentro del diálogo: el resumen no editable arriba, el formulario debajo. */
+.resumen-cierre {
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--cl-borde);
+}
+
+.formulario-cierre {
+  display: grid;
+  gap: 0.7rem;
+  text-align: left;
+}

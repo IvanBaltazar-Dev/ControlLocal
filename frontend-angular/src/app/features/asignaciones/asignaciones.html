@@ -1,0 +1,200 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Personas</p>
+    <h1>Asignaciones</h1>
+    <p class="sub">
+      Mover agentes de equipo. No es lo mismo que reasignar una captación: aquí se mueve a la
+      persona, allí un encargo concreto.
+    </p>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando asignaciones…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error()) {
+  <section class="reasignar">
+    <h2>Reasignar un agente</h2>
+    @if (errorReasignar()) { <p class="alerta" role="alert">{{ errorReasignar() }}</p> }
+    @if (exito()) { <p class="exito" role="status">{{ exito() }}</p> }
+
+    <form [formGroup]="formulario" (ngSubmit)="reasignar()" novalidate>
+      <div class="grid">
+        <label class="campo">
+          <span>Agente <b>*</b></span>
+          <select formControlName="idAgente">
+            <option [value]="0">Elige un agente…</option>
+            @for (agente of agentesReasignables(); track agente.idAgente) {
+              <option [value]="agente.idAgente">
+                {{ texto(agente.nombre) }} — hoy con {{ texto(agente.brokerActual) }}
+              </option>
+            }
+          </select>
+          @if (invalido('idAgente')) {
+            <small class="mensaje-error">Elige el agente que se va a mover.</small>
+          }
+          @if (bloqueados() > 0) {
+            <small class="candado">
+              {{ bloqueados() }} agente(s) no aparecen aquí: solo se reasignan los activos y
+              disponibles.
+            </small>
+          }
+        </label>
+
+        <label class="campo">
+          <span>Broker destino <b>*</b></span>
+          <select formControlName="idBrokerDestino">
+            <option [value]="0">Elige un broker…</option>
+            @for (broker of brokersDestino(); track broker.idBroker) {
+              <option [value]="broker.idBroker">
+                {{ texto(broker.nombre) }} ({{ broker.agentesACargo ?? 0 }} a cargo)
+              </option>
+            }
+          </select>
+          @if (invalido('idBrokerDestino')) {
+            <small class="mensaje-error">Elige el broker que lo va a supervisar.</small>
+          }
+          @if (supervisorActual()) {
+            <small class="candado">
+              Hoy lo supervisa {{ supervisorActual() }}; elegir ese mismo broker será rechazado.
+            </small>
+          }
+          <small class="candado">
+            El broker administrador no aparece: no supervisa equipos.
+          </small>
+        </label>
+      </div>
+
+      <label class="campo">
+        <span>Motivo <b>*</b></span>
+        <textarea
+          formControlName="motivo"
+          rows="2"
+          maxlength="300"
+          placeholder="Por qué se mueve. Queda grabado en el historial."
+        ></textarea>
+        @if (invalido('motivo')) {
+          <small class="mensaje-error">
+            El motivo es obligatorio y es lo único que explicará este cambio dentro de un año.
+          </small>
+        }
+      </label>
+
+      <div class="acciones-formulario">
+        <button type="submit" class="primario" [disabled]="guardando()">
+          {{ guardando() ? 'Reasignando…' : 'Reasignar' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <nav class="cl-pestanas" role="tablist">
+    <button type="button" role="tab" [class.activa]="panel() === 'agentes'" (click)="abrir('agentes')">
+      Agentes <span class="contador">{{ agentes().length }}</span>
+    </button>
+    <button type="button" role="tab" [class.activa]="panel() === 'brokers'" (click)="abrir('brokers')">
+      Equipos <span class="contador">{{ brokers().length }}</span>
+    </button>
+    <button type="button" role="tab" [class.activa]="panel() === 'historial'" (click)="abrir('historial')">
+      Historial <span class="contador">{{ historial().length }}</span>
+    </button>
+  </nav>
+
+  @switch (panel()) {
+    @case ('agentes') {
+      <div class="tabla-envoltorio">
+        <table class="cl-tabla">
+          <thead>
+            <tr>
+              <th scope="col">Agente</th>
+              <th scope="col">Documento</th>
+              <th scope="col">Supervisor actual</th>
+              <th scope="col">Situación</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (agente of agentes(); track agente.idAgente) {
+              <tr [class.bloqueado]="!reasignable(agente)">
+                <td>{{ texto(agente.nombre) }}</td>
+                <td>{{ texto(agente.numeroDocumento) }}</td>
+                <td>{{ texto(agente.brokerActual) }}</td>
+                <td>
+                  {{ operativo(agente) }}
+                  @if (!reasignable(agente)) {
+                    <span class="secundario">{{ motivoBloqueo(agente) }}</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    @case ('brokers') {
+      <div class="tabla-envoltorio">
+        <table class="cl-tabla">
+          <thead>
+            <tr>
+              <th scope="col">Broker</th>
+              <th scope="col">Zona</th>
+              <th scope="col" class="num">Agentes a cargo</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (broker of brokers(); track broker.idBroker) {
+              <tr>
+                <td>
+                  {{ texto(broker.nombre) }}
+                  @if (broker.esAdministrador) {
+                    <span class="secundario">Administrador — no supervisa equipos</span>
+                  }
+                </td>
+                <td>{{ texto(broker.zona) }}</td>
+                <td class="num">{{ broker.agentesACargo ?? 0 }}</td>
+                <td>{{ broker.estadoAdministrativo === 'A' ? 'Activo' : 'Inactivo' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    @default {
+      @if (historial().length === 0) {
+        <p class="vacio">Todavía no se ha reasignado ningún agente.</p>
+      } @else {
+        <div class="tabla-envoltorio">
+          <table class="cl-tabla">
+            <thead>
+              <tr>
+                <th scope="col">Agente</th>
+                <th scope="col">De</th>
+                <th scope="col">A</th>
+                <th scope="col">Autorizó</th>
+                <th scope="col">Motivo</th>
+                <th scope="col">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (evento of historial(); track evento.id) {
+                <tr>
+                  <td>{{ texto(evento.agenteNombre) }}</td>
+                  <td>{{ texto(evento.brokerAnteriorNombre) }}</td>
+                  <td>{{ texto(evento.brokerNuevoNombre) }}</td>
+                  <td>{{ texto(evento.brokerAdministradorNombre) }}</td>
+                  <td>{{ texto(evento.motivo) }}</td>
+                  <td>{{ texto(evento.fechaCambio) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+}

@@ -1,0 +1,133 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Personas</p>
+    <h1>Mi equipo</h1>
+    <p class="sub">
+      Los agentes que supervisas ahora mismo y quién puede recibir encargos hoy.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (esBroker()) {
+      <button type="button" class="cl-btn primario" (click)="nuevoAgente()">
+        Registrar agente
+      </button>
+    }
+  </div>
+</header>
+
+@if (!esBroker()) {
+  <p class="aviso-alcance" role="status">
+    Esta pantalla es del <strong>broker supervisor</strong>: muestra su propio equipo. El
+    administrador no supervisa agentes; su vista del organigrama completo es
+    <strong>Asignaciones</strong>.
+  </p>
+} @else {
+  <cl-estado-listado
+    [cargando]="cargando()"
+    [error]="error()"
+    [vacio]="false"
+    mensajeCarga="Cargando tu equipo…"
+    (reintentar)="cargar()"
+  />
+
+  @if (!cargando() && !error() && broker(); as datos) {
+    <section class="identidad">
+      <div class="dato">
+        <span class="etiqueta">Broker</span>
+        <span>{{ texto(datos.nombre) }}</span>
+      </div>
+      <div class="dato">
+        <span class="etiqueta">Código</span>
+        <span>{{ texto(datos.codigoBroker) }}</span>
+      </div>
+      <div class="dato">
+        <span class="etiqueta">Zona</span>
+        <span>{{ texto(datos.zona) }}</span>
+      </div>
+      <div class="dato">
+        <span class="etiqueta">A cargo</span>
+        <span>{{ equipo().length }}</span>
+      </div>
+      <div class="dato">
+        <span class="etiqueta">Disponibles hoy</span>
+        <span>{{ disponibles() }}</span>
+      </div>
+    </section>
+
+    <div class="atajos">
+      <button type="button" class="cl-btn menor" (click)="verCaptaciones()">
+        Captaciones por revisar
+      </button>
+      <button type="button" class="cl-btn menor" (click)="verSolicitudes()">
+        Solicitudes por revisar
+      </button>
+    </div>
+
+    @if (noDisponibles().length > 0) {
+      <p class="aviso-alcance">
+        <strong>{{ noDisponibles().length }}</strong> agente(s) activos no están disponibles
+        (ocupados, de vacaciones o suspendidos). Siguen en el equipo, pero conviene no
+        reasignarles encargos ahora.
+      </p>
+    }
+
+    <section class="bloque">
+      <h2>Agentes supervisados</h2>
+      <!-- Sin contadores comerciales a propósito: este endpoint los devuelve en
+           0 aunque el agente tenga carga real. El número bueno está en su ficha. -->
+      <p class="nota">
+        Las captaciones y operaciones de cada uno se ven en su ficha: este listado no las trae.
+      </p>
+
+      @if (equipo().length === 0) {
+        <p class="vacio">
+          Todavía no supervisas a ningún agente. Al registrar uno, la supervisión se crea contigo
+          como responsable.
+        </p>
+      } @else {
+        <div class="tabla-envoltorio">
+          <table class="cl-tabla">
+            <thead>
+              <tr>
+                <th scope="col">Agente</th>
+                <th scope="col">Zona</th>
+                <th scope="col">Contacto</th>
+                <th scope="col">Situación</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (agente of equipo(); track agente.id) {
+                <tr [class.bloqueado]="!activo(agente)">
+                  <td>
+                    <button type="button" class="enlace" (click)="abrirAgente(agente)">
+                      {{ texto(agente.nombre) }}
+                    </button>
+                    <span class="secundario">{{ texto(agente.codigoAgente) }}</span>
+                  </td>
+                  <td>{{ texto(agente.zona) }}</td>
+                  <td>
+                    <span>{{ texto(agente.telefono) }}</span>
+                    <span class="secundario">{{ texto(agente.correo) }}</span>
+                  </td>
+                  <td>
+                    <span class="cl-pastilla" [class.activa]="activo(agente)">
+                      {{ activo(agente) ? 'Activo' : 'Inactivo' }}
+                    </span>
+                    <span class="secundario">{{ operativo(agente) }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (inactivos() > 0) {
+        <p class="nota">
+          {{ inactivos() }} de ellos están inactivos administrativamente: conservan su historia,
+          pero no entran al sistema.
+        </p>
+      }
+    </section>
+  }
+}

@@ -1,0 +1,54 @@
+# Backend v2 (Spring Boot). Configuracion COMUN a los tres perfiles.
+#
+# Lo que cambia por entorno vive en application-{dev,test,prod}.yml.
+# Perfil por defecto: dev. Produccion exige SPRING_PROFILES_ACTIVE=prod
+# EXPLICITO: nadie debe llegar a produccion sin declararlo (D-S0-20).
+server:
+  # 8090 para convivir con GlassFish (8080) en la misma maquina.
+  port: ${SERVER_PORT:8090}
+  servlet:
+    # Misma base que el backend Jakarta: el proxy del Strangler enruta por ruta.
+    context-path: /controllocal/Api
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: controllocal-api-v2
+  jpa:
+    # Flyway es el dueno del esquema; Hibernate solo valida el mapeo.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    # Las locations por perfil se declaran en cada application-<perfil>.yml.
+    # REGLA (D-29): las tres locations comparten UNA sola linea de versiones,
+    # por eso migration-prod usa el rango reservado V900+.
+    locations: classpath:db/migration
+  jackson:
+    # Paridad con Yasson (JSON-B) del backend Jakarta: las propiedades
+    # nulas NO viajan en el JSON (contrato congelado).
+    default-property-inclusion: non_null
+
+controllocal:
+  login:
+    # D-S0-21: bloqueo progresivo en ventana deslizante de 15 min, contado en
+    # PostgreSQL. Sustituye al limitador en memoria de 10/min por IP, que un
+    # atacante con 50 IPs esquivaba y que un reinicio borraba (H-07).
+    # Leen la variable de entorno TAMBIEN aqui, y no solo en los perfiles
+    # prod/test: el entorno E2E no activa ningun perfil, asi que cae en estos
+    # valores por defecto y sin `${...}` no habria forma de bajarlos para
+    # provocar el bloqueo en su suite.
+    max-fallos-por-cuenta: ${LOGIN_MAX_FALLOS_CUENTA:5}
+    max-fallos-por-ip: ${LOGIN_MAX_FALLOS_IP:10}
+  seguridad:
+    # IPs de los proxies cuyo X-Forwarded-For se cree. VACIO = no se cree a
+    # nadie y se usa la IP del socket, que es lo correcto sin proxy delante.
+    # Confiar en la cabecera sin lista blanca convierte el bloqueo por IP en
+    # un adorno: cualquiera la fabrica.
+    proxies-de-confianza: ${PROXIES_DE_CONFIANZA:}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

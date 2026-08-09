@@ -1,0 +1,90 @@
+# Entorno efimero para suites E2E de escritura.
+#
+# Se invoca exclusivamente desde verificacion/Invoke-E2E.ps1. Cada corrida
+# recibe nombres de contenedor, base y puerto propios; PostgreSQL vive en
+# tmpfs y `docker compose down -v` retira tambien el almacen de documentos.
+services:
+  postgres-e2e:
+    image: postgres:17-alpine
+    container_name: ${CONTROLLOCAL_E2E_POSTGRES_CONTAINER:?CONTROLLOCAL_E2E_POSTGRES_CONTAINER requerido}
+    environment:
+      POSTGRES_DB: ${CONTROLLOCAL_E2E_DB:?CONTROLLOCAL_E2E_DB requerido}
+      POSTGRES_USER: controllocal
+      POSTGRES_PASSWORD: controllocal
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U controllocal -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  api-e2e:
+    image: eclipse-temurin:21-jre-alpine
+    container_name: ${CONTROLLOCAL_E2E_API_CONTAINER:?CONTROLLOCAL_E2E_API_CONTAINER requerido}
+    depends_on:
+      postgres-e2e:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres-e2e:5432/${CONTROLLOCAL_E2E_DB}
+      DB_USER: controllocal
+      DB_PASSWORD: controllocal
+      SERVER_PORT: 8090
+      CORS_ORIGENES: http://localhost:4200
+      ALMACEN_DIR: /almacen-e2e
+      # Vacio salvo que una corrida de diagnostico lo pida. Sirve para encender
+      # el log de pausas de la JVM (-Xlog:gc,safepoint) sin tocar este fichero
+      # ni el artefacto: las suites normales corren con la JVM por defecto.
+      JAVA_TOOL_OPTIONS: ${CONTROLLOCAL_E2E_JAVA_OPTS:-}
+      # Umbrales del bloqueo por cuenta e IP (D-S0-21). Altos por defecto para
+      # que ninguna suite se bloquee a si misma; la suite s0-bloqueo los baja
+      # para poder provocar el bloqueo a proposito.
+      #
+      # Nota: el contador solo cuenta FALLOS, asi que los logins correctos que
+      # encadenan los 13 scripts no consumen cupo. Los umbrales altos son una
+      # segunda red, no la razon por la que las suites pasan.
+      LOGIN_MAX_FALLOS_CUENTA: ${CONTROLLOCAL_E2E_MAX_FALLOS_CUENTA:-100}
+      LOGIN_MAX_FALLOS_IP: ${CONTROLLOCAL_E2E_MAX_FALLOS_IP:-200}
+      # SOLO EN E2E. No esta en docker-compose.yml ni en ningun perfil de
+      # desarrollo o produccion, y no debe llevarse ahi automaticamente.
+      #
+      # Por que: Tomcat cierra la conexion tras 100 peticiones
+      # (`maxKeepAliveRequests` por defecto) y el cliente de PowerShell mantiene
+      # 2 conexiones agrupadas, asi que el par se renueva cada 200 peticiones.
+      # Rehacer esa conexion A TRAVES DEL PROXY DE PUERTOS DE DOCKER DESKTOP en
+      # Windows cuesta ~2 s, y eso caia sobre una llamada cualquiera del gate
+      # falseando su peor caso. Medido: 4 parones de ~2.070 ms en 900 llamadas
+      # con el valor por defecto; 0 parones y un peor caso de 201 ms con este.
+      # Desde dentro de la red de Docker el mismo ciclo nunca costo nada.
+      #
+      # Lo que esto NO es:
+      #   - no optimiza ninguna consulta;
+      #   - no cambia codigo funcional ni el contrato congelado;
+      #   - solo elimina una renovacion de conexion ARTIFICIAL, propia del
+      #     puerto publicado de Docker Desktop, que no existe en un despliegue.
+      #
+      # El despliegue real tiene que fijar el keep-alive de forma EXPLICITA, en
+      # Tomcat y en su proxy o balanceador; no puede heredar esta decision.
+      # Analisis completo en docs/ai/diagnostico-pico-rc003-gate-f3.md.
+      SERVER_TOMCAT_MAX_KEEP_ALIVE_REQUESTS: ${CONTROLLOCAL_E2E_KEEPALIVE:--1}
+      # Recuperacion de emergencia (V38). APAGADA salvo en la suite que la
+      # prueba, y sus custodios se generan POR CORRIDA en Invoke-E2E.ps1 — no
+      # hay ningun secreto de custodio versionado (D-S0-53).
+      #
+      # El puerto de gestion NO SE PUBLICA, y eso no es un olvido: el conector
+      # escucha en 127.0.0.1 DENTRO del contenedor, asi que publicarlo no
+      # serviria de nada. La suite lo llama con `docker exec`, que es la unica
+      # forma de alcanzarlo — exactamente el control que se quiere probar.
+      RECUPERACION_EMERGENCIA_HABILITADA: ${CONTROLLOCAL_E2E_RECUPERACION:-false}
+      RECUPERACION_PUERTO_GESTION: 8091
+      RECUPERACION_CUSTODIO_A_ID: ${CONTROLLOCAL_E2E_CUSTODIO_A_ID:-}
+      RECUPERACION_CUSTODIO_A_HASH: ${CONTROLLOCAL_E2E_CUSTODIO_A_HASH:-}
+      RECUPERACION_CUSTODIO_B_ID: ${CONTROLLOCAL_E2E_CUSTODIO_B_ID:-}
+      RECUPERACION_CUSTODIO_B_HASH: ${CONTROLLOCAL_E2E_CUSTODIO_B_HASH:-}
+    ports:
+      - "127.0.0.1:${CONTROLLOCAL_E2E_API_PORT:?CONTROLLOCAL_E2E_API_PORT requerido}:8090"
+    volumes:
+      - ./controllocal-app/target/controllocal-app-2.0.0-SNAPSHOT.jar:/app/app.jar:ro
+    tmpfs:
+      - /almacen-e2e
+    command: ["java", "-jar", "/app/app.jar"]

@@ -1,0 +1,123 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Cartera del equipo</p>
+    <h1>Cartera del equipo</h1>
+    <p class="sub">
+      Inmuebles captados por los agentes que supervisas
+      <span class="cl-badge">Solo lectura</span>
+    </p>
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="Propiedades"
+    [valor]="resumen().propiedades"
+    tono="azul"
+    pie="Inmuebles distintos"
+  />
+  <cl-kpi
+    etiqueta="Con captación activa"
+    [valor]="resumen().conCaptacionActiva"
+    tono="verde"
+    pie="En gestión ahora"
+  />
+  <cl-kpi
+    etiqueta="Agentes con cartera"
+    [valor]="resumen().agentesConCartera"
+    tono="info"
+    pie="De tu equipo"
+  />
+  <cl-kpi
+    etiqueta="Distritos"
+    [valor]="resumen().distritos"
+    tono="gris"
+    pie="Cobertura"
+  />
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por dirección, distrito, agente o código…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los distritos"
+    [opciones]="distritos()"
+    [valor]="filtros().distrito"
+    (valorChange)="cambiarDistrito($event)"
+  />
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando propiedades del equipo…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Captación</th>
+          <!-- El código del local va en la tabla porque la dirección NO
+               identifica: dos inmuebles distintos pueden compartirla (un
+               centro comercial, una galería) y sin él las filas se leen como
+               duplicados. El legado no lo mostraba. -->
+          <th>Local</th>
+          <th>Dirección</th>
+          <th>Distrito</th>
+          <th>Rubro</th>
+          <th class="num">Área</th>
+          <th>Agente</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (propiedad of paginaDatos().items; track propiedad.idPropiedad) {
+          <tr>
+            <td class="codigo">{{ valor(propiedad.codigoCaptacion) }}</td>
+            <td class="codigo">{{ valor(propiedad.codigoLocal) }}</td>
+            <td class="destacado">{{ valor(propiedad.direccion) }}</td>
+            <td>{{ valor(propiedad.distrito) }}</td>
+            <td>{{ valor(propiedad.rubro) }}</td>
+            <td class="num">{{ area(propiedad.areaM2) }}</td>
+            <td>{{ propiedad.agenteNombre || 'Sin asignar' }}</td>
+            <td>
+              <span class="cl-badge" [class]="tonoEstado(propiedad.estado)">
+                {{ etiquetaEstado(propiedad.estado) }}
+              </span>
+            </td>
+            <td>
+              <button
+                type="button"
+                class="cl-btn pequeno"
+                (click)="verFicha(propiedad.codigoCaptacion)"
+              >
+                Resumen comercial
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}

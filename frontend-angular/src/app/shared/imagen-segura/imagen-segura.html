@@ -1,0 +1,7 @@
+@if (url(); as fuente) {
+  <img [src]="fuente" [alt]="alt()" />
+} @else if (cargando()) {
+  <span class="marcador" aria-hidden="true"></span>
+} @else if (error()) {
+  <span class="marcador fallo">No se pudo cargar la imagen</span>
+}

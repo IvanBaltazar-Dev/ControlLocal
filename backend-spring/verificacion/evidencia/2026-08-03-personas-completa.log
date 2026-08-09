@@ -1,0 +1,195 @@
+﻿
+== Entorno E2E aislado 20260803140819-9194 ==
+Base: controllocal_e2e_20260803140819_9194
+powershell :  Network controllocal-e2e-20260803140819-9194_default Creating 
+En línea: 1 Carácter: 329
++ ... trolLocal'; powershell -NoProfile -ExecutionPolicy Bypass -File 'back ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Network contro...fault Creating :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Network controllocal-e2e-20260803140819-9194_default Created 
+ Container controllocal-postgres-e2e-20260803140819-9194 Creating 
+ Container controllocal-postgres-e2e-20260803140819-9194 Created 
+ Container controllocal-api-e2e-20260803140819-9194 Creating 
+ Container controllocal-api-e2e-20260803140819-9194 Created 
+ Container controllocal-postgres-e2e-20260803140819-9194 Starting 
+ Container controllocal-postgres-e2e-20260803140819-9194 Started 
+ Container controllocal-postgres-e2e-20260803140819-9194 Waiting 
+ Container controllocal-postgres-e2e-20260803140819-9194 Healthy 
+ Container controllocal-api-e2e-20260803140819-9194 Starting 
+ Container controllocal-api-e2e-20260803140819-9194 Started 
+ Container controllocal-api-e2e-20260803140819-9194 Waiting 
+ Container controllocal-postgres-e2e-20260803140819-9194 Waiting 
+ Container controllocal-api-e2e-20260803140819-9194 Healthy 
+ Container controllocal-postgres-e2e-20260803140819-9194 Healthy 
+
+== Suite personas / corrida 20260803140819-9194 ==
+
+== 1. Login ==
+  OK   login agente
+  OK   login broker
+  OK   login admin
+
+== 2. Alta de propietario (el AGENTE es quien registra) ==
+  OK   el BROKER no puede registrar (403)
+  OK   el alta responde 201 con id
+  OK   nace ACTIVO sin mandar estado
+  OK   el contador arranca en 0
+  OK   el id del cable es el persona_rol del rol PROPIETARIO
+  OK   y nace con el tenant estampado
+  OK   el rol nace VIGENTE
+
+== 3. Validaciones (mensajes del cable) ==
+  OK   sin Content-Type el recurso responde 415, no 500
+  OK   tipo de persona invalido
+  OK   el DNI exige 8 digitos
+  OK   el RUC exige 11 digitos
+  OK   el nombre es obligatorio
+  OK   un documento repetido responde 409, no 400
+
+== 4. Lectura y catalogo compartido ==
+  OK   GET {id} resuelve la ficha
+  OK   con los datos de la persona
+  OK   y su fecha de creacion
+  OK   el catalogo es COMPARTIDO: agente y admin ven el mismo universo
+  OK   y el total cuadra con la BD
+  OK   el recien creado sale primero (orden: ultimo creado)
+  OK   un propietario inexistente responde 404
+
+== 5. contarLocalesEnSeguimiento (SQL nativo, UNION de 2 ramas) ==
+  OK   un propietario sin locales cuenta 0
+  OK   el seed tiene algun propietario con locales en seguimiento
+  OK   ADMIN: cantidadLocales cuadra con el UNION sin filtro de rol
+  OK   y no duplica el local que tiene captacion Y prospeccion (count distinct)
+  OK   AGENTE: el contador es el suyo y nunca supera al del ADMIN
+  OK   AGENTE: y cuadra con el UNION filtrado por su rol
+
+== 6. idsPropietarioDelBroker (SQL nativo, alcance del BROKER) ==
+  OK   el BROKER SI queda acotado (ve menos que el catalogo)
+  OK   y su total cuadra con el UNION de equipo + captaciones que revisa
+  OK   un propietario fuera de su alcance responde 403, no 404
+
+== 7. Actualizacion ==
+  OK   el BROKER no puede editar (403)
+  OK   el PUT reemplaza nombre, telefono y correo
+  OK   y NO toca el documento ni el tipo de persona
+  OK   el PUT responde el contador en 0 (el cable no lo recalcula)
+  OK   el PUT revalida la persona entera (nombre obligatorio)
+
+== 8. Baja logica ==
+  OK   el BROKER no puede dar de baja (403)
+  OK   la baja deja la PERSONA inactiva, no borra fila
+  OK   y el rol sigue existiendo (baja logica, no fisica)
+  OK   dar de baja uno inexistente responde 404
+
+== 9. Brokers: lectura, alta Party-Role y actualizacion ==
+  OK   cualquier usuario autenticado puede listar brokers
+  OK   GET broker expone el usuario y el contador de equipo
+  OK   solo ADMIN puede registrar brokers (403)
+  OK   el segundo broker administrador conserva el mensaje congelado
+  OK   ADMIN registra broker y obtiene el id del rol BROKER
+  OK   el POST ignora estado y nace ACTIVO
+  OK   el alta crea PERSONA + USUARIO_INTERNO + BROKER en el mismo tenant
+  OK   la credencial y el detalle comparten la organizacion del rol
+  OK   un broker nuevo empieza sin agentes
+  OK   PUT broker reemplaza solo los campos editables
+  OK   PUT broker ignora documento, usuario, codigo y bandera ADMIN
+
+== 10. Agentes: alcance, alta, contadores y actualizacion ==
+  OK   un AGENTE no puede consumir /agentes (403)
+  OK   ADMIN ve el catalogo de agentes de su organizacion
+  OK   BROKER ve solo su equipo activo
+  OK   ADMIN no registra agentes operativos directamente
+  OK   el BROKER registra un agente con contadores iniciales en cero
+  OK   el alta crea PERSONA + USUARIO_INTERNO + AGENTE
+  OK   y una supervision vigente con el motivo inicial congelado
+  OK   la credencial creada autentica con rol AGENTE
+  OK   login del broker alterno para probar alcance de escritura
+  OK   un broker no modifica agentes de otro equipo
+  OK   PUT agente reemplaza los campos editables
+  OK   PUT agente ignora documento, usuario y codigo
+  OK   el PUT conserva la rareza del cable: contadores en cero
+  OK   el seed contiene a vmora para contrastar contadores
+  OK   captacionesActivas cuadra con PENDIENTE/OBSERVADA/ACTIVA
+  OK   operacionesActivas cuadra con ABIERTA/SOLICITUD_CREADA
+  OK   /brokers/{id}/agentes incluye el alta del equipo
+
+== 11. Perfil: telefono y foto ==
+  OK   GET /perfil devuelve la persona autenticada
+  OK   PATCH conserva el mensaje de telefono invalido
+  OK   PATCH recorta y persiste solo el telefono
+  OK   la foto rechaza extensiones fuera de PNG/JPG
+  OK   la foto rechaza base64 invalido
+  OK   la foto valida devuelve una clave opaca
+  OK   la clave queda persistida en persona.foto_clave
+  OK   GET /perfil refleja telefono y foto actualizados
+
+== 12. Asignaciones: autorizacion, transaccion e historial V10 ==
+  OK   un BROKER no puede listar asignaciones (403)
+  OK   un AGENTE no puede listar asignaciones (403)
+  OK   ADMIN lista agentes con su broker actual
+  OK   ADMIN lista brokers y el nuevo empieza con cero agentes
+  OK   reasignar exige agente y broker destino
+  OK   el administrador no se usa como supervisor destino
+  OK   la respuesta identifica agente, origen, destino y ADMIN ejecutor
+  OK   la supervision anterior queda cerrada
+  OK   queda exactamente una supervision activa con el destino
+  OK   V10 persiste un evento inmutable con tenant, ADMIN y motivo
+  OK   el historial devuelve primero el evento recien creado
+  OK   reasignar al supervisor actual conserva el mensaje congelado
+  OK   el equipo del broker destino refleja la reasignacion
+  OK   el contador del broker destino sube a uno
+
+== 13. Tenancy: invariantes y aislamiento por API ==
+  OK   sin token responde 401
+  OK   cero personas con organizacion_id NULL
+  OK   cero roles con organizacion_id NULL
+  OK   se crea el fixture de una segunda organizacion
+  OK   el login rechaza credenciales de un tenant no habilitado
+  OK   /brokers no mezcla la segunda organizacion en el tenant legado
+  OK   el ADMIN legado no puede resolver el broker de la otra organizacion
+  OK   el fixture de segunda organizacion se retira al terminar
+
+== Ficha del agente (GET /agentes/{id}) ==
+  OK   el catalogo de agentes trae al menos uno para la ficha
+  OK   la ficha responde el mismo agente que el catalogo
+  OK   la ficha trae la supervision vigente con nombre de broker
+  OK   la ficha reparte las captaciones por estado, no un total suelto
+  OK   la ficha separa las SEIS magnitudes de comision
+  OK   pendiente de cobro = generada - cobrada, por moneda y sin negativos
+  OK   los cierres de la ficha salen de la atribucion historica (V27)
+  OK   la ficha de un agente inexistente responde 404
+  OK   el AGENTE no entra al recurso de agentes (403)
+
+== Busqueda y cubos del catalogo ==
+  OK   el texto filtra en el servidor y encuentra al agente buscado
+  OK   el texto ACOTA el conjunto (no devuelve el catalogo entero)
+  OK   un texto sin coincidencias devuelve vacio y total 0
+  OK   el resumen de agentes cuadra con el total del listado
+  OK   los cubos administrativos suman el total
+  OK   los cubos operativos suman el total
+  OK   el cubo de activos coincide con el filtro de la lista
+  OK   el resumen respeta el mismo texto que la lista
+  OK   el BROKER solo alcanza a los agentes que supervisa
+
+== Busqueda y cubos de propietarios ==
+  OK   el texto de propietarios filtra en el servidor por documento
+  OK   propietarios: un texto sin coincidencias devuelve vacio
+  OK   el resumen de propietarios cuadra con el listado
+  OK   los cubos de propietarios suman el total
+  OK   omitir los filtros conserva el cable congelado (orden id desc)
+
+===== 122 OK / 0 FALLAS =====
+ Container controllocal-api-e2e-20260803140819-9194 Stopping 
+ Container controllocal-api-e2e-20260803140819-9194 Stopped 
+ Container controllocal-api-e2e-20260803140819-9194 Removing 
+ Container controllocal-api-e2e-20260803140819-9194 Removed 
+ Container controllocal-postgres-e2e-20260803140819-9194 Stopping 
+ Container controllocal-postgres-e2e-20260803140819-9194 Stopped 
+ Container controllocal-postgres-e2e-20260803140819-9194 Removing 
+ Container controllocal-postgres-e2e-20260803140819-9194 Removed 
+ Network controllocal-e2e-20260803140819-9194_default Removing 
+ Network controllocal-e2e-20260803140819-9194_default Removed 
+Base controllocal_e2e_20260803140819_9194 y su entorno eliminados en 2.0 s.
+Entorno 20260803140819-9194 eliminado: sin contenedores, volumenes ni red residuales.

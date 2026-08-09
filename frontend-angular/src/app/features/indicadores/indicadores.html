@@ -1,0 +1,279 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Indicadores</p>
+    <h1>Indicadores comerciales</h1>
+    <p class="sub">
+      Lectura analítica del periodo: conversión, embudo, evolución y desempeño.
+      @if (datos(); as i) {
+        <span class="cl-badge">{{ i.ambito }}</span>
+      }
+    </p>
+  </div>
+
+  <div class="acciones">
+    <label class="periodo">
+      <span>Periodo</span>
+      <select (change)="cambiarPeriodo($any($event.target).value)" [disabled]="cargando()">
+        @for (opcion of periodos; track opcion.valor) {
+          <option [value]="opcion.valor" [selected]="opcion.valor === periodo()">
+            {{ opcion.etiqueta }}
+          </option>
+        }
+      </select>
+    </label>
+    <button type="button" class="cl-btn" (click)="cargar()" [disabled]="cargando()">
+      Actualizar
+    </button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Calculando indicadores…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && datos(); as i) {
+  <!-- Un ratio contra su límite: figura + medidor, no un gráfico de una barra. -->
+  <section class="cl-tarjeta hero">
+    <div>
+      <p class="figura">{{ conversion() }}<span>%</span></p>
+      <p class="cl-menudo">
+        de conversión captación → cierre, por cohorte de {{ etiquetaPeriodo().toLowerCase() }}
+      </p>
+    </div>
+    <div class="medida">
+      <div class="medidor" role="img" [attr.aria-label]="conversion() + ' por ciento de conversión'">
+        <i [style.width.%]="conversion()"></i>
+      </div>
+      <p class="cl-menudo">
+        <b>{{ i.cierresCohorte }}</b> de <b>{{ i.captacionesTotales }}</b> captaciones del periodo
+        ya cerraron.
+        @if (i.cierres !== i.cierresCohorte) {
+          <span>
+            Se registraron <b>{{ i.cierres }}</b> cierres en total, incluidos los de captaciones
+            anteriores.
+          </span>
+        }
+      </p>
+    </div>
+  </section>
+
+  <section class="kpis">
+    @for (kpi of kpis(); track kpi.etiqueta) {
+      <cl-kpi [etiqueta]="kpi.etiqueta" [valor]="kpi.valor" [tono]="kpi.tono" [pie]="kpi.pie" />
+    }
+  </section>
+
+  <div class="rejilla">
+    <section class="cl-tarjeta">
+      <header>
+        <div>
+          <h2>Embudo de conversión</h2>
+          <p>Oportunidades del periodo, etapa por etapa</p>
+        </div>
+      </header>
+
+      @if (embudo().length === 0) {
+        <p class="cl-vacio">Sin oportunidades en el periodo.</p>
+      } @else {
+        <ul class="embudo">
+          @for (fila of embudo(); track fila.etapa) {
+            <li>
+              <div class="rotulo">
+                <span class="nombre">{{ fila.etapa }}</span>
+                <span class="cifras">
+                  <b>{{ fila.valor }}</b>
+                  <span class="cl-menudo">{{ fila.porcentaje }}%</span>
+                </span>
+              </div>
+              <div class="pista">
+                <i [style.width.%]="fila.porcentaje" [style.background]="fila.color"></i>
+              </div>
+            </li>
+          }
+        </ul>
+        <p class="cl-menudo nota">
+          Dos rarezas del sistema que se muestran tal cual: la primera fila lleva
+          <b>100 % fijo</b> aunque no haya oportunidades, y <b>“Con visita realizada”</b> cuenta
+          oportunidades con visita <b>de cualquier estado</b>, incluida una cancelada.
+        </p>
+      }
+    </section>
+
+    <section class="cl-tarjeta">
+      <header>
+        <div>
+          <h2>Captaciones por etapa</h2>
+          <p>Reparto acumulado de toda tu cartera; no depende del periodo</p>
+        </div>
+        <span class="cl-badge">
+          {{ totalEtapas() }} {{ totalEtapas() === 1 ? 'activa' : 'activas' }}
+        </span>
+      </header>
+
+      @if (totalEtapas() === 0) {
+        <!--
+          Vacío ≠ "no hay captaciones": el reparto solo cuenta las ACTIVAS, así
+          que una cartera entera en revisión da cero aquí. Decir "no hay
+          captaciones" sería falso y mandaría a buscar un problema que no existe.
+        -->
+        <p class="cl-vacio">
+          Ninguna captación activa todavía. Este reparto solo cuenta las que el broker ya aprobó;
+          las que siguen en revisión aparecen cuando se aprueban.
+        </p>
+      } @else {
+        <div
+          class="barra"
+          role="img"
+          [attr.aria-label]="'Reparto de ' + totalEtapas() + ' captaciones por etapa del proceso'"
+        >
+          @for (etapa of etapas(); track etapa.nombre) {
+            @if (etapa.valor > 0) {
+              <span
+                class="tramo"
+                [style.flex-grow]="etapa.valor"
+                [style.background]="etapa.color"
+                [title]="etapa.nombre + ': ' + etapa.valor"
+              ></span>
+            }
+          }
+        </div>
+        <ul class="leyenda">
+          @for (etapa of etapas(); track etapa.nombre) {
+            <li>
+              <span class="punto" [style.background]="etapa.color" aria-hidden="true"></span>
+              <span class="nombre">{{ etapa.nombre }}</span>
+              <b>{{ etapa.valor }}</b>
+              <span class="cl-menudo pct">{{ etapa.porcentaje }}%</span>
+            </li>
+          }
+        </ul>
+        <p class="cl-menudo nota">
+          Cada captación cae en <b>una sola</b> etapa: la más avanzada que alcanzó.
+        </p>
+      }
+    </section>
+  </div>
+
+  <!--
+    Dos gráficos y no uno: conteos y porcentaje son magnitudes distintas, y
+    compartir marco obligaría a dos escalas.
+  -->
+  <section class="cl-tarjeta">
+    <header>
+      <div>
+        <h2>Evolución</h2>
+        <p>Captaciones y cierres por {{ i.mesesEtiquetas.length > 12 ? 'día' : 'periodo' }}</p>
+      </div>
+    </header>
+    <cl-grafico-serie
+      [etiquetas]="etiquetasSerie()"
+      [series]="seriesConteo()"
+      tipo="columnas"
+      descripcion="Captaciones y cierres por periodo"
+    />
+  </section>
+
+  <section class="cl-tarjeta">
+    <header>
+      <div>
+        <h2>Conversión por periodo</h2>
+        <p>De las captaciones de cada tramo, cuántas ya cerraron</p>
+      </div>
+    </header>
+    <cl-grafico-serie
+      [etiquetas]="etiquetasSerie()"
+      [series]="serieConversion()"
+      tipo="linea"
+      sufijo="%"
+      descripcion="Conversión por periodo, en porcentaje"
+    />
+    <p class="cl-menudo nota">
+      Se calcula sobre la <b>cohorte</b> —las captaciones de cada tramo que ya cerraron—, no sobre
+      la fecha del contrato. Por eso nunca pasa de 100 %.
+    </p>
+  </section>
+
+  <div class="rejilla">
+    <section class="cl-tarjeta">
+      <header>
+        <div>
+          <h2>{{ tituloDesempeno() }}</h2>
+          <p>Hasta 8 filas, ordenadas por cierres del periodo</p>
+        </div>
+      </header>
+      @if (desempeno().length === 0) {
+        <p class="cl-vacio">Sin actividad registrada en {{ etiquetaPeriodo().toLowerCase() }}.</p>
+      } @else {
+        <div class="cl-tabla-marco">
+          <table class="cl-tabla">
+            <thead>
+              <tr>
+                <th>{{ esAdmin() ? 'Broker' : 'Agente' }}</th>
+                <th class="num">Captaciones</th>
+                <th class="num">Cierres</th>
+                <th class="num">Conversión</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (fila of desempeno(); track fila.nombre) {
+                <tr>
+                  <td>{{ fila.nombre }}</td>
+                  <td class="num">{{ fila.captaciones }}</td>
+                  <td class="num">
+                    <b>{{ fila.cierres }}</b>
+                  </td>
+                  <td class="num">{{ fila.conversion }}%</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    @if (operativo(); as op) {
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Disciplina operativa</h2>
+            <p>Lo que hoy está pendiente o vencido en tu alcance</p>
+          </div>
+        </header>
+        <div class="cl-pares">
+          <div>
+            <span>Recontactos vencidos</span>
+            <strong>{{ op.recontactosVencidos }}</strong>
+          </div>
+          <div>
+            <span>Recontactos al día</span>
+            <strong>{{ op.recontactosAlDia }}</strong>
+          </div>
+          <div>
+            <span>Días promedio sin seguimiento</span>
+            <strong>{{ op.diasPromedioSinSeguimiento }}</strong>
+          </div>
+          <div>
+            <span>Visitas pendientes</span>
+            <strong>{{ op.visitasPendientes }}</strong>
+          </div>
+          <div>
+            <span>Aprobadas sin cierre</span>
+            <strong>{{ op.solicitudesSinCierre }}</strong>
+          </div>
+          <div>
+            <span>Prospección → captación</span>
+            <strong>{{ op.conversionProspeccionCaptacion }}%</strong>
+          </div>
+        </div>
+        <p class="cl-menudo nota">
+          Recontactos, visitas y solicitudes son del <b>alcance completo</b>, no del periodo. Y si
+          el periodo no tuvo prospecciones, la tasa se calcula sobre <b>todas</b> las del alcance.
+        </p>
+      </section>
+    }
+  </div>
+}

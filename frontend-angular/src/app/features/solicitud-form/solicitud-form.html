@@ -1,0 +1,218 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Cierre · Solicitudes · Nueva</p>
+    <h1>Nueva solicitud de alquiler</h1>
+    <p class="sub">
+      Formaliza la oferta del cliente sobre una oportunidad abierta. Estas condiciones son las que
+      evalúa el broker y las que hereda el contrato al cerrar.
+    </p>
+  </div>
+  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Preparando el formulario…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  @if (!puedeGuardar()) {
+    <p class="aviso" role="status">
+      Solo el <strong>agente</strong> registra solicitudes. Esta vista es de consulta.
+    </p>
+  }
+  @if (errorGuardado()) { <p class="alerta" role="alert">{{ errorGuardado() }}</p> }
+
+  <form class="cl-formulario ancho" [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <div class="distribucion">
+      <main>
+        <section class="cl-seccion">
+          <div class="cl-seccion-titulo">
+            <span>1</span>
+            <div>
+              <h2>Oportunidad comercial</h2>
+              <p>La oportunidad determina el cliente y la propiedad; aquí no se eligen aparte.</p>
+            </div>
+          </div>
+
+          @if (oportunidadFija()) {
+            <label class="cl-campo">
+              <span>Oportunidad</span>
+              <input [value]="valor(oportunidadActual()?.codigoOportunidad)" disabled />
+              <small>Llegaste desde su seguimiento: la operación ya está fijada.</small>
+            </label>
+          } @else {
+            <div class="busqueda">
+              <label class="cl-campo">
+                <span>Buscar oportunidad abierta</span>
+                <input
+                  type="search"
+                  [formControl]="busqueda"
+                  placeholder="Código, captación, dirección o cliente"
+                  (keydown.enter)="$event.preventDefault(); buscar()"
+                />
+              </label>
+              <button type="button" class="cl-btn" [disabled]="buscando()" (click)="buscar()">
+                {{ buscando() ? 'Buscando…' : 'Buscar' }}
+              </button>
+            </div>
+            <label class="cl-campo">
+              <span>Oportunidad <b>*</b></span>
+              <select formControlName="idOportunidad" (change)="seleccionar()">
+                <option [ngValue]="0">— Selecciona una oportunidad —</option>
+                @for (o of oportunidades(); track o.id) {
+                  <option [ngValue]="o.id">{{ descripcion(o) }}</option>
+                }
+              </select>
+              <small>
+                Mostrando {{ oportunidades().length }} de {{ totalOportunidades() }} abiertas. Solo
+                se ofrecen las <b>abiertas</b>: una que ya tiene solicitud no admite otra.
+              </small>
+              @if (invalido('idOportunidad')) {
+                <small class="cl-error-campo">Selecciona una oportunidad abierta.</small>
+              }
+            </label>
+          }
+
+          @if (oportunidadActual(); as o) {
+            <div class="cl-grid tres">
+              <label class="cl-campo"><span>Cliente</span><input [value]="valor(o.clienteNombre)" disabled /></label>
+              <label class="cl-campo"><span>Captación</span><input [value]="valor(o.codigoCaptacion)" disabled /></label>
+              <label class="cl-campo"><span>Local</span><input [value]="valor(o.direccionLocal)" disabled /></label>
+            </div>
+          }
+        </section>
+
+        <section class="cl-seccion">
+          <div class="cl-seccion-titulo">
+            <span>2</span>
+            <div>
+              <h2>Condiciones del alquiler</h2>
+              <p>Lo que el cliente ofrece. El contrato las hereda tal cual al cerrar.</p>
+            </div>
+          </div>
+
+          <div class="cl-grid tres">
+            <label class="cl-campo">
+              <span>Renta propuesta <b>*</b></span>
+              <input type="number" min="0.01" step="0.01" formControlName="montoPropuesto" />
+              @if (invalido('montoPropuesto')) {
+                <small class="cl-error-campo">Indica un monto mayor que cero.</small>
+              }
+            </label>
+            <label class="cl-campo">
+              <span>Moneda <b>*</b></span>
+              <select formControlName="moneda">
+                @for (m of monedas; track m.valor) {
+                  <option [value]="m.valor">{{ m.etiqueta }}</option>
+                }
+              </select>
+              <small>Obligatoria donde hay importe: no existe "moneda no definida".</small>
+            </label>
+            <label class="cl-campo">
+              <span>Plazo del contrato (meses) <b>*</b></span>
+              <input type="number" min="1" step="1" formControlName="plazoMeses" />
+              @if (invalido('plazoMeses')) {
+                <small class="cl-error-campo">Indica el plazo en meses.</small>
+              }
+            </label>
+          </div>
+
+          <div class="cl-grid tres">
+            <label class="cl-campo">
+              <span>Fecha de inicio <b>*</b></span>
+              <input type="date" formControlName="fechaInicio" />
+            </label>
+            <label class="cl-campo">
+              <span>Forma de pago</span>
+              <select formControlName="formaPago">
+                @for (f of opcionesFormaPago; track f.valor) {
+                  <option [value]="f.valor">{{ f.etiqueta }}</option>
+                }
+              </select>
+            </label>
+            <label class="cl-campo">
+              <span>Vigencia de la oferta</span>
+              <input type="date" formControlName="fechaVigenciaOferta" />
+              <small>Hasta cuándo se sostiene la propuesta. Opcional.</small>
+            </label>
+          </div>
+
+          <div class="cl-grid dos">
+            <label class="cl-campo">
+              <span>Meses de garantía</span>
+              <input type="number" min="0" step="1" formControlName="mesesGarantia" />
+            </label>
+            <label class="cl-campo">
+              <span>Meses de adelanto</span>
+              <input type="number" min="0" step="1" formControlName="mesesAdelanto" />
+            </label>
+          </div>
+
+          <label class="cl-campo">
+            <span>Observaciones</span>
+            <textarea
+              rows="4"
+              maxlength="2000"
+              formControlName="observaciones"
+              placeholder="Ej. El cliente pide dos semanas de gracia para implementar."
+            ></textarea>
+          </label>
+        </section>
+
+        <div class="cl-acciones-formulario">
+          <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+            Cancelar
+          </button>
+          <button type="submit" class="cl-btn primario" [disabled]="guardando() || !puedeGuardar()">
+            {{ guardando() ? 'Registrando…' : 'Registrar solicitud' }}
+          </button>
+        </div>
+      </main>
+
+      <aside>
+        <h3>Qué pasa al registrar</h3>
+        <ol>
+          <li [class.completo]="oportunidadActual() !== null">
+            <span>1</span>
+            <div>
+              <strong>Se crea registrada</strong>
+              <small>La oportunidad pasa a "solicitud creada".</small>
+            </div>
+          </li>
+          <li>
+            <span>2</span>
+            <div>
+              <strong>Cargas los documentos</strong>
+              <small>Seis tipos requeridos, en la pantalla siguiente.</small>
+            </div>
+          </li>
+          <li>
+            <span>3</span>
+            <div>
+              <strong>Envías a evaluación</strong>
+              <small>Recién ahí la ve el broker.</small>
+            </div>
+          </li>
+        </ol>
+
+        <div class="resumen-lateral">
+          <h3>Resumen de la oferta</h3>
+          <div class="cl-pares apiladas">
+            <div><span>Operación</span><strong>{{ valor(oportunidadActual()?.codigoOportunidad) }}</strong></div>
+            <div><span>Cliente</span><strong>{{ valor(oportunidadActual()?.clienteNombre) }}</strong></div>
+            <div><span>Renta</span><strong>{{ ofertaResumen() }}</strong></div>
+            <div><span>Plazo</span><strong>{{ plazoResumen() }}</strong></div>
+          </div>
+        </div>
+
+        <p class="nota">
+          El código de la solicitud lo genera el backend (<code>SOL-…</code>): no se escribe aquí.
+        </p>
+      </aside>
+    </div>
+  </form>
+}

@@ -1,0 +1,189 @@
+:host {
+  display: block;
+}
+
+.periodo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--cl-tinta-suave);
+
+  select {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 0.45rem;
+    background: var(--cl-superficie);
+    color: var(--cl-tinta);
+    font: inherit;
+    font-size: 0.84rem;
+  }
+}
+
+/* La conversión es el número con el que se abre la pantalla. */
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+
+  .figura {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--cl-primario);
+    font-variant-numeric: tabular-nums;
+
+    span {
+      margin-left: 0.15rem;
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--cl-tinta-suave);
+    }
+  }
+
+  .medida {
+    flex: 1;
+    min-width: 15rem;
+  }
+
+  p {
+    margin: 0.35rem 0 0;
+  }
+}
+
+.medidor {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--cl-borde);
+  overflow: hidden;
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--cl-primario-claro);
+  }
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  align-items: start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.cl-tarjeta {
+  margin-bottom: 1rem;
+}
+
+.rejilla .cl-tarjeta {
+  margin-bottom: 0;
+}
+
+/* Embudo: barras horizontales, que es lo que admite nombres largos. */
+.embudo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  .rotulo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.86rem;
+  }
+
+  .cifras {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pista {
+    height: 0.6rem;
+    border-radius: 999px;
+    background: var(--cl-borde);
+    overflow: hidden;
+
+    i {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+    }
+  }
+}
+
+.barra {
+  display: flex;
+  gap: 2px;
+  height: 1.35rem;
+  margin-bottom: 0.9rem;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: var(--cl-borde);
+}
+
+.tramo {
+  min-width: 3px;
+}
+
+.leyenda {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.35rem 1.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .punto {
+    width: 0.6rem;
+    height: 0.6rem;
+    flex-shrink: 0;
+    border-radius: 3px;
+  }
+
+  .nombre {
+    flex: 1;
+    min-width: 0;
+  }
+
+  b {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pct {
+    min-width: 2.6rem;
+    text-align: right;
+  }
+}
+
+/* Las notas explican las rarezas del cable; van al pie, no compiten con el dato. */
+.nota {
+  margin: 0.8rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid color-mix(in srgb, var(--cl-borde) 70%, transparent);
+}

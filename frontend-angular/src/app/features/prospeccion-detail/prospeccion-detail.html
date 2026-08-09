@@ -1,0 +1,127 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Prospecciones · Seguimiento</p>
+    <h1>Seguimiento de {{ valor(prospeccion()?.codigoProspeccion) }}</h1>
+    <p class="sub">
+      {{ valor(prospeccion()?.direccion) }} · {{ valor(prospeccion()?.distrito) }}
+    </p>
+  </div>
+  <div class="acciones">
+    @if (!puedeOperar()) { <span class="solo-lectura">Solo lectura</span> }
+    <button type="button" class="cl-btn" (click)="volver()">Volver</button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="!prospeccion() ? error() : null"
+  [vacio]="false"
+  mensajeCarga="Cargando seguimiento…"
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && prospeccion(); as p) {
+  @if (error()) { <p class="cl-aviso" role="alert">{{ error() }}</p> }
+  @if (mensaje()) { <p class="cl-ok" role="status">{{ mensaje() }}</p> }
+
+  @if (p.estado === 'D') {
+    <p class="alerta-estado mal"><strong>Prospección descartada.</strong> {{ valor(p.observaciones) }}</p>
+  } @else if (p.estado === 'T') {
+    <p class="alerta-estado bien"><strong>Propiedad captada.</strong> La captación vinculada continúa el expediente comercial.</p>
+  } @else if (recontactoVencido()) {
+    <p class="alerta-estado aviso"><strong>Recontacto pendiente.</strong> Registra un seguimiento para reiniciar el plazo comercial.</p>
+  }
+
+  <section class="cl-resumen">
+    <div><span>Estado</span><strong><span class="cl-badge" [class]="tonoEstado()">{{ etiquetaEstado() }}</span></strong></div>
+    <div><span>Propietario</span><strong>{{ valor(p.propietarioNombre) }}</strong></div>
+    <div><span>Agente</span><strong>{{ valor(p.agenteNombre) }}</strong></div>
+    <div><span>Próximo recontacto</span><strong>{{ fecha(p.fechaRecontacto) }}</strong></div>
+  </section>
+
+  <div class="cl-columnas">
+    <main>
+      <section class="cl-tarjeta">
+        <header>
+          <div><h2>Propietario y local</h2><p>Información comercial sobre la que se realiza el seguimiento.</p></div>
+          <button type="button" class="cl-btn pequeno" [disabled]="!p.localId" (click)="verLocal()">Datos del local</button>
+        </header>
+        <div class="cl-pares">
+          <div><span>Código del local</span><strong>{{ valor(p.localCodigo) }}</strong></div>
+          <div><span>Dirección</span><strong>{{ valor(p.direccion) }}</strong></div>
+          <div><span>Distrito</span><strong>{{ valor(p.distrito) }}</strong></div>
+          <div><span>Área</span><strong>{{ area(p.areaM2) }}</strong></div>
+          <div><span>Rubro</span><strong>{{ valor(p.rubro) }}</strong></div>
+          <div><span>Renta referencial</span><strong>{{ precio(p.precioReferencial, p.monedaReferencial) }}</strong></div>
+        </div>
+        @if (p.observaciones) { <p class="observaciones">{{ p.observaciones }}</p> }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header><div><h2>Avance de la prospección</h2><p>Hitos registrados por las operaciones del contrato F2.</p></div></header>
+        <ol class="linea">
+          @for (hito of hitos(); track hito.codigo) {
+            <li [class.completado]="hitoCumplido(hito.codigo)" [class.actual]="hitoActual(hito.codigo)">
+              <span class="punto"></span>
+              <strong>{{ hito.etiqueta }}</strong>
+              <small>{{ hito.fecha ? fecha(hito.fecha) : (hitoCumplido(hito.codigo) ? 'Hito alcanzado' : 'Pendiente') }}</small>
+            </li>
+          }
+        </ol>
+      </section>
+    </main>
+
+    <aside>
+      <section class="cl-tarjeta acciones-comerciales">
+        <header><div><h2>Siguiente acción</h2><p>Solo el agente responsable puede cambiar el estado.</p></div></header>
+        @if (puedeOperar() && activa()) {
+          @switch (p.estado) {
+            @case ('P') { <button type="button" class="cl-btn primario" [disabled]="procesando()" (click)="avanzar('contactar')">Registrar contacto</button> }
+            @case ('C') { <button type="button" class="cl-btn primario" [disabled]="procesando()" (click)="avanzar('reunion')">Registrar reunión</button> }
+            @case ('R') { <button type="button" class="cl-btn primario" [disabled]="procesando()" (click)="avanzar('propuesta')">Entregar propuesta</button> }
+            @case ('E') {
+              <button type="button" class="cl-btn" [disabled]="procesando()" (click)="avanzar('seguimiento')">Registrar seguimiento</button>
+              <button type="button" class="cl-btn primario" [disabled]="procesando()" (click)="crearCaptacion()">Crear captación</button>
+            }
+            @case ('S') {
+              <button type="button" class="cl-btn" [disabled]="procesando()" (click)="avanzar('seguimiento')">Registrar seguimiento</button>
+              <button type="button" class="cl-btn primario" [disabled]="procesando()" (click)="crearCaptacion()">Crear captación</button>
+            }
+          }
+          <button type="button" class="cl-btn peligro" [disabled]="procesando()" (click)="abrirDescartar()">Descartar prospección</button>
+        } @else if (p.estado === 'T' && p.captacionCodigo) {
+          <button type="button" class="cl-btn primario" (click)="verResumen()">Resumen comercial</button>
+        } @else {
+          <p class="cl-vacio">No hay acciones de estado disponibles para esta sesión.</p>
+        }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header><div><h2>Resultado comercial</h2><p>Marcas que explican el estado actual.</p></div></header>
+        <div class="cl-pares apiladas">
+          <div><span>Propuesta</span><strong>{{ p.fechaPropuesta ? 'Entregada' : 'Pendiente' }}</strong></div>
+          <div><span>Fecha de propuesta</span><strong>{{ fecha(p.fechaPropuesta) }}</strong></div>
+          <div><span>Resultado</span><strong>{{ valor(p.resultadoPropuesta) }}</strong></div>
+          <div><span>Captación vinculada</span><strong>{{ valor(p.captacionCodigo) }}</strong></div>
+        </div>
+      </section>
+    </aside>
+  </div>
+}
+
+<cl-confirmacion
+  [abierto]="dialogoDescartar()"
+  titulo="Descartar prospección"
+  descripcion="Indica por qué no continuará la gestión. Esta acción cierra la prospección."
+  tono="rojo"
+  etiquetaConfirmar="Descartar"
+  [ocupado]="procesando()"
+  [bloqueado]="!motivo.value.trim()"
+  (cerrar)="cerrarDescartar()"
+  (confirmar)="confirmarDescartar()"
+>
+  <label class="campo-dialogo">
+    <span>Motivo <b>*</b></span>
+    <textarea rows="4" [formControl]="motivo" maxlength="1000"></textarea>
+  </label>
+</cl-confirmacion>

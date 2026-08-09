@@ -1,0 +1,251 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Clientes · Bitácora de contacto</p>
+    <h1>{{ valor(cliente()?.nombre) }}</h1>
+    <p class="sub">Relación agente-cliente, con y sin propiedad de por medio.</p>
+  </div>
+  <div class="acciones">
+    @if (!cargando() && cliente()) {
+      @if (puedeOperar()) {
+        <button type="button" class="cl-btn" (click)="editarCliente()">Editar cliente</button>
+        <button type="button" class="cl-btn" (click)="registrarInteraccion()">
+          Registrar contacto
+        </button>
+        <button type="button" class="cl-btn primario" (click)="crearOportunidad()">
+          Nueva oportunidad
+        </button>
+      } @else {
+        <span class="solo-lectura">Solo lectura</span>
+      }
+    }
+    <button type="button" class="cl-btn" (click)="verFicha()">Ficha del cliente</button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando bitácora del cliente…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && cliente(); as datos) {
+  <section class="cl-resumen">
+    <div><span>Interacciones</span><strong>{{ interacciones().length }}</strong></div>
+    <div><span>Propuestas</span><strong>{{ oportunidades().length }}</strong></div>
+    <div><span>Oportunidades activas</span><strong>{{ activas() }}</strong></div>
+    <div><span>Último contacto</span><strong>{{ momento(ultimoContacto()) }}</strong></div>
+  </section>
+
+  <div class="cl-columnas">
+    <main>
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Cliente y agente visible</h2>
+            <p>Contacto comercial general, sin propiedad obligatoria.</p>
+          </div>
+          <span class="cl-badge" [class]="datos.estado === 'I' ? 'mal' : 'bien'">
+            {{ datos.estado === 'I' ? 'Inactivo' : 'Activo' }}
+          </span>
+        </header>
+        <div class="cl-pares">
+          <div><span>Documento</span><strong>{{ documento() }}</strong></div>
+          <div><span>Teléfono</span><strong>{{ valor(datos.telefono) }}</strong></div>
+          <div><span>Correo</span><strong>{{ valor(datos.correo) }}</strong></div>
+          <div><span>Rubro de interés</span><strong>{{ valor(datos.rubroComercial) }}</strong></div>
+          <div><span>Agente visible</span><strong>{{ agenteVisible() }}</strong></div>
+          <div><span>Alta</span><strong>{{ fecha(datos.fechaCreacion) }}</strong></div>
+        </div>
+        @if (!datos.consentimientoContacto) {
+          <p class="aviso-consentimiento">
+            Este cliente <strong>no autorizó el contacto comercial</strong>. Registrar
+            interacciones no lo cambia: revisa el consentimiento antes de llamarlo.
+          </p>
+        }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Interacciones agente-cliente</h2>
+            <p>Contexto <code>CLIENTE</code>: la conversación que no cuelga de ninguna propiedad.</p>
+          </div>
+          <span class="cl-badge">{{ interacciones().length }}</span>
+        </header>
+
+        @if (errorInteracciones(); as fallo) {
+          <p class="alerta" role="alert">
+            <span>{{ fallo }}</span>
+            <button type="button" class="cl-btn pequeno" (click)="cargarInteracciones()">
+              Reintentar
+            </button>
+          </p>
+        } @else if (interacciones().length === 0) {
+          <p class="cl-vacio">Aún no hay interacciones generales con este cliente.</p>
+        } @else {
+          <div class="cl-tabla-marco">
+            <table class="cl-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Canal</th>
+                  <th>Resultado</th>
+                  <th>Observaciones</th>
+                  <th>Agente</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (interaccion of interacciones(); track interaccion.id) {
+                  <tr>
+                    <td class="fecha">{{ momento(interaccion.fechaHora) }}</td>
+                    <td><span class="cl-badge">{{ canal(interaccion.canalContacto) }}</span></td>
+                    <td>{{ resultado(interaccion.resultado) }}</td>
+                    <td class="libre">{{ valor(interaccion.observaciones) }}</td>
+                    <td>{{ valor(interaccion.agenteNombre) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (bitacoraAlTope()) {
+            <p class="nota">
+              Se muestran las 100 interacciones más recientes; puede haber más registradas.
+            </p>
+          }
+        }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Propuestas realizadas</h2>
+            <p>Oportunidades: el momento en que la conversación pasa a un inmueble concreto.</p>
+          </div>
+          <span class="cl-badge">{{ oportunidades().length }}</span>
+        </header>
+
+        @if (errorOportunidades(); as fallo) {
+          <p class="alerta" role="alert">
+            <span>{{ fallo }}</span>
+            <button type="button" class="cl-btn pequeno" (click)="cargarOportunidades()">
+              Reintentar
+            </button>
+          </p>
+        } @else if (oportunidades().length === 0) {
+          <p class="cl-vacio">Todavía no se han propuesto propiedades a este cliente.</p>
+        } @else {
+          <div class="cl-tabla-marco">
+            <table class="cl-tabla">
+              <thead>
+                <tr>
+                  <th>Oportunidad</th>
+                  <th>Propiedad</th>
+                  <th>Agente</th>
+                  <th>Estado</th>
+                  <th>Registro</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (oportunidad of oportunidades(); track oportunidad.id) {
+                  <tr>
+                    <td class="codigo">{{ valor(oportunidad.codigoOportunidad) }}</td>
+                    <td>
+                      <strong>{{ valor(oportunidad.direccionLocal) }}</strong>
+                      <span class="secundario">
+                        {{ valor(oportunidad.distritoLocal) }} ·
+                        {{ valor(oportunidad.codigoCaptacion) }}
+                      </span>
+                    </td>
+                    <td>{{ valor(oportunidad.agenteNombre) }}</td>
+                    <td>
+                      <span class="cl-badge" [class]="tonoOportunidad(oportunidad.estado)">
+                        {{ estadoOportunidad(oportunidad.estado) }}
+                      </span>
+                    </td>
+                    <td class="fecha">{{ momento(oportunidad.fechaRegistro) }}</td>
+                    <td>
+                      <button
+                        type="button"
+                        class="cl-btn pequeno"
+                        (click)="verOportunidad(oportunidad)"
+                      >
+                        Seguimiento
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (propuestasAlTope()) {
+            <p class="nota">
+              Se muestran las 100 propuestas más recientes; puede haber más registradas.
+            </p>
+          }
+        }
+      </section>
+    </main>
+
+    <aside>
+      <section class="cl-tarjeta">
+        <header><div><h2>Lectura comercial</h2></div></header>
+        <div class="cl-pares apiladas">
+          <div><span>Último contacto</span><strong>{{ momento(ultimoContacto()) }}</strong></div>
+          <div><span>Interacciones</span><strong>{{ interacciones().length }}</strong></div>
+          <div><span>Propuestas</span><strong>{{ oportunidades().length }}</strong></div>
+          <div><span>Oportunidades activas</span><strong>{{ activas() }}</strong></div>
+          <div><span>Agente visible</span><strong>{{ agenteVisible() }}</strong></div>
+        </div>
+        <p class="nota">
+          El agente visible se deduce de quién registró el último contacto: el cliente es un
+          catálogo compartido y su rol no guarda agente asignado.
+        </p>
+        <p class="nota">
+          Lo que ves está acotado a tu alcance, así que dos actores pueden leer bitácoras
+          distintas del mismo cliente.
+        </p>
+      </section>
+
+      <section class="cl-tarjeta">
+        <header><div><h2>Siguiente acción</h2></div></header>
+        @if (puedeOperar()) {
+          <ul class="siguientes">
+            <li>
+              <div>
+                <strong>Registrar contacto general</strong>
+                <span>{{ momento(ultimoContacto()) }}</span>
+              </div>
+              <button type="button" class="cl-btn pequeno" (click)="registrarInteraccion()">
+                Registrar
+              </button>
+            </li>
+            <li>
+              <div>
+                <strong>Proponer una propiedad</strong>
+                <span>{{ oportunidades().length }} propuesta(s)</span>
+              </div>
+              <button type="button" class="cl-btn pequeno primario" (click)="crearOportunidad()">
+                Crear
+              </button>
+            </li>
+            <li>
+              <div>
+                <strong>Revisar requerimientos</strong>
+                <span>{{ valor(datos.rubroComercial) }}</span>
+              </div>
+              <button type="button" class="cl-btn pequeno" (click)="verFicha()">Ver ficha</button>
+            </li>
+          </ul>
+        } @else {
+          <p class="cl-vacio">
+            Solo el agente responsable registra contactos y propuestas. Esta vista es de
+            supervisión.
+          </p>
+        }
+      </section>
+    </aside>
+  </div>
+}

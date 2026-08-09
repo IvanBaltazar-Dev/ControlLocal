@@ -1,0 +1,9 @@
+# Listener registrado aqui, y no como @Component, porque corre en
+# ApplicationEnvironmentPreparedEvent: en ese instante todavia no existe el
+# contexto de Spring, asi que no hay donde inyectar un bean.
+#
+# Motivo de que sea tan temprano: si la comprobacion espera al contexto, el
+# primer fallo lo da el DataSource con 'url' must start with "jdbc", que no
+# nombra la variable ausente (D-S0-2 exige que el mensaje la nombre).
+org.springframework.context.ApplicationListener=\
+com.controllocal.app.arranque.ComprobacionVariablesObligatorias

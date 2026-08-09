@@ -1,0 +1,421 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Clientes · Ficha</p>
+    <h1>{{ valor(cliente()?.nombre) }}</h1>
+    <p>Historia comercial visible en tu alcance.</p>
+  </div>
+  <div class="acciones">
+    <button type="button" class="cl-btn" (click)="volver()">Volver a la bandeja</button>
+    @if (!cargando() && !error()) {
+      <button type="button" class="cl-btn" (click)="verBitacora()">Bitácora de contacto</button>
+    }
+    @if (esAgente() && !cargando() && !error()) {
+      <button type="button" class="cl-btn primario" (click)="editar()">Editar cliente</button>
+    }
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando ficha comercial…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && cliente(); as datos) {
+  <section class="resumen">
+    <div class="cl-tarjeta">
+      <div class="cl-seccion-titulo">
+        <h2>Resumen comercial</h2>
+        <span class="cl-badge" [class]="activo() ? 'bien' : 'mal'">
+          {{ activo() ? 'Activo' : 'Inactivo' }}
+        </span>
+      </div>
+      <dl class="pares">
+        <div><dt>Tipo</dt><dd>{{ tipoPersona() }}</dd></div>
+        <div><dt>Documento</dt><dd>{{ documento() }}</dd></div>
+        <div><dt>Teléfono</dt><dd>{{ valor(datos.telefono) }}</dd></div>
+        <div><dt>Correo</dt><dd>{{ valor(datos.correo) }}</dd></div>
+        <div><dt>Rubro de interés</dt><dd>{{ valor(datos.rubroComercial) }}</dd></div>
+        <div><dt>Registro</dt><dd>{{ fecha(datos.fechaCreacion) }}</dd></div>
+      </dl>
+      <div class="consentimientos">
+        <span class="cl-badge" [class]="datos.consentimientoContacto ? 'bien' : ''">
+          Contacto: {{ datos.consentimientoContacto ? 'autorizado' : 'no autorizado' }}
+        </span>
+        <span class="cl-badge" [class]="datos.consentimientoUsoDato ? 'bien' : ''">
+          Uso de datos: {{ datos.consentimientoUsoDato ? 'autorizado' : 'no autorizado' }}
+        </span>
+      </div>
+
+      <!-- D-27: los dos badges de arriba son los booleanos del contrato
+           congelado; esto es la constancia REAL, derivada del registro
+           append-only. Van juntos a propósito hasta el corte, que es cuando
+           los booleanos se retiran del cable. -->
+      <cl-constancia-autorizacion
+        [constancia]="autorizacion()"
+        [cargando]="cargandoAutorizacion()"
+        [error]="errorAutorizacion()"
+      />
+    </div>
+
+    <div class="cl-tarjeta">
+      <div class="cl-seccion-titulo"><h2>Alcance visible</h2></div>
+      <ul class="metricas">
+        @for (metrica of metricas(); track metrica.etiqueta) {
+          <li>
+            <span>{{ metrica.etiqueta }}</span>
+            <!-- Guion = sección aún no pedida. Un cero afirmaría que no hay
+                 ninguna, y la carga inicial de la ficha es parcial. -->
+            <strong [class.pendiente]="metrica.valor === null">
+              {{ metrica.valor === null ? '—' : metrica.valor }}
+            </strong>
+          </li>
+        }
+      </ul>
+      <p class="nota">Se cuentan al abrir su pestaña.</p>
+      @if (hayBusquedaActiva()) {
+        <p class="aviso-busqueda">
+          Este cliente tiene <strong>búsqueda activa</strong>: hay al menos un requerimiento
+          vigente.
+        </p>
+        <!-- La CTA solo aparece con búsqueda activa: sin requerimiento activo
+             el matching no tiene contra qué comparar y devolvería vacío. -->
+        <button type="button" class="primario ancho" (click)="verCoincidencias()">
+          Presentar propiedades de cartera
+        </button>
+      }
+      <p class="nota">
+        Los números salen de las secciones de esta ficha, así que reflejan tu alcance: dos
+        actores distintos pueden ver totales distintos del mismo cliente.
+      </p>
+    </div>
+  </section>
+
+  @if (coincidenciasAbiertas()) {
+    <section class="seccion coincidencias">
+      <div class="cl-seccion-titulo">
+        <h2>Propiedades que encajan con su búsqueda</h2>
+        <span class="cl-badge">{{ totalCoincidencias() }} coincidencia(s)</span>
+      </div>
+
+      @if (cargandoCoincidencias()) {
+        <p class="cl-menudo" role="status">Comparando su búsqueda con la cartera…</p>
+      } @else if (errorCoincidencias()) {
+        <p class="cl-aviso" role="alert">
+          {{ errorCoincidencias() }}
+          <button type="button" class="cl-btn" (click)="verCoincidencias()">Reintentar</button>
+        </p>
+      } @else if (coincidencias().length === 0) {
+        <p class="cl-vacio">
+          Ninguna propiedad de la cartera visible encaja con su búsqueda declarada.
+        </p>
+      } @else {
+        <ul class="lista-coincidencias">
+          @for (c of coincidencias(); track c.id) {
+            <li>
+              <div class="puntaje" [class.alto]="c.puntaje >= 70">{{ c.puntaje }}%</div>
+              <div class="detalle">
+                <strong>{{ valor(c.titulo) }}</strong>
+                <span class="secundario">{{ valor(c.subtitulo) }}</span>
+                <div class="criterios">
+                  @for (frase of c.cumple ?? []; track frase) {
+                    <span class="criterio bien">{{ frase }}</span>
+                  }
+                  @for (frase of c.noCumple ?? []; track frase) {
+                    <span class="criterio mal">{{ frase }}</span>
+                  }
+                </div>
+              </div>
+              @if (esAgente()) {
+                <button type="button" class="cl-btn primario" (click)="proponer(c)">Proponer</button>
+              }
+            </li>
+          }
+        </ul>
+        <p class="nota">
+          El porcentaje mide <strong>lo que se pudo evaluar</strong>: un criterio sin dato —en el
+          requerimiento o en el local— no cuenta ni a favor ni en contra. Por eso el número va
+          siempre acompañado de sus motivos.
+        </p>
+      }
+    </section>
+  }
+
+  <nav class="cl-pestanas" role="tablist">
+    @for (pestana of pestanas(); track pestana.clave) {
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activa() === pestana.clave"
+        [class.activa]="activa() === pestana.clave"
+        (click)="abrir(pestana.clave)"
+      >
+        {{ pestana.etiqueta }}
+        @if (pestana.total > 0) { <span class="cuenta">{{ pestana.total }}</span> }
+      </button>
+    }
+  </nav>
+
+  <!-- La búsqueda declarada se edita aquí y no en `ClienteForm`: no es un dato
+       del cliente, es un registro propio (`/requerimientos`) con su ciclo de
+       vida —activo, pausado, cerrado— y su propio endpoint de estado. -->
+  @if (activa() === 'requerimientos') {
+    <section class="seccion requerimientos">
+      <div class="cl-seccion-titulo">
+        <h2>Búsqueda declarada</h2>
+        <div class="titulo-acciones">
+          <span class="cl-badge">{{ requerimientos().length }}</span>
+          @if (esAgente() && editando() === null) {
+            <button type="button" class="cl-btn primario" (click)="nuevoRequerimiento()">
+              Nuevo requerimiento
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (errorRequerimientos()) {
+        <p class="cl-aviso" role="alert">
+          {{ errorRequerimientos() }}
+          <button type="button" class="cl-btn" (click)="cargarRequerimientos()">
+            Reintentar
+          </button>
+        </p>
+      }
+
+      @if (editando() !== null) {
+        <form class="editor" [formGroup]="formulario" (ngSubmit)="guardarRequerimiento()" novalidate>
+          <h3>{{ editando() === 0 ? 'Nuevo requerimiento' : 'Editar requerimiento' }}</h3>
+          <div class="cl-grid dos">
+            <label class="cl-campo">
+              <span>Rubro que buscará <b>*</b></span>
+              <input formControlName="rubro" maxlength="120" placeholder="Ej. Cafetería / Postres" />
+              <small>Texto libre: se compara normalizado y por inclusión.</small>
+            </label>
+            <label class="cl-campo">
+              <span>Tipo de inmueble</span>
+              <select formControlName="tipoInmueble">
+                @for (o of opcionesTipoInmueble; track o.valor) {
+                  <option [value]="o.valor">{{ o.etiqueta }}</option>
+                }
+              </select>
+            </label>
+            <label class="cl-campo">
+              <span>Moneda</span>
+              <select formControlName="moneda">
+                <option value="PEN">Soles (PEN)</option>
+                <option value="USD">Dólares (USD)</option>
+              </select>
+            </label>
+            <label class="cl-campo">
+              <span>Estado</span>
+              <select formControlName="estado">
+                @for (o of opcionesEstadoRequerimiento; track o.valor) {
+                  <option [value]="o.valor">{{ o.etiqueta }}</option>
+                }
+              </select>
+              <small>Solo los <strong>activos</strong> alimentan el matching de cartera.</small>
+            </label>
+            <label class="cl-campo">
+              <span>Renta mínima</span>
+              <input type="number" min="0" step="0.01" formControlName="rentaMin" />
+            </label>
+            <label class="cl-campo">
+              <span>Renta máxima</span>
+              <input type="number" min="0" step="0.01" formControlName="rentaMax" />
+            </label>
+            <label class="cl-campo">
+              <span>Metraje mínimo (m²)</span>
+              <input type="number" min="0" step="0.01" formControlName="metrajeMin" />
+            </label>
+            <label class="cl-campo">
+              <span>Metraje máximo (m²)</span>
+              <input type="number" min="0" step="0.01" formControlName="metrajeMax" />
+            </label>
+            <label class="cl-campo">
+              <span>Frente mínimo (m)</span>
+              <input type="number" min="0" step="0.01" formControlName="frenteMinimo" />
+            </label>
+            <label class="cl-campo">
+              <span>Distritos de interés</span>
+              <input formControlName="distritos" placeholder="Miraflores, San Isidro, Surco" />
+              <small>Separados por comas. Viajan por nombre, no por identificador.</small>
+            </label>
+          </div>
+          <label class="cl-campo">
+            <span>Observaciones</span>
+            <textarea rows="3" maxlength="1000" formControlName="observaciones"></textarea>
+          </label>
+          <p class="nota">
+            Ningún límite es obligatorio: un requerimiento sin renta ni metraje es válido, y el
+            matching cuenta esos criterios como <strong>no aplica</strong> en vez de descartarlo.
+          </p>
+          <div class="acciones-editor">
+            <button
+              type="button"
+              class="cl-btn"
+              [disabled]="guardandoRequerimiento()"
+              (click)="cerrarEditor()"
+            >
+              Cancelar
+            </button>
+            <button type="submit" class="cl-btn primario" [disabled]="guardandoRequerimiento()">
+              {{ guardandoRequerimiento() ? 'Guardando…' : 'Guardar requerimiento' }}
+            </button>
+          </div>
+        </form>
+      }
+
+      @if (cargandoRequerimientos()) {
+        <p class="cl-menudo" role="status">Cargando la búsqueda declarada…</p>
+      } @else if (requerimientos().length === 0 && editando() === null) {
+        <p class="cl-vacio">
+          Este cliente todavía no declaró qué busca. Sin un requerimiento activo no aparece en el
+          matching de cartera.
+        </p>
+      } @else {
+        <ul class="lista-requerimientos">
+          @for (r of requerimientos(); track r.id) {
+            <li>
+              <div class="cabecera-requerimiento">
+                <div>
+                  <strong>{{ valor(r.rubro) }}</strong>
+                  <span class="secundario">{{ etiquetaTipoInmueble(r.tipoInmueble) }}</span>
+                </div>
+                <span class="cl-badge" [class]="tonoRequerimiento(r.estado)">
+                  {{ etiquetaEstadoRequerimiento(r.estado) }}
+                </span>
+              </div>
+              <dl class="pares">
+                <div>
+                  <dt>Renta</dt>
+                  <dd>{{ rango(r.rentaMin, r.rentaMax, ' ' + valor(r.moneda)) }}</dd>
+                </div>
+                <div><dt>Metraje</dt><dd>{{ rango(r.metrajeMin, r.metrajeMax, ' m²') }}</dd></div>
+                <div><dt>Frente mínimo</dt><dd>{{ r.frenteMinimo ? r.frenteMinimo + ' m' : '—' }}</dd></div>
+                <div>
+                  <dt>Distritos</dt>
+                  <dd>{{ (r.distritos ?? []).length ? (r.distritos ?? []).join(', ') : '—' }}</dd>
+                </div>
+              </dl>
+              @if (r.observaciones) { <p class="observaciones">{{ r.observaciones }}</p> }
+              @if (esAgente()) {
+                <div class="acciones-requerimiento">
+                  <button
+                    type="button"
+                    class="cl-btn"
+                    [disabled]="guardandoRequerimiento()"
+                    (click)="editarRequerimiento(r)"
+                  >
+                    Editar
+                  </button>
+                  @if (r.estado === 'A') {
+                    <button
+                      type="button"
+                      class="cl-btn"
+                      [disabled]="guardandoRequerimiento()"
+                      (click)="cambiarEstadoRequerimiento(r, 'P')"
+                    >
+                      Pausar
+                    </button>
+                    <button
+                      type="button"
+                      class="cl-btn"
+                      [disabled]="guardandoRequerimiento()"
+                      (click)="cambiarEstadoRequerimiento(r, 'C')"
+                    >
+                      Cerrar
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="cl-btn"
+                      [disabled]="guardandoRequerimiento()"
+                      (click)="cambiarEstadoRequerimiento(r, 'A')"
+                    >
+                      Reactivar
+                    </button>
+                  }
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+
+  <section class="cl-seccion">
+    <div class="cl-seccion-titulo">
+      <h2>{{ etiquetaSeccion(activa()) }}</h2>
+      <span class="cl-badge">{{ totalActiva() }} registro(s)</span>
+    </div>
+
+    @if (cargandoSeccion()) {
+      <p class="cl-menudo" role="status">Actualizando ficha…</p>
+    } @else if (errorSeccion()) {
+      <p class="cl-aviso" role="alert">
+        {{ errorSeccion() }}
+        <button type="button" class="cl-btn" (click)="reintentarSeccion()">Reintentar</button>
+      </p>
+    } @else if (filas().length === 0) {
+      <p class="cl-vacio">Sin registros visibles en esta sección.</p>
+    } @else {
+      <div class="cl-tabla-marco">
+        <table class="cl-tabla">
+          <thead>
+            <tr>
+              <th>Proceso</th>
+              <th>Código</th>
+              <th>Detalle</th>
+              @if (muestraLocal()) { <th>Local</th> }
+              @if (muestraDistrito()) { <th>Distrito</th> }
+              @if (muestraPropietario()) { <th>Propietario</th> }
+              @if (muestraAgente()) { <th>Agente</th> }
+              <th>Estado</th>
+              <th>Fecha</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (fila of filas(); track fila.id) {
+              <tr>
+                <td>{{ valor(fila.proceso) }}</td>
+                <td class="codigo">{{ valor(fila.codigo) }}</td>
+                <td>
+                  <strong>{{ valor(fila.titulo) }}</strong>
+                  <span class="secundario">{{ valor(fila.subtitulo) }}</span>
+                </td>
+                @if (muestraLocal()) { <td>{{ valor(fila.local) }}</td> }
+                @if (muestraDistrito()) { <td>{{ valor(fila.distrito) }}</td> }
+                @if (muestraPropietario()) { <td>{{ valor(fila.propietario) }}</td> }
+                @if (muestraAgente()) { <td>{{ valor(fila.agente) }}</td> }
+                <td><span class="cl-badge">{{ valor(fila.estado) }}</span></td>
+                <td class="fecha">{{ fecha(fila.fecha) }}</td>
+                <td>
+                  <!-- Solo se ofrece el enlace si su pantalla existe; una ruta
+                       a una pantalla sin migrar se queda como texto. -->
+                  @if (tieneDestino(fila)) {
+                    <button type="button" class="cl-btn pequeno" (click)="navegar(fila)">
+                      Ver detalle
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (totalActiva() > porPagina) {
+        <cl-paginacion
+          [total]="totalActiva()"
+          [tamano]="porPagina"
+          [pagina]="paginaActiva()"
+          (paginaChange)="cambiarPagina($event)"
+        />
+      }
+    }
+  </section>
+}

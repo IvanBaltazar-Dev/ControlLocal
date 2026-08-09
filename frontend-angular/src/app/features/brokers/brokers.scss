@@ -1,0 +1,59 @@
+// El aviso de alcance no es decorativo: sin él, una lista corta de propietarios
+// se lee como "faltan datos" en vez de "esto es lo tuyo".
+.aviso-alcance {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--cl-borde-fuerte, #94a3b8);
+  background: var(--cl-fondo-suave, #f1f5f9);
+  color: var(--cl-tinta-suave);
+  font-size: 0.85rem;
+}
+
+.cl-tabla {
+  .secundario {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--cl-tinta-suave);
+    font-size: 0.75rem;
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .enlace {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--cl-acento, #2563eb);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .acciones-fila {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+}
+
+.cl-badge.admin {
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--cl-acento-suave, #dbeafe);
+  color: var(--cl-acento, #2563eb);
+  font-size: 0.68rem;
+}
+
+.nota-admin {
+  margin: 0.75rem 0 0;
+  color: var(--cl-tinta-suave);
+  font-size: 0.8rem;
+}

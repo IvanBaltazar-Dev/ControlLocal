@@ -1,0 +1,38 @@
+@if (abierto()) {
+  <div class="fondo" (click)="alCerrar()" (keydown.escape)="alCerrar()" tabindex="-1">
+    <!-- stopPropagation: un clic dentro del cuadro no debe cerrarlo. -->
+    <div
+      class="cuadro"
+      [class]="'tono-' + tono()"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="titulo()"
+      (click)="$event.stopPropagation()"
+    >
+      <h2>{{ titulo() }}</h2>
+
+      @if (descripcion(); as texto) {
+        <p class="descripcion">{{ texto }}</p>
+      }
+
+      <!-- Campos que la acción necesite: la observación de observar/rechazar, el motivo… -->
+      <div class="cuerpo">
+        <ng-content />
+      </div>
+
+      <footer>
+        <button type="button" class="cancelar" [disabled]="ocupado()" (click)="alCerrar()">
+          {{ etiquetaCancelar() }}
+        </button>
+        <button
+          type="button"
+          class="confirmar"
+          [disabled]="ocupado() || bloqueado()"
+          (click)="alConfirmar()"
+        >
+          {{ ocupado() ? 'Procesando…' : etiquetaConfirmar() }}
+        </button>
+      </footer>
+    </div>
+  </div>
+}

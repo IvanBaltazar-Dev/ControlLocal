@@ -1,0 +1,320 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Cierre · Solicitudes · Expediente</p>
+    <h1>{{ valor(solicitud()?.codigoSolicitud) }} · {{ valor(solicitud()?.clienteNombre) }}</h1>
+    <p class="sub">
+      <span>Operación {{ valor(solicitud()?.codigoOportunidad) }}</span>
+      <span>{{ valor(solicitud()?.direccionLocal) }}</span>
+      @if (solicitud(); as s) {
+        <span class="cl-badge" [class]="tonoEstado(s.estado)">{{ etiquetaEstado(s.estado) }}</span>
+      }
+    </p>
+  </div>
+  <div class="acciones">
+    <button type="button" class="cl-btn" (click)="volver()">Volver</button>
+    <!-- Con el alquiler cerrado el expediente pasa a solo lectura. -->
+    @if (esAgente() && !contrato() && solicitud()?.estado !== 'C') {
+      <button type="button" class="cl-btn" (click)="gestionarDocumentos()">Gestionar documentos</button>
+    }
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando la solicitud…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && solicitud(); as s) {
+  <!-- Barra de etapas: dónde está la solicitud dentro del circuito. -->
+  <ol class="etapas">
+    @for (etapa of etapas; track etapa.titulo; let i = $index) {
+      <li [class.hecha]="i < etapaActual()" [class.actual]="i === etapaActual()">
+        <span class="momento">{{ etapa.titulo }}</span>
+        <span class="que">{{ etapa.detalle }}</span>
+      </li>
+    }
+  </ol>
+
+  @if (errorAccion()) { <p class="cl-aviso" role="alert">{{ errorAccion() }}</p> }
+  @if (cerrado()) {
+    <p class="cl-ok" role="status">
+      <strong>¡Propiedad alquilada!</strong> El contrato quedó registrado, la operación cerró como
+      exitosa y la comisión nació pendiente de liquidar.
+    </p>
+  }
+
+  <div class="cl-columnas">
+    <div>
+      <!-- 1) El cierre: primero lo que hay que hacer, después lo que se consulta. -->
+      @if (contrato(); as c) {
+        <section class="cl-tarjeta">
+          <header>
+            <div>
+              <h2>Alquiler cerrado</h2>
+              <p>La operación quedó finalizada con contrato y comisión.</p>
+            </div>
+            <span class="cl-badge bien">{{ etiquetaEstadoContrato(c.estadoContrato) }}</span>
+          </header>
+          <div class="cl-pares">
+            <div><span>Renta mensual</span><strong>{{ monto(c.rentaMensual, c.moneda) }}</strong></div>
+            <div><span>Plazo</span><strong>{{ c.plazoContratoMeses ?? '—' }} meses</strong></div>
+            <div><span>Inicio</span><strong>{{ fecha(c.fechaInicioContrato) }}</strong></div>
+            <div><span>Fin</span><strong>{{ fecha(c.fechaFinContrato) }}</strong></div>
+            <div><span>Fecha de cierre</span><strong>{{ fecha(c.fechaCierre) }}</strong></div>
+            <div>
+              <span>Comisión generada</span>
+              <strong>{{ monto(c.comisionGenerada, c.monedaComision) }}</strong>
+            </div>
+            <div>
+              <span>Liquidación</span>
+              <strong>{{ etiquetaEstadoComision(c.comisionEstado) }}</strong>
+            </div>
+          </div>
+          @if (c.incidencias) { <p class="descripcion">{{ c.incidencias }}</p> }
+          <div class="acciones-tarjeta">
+            <button type="button" class="cl-btn" (click)="verCierres()">Ver cierres exitosos</button>
+          </div>
+        </section>
+      } @else if (puedeCerrar()) {
+        <section class="cl-tarjeta destacada">
+          <header>
+            <div>
+              <h2>Cerrar el alquiler</h2>
+              <p>El broker aprobó estas condiciones. Al confirmar se formaliza el contrato.</p>
+            </div>
+            <span class="cl-badge bien">Aprobada</span>
+          </header>
+          <div class="cl-pares">
+            <div><span>Renta aprobada</span><strong>{{ monto(s.montoPropuesto, s.moneda) }}</strong></div>
+            <div><span>Plazo</span><strong>{{ plazo(s) }}</strong></div>
+            <div><span>Inicio</span><strong>{{ fecha(s.fechaInicio) }}</strong></div>
+            <div><span>Forma de pago</span><strong>{{ etiquetaFormaPago(s.formaPago) }}</strong></div>
+          </div>
+
+          <!-- La comisión es una ESTIMACIÓN: la liquidación la escribe el cierre. -->
+          <div class="comision">
+            <div>
+              <span class="cl-menudo">Comisión estimada</span>
+              <strong>{{ importe(comisionEstimada()) }}</strong>
+              <span class="cl-menudo">{{ comisionEnPalabras() }}</span>
+            </div>
+            <span class="cl-badge">Liquidación pendiente</span>
+          </div>
+          @if (errorCaptacion()) { <p class="cl-aviso">{{ errorCaptacion() }}</p> }
+
+          <div class="acciones-tarjeta">
+            <button type="button" class="cl-btn primario" (click)="pedirCierre()">
+              Cerrar el alquiler
+            </button>
+          </div>
+        </section>
+      }
+
+      <!-- 2) Las condiciones ofertadas. -->
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Condiciones del alquiler</h2>
+            <p>Lo que el cliente ofreció y el broker evalúa. El contrato las hereda.</p>
+          </div>
+        </header>
+        <div class="cl-pares">
+          <div><span>Renta propuesta</span><strong>{{ monto(s.montoPropuesto, s.moneda) }}</strong></div>
+          <div><span>Plazo</span><strong>{{ plazo(s) }}</strong></div>
+          <div><span>Inicio</span><strong>{{ fecha(s.fechaInicio) }}</strong></div>
+          <div><span>Forma de pago</span><strong>{{ etiquetaFormaPago(s.formaPago) }}</strong></div>
+          <div><span>Garantía</span><strong>{{ meses(s.mesesGarantia) }}</strong></div>
+          <div><span>Adelanto</span><strong>{{ meses(s.mesesAdelanto) }}</strong></div>
+          <div><span>Vigencia de la oferta</span><strong>{{ fecha(s.fechaVigenciaOferta) }}</strong></div>
+          <div><span>Registrada</span><strong>{{ fecha(s.fechaRegistro) }}</strong></div>
+        </div>
+
+        <!-- Desembolso concepto por concepto: garantía y adelanto son del
+             propietario, la comisión de la inmobiliaria. Sumarlos confunde. -->
+        @if (desembolso(); as d) {
+          <div class="desembolso">
+            <h3>Desembolso inicial del inquilino</h3>
+            <div class="cl-pares">
+              <div><span>Garantía (propietario)</span><strong>{{ importe(d.garantia) }}</strong></div>
+              <div><span>Adelanto (propietario)</span><strong>{{ importe(d.adelanto) }}</strong></div>
+              <div><span>Comisión (inmobiliaria)</span><strong>{{ importe(d.comision) }}</strong></div>
+              <div><span>Total para entrar</span><strong>{{ importe(d.total) }}</strong></div>
+            </div>
+          </div>
+        }
+
+        @if (s.observaciones) { <p class="descripcion">{{ s.observaciones }}</p> }
+      </section>
+
+      <!-- 3) Documentos. -->
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Documentos</h2>
+            <p>Expediente entregado por el agente.</p>
+          </div>
+          <span class="cl-badge">{{ checklist(s) }} entregados</span>
+        </header>
+        @if (errorDocumentos()) { <p class="cl-aviso">{{ errorDocumentos() }}</p> }
+        @if (documentos().length === 0 && !errorDocumentos()) {
+          <p class="cl-vacio">Todavía no hay documentos cargados.</p>
+        } @else if (documentos().length > 0) {
+          <div class="cl-tabla-marco">
+            <table class="cl-tabla">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Archivo</th>
+                  <th>Estado</th>
+                  <th>Entregado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (d of documentos(); track d.id) {
+                  <tr>
+                    <td><strong>{{ nombreTipo(d) }}</strong></td>
+                    <td class="cl-menudo">{{ valor(d.nombreArchivo) }}</td>
+                    <td>
+                      <span class="cl-badge" [class]="tonoDocumento(d)">
+                        {{ etiquetaDocumento(d) }}
+                      </span>
+                      @if (d.estado === 'O' && d.observaciones) {
+                        <p class="observacion">{{ d.observaciones }}</p>
+                      }
+                    </td>
+                    <td class="cl-menudo">{{ momento(d.fechaEntrega) }}</td>
+                    <td>
+                      @if (d.rutaArchivo) {
+                        <button type="button" class="cl-btn pequeno" (click)="abrir(d)">Ver</button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      @if (documentoAbierto(); as doc) {
+        <section class="cl-tarjeta">
+          <header>
+            <h2>{{ nombreTipo(doc) }}</h2>
+            <button type="button" class="cl-btn pequeno" (click)="cerrarVisor()">Cerrar</button>
+          </header>
+          <cl-visor-documento
+            [clave]="doc.rutaArchivo ?? null"
+            [nombreArchivo]="doc.nombreArchivo ?? 'documento'"
+          />
+        </section>
+      }
+
+      <!-- 4) Historial de evaluaciones. -->
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Historial de evaluaciones</h2>
+            <p>Cada decisión del broker sobre esta solicitud.</p>
+          </div>
+          <span class="cl-badge">{{ evaluaciones().length }}</span>
+        </header>
+        @if (errorEvaluaciones()) { <p class="cl-aviso">{{ errorEvaluaciones() }}</p> }
+        @if (evaluaciones().length === 0 && !errorEvaluaciones()) {
+          <p class="cl-vacio">Todavía no hay evaluaciones registradas.</p>
+        } @else {
+          <ul class="historial">
+            @for (e of evaluaciones(); track e.id) {
+              <li>
+                <div class="linea-historial">
+                  <span class="cl-badge">{{ etiquetaResultado(e.resultado) }}</span>
+                  <strong>{{ etiquetaTipoEvaluacion(e.tipoEvaluacion) }}</strong>
+                  <span class="cl-menudo">{{ momento(e.fechaEvaluacion) }}</span>
+                </div>
+                @if (e.observaciones) { <p class="cl-menudo">{{ e.observaciones }}</p> }
+                @if (e.brokerNombre) { <p class="cl-menudo">Broker: {{ e.brokerNombre }}</p> }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+
+    <aside>
+      <section class="cl-tarjeta">
+        <header><h2>La operación</h2></header>
+        <div class="cl-pares apiladas">
+          <div><span>Cliente</span><strong>{{ valor(s.clienteNombre) }}</strong></div>
+          <div><span>Agente</span><strong>{{ valor(s.agenteNombre) }}</strong></div>
+          <div><span>Captación</span><strong>{{ valor(s.codigoCaptacion) }}</strong></div>
+          <div><span>Local</span><strong>{{ valor(s.direccionLocal) }}</strong></div>
+          <div><span>Distrito</span><strong>{{ valor(s.distritoLocal) }}</strong></div>
+          <div><span>Actualizada</span><strong>{{ momento(s.fechaActualizacionEstado) }}</strong></div>
+        </div>
+        <div class="acciones-tarjeta">
+          <button type="button" class="cl-btn pequeno" [disabled]="!s.idOportunidad" (click)="verOportunidad()">
+            Seguimiento
+          </button>
+          <button type="button" class="cl-btn pequeno" [disabled]="!s.idCliente" (click)="verCliente()">
+            Cliente
+          </button>
+          <button type="button" class="cl-btn pequeno" [disabled]="!s.codigoCaptacion" (click)="verPropiedad()">
+            Propiedad
+          </button>
+        </div>
+      </section>
+
+      @if (errorContrato()) { <p class="cl-aviso">{{ errorContrato() }}</p> }
+    </aside>
+  </div>
+
+  <!-- El cierre se confirma con su formulario dentro: fecha y estado son la
+       única decisión, y el resumen recuerda lo que la transacción provoca. -->
+  <cl-confirmacion
+    [abierto]="confirmarCierre()"
+    titulo="Cerrar el alquiler"
+    descripcion="Se registra el contrato, la propiedad queda alquilada y nace la comisión pendiente."
+    tono="verde"
+    etiquetaConfirmar="Confirmar cierre"
+    [ocupado]="cerrando()"
+    [bloqueado]="cierreInvalido()"
+    (confirmar)="cerrarAlquiler()"
+    (cerrar)="cancelarCierre()"
+  >
+    <div class="cl-pares apiladas resumen-cierre">
+      <div><span>Inquilino</span><strong>{{ valor(s.clienteNombre) }}</strong></div>
+      <div><span>Local</span><strong>{{ valor(s.direccionLocal) }}</strong></div>
+      <div><span>Renta mensual</span><strong>{{ monto(s.montoPropuesto, s.moneda) }}</strong></div>
+      <div><span>Comisión estimada</span><strong>{{ importe(comisionEstimada()) }}</strong></div>
+    </div>
+
+    <form [formGroup]="formularioCierre" class="formulario-cierre">
+      <label class="cl-campo">
+        <span>Fecha de cierre <b>*</b></span>
+        <input type="date" formControlName="fechaCierre" [max]="hoy" />
+        <small>No puede ser futura: el backend la rechaza.</small>
+      </label>
+      <label class="cl-campo">
+        <span>Estado del contrato <b>*</b></span>
+        <select formControlName="estadoContrato">
+          @for (o of opcionesEstadoContrato; track o.valor) {
+            <option [value]="o.valor">{{ o.etiqueta }}</option>
+          }
+        </select>
+        <small>El cierre solo admite Vigente o Firmado.</small>
+      </label>
+      <label class="cl-campo">
+        <span>Incidencias</span>
+        <textarea
+          rows="3"
+          maxlength="2000"
+          formControlName="incidencias"
+          placeholder="Opcional: condiciones pendientes o acuerdos de la formalización."
+        ></textarea>
+      </label>
+    </form>
+  </cl-confirmacion>
+}

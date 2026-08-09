@@ -1,0 +1,252 @@
+:host {
+  display: block;
+}
+
+/* El selector de periodo va en la cabecera, con su etiqueta visible. */
+.periodo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--cl-tinta-suave);
+
+  select {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 0.45rem;
+    background: var(--cl-superficie);
+    color: var(--cl-tinta);
+    font: inherit;
+    font-size: 0.84rem;
+  }
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+/* El KPI enlazado se comporta como tarjeta clicable sin heredar el subrayado. */
+.kpi-enlace {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--cl-radio);
+  transition: transform 0.12s ease;
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--cl-primario-claro);
+    outline-offset: 2px;
+  }
+}
+
+/* La columna principal es más ancha que en una ficha: aquí manda la bandeja. */
+.cl-columnas.anchas {
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+}
+
+.tareas,
+.focos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 0.6rem;
+    background: color-mix(in srgb, var(--cl-fondo) 45%, var(--cl-superficie));
+  }
+
+  .cuerpo {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .titulo {
+    margin: 0 0 0.15rem;
+    font-weight: 620;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.acciones-tarea {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.4rem;
+}
+
+/* El número del foco es el dato, así que lleva el peso visual de la fila. */
+.focos .valor {
+  flex-shrink: 0;
+  min-width: 2.4rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.5rem;
+  background: #eef1f6;
+  color: var(--cl-tinta);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+
+  &.tono-rojo {
+    background: color-mix(in srgb, var(--cl-error) 12%, transparent);
+    color: var(--cl-error);
+  }
+
+  &.tono-ambar {
+    background: color-mix(in srgb, #e08a00 16%, transparent);
+    color: #8a5400;
+  }
+
+  &.tono-verde {
+    background: color-mix(in srgb, var(--cl-exito) 14%, transparent);
+    color: var(--cl-exito);
+  }
+
+  &.tono-azul,
+  &.tono-info {
+    background: color-mix(in srgb, var(--cl-primario-claro) 12%, transparent);
+    color: var(--cl-primario);
+  }
+}
+
+.ver-todas {
+  margin-top: 0.7rem;
+}
+
+/*
+ * Barra apilada: un gap de superficie entre tramos los separa sin necesidad de
+ * un borde, que engordaría los tramos pequeños.
+ */
+.barra {
+  display: flex;
+  gap: 2px;
+  height: 1.35rem;
+  margin-bottom: 0.9rem;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: var(--cl-borde);
+}
+
+.tramo {
+  min-width: 3px;
+}
+
+.leyenda {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.35rem 1.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .punto {
+    width: 0.6rem;
+    height: 0.6rem;
+    flex-shrink: 0;
+    border-radius: 3px;
+  }
+
+  .nombre {
+    flex: 1;
+    min-width: 0;
+  }
+
+  b {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pct {
+    min-width: 2.6rem;
+    text-align: right;
+  }
+}
+
+.senales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+/* Medidor: un ratio contra su límite, con el número como figura principal. */
+.medidor-valor {
+  margin: 0 0 0.4rem;
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--cl-primario);
+  font-variant-numeric: tabular-nums;
+
+  span {
+    margin-left: 0.15rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+.medidor {
+  height: 0.5rem;
+  margin-bottom: 0.9rem;
+  border-radius: 999px;
+  background: var(--cl-borde);
+  overflow: hidden;
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--cl-primario-claro);
+  }
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-right: 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cl-primario-claro) 15%, transparent);
+  color: var(--cl-primario);
+  font-size: 0.65rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.cl-tarjeta + .cl-tarjeta {
+  margin-top: 0;
+}
+
+@media (max-width: 60rem) {
+  .cl-columnas.anchas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

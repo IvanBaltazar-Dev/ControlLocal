@@ -1,0 +1,165 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Oportunidades</p>
+    <h1>Oportunidades comerciales</h1>
+    <p class="sub">
+      Clientes interesados vinculados a una propiedad captada. Los indicadores filtran la lista al
+      pulsarlos.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (puedeOperar()) {
+      <button type="button" class="cl-btn primario" (click)="nueva()">Nueva oportunidad</button>
+    } @else {
+      <span class="solo-lectura">Solo lectura</span>
+    }
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="Total"
+    [valor]="resumen().total"
+    tono="gris"
+    pie="En tu alcance"
+    [clicable]="true"
+    [activa]="!filtros().estado"
+    (pulsar)="cambiarEstado('')"
+  />
+  <cl-kpi
+    etiqueta="Abiertas"
+    [valor]="resumen().abiertas"
+    tono="azul"
+    pie="En seguimiento"
+    [clicable]="true"
+    [activa]="filtros().estado === 'A'"
+    (pulsar)="seleccionarEstado('A')"
+  />
+  <cl-kpi
+    etiqueta="Con solicitud"
+    [valor]="resumen().conSolicitud"
+    tono="info"
+    pie="Expediente en curso"
+    [clicable]="true"
+    [activa]="filtros().estado === 'S'"
+    (pulsar)="seleccionarEstado('S')"
+  />
+  <cl-kpi
+    etiqueta="Cerradas exitosas"
+    [valor]="resumen().exitosas"
+    tono="verde"
+    pie="Alquiler firmado"
+    [clicable]="true"
+    [activa]="filtros().estado === 'F'"
+    (pulsar)="seleccionarEstado('F')"
+  />
+  <cl-kpi
+    etiqueta="No continúan"
+    [valor]="resumen().noContinuan"
+    tono="rojo"
+    pie="Cerradas con motivo"
+    [clicable]="true"
+    [activa]="filtros().estado === 'N'"
+    (pulsar)="seleccionarEstado('N')"
+  />
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por código, captación, dirección o cliente…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todas las etapas"
+    [opciones]="opcionesEstado"
+    [valor]="filtros().estado"
+    (valorChange)="cambiarEstado($event)"
+  />
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando oportunidades…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Oportunidad</th>
+          <th>Cliente</th>
+          <th>Propiedad</th>
+          <th>Agente</th>
+          <th>Etapa</th>
+          <th>Registro</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (o of paginaDatos().items; track o.id) {
+          <tr>
+            <td class="codigo">{{ valor(o.codigoOportunidad) }}</td>
+            <td>
+              <strong>{{ valor(o.clienteNombre) }}</strong>
+              <span class="secundario">{{ valor(o.codigoCaptacion) }}</span>
+            </td>
+            <td>
+              {{ valor(o.direccionLocal) }}
+              <span class="secundario">{{ valor(o.distritoLocal) }}</span>
+            </td>
+            <td>{{ valor(o.agenteNombre) }}</td>
+            <td>
+              <span class="cl-badge" [class]="tonoEstado(o.estado)">
+                {{ etiquetaEstado(o.estado) }}
+              </span>
+              <!-- El motivo explica el estado y solo existe si se cerró. -->
+              @if (o.motivoCierre) {
+                <span class="secundario">{{ o.motivoCierre }}</span>
+              }
+            </td>
+            <td class="fecha">{{ fecha(o.fechaRegistro) }}</td>
+            <td class="acciones-fila">
+              <button type="button" class="cl-btn pequeno" (click)="verSeguimiento(o.id)">
+                Seguimiento
+              </button>
+              <button
+                type="button"
+                class="cl-btn pequeno"
+                [disabled]="!o.idCliente"
+                (click)="verCliente(o.idCliente)"
+              >
+                Cliente
+              </button>
+              <button
+                type="button"
+                class="cl-btn pequeno"
+                [disabled]="!o.codigoCaptacion"
+                (click)="verPropiedad(o.codigoCaptacion)"
+              >
+                Propiedad
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}

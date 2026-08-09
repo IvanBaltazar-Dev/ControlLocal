@@ -1,0 +1,117 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Interacciones</p>
+    <h1>Bitácora comercial</h1>
+    <p class="sub">
+      Historial de contacto separado por lado de la relación: quien busca local y quien lo tiene.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (puedeOperar()) {
+      <button type="button" class="cl-btn primario" (click)="nueva()">Nueva interacción</button>
+    } @else {
+      <span class="solo-lectura">Solo lectura</span>
+    }
+  </div>
+</header>
+
+<nav class="cl-pestanas" role="tablist">
+  @for (pestana of pestanas; track pestana.clave) {
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="filtros().grupo === pestana.clave"
+      [class.activa]="filtros().grupo === pestana.clave"
+      (click)="cambiarGrupo(pestana.clave)"
+    >
+      {{ pestana.etiqueta }}
+    </button>
+  }
+</nav>
+<p class="explicacion">{{ descripcionPestana() }}</p>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por persona, código u observación…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los canales"
+    [opciones]="opcionesCanal"
+    [valor]="filtros().canal"
+    (valorChange)="cambiarCanal($event)"
+  />
+  <cl-filtro-select
+    marcador="Todos los resultados"
+    [opciones]="opcionesResultado()"
+    [valor]="filtros().resultado"
+    (valorChange)="cambiarResultado($event)"
+  />
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando bitácora…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Contexto</th>
+          <th>Persona</th>
+          <th>Canal</th>
+          <th>Resultado</th>
+          <th>Observaciones</th>
+          <th>Agente</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (i of paginaDatos().items; track i.id) {
+          <tr>
+            <td class="fecha">{{ momento(i.fechaHora) }}</td>
+            <td>
+              <span class="cl-badge" [class]="esDePropietario(i) ? 'aviso' : ''">
+                {{ contexto(i.contexto) }}
+              </span>
+              @if (referencia(i) !== '—') {
+                <span class="secundario">{{ referencia(i) }}</span>
+              }
+            </td>
+            <td>
+              <strong>{{ persona(i) }}</strong>
+              <span class="secundario">{{ valor(i.personaTipo) }}</span>
+            </td>
+            <td><span class="cl-badge">{{ canal(i.canalContacto) }}</span></td>
+            <td>{{ resultado(i.resultado) }}</td>
+            <td class="libre">{{ valor(i.observaciones) }}</td>
+            <td>{{ valor(i.agenteNombre) }}</td>
+            <td>
+              <button type="button" class="cl-btn pequeno" (click)="ver(i)">Ver</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}

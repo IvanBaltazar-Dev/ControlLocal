@@ -1,0 +1,81 @@
+<button
+  type="button"
+  class="disparador"
+  (click)="alternar()"
+  [attr.aria-expanded]="abierta()"
+  aria-haspopup="dialog"
+  [attr.aria-label]="
+    total() > 0 ? 'Avisos: ' + total() + ' sin atender' : 'Avisos: ninguno sin atender'
+  "
+>
+  <!-- Campana dibujada, no una fuente de iconos: una dependencia menos. -->
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+    <path
+      d="M12 3a5 5 0 0 0-5 5v3.6L5.4 15h13.2L17 11.6V8a5 5 0 0 0-5-5Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linejoin="round"
+    />
+    <path d="M10 18a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.6" />
+  </svg>
+  @if (total() > 0) {
+    <span class="globo">{{ insignia() }}</span>
+  }
+</button>
+
+@if (abierta()) {
+  <div class="panel" role="dialog" aria-label="Avisos">
+    <header>
+      <h2>Avisos</h2>
+      <button type="button" class="cerrar" (click)="cerrar()" aria-label="Cerrar avisos">×</button>
+    </header>
+
+    @if (error(); as mensaje) {
+      <p class="cl-aviso">{{ mensaje }}</p>
+    }
+
+    @if (cargando() && alertas().length === 0) {
+      <p class="cl-vacio">Cargando avisos…</p>
+    } @else if (alertas().length === 0) {
+      <p class="cl-vacio">Sin avisos sin atender.</p>
+    } @else {
+      <ul>
+        @for (alerta of alertas(); track alerta.id) {
+          <li>
+            <div class="fila">
+              <span class="cl-badge" [class]="tono(alerta.severidad)">{{ alerta.severidad }}</span>
+              <p class="mensaje">{{ alerta.mensaje }}</p>
+            </div>
+            <p class="cl-menudo">
+              <span>{{ cuando(alerta) }}</span>
+              @if (alerta.agenteNombre) {
+                <span aria-hidden="true"> · </span>
+                <span>{{ alerta.agenteNombre }}</span>
+              }
+            </p>
+            <div class="acciones">
+              @if (puedeAbrir(alerta)) {
+                <button type="button" class="cl-btn" (click)="abrir(alerta)">Ver</button>
+              }
+              <button
+                type="button"
+                class="cl-btn primario"
+                (click)="atender(alerta)"
+                [disabled]="atendiendo() === alerta.id"
+              >
+                {{ atendiendo() === alerta.id ? 'Atendiendo…' : 'Atender' }}
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+
+      @if (hayMas()) {
+        <p class="cl-menudo pie">
+          Se muestran {{ alertas().length }} de {{ total() }}; atiende estos para ver el resto.
+        </p>
+      }
+    }
+  </div>
+}

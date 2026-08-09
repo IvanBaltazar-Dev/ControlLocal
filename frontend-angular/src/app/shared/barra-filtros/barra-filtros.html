@@ -1,0 +1,28 @@
+<div class="barra">
+  <input
+    type="search"
+    class="busqueda"
+    [placeholder]="marcador()"
+    [value]="texto()"
+    (input)="alEscribir($event)"
+  />
+
+  <!-- Filtros secundarios de la pantalla (cl-filtro-select y afines). -->
+  <ng-content />
+
+  @if (hayFiltros()) {
+    <button type="button" class="limpiar" (click)="alLimpiar()" title="Limpiar filtros">
+      Limpiar
+    </button>
+  }
+
+  <div class="cola">
+    @if (resultados() !== null) {
+      <span class="contador">
+        {{ resultados() }} resultado{{ resultados() === 1 ? '' : 's' }}
+      </span>
+    }
+    <!-- Acciones de la derecha: exportar, "nuevo", etc. -->
+    <ng-content select="[cola]" />
+  </div>
+</div>

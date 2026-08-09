@@ -1,0 +1,285 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Oportunidades · Seguimiento</p>
+    <h1>{{ valor(oportunidad()?.clienteNombre) }}</h1>
+    <p class="sub">
+      {{ valor(oportunidad()?.codigoOportunidad) }} ·
+      {{ valor(oportunidad()?.direccionLocal) }} ·
+      {{ valor(oportunidad()?.codigoCaptacion) }}
+    </p>
+  </div>
+  <div class="acciones">
+    @if (!puedeOperar()) { <span class="solo-lectura">Solo lectura</span> }
+    @if (oportunidad()) {
+      <button type="button" class="cl-btn" (click)="verCliente()">Bitácora del cliente</button>
+      <button
+        type="button"
+        class="cl-btn"
+        [disabled]="!oportunidad()?.codigoCaptacion"
+        (click)="verPropiedad()"
+      >
+        Resumen de la propiedad
+      </button>
+    }
+    <button type="button" class="cl-btn" (click)="volver()">Volver</button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="!oportunidad() ? error() : null"
+  [vacio]="false"
+  mensajeCarga="Cargando seguimiento…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && oportunidad(); as o) {
+  @if (error()) { <p class="cl-aviso" role="alert">{{ error() }}</p> }
+  @if (mensaje()) { <p class="cl-ok" role="status">{{ mensaje() }}</p> }
+
+  @if (noContinua()) {
+    <p class="alerta-estado mal">
+      <strong>Este cliente no continúa con la propiedad.</strong>
+      {{ o.motivoCierre ? 'Motivo: ' + o.motivoCierre + '.' : '' }}
+      {{ valor(o.observaciones) !== '—' ? o.observaciones : '' }}
+    </p>
+  } @else if (cerradaExitosa()) {
+    <p class="alerta-estado bien">
+      <strong>Trato cerrado.</strong> El contrato de alquiler finalizó esta oportunidad.
+    </p>
+  } @else if (cerradaNoFavorable()) {
+    <p class="alerta-estado mal">
+      <strong>Oportunidad finalizada sin acuerdo.</strong> El expediente de solicitud no prosperó.
+    </p>
+  }
+
+  @if (!noContinua()) {
+    <ol class="etapas">
+      @for (etapa of etapas; track etapa.clave; let i = $index) {
+        <li [class.completado]="etapaCumplida(i)" [class.actual]="etapaEsActual(i)">
+          <span class="punto"></span>
+          <small>Etapa {{ i + 1 }}</small>
+          <strong>{{ etapa.etiqueta }}</strong>
+        </li>
+      }
+    </ol>
+  }
+
+  <section class="cl-resumen">
+    <div>
+      <span>Estado</span>
+      <strong><span class="cl-badge" [class]="tonoEstado()">{{ etiquetaEstado() }}</span></strong>
+    </div>
+    <div><span>Agente responsable</span><strong>{{ valor(o.agenteNombre) }}</strong></div>
+    <div><span>Último contacto</span><strong>{{ momento(ultimoContacto()) }}</strong></div>
+    <div><span>Visitas realizadas</span><strong>{{ visitasRealizadas() }}</strong></div>
+  </section>
+
+  <div class="cl-columnas">
+    <main>
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Cliente y propiedad</h2>
+            <p>Una misma propiedad puede tener varias oportunidades, cada una con su seguimiento.</p>
+          </div>
+        </header>
+        <div class="cl-pares">
+          <div><span>Cliente interesado</span><strong>{{ valor(o.clienteNombre) }}</strong></div>
+          <div><span>Oportunidad</span><strong>{{ valor(o.codigoOportunidad) }}</strong></div>
+          <div><span>Propiedad</span><strong>{{ valor(o.direccionLocal) }}</strong></div>
+          <div><span>Distrito</span><strong>{{ valor(o.distritoLocal) }}</strong></div>
+          <div><span>Captación</span><strong>{{ valor(o.codigoCaptacion) }}</strong></div>
+          <div><span>Registro</span><strong>{{ momento(o.fechaRegistro) }}</strong></div>
+        </div>
+        @if (o.observaciones) { <p class="observaciones">{{ o.observaciones }}</p> }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Interacciones</h2>
+            <p>Conversación registrada sobre esta propiedad concreta.</p>
+          </div>
+          <div class="cabecera-acciones">
+            <span class="cl-badge">{{ interacciones().length }}</span>
+            @if (puedeOperar() && !cerrada()) {
+              <button type="button" class="cl-btn pequeno" (click)="registrarInteraccion()">
+                Registrar
+              </button>
+            }
+          </div>
+        </header>
+
+        @if (errorInteracciones(); as fallo) {
+          <p class="alerta" role="alert">
+            <span>{{ fallo }}</span>
+            <button type="button" class="cl-btn pequeno" (click)="cargarInteracciones()">
+              Reintentar
+            </button>
+          </p>
+        } @else if (interacciones().length === 0) {
+          <p class="cl-vacio">Aún no hay interacciones sobre esta oportunidad.</p>
+        } @else {
+          <div class="cl-tabla-marco">
+            <table class="cl-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Canal</th>
+                  <th>Resultado</th>
+                  <th>Observaciones</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (i of interacciones(); track i.id) {
+                  <tr>
+                    <td class="fecha">{{ momento(i.fechaHora) }}</td>
+                    <td><span class="cl-badge">{{ canal(i.canalContacto) }}</span></td>
+                    <td>{{ resultadoInteraccion(i.resultado) }}</td>
+                    <td class="libre">{{ valor(i.observaciones) }}</td>
+                    <td>
+                      <button type="button" class="cl-btn pequeno" (click)="verInteraccion(i)">
+                        Ver
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Visitas</h2>
+            <p>Agenda de la propiedad con este cliente. El desenlace se registra tras realizarla.</p>
+          </div>
+          <div class="cabecera-acciones">
+            <span class="cl-badge">{{ visitas().length }}</span>
+            @if (puedeOperar() && !cerrada()) {
+              <button type="button" class="cl-btn pequeno" (click)="programarVisita()">
+                Programar
+              </button>
+            }
+          </div>
+        </header>
+
+        @if (errorVisitas(); as fallo) {
+          <p class="alerta" role="alert">
+            <span>{{ fallo }}</span>
+            <button type="button" class="cl-btn pequeno" (click)="cargarVisitas()">Reintentar</button>
+          </p>
+        } @else if (visitas().length === 0) {
+          <p class="cl-vacio">Todavía no hay visitas programadas.</p>
+        } @else {
+          <div class="cl-tabla-marco">
+            <table class="cl-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Hora</th>
+                  <th>Estado</th>
+                  <th>Desenlace</th>
+                  <th>Interés</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (v of visitas(); track v.id) {
+                  <tr>
+                    <td>{{ fecha(v.fechaVisita) }}</td>
+                    <td class="hora">{{ hora(v.horaVisita) }}</td>
+                    <td>
+                      <span class="cl-badge" [class]="tonoVisita(v.estado)">
+                        {{ estadoVisita(v.estado) }}
+                      </span>
+                    </td>
+                    <td>{{ resultadoVisita(v.resultado) }}</td>
+                    <td>{{ v.nivelInteres ? v.nivelInteres + '/5' : '—' }}</td>
+                    <td>
+                      <button type="button" class="cl-btn pequeno" (click)="verVisita(v)">
+                        Gestionar
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    </main>
+
+    <aside>
+      <section class="cl-tarjeta acciones-seguimiento">
+        <header><div><h2>Siguiente acción</h2><p>Solo el agente responsable opera.</p></div></header>
+        @if (puedeOperar() && !cerrada()) {
+          <button type="button" class="cl-btn" (click)="registrarInteraccion()">
+            Registrar interacción
+          </button>
+          <button type="button" class="cl-btn" (click)="programarVisita()">Programar visita</button>
+          <button
+            type="button"
+            class="cl-btn peligro"
+            [disabled]="procesando()"
+            (click)="abrirCierre()"
+          >
+            Marcar sin continuidad
+          </button>
+        } @else if (cerrada()) {
+          <p class="cl-vacio">La oportunidad está cerrada: no admite nuevas acciones.</p>
+        } @else {
+          <p class="cl-vacio">Esta vista es de supervisión.</p>
+        }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header><div><h2>Agenda</h2></div></header>
+        <div class="cl-pares apiladas">
+          <div>
+            <span>Próxima visita</span>
+            <strong>
+              {{ visitaProxima() ? fecha(visitaProxima()?.fechaVisita) + ' · ' + hora(visitaProxima()?.horaVisita) : 'Sin programar' }}
+            </strong>
+          </div>
+          <div><span>Visitas realizadas</span><strong>{{ visitasRealizadas() }}</strong></div>
+          <div><span>Interacciones</span><strong>{{ interacciones().length }}</strong></div>
+        </div>
+        <p class="nota">
+          El cierre favorable <strong>no se registra desde aquí</strong>: lo produce el contrato de
+          alquiler cuando se aprueba la solicitud.
+        </p>
+      </section>
+    </aside>
+  </div>
+}
+
+<cl-confirmacion
+  [abierto]="dialogoCierre()"
+  titulo="Marcar cliente sin continuidad"
+  descripcion="El cliente quedará desvinculado de esta propiedad y la oportunidad se cerrará. No se puede deshacer."
+  tono="rojo"
+  etiquetaConfirmar="Marcar sin continuidad"
+  [ocupado]="procesando()"
+  [bloqueado]="!razon.value"
+  (cerrar)="cerrarDialogo()"
+  (confirmar)="confirmarCierre()"
+>
+  <label class="campo-dialogo">
+    <span>Motivo <b>*</b></span>
+    <select [formControl]="razon">
+      <option value="">— Selecciona un motivo —</option>
+      @for (opcion of opcionesRazon; track opcion.valor) {
+        <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+      }
+    </select>
+  </label>
+  <label class="campo-dialogo">
+    <span>Observaciones</span>
+    <textarea rows="3" [formControl]="observacionesCierre" maxlength="1000"></textarea>
+  </label>
+</cl-confirmacion>

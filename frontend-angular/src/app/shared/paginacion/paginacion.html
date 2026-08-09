@@ -1,0 +1,33 @@
+<div class="paginacion">
+  <span class="rango">Mostrando {{ desde() }}–{{ hasta() }} de {{ total() }} resultados</span>
+
+  <nav class="botones" aria-label="Paginación">
+    <button type="button" [disabled]="actual() === 1" (click)="ir(actual() - 1)" aria-label="Anterior">
+      ‹
+    </button>
+
+    @for (p of paginas(); track $index) {
+      @if (p === null) {
+        <span class="elipsis" aria-hidden="true">…</span>
+      } @else {
+        <button
+          type="button"
+          [class.activa]="p === actual()"
+          [attr.aria-current]="p === actual() ? 'page' : null"
+          (click)="ir(p)"
+        >
+          {{ p }}
+        </button>
+      }
+    }
+
+    <button
+      type="button"
+      [disabled]="actual() === ultima()"
+      (click)="ir(actual() + 1)"
+      aria-label="Siguiente"
+    >
+      ›
+    </button>
+  </nav>
+</div>

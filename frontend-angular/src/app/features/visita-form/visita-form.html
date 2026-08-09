@@ -1,0 +1,145 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Visitas · Nueva</p>
+    <h1>Programar visita</h1>
+    <p class="sub">Agenda la visita del cliente al local de una oportunidad abierta.</p>
+  </div>
+  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+    Cancelar
+  </button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Preparando el formulario…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  @if (!puedeGuardar()) {
+    <p class="aviso" role="status">
+      Programar una visita exige que la oportunidad sea del <strong>propio agente</strong>: el
+      backend lo comprueba directamente, sin alcance de broker.
+    </p>
+  }
+  @if (errorGuardado()) { <p class="alerta" role="alert">{{ errorGuardado() }}</p> }
+
+  <form class="cl-formulario" [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <section class="cl-seccion">
+      <div class="cl-seccion-titulo">
+        <span>1</span>
+        <div>
+          <h2>Oportunidad</h2>
+          <p>Cliente y propiedad sobre los que se agenda la visita.</p>
+        </div>
+      </div>
+
+      @if (oportunidadFija()) {
+        <label class="cl-campo">
+          <span>Oportunidad</span>
+          <input [value]="oportunidadActual() ? descripcion(oportunidadActual()!) : sinDato" disabled />
+          <small>Llegaste desde su seguimiento: la oportunidad ya está fijada.</small>
+        </label>
+      } @else {
+        <div class="busqueda">
+          <label class="cl-campo">
+            <span>Buscar oportunidad abierta</span>
+            <input
+              type="search"
+              [formControl]="busqueda"
+              placeholder="Código, captación, dirección o cliente"
+              (keydown.enter)="$event.preventDefault(); buscar()"
+            />
+          </label>
+          <button type="button" class="cl-btn" [disabled]="buscando()" (click)="buscar()">
+            {{ buscando() ? 'Buscando…' : 'Buscar' }}
+          </button>
+        </div>
+        <label class="cl-campo">
+          <span>Oportunidad <b>*</b></span>
+          <select formControlName="idOportunidad" (change)="seleccionar()">
+            <option [ngValue]="0">— Selecciona una oportunidad —</option>
+            @for (o of oportunidades(); track o.id) {
+              <option [ngValue]="o.id">{{ descripcion(o) }}</option>
+            }
+          </select>
+          <small>
+            Mostrando {{ oportunidades().length }} de {{ totalOportunidades() }} abiertas. Solo
+            aparecen las de tu alcance.
+          </small>
+          @if (invalido('idOportunidad')) {
+            <small class="cl-error-campo">Selecciona una oportunidad.</small>
+          }
+        </label>
+      }
+
+      @if (oportunidadActual(); as o) {
+        <div class="cl-grid tres">
+          <label class="cl-campo"><span>Cliente</span><input [value]="valor(o.clienteNombre)" disabled /></label>
+          <label class="cl-campo"><span>Local</span><input [value]="valor(o.direccionLocal)" disabled /></label>
+          <label class="cl-campo"><span>Distrito</span><input [value]="valor(o.distritoLocal)" disabled /></label>
+        </div>
+      }
+    </section>
+
+    <section class="cl-seccion">
+      <div class="cl-seccion-titulo">
+        <span>2</span>
+        <div>
+          <h2>Fecha y hora</h2>
+          <p>La visita nace <strong>programada</strong>; después podrá reprogramarse.</p>
+        </div>
+      </div>
+      <div class="cl-grid dos">
+        <label class="cl-campo">
+          <span>Fecha <b>*</b></span>
+          <input type="date" formControlName="fechaVisita" />
+          @if (invalido('fechaVisita')) {
+            <small class="cl-error-campo">Indica la fecha de la visita.</small>
+          }
+        </label>
+        <label class="cl-campo">
+          <span>Hora <b>*</b></span>
+          <input type="time" formControlName="horaVisita" />
+          @if (invalido('horaVisita')) {
+            <small class="cl-error-campo">Indica la hora de la visita.</small>
+          }
+        </label>
+      </div>
+    </section>
+
+    <section class="cl-seccion">
+      <div class="cl-seccion-titulo">
+        <span>3</span>
+        <div>
+          <h2>Notas</h2>
+          <p>Contexto para quien acompañe la visita.</p>
+        </div>
+      </div>
+      <label class="cl-campo">
+        <span>Observaciones</span>
+        <textarea
+          rows="4"
+          maxlength="1000"
+          formControlName="observaciones"
+          placeholder="Ej. el propietario abre a partir de las 10:00."
+        ></textarea>
+        <small>
+          Ojo: si más adelante se cancela o se marca como no realizada, el motivo de esa acción
+          <strong>reemplaza</strong> estas observaciones.
+        </small>
+      </label>
+    </section>
+
+    <div class="cl-acciones-formulario">
+      <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+        Cancelar
+      </button>
+      <button type="submit" class="cl-btn primario" [disabled]="guardando() || !puedeGuardar()">
+        {{ guardando() ? 'Programando…' : 'Programar visita' }}
+      </button>
+    </div>
+  </form>
+}

@@ -1,0 +1,145 @@
+The files belonging to this database system will be owned by user "postgres".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "en_US.utf8".
+The default database encoding has accordingly been set to "UTF8".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+fixing permissions on existing directory /var/lib/postgresql/data ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default "max_connections" ... 100
+selecting default "shared_buffers" ... 128MB
+selecting default time zone ... UTC
+creating configuration files ... ok
+running bootstrap script ... ok
+sh: locale: not found
+2026-08-03 07:56:52.941 UTC [36] WARNING:  no usable system locales were found
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+
+
+Success. You can now start the database server using:
+
+    pg_ctl -D /var/lib/postgresql/data -l logfile start
+
+initdb: warning: enabling "trust" authentication for local connections
+initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+waiting for server to start....2026-08-03 07:56:53.692 UTC [42] LOG:  starting PostgreSQL 17.10 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+2026-08-03 07:56:53.700 UTC [42] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-08-03 07:56:53.703 UTC [45] LOG:  database system was shut down at 2026-08-03 07:56:53 UTC
+2026-08-03 07:56:53.711 UTC [42] LOG:  database system is ready to accept connections
+ done
+server started
+CREATE DATABASE
+
+
+/usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+
+waiting for server to shut down....2026-08-03 07:56:53.843 UTC [42] LOG:  received fast shutdown request
+2026-08-03 07:56:53.843 UTC [42] LOG:  aborting any active transactions
+2026-08-03 07:56:53.848 UTC [42] LOG:  background worker "logical replication launcher" (PID 48) exited with exit code 1
+2026-08-03 07:56:53.849 UTC [43] LOG:  shutting down
+2026-08-03 07:56:53.849 UTC [43] LOG:  checkpoint starting: shutdown immediate
+2026-08-03 07:56:53.860 UTC [43] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.011 s, sync=0.001 s, total=0.012 s; sync files=301, longest=0.001 s, average=0.000 s; distance=4266 kB, estimate=4266 kB; lsn=0/191C800, redo lsn=0/191C800
+2026-08-03 07:56:53.869 UTC [42] LOG:  database system is shut down
+ done
+server stopped
+
+PostgreSQL init process complete; ready for start up.
+
+2026-08-03 07:56:53.967 UTC [1] LOG:  starting PostgreSQL 17.10 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+2026-08-03 07:56:53.967 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-08-03 07:56:53.967 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-08-03 07:56:53.975 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-08-03 07:56:53.977 UTC [58] LOG:  database system was shut down at 2026-08-03 07:56:53 UTC
+2026-08-03 07:56:53.983 UTC [1] LOG:  database system is ready to accept connections
+2026-08-03 07:58:11.930 UTC [1] LOG:  received SIGHUP, reloading configuration files
+2026-08-03 07:58:11.934 UTC [1] LOG:  parameter "log_min_duration_statement" changed to "1500"
+2026-08-03 07:58:51.700 UTC [405] LOG:  duration: 35410.713 ms  statement: insert into captacion (codigo_captacion, fecha_captacion, fecha_inicio_encargo, fecha_fin_encargo,
+	                       estado, id_propiedad, id_rol_agente, organizacion_id)
+	select 'CAPD-' || lpad(row_number() over (order by p.id_propiedad)::text, 7, '0')
+	       || case when row_number() over (order by p.id_propiedad) % 4999 = 0 then '-HITOCAP' else '' end,
+	       current_date, current_date, current_date + 180, 'V', p.id_propiedad, 28, 1
+	  from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFD-%'
+2026-08-03 07:59:24.221 UTC [527] LOG:  duration: 32089.646 ms  statement: insert into prospeccion (codigo_prospeccion, estado, id_propiedad, id_rol_agente, organizacion_id)
+	select 'PROD-' || lpad(row_number() over (order by p.id_propiedad)::text, 7, '0')
+	       || case when row_number() over (order by p.id_propiedad) % 4999 = 0 then '-HITOPRO' else '' end,
+	       'P', p.id_propiedad, 28, 1
+	  from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFD-%'
+2026-08-03 07:59:28.219 UTC [56] LOG:  checkpoint starting: wal
+2026-08-03 08:00:07.486 UTC [669] LOG:  duration: 41648.628 ms  statement: insert into oportunidad_comercial (organizacion_id, codigo_oportunidad, estado, id_rol_cliente,
+	                                   id_captacion, id_rol_agente, observaciones, fecha_registro)
+	select 1,
+	       'OPD-' || lpad(n::text, 7, '0') || case when n % 4999 = 0 then '-HITOOP' else '' end,
+	       (array['A','S','N','F','X'])[1 + n % 5],
+	       cli.id_persona_rol, c.id_captacion, 28,
+	       'Carga demanda ' || n, now() - (n || ' minutes')::interval
+	  from (select c.id_captacion, row_number() over (order by c.id_captacion) as n
+	          from captacion c where c.organizacion_id = 1 and c.codigo_captacion like 'CAPD-%') c
+	  -- Los clientes se numeran UNA vez y se emparejan por hash. Con un join
+	  -- lateral ... offset N limit 1 el reparto costaba 100.000 recorridos de la
+	  -- tabla de clientes y la carga del banco se iba a varios minutos.
+	  join (select r.id_persona_rol, (row_number() over (order by r.id_persona_rol) - 1) as k
+	          from persona_rol r join persona p on p.id_persona = r.id_persona
+	         where r.tipo_rol = 'CLIENTE' and p.correo like 'demanda%@perf.test') cli
+	    on cli.k = c.n % 199
+2026-08-03 08:00:37.140 UTC [822] LOG:  duration: 29296.748 ms  statement: insert into visita (organizacion_id, id_oportunidad, id_rol_agente, fecha_visita, hora_visita,
+	                    estado, observaciones)
+	select 1, o.id_oportunidad, 28, current_date + ((n % 60)::int), time '10:00',
+	       (array['P','G','R','N','C'])[1 + n % 5], 'Visita de carga ' || n
+	  from (select o.id_oportunidad, row_number() over (order by o.id_oportunidad) as n
+	          from oportunidad_comercial o
+	         where o.organizacion_id = 1 and o.codigo_oportunidad like 'OPD-%') o
+2026-08-03 08:01:04.069 UTC [929] LOG:  duration: 26573.097 ms  statement: insert into interaccion_comercial (organizacion_id, contexto, id_oportunidad, id_prospeccion,
+	                                   id_captacion, id_rol_cliente, id_rol_agente, canal_contacto,
+	                                   resultado, observaciones, fecha_hora)
+	select 1,
+	       (array['OPORTUNIDAD','CAPTACION','CLIENTE','PROSPECCION'])[1 + n % 4],
+	       case when n % 4 = 0 then o.id_oportunidad end,
+	       case when n % 4 = 3 then pro.id_prospeccion end,
+	       case when n % 4 = 1 then o.id_captacion end,
+	       case when n % 4 = 2 then o.id_rol_cliente end,
+	       28,
+	       (array['L','W','E','P','R','T','O'])[1 + n % 7],
+	       case when n % 4 = 0 then 'INTERESADO' when n % 4 = 1 then 'DOCS_SOLICITADOS'
+	            when n % 4 = 2 then 'SEGUIMIENTO' else 'CONTACTADO' end,
+	       'Contacto de carga ' || n || case when n % 4999 = 0 then ' HITOOBS' else '' end,
+	       now() - (n || ' minutes')::interval
+	  from (select o.id_oportunidad, o.id_captacion, o.id_rol_cliente,
+	               row_number() over (order by o.id_oportunidad) as n
+	          from oportunidad_comercial o
+	         where o.organizacion_id = 1 and o.codigo_oportunidad like 'OPD-%') o
+	  -- Mismo motivo que arriba: prospecciones numeradas una vez y emparejadas
+	  -- por hash, no un lateral con OFFSET por cada una de las 100.000 filas.
+	  join (select p.id_prospeccion, (row_number() over (order by p.id_prospeccion) - 1) as k
+	          from prospeccion p
+	         where p.organizacion_id = 1 and p.codigo_prospeccion like 'PROD-%'
+	         limit 4999) pro on pro.k = o.n % 4999
+2026-08-03 08:03:58.043 UTC [56] LOG:  checkpoint complete: wrote 6503 buffers (39.7%); 0 WAL file(s) added, 0 removed, 33 recycled; write=269.818 s, sync=0.004 s, total=269.825 s; sync files=484, longest=0.001 s, average=0.001 s; distance=534964 kB, estimate=534964 kB; lsn=0/32F074A8, redo lsn=0/22389B50
+2026-08-03 08:09:28.093 UTC [56] LOG:  checkpoint starting: time
+2026-08-03 08:13:58.093 UTC [56] LOG:  checkpoint complete: wrote 11655 buffers (71.1%); 0 WAL file(s) added, 0 removed, 19 recycled; write=269.998 s, sync=0.001 s, total=270.000 s; sync files=53, longest=0.001 s, average=0.001 s; distance=311416 kB, estimate=512610 kB; lsn=0/353A7EC0, redo lsn=0/353A7E30
+2026-08-03 08:16:14.760 UTC [2184] LOG:  duration: 665579.666 ms  statement: delete from interaccion_comercial where observaciones like 'Contacto de carga%';
+	delete from visita where observaciones like 'Visita de carga%';
+	delete from oportunidad_comercial where codigo_oportunidad like 'OPD-%';
+	delete from prospeccion where codigo_prospeccion like 'PROD-%';
+	delete from captacion where codigo_captacion like 'CAPD-%';
+	delete from detalle_local_comercial where id_propiedad in
+	    (select id_propiedad from propiedad where codigo like 'PERFD-%');
+	delete from propiedad where codigo like 'PERFD-%';
+	delete from detalle_cliente where id_persona_rol in
+	    (select r.id_persona_rol from persona_rol r join persona p on p.id_persona = r.id_persona
+	      where p.correo like 'demanda%@perf.test');
+	delete from persona_rol where id_persona in
+	    (select id_persona from persona where correo like 'demanda%@perf.test');
+	delete from persona where correo like 'demanda%@perf.test';
+2026-08-03 08:16:16.273 UTC [1] LOG:  received fast shutdown request
+2026-08-03 08:16:16.273 UTC [1] LOG:  aborting any active transactions
+2026-08-03 08:16:16.279 UTC [1] LOG:  background worker "logical replication launcher" (PID 61) exited with exit code 1
+2026-08-03 08:16:16.311 UTC [56] LOG:  shutting down
+2026-08-03 08:16:16.311 UTC [56] LOG:  checkpoint starting: shutdown immediate
+2026-08-03 08:16:16.345 UTC [4445] FATAL:  the database system is shutting down
+2026-08-03 08:16:16.372 UTC [56] LOG:  checkpoint complete: wrote 4193 buffers (25.6%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.058 s, sync=0.001 s, total=0.061 s; sync files=17, longest=0.001 s, average=0.001 s; distance=32775 kB, estimate=464626 kB; lsn=0/373A9B98, redo lsn=0/373A9B98
+2026-08-03 08:16:16.488 UTC [1] LOG:  database system is shut down

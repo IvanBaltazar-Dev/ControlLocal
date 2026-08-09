@@ -1,0 +1,150 @@
+<div class="escena">
+  <div class="panel">
+    <div class="marca">
+      <span class="marca-logo">CL</span>
+      <div class="marca-texto">
+        <h1>Segundo factor</h1>
+        <p>ControlLocal</p>
+      </div>
+    </div>
+
+    @switch (fase()) {
+      @case ('generando') {
+        @if (errorInicio(); as mensaje) {
+          <div class="alerta" role="alert">{{ mensaje }}</div>
+          <button type="button" (click)="generar()">Reintentar</button>
+          @if (!obligatorio) {
+            <p class="pie">
+              <button type="button" class="enlace" (click)="volver()">Volver a mi perfil</button>
+            </p>
+          }
+        } @else {
+          <p class="intro" role="status">
+            <span class="girando" aria-hidden="true"></span> Preparando tu configuración…
+          </p>
+        }
+      }
+
+      @case ('ya-activo') {
+        <!-- Recargar la pantalla de códigos de respaldo cae aquí: el factor ya
+             quedó activo y los códigos no vuelven a mostrarse. Se dice con
+             claridad en vez de dejar que el enrolamiento falle con un mensaje
+             sobre revocar, que en este momento no explica nada. -->
+        <div class="aviso" role="status">
+          <p><strong>Tu segundo factor ya está activo.</strong></p>
+          <p>
+            Los códigos de respaldo solo se muestran una vez. Si no los guardaste, pídele a tu
+            administrador que revoque el factor para volver a configurarlo.
+          </p>
+        </div>
+        <!-- Se vuelve al perfil en vez de forzar el cierre: si la sesión murió
+             al activar el factor, el 401 llevará al login solo; y si sigue viva
+             —alguien que llegó aquí escribiendo la URL— no hay motivo para
+             echarlo. -->
+        <button type="button" (click)="volver()">Volver a mi perfil</button>
+      }
+
+      @case ('escanear') {
+        @if (obligatorio) {
+          <div class="aviso" role="status">
+            <p><strong>Tu cuenta necesita un segundo factor.</strong></p>
+            <p>Hasta configurarlo, el resto del sistema no está disponible.</p>
+          </div>
+        }
+
+        @if (reemplaza()) {
+          <!-- El secreto no se guarda en el navegador, así que recargar no
+               puede continuar el enrolamiento anterior: empieza otro. Decirlo
+               evita que alguien escanee dos veces y luego no entienda por qué
+               su aplicación da códigos que no valen. -->
+          <div class="aviso aviso-cambio" role="alert">
+            <p><strong>Se generó una nueva configuración MFA.</strong></p>
+            <p>
+              Elimina de tu aplicación autenticadora la configuración anterior y escanea el nuevo
+              código.
+            </p>
+          </div>
+        }
+
+        <ol class="pasos">
+          <li>Abre tu aplicación autenticadora (Google Authenticator, Authy, 1Password…).</li>
+          <li>Escanea este código o escribe la clave a mano.</li>
+          <li>Escribe el código de 6 dígitos que te muestre.</li>
+        </ol>
+
+        <div class="qr">
+          @if (qr(); as imagen) {
+            <img [src]="imagen" alt="Código QR para configurar el segundo factor" width="232" height="232" />
+          } @else {
+            <p>
+              No se pudo dibujar el código QR. Usa la clave manual de abajo: es exactamente lo
+              mismo.
+            </p>
+          }
+        </div>
+
+        <div class="clave">
+          <span class="clave-titulo">Clave manual</span>
+          <code>{{ secretoLegible }}</code>
+          <button type="button" class="enlace" (click)="copiarClave()">
+            {{ copiado() ? 'Copiada' : 'Copiar' }}
+          </button>
+        </div>
+
+        <form [formGroup]="formulario" (ngSubmit)="confirmar()" novalidate>
+          <label for="codigo">Código de 6 dígitos</label>
+          <input
+            id="codigo"
+            type="text"
+            formControlName="codigo"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            placeholder="000000"
+            [class.invalido]="formulario.controls.codigo.touched && formulario.controls.codigo.invalid"
+          />
+
+          @if (errorCodigo(); as mensaje) {
+            <div class="alerta" role="alert">{{ mensaje }}</div>
+          }
+
+          <button type="submit" [disabled]="confirmando()">
+            @if (confirmando()) {
+              <span class="girando" aria-hidden="true"></span> Activando…
+            } @else {
+              Activar segundo factor
+            }
+          </button>
+        </form>
+
+        <p class="pie">
+          <button type="button" class="enlace" (click)="generar()">
+            Generar una configuración nueva
+          </button>
+          @if (!obligatorio) {
+            <span aria-hidden="true"> · </span>
+            <button type="button" class="enlace" (click)="volver()">Volver a mi perfil</button>
+          }
+        </p>
+      }
+
+      @case ('respaldo') {
+        <div class="exito" role="status">
+          <p><strong>Segundo factor activado.</strong></p>
+          <p>Guarda estos códigos de respaldo: son tu forma de entrar si pierdes el teléfono.</p>
+        </div>
+
+        <p class="ayuda">
+          Al continuar se cerrará esta sesión. Entra otra vez con tu contraseña y un código
+          <strong>nuevo</strong> de tu aplicación.
+        </p>
+
+        <cl-codigos-respaldo
+          [codigos]="codigos()"
+          etiquetaContinuar="Continuar e iniciar sesión"
+          (continuar)="terminar()"
+        />
+      }
+    }
+  </div>
+</div>

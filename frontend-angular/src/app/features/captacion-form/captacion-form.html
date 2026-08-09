@@ -1,0 +1,117 @@
+<header class="cabecera">
+  <div>
+    <p class="miga">Proceso · Captaciones · {{ esEdicion() ? 'Editar' : 'Nueva' }}</p>
+    <h1>{{ titulo() }}</h1>
+    <p>
+      {{ esSubsanacion() ? 'Corrige lo observado por el broker y reenvía el expediente.' : 'Registra las condiciones del encargo para enviarlas a revisión.' }}
+    </p>
+  </div>
+  <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Cargando formulario de captación…"
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  @if (esSubsanacion()) {
+    <p class="observacion-broker"><strong>Observación del broker:</strong> {{ valor(captacionOriginal?.observacionRevision) }}</p>
+  }
+  @if (errorGuardado()) { <p class="alerta" role="alert">{{ errorGuardado() }}</p> }
+
+  <form [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <div class="distribucion">
+      <main>
+        <section class="seccion">
+          <div class="seccion-titulo"><span>1</span><div><h2>Local comercial</h2><p>Inmueble asociado a la captación.</p></div></div>
+          @if (!localFijo()) {
+            <div class="busqueda-local">
+              <label class="campo">
+                <span>Buscar local disponible</span>
+                <input type="search" [formControl]="busquedaLocal" placeholder="Código, dirección o distrito" (keydown.enter)="$event.preventDefault(); buscarLocales()" />
+              </label>
+              <button type="button" class="secundario" [disabled]="cargandoLocales()" (click)="buscarLocales()">{{ cargandoLocales() ? 'Buscando…' : 'Buscar' }}</button>
+            </div>
+            <label class="campo">
+              <span>Local <b>*</b></span>
+              <select formControlName="idLocal" (change)="seleccionarLocal()">
+                <option [ngValue]="0">— Selecciona un local —</option>
+                @for (local of locales(); track local.id) {
+                  <option [ngValue]="local.id">{{ valor(local.codigoLocal) }} · {{ valor(local.direccion) }} ({{ valor(local.distrito) }})</option>
+                }
+              </select>
+              <small>Mostrando {{ locales().length }} de {{ totalLocales() }}. Usa la búsqueda si no aparece.</small>
+              @if (invalido('idLocal')) { <small class="mensaje-error">Selecciona un local.</small> }
+            </label>
+          } @else {
+            <label class="campo"><span>Local</span><input [value]="descripcionLocal()" disabled /></label>
+          }
+          <div class="grid tres resumen-local">
+            <label class="campo"><span>Propietario</span><input [value]="valor(localActual()?.propietarioNombre)" disabled /></label>
+            <label class="campo"><span>Área registrada</span><input [value]="areaLocal()" disabled /></label>
+            <label class="campo"><span>Precio referencial</span><input [value]="precioLocal()" disabled /></label>
+            <label class="campo"><span>Distrito</span><input [value]="valor(localActual()?.distrito)" disabled /></label>
+            <label class="campo"><span>Rubro permitido</span><input [value]="valor(localActual()?.rubroPermitido)" disabled /></label>
+          </div>
+        </section>
+
+        <section class="seccion">
+          <div class="seccion-titulo"><span>2</span><div><h2>Condiciones del encargo</h2><p>Alquiler comercial, prioridad y exclusividad.</p></div></div>
+          <div class="grid tres">
+            <label class="campo"><span>Operación</span><input value="Alquiler comercial" disabled /></label>
+            <label class="campo"><span>Urgencia</span><select formControlName="urgencia">@for (nivel of [1, 2, 3, 4, 5]; track nivel) { <option [ngValue]="nivel">{{ nivel }}</option> }</select></label>
+            <label class="campo checkbox"><input type="checkbox" formControlName="exclusividad" /><span>Encargo exclusivo</span></label>
+          </div>
+        </section>
+
+        <section class="seccion">
+          <div class="seccion-titulo"><span>3</span><div><h2>Encargo y comisión</h2><p>Periodo, modalidad económica, moneda e IGV pactados.</p></div></div>
+          <div class="grid dos">
+            <label class="campo"><span>Fecha de captación <b>*</b></span><input type="date" formControlName="fechaCaptacion" /></label>
+            <label class="campo"><span>Modalidad de comisión <b>*</b></span><select formControlName="modalidadComision"><option value="E05">Medio mes de alquiler</option><option value="E1">Un mes de alquiler</option><option value="E15">Un mes y medio de alquiler</option><option value="E2">Dos meses de alquiler</option><option value="P">Porcentaje sobre la renta mensual</option><option value="F">Monto fijo</option><option value="S">Sin comisión</option></select><small>{{ descripcionComision() }}</small></label>
+            <label class="campo"><span>Fecha de inicio del encargo <b>*</b></span><input type="date" formControlName="fechaInicioVigencia" /></label>
+            <label class="campo"><span>Fecha final del encargo <b>*</b></span><input type="date" formControlName="fechaFinVigencia" /></label>
+            @if (requiereValorComision()) {
+              <label class="campo"><span>{{ formulario.controls.modalidadComision.value === 'P' ? 'Porcentaje sobre la renta (%)' : 'Monto fijo' }} <b>*</b></span><input type="number" min="0" step="0.01" formControlName="valorComision" />@if (formulario.hasError('comision')) { <small class="mensaje-error">Ingresa un valor mayor que cero.</small> } @else if (formulario.controls.modalidadComision.value === 'P') { <!-- La convención del negocio: la comisión habitual es "un mes", y eso aquí se escribe 100. Sin decirlo, se teclea 1. --><small class="ayuda">Un mes de alquiler se escribe <strong>100</strong>: es el % sobre la renta mensual.</small> }</label>
+            }
+            @if (formulario.controls.modalidadComision.value === 'F') {
+              <label class="campo"><span>Moneda de la comisión fija <b>*</b></span><select formControlName="monedaComision"><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select></label>
+            }
+            @if (sinComision()) {
+              <label class="campo"><span>Motivo para no cobrar comisión <b>*</b></span><textarea rows="2" maxlength="300" formControlName="motivoSinComision"></textarea>@if (formulario.hasError('comision')) { <small class="mensaje-error">Registra el motivo expreso.</small> }</label>
+            }
+            <label class="campo"><span>Tratamiento del IGV <b>*</b></span><select formControlName="tratamientoIgv"><option value="N">No aplica</option><option value="I">Incluido en la comisión</option><option value="A">Se agrega a la comisión</option></select></label>
+            <label class="campo"><span>Comisión calculada</span><input [value]="importeComision()" disabled /><small>Se calcula con la renta y moneda registradas en el local.</small></label>
+            <label class="campo checkbox"><input type="checkbox" formControlName="comisionConfirmada" /><span>Confirmo que estas condiciones fueron pactadas con el propietario <b>*</b></span>@if (invalido('comisionConfirmada')) { <small class="mensaje-error">Confirma las condiciones antes de enviar.</small> }</label>
+          </div>
+          @if (formulario.hasError('vigencia') && (formulario.dirty || formulario.touched)) { <p class="mensaje-error">La fecha final del encargo debe ser posterior a la fecha inicial.</p> }
+        </section>
+
+        <section class="seccion">
+          <div class="seccion-titulo"><span>4</span><div><h2>Observaciones</h2><p>Notas que revisará el broker.</p></div></div>
+          <label class="campo"><span>Observaciones</span><textarea rows="4" maxlength="2000" formControlName="observaciones"></textarea></label>
+        </section>
+
+        <div class="acciones-formulario">
+          <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
+          <button type="submit" class="primario" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : textoGuardar() }}</button>
+        </div>
+      </main>
+
+      <aside>
+        <h3>Avance del formulario</h3>
+        <ol>
+          <li [class.completo]="pasoLocal()"><span>1</span><div><strong>Local</strong><small>Inmueble asociado</small></div></li>
+          <li [class.completo]="pasoCondiciones()"><span>2</span><div><strong>Condiciones</strong><small>Operación y urgencia</small></div></li>
+          <li [class.completo]="pasoVigencia()"><span>3</span><div><strong>Encargo y comisión</strong><small>Periodo y condición económica</small></div></li>
+          <li class="completo"><span>4</span><div><strong>Observaciones</strong><small>Notas para revisión</small></div></li>
+        </ol>
+        <p class="nota">La captación se registra como <strong>Pendiente de revisión</strong>. El broker podrá aprobarla, observarla o rechazarla.</p>
+      </aside>
+    </div>
+  </form>
+}

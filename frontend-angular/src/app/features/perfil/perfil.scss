@@ -1,0 +1,113 @@
+.identidad {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--cl-borde, #e2e8f0);
+  border-radius: 0.5rem;
+  background: var(--cl-fondo-suave, #f8fafc);
+
+  .dato {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .etiqueta {
+    color: var(--cl-tinta-suave);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.bloque {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--cl-borde, #e2e8f0);
+  border-radius: 0.5rem;
+  max-width: 34rem;
+
+  h2 {
+    margin: 0 0 0.6rem;
+    font-size: 1rem;
+  }
+}
+
+.exito {
+  margin: 0 0 0.6rem;
+  padding: 0.45rem 0.7rem;
+  border-left: 3px solid var(--cl-exito, #15803d);
+  background: var(--cl-exito-suave, #dcfce7);
+  color: var(--cl-exito, #15803d);
+  font-size: 0.85rem;
+}
+
+.cl-btn.subir {
+  display: inline-block;
+  cursor: pointer;
+
+  input[type='file'] {
+    display: none;
+  }
+}
+
+.foto {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Redondo y del tamaño del avatar de la topbar, para que se vea igual que
+   donde de verdad se usa. `overflow: hidden` recorta el <img> de
+   `cl-imagen-segura`, que ocupa el 100% de su hueco. */
+.foto-marco {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 5rem;
+  height: 5rem;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid var(--cl-borde, #e2e8f0);
+  background: var(--cl-fondo-suave, #f8fafc);
+}
+
+.foto-vacia {
+  color: var(--cl-tinta-suave);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.foto-texto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+
+  .nota {
+    margin: 0;
+  }
+}
+
+.nota {
+  color: var(--cl-tinta-suave);
+  font-size: 0.82rem;
+}
+
+// El aviso de códigos por agotarse va dentro del párrafo de estado y no en su
+// propia caja: es una advertencia, no una alarma, y sacarla a un bloque rojo
+// haría pensar que el segundo factor dejó de funcionar.
+.alerta-inline {
+  color: var(--cl-error);
+  font-weight: 600;
+}
+
+.acciones-mfa {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}

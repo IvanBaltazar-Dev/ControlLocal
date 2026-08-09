@@ -1,0 +1,29 @@
+/* Solo lo propio de la bitácora: cabecera, tabla, badge, botón y la marca de
+   solo lectura son globales (`styles.scss`). */
+
+:host { display: block; }
+
+/* Las dos conversaciones del negocio. No es un filtro por contexto: PROPIETARIO
+   agrupa prospección y captación, y "lado cliente" es su complemento. */
+
+.explicacion {
+  margin: 0 0 0.8rem;
+  color: var(--cl-tinta-suave);
+  font-size: 0.78rem;
+}
+
+.cl-tabla {
+  td strong,
+  .secundario { display: block; }
+
+  .secundario {
+    margin-top: 0.15rem;
+    color: var(--cl-tinta-suave);
+    font-size: 0.75rem;
+  }
+
+  .fecha { color: var(--cl-tinta-suave); font-size: 0.78rem; white-space: nowrap; }
+
+  /* La observación es texto libre: la única columna que envuelve. */
+  .libre { max-width: 22rem; white-space: normal; color: var(--cl-tinta-suave); }
+}

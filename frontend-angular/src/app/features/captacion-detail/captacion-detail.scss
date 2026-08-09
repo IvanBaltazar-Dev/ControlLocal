@@ -1,0 +1,15 @@
+:host { display: block; }
+.peligro { border-color: var(--cl-error); color: var(--cl-error); }
+.observacion-broker { padding: 0.75rem 0.9rem; border-radius: 9px; background: #fff7e6; color: #8a5400; font-size: 0.84rem; }
+.observaciones { margin: 0.9rem 0 0; padding: 0.75rem; border-radius: 8px; background: var(--cl-fondo); color: var(--cl-tinta-suave); font-size: 0.84rem; }
+.origenes { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.7rem; }
+.origen { display: grid; gap: 0.25rem; padding: 0.8rem; border: 1px solid var(--cl-borde); border-radius: 9px; background: white; color: var(--cl-tinta); text-align: left; cursor: pointer; }
+.origen span { color: var(--cl-tinta-suave); font-size: 0.75rem; }
+.estado-flujo ol { display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+.estado-flujo li { display: flex; gap: 0.55rem; align-items: center; color: var(--cl-tinta-suave); font-size: 0.82rem; }
+.estado-flujo li span { width: 0.7rem; height: 0.7rem; border: 2px solid var(--cl-borde); border-radius: 50%; }
+.estado-flujo li.completo span { border-color: var(--cl-exito); background: var(--cl-exito); }
+.estado-flujo li.actual { color: var(--cl-tinta); font-weight: 650; }
+.estado-flujo li.actual span { border-color: var(--cl-acento); background: var(--cl-acento); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cl-acento) 20%, transparent); }
+.campo-dialogo { display: grid; gap: 0.35rem; color: var(--cl-tinta-suave); font-size: 0.8rem; font-weight: 650; }
+.campo-dialogo textarea { width: 100%; padding: 0.6rem; border: 1px solid var(--cl-borde); border-radius: 8px; font: inherit; }

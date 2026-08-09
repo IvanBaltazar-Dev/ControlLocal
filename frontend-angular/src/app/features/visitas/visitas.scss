@@ -1,0 +1,112 @@
+/* Solo lo propio de la agenda: cabecera, tarjeta, tabla, badge, botón, rejilla
+   y la marca de solo lectura son globales (`styles.scss`). */
+
+:host { display: block; }
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.agenda {
+  margin-bottom: 1rem;
+}
+
+.linea-agenda {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 9px;
+    background: var(--cl-fondo);
+  }
+
+  .cuando strong,
+  .quien strong { display: block; font-size: 0.84rem; }
+  .cuando span,
+  .quien span { display: block; margin-top: 0.1rem; color: var(--cl-tinta-suave); font-size: 0.74rem; }
+  .cuando span { font-variant-numeric: tabular-nums; }
+}
+
+.cl-tabla {
+  td strong,
+  .secundario { display: block; }
+
+  .secundario {
+    margin-top: 0.15rem;
+    color: var(--cl-tinta-suave);
+    font-size: 0.75rem;
+    white-space: normal;
+  }
+
+  .hora { font-variant-numeric: tabular-nums; }
+
+  .acciones-fila {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+}
+
+/* Campos dentro del diálogo de acción. Van aquí y no en el vocabulario global
+   porque el diálogo tiene su propia densidad: es una decisión, no un alta. */
+.campo-dialogo {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.7rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+
+  b { color: var(--cl-error); }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+    resize: vertical;
+  }
+}
+
+.desenlace { display: block; }
+
+.explicacion {
+  margin: 0.2rem 0 0.6rem;
+  color: var(--cl-tinta-suave);
+  font-size: 0.8rem;
+  line-height: 1.45;
+
+  &.aviso {
+    padding: 0.55rem 0.7rem;
+    border-radius: 8px;
+    background: #fff7e6;
+    color: #8a5400;
+  }
+}
+
+.alerta {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cl-error) 8%, white);
+  color: var(--cl-error);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 46rem) {
+  .linea-agenda li { grid-template-columns: minmax(0, 1fr); }
+}

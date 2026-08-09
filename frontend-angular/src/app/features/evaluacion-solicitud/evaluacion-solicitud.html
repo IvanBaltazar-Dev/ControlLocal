@@ -1,0 +1,291 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Cierre · Solicitudes por revisar · Evaluación</p>
+    <h1>Evaluar {{ valor(solicitud()?.codigoSolicitud) }}</h1>
+    <p class="sub">
+      Revisa las condiciones y el expediente, y registra una decisión clara para el agente.
+    </p>
+  </div>
+  <div class="acciones">
+    <button type="button" class="cl-btn" (click)="volver()">Volver a la cola</button>
+    <button type="button" class="cl-btn" (click)="verExpediente()">Expediente</button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando la solicitud…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && solicitud(); as s) {
+  @if (!puedeDecidir()) {
+    <p class="banner info" role="status">
+      Solo el <strong>broker</strong> que supervisa al agente responsable (o un administrador)
+      registra la evaluación. Esta vista es de consulta.
+    </p>
+  }
+  @if (errorAccion()) { <p class="cl-aviso" role="alert">{{ errorAccion() }}</p> }
+  @if (aviso()) { <p class="cl-ok" role="status">{{ aviso() }}</p> }
+
+  <div class="cl-columnas">
+    <div>
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Condiciones ofertadas</h2>
+            <p>Es lo que se aprueba: el contrato las hereda tal cual al cerrar.</p>
+          </div>
+          <span class="cl-badge">{{ etiquetaEstado(s.estado) }}</span>
+        </header>
+        <div class="cl-pares">
+          <div><span>Operación</span><strong>{{ valor(s.codigoOportunidad) }}</strong></div>
+          <div><span>Cliente</span><strong>{{ valor(s.clienteNombre) }}</strong></div>
+          <div><span>Agente</span><strong>{{ valor(s.agenteNombre) }}</strong></div>
+          <div><span>Local</span><strong>{{ valor(s.direccionLocal) }}</strong></div>
+          <div><span>Distrito</span><strong>{{ valor(s.distritoLocal) }}</strong></div>
+          <div><span>Renta propuesta</span><strong>{{ monto(s.montoPropuesto, s.moneda) }}</strong></div>
+          <div><span>Plazo</span><strong>{{ plazo(s) }}</strong></div>
+          <div><span>Inicio</span><strong>{{ fecha(s.fechaInicio) }}</strong></div>
+          <div><span>Forma de pago</span><strong>{{ etiquetaFormaPago(s.formaPago) }}</strong></div>
+          <div><span>Garantía</span><strong>{{ meses(s.mesesGarantia) }}</strong></div>
+          <div><span>Adelanto</span><strong>{{ meses(s.mesesAdelanto) }}</strong></div>
+          <div><span>Vigencia de la oferta</span><strong>{{ fecha(s.fechaVigenciaOferta) }}</strong></div>
+        </div>
+        @if (s.observaciones) {
+          <p class="descripcion">{{ s.observaciones }}</p>
+        }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Documentos</h2>
+            <p>Valida u observa uno a uno. Observar exige decir qué corregir.</p>
+          </div>
+          <span class="cl-badge" [class.bien]="observados().length === 0">
+            {{ s.documentosEntregados ?? 0 }}/{{ s.documentosRequeridos ?? 0 }} entregados
+          </span>
+        </header>
+
+        @if (documentos().length === 0) {
+          <p class="cl-vacio">El agente todavía no cargó ningún documento.</p>
+        } @else {
+          @if (puedeDecidir() && sinRevisar().length > 0) {
+            <p class="banner atencion">
+              Quedan <strong>{{ sinRevisar().length }}</strong> documento(s) cargados sin revisar.
+              <button
+                type="button"
+                class="cl-btn pequeno"
+                [disabled]="procesando()"
+                (click)="validarTodos()"
+              >
+                Validar todos
+              </button>
+            </p>
+          }
+          <div class="cl-tabla-marco">
+            <table class="cl-tabla">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Archivo</th>
+                  <th>Estado</th>
+                  <th>Entregado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (d of documentos(); track d.id) {
+                  <tr>
+                    <td><strong>{{ nombreTipo(d) }}</strong></td>
+                    <td class="cl-menudo">{{ valor(d.nombreArchivo) }}</td>
+                    <td>
+                      <span class="cl-badge" [class]="tonoDocumento(d)">
+                        {{ etiquetaDocumento(d) }}
+                      </span>
+                      @if (d.estado === 'O' && d.observaciones) {
+                        <p class="observacion">{{ d.observaciones }}</p>
+                      }
+                    </td>
+                    <td class="cl-menudo">{{ momento(d.fechaEntrega) }}</td>
+                    <td class="acciones-fila">
+                      @if (d.rutaArchivo) {
+                        <button type="button" class="cl-btn pequeno" (click)="abrir(d)">Ver</button>
+                      }
+                      @if (puedeDecidir() && d.rutaArchivo) {
+                        <button
+                          type="button"
+                          class="cl-btn pequeno"
+                          [disabled]="procesando()"
+                          (click)="validar(d)"
+                        >
+                          Validar
+                        </button>
+                        <button
+                          type="button"
+                          class="cl-btn pequeno"
+                          [disabled]="procesando()"
+                          (click)="pedirObservacionDocumento(d)"
+                        >
+                          Observar
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      @if (documentoAbierto(); as doc) {
+        <section class="cl-tarjeta">
+          <header>
+            <h2>{{ nombreTipo(doc) }}</h2>
+            <button type="button" class="cl-btn pequeno" (click)="cerrarVisor()">Cerrar</button>
+          </header>
+          <cl-visor-documento
+            [clave]="doc.rutaArchivo ?? null"
+            [nombreArchivo]="doc.nombreArchivo ?? 'documento'"
+          />
+        </section>
+      }
+
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Historial de evaluaciones</h2>
+            <p>Cada decisión previa sobre esta solicitud.</p>
+          </div>
+          <span class="cl-badge">{{ historial().length }}</span>
+        </header>
+        @if (historial().length === 0) {
+          <p class="cl-vacio">Todavía no hay evaluaciones registradas.</p>
+        } @else {
+          <ul class="historial">
+            @for (e of historial(); track e.id) {
+              <li>
+                <div class="linea-historial">
+                  <span class="cl-badge">{{ etiquetaResultado(e.resultado) }}</span>
+                  <strong>{{ etiquetaTipoEvaluacion(e.tipoEvaluacion) }}</strong>
+                  <span class="cl-menudo">{{ momento(e.fechaEvaluacion) }}</span>
+                </div>
+                @if (e.observaciones) { <p class="cl-menudo">{{ e.observaciones }}</p> }
+                @if (e.brokerNombre) { <p class="cl-menudo">Broker: {{ e.brokerNombre }}</p> }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+
+    <aside>
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Decisión</h2>
+            <p>El tipo lo deriva el resultado: no se elige.</p>
+          </div>
+        </header>
+
+        @if (bloqueaAprobar()) {
+          <p class="banner atencion">
+            Hay <strong>{{ observados().length }}</strong> documento(s) observado(s) sin resolver.
+            Valídalos si ya están bien, u observa la solicitud para devolverla al agente.
+          </p>
+        }
+
+        <div class="decisiones">
+          <button
+            type="button"
+            class="cl-btn primario"
+            [disabled]="!puedeDecidir() || procesando() || bloqueaAprobar()"
+            (click)="pedirDecision('A')"
+          >
+            Aprobar solicitud
+          </button>
+          <button
+            type="button"
+            class="cl-btn"
+            [disabled]="!puedeDecidir() || procesando()"
+            (click)="pedirDecision('O')"
+          >
+            Observar y devolver
+          </button>
+          <button
+            type="button"
+            class="cl-btn peligro"
+            [disabled]="!puedeDecidir() || procesando()"
+            (click)="pedirDecision('R')"
+          >
+            Rechazar
+          </button>
+        </div>
+        <p class="cl-menudo">
+          Aprobar y rechazar son <strong>finales</strong>: solo cabe una evaluación final por
+          solicitud. Observar la devuelve al agente para que subsane y la reenvíe.
+        </p>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Decisión sobre la solicitud. El motivo es obligatorio en observar y
+       rechazar, y el diálogo lo bloquea en vez de dejar que lo diga el 400. -->
+  <cl-confirmacion
+    [abierto]="decision() !== null"
+    [titulo]="tituloDecision()"
+    [descripcion]="descripcionDecision()"
+    [tono]="tonoDecision()"
+    etiquetaConfirmar="Registrar evaluación"
+    [ocupado]="procesando()"
+    [bloqueado]="confirmacionBloqueada()"
+    (confirmar)="confirmarDecision()"
+    (cerrar)="cancelarDecision()"
+  >
+    <label class="cl-campo">
+      <span>
+        {{ decision() === 'A' ? 'Nota para el agente (opcional)' : 'Motivo' }}
+        @if (decision() !== 'A') { <b>*</b> }
+      </span>
+      <textarea
+        rows="3"
+        maxlength="2000"
+        [formControl]="observaciones"
+        placeholder="Explica la decisión con el detalle que el agente necesita."
+      ></textarea>
+      @if (faltaMotivo()) {
+        <small class="cl-error-campo">Las observaciones son obligatorias al observar o rechazar.</small>
+      }
+    </label>
+  </cl-confirmacion>
+
+  <!-- Observar UN documento: nota obligatoria, igual que en la solicitud. -->
+  <cl-confirmacion
+    [abierto]="documentoAObservar() !== null"
+    titulo="Observar documento"
+    descripcion="El agente tendrá que volver a cargarlo. Indica qué está mal."
+    tono="ambar"
+    etiquetaConfirmar="Observar documento"
+    [ocupado]="procesando()"
+    [bloqueado]="notaVacia"
+    (confirmar)="confirmarObservacionDocumento()"
+    (cerrar)="cancelarObservacionDocumento()"
+  >
+    <label class="cl-campo">
+      <span>Observación <b>*</b></span>
+      <textarea
+        rows="3"
+        maxlength="2000"
+        [formControl]="notaDocumento"
+        placeholder="Ej. El documento está vencido / ilegible / no corresponde."
+      ></textarea>
+      @if (notaVacia) {
+        <small class="cl-error-campo">La observación del documento es obligatoria.</small>
+      }
+    </label>
+  </cl-confirmacion>
+}

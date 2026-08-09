@@ -1,0 +1,209 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">
+      <button type="button" class="enlace" (click)="volver()">Agentes</button> · Ficha
+    </p>
+    <h1>{{ texto(agente()?.nombre) }}</h1>
+    <p class="sub">{{ texto(agente()?.codigoAgente) }} · {{ documento() }}</p>
+  </div>
+  <div class="acciones">
+    @if (puedeEditar() && ficha()) {
+      <button type="button" class="cl-btn" (click)="editar()">Editar datos</button>
+      <!-- Esta ficha es el expediente COMERCIAL y se identifica por el id del
+           rol; las operaciones de acceso hablan de la persona, y el contrato
+           congelado no publica ese id aquí. Se enlaza al gobierno de accesos
+           en vez de duplicar la acción con un identificador equivocado. -->
+      <a class="cl-btn" routerLink="/seguridad">Gestionar acceso</a>
+    }
+  </div>
+</header>
+
+@if (fueraDeAlcance()) {
+  <p class="aviso-alcance" role="status">
+    Este agente no está en tu equipo. Solo puedes abrir la ficha de los agentes que supervisas;
+    el administrador ve todos.
+  </p>
+}
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando ficha del agente…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && !fueraDeAlcance() && ficha(); as datos) {
+  <section class="identidad">
+    <div class="dato">
+      <span class="etiqueta">Zona</span>
+      <span>{{ texto(agente()?.zona) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Teléfono</span>
+      <span>{{ texto(agente()?.telefono) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Correo</span>
+      <span>{{ texto(agente()?.correo) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Usuario</span>
+      <span>{{ texto(agente()?.usuario) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Ingreso</span>
+      <span>{{ texto(agente()?.fechaIngreso) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Estado</span>
+      <span class="cl-pastilla" [class.activa]="activo()">
+        {{ activo() ? 'Activo' : 'Inactivo' }}
+      </span>
+      <span class="secundario">{{ operativo() }}</span>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>Supervisión vigente</h2>
+    @if (datos.supervision; as supervision) {
+      <p class="supervisor">
+        <button type="button" class="enlace" (click)="verBroker()">
+          {{ texto(supervision.brokerNombre) }}
+        </button>
+        <span class="secundario">
+          {{ texto(supervision.codigoBroker) }} · desde
+          {{ texto(supervision.fechaAsignacion) }}
+        </span>
+      </p>
+      <p class="nota">{{ texto(supervision.motivo) }}</p>
+    } @else {
+      <p class="nota">
+        Ahora mismo <strong>ningún broker lo supervisa</strong>. Sin supervisor no puede enviar
+        solicitudes a evaluación; se asigna desde <strong>Asignaciones</strong>.
+      </p>
+    }
+  </section>
+
+  <section class="bloque">
+    <h2>Actividad comercial</h2>
+    <p class="nota">
+      Repartida por estado y contada en la base sobre <strong>todo</strong> su trabajo, no sobre
+      una página.
+    </p>
+
+    <div class="maquinas">
+      <div class="maquina">
+        <h3>Captaciones <span class="contador">{{ totalCaptaciones() }}</span></h3>
+        @if (captaciones().length === 0) {
+          <p class="vacio">Sin captaciones registradas.</p>
+        } @else {
+          <ul>
+            @for (conteo of captaciones(); track conteo.estado) {
+              <li><span>{{ conteo.descripcion }}</span><b>{{ conteo.total }}</b></li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="maquina">
+        <h3>Oportunidades <span class="contador">{{ totalOportunidades() }}</span></h3>
+        @if (oportunidades().length === 0) {
+          <p class="vacio">Sin oportunidades registradas.</p>
+        } @else {
+          <ul>
+            @for (conteo of oportunidades(); track conteo.estado) {
+              <li><span>{{ conteo.descripcion }}</span><b>{{ conteo.total }}</b></li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="maquina">
+        <h3>Solicitudes <span class="contador">{{ totalSolicitudes() }}</span></h3>
+        @if (solicitudes().length === 0) {
+          <p class="vacio">Sin solicitudes registradas.</p>
+        } @else {
+          <ul>
+            @for (conteo of solicitudes(); track conteo.estado) {
+              <li><span>{{ conteo.descripcion }}</span><b>{{ conteo.total }}</b></li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <div class="bloque-cabecera">
+      <h2>Alquileres cerrados <span class="contador">{{ datos.cierres }}</span></h2>
+      @if (datos.cierres > 0) {
+        <button type="button" class="cl-btn menor" (click)="verCierres()">Ver todos</button>
+      }
+    </div>
+    <p class="nota">
+      Atribuidos a este agente <strong>cuando se cerró cada alquiler</strong>. Si después cambió
+      de equipo, sus cierres siguen siendo suyos: la ficha no se reescribe al reorganizar el
+      organigrama.
+    </p>
+
+    @if (ultimosCierres().length === 0) {
+      <p class="vacio">Todavía no tiene alquileres cerrados.</p>
+    } @else {
+      <div class="tabla-envoltorio">
+        <table class="cl-tabla">
+          <thead>
+            <tr>
+              <th scope="col">Solicitud</th>
+              <th scope="col">Local</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Renta</th>
+              <th scope="col">Cierre</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (cierre of ultimosCierres(); track cierre.idContrato) {
+              <tr>
+                <td>{{ texto(cierre.codigoSolicitud) }}</td>
+                <td>
+                  <span>{{ texto(cierre.direccionLocal) }}</span>
+                  <span class="secundario">{{ texto(cierre.distrito) }}</span>
+                </td>
+                <td>{{ texto(cierre.clienteNombre) }}</td>
+                <td>
+                  {{ cierre.moneda }} {{ cierre.rentaContractual }}
+                </td>
+                <td>{{ texto(cierre.fechaCierre) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  <section class="bloque">
+    <h2>Comisiones</h2>
+    <p class="nota">
+      <strong>Generado, cobrado y pagado son tres cosas distintas</strong> y por eso van
+      separados: lo pactado no es lo que entró en caja, y lo que le toca al agente no es lo que
+      ya se le pagó. Cada moneda va por su cuenta; PEN y USD nunca se suman.
+    </p>
+
+    <div class="dinero">
+      @for (bloque of dinero(); track bloque.etiqueta) {
+        <div class="tarjeta" [class]="bloque.tono">
+          <span class="etiqueta">{{ bloque.etiqueta }}</span>
+          @if (vacio(bloque)) {
+            <span class="monto">—</span>
+          } @else {
+            @for (importe of bloque.importes; track importe.moneda) {
+              <span class="monto">{{ this.importe(importe) }}</span>
+            }
+          }
+          <span class="explicacion">{{ bloque.explicacion }}</span>
+        </div>
+      }
+    </div>
+  </section>
+}

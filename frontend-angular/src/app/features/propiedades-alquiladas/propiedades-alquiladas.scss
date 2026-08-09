@@ -1,0 +1,18 @@
+/* Solo lo propio: cabecera, tabla, badge y botón son globales (`styles.scss`). */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cl-tabla {
+  .destacado {
+    font-weight: 600;
+  }
+
+  tbody tr:hover td {
+    background: color-mix(in srgb, var(--cl-primario) 3%, transparent);
+  }
+}

@@ -1,0 +1,98 @@
+<div class="escena">
+  <div class="panel">
+    <div class="marca">
+      <span class="marca-logo">CL</span>
+      <div class="marca-texto">
+        <h1>ControlLocal</h1>
+        <p>Gestión comercial de locales</p>
+      </div>
+    </div>
+
+    @if (aviso(); as mensaje) {
+      <div class="nota" role="status">{{ mensaje }}</div>
+    }
+
+    @if (desafio()) {
+      <!-- Segundo paso. La contraseña ya se validó: aquí solo falta el código,
+           y por eso el formulario anterior desaparece en vez de quedar a medias. -->
+      <p class="intro">
+        Escribe el código de tu aplicación autenticadora. También sirve uno de tus códigos de
+        respaldo.
+      </p>
+
+      <form [formGroup]="formularioCodigo" (ngSubmit)="verificar()" novalidate>
+        <label for="codigo">Código de verificación</label>
+        <input
+          id="codigo"
+          type="text"
+          formControlName="codigo"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          autofocus
+          placeholder="000000"
+          [class.invalido]="
+            formularioCodigo.controls.codigo.touched && formularioCodigo.controls.codigo.invalid
+          "
+        />
+
+        @if (error(); as mensaje) {
+          <div class="alerta" role="alert">{{ mensaje }}</div>
+        }
+
+        <button type="submit" [disabled]="cargando()">
+          @if (cargando()) {
+            <span class="girando" aria-hidden="true"></span> Verificando…
+          } @else {
+            Verificar
+          }
+        </button>
+      </form>
+
+      <p class="pie">
+        <button type="button" class="enlace" (click)="cancelarCodigo()">
+          Usar otra cuenta
+        </button>
+      </p>
+    } @else {
+      <form [formGroup]="formulario" (ngSubmit)="ingresar()" novalidate>
+        <label for="usuario">Usuario</label>
+        <input
+          id="usuario"
+          type="text"
+          formControlName="usuario"
+          autocomplete="username"
+          placeholder="tu usuario"
+          [class.invalido]="formulario.controls.usuario.touched && formulario.controls.usuario.invalid"
+        />
+
+        <label for="contrasena">Contraseña</label>
+        <input
+          id="contrasena"
+          type="password"
+          formControlName="contrasena"
+          autocomplete="current-password"
+          placeholder="••••••••"
+          [class.invalido]="formulario.controls.contrasena.touched && formulario.controls.contrasena.invalid"
+        />
+
+        @if (error(); as mensaje) {
+          <div class="alerta" role="alert">{{ mensaje }}</div>
+        }
+
+        <button type="submit" [disabled]="cargando()">
+          @if (cargando()) {
+            <span class="girando" aria-hidden="true"></span> Ingresando…
+          } @else {
+            Iniciar sesión
+          }
+        </button>
+      </form>
+
+      <p class="pie">
+        <a routerLink="/recuperar">¿Olvidaste tu contraseña?</a>
+      </p>
+    }
+
+    <p class="pie">Plataforma inmobiliaria · backend v2</p>
+  </div>
+</div>

@@ -1,0 +1,70 @@
+﻿
+== Entorno E2E aislado 20260803082255-4820 ==
+Base: controllocal_e2e_20260803082255_4820
+powershell :  Network controllocal-e2e-20260803082255-4820_default Creating 
+En línea: 1 Carácter: 454
++ ... lyContinue; powershell -NoProfile -ExecutionPolicy Bypass -File D:\in ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Network contro...fault Creating :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Network controllocal-e2e-20260803082255-4820_default Created 
+ Container controllocal-postgres-e2e-20260803082255-4820 Creating 
+ Container controllocal-postgres-e2e-20260803082255-4820 Created 
+ Container controllocal-api-e2e-20260803082255-4820 Creating 
+ Container controllocal-api-e2e-20260803082255-4820 Created 
+ Container controllocal-postgres-e2e-20260803082255-4820 Starting 
+ Container controllocal-postgres-e2e-20260803082255-4820 Started 
+ Container controllocal-postgres-e2e-20260803082255-4820 Waiting 
+ Container controllocal-postgres-e2e-20260803082255-4820 Healthy 
+ Container controllocal-api-e2e-20260803082255-4820 Starting 
+ Container controllocal-api-e2e-20260803082255-4820 Started 
+ Container controllocal-api-e2e-20260803082255-4820 Waiting 
+ Container controllocal-postgres-e2e-20260803082255-4820 Waiting 
+ Container controllocal-api-e2e-20260803082255-4820 Healthy 
+ Container controllocal-postgres-e2e-20260803082255-4820 Healthy 
+
+== Suite diagnostico-transporte-largo / corrida 20260803082255-4820 ==
+
+== 900 s de /salud, una vez por segundo, por los dos caminos a la vez ==
+
+== Resultado: ventana 08:23:33 -> 08:38:47 UTC ==
+
+Camino                           N p50 p99 Peor Sobre500 Sobre1500
+------                           - --- --- ---- -------- ---------
+W  Windows -> puerto publicado 900  23  82 2074        4         4
+
+
+
+-- parones de W (>= 500 ms sobre un trabajo de ~20 ms) --
+
+  N Utc        Ms
+  - ---        --
+200 08:26:54 2074
+400 08:30:17 2042
+600 08:33:40 2074
+800 08:37:04 2065
+
+
+
+-- parones de D (>= 500 ms sobre un trabajo de ~0 ms) --
+   ninguno
+
+-- coincidencias en el tiempo --
+   hubo parones en W y NINGUNO en D: el paron lo pone el camino Windows<->contenedor
+
+-- pausas de la JVM en la ventana --
+   55 pausas; la mas larga 59.5 ms
+
+===== transporte largo medido =====
+ Container controllocal-api-e2e-20260803082255-4820 Stopping 
+ Container controllocal-api-e2e-20260803082255-4820 Stopped 
+ Container controllocal-api-e2e-20260803082255-4820 Removing 
+ Container controllocal-api-e2e-20260803082255-4820 Removed 
+ Container controllocal-postgres-e2e-20260803082255-4820 Stopping 
+ Container controllocal-postgres-e2e-20260803082255-4820 Stopped 
+ Container controllocal-postgres-e2e-20260803082255-4820 Removing 
+ Container controllocal-postgres-e2e-20260803082255-4820 Removed 
+ Network controllocal-e2e-20260803082255-4820_default Removing 
+ Network controllocal-e2e-20260803082255-4820_default Removed 
+Entorno 20260803082255-4820 eliminado: sin contenedores, volumenes, red ni filas E2E residuales.

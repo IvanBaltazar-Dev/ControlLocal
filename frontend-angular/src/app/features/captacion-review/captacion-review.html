@@ -1,0 +1,80 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Captaciones por revisar · Decisión</p>
+    <h1>Revisar {{ valor(captacion()?.codigoCaptacion) }}</h1>
+    <p class="sub">{{ valor(captacion()?.direccionLocal) }} · enviada por {{ valor(captacion()?.agenteNombre) }}</p>
+  </div>
+  <div class="acciones"><button type="button" class="cl-btn" (click)="volver()">Volver a la bandeja</button></div>
+</header>
+
+<cl-estado-listado [cargando]="cargando()" [error]="errorCarga()" [vacio]="false" mensajeCarga="Preparando expediente para revisión…" (reintentar)="reintentar()" />
+
+@if (!cargando() && captacion(); as c) {
+  @if (errorAccion()) { <p class="cl-aviso" role="alert">{{ errorAccion() }}</p> }
+  @if (mensaje()) { <p class="cl-ok" role="status">{{ mensaje() }}</p> }
+
+  <section class="cl-resumen">
+    <div><span>Estado</span><strong><span class="cl-badge" [class]="tonoEstado()">{{ etiquetaEstado() }}</span></strong></div>
+    <div><span>Propietario</span><strong>{{ valor(c.propietarioNombre) }}</strong></div>
+    <div><span>Agente responsable</span><strong>{{ valor(c.agenteNombre) }}</strong></div>
+    <div><span>Comisión</span><strong>{{ comision() }}</strong></div>
+  </section>
+
+  <div class="cl-columnas">
+    <main>
+      <section class="cl-tarjeta">
+        <header><div><h2>Resumen de la captación</h2><p>Condiciones declaradas por el agente.</p></div><button type="button" class="cl-btn pequeno" (click)="expediente()">Abrir expediente</button></header>
+        <div class="cl-pares">
+          <div><span>Dirección</span><strong>{{ valor(c.direccionLocal) }}</strong></div>
+          <div><span>Distrito</span><strong>{{ valor(c.distritoLocal) }}</strong></div>
+          <div><span>Área</span><strong>{{ area(c.areaM2) }}</strong></div>
+          <div><span>Rubro</span><strong>{{ valor(c.rubro) }}</strong></div>
+          <div><span>Fecha de captación</span><strong>{{ fecha(c.fechaCaptacion) }}</strong></div>
+          <div><span>Periodo del encargo</span><strong>{{ fecha(c.fechaInicioVigencia) }} – {{ fecha(c.fechaFinVigencia) }}</strong></div>
+          <div><span>Operación</span><strong>Alquiler comercial</strong></div>
+          <div><span>Urgencia</span><strong>{{ c.urgencia ? c.urgencia + ' / 5' : '—' }}</strong></div>
+          <div><span>Exclusividad</span><strong>{{ exclusivo(c.exclusividad) }}</strong></div>
+          <div><span>Renta referencial</span><strong>{{ precio(local()?.precioReferencial, local()?.monedaReferencial) }}</strong></div>
+          <div><span>Comisión calculada</span><strong>{{ importeComision() }}</strong></div>
+          <div><span>Tratamiento del IGV</span><strong>{{ c.tratamientoIgv === 'I' ? 'Incluido' : c.tratamientoIgv === 'A' ? 'Adicional' : 'No aplica' }}</strong></div>
+        </div>
+        <p class="observaciones"><strong>Observaciones del agente:</strong> {{ valor(c.observaciones) }}</p>
+        @if (c.observacionRevision) { <p class="observacion-previa"><strong>Última observación del broker:</strong> {{ c.observacionRevision }}</p> }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header><div><h2>Origen de la gestión</h2><p>Local y prospección que sustentan el expediente.</p></div></header>
+        <div class="origenes">
+          <button type="button" class="origen" [disabled]="!c.idLocal" (click)="verLocal()"><strong>Datos del local</strong><span>{{ valor(local()?.codigoLocal) }} · {{ valor(local()?.direccion) }}</span></button>
+          <button type="button" class="origen" [disabled]="!prospeccion()" (click)="verProspeccion()"><strong>Seguimiento de prospección</strong><span>{{ valor(prospeccion()?.codigoProspeccion) }} · {{ resultadoPropuesta(prospeccion()?.resultadoPropuesta) }}</span></button>
+        </div>
+      </section>
+    </main>
+
+    <aside>
+      <section class="cl-tarjeta panel-decision">
+        <header><div><h2>Decisión del broker</h2><p>La máquina cambia solo al confirmar.</p></div></header>
+        @if (revisable()) {
+          <button type="button" class="cl-btn aprobar" [disabled]="procesando()" (click)="abrirDecision('A')">Aprobar captación</button>
+          <button type="button" class="cl-btn observar" [disabled]="procesando()" (click)="abrirDecision('O')">Observar y devolver</button>
+          <button type="button" class="cl-btn rechazar" [disabled]="procesando()" (click)="abrirDecision('R')">Rechazar captación</button>
+          <button type="button" class="cl-btn" [disabled]="procesando()" (click)="abrirReasignacion()">Reasignar agente</button>
+        } @else {
+          <p class="cl-vacio">La revisión ya fue registrada. Consulta el expediente para continuar.</p>
+        }
+      </section>
+      <section class="cl-tarjeta"><header><div><h2>Trazabilidad</h2><p>Datos de la revisión actual.</p></div></header><div class="cl-pares apiladas"><div><span>ID interno</span><strong>{{ c.id }}</strong></div><div><span>Fecha de revisión</span><strong>{{ fecha(c.fechaRevision) }}</strong></div><div><span>Broker revisor</span><strong>{{ c.idBrokerRevisor || 'Pendiente' }}</strong></div></div></section>
+    </aside>
+  </div>
+}
+
+<cl-confirmacion [abierto]="decision() !== null" [titulo]="tituloDecision()" [descripcion]="descripcionDecision()" [tono]="tonoDecision()" [etiquetaConfirmar]="etiquetaConfirmar()" [ocupado]="procesando()" [bloqueado]="decisionBloqueada()" (cerrar)="cerrarDecision()" (confirmar)="confirmarDecision()">
+  <label class="campo-dialogo"><span>{{ decision() === 'A' ? 'Nota opcional' : 'Motivo *' }}</span><textarea rows="4" maxlength="1000" [formControl]="observacion"></textarea></label>
+</cl-confirmacion>
+
+<cl-confirmacion [abierto]="dialogoReasignar()" titulo="Reasignar captación" descripcion="Selecciona al agente que continuará el expediente. La reasignación no cambia el estado." tono="azul" etiquetaConfirmar="Reasignar" [ocupado]="procesando()" [bloqueado]="agenteNuevo.value <= 0 || !motivoReasignacion.value.trim()" (cerrar)="cerrarReasignacion()" (confirmar)="confirmarReasignacion()">
+  <div class="campos-dialogo">
+    <label class="campo-dialogo"><span>Nuevo agente *</span><select [formControl]="agenteNuevo"><option [ngValue]="0">Selecciona un agente</option>@for (agente of agentesDestino(); track agente.id) { <option [ngValue]="agente.id">{{ agente.nombre }}</option> }</select></label>
+    <label class="campo-dialogo"><span>Motivo *</span><textarea rows="3" maxlength="1000" [formControl]="motivoReasignacion"></textarea></label>
+  </div>
+</cl-confirmacion>

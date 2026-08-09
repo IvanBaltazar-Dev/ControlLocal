@@ -1,0 +1,202 @@
+.identidad {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--cl-borde, #e2e8f0);
+  border-radius: 0.5rem;
+  background: var(--cl-fondo-suave, #f8fafc);
+
+  .dato {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .etiqueta {
+    color: var(--cl-tinta-suave);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.enlace {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cl-acento, #2563eb);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.equipo {
+  margin-top: 1.5rem;
+
+  .equipo-cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.4rem;
+
+    h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+  }
+
+  .contador {
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: var(--cl-fondo-suave, #f1f5f9);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .nota,
+  .vacio {
+    color: var(--cl-tinta-suave);
+    font-size: 0.82rem;
+  }
+}
+
+.cl-badge.admin {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--cl-acento-suave, #dbeafe);
+  color: var(--cl-acento, #2563eb);
+  font-size: 0.7rem;
+  vertical-align: middle;
+}
+
+.aviso-alcance {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--cl-aviso, #b45309);
+  background: var(--cl-aviso-suave, #fef3c7);
+  color: var(--cl-aviso, #b45309);
+  font-size: 0.85rem;
+}
+
+.bloque {
+  margin-top: 1.5rem;
+
+  h2 {
+    margin: 0 0 0.3rem;
+    font-size: 1rem;
+  }
+
+  .bloque-cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+}
+
+.maquinas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+
+  .maquina {
+    padding: 0.8rem;
+    border: 1px solid var(--cl-borde, #e2e8f0);
+    border-radius: 0.5rem;
+
+    h3 {
+      margin: 0 0 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.2rem 0;
+      font-size: 0.85rem;
+
+      b {
+        font-variant-numeric: tabular-nums;
+      }
+    }
+  }
+}
+
+// Seis tarjetas y no un total: juntar generado, cobrado y pagado en un numero
+// escondería justo lo que hay que ver, que es la diferencia entre los tres.
+.dinero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+
+  .tarjeta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.8rem;
+    border: 1px solid var(--cl-borde, #e2e8f0);
+    border-left-width: 3px;
+    border-radius: 0.5rem;
+
+    &.ok { border-left-color: var(--cl-exito, #15803d); }
+    &.aviso { border-left-color: var(--cl-aviso, #b45309); }
+    &.neutro { border-left-color: var(--cl-borde-fuerte, #94a3b8); }
+
+    .etiqueta {
+      color: var(--cl-tinta-suave);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .monto {
+      font-size: 1.05rem;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .explicacion {
+      color: var(--cl-tinta-suave);
+      font-size: 0.74rem;
+    }
+  }
+}
+
+.supervisor {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.95rem;
+}
+
+.vacio {
+  color: var(--cl-tinta-suave);
+  font-size: 0.85rem;
+}
+
+.atajos {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 0;
+}
+
+.cl-tabla tr.bloqueado {
+  opacity: 0.65;
+}

@@ -1,0 +1,24 @@
+.filtro {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--cl-borde);
+  border-radius: 9px;
+  background: var(--cl-fondo);
+  color: var(--cl-tinta);
+  font-size: 0.88rem;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: var(--cl-primario-claro);
+    background: var(--cl-superficie);
+  }
+}
+
+/* Un filtro con valor elegido se marca, para que se vea de un vistazo por qué
+   la lista está recortada (la queja recurrente del legado). */
+.filtro:not(:has(option[value='']:checked)) {
+  border-color: var(--cl-primario-claro);
+  background: var(--cl-superficie);
+  color: var(--cl-primario);
+  font-weight: 600;
+}

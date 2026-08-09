@@ -1,0 +1,166 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Personas</p>
+    <h1>Propietarios</h1>
+    <p class="sub">
+      Personas y empresas dueñas de los locales de la cartera. El número de locales se cuenta
+      según tu alcance.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (puedeEditar()) {
+      <button type="button" class="cl-btn primario" (click)="nuevo()">Registrar propietario</button>
+    } @else {
+      <span class="cl-badge">Solo lectura</span>
+    }
+  </div>
+</header>
+
+@if (avisoAlcance(); as aviso) {
+  <p class="aviso-alcance">{{ aviso }}</p>
+}
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="En cartera"
+    [valor]="resumen().total"
+    tono="azul"
+    pie="Todos los de tu alcance"
+    [clicable]="true"
+    [activa]="!filtros().estado"
+    (pulsar)="cambiarEstado('')"
+  />
+  <cl-kpi
+    etiqueta="Activos"
+    [valor]="resumen().activos"
+    tono="verde"
+    pie="En gestión"
+    [clicable]="true"
+    [activa]="filtros().estado === 'A'"
+    (pulsar)="cambiarEstado(filtros().estado === 'A' ? '' : 'A')"
+  />
+  <cl-kpi
+    etiqueta="Inactivos"
+    [valor]="resumen().inactivos"
+    tono="gris"
+    pie="Dados de baja"
+    [clicable]="true"
+    [activa]="filtros().estado === 'I'"
+    (pulsar)="cambiarEstado(filtros().estado === 'I' ? '' : 'I')"
+  />
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="buscar($event)"
+  marcador="Buscar por nombre, documento o correo…"
+  [resultados]="total()"
+  [hayFiltros]="hayFiltros()"
+  [debounceMs]="300"
+  (limpiar)="limpiarFiltros()"
+/>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && filas().length === 0"
+  mensajeCarga="Cargando propietarios…"
+  [mensajeVacio]="
+    hayFiltros()
+      ? 'Ningún propietario de tu alcance coincide con la búsqueda.'
+      : 'No hay propietarios en tu alcance.'
+  "
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && !error() && filas().length > 0) {
+  <div class="tabla-envoltorio">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th scope="col">Propietario</th>
+          <th scope="col">Documento</th>
+          <th scope="col">Contacto</th>
+          <th scope="col" class="num">Locales</th>
+          <th scope="col">Estado</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (propietario of filas(); track propietario.id) {
+          <tr>
+            <td>
+              <button type="button" class="enlace" (click)="abrir(propietario)">
+                {{ texto(propietario.nombre) }}
+              </button>
+              <span class="secundario">{{ tipoPersona(propietario.tipoPersona) }}</span>
+            </td>
+            <td>{{ documento(propietario) }}</td>
+            <td>
+              <span>{{ texto(propietario.telefono) }}</span>
+              <span class="secundario">{{ texto(propietario.correo) }}</span>
+            </td>
+            <td class="num">{{ propietario.cantidadLocales }}</td>
+            <td>
+              <span class="cl-pastilla" [class.activa]="activo(propietario)">
+                {{ activo(propietario) ? 'Activo' : 'Inactivo' }}
+              </span>
+            </td>
+            <td class="acciones-fila">
+              @if (puedeEditar()) {
+                <button type="button" class="cl-btn menor" (click)="editar(propietario)">
+                  Editar
+                </button>
+                @if (activo(propietario)) {
+                  <button
+                    type="button"
+                    class="cl-btn menor peligro"
+                    [disabled]="guardando()"
+                    (click)="pedirBaja(propietario)"
+                  >
+                    Dar de baja
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="cl-btn menor"
+                    [disabled]="guardando()"
+                    (click)="reactivar(propietario)"
+                  >
+                    Reactivar
+                  </button>
+                }
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (total() > porPagina) {
+    <cl-paginacion
+      [total]="total()"
+      [tamano]="porPagina"
+      [pagina]="pagina()"
+      (paginaChange)="irAPagina($event)"
+    />
+  }
+}
+
+@if (aDesactivar(); as propietario) {
+  <cl-confirmacion
+    [abierto]="true"
+    titulo="Dar de baja al propietario"
+    etiquetaConfirmar="Dar de baja"
+    [descripcion]="
+      'El propietario ' +
+      texto(propietario.nombre) +
+      ' quedará inactivo. Es una baja lógica: no se borra su historia comercial ni sus locales, y puedes reactivarlo después.'
+    "
+    tono="rojo"
+    [ocupado]="guardando()"
+    (confirmar)="confirmarBaja()"
+    (cerrar)="cancelarBaja()"
+  />
+}

@@ -1,0 +1,202 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión</p>
+    <h1>Mi perfil</h1>
+    <p class="sub">
+      Tus datos de sesión, tu contraseña y tu segundo factor. El nombre y el correo no se editan
+      desde aquí: el contrato actual no expone esa operación.
+    </p>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando tu perfil…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && perfil(); as datos) {
+  <section class="identidad">
+    <div class="dato">
+      <span class="etiqueta">Nombre</span>
+      <span>{{ texto(datos.nombre) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Correo</span>
+      <span>{{ texto(datos.correo) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Rol de sesión</span>
+      <span>{{ rol() }}</span>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>Teléfono</h2>
+    @if (errorTelefono()) { <p class="alerta" role="alert">{{ errorTelefono() }}</p> }
+    @if (exitoTelefono()) { <p class="exito" role="status">{{ exitoTelefono() }}</p> }
+
+    <form [formGroup]="formulario" (ngSubmit)="guardarTelefono()" novalidate>
+      <label class="campo">
+        <span>Teléfono de contacto <b>*</b></span>
+        <input type="tel" formControlName="telefono" maxlength="20" placeholder="+51 999 888 777" />
+        @if (telefonoInvalido) {
+          <small class="mensaje-error">
+            Ingresa un teléfono válido de entre 6 y 15 dígitos. Se cuentan solo los números, así
+            que los espacios y el prefijo no estorban.
+          </small>
+        }
+      </label>
+      <div class="acciones-formulario">
+        <button type="submit" class="primario" [disabled]="guardando()">
+          {{ guardando() ? 'Guardando…' : 'Guardar teléfono' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="bloque">
+    <h2>Foto</h2>
+    @if (errorFoto()) { <p class="alerta" role="alert">{{ errorFoto() }}</p> }
+    @if (exitoFoto()) { <p class="exito" role="status">{{ exitoFoto() }}</p> }
+
+    <!-- La foto se ENSEÑA, no se describe. Antes esto decía "Ya tienes una foto
+         cargada" y no había forma de ver cuál: se subía a ciegas y solo se
+         comprobaba el resultado volviendo a subir otra. -->
+    <div class="foto">
+      <div class="foto-marco">
+        @if (datos.fotoClave; as clave) {
+          <cl-imagen-segura [clave]="clave" alt="Tu foto de perfil" />
+        } @else {
+          <span class="foto-vacia" aria-hidden="true">{{ iniciales() }}</span>
+        }
+      </div>
+      <div class="foto-texto">
+        <p class="nota">
+          PNG o JPG, hasta 5 MB.
+          @if (!datos.fotoClave) {
+            Mientras no cargues ninguna se usan tus iniciales.
+          }
+        </p>
+        <label class="cl-btn subir">
+          {{ subiendo() ? 'Subiendo…' : datos.fotoClave ? 'Cambiar imagen' : 'Elegir imagen' }}
+          <input
+            type="file"
+            accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+            [disabled]="subiendo()"
+            (change)="elegirFoto($event)"
+          />
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- El cambio de contraseña vive FUERA del shell (§4.2): la misma pantalla
+       sirve para el cambio voluntario y para el obligatorio de una contraseña
+       temporal, y ese segundo caso llega con la sesión capada, sin poder
+       pintar el armazón. Aquí solo se enlaza. -->
+  <section class="bloque">
+    <h2>Contraseña</h2>
+    <p class="nota">
+      Al cambiarla se cierran <strong>todas</strong> las sesiones de tu cuenta, incluida esta.
+    </p>
+    <a class="cl-btn" routerLink="/cambiar-contrasena">Cambiar mi contraseña</a>
+  </section>
+
+  <!-- Igual que la contraseña: el enrolamiento vive fuera del shell porque la
+       misma pantalla sirve al caso voluntario y al obligatorio, y ese llega con
+       la sesión capada. Aquí se dice el estado y se ofrecen las dos acciones
+       que SÍ se pueden hacer desde dentro.
+
+       El secreto vigente y el QR anterior NO se vuelven a mostrar nunca: solo
+       salen del servidor durante el enrolamiento y no hay endpoint que los
+       relea. Reemplazar el autenticador significa enrolar otro, no reenseñar
+       el que ya existe. -->
+  <section class="bloque">
+    <h2>Segundo factor</h2>
+    @if (estadoMfa(); as mfa) {
+      @if (mfa.activo) {
+        <p class="nota">
+          <strong>Activo.</strong> Te quedan <strong>{{ mfa.codigosDisponibles }}</strong> códigos
+          de respaldo.
+          @if (mfa.codigosPorAgotarse) {
+            <span class="alerta-inline">Se están agotando: conviene regenerarlos.</span>
+          }
+        </p>
+
+        @if (codigosNuevos(); as codigos) {
+          <p class="nota">
+            <strong>Códigos regenerados.</strong> Los anteriores dejaron de valer, usados o no. Tu
+            sesión sigue abierta: regenerar códigos no cambia cómo entras.
+          </p>
+          <cl-codigos-respaldo
+            [codigos]="codigos"
+            etiquetaContinuar="Listo"
+            (continuar)="cerrarCodigosNuevos()"
+          />
+        } @else {
+          <div class="acciones-mfa">
+            <button type="button" class="cl-btn" (click)="abrirAccionMfa('regenerar')">
+              Regenerar códigos de respaldo
+            </button>
+            <button type="button" class="cl-btn" (click)="abrirAccionMfa('reemplazar')">
+              Reemplazar autenticador
+            </button>
+          </div>
+        }
+      } @else {
+        <p class="nota">
+          Sin configurar. Añade un código de tu teléfono al entrar; si tu cuenta gobierna la
+          corredora, es obligatorio.
+        </p>
+        <a class="cl-btn" routerLink="/enrolar-mfa">Configurar segundo factor</a>
+      }
+    }
+  </section>
+
+  <!-- Un solo cuadro para las dos acciones: piden exactamente lo mismo
+       (contraseña + código vigente) y lo que cambia es la consecuencia. -->
+  <cl-confirmacion
+    [abierto]="accionMfa() !== null"
+    [titulo]="
+      accionMfa() === 'regenerar' ? 'Regenerar códigos de respaldo' : 'Reemplazar autenticador'
+    "
+    [descripcion]="
+      accionMfa() === 'regenerar'
+        ? 'Los ocho códigos actuales dejarán de valer, los hayas usado o no. Tu sesión seguirá abierta.'
+        : 'Se revocará tu segundo factor y se cerrarán todas tus sesiones. Tendrás que iniciar sesión y configurar el autenticador nuevo antes de poder operar.'
+    "
+    [tono]="accionMfa() === 'regenerar' ? 'azul' : 'ambar'"
+    [etiquetaConfirmar]="accionMfa() === 'regenerar' ? 'Regenerar' : 'Revocar y reemplazar'"
+    [ocupado]="ocupadoMfa()"
+    [bloqueado]="reautenticacionIncompleta"
+    (confirmar)="confirmarAccionMfa()"
+    (cerrar)="cerrarAccionMfa()"
+  >
+    <form [formGroup]="reautenticacion" novalidate>
+      <p class="nota">
+        Confirma que eres tú: una sesión abierta no basta para tocar el segundo factor.
+      </p>
+      <label class="campo">
+        <span>Contraseña actual <b>*</b></span>
+        <input type="password" formControlName="contrasena" autocomplete="current-password" />
+      </label>
+      <label class="campo">
+        <span>Código de tu aplicación <b>*</b></span>
+        <input
+          type="text"
+          formControlName="codigo"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="6"
+          placeholder="000000"
+        />
+      </label>
+      @if (errorMfa(); as mensaje) {
+        <p class="alerta" role="alert">{{ mensaje }}</p>
+      }
+    </form>
+  </cl-confirmacion>
+}

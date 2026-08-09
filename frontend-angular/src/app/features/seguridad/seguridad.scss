@@ -1,0 +1,136 @@
+.bloque {
+  margin-top: 1.5rem;
+
+  h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+  }
+}
+
+.nota {
+  margin: 0 0 0.8rem;
+  color: var(--cl-tinta-suave);
+  font-size: 0.84rem;
+}
+
+.exito {
+  margin: 0.75rem 0 0;
+  padding: 0.55rem 0.8rem;
+  border-left: 3px solid var(--cl-exito, #15803d);
+  background: var(--cl-exito-suave, #dcfce7);
+  color: var(--cl-exito, #15803d);
+  font-size: 0.86rem;
+}
+
+// La tabla scrollea DENTRO de su envoltorio: sin esto, en pantallas estrechas
+// el desbordamiento lo hereda el body y toda la página se mueve en horizontal.
+.tabla-envoltorio {
+  overflow-x: auto;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.87rem;
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--cl-borde);
+    white-space: nowrap;
+  }
+
+  th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+.celda-accion {
+  text-align: right;
+}
+
+.vacio {
+  color: var(--cl-tinta-suave);
+  font-style: italic;
+}
+
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.avisos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(12rem, auto) 1fr auto;
+    gap: 0.2rem 0.8rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 8px;
+    background: rgba(21, 90, 117, 0.05);
+    border-left: 3px solid var(--cl-primario-claro);
+    font-size: 0.85rem;
+  }
+
+  // Un intento fallido de reautenticación no es ruido: es la señal de que
+  // alguien está probando llaves.
+  li.fallo {
+    background: rgba(192, 57, 43, 0.07);
+    border-left-color: var(--cl-error);
+  }
+}
+
+.aviso-tipo {
+  font-weight: 600;
+}
+
+.aviso-quien,
+.aviso-motivo,
+.aviso-fecha {
+  color: var(--cl-tinta-suave);
+}
+
+.aviso-motivo {
+  grid-column: 1 / -1;
+  font-style: italic;
+}
+
+.aviso-fecha {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+}
+
+.destinatario {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+
+.ayuda {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--cl-tinta-suave);
+  font-size: 0.78rem;
+}
+
+.alerta {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(192, 57, 43, 0.09);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  color: var(--cl-error);
+  font-size: 0.85rem;
+}

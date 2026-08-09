@@ -1,0 +1,41 @@
+/* Solo lo propio: el armazón del formulario es global (`styles.scss`, `cl-`). */
+
+:host { display: block; }
+
+.busqueda {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+  margin: 0.8rem 0 0.7rem;
+}
+
+.aviso {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cl-primario-claro) 9%, white);
+  color: var(--cl-primario-claro);
+  font-size: 0.84rem;
+}
+
+.alerta {
+  margin: 0 0 0.9rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--cl-error) 25%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cl-error) 8%, white);
+  color: var(--cl-error);
+  font-size: 0.84rem;
+}
+
+.nota {
+  margin: 0.9rem 0 0;
+  color: var(--cl-tinta-suave);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 46rem) {
+  .busqueda { grid-template-columns: minmax(0, 1fr); }
+}

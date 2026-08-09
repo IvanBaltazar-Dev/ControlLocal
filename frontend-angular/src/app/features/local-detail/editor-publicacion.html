@@ -1,0 +1,87 @@
+@if (abierto()) {
+  <div class="fondo" (click)="alCerrar()" (keydown.escape)="alCerrar()" tabindex="-1">
+    <!-- stopPropagation: un clic dentro del cuadro no debe cerrarlo. -->
+    <div
+      class="cuadro"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="esEdicion() ? 'Editar publicación' : 'Publicar local'"
+      (click)="$event.stopPropagation()"
+    >
+      <h2>{{ esEdicion() ? 'Editar publicación' : 'Publicar local' }}</h2>
+      <p class="descripcion">
+        Difunde el local en un canal. Se conservan canal, URL y renta para poder
+        atribuir una oportunidad a su anuncio de origen.
+      </p>
+
+      <form [formGroup]="formulario" (ngSubmit)="guardar()">
+        <div class="rejilla">
+          <label>
+            <span>Canal <em aria-hidden="true">*</em></span>
+            <select formControlName="canal">
+              @for (canal of canales; track canal.valor) {
+                <option [value]="canal.valor">{{ canal.etiqueta }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Moneda <em aria-hidden="true">*</em></span>
+            <select formControlName="moneda">
+              <option value="" disabled>Selecciona la moneda</option>
+              <option value="PEN">Soles (PEN)</option>
+              <option value="USD">Dólares (USD)</option>
+            </select>
+            @if (invalido('moneda')) {
+              <small class="fallo">Selecciona PEN o USD.</small>
+            }
+          </label>
+        </div>
+
+        <label>
+          <span>Renta publicada por mes <em aria-hidden="true">*</em></span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            formControlName="rentaPublicada"
+            [attr.aria-invalid]="invalido('rentaPublicada')"
+          />
+          @if (invalido('rentaPublicada')) {
+            <small class="fallo">
+              Indica la renta publicada del anuncio; debe ser un importe de 0 o más.
+            </small>
+          }
+        </label>
+
+        <label>
+          <span>Título del anuncio</span>
+          <input formControlName="tituloAnuncio" placeholder="Opcional" maxlength="200" />
+        </label>
+
+        <label>
+          <span>URL del anuncio</span>
+          <input
+            type="url"
+            formControlName="urlPublicacion"
+            placeholder="https://…"
+            maxlength="500"
+          />
+        </label>
+
+        @if (error(); as texto) {
+          <p class="error" role="alert">{{ texto }}</p>
+        }
+
+        <footer>
+          <button type="button" class="cancelar" [disabled]="guardando()" (click)="alCerrar()">
+            Cancelar
+          </button>
+          <button type="submit" class="confirmar" [disabled]="guardando()">
+            {{ guardando() ? 'Guardando…' : esEdicion() ? 'Guardar cambios' : 'Publicar' }}
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+}

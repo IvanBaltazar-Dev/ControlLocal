@@ -1,0 +1,176 @@
+.marco {
+  display: grid;
+  grid-template-columns: 15.5rem 1fr;
+  min-height: 100dvh;
+}
+
+.lateral {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #0e3a4c 0%, #0a2a38 100%);
+  color: #d7e2e8;
+  padding: 1.1rem 0.9rem;
+
+  .marca {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.25rem 0.5rem 1rem;
+
+    &-logo {
+      display: grid;
+      place-items: center;
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--cl-acento);
+      font-weight: 800;
+      font-size: 0.9rem;
+    }
+
+    &-nombre {
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+  }
+
+  nav {
+    display: grid;
+    gap: 0.15rem;
+    margin-top: 0.5rem;
+
+    a {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 9px;
+      font-size: 0.92rem;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    a:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    a.activo {
+      background: rgba(217, 164, 65, 0.14);
+      color: #fff;
+
+      .punto {
+        background: var(--cl-acento);
+      }
+    }
+
+    .punto {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.35);
+      flex: none;
+    }
+
+    .seccion {
+      margin: 1rem 0.65rem 0.3rem;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.45);
+    }
+  }
+
+  .version {
+    margin-top: auto;
+    padding: 0.75rem 0.65rem 0.2rem;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.principal {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.5rem;
+  background: var(--cl-superficie);
+  border-bottom: 1px solid var(--cl-borde);
+
+  .titulo {
+    font-weight: 700;
+    color: var(--cl-primario);
+  }
+}
+
+.usuario {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 2.3rem;
+    height: 2.3rem;
+    border-radius: 50%;
+    background: var(--cl-primario);
+    color: var(--cl-acento);
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex: none;
+  }
+
+  /* Con foto: mismo círculo, pero recortando la imagen en vez de centrar
+     texto. Doble clase para ganarle al `:host { width: 100% }` de
+     `cl-imagen-segura`, que por especificidad empata con una clase suelta.
+     `overflow: hidden` es lo que hace que el borde redondeado recorte el
+     <img> de dentro. */
+  .avatar.avatar-foto {
+    display: block;
+    width: 2.3rem;
+    height: 2.3rem;
+    overflow: hidden;
+  }
+
+  .datos {
+    display: grid;
+    line-height: 1.2;
+
+    .nombre {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .rol {
+      font-size: 0.75rem;
+      color: var(--cl-tinta-suave);
+    }
+  }
+
+  .salir {
+    border: 1px solid var(--cl-borde);
+    background: transparent;
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    color: var(--cl-tinta-suave);
+    transition: border-color 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      border-color: var(--cl-error);
+      color: var(--cl-error);
+    }
+  }
+}
+
+.contenido {
+  padding: 1.5rem;
+  flex: 1;
+}

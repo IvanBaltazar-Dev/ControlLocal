@@ -1,0 +1,152 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Captaciones</p>
+    <h1>Bandeja de captaciones</h1>
+    <p class="sub">{{ subtitulo() }}</p>
+  </div>
+  <div class="acciones">
+    @if (puedeRegistrar()) {
+      <button type="button" class="cl-btn primario" (click)="nueva()">
+        Nueva captación
+      </button>
+    } @else {
+      <span class="cl-badge">Solo lectura</span>
+    }
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi etiqueta="Total" [valor]="metricas().total" tono="gris" pie="En tu alcance" />
+  <cl-kpi
+    etiqueta="Por revisar"
+    [valor]="metricas().pendientes"
+    tono="ambar"
+    pie="Pendientes del broker"
+    [clicable]="true"
+    [activa]="filtros().estado === 'P'"
+    (pulsar)="seleccionarEstado('P')"
+  />
+  <cl-kpi
+    etiqueta="Observadas"
+    [valor]="metricas().observadas"
+    tono="ambar"
+    pie="Requieren subsanación"
+    [clicable]="true"
+    [activa]="filtros().estado === 'O'"
+    (pulsar)="seleccionarEstado('O')"
+  />
+  <cl-kpi
+    etiqueta="Activas"
+    [valor]="metricas().activas"
+    tono="verde"
+    pie="En gestión comercial"
+    [clicable]="true"
+    [activa]="filtros().estado === 'A'"
+    (pulsar)="seleccionarEstado('A')"
+  />
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por captación, local, dirección, distrito o agente…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los estados"
+    [opciones]="opcionesEstado"
+    [valor]="filtros().estado"
+    (valorChange)="cambiarEstado($event)"
+  />
+  @if (supervisa()) {
+    <cl-filtro-select
+      marcador="Todos los agentes"
+      [opciones]="opcionesAgente()"
+      [valor]="filtros().idAgente ? '' + filtros().idAgente : ''"
+      (valorChange)="cambiarAgente($event)"
+    />
+  }
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando captaciones…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Captación</th>
+          <th>Local</th>
+          <th>Propietario</th>
+          @if (supervisa()) { <th>Agente</th> }
+          <th class="num">Comisión</th>
+          <th>Periodo del encargo</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of paginaDatos().items; track c.id) {
+          <tr>
+            <td class="codigo">{{ valor(c.codigoCaptacion) }}</td>
+            <td>
+              <strong>{{ valor(c.direccionLocal) }}</strong>
+              <span class="secundario">{{ valor(c.distritoLocal) }}</span>
+            </td>
+            <td>{{ valor(c.propietarioNombre) }}</td>
+            @if (supervisa()) { <td>{{ c.agenteNombre || 'Sin asignar' }}</td> }
+            <td class="num">{{ comision(c) }}</td>
+            <td>
+              <span>{{ vigencia(c) }}</span>
+              <span class="secundario" [class.vencida]="vencida(c)">{{ diasRestantes(c) }}</span>
+            </td>
+            <td>
+              <span class="cl-badge" [class]="tonoEstado(c.estado)">
+                {{ etiquetaEstado(c.estado) }}
+              </span>
+            </td>
+            <td class="acciones-fila">
+              @if (c.idLocal) {
+                <button type="button" class="cl-btn pequeno" (click)="verLocal(c.idLocal)">
+                  Datos del local
+                </button>
+              }
+              @if (c.codigoCaptacion) {
+                <button type="button" class="cl-btn pequeno" (click)="verExpediente(c.codigoCaptacion)">
+                  Expediente
+                </button>
+                <button type="button" class="cl-btn pequeno" (click)="verResumen(c.codigoCaptacion)">
+                  Resumen comercial
+                </button>
+                @if (puedeRegistrar() && (c.estado === 'P' || c.estado === 'O')) {
+                  <button type="button" class="cl-btn pequeno" (click)="editar(c.codigoCaptacion)">
+                    {{ c.estado === 'O' ? 'Subsanar' : 'Editar' }}
+                  </button>
+                }
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}

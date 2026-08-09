@@ -1,0 +1,130 @@
+/* Solo lo propio de este seguimiento: cabecera, resumen, columnas, pares,
+   tarjeta, tabla, badge, botón y la marca de solo lectura son globales. */
+
+:host { display: block; }
+
+.alerta-estado {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 9px;
+  font-size: 0.88rem;
+
+  &.bien { background: color-mix(in srgb, var(--cl-exito) 11%, white); color: var(--cl-exito); }
+  &.mal { background: color-mix(in srgb, var(--cl-error) 10%, white); color: var(--cl-error); }
+}
+
+/* Barra lineal de las cinco etapas del cliente sobre ESTA propiedad. Vive en
+   la oportunidad, no en la captación: una propiedad puede tener varias. */
+.etapas {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+
+  li {
+    position: relative;
+    display: grid;
+    gap: 0.15rem;
+    padding: 1.4rem 0.4rem 0;
+    border-top: 3px solid var(--cl-borde);
+    color: var(--cl-tinta-suave);
+  }
+
+  .punto {
+    position: absolute;
+    top: -0.48rem;
+    left: 0;
+    width: 0.8rem;
+    height: 0.8rem;
+    border: 2px solid var(--cl-borde);
+    border-radius: 50%;
+    background: var(--cl-superficie);
+  }
+
+  li.completado,
+  li.actual { color: var(--cl-tinta); border-color: var(--cl-exito); }
+  li.completado .punto,
+  li.actual .punto { border-color: var(--cl-exito); background: var(--cl-exito); }
+  li.actual .punto { box-shadow: 0 0 0 4px color-mix(in srgb, var(--cl-exito) 20%, transparent); }
+
+  small { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  strong { font-size: 0.82rem; }
+}
+
+.cabecera-acciones {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.observaciones {
+  margin: 0.9rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--cl-borde);
+  color: var(--cl-tinta-suave);
+  font-size: 0.86rem;
+}
+
+.alerta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--cl-error) 25%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cl-error) 8%, white);
+  color: var(--cl-error);
+  font-size: 0.84rem;
+}
+
+.cl-tabla {
+  .fecha { color: var(--cl-tinta-suave); font-size: 0.78rem; white-space: nowrap; }
+  .hora { font-variant-numeric: tabular-nums; }
+
+  /* La observación es texto libre: la única columna que envuelve. */
+  .libre { max-width: 24rem; white-space: normal; color: var(--cl-tinta-suave); }
+}
+
+.acciones-seguimiento button {
+  width: 100%;
+  margin-top: 0.45rem;
+}
+
+.nota {
+  margin: 0.9rem 0 0;
+  color: var(--cl-tinta-suave);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.campo-dialogo {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.7rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+
+  b { color: var(--cl-error); }
+
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+    resize: vertical;
+  }
+}
+
+@media (max-width: 46rem) {
+  .etapas { grid-template-columns: minmax(0, 1fr); gap: 0.8rem; }
+  .etapas li { padding: 0.3rem 0 0.3rem 1.2rem; border-top: 0; border-left: 3px solid var(--cl-borde); }
+  .etapas li.completado, .etapas li.actual { border-color: var(--cl-exito); }
+  .etapas .punto { top: 0.45rem; left: -0.5rem; }
+}

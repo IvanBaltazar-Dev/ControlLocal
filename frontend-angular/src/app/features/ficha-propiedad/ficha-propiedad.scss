@@ -1,0 +1,135 @@
+/* Solo lo propio de esta ficha: el armazón, la tarjeta, el badge y el botón
+   son globales (`styles.scss`). */
+
+.galeria {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border: 1px solid var(--cl-borde);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--cl-borde) 30%, transparent);
+  }
+
+  .proveedor {
+    position: absolute;
+    top: 0.35rem;
+    left: 0.35rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(14, 38, 47, 0.72);
+    color: #fff;
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* La acción destructiva se apoya sobre la foto: fondo sólido para que se
+     lea sobre cualquier imagen. */
+  .quitar {
+    position: absolute;
+    right: 0.35rem;
+    bottom: 0.35rem;
+    background: rgba(255, 255, 255, 0.94);
+  }
+}
+
+.subida {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--cl-borde);
+}
+
+.parrafo {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--cl-tinta-suave);
+}
+
+.enlace a {
+  color: var(--cl-primario-claro);
+  font-weight: 600;
+}
+
+.precio {
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--cl-borde);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--cl-primario);
+
+  small {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+.comision {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--cl-borde);
+
+  .etiqueta {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cl-tinta-suave);
+  }
+
+  strong {
+    font-size: 0.95rem;
+    font-weight: 650;
+  }
+}
+
+.vencido {
+  color: var(--cl-error);
+}
+
+.persona {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  strong {
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: var(--cl-primario);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}

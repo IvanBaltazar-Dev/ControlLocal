@@ -1,0 +1,76 @@
+<div class="marco">
+  <aside class="lateral">
+    <div class="marca">
+      <span class="marca-logo">CL</span>
+      <span class="marca-nombre">ControlLocal</span>
+    </div>
+
+    <nav>
+      @for (grupo of menu(); track grupo.seccion) {
+        <p class="seccion">{{ grupo.seccion }}</p>
+
+        <!-- Todo módulo del menú tiene ruta: ya no hay entradas "pendientes".
+             La última que quedaba, "Mis locales", pasó a ser un filtro dentro
+             de Locales en vez de una pantalla propia. -->
+        @for (modulo of grupo.modulos; track modulo.ruta) {
+          <a
+            [routerLink]="'/' + modulo.ruta"
+            routerLinkActive="activo"
+            [routerLinkActiveOptions]="{ exact: modulo.ruta === '' }"
+          >
+            <span class="punto"></span> {{ modulo.etiqueta }}
+          </a>
+        }
+      }
+    </nav>
+
+    <div class="version">backend v2 · Spring + Angular</div>
+  </aside>
+
+  <div class="principal">
+    <header class="topbar">
+      <span class="titulo">Panel</span>
+
+      @if (auth.sesion(); as sesion) {
+        <div class="usuario">
+          <!--
+            La campana es chrome global, no una pantalla: vive aquí y no en el
+            dashboard porque los avisos siguen llegando mientras se trabaja en
+            cualquier otra parte.
+          -->
+          <cl-campana />
+          <!-- Iniciales solo mientras no haya foto: es el caso por defecto y
+               tiene que verse bien, no como un hueco esperando una imagen. -->
+          @if (fotoPerfil(); as clave) {
+            <cl-imagen-segura
+              class="avatar avatar-foto"
+              [clave]="clave"
+              [alt]="'Foto de ' + sesion.nombre"
+            />
+          } @else {
+            <span class="avatar">{{ iniciales(sesion.nombre) }}</span>
+          }
+          <div class="datos">
+            <span class="nombre">{{ sesion.nombre }}</span>
+            <span class="rol">{{ etiquetaRol[sesion.rol] }}</span>
+          </div>
+          <!-- `salir()` y no `cerrarSesion()`: avisa al servidor para que el
+               token deje de valer de verdad. Cierra TODAS las sesiones de la
+               cuenta, y el título lo dice para no prometer otra cosa. -->
+          <button
+            type="button"
+            class="salir"
+            title="Cierra la sesión en todos tus dispositivos"
+            (click)="salir()"
+          >
+            Salir
+          </button>
+        </div>
+      }
+    </header>
+
+    <main class="contenido">
+      <router-outlet />
+    </main>
+  </div>
+</div>

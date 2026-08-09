@@ -1,0 +1,72 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Supervisión</p>
+    <h1>Captaciones por revisar</h1>
+    <p class="sub">Expedientes enviados por los agentes dentro de tu alcance.</p>
+  </div>
+  <div class="acciones">
+    <button type="button" class="cl-btn" [disabled]="exportando()" (click)="exportar()">
+      {{ exportando() ? 'Exportando…' : 'Exportar CSV' }}
+    </button>
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi etiqueta="Total" [valor]="metricas().total" tono="gris" pie="Pendientes u observadas" />
+  <cl-kpi etiqueta="Pendientes" [valor]="metricas().pendientes" tono="ambar" pie="Esperan decisión" [clicable]="true" [activa]="filtros().estado === 'P'" (pulsar)="seleccionarEstado('P')" />
+  <cl-kpi etiqueta="Observadas" [valor]="metricas().observadas" tono="ambar" pie="Devueltas para corregir" [clicable]="true" [activa]="filtros().estado === 'O'" (pulsar)="seleccionarEstado('O')" />
+</section>
+
+@if (avisoExportacion()) { <p class="cl-ok" role="status">{{ avisoExportacion() }}</p> }
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por código, local, distrito o agente…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select marcador="Pendientes y observadas" [opciones]="opcionesEstado" [valor]="filtros().estado" (valorChange)="cambiarEstado($event)" />
+  <cl-filtro-select marcador="Todos los agentes" [opciones]="opcionesAgente()" [valor]="filtros().idAgente ? '' + filtros().idAgente : ''" (valorChange)="cambiarAgente($event)" />
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Actualizando bandeja de revisión…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead><tr><th>Captación</th><th>Local</th><th>Propietario</th><th>Agente</th><th>Área / rubro</th><th>Fecha</th><th class="num">Comisión</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        @for (c of paginaDatos().items; track c.id) {
+          <tr>
+            <td class="codigo">{{ valor(c.codigoCaptacion) }}</td>
+            <td><strong>{{ valor(c.direccionLocal) }}</strong><span class="secundario">{{ valor(c.distritoLocal) }}</span></td>
+            <td>{{ valor(c.propietarioNombre) }}</td>
+            <td>{{ valor(c.agenteNombre) }}</td>
+            <td><span>{{ area(c.areaM2) }}</span><span class="secundario">{{ valor(c.rubro) }}</span></td>
+            <td>{{ fecha(c.fechaCaptacion) }}</td>
+            <td class="num">{{ comision(c) }}</td>
+            <td><span class="cl-badge" [class]="tonoEstado(c.estado)">{{ etiquetaEstado(c.estado) }}</span></td>
+            <td class="acciones-fila">
+              <button type="button" class="cl-btn pequeno primario" (click)="revisar(c.codigoCaptacion)">Revisar</button>
+              <button type="button" class="cl-btn pequeno" (click)="expediente(c.codigoCaptacion)">Expediente</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion [total]="paginaDatos().totalRecords" [tamano]="porPagina" [pagina]="filtros().page" (paginaChange)="cambiarPagina($event)" />
+}

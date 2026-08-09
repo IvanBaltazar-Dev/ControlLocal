@@ -60,6 +60,31 @@ PersonaRol              id, persona_id, tipoRol ∈ {PROPIETARIO, CLIENTE, USUAR
 - **Unicidad parcial NATIVA en Postgres** (resuelve MEJ-21, elimina las 5 columnas `GENERATED STORED`): `CREATE UNIQUE INDEX ... WHERE estado='ACTIVA'` (captación activa por local), `WHERE esAdministrador` (broker admin único), `WHERE tipoEvaluacion='FINAL'` (evaluación final), etc. El invariante duro vive en la BD, no en validación service.
 - Se **erradica `listarTodos`** en rutas calientes (MEJ-05); se hereda el indexado compuesto (recreado en v2).
 
+**Cierre de RC-003 para el listado de locales (2026-08-02).** El objetivo de 3 s
+se cerró *con margen operativo*, no rozando el límite: p95 del texto libre **944
+ms** en página 1 y peor observado **1.040 ms** sobre 100.000 locales medidos por
+HTTP. Tres piezas lo sostienen, y las tres son norma para lo que venga:
+
+1. **Búsqueda por conjunto de candidatos** (`docs/ai/contrato-listados-paginados.md`
+   §5): ningún listado resuelve el texto libre con un `OR` que cruce tablas —no
+   lo puede servir ningún índice y degenera en `Seq Scan`—; se usa una rama
+   indexable por tabla unidas con `UNION`, el mismo conjunto para conteo, página
+   y KPI, y la proyección completa se carga solo para los ids de la página.
+2. **Un índice por campo buscable**, sobre la expresión `lower(campo)` (V11, V23).
+   Y cuidado al renombrar columnas: al partir `propiedad.estado` en V15–V17
+   desapareció con ella el índice del camino caliente que había creado V11, sin
+   que nada lo avisara. Lo recuperó V22.
+3. **Un gate que lo mide de verdad**: `e2e-locales-busqueda.ps1`, 100.000 filas
+   por HTTP. Un `EXPLAIN` sobre una consulta simplificada no vale como prueba —el
+   planner elige otro plan cuando la consulta lleva sus joins, y esa diferencia
+   ya nos hizo dar por buena una justificación equivocada.
+
+Lo que **no** hizo falta: materializar una proyección de búsqueda. Se evaluará
+solo si un módulo no llega al objetivo con el patrón anterior, y con medición
+delante. El único número que sigue por encima del segundo es la **última página**
+(`OFFSET` recorriendo 99.990 entradas), y ahí la palanca es la paginación por
+clave, no la búsqueda: sin texto esa misma página ya cuesta lo mismo.
+
 ## 7. Trazabilidad / auditoría (pilar RC-002)
 - **Fuente de verdad ÚNICA**: un **aspecto** (o `@EntityListener`/`@PostUpdate`) sobre las transiciones —**no** llamadas manuales (que reproducen la causa de MEJ-01: hoy solo 1/9 se cablea)—. `estadoAnterior` se **captura antes de mutar** (en la carga). **Test de cobertura** (estilo ArchUnit) que falla si una transición de las entidades auditables no emite historial.
 - **Catálogo `entidad_tipo` maestro (superset)** con dos subconjuntos: **transicionables/auditables** (con máquina de estado) vs **referenciables** (tarea/alerta pueden apuntar a cualquiera). *Corrección*: "mismo vocabulario" era falso (tarea ya usa 12 valores). El alcance de auditoría se **amplía explícitamente** más allá de los 9 actuales para cubrir eventos sensibles: `evaluacion`, `comision_liquidacion` (transiciones financieras), `documento_solicitud`, y datos personales/consentimientos (`persona`/`propietario`/`cliente`) si RC-001 lo exige.

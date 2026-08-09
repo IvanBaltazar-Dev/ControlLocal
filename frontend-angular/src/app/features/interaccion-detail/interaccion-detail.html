@@ -1,0 +1,130 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Interacciones · Detalle</p>
+    <h1>{{ persona() }}</h1>
+    <p class="sub">
+      {{ contexto() }}
+      @if (referencia() !== '—') { · {{ referencia() }} }
+      · {{ momento(interaccion()?.fechaHora) }}
+    </p>
+  </div>
+  <div class="acciones">
+    @if (!puedeEditar()) { <span class="solo-lectura">Solo lectura</span> }
+    @if (interaccion() && tieneOrigen()) {
+      <button type="button" class="cl-btn" (click)="irAlOrigen()">{{ etiquetaOrigen() }}</button>
+    }
+    <button type="button" class="cl-btn" (click)="volver()">Volver</button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="!interaccion() ? error() : null"
+  [vacio]="false"
+  mensajeCarga="Cargando interacción…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && interaccion(); as i) {
+  @if (error()) { <p class="cl-aviso" role="alert">{{ error() }}</p> }
+  @if (mensaje()) { <p class="cl-ok" role="status">{{ mensaje() }}</p> }
+
+  <section class="cl-resumen">
+    <div>
+      <span>Lado de la relación</span>
+      <strong>
+        <span class="cl-badge" [class]="esDePropietario() ? 'aviso' : ''">
+          {{ esDePropietario() ? 'Propietario' : 'Cliente' }}
+        </span>
+      </strong>
+    </div>
+    <div><span>Canal</span><strong>{{ canal() }}</strong></div>
+    <div><span>Resultado</span><strong>{{ resultadoActual() }}</strong></div>
+    <div><span>Agente</span><strong>{{ valor(i.agenteNombre) }}</strong></div>
+  </section>
+
+  <div class="cl-columnas">
+    <main>
+      <section class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Resultado y observaciones</h2>
+            <p>Lo único que el backend deja corregir después de registrar.</p>
+          </div>
+          @if (puedeEditar() && !editando()) {
+            <button type="button" class="cl-btn pequeno" (click)="editar()">Editar</button>
+          }
+        </header>
+
+        @if (!editando()) {
+          <div class="cl-pares">
+            <div><span>Resultado</span><strong>{{ resultadoActual() }}</strong></div>
+            <div><span>Registrada</span><strong>{{ momento(i.fechaHora) }}</strong></div>
+          </div>
+          <p class="texto-libre">{{ valor(i.observaciones) }}</p>
+        } @else {
+          <div class="cl-grid">
+            <label class="cl-campo">
+              <span>Resultado <b>*</b></span>
+              <select [formControl]="resultado">
+                <option value="">— Selecciona un resultado —</option>
+                @for (o of opcionesResultado(); track o.valor) {
+                  <option [value]="o.valor">{{ o.etiqueta }}</option>
+                }
+              </select>
+              <small>Solo los resultados válidos para el contexto {{ contexto().toLowerCase() }}.</small>
+            </label>
+            <label class="cl-campo">
+              <span>Observaciones</span>
+              <textarea rows="4" maxlength="2000" [formControl]="observaciones"></textarea>
+            </label>
+          </div>
+          <div class="acciones-edicion">
+            <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelarEdicion()">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="cl-btn primario"
+              [disabled]="guardando() || !resultado.value"
+              (click)="guardar()"
+            >
+              {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
+            </button>
+          </div>
+        }
+      </section>
+
+      @if (i.transcripcionNota) {
+        <section class="cl-tarjeta">
+          <header>
+            <div>
+              <h2>Nota o transcripción</h2>
+              <p>Detalle literal registrado en su momento. No se edita.</p>
+            </div>
+          </header>
+          <p class="texto-libre">{{ i.transcripcionNota }}</p>
+        </section>
+      }
+    </main>
+
+    <aside>
+      <section class="cl-tarjeta">
+        <header><div><h2>Datos fijos</h2></div></header>
+        <div class="cl-pares apiladas">
+          <div><span>Contexto</span><strong>{{ contexto() }}</strong></div>
+          <div><span>Persona</span><strong>{{ persona() }}</strong></div>
+          <div><span>Tipo</span><strong>{{ valor(i.personaTipo) }}</strong></div>
+          <div><span>Referencia</span><strong>{{ referencia() }}</strong></div>
+          <div><span>Canal</span><strong>{{ canal() }}</strong></div>
+          <div><span>Fecha y hora</span><strong>{{ momento(i.fechaHora) }}</strong></div>
+        </div>
+        <p class="nota">
+          El contexto, la entidad, el canal y la fecha <strong>no se pueden cambiar</strong>: el
+          backend los descarta si se envían. Si el contacto se anotó donde no era, lo correcto es
+          registrar la interacción en su sitio.
+        </p>
+      </section>
+    </aside>
+  </div>
+}

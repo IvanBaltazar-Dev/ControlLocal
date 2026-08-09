@@ -1,0 +1,164 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión</p>
+    <h1>Seguridad y accesos</h1>
+    <p class="sub">
+      Quién tiene acceso a la corredora y qué se ha hecho con esos accesos. Solo gobierno.
+    </p>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando accesos…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error()) {
+  @if (exito(); as mensaje) {
+    <p class="exito" role="status">{{ mensaje }}</p>
+  }
+
+  <section class="bloque">
+    <h2>Cuentas</h2>
+    <p class="nota">
+      El gobierno <strong>revoca</strong> un segundo factor; nunca lo ve ni lo configura. Quien
+      vuelve a enrolarlo es siempre el titular.
+    </p>
+
+    <div class="tabla-envoltorio">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Persona</th>
+            <th scope="col">Usuario</th>
+            <th scope="col">Banda</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Segundo factor</th>
+            <th scope="col"><span class="visualmente-oculto">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (cuenta of cuentas(); track cuenta.idPersona) {
+            <tr>
+              <td>{{ cuenta.nombre }}</td>
+              <td><code>{{ cuenta.usuario }}</code></td>
+              <td>{{ cuenta.rolDeGobierno ?? '—' }}</td>
+              <td>{{ estadoDe(cuenta) }}</td>
+              <td>
+                @if (cuenta.mfaActivo) {
+                  Activo · {{ cuenta.codigosRespaldoDisponibles }} códigos
+                } @else {
+                  Sin configurar
+                }
+              </td>
+              <td class="celda-accion">
+                @if (puedeRevocar(cuenta)) {
+                  <button type="button" class="cl-btn" (click)="abrirRevocacion(cuenta)">
+                    Revocar segundo factor
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="vacio">No hay cuentas que mostrar.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>Aviso de gobierno</h2>
+    <!-- No se puede atender ni descartar, y esa es la propiedad que se busca:
+         quien más interés tendría en hacer desaparecer un «se revocó el factor
+         de X» es precisamente quien lo revocó sin permiso. -->
+    <p class="nota">
+      Registro permanente de lo que se ha hecho con los accesos.
+      <strong>No se puede marcar como leído ni borrar.</strong>
+    </p>
+
+    <ul class="avisos">
+      @for (aviso of avisos(); track aviso.id) {
+        <li [class.fallo]="aviso.resultado !== 'OK'">
+          <span class="aviso-tipo">{{ etiqueta(aviso.tipo) }}</span>
+          <span class="aviso-quien">
+            {{ aviso.actor ?? 'Sistema' }}
+            @if (aviso.afectado) {
+              · sobre {{ aviso.afectado }}
+            }
+          </span>
+          @if (aviso.motivo) {
+            <span class="aviso-motivo">“{{ aviso.motivo }}”</span>
+          }
+          <span class="aviso-fecha">{{ aviso.fecha }}</span>
+        </li>
+      } @empty {
+        <li class="vacio">Todavía no hay hechos de gobierno registrados.</li>
+      }
+    </ul>
+  </section>
+
+  <cl-confirmacion
+    [abierto]="objetivo() !== null"
+    titulo="Revocar segundo factor"
+    [descripcion]="
+      'Se revocará su segundo factor. Tendrá que volver a enrolarlo. Además se cerrarán todas sus sesiones.'
+    "
+    tono="rojo"
+    etiquetaConfirmar="Revocar segundo factor"
+    [ocupado]="ocupado()"
+    [bloqueado]="incompleto"
+    (confirmar)="revocar()"
+    (cerrar)="cerrarRevocacion()"
+  >
+    @if (objetivo(); as cuenta) {
+      <p class="destinatario">
+        <strong>{{ cuenta.nombre }}</strong> · <code>{{ cuenta.usuario }}</code>
+      </p>
+    }
+
+    <form [formGroup]="formulario" novalidate>
+      <label class="campo">
+        <span>Motivo <b>*</b></span>
+        <textarea
+          formControlName="motivo"
+          rows="2"
+          maxlength="300"
+          placeholder="Perdió el teléfono, cambio de equipo…"
+        ></textarea>
+        <small class="ayuda">
+          Queda registrado. Sin motivo escrito, una revocación legítima y el primer movimiento de
+          un atacante son la misma fila.
+        </small>
+      </label>
+
+      <p class="nota">
+        Confirma que eres tú: una sesión abierta no basta para tocar el factor de otra persona.
+      </p>
+      <label class="campo">
+        <span>Tu contraseña <b>*</b></span>
+        <input type="password" formControlName="contrasena" autocomplete="current-password" />
+      </label>
+      <label class="campo">
+        <span>Tu código de verificación <b>*</b></span>
+        <input
+          type="text"
+          formControlName="codigo"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="6"
+          placeholder="000000"
+        />
+      </label>
+
+      @if (errorRevocacion(); as mensaje) {
+        <p class="alerta" role="alert">{{ mensaje }}</p>
+      }
+    </form>
+  </cl-confirmacion>
+}

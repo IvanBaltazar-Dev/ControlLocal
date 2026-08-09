@@ -1,0 +1,87 @@
+# Perfil PROD.
+#
+# REGLA (D-S0-20): aqui NO hay valores por defecto que hagan arrancar el
+# sistema "de casualidad". Toda variable sin `${VAR:defecto}` es obligatoria:
+# si falta, el contexto no levanta y el mensaje nombra la variable.
+#
+# Ademas, ValidadorConfiguracionSeguridad comprueba en el arranque lo que
+# una variable presente pero INSEGURA no puede detectar por si sola
+# (secreto de desarrollo, contrasena por defecto, hashes del seed,
+# almacen no persistente, CORS abierto, Swagger publico).
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    # migration-prod: endurecimiento productivo (rango reservado V900+).
+    # El seed de desarrollo NO esta aqui: una base productiva nueva no nace
+    # con las 21 cuentas conocidas.
+    locations: classpath:db/migration,classpath:db/migration-prod
+
+controllocal:
+  token:
+    # Sin defecto: ausente => no arranca. >= 32 caracteres y distinto del
+    # fallback de desarrollo, comprobado por el validador de arranque.
+    secreto: ${API_TOKEN_SECRET}
+  mfa:
+    clave: ${MFA_CLAVE_CIFRADO:}
+    clave-anterior: ${MFA_CLAVE_CIFRADO_ANTERIOR:}
+    version-clave: ${MFA_VERSION_CLAVE:1}
+  cors:
+    # Sin defecto: un CORS mal puesto en produccion es superficie abierta.
+    origenes: ${CORS_ORIGENES}
+  almacen:
+    # DISCO o S3. Sin defecto, como todo en prod: elegir donde viven los
+    # binarios de una corredora no puede ser algo que pase por omision.
+    proveedor: ${ALMACEN_PROVEEDOR}
+    # Con proveedor=DISCO debe apuntar a un volumen persistente y escribible.
+    # El validador lo comprueba: sin el, los binarios se pierden al recrear el
+    # contenedor. Con S3 no se usa, y por eso admite vacio.
+    directorio: ${ALMACEN_DIR:}
+    # Sin defectos a proposito. `endpoint` vacio significa el S3 de AWS; para
+    # un compatible autohospedado hay que declararlo. Las credenciales vacias
+    # NO son un error: delegan en la cadena por defecto del SDK, que es como
+    # se usa un rol IAM. El validador exige el bucket y rechaza un endpoint
+    # sin TLS.
+    s3:
+      endpoint: ${ALMACEN_S3_ENDPOINT:}
+      bucket: ${ALMACEN_S3_BUCKET:}
+      region: ${ALMACEN_S3_REGION:us-east-1}
+      access-key: ${ALMACEN_S3_ACCESS_KEY:}
+      secret-key: ${ALMACEN_S3_SECRET_KEY:}
+      estilo-de-ruta: ${ALMACEN_S3_ESTILO_RUTA:true}
+  login:
+    max-fallos-por-cuenta: ${LOGIN_MAX_FALLOS_CUENTA:5}
+    max-fallos-por-ip: ${LOGIN_MAX_FALLOS_IP:10}
+  seguridad:
+    # Cuando entre NGINX (Fase 5) hay que declarar aqui su IP, o el bloqueo
+    # por IP contara a todo el mundo bajo la del proxy: un solo cupo para
+    # todo el trafico. Vacio es seguro por defecto, pero deja de ser correcto
+    # en cuanto haya un proxy delante.
+    proxies-de-confianza: ${PROXIES_DE_CONFIANZA:}
+
+springdoc:
+  # H-13: en produccion la documentacion del contrato no es publica.
+  api-docs:
+    enabled: ${SWAGGER_HABILITADO:false}
+  swagger-ui:
+    enabled: ${SWAGGER_HABILITADO:false}
+
+  recuperacion:
+    # Encenderla SIN los dos custodios reales y SIN canal externo DETIENE el
+    # arranque (ValidadorConfiguracionSeguridad). No es una nota: una
+    # recuperacion de emergencia puede usarse justo cuando nadie esta dentro
+    # para ver la campana.
+    habilitada: ${RECUPERACION_EMERGENCIA_HABILITADA:false}
+    puerto-gestion: ${RECUPERACION_PUERTO_GESTION:8091}
+    custodio-a:
+      id: ${RECUPERACION_CUSTODIO_A_ID:}
+      hash: ${RECUPERACION_CUSTODIO_A_HASH:}
+    custodio-b:
+      id: ${RECUPERACION_CUSTODIO_B_ID:}
+      hash: ${RECUPERACION_CUSTODIO_B_HASH:}
+
+logging:
+  level:
+    root: INFO

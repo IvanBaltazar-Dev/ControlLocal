@@ -1,0 +1,45 @@
+# Perfil TEST — suites de integracion y los entornos efimeros de verificacion/.
+#
+# Comparte con dev el seed (los 13 scripts de verificacion/ entran con las
+# credenciales sembradas) pero NO comparte su base: `Invoke-E2E.ps1` crea
+# controllocal_e2e_<runId> por corrida y la destruye en `finally`.
+spring:
+  datasource:
+    # Sin valor por defecto util: una suite que no declara su base debe fallar,
+    # no caer sobre la base de desarrollo y contaminarla (leccion de H-08).
+    url: ${TEST_DB_URL:${DB_URL:}}
+    username: ${DB_USER:controllocal}
+    password: ${DB_PASSWORD:controllocal}
+  flyway:
+    locations: classpath:db/migration,classpath:db/migration-dev
+
+controllocal:
+  token:
+    secreto: ${API_TOKEN_SECRET:}
+  mfa:
+    clave: ${MFA_CLAVE_CIFRADO:}
+    clave-anterior: ${MFA_CLAVE_CIFRADO_ANTERIOR:}
+    version-clave: ${MFA_VERSION_CLAVE:1}
+  cors:
+    origenes: ${CORS_ORIGENES:http://localhost:4200}
+  almacen:
+    directorio: ${ALMACEN_DIR:./almacen-e2e}
+  login:
+    # Los scripts encadenan 3-4 logins; con el umbral de dev, dos corridas
+    # seguidas del mismo script bloquearian al usuario del fixture — el aviso
+    # explicito del Plan S0 §4.8. Se relaja SOLO aqui, nunca en prod.
+    #
+    # La suite s0-bloqueo baja su propio umbral por variable de entorno para
+    # poder provocar el bloqueo a proposito.
+    max-fallos-por-cuenta: ${LOGIN_MAX_FALLOS_CUENTA:100}
+    max-fallos-por-ip: ${LOGIN_MAX_FALLOS_IP:200}
+  recuperacion:
+    # Apagada: los tests que la necesitan la encienden por propiedad.
+    habilitada: ${RECUPERACION_EMERGENCIA_HABILITADA:false}
+    puerto-gestion: ${RECUPERACION_PUERTO_GESTION:8091}
+    custodio-a:
+      id: ${RECUPERACION_CUSTODIO_A_ID:}
+      hash: ${RECUPERACION_CUSTODIO_A_HASH:}
+    custodio-b:
+      id: ${RECUPERACION_CUSTODIO_B_ID:}
+      hash: ${RECUPERACION_CUSTODIO_B_HASH:}

@@ -1,0 +1,227 @@
+BLOQUE 7 — CIERRE DEL CICLO CONTRACTUAL
+---------------------------------------
+f4-solicitud 127/127, exit 0. La seccion 10 es nueva.
+
+QUE SE ENCONTRO Y NO SE SABIA
+`finalizar` y `rescindir` fallaban SIEMPRE con 409. La tarea de revision del
+inmueble se creaba con entidad_tipo = "PROPIEDAD" y el CHECK
+`ck_tarea_tipo_entidad` declara "INMUEBLE": el insert no podia pasar. La pieza
+en la que se apoya la decision de NO liberar el inmueble automaticamente —dejar
+una tarea para que una persona lo revise— nunca llego a existir. De paso, la
+deduplicacion buscaba un valor imposible, asi que tampoco deduplicaba.
+Corregido con `Tarea.ENTIDAD_INMUEBLE` en vez de la cadena suelta.
+
+QUE **NO** ESTABA ROTO, pese al diagnostico previo
+El grafo del contrato SI se validaba, y siempre. `MaquinasEstado` declara la
+maquina (P->{D,A}, D->{V,A}, V->{F,S,R}, terminales cerrados) y
+`Transiciones.aplicar` la invoca antes de mutar. Las 21 transiciones ilegales
+—incluida anular un contrato VIGENTE— ya se rechazaban con 400. Queda fijado
+por `CicloContratoTest` (28 pruebas) para que la respuesta no dependa de por
+donde entre quien lo lea: `ContratoAlquiler.transicionarA` es una asignacion
+sin comprobaciones y quien se detiene ahi concluye lo contrario.
+
+EL UNICO HUECO REAL
+`Transiciones` ignora en silencio una transicion al mismo estado —idempotencia
+deliberada para captacion, solicitud, oportunidad y publicacion— y eso hacia
+que rescindir dos veces respondiera 200 sin cambiar nada. El rechazo se hace en
+el caso de uso del contrato, no en `Transiciones`: bajarlo alli cambiaria de
+golpe el comportamiento de las otras cuatro entidades.
+
+ROLES
+Rescindir y anular pasan de AGENTE a BROKER. Un TENANT_ADMIN sin rol operativo
+recibe 403: la authority es la banda efectiva, no el rol del token.
+
+DISPONIBILIDAD: SIN TOCAR
+Verificado en base que tras rescindir el inmueble sigue ALQUILADO y queda la
+tarea de revision. Terminar juridicamente un contrato no demuestra que el local
+este vacio, entregado ni apto para volver al mercado.
+
+LO QUE ESTA SECCION NO CUBRE
+Firma y activacion quedan con prueba unitaria pero sin recorrido HTTP: exigirian
+una segunda solicitud aprobada que esta suite no construye.
+
+== Entorno E2E aislado 20260806200749-2755 ==
+Base: controllocal_e2e_20260806200749_2755
+ Network controllocal-e2e-20260806200749-2755_default Creating 
+ Network controllocal-e2e-20260806200749-2755_default Created 
+ Container controllocal-postgres-e2e-20260806200749-2755 Creating 
+ Container controllocal-postgres-e2e-20260806200749-2755 Created 
+ Container controllocal-api-e2e-20260806200749-2755 Creating 
+ Container controllocal-api-e2e-20260806200749-2755 Created 
+ Container controllocal-postgres-e2e-20260806200749-2755 Starting 
+ Container controllocal-postgres-e2e-20260806200749-2755 Started 
+ Container controllocal-postgres-e2e-20260806200749-2755 Waiting 
+ Container controllocal-postgres-e2e-20260806200749-2755 Healthy 
+ Container controllocal-api-e2e-20260806200749-2755 Starting 
+ Container controllocal-api-e2e-20260806200749-2755 Started 
+ Container controllocal-api-e2e-20260806200749-2755 Waiting 
+ Container controllocal-postgres-e2e-20260806200749-2755 Waiting 
+ Container controllocal-postgres-e2e-20260806200749-2755 Healthy 
+ Container controllocal-api-e2e-20260806200749-2755 Healthy 
+
+== Suite f4-solicitud / corrida 20260806200749-2755 ==
+
+== 1. Login de los cinco actores ==
+  OK   login agente responsable (AGE-001)
+  OK   login agente de otro equipo (AGE-003)
+  OK   login broker supervisor (BRK-001)
+  OK   login broker de otro equipo (BRK-002)
+  OK   login admin
+
+== 2. Prologo F2 + F3: oferta, captacion ACTIVA y oportunidad ==
+  OK   la captacion del prologo quedo ACTIVA
+  OK   el local tiene una publicacion PUBLICADA (para el efecto 6)
+  OK   la oportunidad del prologo nace ABIERTA
+
+== 3. POST /solicitudes: alta, precondiciones y efecto lateral ==
+  OK   sin idOportunidad responde el mensaje del cable
+  OK   forma de pago invalida da el mensaje del cable
+  OK   el BROKER no registra solicitudes (403)
+  OK   POST /solicitudes responde 201 y nace REGISTRADA (G)
+  OK   el codigo autogenerado sigue el formato SOL-yyMMddHHmmss
+  OK   plazoTentativo se DERIVA de plazoMeses ("24 meses")
+  OK   el checklist arranca en 0/6
+  OK   la solicitud nace con tenant
+  OK   nacer no deja fila en historial_estado
+  OK   el alta movio la oportunidad a S (solicitud creada)
+  OK   y esa transicion SI se audito (la v1 no lo hacia)
+  OK   una oportunidad admite UNA sola solicitud (corta por la precondicion)
+  OK   y la BD lo respalda con el unico por oportunidad
+
+== 4. Lectura y alcance de /solicitudes (§7: por AGENTE) ==
+  OK   GET /solicitudes/codigo/{codigo} resuelve la ficha
+  OK   el filtro idOportunidad acota a una
+  OK   la ficha resuelve el contexto (cliente, captacion, local)
+  OK   el BROKER supervisor la alcanza (por agente supervisado)
+  OK   el BROKER de otro equipo NO la ve (lista vacia, no 403)
+  OK   un agente de otro equipo recibe 403 en la ficha
+  OK   el ADMIN ve todo el tenant
+
+== 5. Documentos: las TRES vias de subida (D-F4-1) ==
+  OK   via base64 responde 201 con el documento REGISTRADO/Pendiente
+  OK   la clave del almacen cuelga de tenant/{org}/{codigo de la solicitud}
+  OK   el tipo se traduce a su nombre de catalogo
+  OK   el POST devuelve fechaEntrega (no depende del DEFAULT de la BD)
+  OK   el binario se sirve por la URL capability, sin token
+  OK   via octet-stream responde 201
+  OK   un trozo intermedio responde 200 sin cuerpo
+  OK   el ultimo trozo ensambla y responde 201
+  OK   el archivo ensamblado suma los dos trozos
+  OK   la via "documentos/local" NO existe en la v2 (D-F4-1)
+
+== 6. Documentos: validaciones y checklist X/6 ==
+  OK   extension no permitida
+  OK   tipo de documento invalido
+  OK   base64 invalido
+  OK   tipo obligatorio
+  OK   nombre de archivo obligatorio
+  OK   un cuerpo JSON vacio corta por tipo obligatorio
+  OK   sin Content-Type responde 415, no 500
+  OK   un alta rechazada no deja huerfanos en el almacen
+  OK   el tipo OTRO no suma al checklist (sigue 3/6)
+  OK   con los seis tipos entregados el checklist marca 6/6
+
+== 7. Revision de documentos (BROKER/ADMIN) ==
+  OK   el resultado de la revision es obligatorio
+  OK   observar exige la observacion (MEJ-03)
+  OK   el AGENTE no revisa documentos (403)
+  OK   observar deja el documento OBSERVADO
+  OK   un documento OBSERVADO deja de contar (5/6)
+  OK   la revision se audito
+  OK   D-F4-5 cerrada: un broker de OTRO equipo ya NO puede revisar (403)
+  OK   D-F4-5: conformar en bloque tambien exige alcance (403)
+  OK   conformar devuelve el expediente COMPLETO
+  OK   conformar respeta al OBSERVADO (hallazgo deliberado del broker)
+  OK   y deja VALIDADO todo lo que estaba pendiente
+
+== 8. Reenvio a evaluacion y decision del broker ==
+  OK   reenviar deja la solicitud EN REVISION (E)
+  OK   no se reenvia desde EN REVISION
+  OK   el AGENTE no entra a /evaluaciones (403)
+  OK   tipoEvaluacion ausente es 400 (se ignora su valor, no su presencia)
+  OK   con tipo y resultado invalidos gana el mensaje del TIPO
+  OK   la evaluacion SI exige supervision (a diferencia de revisar)
+  OK   el tipo se DERIVA del resultado: OBSERVADA => OBSERVACION
+  OK   la evaluacion movio la solicitud a OBSERVADA
+  OK   el historial por solicitud SI lo ve el agente dueno
+  OK   APROBADA => tipo FINAL (se pisa el "P" que mando el cliente)
+  OK   la solicitud quedo APROBADA
+  OK   solo cabe UNA evaluacion final por solicitud
+  OK   GET /evaluaciones pagina en SQL y devuelve las del broker
+  OK   GET /evaluaciones/{id} resuelve la ficha
+
+== 9. POST /contratos: la cascada de SIETE efectos (§6) ==
+  OK   sin idSolicitud responde el mensaje del cable
+  OK   un estado que no existe en el enum
+  OK   un estado valido que no es de cierre
+  OK   la fecha de cierre no puede ser futura
+  OK   el contrato SI exige que la solicitud sea del agente (403)
+  OK   el BROKER no cierra (403): el cierre lo registra el agente
+  OK   POST /contratos responde 201 y el contrato queda VIGENTE
+  OK   las condiciones se LEEN de la solicitud, no se copian
+  OK   la fecha fin se deriva (inicio + plazo)
+  OK   efecto 2: la comision nace P con la bruta (5% de 8000 = 400)
+  OK   efecto 2: renta y comision conservan PEN sin conversion
+  OK   efecto 3: la oportunidad se cerro EXITOSA (F)
+  OK   efecto 4: la solicitud quedo CERRADA (C)
+  OK   efecto 5: la captacion se cerro con fecha y motivo de alquiler
+  OK   efecto 6: el local conserva registro A y disponibilidad A (alquilado)
+  OK   efecto 6: se registro el precio con hito C (cerrado real)
+  OK   efecto 6: las publicaciones se dieron de baja
+  OK   la cascada dejo CUATRO filas en historial_estado (MEJ-01)
+  OK   el contrato NACE con iniciar(): no suma fila propia
+  OK   una oportunidad no admite un segundo contrato
+
+== 10. Lectura de contratos y comision (§5) ==
+  OK   GET /contratos/oportunidad/{id} resuelve el contrato
+  OK   el tamano por defecto de /contratos es 100, no 10
+  OK   el BROKER alcanza por CAPTACION supervisada
+  OK   el BROKER de otro equipo no lo ve
+  OK   los gates de comision son del BROKER SIN admin (403)
+  OK   asignar exige el monto del agente
+  OK   un broker que no supervisa la captacion recibe 403
+  OK   asignar fija el monto del agente
+  OK   y el de la empresa se calcula solo (400 - 250 = 150)
+  OK   el AGENTE no ve el reparto (Jackson non_null: ni viajan)
+  OK   pero SI ve la comision bruta y su estado
+  OK   el ADMIN si ve el reparto (solo lectura)
+  OK   el cobro exige el estado
+  OK   el cobro solo admite Cobrada o Anulada
+  OK   el cobro deja la comision C
+  OK   el estado viaja como codigo y la forma de pago conserva su catalogo
+  OK   el cobro se audito en la comision
+
+== 11. Contrato de errores y tenancy ==
+  OK   sin token responde 401
+  OK   una solicitud inexistente responde 404
+  OK   un contrato inexistente responde 404
+  OK   el metodo equivocado es 405, no 500
+  OK   contrato, comision y documentos nacen con tenant
+
+== 10. Ciclo juridico del contrato (Bloque 7) ==
+  OK   anular un contrato VIGENTE se rechaza
+  OK   y el rechazo dice de que estado a cual
+  OK   el contrato sigue VIGENTE en la base
+  OK   y el intento ilegal no dejo historial
+  OK   un AGENTE no rescinde: 403
+  OK   un AGENTE tampoco anula: 403
+  OK   el BROKER SI rescinde
+  OK   el inmueble NO se libera solo: sigue ALQUILADO
+  OK   pero queda una tarea de revision del inmueble
+  OK   rescindir dos veces se rechaza, no se ignora
+  OK   un contrato rescindido no se reactiva
+  OK   cero filas con organizacion_id NULL en toda la BD
+
+===== 127 OK / 0 FALLAS =====
+ Container controllocal-api-e2e-20260806200749-2755 Stopping 
+ Container controllocal-api-e2e-20260806200749-2755 Stopped 
+ Container controllocal-api-e2e-20260806200749-2755 Removing 
+ Container controllocal-api-e2e-20260806200749-2755 Removed 
+ Container controllocal-postgres-e2e-20260806200749-2755 Stopping 
+ Container controllocal-postgres-e2e-20260806200749-2755 Stopped 
+ Container controllocal-postgres-e2e-20260806200749-2755 Removing 
+ Container controllocal-postgres-e2e-20260806200749-2755 Removed 
+ Network controllocal-e2e-20260806200749-2755_default Removing 
+ Network controllocal-e2e-20260806200749-2755_default Removed 
+Base controllocal_e2e_20260806200749_2755 y su entorno eliminados en 3.1 s.
+Entorno 20260806200749-2755 eliminado: sin contenedores, volumenes ni red residuales.

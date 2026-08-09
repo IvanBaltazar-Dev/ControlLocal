@@ -1,0 +1,136 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Reportes</p>
+    <h1>Avance comercial por propiedad</h1>
+    <p class="sub">
+      Qué pasó sobre cada inmueble captado, acumulado. No es una ventana de tiempo.
+      @if (datos(); as a) {
+        <span class="cl-badge">{{ a.ambito }}</span>
+      }
+    </p>
+  </div>
+
+  <div class="acciones">
+    <button
+      type="button"
+      class="cl-btn"
+      (click)="exportar()"
+      [disabled]="cargando() || filas().length === 0"
+    >
+      Exportar CSV
+    </button>
+    <button type="button" class="cl-btn" (click)="cargar()" [disabled]="cargando()">
+      Actualizar
+    </button>
+  </div>
+</header>
+
+@if (exportado(); as mensaje) {
+  <p class="cl-ok">{{ mensaje }}</p>
+}
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && filas().length === 0"
+  mensajeCarga="Calculando el avance…"
+  mensajeVacio="No tienes captaciones activas todavía: el avance se arma sobre ellas."
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && filas().length > 0 && datos(); as a) {
+  <section class="kpis">
+    <cl-kpi etiqueta="Propiedades" [valor]="a.propiedades" tono="azul" pie="captaciones activas" />
+    <cl-kpi
+      etiqueta="Oportunidades"
+      [valor]="a.oportunidadesTotales"
+      tono="info"
+      [pie]="a.oportunidadesAbiertas + ' abiertas'"
+    />
+    <cl-kpi
+      etiqueta="Interesados"
+      [valor]="a.interesados"
+      tono="azul"
+      pie="clientes distintos en total"
+    />
+    <cl-kpi
+      etiqueta="Visitas concretadas"
+      [valor]="a.visitasConcretadas"
+      tono="verde"
+      [pie]="a.visitasProgramadas + ' programadas'"
+    />
+    <cl-kpi
+      etiqueta="Solicitudes"
+      [valor]="a.solicitudesRecibidas"
+      tono="ambar"
+      [pie]="a.cerradasExitosas + ' cierres exitosos'"
+    />
+    <cl-kpi
+      etiqueta="Sin movimiento"
+      [valor]="sinMovimiento()"
+      [tono]="sinMovimiento() > 0 ? 'ambar' : 'verde'"
+      pie="propiedades sin ninguna oportunidad"
+    />
+  </section>
+
+  <p class="cl-menudo aclaracion">
+    <b>Interesados</b> de arriba son clientes <b>distintos</b>: un mismo cliente interesado en dos
+    propiedades cuenta una vez aquí y dos en la tabla. Las dos tasas se calculan sobre el total de
+    oportunidades ({{ a.tasaOportVisita }}% con visita, {{ a.tasaOportSolicitud }}% con solicitud).
+  </p>
+
+  <div class="tabla-avance">
+    <div class="cl-tabla-marco">
+      <table class="cl-tabla">
+        <thead>
+          <tr>
+            <th>Captación</th>
+            <th>Local</th>
+            <th>Estado</th>
+            <th class="num">Oport.</th>
+            <th class="num">Abiertas</th>
+            <th class="num">Con visita</th>
+            <th class="num">Con solicitud</th>
+            <th class="num">Interesados</th>
+            <th class="num">Interac.</th>
+            <th class="num">Visitas</th>
+            <th class="num">Tasa visita</th>
+            <th>Motivo de no continuidad</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of filas(); track fila.idCaptacion) {
+            <tr [class.inerte]="fila.oportunidadesTotales === 0">
+              <td>{{ fila.codigoCaptacion }}</td>
+              <td class="ancho">
+                <span class="principal">{{ fila.direccion }}</span>
+                <span class="cl-menudo">{{ fila.distrito }}</span>
+              </td>
+              <td>{{ fila.estadoComercial }}</td>
+              <td class="num">
+                <b>{{ fila.oportunidadesTotales }}</b>
+              </td>
+              <td class="num">{{ fila.oportunidadesAbiertas }}</td>
+              <td class="num">{{ fila.oportunidadesConVisita }}</td>
+              <td class="num">{{ fila.oportunidadesConSolicitud }}</td>
+              <td class="num">{{ fila.interesados }}</td>
+              <td class="num">{{ fila.interacciones }}</td>
+              <td class="num">
+                {{ fila.visitasConcretadas }}/{{ fila.visitasProgramadas + fila.visitasConcretadas }}
+              </td>
+              <td class="num">{{ fila.tasaOportVisita }}%</td>
+              <td class="ancho">{{ fila.motivoNoContinuidad || '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="cl-menudo nota">
+      Ordenado por oportunidades abiertas y, a igualdad, por interacciones. Las filas
+      <b>atenuadas</b> son propiedades sin ninguna oportunidad: captadas y quietas.
+      Esta lectura <b>no se pagina</b>, así que la exportación lleva exactamente estas
+      {{ filas().length }} filas.
+    </p>
+  </div>
+}

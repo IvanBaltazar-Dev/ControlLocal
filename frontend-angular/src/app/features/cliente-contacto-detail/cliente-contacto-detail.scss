@@ -1,0 +1,80 @@
+/* Solo lo propio de esta bitácora: el armazón (cabecera, resumen, columnas,
+   pares), la tarjeta, la tabla, el badge, el botón y la marca de solo lectura
+   son globales (`styles.scss`). */
+
+:host { display: block; }
+
+/* Error de UN bloque: no tumba la pantalla, así que se dibuja dentro de su
+   tarjeta y con su propio botón de reintento. */
+.alerta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--cl-error) 25%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cl-error) 8%, white);
+  color: var(--cl-error);
+  font-size: 0.84rem;
+}
+
+.aviso-consentimiento {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #8a5400;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.nota {
+  margin: 0.7rem 0 0;
+  color: var(--cl-tinta-suave);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.cl-tabla {
+  .codigo { color: var(--cl-primario); font-weight: 650; font-variant-numeric: tabular-nums; }
+  .fecha { color: var(--cl-tinta-suave); font-size: 0.78rem; white-space: nowrap; }
+  td strong, td .secundario { display: block; }
+  td .secundario { margin-top: 0.15rem; color: var(--cl-tinta-suave); font-size: 0.75rem; }
+
+  /* La observación es texto libre: es la única columna que puede envolver. */
+  .libre {
+    max-width: 26rem;
+    white-space: normal;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+.siguientes {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: 9px;
+    background: var(--cl-fondo);
+  }
+
+  strong { display: block; font-size: 0.84rem; }
+  span { display: block; margin-top: 0.1rem; color: var(--cl-tinta-suave); font-size: 0.75rem; }
+}
+
+code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 5px;
+  background: var(--cl-fondo);
+  font-size: 0.9em;
+}

@@ -1,0 +1,319 @@
+// Misma escena que el login y el cambio de contraseña: las tres son la puerta
+// de entrada, y verlas distintas haría dudar de si se está en el sitio correcto.
+.escena {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(60rem 30rem at 110% -10%, rgba(217, 164, 65, 0.18), transparent 60%),
+    linear-gradient(160deg, #0e3a4c 0%, #0a2a38 55%, #071e29 100%);
+}
+
+.panel {
+  // Un poco más ancha que el login: aquí conviven el QR, la clave manual y los
+  // ocho códigos de respaldo, y apretarlos obligaría a partir los códigos.
+  width: min(30rem, 100%);
+  background: var(--cl-superficie);
+  border-radius: 18px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+  animation: aparecer 0.45s ease-out both;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.5rem;
+
+  &-logo {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 12px;
+    background: linear-gradient(140deg, var(--cl-primario), var(--cl-primario-claro));
+    color: var(--cl-acento);
+    font-weight: 800;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    color: var(--cl-primario);
+  }
+
+  p {
+    margin: 0.1rem 0 0;
+    font-size: 0.85rem;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+// Todo el texto secundario de la pantalla, a un solo tamaño y un solo color:
+// aquí conviven cinco bloques de apoyo y verlos a cinco tamaños distintos hace
+// que ninguno parezca más importante que los demás.
+.intro,
+.pasos,
+.ayuda,
+.pie,
+.clave-titulo,
+label {
+  font-size: 0.84rem;
+  color: var(--cl-tinta-suave);
+}
+
+.intro {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.aviso,
+.exito,
+.alerta {
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+
+  p {
+    margin: 0 0 0.35rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.aviso {
+  margin-bottom: 1rem;
+  background: rgba(21, 90, 117, 0.08);
+  border: 1px solid rgba(21, 90, 117, 0.22);
+
+  // El de "tu configuración anterior ya no vale" pide más atención que el de
+  // contexto: si pasa desapercibido, el usuario escanea dos veces y se queda
+  // con una entrada muerta en su aplicación.
+  &-cambio {
+    background: rgba(217, 164, 65, 0.12);
+    border-color: rgba(217, 164, 65, 0.4);
+  }
+}
+
+.pasos {
+  margin: 0 0 1.1rem;
+  padding-left: 1.15rem;
+}
+
+.qr {
+  display: grid;
+  place-items: center;
+  padding: 0.9rem;
+  border-radius: 14px;
+  // Fondo blanco fijo y no `--cl-superficie`: un QR sobre fondo teñido deja de
+  // leerse en la mitad de las cámaras.
+  background: #fff;
+  border: 1px solid var(--cl-borde);
+
+  img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  p {
+    margin: 0;
+    padding: 1rem 0.5rem;
+    font-size: 0.85rem;
+    color: var(--cl-tinta-suave);
+    text-align: center;
+  }
+}
+
+// La misma caja tenue para la clave manual y para los códigos de respaldo: son
+// las dos cosas que hay que copiar de esta pantalla.
+.clave,
+.codigos {
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(21, 90, 117, 0.06);
+  border: 1px solid var(--cl-borde);
+}
+
+.clave {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+
+  &-titulo {
+    width: 100%;
+    font-weight: 600;
+  }
+
+  code {
+    flex: 1;
+    letter-spacing: 0.08em;
+    word-break: break-all;
+  }
+}
+
+form {
+  display: grid;
+  gap: 0.45rem;
+}
+
+label {
+  margin-top: 0.9rem;
+  font-weight: 600;
+}
+
+input[type='text'] {
+  border: 1px solid var(--cl-borde);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  // El código se lee dígito a dígito para compararlo con el del teléfono.
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.35em;
+  text-align: center;
+  outline: none;
+
+  &:focus {
+    border-color: var(--cl-primario-claro);
+    box-shadow: 0 0 0 3px rgba(21, 90, 117, 0.15);
+  }
+
+  &.invalido {
+    border-color: var(--cl-error);
+  }
+}
+
+.ayuda {
+  margin: 0.7rem 0 0;
+}
+
+.alerta {
+  margin-top: 0.75rem;
+  background: rgba(192, 57, 43, 0.09);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  color: var(--cl-error);
+}
+
+.exito {
+  background: rgba(39, 174, 96, 0.08);
+  border: 1px solid rgba(39, 174, 96, 0.25);
+}
+
+.codigos {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.45rem;
+  margin: 1rem 0 0;
+}
+
+.acciones {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.confirmacion {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+  font-size: 0.87rem;
+  cursor: pointer;
+
+  input {
+    margin-top: 0.15rem;
+    accent-color: var(--cl-primario);
+  }
+}
+
+button[type='submit'],
+.panel > button {
+  margin-top: 1.1rem;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(140deg, var(--cl-primario), var(--cl-primario-claro));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.secundario {
+  flex: 1;
+  margin: 0;
+  border: 1px solid var(--cl-borde);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--cl-primario);
+  background: var(--cl-superficie);
+  cursor: pointer;
+}
+
+// Un botón, no un `href` falso: no navega a ninguna parte, y un enlace vacío
+// rompe el teclado y el lector de pantalla.
+.enlace {
+  margin: 0;
+  padding: 0;
+  width: auto;
+  border: 0;
+  background: none;
+  color: var(--cl-primario-claro);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pie {
+  margin: 1.25rem 0 0;
+  text-align: center;
+}
+
+// `currentColor` en vez de un color fijo: el mismo aro sirve sobre el panel
+// claro y dentro del botón oscuro, que si no se pierde contra su propio fondo.
+.girando {
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(127, 127, 127, 0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}

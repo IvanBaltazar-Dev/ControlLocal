@@ -1,0 +1,150 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Operación · Cierres exitosos</p>
+    <h1>Cierres exitosos</h1>
+    <p class="sub">Locales alquilados con contrato registrado</p>
+  </div>
+  <div class="acciones">
+    <button
+      type="button"
+      class="cl-btn"
+      [disabled]="exportando() || cargando()"
+      (click)="exportar()"
+    >
+      {{ exportando() ? 'Exportando…' : 'Exportar CSV' }}
+    </button>
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="Cierres exitosos"
+    [valor]="resumen().cierres"
+    tono="verde"
+    pie="Contratos registrados"
+  />
+  <cl-kpi
+    etiqueta="Comisión generada"
+    [valor]="comisionTotal()"
+    tono="azul"
+    pie="Bruta; excluye liquidaciones anuladas"
+  />
+  <cl-kpi
+    etiqueta="Cobrado"
+    [valor]="cobradoTotal()"
+    tono="verde"
+    pie="Movimientos efectivos por moneda"
+  />
+  <cl-kpi
+    etiqueta="Pendiente de cobro"
+    [valor]="pendienteTotal()"
+    tono="ambar"
+    pie="Saldo por moneda"
+  />
+  <cl-kpi
+    etiqueta="Pagado a agentes"
+    [valor]="pagadoAgenteTotal()"
+    tono="azul"
+    pie="Pagos efectivos por moneda"
+  />
+  <cl-kpi
+    etiqueta="Pendiente a agentes"
+    [valor]="pendienteAgenteTotal()"
+    tono="ambar"
+    pie="Saldo del reparto por moneda"
+  />
+</section>
+
+@if (avisoExportacion(); as aviso) {
+  <p class="cl-ok" role="status">{{ aviso }}</p>
+}
+@if (errorExportacion(); as fallo) {
+  <p class="cl-aviso" role="alert">{{ fallo }}</p>
+}
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por local, inquilino, operación o captación…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los distritos"
+    [opciones]="distritos()"
+    [valor]="filtros().distrito"
+    (valorChange)="cambiarDistrito($event)"
+  />
+  <!-- El filtro por agente solo tiene sentido para quien supervisa a varios. -->
+  @if (puedeFiltrarPorAgente()) {
+    <cl-filtro-select
+      marcador="Todos los agentes"
+      [opciones]="agentes()"
+      [valor]="agenteSeleccionado()"
+      (valorChange)="cambiarAgente($event)"
+    />
+  }
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando cierres exitosos…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Local</th>
+          <th>Distrito</th>
+          <th>Inquilino</th>
+          <th class="num">Renta/mes</th>
+          <th class="num">Plazo</th>
+          <th class="num">Comisión</th>
+          <th>Estado de cobro de comisión</th>
+          <th>Cierre</th>
+          <th>Disponibilidad del local</th>
+          <th>Estado jurídico del contrato</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (contrato of paginaDatos().items; track contrato.id) {
+          <tr>
+            <td class="destacado">{{ valor(contrato.direccionLocal) }}</td>
+            <td>{{ valor(contrato.distritoLocal) }}</td>
+            <td>{{ valor(contrato.clienteNombre) }}</td>
+            <td class="num">{{ importe(contrato.rentaMensual, contrato.moneda) }}</td>
+            <td class="num">{{ plazo(contrato.plazoContratoMeses) }}</td>
+            <td class="num">{{ importe(contrato.comisionGenerada, contrato.monedaComision) }}</td>
+            <td><span class="cl-badge" [class]="tonoComision(contrato.comisionEstado)">{{ etiquetaComision(contrato.comisionEstado) }}</span></td>
+            <td>{{ fecha(contrato.fechaCierre) }}</td>
+            <td><span class="cl-badge" [class]="tonoDisponibilidad(contrato.estadoDisponibilidadLocal)">{{ etiquetaDisponibilidad(contrato.estadoDisponibilidadLocal) }}</span></td>
+            <td>
+              <!-- El estado REAL del contrato: el legado rotulaba todas las
+                   filas como "Alquilado", incluidas las rescindidas. -->
+              <span class="cl-badge" [class]="tonoContrato(contrato.estadoContrato)">
+                {{ etiquetaContrato(contrato.estadoContrato) }}
+              </span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}

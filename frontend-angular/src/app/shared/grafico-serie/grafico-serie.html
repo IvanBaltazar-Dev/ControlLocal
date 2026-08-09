@@ -1,0 +1,58 @@
+@if (!hayDatos()) {
+  <p class="cl-vacio">Sin datos para el periodo.</p>
+} @else {
+  @if (conLeyenda()) {
+    <ul class="leyenda">
+      @for (serie of series(); track serie.nombre) {
+        <li>
+          <span class="punto" [style.background]="serie.color" aria-hidden="true"></span>
+          {{ serie.nombre }}
+        </li>
+      }
+    </ul>
+  }
+
+  <svg
+    [attr.viewBox]="'0 0 ' + ancho + ' ' + alto()"
+    preserveAspectRatio="none"
+    role="img"
+    [attr.aria-label]="alternativo()"
+  >
+    <!-- Rejilla recesiva: sitúa el valor sin competir con las marcas. -->
+    @for (marca of marcas(); track marca.y) {
+      <line
+        [attr.x1]="ejeIzquierdo"
+        [attr.x2]="ancho"
+        [attr.y1]="marca.y"
+        [attr.y2]="marca.y"
+        class="rejilla"
+      />
+      <text [attr.x]="ejeIzquierdo - 6" [attr.y]="marca.y + 3" class="eje" text-anchor="end">
+        {{ marca.etiqueta }}
+      </text>
+    }
+
+    @if (tipo() === 'columnas') {
+      @for (columna of columnas(); track columna.titulo) {
+        @if (columna.alto > 0) {
+          <path [attr.d]="columna.ruta" [attr.fill]="columna.color">
+            <title>{{ columna.titulo }}</title>
+          </path>
+        }
+      }
+    } @else {
+      <path [attr.d]="linea()" fill="none" [attr.stroke]="colorLinea()" stroke-width="2" />
+      @for (punto of puntos(); track punto.titulo) {
+        <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="4.5" [attr.fill]="colorLinea()">
+          <title>{{ punto.titulo }}</title>
+        </circle>
+      }
+    }
+
+    @for (etiqueta of etiquetasEje(); track etiqueta.texto) {
+      <text [attr.x]="etiqueta.x" [attr.y]="alto() - 8" class="eje" text-anchor="middle">
+        {{ etiqueta.texto }}
+      </text>
+    }
+  </svg>
+}

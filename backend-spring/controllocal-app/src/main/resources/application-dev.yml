@@ -1,0 +1,64 @@
+# Perfil DEV — la maquina del desarrollador y el contenedor `api` del compose.
+#
+# Es el UNICO perfil donde se admite el fallback del secreto JWT, y ni siquiera
+# ahi es silencioso: el arranque emite un WARN nombrando la variable (D-S0-1).
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/controllocal_dev}
+    username: ${DB_USER:controllocal}
+    password: ${DB_PASSWORD:controllocal}
+  flyway:
+    # migration-dev alberga el seed de desarrollo. El seed NO viaja a produccion.
+    locations: classpath:db/migration,classpath:db/migration-dev
+
+controllocal:
+  token:
+    # Vacio => fallback dev compartido con el backend Jakarta (SSO del Strangler).
+    secreto: ${API_TOKEN_SECRET:}
+  mfa:
+    # Vacia => clave fija de desarrollo, con WARN en el arranque. En prod el
+    # contexto NO levanta sin ella (mismo criterio que el secreto del token).
+    clave: ${MFA_CLAVE_CIFRADO:}
+    clave-anterior: ${MFA_CLAVE_CIFRADO_ANTERIOR:}
+    version-clave: ${MFA_VERSION_CLAVE:1}
+  cors:
+    origenes: ${CORS_ORIGENES:http://localhost:4200}
+  almacen:
+    # DISCO sigue siendo el defecto y lo seguira siendo hasta que el Bloque 8
+    # migre los binarios: cambiarlo aqui dejaria el almacen vacio, porque los
+    # archivos que ya existen estan en el volumen, no en ningun bucket.
+    proveedor: ${ALMACEN_PROVEEDOR:DISCO}
+    # En el compose apunta al volumen con nombre `controllocal_almacen`.
+    # Fuera del compose cae en ./almacen-dev, que es efimero A PROPOSITO:
+    # quien corre el API a mano ya sabe que su almacen es de usar y tirar.
+    directorio: ${ALMACEN_DIR:./almacen-dev}
+    # Solo se leen con proveedor=S3. Los valores por defecto son los del MinIO
+    # del compose: credenciales de desarrollo publicadas a proposito, porque
+    # ese servicio solo escucha en localhost y su bucket es de usar y tirar.
+    # En produccion las pone el entorno y el validador de arranque lo exige.
+    s3:
+      endpoint: ${ALMACEN_S3_ENDPOINT:http://localhost:9000}
+      bucket: ${ALMACEN_S3_BUCKET:controllocal-dev}
+      region: ${ALMACEN_S3_REGION:us-east-1}
+      access-key: ${ALMACEN_S3_ACCESS_KEY:controllocal}
+      secret-key: ${ALMACEN_S3_SECRET_KEY:controllocal-dev-2026}
+      estilo-de-ruta: ${ALMACEN_S3_ESTILO_RUTA:true}
+  recuperacion:
+    # APAGADA por defecto, tambien en dev. Encendida crea un conector de
+    # gestion en 127.0.0.1 que no deberia existir en una maquina donde nadie
+    # lo necesita: la superficie que no esta no hay que protegerla.
+    habilitada: ${RECUPERACION_EMERGENCIA_HABILITADA:false}
+    puerto-gestion: ${RECUPERACION_PUERTO_GESTION:8091}
+    # Los E2E generan los suyos por corrida y los destruyen con su base
+    # efimera (D-S0-53). Vacios aqui: un custodio de fixture versionado seria
+    # un custodio real con secreto publicado.
+    custodio-a:
+      id: ${RECUPERACION_CUSTODIO_A_ID:}
+      hash: ${RECUPERACION_CUSTODIO_A_HASH:}
+    custodio-b:
+      id: ${RECUPERACION_CUSTODIO_B_ID:}
+      hash: ${RECUPERACION_CUSTODIO_B_HASH:}
+
+logging:
+  level:
+    org.flywaydb: INFO

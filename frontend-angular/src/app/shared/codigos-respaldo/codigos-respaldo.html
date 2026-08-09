@@ -1,0 +1,26 @@
+<ul class="codigos">
+  @for (codigo of codigos(); track codigo) {
+    <li><code>{{ codigo }}</code></li>
+  }
+</ul>
+
+<p class="ayuda">
+  Cada código sirve <strong>una sola vez</strong> y no vuelven a mostrarse. Guárdalos fuera de este
+  dispositivo.
+</p>
+
+<div class="acciones">
+  <button type="button" class="secundario" (click)="copiar()">
+    {{ copiado() ? 'Copiados' : 'Copiar' }}
+  </button>
+  <button type="button" class="secundario" (click)="descargar()">Descargar</button>
+</div>
+
+<label class="confirmacion">
+  <input type="checkbox" [checked]="guardados()" (change)="marcar($event)" />
+  <span>He guardado mis códigos de respaldo en un lugar seguro.</span>
+</label>
+
+<button type="button" class="principal" [disabled]="!guardados()" (click)="alContinuar()">
+  {{ etiquetaContinuar() }}
+</button>

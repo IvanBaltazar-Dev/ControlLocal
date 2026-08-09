@@ -1,0 +1,205 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Cierre · Solicitudes</p>
+    <h1>Solicitudes de alquiler</h1>
+    <p class="sub">
+      La oferta formal del cliente sobre una oportunidad: condiciones, expediente documental y
+      decisión del broker. Los indicadores filtran la lista al pulsarlos.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (esAgente()) {
+      <button type="button" class="cl-btn primario" (click)="nueva()">Nueva solicitud</button>
+    } @else {
+      <span class="solo-lectura">Consulta</span>
+    }
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="Total"
+    [valor]="resumen().total"
+    tono="gris"
+    pie="En tu alcance"
+    [clicable]="true"
+    [activa]="!filtros().estado"
+    (pulsar)="cambiarEstado('')"
+  />
+  <cl-kpi
+    etiqueta="Registradas"
+    [valor]="resumen().registradas"
+    tono="azul"
+    pie="Sin enviar a evaluación"
+    [clicable]="true"
+    [activa]="filtros().estado === 'G'"
+    (pulsar)="seleccionarEstado('G')"
+  />
+  <cl-kpi
+    etiqueta="En revisión"
+    [valor]="resumen().enRevision"
+    tono="info"
+    pie="Las evalúa el broker"
+    [clicable]="true"
+    [activa]="filtros().estado === 'E'"
+    (pulsar)="seleccionarEstado('E')"
+  />
+  <cl-kpi
+    etiqueta="Observadas"
+    [valor]="resumen().observadas"
+    tono="ambar"
+    pie="Devueltas para subsanar"
+    [clicable]="true"
+    [activa]="filtros().estado === 'O'"
+    (pulsar)="seleccionarEstado('O')"
+  />
+  <cl-kpi
+    etiqueta="Aprobadas"
+    [valor]="resumen().aprobadas"
+    tono="verde"
+    pie="Listas para cerrar"
+    [clicable]="true"
+    [activa]="filtros().estado === 'A'"
+    (pulsar)="seleccionarEstado('A')"
+  />
+  <cl-kpi
+    etiqueta="Cerradas"
+    [valor]="resumen().cerradas"
+    tono="verde"
+    pie="Alquiler firmado"
+    [clicable]="true"
+    [activa]="filtros().estado === 'C'"
+    (pulsar)="seleccionarEstado('C')"
+  />
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por código, operación, dirección, cliente o agente…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los estados"
+    [opciones]="opcionesEstado"
+    [valor]="filtros().estado"
+    (valorChange)="cambiarEstado($event)"
+  />
+  <cl-filtro-select
+    marcador="Todos los distritos"
+    [opciones]="opcionesDistrito()"
+    [valor]="filtros().distrito"
+    (valorChange)="cambiarDistrito($event)"
+  />
+  <!-- El filtro por agente solo se ofrece a quien ve a más de uno. -->
+  @if (supervisa()) {
+    <cl-filtro-select
+      marcador="Todos los agentes"
+      [opciones]="opcionesAgente()"
+      [valor]="filtros().idAgente"
+      (valorChange)="cambiarAgente($event)"
+    />
+  }
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando solicitudes…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Solicitud</th>
+          <th>Cliente</th>
+          <th>Propiedad</th>
+          <th>Agente</th>
+          <th>Oferta</th>
+          <th>Documentos</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of paginaDatos().items; track s.id) {
+          <tr>
+            <td class="codigo">
+              {{ valor(s.codigoSolicitud) }}
+              <span class="secundario">{{ valor(s.codigoOportunidad) }}</span>
+            </td>
+            <td>
+              <strong>{{ valor(s.clienteNombre) }}</strong>
+              <span class="secundario">{{ fecha(s.fechaRegistro) }}</span>
+            </td>
+            <td>
+              {{ valor(s.direccionLocal) }}
+              <span class="secundario">{{ valor(s.distritoLocal) }}</span>
+            </td>
+            <td>{{ valor(s.agenteNombre) }}</td>
+            <td>
+              <strong>{{ monto(s.montoPropuesto, s.moneda) }}</strong>
+              <span class="secundario">{{ plazo(s) }}</span>
+            </td>
+            <td>
+              <!-- El contador lo calcula el backend sobre los SEIS requeridos. -->
+              <div class="avance" [attr.aria-label]="checklist(s) + ' documentos entregados'">
+                <span
+                  class="relleno"
+                  [class.completo]="avanceDocumentos(s) === 100"
+                  [style.width.%]="avanceDocumentos(s)"
+                ></span>
+              </div>
+              <span class="secundario">{{ checklist(s) }}</span>
+            </td>
+            <td>
+              <span class="cl-badge" [class]="tonoEstado(s.estado)">
+                {{ etiquetaEstado(s.estado) }}
+              </span>
+            </td>
+            <td class="acciones-fila">
+              <button type="button" class="cl-btn pequeno" (click)="verExpediente(s.codigoSolicitud)">
+                Expediente
+              </button>
+              <!-- Subsanar es del agente y solo sobre una observada. -->
+              @if (esAgente() && s.estado === 'O') {
+                <button
+                  type="button"
+                  class="cl-btn pequeno primario"
+                  (click)="gestionarDocumentos(s.codigoSolicitud)"
+                >
+                  Subsanar
+                </button>
+              }
+              <button
+                type="button"
+                class="cl-btn pequeno"
+                [disabled]="!s.idCliente"
+                (click)="verCliente(s.idCliente)"
+              >
+                Cliente
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}

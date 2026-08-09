@@ -1,0 +1,45 @@
+:host {
+  display: block;
+}
+
+svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* La rejilla y los rótulos del eje son tinta, nunca el color de la serie. */
+.rejilla {
+  stroke: var(--cl-borde);
+  stroke-width: 1;
+}
+
+.eje {
+  fill: var(--cl-tinta-suave);
+  font-size: 10px;
+  font-family: inherit;
+}
+
+.leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--cl-tinta-suave);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .punto {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 3px;
+  }
+}

@@ -1,0 +1,189 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Cierre · Solicitudes · Documentos</p>
+    <h1>Expediente de {{ valor(solicitud()?.codigoSolicitud) }}</h1>
+    <p class="sub">
+      Carga los seis documentos requeridos y envía la solicitud a evaluación. Un archivo nuevo queda
+      <strong>registrado</strong>: solo la revisión del broker lo deja validado u observado.
+    </p>
+  </div>
+  <div class="acciones">
+    <button type="button" class="cl-btn" (click)="volver()">Volver al expediente</button>
+    <button
+      type="button"
+      class="cl-btn primario"
+      [disabled]="!puedeReenviar()"
+      [attr.title]="motivoBloqueo() || null"
+      (click)="pedirReenvio()"
+    >
+      {{ reenviando() ? 'Enviando…' : 'Enviar a evaluación' }}
+    </button>
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando el expediente…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && solicitud(); as s) {
+  <!-- El banner explica en qué punto del circuito está, que es lo que decide
+       si el agente puede hacer algo aquí o solo esperar. -->
+  @if (s.estado === 'E') {
+    <p class="banner info" role="status">
+      Esta solicitud está <strong>en revisión</strong> del broker. No se reenvía mientras la evalúa,
+      pero sí puedes reemplazar un documento que él haya observado; cuando devuelva la solicitud
+      podrás volver a enviarla.
+    </p>
+  } @else if (s.estado === 'O') {
+    <p class="banner atencion" role="status">
+      El broker <strong>observó</strong> esta solicitud. Vuelve a cargar los documentos marcados como
+      observados y envíala de nuevo a evaluación.
+    </p>
+  } @else if (s.estado === 'G') {
+    <p class="banner info" role="status">
+      Solicitud <strong>registrada</strong>. Completa el expediente y envíala a evaluación: hasta
+      entonces el broker no la ve.
+    </p>
+  } @else {
+    <p class="banner info" role="status">
+      Esta solicitud está <strong>{{ etiquetaEstado(s.estado).toLowerCase() }}</strong>. Los
+      documentos quedan como referencia.
+    </p>
+  }
+
+  @if (errorAccion()) { <p class="cl-aviso" role="alert">{{ errorAccion() }}</p> }
+  @if (aviso()) { <p class="cl-ok" role="status">{{ aviso() }}</p> }
+
+  <div class="cl-columnas">
+    <div>
+      <section class="cl-tarjeta">
+        <header>
+          <h2>Documentos requeridos</h2>
+          <span class="cl-badge" [class.bien]="porResolver().length === 0">
+            {{ entregados() }}/{{ tiposRequeridos.length }} entregados
+          </span>
+        </header>
+
+        <div class="cl-tabla-marco">
+          <table class="cl-tabla">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Archivo</th>
+                <th>Estado</th>
+                <th>Actualizado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (fila of filas(); track fila.tipo) {
+                <tr>
+                  <td><strong>{{ fila.nombre }}</strong></td>
+                  <td class="cl-menudo">{{ valor(fila.documento?.nombreArchivo) }}</td>
+                  <td>
+                    <span class="cl-badge" [class]="tonoDocumento(fila.documento)">
+                      {{ etiquetaDocumento(fila.documento) }}
+                    </span>
+                    <!-- La observación del broker es lo que hay que corregir:
+                         se muestra entera, no truncada. -->
+                    @if (fila.documento?.estado === 'O' && fila.documento?.observaciones) {
+                      <p class="observacion">{{ fila.documento?.observaciones }}</p>
+                    }
+                  </td>
+                  <td class="cl-menudo">{{ fecha(fila.documento?.fechaEntrega) }}</td>
+                  <td class="acciones-fila">
+                    @if (fila.documento?.rutaArchivo) {
+                      <button type="button" class="cl-btn pequeno" (click)="abrir(fila.documento)">
+                        Ver
+                      </button>
+                    }
+                    @if (puedeCargar()) {
+                      <button
+                        type="button"
+                        class="cl-btn pequeno"
+                        [disabled]="subiendo()"
+                        (click)="seleccionarTipo(fila.tipo)"
+                      >
+                        {{ fila.documento ? 'Reemplazar' : 'Cargar' }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      @if (documentoAbierto(); as doc) {
+        <section class="cl-tarjeta">
+          <header>
+            <h2>{{ valor(doc.tipoNombre) }}</h2>
+            <button type="button" class="cl-btn pequeno" (click)="cerrarVisor()">Cerrar</button>
+          </header>
+          <!-- El binario se pide con el token, NUNCA por la URL pública. -->
+          <cl-visor-documento
+            [clave]="doc.rutaArchivo ?? null"
+            [nombreArchivo]="doc.nombreArchivo ?? 'documento'"
+          />
+        </section>
+      }
+    </div>
+
+    <aside>
+      @if (puedeCargar()) {
+        <section class="cl-tarjeta">
+          <header><h2>Subir documento</h2></header>
+          <label class="cl-campo">
+            <span>Tipo de documento</span>
+            <select
+              [value]="tipoSeleccionado()"
+              (change)="seleccionarTipo($any($event.target).value)"
+            >
+              @for (fila of filas(); track fila.tipo) {
+                <option [value]="fila.tipo">{{ fila.nombre }}</option>
+              }
+            </select>
+          </label>
+          <cl-subida-archivo
+            etiqueta="Elegir archivo"
+            [extensiones]="['.pdf', '.png', '.jpg', '.jpeg']"
+            [deshabilitado]="subiendo()"
+            (seleccion)="subir($event)"
+            (fallo)="fallaSubida($event)"
+          />
+          <p class="cl-menudo">
+            Se guarda al elegirlo. Reemplazar un observado lo devuelve a
+            <strong>registrado</strong> para que el broker lo vuelva a revisar.
+          </p>
+        </section>
+      }
+
+      <section class="cl-tarjeta">
+        <header><h2>Avance</h2></header>
+        <div class="cl-pares apiladas">
+          <div><span>Entregados</span><strong>{{ entregados() }} de {{ tiposRequeridos.length }}</strong></div>
+          <div><span>Por resolver</span><strong>{{ porResolver().length }}</strong></div>
+          <div><span>Estado</span><strong>{{ etiquetaEstado(s.estado) }}</strong></div>
+        </div>
+        @if (motivoBloqueo()) {
+          <p class="cl-menudo bloqueo">{{ motivoBloqueo() }}</p>
+        }
+      </section>
+    </aside>
+  </div>
+
+  <cl-confirmacion
+    [abierto]="confirmarReenvio()"
+    titulo="¿Enviar la solicitud a evaluación?"
+    descripcion="Pasará al estado En revisión y el broker supervisor recibirá el aviso."
+    etiquetaConfirmar="Enviar a evaluación"
+    [ocupado]="reenviando()"
+    (confirmar)="reenviar()"
+    (cerrar)="cancelarReenvio()"
+  />
+}

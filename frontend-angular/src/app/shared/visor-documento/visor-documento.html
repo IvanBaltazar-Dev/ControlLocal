@@ -1,0 +1,27 @@
+<section class="visor" [style.--alto-visor]="alto()">
+  @if (!clave()) {
+    <div class="estado">No hay un archivo seleccionado.</div>
+  } @else if (cargando()) {
+    <div class="estado" aria-live="polite">Cargando documento…</div>
+  } @else if (error()) {
+    <div class="estado error" role="alert">
+      <span>{{ error() }}</span>
+      <button type="button" (click)="volverAIntentar()">Reintentar</button>
+    </div>
+  } @else if (url()) {
+    @if (esImagen()) {
+      <img [src]="url()" [alt]="nombreArchivo()" />
+    } @else if (esPdf() && urlSegura()) {
+      <iframe
+        [src]="urlSegura()"
+        [title]="'Vista previa de ' + nombreArchivo()"
+        referrerpolicy="no-referrer"
+      ></iframe>
+    } @else {
+      <div class="estado">
+        <span>Este tipo de archivo se descarga para abrirlo.</span>
+        <a [href]="url()" [download]="nombreArchivo()">Descargar {{ nombreArchivo() }}</a>
+      </div>
+    }
+  }
+</section>

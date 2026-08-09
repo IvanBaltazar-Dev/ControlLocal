@@ -1,0 +1,157 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Interacciones · Nueva</p>
+    <h1>Registrar interacción</h1>
+    <p class="sub">Un contacto comercial queda anotado sobre la entidad que le da sentido.</p>
+  </div>
+  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+    Cancelar
+  </button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Preparando el formulario…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  @if (!puedeGuardar()) {
+    <p class="aviso" role="status">
+      Solo el <strong>agente</strong> registra interacciones. Esta vista es de consulta.
+    </p>
+  }
+  @if (errorGuardado()) { <p class="alerta" role="alert">{{ errorGuardado() }}</p> }
+
+  <form class="cl-formulario" [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <section class="cl-seccion">
+      <div class="cl-seccion-titulo">
+        <span>1</span>
+        <div>
+          <h2>De qué se habló</h2>
+          <p>La interacción cuelga de una sola entidad: eso define de qué conversación forma parte.</p>
+        </div>
+      </div>
+
+      <div class="cl-grid dos">
+        <label class="cl-campo">
+          <span>Contexto <b>*</b></span>
+          <select formControlName="contexto" (change)="cambiarContexto()">
+            @for (o of opcionesContexto; track o.valor) {
+              <option [value]="o.valor">{{ o.etiqueta }}</option>
+            }
+          </select>
+          @if (entidadFija()) {
+            <small>Llegaste desde un registro concreto: el contexto ya está fijado.</small>
+          }
+        </label>
+      </div>
+
+      @if (!entidadFija()) {
+        <div class="busqueda">
+          <label class="cl-campo">
+            <span>Buscar {{ etiquetaEntidad().toLowerCase() }}</span>
+            <input
+              type="search"
+              [formControl]="busqueda"
+              [placeholder]="marcadorBusqueda()"
+              (keydown.enter)="$event.preventDefault(); buscar()"
+            />
+          </label>
+          <button type="button" class="cl-btn" [disabled]="buscando()" (click)="buscar()">
+            {{ buscando() ? 'Buscando…' : 'Buscar' }}
+          </button>
+        </div>
+      }
+
+      <label class="cl-campo">
+        <span>{{ etiquetaEntidad() }} <b>*</b></span>
+        <select formControlName="idEntidad">
+          <option [ngValue]="0">— Selecciona un registro —</option>
+          @for (c of candidatos(); track c.id) {
+            <option [ngValue]="c.id">{{ c.etiqueta }}</option>
+          }
+        </select>
+        @if (!entidadFija()) {
+          <small>
+            Mostrando {{ candidatos().length }} de {{ totalCandidatos() }}. Usa la búsqueda si no
+            aparece.
+          </small>
+        }
+        @if (invalido('idEntidad')) {
+          <small class="cl-error-campo">Selecciona el registro sobre el que se habló.</small>
+        }
+      </label>
+    </section>
+
+    <section class="cl-seccion">
+      <div class="cl-seccion-titulo">
+        <span>2</span>
+        <div>
+          <h2>Contacto y resultado</h2>
+          <p>Los resultados disponibles dependen del contexto: son los que acepta el backend.</p>
+        </div>
+      </div>
+      <div class="cl-grid dos">
+        <label class="cl-campo">
+          <span>Canal de contacto <b>*</b></span>
+          <select formControlName="canalContacto">
+            <option value="">— Selecciona un canal —</option>
+            @for (o of opcionesCanal; track o.valor) {
+              <option [value]="o.valor">{{ o.etiqueta }}</option>
+            }
+          </select>
+          @if (invalido('canalContacto')) {
+            <small class="cl-error-campo">Indica por dónde se produjo el contacto.</small>
+          }
+        </label>
+        <label class="cl-campo">
+          <span>Resultado <b>*</b></span>
+          <select formControlName="resultado">
+            <option value="">— Selecciona un resultado —</option>
+            @for (o of opcionesResultado(); track o.valor) {
+              <option [value]="o.valor">{{ o.etiqueta }}</option>
+            }
+          </select>
+          @if (invalido('resultado')) {
+            <small class="cl-error-campo">Indica cómo terminó el contacto.</small>
+          }
+        </label>
+      </div>
+      <p class="nota">
+        La fecha y la hora las pone el servidor al registrar: no se pueden anteponer ni corregir
+        después.
+      </p>
+    </section>
+
+    <section class="cl-seccion">
+      <div class="cl-seccion-titulo">
+        <span>3</span>
+        <div>
+          <h2>Qué se dijo</h2>
+          <p>Lo que el equipo leerá cuando retome esta conversación.</p>
+        </div>
+      </div>
+      <label class="cl-campo">
+        <span>Observaciones</span>
+        <textarea rows="4" maxlength="2000" formControlName="observaciones"></textarea>
+      </label>
+      <label class="cl-campo">
+        <span>Nota o transcripción</span>
+        <textarea rows="4" maxlength="4000" formControlName="transcripcionNota"></textarea>
+        <small>Detalle literal de la llamada o del mensaje, si lo hay.</small>
+      </label>
+    </section>
+
+    <div class="cl-acciones-formulario">
+      <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+        Cancelar
+      </button>
+      <button type="submit" class="cl-btn primario" [disabled]="guardando() || !puedeGuardar()">
+        {{ guardando() ? 'Registrando…' : 'Registrar interacción' }}
+      </button>
+    </div>
+  </form>
+}

@@ -1,0 +1,71 @@
+﻿
+== Entorno E2E aislado 20260803081830-6843 ==
+Base: controllocal_e2e_20260803081830_6843
+powershell :  Network controllocal-e2e-20260803081830-6843_default Creating 
+En línea: 1 Carácter: 450
++ ... lyContinue; powershell -NoProfile -ExecutionPolicy Bypass -File D:\in ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Network contro...fault Creating :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Network controllocal-e2e-20260803081830-6843_default Created 
+ Container controllocal-postgres-e2e-20260803081830-6843 Creating 
+ Container controllocal-postgres-e2e-20260803081830-6843 Created 
+ Container controllocal-api-e2e-20260803081830-6843 Creating 
+ Container controllocal-api-e2e-20260803081830-6843 Created 
+ Container controllocal-postgres-e2e-20260803081830-6843 Starting 
+ Container controllocal-postgres-e2e-20260803081830-6843 Started 
+ Container controllocal-postgres-e2e-20260803081830-6843 Waiting 
+ Container controllocal-postgres-e2e-20260803081830-6843 Healthy 
+ Container controllocal-api-e2e-20260803081830-6843 Starting 
+ Container controllocal-api-e2e-20260803081830-6843 Started 
+ Container controllocal-api-e2e-20260803081830-6843 Waiting 
+ Container controllocal-postgres-e2e-20260803081830-6843 Waiting 
+ Container controllocal-api-e2e-20260803081830-6843 Healthy 
+ Container controllocal-postgres-e2e-20260803081830-6843 Healthy 
+
+== Suite diagnostico-transporte / corrida 20260803081830-6843 ==
+
+== Trabajo trivial (3000 llamadas a /salud por camino) ==
+   /salud no consulta la base: cualquier paron que aparezca aqui es del camino.
+
+-- W: desde Windows contra el puerto publicado --
+   hecho
+
+-- D: desde dentro de la red de Docker --
+   muestras obtenidas: 3000
+
+== Resultado ==
+
+Camino                            N p50 p99 Peor Sobre500ms Sobre1500ms
+------                            - --- --- ---- ---------- -----------
+W  Windows -> puerto publicado 3000  20  44 2091          1           1
+D  dentro de Docker            3000   0   0   10          0           0
+
+
+
+-- llamadas de W por encima de 500 ms (el trabajo real son milisegundos) --
+
+N InicioUtc      Ms
+- ---------      --
+1 08:19:07.035 2091
+
+
+
+-- llamadas de D por encima de 500 ms: 0 
+
+-- pausas de la JVM durante esta prueba (si el log esta encendido) --
+   59 pausas registradas; la mas larga 50 ms
+
+===== transporte medido =====
+ Container controllocal-api-e2e-20260803081830-6843 Stopping 
+ Container controllocal-api-e2e-20260803081830-6843 Stopped 
+ Container controllocal-api-e2e-20260803081830-6843 Removing 
+ Container controllocal-api-e2e-20260803081830-6843 Removed 
+ Container controllocal-postgres-e2e-20260803081830-6843 Stopping 
+ Container controllocal-postgres-e2e-20260803081830-6843 Stopped 
+ Container controllocal-postgres-e2e-20260803081830-6843 Removing 
+ Container controllocal-postgres-e2e-20260803081830-6843 Removed 
+ Network controllocal-e2e-20260803081830-6843_default Removing 
+ Network controllocal-e2e-20260803081830-6843_default Removed 
+Entorno 20260803081830-6843 eliminado: sin contenedores, volumenes, red ni filas E2E residuales.

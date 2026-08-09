@@ -1,0 +1,10 @@
+@if (cargando()) {
+  <div class="estado carga" role="status">{{ mensajeCarga() }}</div>
+} @else if (error(); as mensaje) {
+  <div class="estado error" role="alert">
+    <span>{{ mensaje }}</span>
+    <button type="button" (click)="reintentar.emit()">Reintentar</button>
+  </div>
+} @else if (vacio()) {
+  <div class="estado vacio">{{ mensajeVacio() }}</div>
+}

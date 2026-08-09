@@ -1,0 +1,98 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Captaciones · Expediente</p>
+    <h1>Expediente de {{ valor(captacion()?.codigoCaptacion) }}</h1>
+    <p class="sub">{{ valor(captacion()?.direccionLocal) }} · {{ valor(captacion()?.distritoLocal) }}</p>
+  </div>
+  <div class="acciones">
+    @if (puedeEditar()) { <button type="button" class="cl-btn primario" (click)="editar()">{{ captacion()?.estado === 'O' ? 'Subsanar' : 'Editar' }}</button> }
+    @if (puedeRevisar()) { <button type="button" class="cl-btn primario" (click)="revisar()">Revisar captación</button> }
+    @if (puedeCerrar()) { <button type="button" class="cl-btn peligro" (click)="abrirCierre()">Cerrar captación</button> }
+    <button type="button" class="cl-btn" (click)="volver()">Volver</button>
+  </div>
+</header>
+
+<cl-estado-listado [cargando]="cargando()" [error]="errorCarga()" [vacio]="false" mensajeCarga="Cargando expediente de captación…" (reintentar)="reintentar()" />
+
+@if (!cargando() && captacion(); as c) {
+  @if (errorAccion()) { <p class="cl-aviso" role="alert">{{ errorAccion() }}</p> }
+  @if (mensaje()) { <p class="cl-ok" role="status">{{ mensaje() }}</p> }
+  @if (c.estado === 'O' && c.observacionRevision) { <p class="observacion-broker"><strong>Observación pendiente de subsanar:</strong> {{ c.observacionRevision }}</p> }
+
+  <section class="cl-resumen">
+    <div><span>Estado</span><strong><span class="cl-badge" [class]="tonoEstado()">{{ estado() }}</span></strong></div>
+    <div><span>Propietario</span><strong>{{ valor(c.propietarioNombre) }}</strong></div>
+    <div><span>Agente responsable</span><strong>{{ valor(c.agenteNombre) }}</strong></div>
+    <div><span>Comisión pactada</span><strong>{{ comision() }}</strong></div>
+  </section>
+
+  <div class="cl-columnas">
+    <main>
+      <section class="cl-tarjeta">
+        <header><div><h2>Condiciones de la captación</h2><p>Encargo comercial registrado con el propietario.</p></div><button type="button" class="cl-btn pequeno" (click)="resumenComercial()">Resumen comercial</button></header>
+        <div class="cl-pares">
+          <div><span>Fecha de captación</span><strong>{{ fecha(c.fechaCaptacion) }}</strong></div>
+          <div><span>Fecha de inicio del encargo</span><strong>{{ fecha(c.fechaInicioVigencia) }}</strong></div>
+          <div><span>Fecha final del encargo</span><strong>{{ fecha(c.fechaFinVigencia) }}</strong></div>
+          <div><span>Operación</span><strong>Alquiler comercial</strong></div>
+          <div><span>Urgencia</span><strong>{{ c.urgencia ? c.urgencia + ' / 5' : '—' }}</strong></div>
+          <div><span>Exclusividad</span><strong>{{ exclusivo(c.exclusividad) }}</strong></div>
+          <div><span>Área</span><strong>{{ area(c.areaM2) }}</strong></div>
+          <div><span>Rubro</span><strong>{{ valor(c.rubro) }}</strong></div>
+          <div><span>Renta referencial</span><strong>{{ precio(local()?.precioReferencial, local()?.monedaReferencial) }}</strong></div>
+          <div><span>Comisión calculada</span><strong>{{ importeComision() }}</strong></div>
+          <div><span>Tratamiento del IGV</span><strong>{{ c.tratamientoIgv === 'I' ? 'Incluido' : c.tratamientoIgv === 'A' ? 'Adicional' : 'No aplica' }}</strong></div>
+          @if (c.fechaCierre) { <div><span>Fecha de cierre</span><strong>{{ fecha(c.fechaCierre) }}</strong></div> }
+          @if (c.motivoCierre) { <div><span>Motivo de cierre</span><strong>{{ valor(c.motivoCierre) }}</strong></div> }
+        </div>
+        <p class="observaciones"><strong>Observaciones del agente:</strong> {{ valor(c.observaciones) }}</p>
+        @if (c.detalleMotivoCierre) { <p class="observaciones"><strong>Detalle del cierre:</strong> {{ c.detalleMotivoCierre }}</p> }
+      </section>
+
+      <section class="cl-tarjeta">
+        <header><div><h2>Origen y propiedad</h2><p>Accesos con nombres distintos según lo que muestran.</p></div></header>
+        <div class="origenes">
+          <button type="button" class="origen" [disabled]="!c.idLocal" (click)="verLocal()"><strong>Datos del local</strong><span>Registro técnico-operativo · {{ valor(local()?.codigoLocal) }}</span></button>
+          <button type="button" class="origen" (click)="resumenComercial()"><strong>Resumen comercial</strong><span>Galería, condiciones, comisión y responsables</span></button>
+          <button type="button" class="origen" [disabled]="!prospeccion()" (click)="verProspeccion()"><strong>Seguimiento de prospección</strong><span>{{ valor(prospeccion()?.codigoProspeccion) }} · {{ resultadoPropuesta() }}</span></button>
+        </div>
+      </section>
+
+      <section class="cl-tarjeta">
+        <header><div><h2>Revisión del broker</h2><p>Resultado y observaciones de gobierno del expediente.</p></div></header>
+        <div class="cl-pares">
+          <div><span>Fecha de revisión</span><strong>{{ fecha(c.fechaRevision) }}</strong></div>
+          <div><span>Broker revisor</span><strong>{{ c.idBrokerRevisor || 'Pendiente' }}</strong></div>
+          <div><span>Resultado</span><strong>{{ estado() }}</strong></div>
+        </div>
+        @if (c.observacionRevision) { <p class="observaciones">{{ c.observacionRevision }}</p> }
+      </section>
+    </main>
+
+    <aside>
+      <section class="cl-tarjeta">
+        <header><div><h2>Lectura del expediente</h2><p>Identificadores y situación actual.</p></div></header>
+        <div class="cl-pares apiladas">
+          <div><span>ID interno</span><strong>{{ c.id }}</strong></div>
+          <div><span>Código</span><strong>{{ valor(c.codigoCaptacion) }}</strong></div>
+          <div><span>Código del local</span><strong>{{ valor(local()?.codigoLocal) }}</strong></div>
+          <div><span>Prospección de origen</span><strong>{{ valor(prospeccion()?.codigoProspeccion) }}</strong></div>
+        </div>
+      </section>
+      <section class="cl-tarjeta estado-flujo">
+        <header><div><h2>Flujo de revisión</h2><p>Estado contractual, sin etiquetas inventadas.</p></div></header>
+        <ol>
+          <li class="completo"><span></span>Captación registrada</li>
+          <li [class.completo]="c.estado !== 'P'" [class.actual]="c.estado === 'P'"><span></span>Pendiente de revisión</li>
+          <li [class.completo]="['A', 'O', 'R', 'C', 'V'].includes(c.estado || '')" [class.actual]="c.estado === 'O'"><span></span>Decisión del broker</li>
+          <li [class.completo]="['A', 'C', 'V'].includes(c.estado || '')" [class.actual]="c.estado === 'A'"><span></span>Gestión comercial activa</li>
+          <li [class.completo]="['C', 'V'].includes(c.estado || '')" [class.actual]="['C', 'V'].includes(c.estado || '')"><span></span>Cierre o vencimiento</li>
+        </ol>
+      </section>
+    </aside>
+  </div>
+}
+
+<cl-confirmacion [abierto]="dialogoCierre()" titulo="Cerrar captación" descripcion="El encargo dejará de estar activo. El motivo quedará en la trazabilidad y se avisará al agente." tono="rojo" etiquetaConfirmar="Cerrar captación" [ocupado]="procesando()" [bloqueado]="!motivoCierre.value.trim()" (cerrar)="cerrarDialogo()" (confirmar)="confirmarCierre()">
+  <label class="campo-dialogo"><span>Motivo *</span><textarea rows="4" maxlength="1000" [formControl]="motivoCierre"></textarea></label>
+</cl-confirmacion>

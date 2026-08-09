@@ -1,0 +1,50 @@
+:host {
+  display: block;
+}
+
+.visor {
+  background: #f7f5f1;
+  border: 1px solid #ded8cf;
+  border-radius: 10px;
+  min-height: 180px;
+  overflow: hidden;
+}
+
+img,
+iframe {
+  border: 0;
+  display: block;
+  height: var(--alto-visor);
+  max-height: 760px;
+  min-height: 260px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.estado {
+  align-items: center;
+  color: #6f665d;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  min-height: 180px;
+  padding: 20px;
+  text-align: center;
+}
+
+.error {
+  color: #9f3028;
+}
+
+button,
+a {
+  background: #3e352d;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 13px;
+  text-decoration: none;
+}

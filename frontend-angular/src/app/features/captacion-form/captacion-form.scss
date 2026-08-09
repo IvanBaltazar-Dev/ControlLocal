@@ -1,0 +1,50 @@
+:host { display: block; }
+
+.cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.2rem; }
+.cabecera h1 { margin: 0.2rem 0; color: var(--cl-primario); font-size: 1.4rem; }
+.cabecera p { margin: 0; color: var(--cl-tinta-suave); }
+.miga { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.distribucion { display: grid; grid-template-columns: minmax(0, 1fr) 17.5rem; gap: 1rem; align-items: start; }
+main { display: grid; gap: 0.9rem; }
+.seccion, aside { padding: 1.15rem; border: 1px solid var(--cl-borde); border-radius: var(--cl-radio); background: var(--cl-superficie); }
+.seccion-titulo { display: flex; gap: 0.7rem; margin-bottom: 1rem; }
+.seccion-titulo > span { display: grid; place-items: center; flex: 0 0 1.8rem; height: 1.8rem; border-radius: 50%; background: var(--cl-primario); color: white; font-size: 0.75rem; font-weight: 700; }
+h2, h3 { margin: 0; color: var(--cl-primario); }
+h2 { font-size: 1rem; }
+h3 { font-size: 0.95rem; }
+.seccion-titulo p, .campo small { margin: 0.15rem 0 0; color: var(--cl-tinta-suave); font-size: 0.74rem; }
+.grid { display: grid; gap: 0.8rem; }
+.grid.dos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid.tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.resumen-local { margin-top: 0.8rem; }
+.campo { display: grid; gap: 0.35rem; color: var(--cl-tinta-suave); font-size: 0.78rem; font-weight: 650; }
+.campo b { color: var(--cl-error); }
+input, select, textarea { width: 100%; min-height: 2.5rem; padding: 0.55rem 0.65rem; border: 1px solid var(--cl-borde); border-radius: 8px; background: white; color: var(--cl-tinta); font: inherit; }
+input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--cl-primario-claro); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cl-primario-claro) 15%, transparent); }
+input:disabled { background: var(--cl-fondo); color: var(--cl-tinta-suave); }
+.checkbox { grid-template-columns: auto 1fr; align-items: center; align-self: end; min-height: 2.5rem; }
+.checkbox input { width: auto; min-height: auto; }
+.busqueda-local { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; margin-bottom: 0.7rem; }
+.mensaje-error { margin: 0.35rem 0 0; color: var(--cl-error) !important; font-size: 0.74rem; }
+/* Ayuda, no error: mismo hueco y mismo tamano, pero en tinta suave para que
+   no compita con el mensaje que si pide corregir algo. */
+.ayuda { margin: 0.35rem 0 0; color: var(--cl-tinta-suave); font-size: 0.74rem; }
+.observacion-broker { padding: 0.75rem 0.9rem; border-radius: 9px; background: #fff7e6; color: #8a5400; font-size: 0.86rem; }
+.alerta { padding: 0.75rem 0.9rem; border: 1px solid color-mix(in srgb, var(--cl-error) 25%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--cl-error) 8%, white); color: var(--cl-error); font-size: 0.84rem; }
+aside { position: sticky; top: 1rem; }
+aside ol { display: grid; gap: 0.75rem; margin: 0.9rem 0 0; padding: 0; list-style: none; }
+aside li { display: flex; gap: 0.55rem; align-items: center; color: var(--cl-tinta-suave); }
+aside li > span { display: grid; place-items: center; width: 1.55rem; height: 1.55rem; border: 1px solid var(--cl-borde); border-radius: 50%; font-size: 0.7rem; }
+aside li.completo > span { border-color: var(--cl-exito); background: var(--cl-exito); color: white; }
+aside strong, aside small { display: block; }
+aside strong { font-size: 0.78rem; }
+aside small { margin-top: 0.1rem; font-size: 0.68rem; }
+.nota { margin: 1rem 0 0; padding: 0.75rem; border-radius: 8px; background: color-mix(in srgb, var(--cl-primario-claro) 9%, white); color: var(--cl-primario-claro); font-size: 0.76rem; line-height: 1.45; }
+.acciones-formulario { display: flex; justify-content: flex-end; gap: 0.55rem; padding: 0.9rem 1rem; border: 1px solid var(--cl-borde); border-radius: var(--cl-radio); background: var(--cl-superficie); }
+.primario, .secundario { padding: 0.55rem 0.9rem; border: 1px solid var(--cl-primario); border-radius: 8px; cursor: pointer; font: inherit; font-weight: 650; }
+.primario { background: var(--cl-primario); color: white; }
+.secundario { background: white; color: var(--cl-primario); }
+button:disabled { opacity: 0.55; cursor: default; }
+
+@media (max-width: 64rem) { .distribucion { grid-template-columns: 1fr; } aside { position: static; } }
+@media (max-width: 46rem) { .cabecera { flex-direction: column; } .grid.dos, .grid.tres { grid-template-columns: 1fr; } .busqueda-local { grid-template-columns: 1fr; } }

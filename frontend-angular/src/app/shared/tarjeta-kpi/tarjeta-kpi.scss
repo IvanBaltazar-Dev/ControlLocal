@@ -1,0 +1,74 @@
+:host {
+  --kpi-color: var(--cl-primario-claro);
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 9rem;
+  padding: 0.85rem 1rem;
+  background: var(--cl-superficie);
+  border: 1px solid var(--cl-borde);
+  border-left: 3px solid var(--kpi-color);
+  border-radius: var(--cl-radio);
+}
+
+/* Temperatura del indicador. Se conserva el significado del legado: verde
+   positivo, ámbar precaución, rojo negativo — no es decoración. */
+:host(.tono-azul) {
+  --kpi-color: #0a57e7;
+}
+:host(.tono-verde) {
+  --kpi-color: var(--cl-exito);
+}
+:host(.tono-ambar) {
+  --kpi-color: #e08a00;
+}
+:host(.tono-rojo) {
+  --kpi-color: var(--cl-error);
+}
+:host(.tono-gris) {
+  --kpi-color: #5a6472;
+}
+:host(.tono-info) {
+  --kpi-color: #0398d6;
+}
+
+:host(.clicable) {
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: var(--kpi-color);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--kpi-color);
+    outline-offset: 2px;
+  }
+}
+
+:host(.activa) {
+  border-color: var(--kpi-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--kpi-color) 14%, transparent);
+}
+
+.etiqueta {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cl-tinta-suave);
+}
+
+.valor {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--cl-primario);
+}
+
+.pie {
+  font-size: 0.72rem;
+  color: var(--cl-tinta-suave);
+}

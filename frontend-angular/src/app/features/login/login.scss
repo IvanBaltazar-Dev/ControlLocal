@@ -1,0 +1,192 @@
+.escena {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(60rem 30rem at 110% -10%, rgba(217, 164, 65, 0.18), transparent 60%),
+    linear-gradient(160deg, #0e3a4c 0%, #0a2a38 55%, #071e29 100%);
+}
+
+.panel {
+  width: min(26rem, 100%);
+  background: var(--cl-superficie);
+  border-radius: 18px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+  animation: aparecer 0.45s ease-out both;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.75rem;
+
+  &-logo {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 12px;
+    background: linear-gradient(140deg, var(--cl-primario), var(--cl-primario-claro));
+    color: var(--cl-acento);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    color: var(--cl-primario);
+  }
+
+  p {
+    margin: 0.1rem 0 0;
+    font-size: 0.85rem;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+form {
+  display: grid;
+  gap: 0.45rem;
+}
+
+label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--cl-tinta-suave);
+  margin-top: 0.5rem;
+}
+
+input {
+  border: 1px solid var(--cl-borde);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: var(--cl-primario-claro);
+    box-shadow: 0 0 0 3px rgba(21, 90, 117, 0.15);
+  }
+
+  &.invalido {
+    border-color: var(--cl-error);
+  }
+}
+
+.alerta {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: rgba(192, 57, 43, 0.09);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  color: var(--cl-error);
+  font-size: 0.88rem;
+}
+
+button {
+  margin-top: 1.1rem;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(140deg, var(--cl-primario), var(--cl-primario-claro));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: filter 0.15s ease, transform 0.05s ease;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: default;
+  }
+}
+
+.girando {
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pie {
+  margin: 1.5rem 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--cl-tinta-suave);
+}
+
+// Aviso traído por `?aviso=` desde otra pantalla (p. ej. "MFA configurado").
+// Verde, no rojo: informa de algo que salió bien, aunque obligue a repetir el
+// ingreso.
+.nota {
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(39, 174, 96, 0.08);
+  border: 1px solid rgba(39, 174, 96, 0.25);
+  font-size: 0.86rem;
+}
+
+.intro {
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  color: var(--cl-tinta-suave);
+}
+
+// El código se compara dígito a dígito con el del teléfono.
+#codigo {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.35em;
+  text-align: center;
+}
+
+// Un botón, no un `href` falso: no navega a ninguna parte, y un enlace vacío
+// rompe el teclado y el lector de pantalla. Anula el estilo del `button` de
+// arriba, que aquí alcanza a todo el panel.
+.enlace {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cl-primario-claro);
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

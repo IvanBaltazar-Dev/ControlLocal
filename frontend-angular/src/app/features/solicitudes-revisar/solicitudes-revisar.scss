@@ -1,0 +1,56 @@
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cl-tabla {
+  td strong,
+  .secundario {
+    display: block;
+  }
+
+  .secundario {
+    margin-top: 0.15rem;
+    color: var(--cl-tinta-suave);
+    font-size: 0.75rem;
+  }
+
+  .codigo {
+    color: var(--cl-primario);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .acciones-fila {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+}
+
+/**
+ * Barra del checklist documental. Verde solo al 6/6: un expediente incompleto
+ * no debe "parecer" listo de un vistazo.
+ */
+.avance {
+  display: block;
+  width: 100%;
+  min-width: 3.5rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--cl-borde);
+  overflow: hidden;
+
+  .relleno {
+    display: block;
+    height: 100%;
+    background: var(--cl-primario);
+    transition: width 0.2s ease;
+
+    &.completo {
+      background: var(--cl-exito);
+    }
+  }
+}

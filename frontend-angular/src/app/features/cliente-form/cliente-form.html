@@ -1,0 +1,212 @@
+<header class="cabecera">
+  <div>
+    <p class="miga">Demanda · Clientes · {{ esEdicion() ? 'Editar' : 'Nuevo' }}</p>
+    <h1>{{ titulo() }}</h1>
+    <p>
+      {{ esEdicion()
+        ? 'Actualiza contacto, rubro y consentimientos. La identidad quedó fijada al registrarlo.'
+        : 'Registra al interesado para poder abrirle oportunidades y visitas.' }}
+    </p>
+  </div>
+  <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Cargando cliente…"
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  @if (!puedeEditar()) {
+    <p class="alerta" role="alert">
+      El registro y la edición de clientes son del agente inmobiliario.
+    </p>
+  }
+  @if (errorGuardado()) { <p class="alerta" role="alert">{{ errorGuardado() }}</p> }
+
+  <form [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <section class="seccion">
+      <div class="seccion-titulo">
+        <span>1</span>
+        <div>
+          <h2>Tipo de cliente</h2>
+          <p>{{ esEdicion() ? 'No se puede cambiar tras el registro.' : 'Determina qué identificación se pide.' }}</p>
+        </div>
+      </div>
+      <div class="segmentado" role="group" aria-label="Tipo de cliente">
+        <button
+          type="button"
+          [class.activo]="!juridica()"
+          [disabled]="esEdicion()"
+          (click)="cambiarTipoPersona('N')"
+        >
+          Persona natural
+        </button>
+        <button
+          type="button"
+          [class.activo]="juridica()"
+          [disabled]="esEdicion()"
+          (click)="cambiarTipoPersona('J')"
+        >
+          Persona jurídica
+        </button>
+      </div>
+    </section>
+
+    <section class="seccion">
+      <div class="seccion-titulo">
+        <span>2</span>
+        <div>
+          <h2>Identificación</h2>
+          <p>{{ juridica() ? 'Datos de la empresa.' : 'Datos personales del cliente.' }}</p>
+        </div>
+      </div>
+      <div class="grid dos">
+        <label class="campo">
+          <span>{{ etiquetaNombre() }} <b>*</b></span>
+          <input
+            type="text"
+            formControlName="nombre"
+            maxlength="150"
+            [placeholder]="juridica() ? 'Ej. Inversiones Trébol S.A.C.' : 'Nombres y apellidos'"
+          />
+          @if (invalido('nombre')) {
+            <small class="mensaje-error">{{ etiquetaNombre() }} es obligatorio.</small>
+          }
+        </label>
+        @if (!juridica()) {
+          <label class="campo">
+            <span>Tipo de documento <b>*</b></span>
+            <select formControlName="tipoDocumento">
+              <option value="D">DNI</option>
+              <option value="C">Carné de extranjería</option>
+              <option value="P">Pasaporte</option>
+            </select>
+          </label>
+        }
+        <label class="campo">
+          <span>{{ etiquetaDocumento() }} <b>*</b></span>
+          <input
+            type="text"
+            formControlName="numeroDocumento"
+            inputmode="numeric"
+            maxlength="15"
+            [placeholder]="juridica() ? '20XXXXXXXXX' : 'XXXXXXXX'"
+          />
+          @if (esEdicion()) {
+            <small class="candado">
+              El documento no se puede modificar: la actualización no lo toca.
+            </small>
+          }
+          @if (invalido('numeroDocumento') || documentoIncompleto) {
+            <small class="mensaje-error">{{ mensajeDocumento() }}</small>
+          }
+        </label>
+      </div>
+    </section>
+
+    <section class="seccion">
+      <div class="seccion-titulo">
+        <span>3</span>
+        <div><h2>Contacto</h2><p>Para coordinar interacciones y visitas.</p></div>
+      </div>
+      <div class="grid dos">
+        <label class="campo">
+          <span>Teléfono principal <b>*</b></span>
+          <div class="telefono">
+            <span class="prefijo">+51</span>
+            <input type="tel" formControlName="telefono" inputmode="numeric" maxlength="9" placeholder="999999999" />
+          </div>
+          @if (invalido('telefono')) {
+            <small class="mensaje-error">El teléfono debe tener 9 dígitos.</small>
+          }
+        </label>
+        <label class="campo">
+          <span>Correo electrónico <b>*</b></span>
+          <input type="email" formControlName="correo" maxlength="120" placeholder="cliente@correo.com" />
+          @if (invalido('correo')) {
+            <small class="mensaje-error">Escribe un correo válido.</small>
+          }
+        </label>
+      </div>
+    </section>
+
+    <section class="seccion">
+      <div class="seccion-titulo">
+        <span>4</span>
+        <div><h2>Perfil comercial y consentimientos</h2><p>Qué busca y qué autorizó.</p></div>
+      </div>
+      <div class="grid dos">
+        <label class="campo">
+          <span>Rubro de interés <b>*</b></span>
+          <select formControlName="rubroComercial">
+            @for (rubro of rubros(); track rubro) {
+              <option [value]="rubro">{{ rubro }}</option>
+            }
+          </select>
+        </label>
+      </div>
+      <p class="nota">
+        El perfil de búsqueda (renta, metraje, distritos) no se captura aquí: es un
+        <strong>requerimiento</strong> del cliente, y puede tener más de uno.
+      </p>
+    </section>
+
+    <!-- D-27: la autorización se pide UNA SOLA VEZ, en el alta, y no puede
+         dominar la pantalla. Dos elementos y ni uno más: la casilla y el
+         enlace. Canal, fecha, actor, organización, versión del aviso, base
+         jurídica y finalidad los pone el backend — si alguno de esos aparece
+         aquí como campo, la pantalla está mal. -->
+    @if (!esEdicion()) {
+      <section class="seccion autorizacion">
+        <div class="seccion-titulo">
+          <span>5</span>
+          <div>
+            <h2>Autorización de datos</h2>
+            <p>Se pide una sola vez, al registrar.</p>
+          </div>
+        </div>
+
+        <label class="campo checkbox">
+          <input type="checkbox" formControlName="consentimientoUsoDato" />
+          <span>
+            La persona autorizó el registro y uso de sus datos para atender su solicitud y
+            gestionar la relación comercial.
+          </span>
+        </label>
+
+        <p class="nota">
+          <!-- href y no routerLink: abre en pestana nueva, asi que el router no
+               interviene, y ademas la pagina es PUBLICA (se puede leer sin sesion). -->
+          <a href="/privacidad" target="_blank" rel="noopener">
+            Consultar el aviso de privacidad
+          </a>
+          — cubre gestión comercial, comunicaciones, documentos y contratos, seguridad y
+          cumplimiento legal, y las automatizaciones internas del servicio.
+        </p>
+
+        @if (faltaAutorizacion()) {
+          <p class="cl-aviso">
+            Sin esta autorización no se puede registrar a la persona: no se guardará ningún dato.
+          </p>
+        }
+      </section>
+    }
+
+    <div class="acciones-formulario">
+      <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        class="primario"
+        [disabled]="guardando() || !puedeEditar() || faltaAutorizacion()"
+      >
+        {{ guardando() ? 'Guardando…' : (esEdicion() ? 'Guardar cambios' : 'Registrar cliente') }}
+      </button>
+    </div>
+  </form>
+}

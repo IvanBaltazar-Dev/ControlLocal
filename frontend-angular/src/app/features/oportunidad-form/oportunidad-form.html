@@ -1,0 +1,236 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Demanda · Oportunidades · Nueva</p>
+    <h1>Nueva oportunidad comercial</h1>
+    <p class="sub">
+      Vincula un cliente interesado con una captación activa para iniciar el seguimiento.
+    </p>
+  </div>
+  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+    Cancelar
+  </button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Preparando el formulario…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  @if (!puedeGuardar()) {
+    <p class="aviso" role="status">
+      Solo el <strong>agente</strong> registra oportunidades. Esta vista es de consulta.
+    </p>
+  }
+  @if (errorGuardado()) { <p class="alerta" role="alert">{{ errorGuardado() }}</p> }
+
+  <form class="cl-formulario ancho" [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <div class="distribucion">
+      <main>
+        <section class="cl-seccion">
+          <div class="cl-seccion-titulo">
+            <span>1</span>
+            <div>
+              <h2>Cliente interesado</h2>
+              <p>Persona o empresa que quiere evaluar el local.</p>
+            </div>
+          </div>
+
+          @if (clienteFijo()) {
+            <label class="cl-campo">
+              <span>Cliente</span>
+              <input [value]="valor(clienteActual()?.nombre)" disabled />
+              <small>Llegaste desde su bitácora: el interesado ya está fijado.</small>
+            </label>
+          } @else {
+            <div class="busqueda">
+              <label class="cl-campo">
+                <span>Buscar cliente activo</span>
+                <input
+                  type="search"
+                  [formControl]="busquedaCliente"
+                  placeholder="Nombre, razón social, documento o rubro"
+                  (keydown.enter)="$event.preventDefault(); buscarClientes()"
+                />
+              </label>
+              <button
+                type="button"
+                class="cl-btn"
+                [disabled]="buscandoClientes()"
+                (click)="buscarClientes()"
+              >
+                {{ buscandoClientes() ? 'Buscando…' : 'Buscar' }}
+              </button>
+            </div>
+            <label class="cl-campo">
+              <span>Cliente <b>*</b></span>
+              <select formControlName="idCliente" (change)="seleccionarCliente()">
+                <option [ngValue]="0">— Selecciona un cliente —</option>
+                @for (c of clientes(); track c.id) {
+                  <option [ngValue]="c.id">
+                    {{ valor(c.nombre) }} — {{ valor(c.rubroComercial) }}
+                  </option>
+                }
+              </select>
+              <small>
+                Mostrando {{ clientes().length }} de {{ totalClientes() }} activos. Usa la búsqueda
+                si no aparece.
+              </small>
+              @if (invalido('idCliente')) {
+                <small class="cl-error-campo">Selecciona un cliente interesado.</small>
+              }
+            </label>
+          }
+
+          @if (clienteActual(); as c) {
+            <div class="cl-grid tres">
+              <label class="cl-campo"><span>Teléfono</span><input [value]="valor(c.telefono)" disabled /></label>
+              <label class="cl-campo"><span>Correo</span><input [value]="valor(c.correo)" disabled /></label>
+              <label class="cl-campo"><span>Rubro</span><input [value]="valor(c.rubroComercial)" disabled /></label>
+            </div>
+            @if (!c.consentimientoContacto) {
+              <p class="aviso-consentimiento">
+                Este cliente <strong>no autorizó el contacto comercial</strong>. La oportunidad se
+                puede crear igual, pero revisa el consentimiento antes de llamarlo.
+              </p>
+            }
+          }
+        </section>
+
+        <section class="cl-seccion">
+          <div class="cl-seccion-titulo">
+            <span>2</span>
+            <div>
+              <h2>Captación activa</h2>
+              <p>Propiedad disponible sobre la que se hará el seguimiento.</p>
+            </div>
+          </div>
+
+          <div class="busqueda">
+            <label class="cl-campo">
+              <span>Buscar captación activa</span>
+              <input
+                type="search"
+                [formControl]="busquedaCaptacion"
+                placeholder="Código, dirección o distrito"
+                (keydown.enter)="$event.preventDefault(); buscarCaptaciones()"
+              />
+            </label>
+            <button
+              type="button"
+              class="cl-btn"
+              [disabled]="buscandoCaptaciones()"
+              (click)="buscarCaptaciones()"
+            >
+              {{ buscandoCaptaciones() ? 'Buscando…' : 'Buscar' }}
+            </button>
+          </div>
+          <label class="cl-campo">
+            <span>Captación <b>*</b></span>
+            <select formControlName="idCaptacion" (change)="seleccionarCaptacion()">
+              <option [ngValue]="0">— Selecciona una captación —</option>
+              @for (c of captaciones(); track c.id) {
+                <option [ngValue]="c.id">{{ descripcionCaptacion(c) }}</option>
+              }
+            </select>
+            <small>
+              Mostrando {{ captaciones().length }} de {{ totalCaptaciones() }} activas. Solo
+              aparecen las de tu alcance: el backend exige que la captación sea tuya.
+            </small>
+            @if (invalido('idCaptacion')) {
+              <small class="cl-error-campo">Selecciona una captación activa.</small>
+            }
+          </label>
+
+          @if (captacionActual(); as c) {
+            <div class="cl-grid tres">
+              <label class="cl-campo"><span>Propietario</span><input [value]="valor(c.propietarioNombre)" disabled /></label>
+              <label class="cl-campo"><span>Distrito</span><input [value]="valor(c.distritoLocal)" disabled /></label>
+              <label class="cl-campo"><span>Rubro permitido</span><input [value]="valor(c.rubro)" disabled /></label>
+              <label class="cl-campo"><span>Agente de la captación</span><input [value]="valor(c.agenteNombre)" disabled /></label>
+              <label class="cl-campo"><span>Vigencia hasta</span><input [value]="fecha(c.fechaFinVigencia)" disabled /></label>
+            </div>
+          }
+
+          <!-- Solo si el local tiene anuncios: atribuir la oportunidad a "por
+               dónde llegó" es opcional y no debe estorbar cuando no aplica. -->
+          @if (publicaciones().length > 0) {
+            <label class="cl-campo">
+              <span>Publicación de origen</span>
+              <select formControlName="idPublicacionOrigen">
+                <option [ngValue]="0">Sin atribuir</option>
+                @for (p of publicaciones(); track p.id) {
+                  <option [ngValue]="p.id">{{ descripcionPublicacion(p) }}</option>
+                }
+              </select>
+              <small>Anuncio por el que el cliente llegó a esta propiedad. Opcional.</small>
+            </label>
+          }
+        </section>
+
+        <section class="cl-seccion">
+          <div class="cl-seccion-titulo">
+            <span>3</span>
+            <div>
+              <h2>Primer contexto</h2>
+              <p>Notas iniciales del interés del cliente.</p>
+            </div>
+          </div>
+          <label class="cl-campo">
+            <span>Observaciones</span>
+            <textarea
+              rows="4"
+              maxlength="2000"
+              formControlName="observaciones"
+              placeholder="Ej. Interesado en visitar el local esta semana."
+            ></textarea>
+          </label>
+        </section>
+
+        <div class="cl-acciones-formulario">
+          <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+            Cancelar
+          </button>
+          <button type="submit" class="cl-btn primario" [disabled]="guardando() || !puedeGuardar()">
+            {{ guardando() ? 'Creando…' : 'Crear oportunidad' }}
+          </button>
+        </div>
+      </main>
+
+      <aside>
+        <h3>Avance del formulario</h3>
+        <ol>
+          <li [class.completo]="pasoCliente()">
+            <span>1</span><div><strong>Cliente</strong><small>Interesado</small></div>
+          </li>
+          <li [class.completo]="pasoCaptacion()">
+            <span>2</span><div><strong>Captación</strong><small>Propiedad activa</small></div>
+          </li>
+          <li class="completo">
+            <span>3</span><div><strong>Contexto</strong><small>Notas iniciales</small></div>
+          </li>
+        </ol>
+
+        <div class="resumen-lateral">
+          <h3>Resumen</h3>
+          <div class="cl-pares apiladas">
+            <div><span>Cliente</span><strong>{{ valor(clienteActual()?.nombre) }}</strong></div>
+            <div><span>Captación</span><strong>{{ valor(captacionActual()?.codigoCaptacion) }}</strong></div>
+            <div><span>Local</span><strong>{{ valor(captacionActual()?.direccionLocal) }}</strong></div>
+          </div>
+        </div>
+
+        <p class="nota">
+          La oportunidad abre el seguimiento comercial. Desde ella se registran interacciones,
+          visitas y, cuando llegue el momento, la solicitud de alquiler.
+        </p>
+        <p class="nota">
+          El código se genera solo: no hace falta escribirlo.
+        </p>
+      </aside>
+    </div>
+  </form>
+}

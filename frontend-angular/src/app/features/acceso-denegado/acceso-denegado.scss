@@ -1,0 +1,54 @@
+.aviso {
+  max-width: 34rem;
+  margin: 3rem auto;
+  padding: 2rem;
+  text-align: center;
+  background: var(--cl-superficie);
+  border: 1px solid var(--cl-borde);
+  border-radius: 14px;
+
+  .icono {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: rgba(217, 164, 65, 0.14);
+    color: var(--cl-acento);
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  h1 {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    color: var(--cl-primario);
+  }
+
+  p {
+    margin: 0 0 0.6rem;
+    color: var(--cl-tinta-suave);
+    font-size: 0.95rem;
+  }
+
+  .pista {
+    font-size: 0.85rem;
+  }
+
+  .volver {
+    display: inline-block;
+    margin-top: 1.2rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 9px;
+    background: var(--cl-primario);
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.9rem;
+
+    &:hover {
+      opacity: 0.92;
+    }
+  }
+}

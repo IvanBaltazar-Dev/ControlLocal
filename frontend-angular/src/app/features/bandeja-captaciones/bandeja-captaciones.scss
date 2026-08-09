@@ -1,0 +1,7 @@
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.cl-tabla {
+  td strong, .secundario { display: block; }
+  .codigo { color: var(--cl-primario); font-weight: 650; font-variant-numeric: tabular-nums; }
+  .secundario { margin-top: 0.15rem; color: var(--cl-tinta-suave); font-size: 0.75rem; }
+  .acciones-fila { display: flex; gap: 0.35rem; }
+}

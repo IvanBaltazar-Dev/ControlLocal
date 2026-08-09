@@ -1,0 +1,45 @@
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.alerta-recontacto {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.8rem;
+  border-left: 3px solid #d98200;
+  border-radius: 8px;
+  background: color-mix(in srgb, #d98200 10%, transparent);
+  color: #754900;
+  font-size: 0.86rem;
+}
+
+.cl-tabla {
+  td strong,
+  .secundario {
+    display: block;
+  }
+
+  .codigo {
+    color: var(--cl-primario);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .secundario {
+    margin-top: 0.15rem;
+    color: var(--cl-tinta-suave);
+    font-size: 0.75rem;
+  }
+
+  .atrasado {
+    color: #a45d00;
+    font-weight: 650;
+  }
+
+  .acciones-fila {
+    display: flex;
+    gap: 0.4rem;
+  }
+}

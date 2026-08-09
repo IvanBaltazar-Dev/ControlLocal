@@ -1,0 +1,32 @@
+:host {
+  display: block;
+}
+
+.estado {
+  padding: 1.5rem;
+  border: 1px solid var(--cl-borde);
+  border-radius: var(--cl-radio);
+  background: var(--cl-superficie);
+  text-align: center;
+  color: var(--cl-tinta-suave);
+  font-size: 0.9rem;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  border-color: color-mix(in srgb, var(--cl-error) 35%, transparent);
+  background: color-mix(in srgb, var(--cl-error) 8%, var(--cl-superficie));
+  color: var(--cl-error);
+
+  button {
+    padding: 0.3rem 0.7rem;
+    border: 1px solid currentcolor;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+}

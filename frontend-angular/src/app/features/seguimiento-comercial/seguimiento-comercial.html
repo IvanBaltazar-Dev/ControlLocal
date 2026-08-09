@@ -1,0 +1,143 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Seguimiento</p>
+    <h1>Seguimiento comercial</h1>
+    <p class="sub">
+      El proceso entero en una lista: prospección, captación, oportunidad, solicitud y cierre.
+    </p>
+  </div>
+</header>
+
+<!--
+  KPI clicables: son atajos al filtro de proceso y siguen valiendo con otros
+  filtros puestos, porque el backend los cuenta ignorando SOLO el de proceso.
+-->
+<section class="kpis">
+  @for (kpi of kpis(); track kpi.etiqueta) {
+    <cl-kpi
+      [etiqueta]="kpi.etiqueta"
+      [valor]="kpi.total"
+      [tono]="kpi.tono"
+      [clicable]="true"
+      [activa]="tipo() === kpi.valor"
+      (pulsar)="filtrarPorProceso(kpi.valor)"
+    />
+  }
+</section>
+
+<cl-barra-filtros
+  [busqueda]="texto()"
+  (busquedaChange)="texto.set($event); aplicar()"
+  marcador="Buscar por código, cliente, local, distrito, agente o propietario…"
+  [resultados]="datos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  [debounceMs]="300"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los agentes"
+    [opciones]="opciones().agentes"
+    [valor]="agente()"
+    (valorChange)="agente.set($event); aplicar()"
+  />
+  <cl-filtro-select
+    marcador="Todos los propietarios"
+    [opciones]="opciones().propietarios"
+    [valor]="propietario()"
+    (valorChange)="propietario.set($event); aplicar()"
+  />
+  <cl-filtro-select
+    marcador="Todos los estados"
+    [opciones]="opciones().estados"
+    [valor]="estado()"
+    (valorChange)="estado.set($event); aplicar()"
+  />
+  <cl-filtro-select
+    marcador="Todos los distritos"
+    [opciones]="opciones().distritos"
+    [valor]="distrito()"
+    (valorChange)="distrito.set($event); aplicar()"
+  />
+</cl-barra-filtros>
+
+@if (aviso(); as mensaje) {
+  <p class="cl-aviso">{{ mensaje }}</p>
+}
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && datos().items.length === 0"
+  mensajeCarga="Cargando el seguimiento…"
+  mensajeVacio="No hay registros con esos filtros."
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && datos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Proceso</th>
+          <th>Código</th>
+          <th>Local</th>
+          <th>Cliente</th>
+          <th>Agente</th>
+          <th>Estado</th>
+          <th>Último hito</th>
+          <th class="num">Fecha</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (fila of datos().items; track fila.proceso + fila.codigo) {
+          <tr>
+            <td>
+              <span class="cl-badge" [class]="tono(fila)">{{ fila.proceso }}</span>
+            </td>
+            <td>{{ fila.codigo }}</td>
+            <td class="ancho">
+              <span class="principal">{{ fila.local }}</span>
+              <span class="cl-menudo">{{ fila.distrito }}</span>
+            </td>
+            <td class="ancho">
+              <span class="principal">{{ fila.cliente }}</span>
+              <span class="cl-menudo">{{ fila.propietario }}</span>
+            </td>
+            <td>{{ fila.agente }}</td>
+            <td>{{ fila.estado }}</td>
+            <td class="ancho">
+              <span class="principal">{{ hito(fila) }}</span>
+              @if (importe(fila)) {
+                <span class="cl-menudo">{{ importe(fila) }}</span>
+              }
+            </td>
+            <td class="num">{{ fecha(fila) }}</td>
+            <td class="acciones">
+              @if (puedeRevisar(fila)) {
+                <button type="button" class="cl-btn primario" (click)="abrir(fila.rutaRevision)">
+                  Revisar
+                </button>
+              }
+              @if (puedeAbrir(fila)) {
+                <button type="button" class="cl-btn" (click)="abrir(fila.ruta)">Abrir</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <cl-paginacion
+    [total]="datos().totalRecords"
+    [tamano]="tamano"
+    [pagina]="pagina()"
+    (paginaChange)="cambiarPagina($event)"
+  />
+
+  <p class="cl-menudo nota">
+    Se muestran {{ tamano }} registros por página: es el tope del recurso, no una preferencia de
+    esta pantalla. Las filas <b>sin fecha encabezan</b> la lista.
+  </p>
+}

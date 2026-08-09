@@ -1,0 +1,47 @@
+/* Solo lo propio del expediente: el armazón (cabecera, columnas, tarjeta,
+   pares, tabla, badge, avisos) es global (`styles.scss`, prefijo `cl-`). */
+
+:host { display: block; }
+
+/*
+ * Banner de contexto: dice en qué punto del circuito está la solicitud, que es
+ * lo que decide si el agente puede hacer algo aquí o solo esperar.
+ */
+.banner {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 9px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+
+  &.info {
+    background: color-mix(in srgb, var(--cl-primario-claro) 9%, white);
+    color: var(--cl-primario-claro);
+  }
+
+  &.atencion {
+    background: #fff7e6;
+    color: #8a5400;
+  }
+}
+
+/* La observación del broker es la instrucción de qué corregir: se lee entera. */
+.observacion {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: #8a5400;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.acciones-fila {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.bloqueo {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--cl-borde);
+}

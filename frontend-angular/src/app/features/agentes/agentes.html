@@ -1,0 +1,192 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión · Personas</p>
+    <h1>Agentes inmobiliarios</h1>
+    <p class="sub">
+      Equipo comercial. La búsqueda y los indicadores se resuelven en el servidor sobre todo tu
+      alcance, no sobre la página cargada.
+    </p>
+  </div>
+  <div class="acciones">
+    @if (puedeCrear()) {
+      <button type="button" class="cl-btn primario" (click)="nuevo()">Registrar agente</button>
+    }
+  </div>
+</header>
+
+<p class="aviso-alcance">{{ avisoAlcance() }}</p>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="En el equipo"
+    [valor]="resumen().total"
+    tono="azul"
+    pie="Todos los agentes de tu alcance"
+    [clicable]="true"
+    [activa]="!filtros().estado && !filtros().estadoOperativo"
+    (pulsar)="limpiarFiltros()"
+  />
+  <cl-kpi
+    etiqueta="Activos"
+    [valor]="resumen().activos"
+    tono="verde"
+    pie="Con acceso al sistema"
+    [clicable]="true"
+    [activa]="filtros().estado === 'A'"
+    (pulsar)="cambiarEstado(filtros().estado === 'A' ? '' : 'A')"
+  />
+  <cl-kpi
+    etiqueta="Inactivos"
+    [valor]="resumen().inactivos"
+    tono="gris"
+    pie="Dados de baja"
+    [clicable]="true"
+    [activa]="filtros().estado === 'I'"
+    (pulsar)="cambiarEstado(filtros().estado === 'I' ? '' : 'I')"
+  />
+  <cl-kpi
+    etiqueta="Disponibles"
+    [valor]="resumen().disponibles"
+    tono="verde"
+    pie="Pueden recibir encargos"
+    [clicable]="true"
+    [activa]="filtros().estadoOperativo === 'D'"
+    (pulsar)="cambiarOperativo(filtros().estadoOperativo === 'D' ? '' : 'D')"
+  />
+  <cl-kpi
+    etiqueta="No disponibles"
+    [valor]="resumen().ocupados + resumen().vacaciones + resumen().suspendidos"
+    tono="ambar"
+    pie="Ocupados, de vacaciones o suspendidos"
+  />
+</section>
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="buscar($event)"
+  marcador="Buscar por nombre, documento, código o zona…"
+  [resultados]="total()"
+  [hayFiltros]="hayFiltros()"
+  [debounceMs]="300"
+  (limpiar)="limpiarFiltros()"
+>
+  <cl-filtro-select
+    marcador="Toda situación"
+    [opciones]="opcionesOperativo"
+    [valor]="filtros().estadoOperativo"
+    (valorChange)="cambiarOperativo($event)"
+  />
+  @if (resumen().zonas.length > 0) {
+    <cl-filtro-select
+      marcador="Toda zona"
+      [opciones]="resumen().zonas"
+      [valor]="filtros().zona"
+      (valorChange)="cambiarZona($event)"
+    />
+  }
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && filas().length === 0"
+  mensajeCarga="Cargando agentes…"
+  [mensajeVacio]="
+    hayFiltros()
+      ? 'Ningún agente de tu alcance coincide con la búsqueda.'
+      : 'No hay agentes en tu alcance.'
+  "
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && !error() && filas().length > 0) {
+  <div class="tabla-envoltorio">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th scope="col">Agente</th>
+          <th scope="col">Zona</th>
+          <th scope="col">Contacto</th>
+          <th scope="col" class="num">Captaciones</th>
+          <th scope="col" class="num">Operaciones</th>
+          <th scope="col">Situación</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (agente of filas(); track agente.id) {
+          <tr>
+            <td>
+              <button type="button" class="enlace" (click)="abrir(agente)">
+                {{ texto(agente.nombre) }}
+              </button>
+              <span class="secundario">{{ texto(agente.codigoAgente) }}</span>
+            </td>
+            <td>{{ texto(agente.zona) }}</td>
+            <td>
+              <span>{{ texto(agente.telefono) }}</span>
+              <span class="secundario">{{ texto(agente.correo) }}</span>
+            </td>
+            <td class="num">{{ agente.captacionesActivas ?? 0 }}</td>
+            <td class="num">{{ agente.operacionesActivas ?? 0 }}</td>
+            <td>
+              <span class="cl-pastilla" [class.activa]="activo(agente)">
+                {{ activo(agente) ? 'Activo' : 'Inactivo' }}
+              </span>
+              <span class="secundario" [class]="tonoOperativo(agente)">{{ operativo(agente) }}</span>
+            </td>
+            <td class="acciones-fila">
+              @if (puedeEditar()) {
+                <button type="button" class="cl-btn menor" (click)="editar(agente)">Editar</button>
+                @if (activo(agente)) {
+                  <button
+                    type="button"
+                    class="cl-btn menor peligro"
+                    [disabled]="guardando()"
+                    (click)="pedirBaja(agente)"
+                  >
+                    Dar de baja
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="cl-btn menor"
+                    [disabled]="guardando()"
+                    (click)="reactivar(agente)"
+                  >
+                    Reactivar
+                  </button>
+                }
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (total() > porPagina) {
+    <cl-paginacion
+      [total]="total()"
+      [tamano]="porPagina"
+      [pagina]="pagina()"
+      (paginaChange)="irAPagina($event)"
+    />
+  }
+}
+
+@if (aDarDeBaja(); as agente) {
+  <cl-confirmacion
+    [abierto]="true"
+    titulo="Dar de baja al agente"
+    [descripcion]="
+      texto(agente.nombre) +
+      ' quedará inactivo administrativamente. No se borra nada: sus captaciones, oportunidades e historia comercial se conservan, y puedes reactivarlo después.'
+    "
+    tono="rojo"
+    etiquetaConfirmar="Dar de baja"
+    [ocupado]="guardando()"
+    (confirmar)="confirmarBaja()"
+    (cerrar)="cancelarBaja()"
+  />
+}

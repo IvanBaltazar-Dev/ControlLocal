@@ -1,0 +1,332 @@
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  mensajeCarga="Cargando el resumen comercial…"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && captacion(); as c) {
+  <header class="cl-cabecera">
+    <div>
+      <p class="miga">Captaciones · {{ valor(c.codigoCaptacion) }} · Resumen comercial</p>
+      <h1>{{ valor(c.direccionLocal) }}</h1>
+      <p class="sub">
+        {{ valor(c.distritoLocal) }} · {{ rubro() }}
+        <span class="cl-badge" [class]="tonoEstado(c.estado)">
+          {{ etiquetaEstado(c.estado) }}
+        </span>
+      </p>
+    </div>
+    <div class="acciones">
+      <button type="button" class="cl-btn" (click)="volver()">Volver</button>
+      @if (c.idLocal) {
+        <button type="button" class="cl-btn primario" (click)="verLocal()">
+          Datos del local
+        </button>
+      }
+    </div>
+  </header>
+
+  <section class="cl-resumen">
+    <div><span>Área</span><strong>{{ unidad(area() ?? undefined, 'm²') }}</strong></div>
+    <div>
+      <span>Renta mensual</span>
+      <strong>{{ texto(renta()) }}</strong>
+    </div>
+    <div>
+      <span>Comisión</span>
+      <strong>{{ comisionEquivalencia() }}</strong>
+    </div>
+    <div><span>Periodo del encargo</span><strong>{{ vigencia() }}</strong></div>
+  </section>
+
+  <div class="cl-columnas">
+    <div class="principal">
+      <article class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Galería del local</h2>
+            <p>Hasta {{ maximoFotos }} fotos por local</p>
+          </div>
+          <span class="cl-badge" [class]="galeriaLlena() ? 'bien' : ''">
+            {{ totalFotos() }} / {{ maximoFotos }} fotos
+          </span>
+        </header>
+
+        @if (fotos().error; as fallo) {
+          <p class="cl-aviso" role="alert">{{ fallo }}</p>
+        }
+
+        @if (fotos().datos.length > 0) {
+          <ul class="galeria">
+            @for (foto of fotos().datos; track foto.idFoto) {
+              <li>
+                <!-- La imagen se pide con el token, no por la URL pública. -->
+                <cl-imagen-segura
+                  [clave]="foto.clave"
+                  [alt]="'Foto del local: ' + valor(foto.nombre)"
+                />
+                @if (foto.proveedor) {
+                  <span class="proveedor">{{ foto.proveedor }}</span>
+                }
+                @if (puedeEditarFotos()) {
+                  <button
+                    type="button"
+                    class="cl-btn pequeno quitar"
+                    [disabled]="fotoOcupada()"
+                    (click)="eliminarFoto(foto.idFoto)"
+                  >
+                    {{ eliminandoFoto() === foto.idFoto ? 'Eliminando…' : 'Eliminar' }}
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        } @else if (!fotos().error) {
+          <p class="cl-vacio">Aún no hay fotos cargadas para este local.</p>
+        }
+
+        @if (puedeEditarFotos() && c.idLocal) {
+          <div class="subida">
+            @if (galeriaLlena()) {
+              <p class="cl-vacio">Límite de {{ maximoFotos }} fotos alcanzado.</p>
+            } @else {
+              <cl-subida-archivo
+                etiqueta="Agregar fotos"
+                [extensiones]="extensionesFoto"
+                [multiple]="true"
+                [maximoArchivos]="quedanFotos()"
+                [deshabilitado]="fotoOcupada()"
+                (seleccion)="fotosElegidas($event)"
+                (fallo)="fotoRechazada($event)"
+              />
+              <p class="cl-menudo">
+                Puedes agregar {{ quedanFotos() }} más. Se guardan al seleccionarlas.
+              </p>
+            }
+
+            @if (subiendo()) {
+              <p class="cl-menudo">Guardando…</p>
+            }
+            @if (mensajeFoto(); as ok) {
+              <p class="cl-ok" role="status">{{ ok }}</p>
+            }
+            @if (errorFoto(); as fallo) {
+              <p class="cl-aviso" role="alert">{{ fallo }}</p>
+            }
+          </div>
+        }
+      </article>
+
+      <article class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Características de la propiedad</h2>
+            <p>Ficha técnica del local captado</p>
+          </div>
+        </header>
+
+        @if (local().error; as fallo) {
+          <p class="cl-aviso" role="alert">{{ fallo }}</p>
+        } @else if (local().datos; as l) {
+          <div class="cl-pares">
+            <div><span>Área</span><strong>{{ unidad(area() ?? undefined, 'm²') }}</strong></div>
+            <div><span>Rubro sugerido</span><strong>{{ rubro() }}</strong></div>
+            <div><span>Tipo</span><strong>{{ etiquetaTipoInmueble(l.tipoInmueble) }}</strong></div>
+            <div><span>Ambientes</span><strong>{{ cifra(l.ambientes, 0) }}</strong></div>
+            <div>
+              <span>Antigüedad</span>
+              <strong>{{ unidad(l.antiguedadAnios, 'años', 0) }}</strong>
+            </div>
+            <div><span>Distrito</span><strong>{{ valor(c.distritoLocal) }}</strong></div>
+            <div><span>Referencia</span><strong>{{ valor(l.zonaUrbanizacion) }}</strong></div>
+            <div><span>Frente</span><strong>{{ unidad(l.frente, 'm') }}</strong></div>
+            <div>
+              <span>Estacionamientos</span>
+              <strong>{{ cifra(l.numeroEstacionamientos, 0) }}</strong>
+            </div>
+            <div>
+              <span>Carga eléctrica</span>
+              <strong>{{ unidad(l.cargaElectricaKw, 'kW') }}</strong>
+            </div>
+            <div><span>Zonificación</span><strong>{{ valor(l.zonificacion) }}</strong></div>
+            <div>
+              <span>Apto licencia</span>
+              <strong>{{ booleano(l.aptoLicenciaFuncionamiento) }}</strong>
+            </div>
+            <div>
+              <span>Cuota mantenimiento</span>
+              <strong>{{ importe(l.cuotaMantenimiento, l.monedaReferencial) }}</strong>
+            </div>
+            <div>
+              <span>Estado del local</span>
+              <strong>{{ etiquetaEstadoLocal(l.estado) }}</strong>
+            </div>
+          </div>
+        }
+      </article>
+
+      <article class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Descripción</h2>
+            <p>La que registró el agente para este local</p>
+          </div>
+        </header>
+        @if (local().datos?.descripcion; as descripcion) {
+          <p class="parrafo">{{ descripcion }}</p>
+        } @else {
+          <p class="cl-vacio">Este local todavía no tiene descripción registrada.</p>
+        }
+      </article>
+
+      <article class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Ubicación</h2>
+            <p>Dirección registrada de la propiedad</p>
+          </div>
+        </header>
+        <div class="cl-pares">
+          <div><span>Dirección</span><strong>{{ valor(c.direccionLocal) }}</strong></div>
+          <div><span>Distrito</span><strong>{{ valor(c.distritoLocal) }}</strong></div>
+          @if (local().datos?.geoLat !== undefined && local().datos?.geoLong !== undefined) {
+            <div>
+              <span>Coordenadas</span>
+              <strong>{{ cifra(local().datos?.geoLat, 5) }}, {{ cifra(local().datos?.geoLong, 5) }}</strong>
+            </div>
+          }
+        </div>
+        @if (enlaceMapa(); as mapa) {
+          <p class="cl-menudo enlace">
+            <a [href]="mapa" target="_blank" rel="noopener noreferrer">Abrir en el mapa</a>
+          </p>
+        }
+      </article>
+    </div>
+
+    <aside class="lateral">
+      <article class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Condiciones comerciales</h2>
+            <p>Lo pactado en la captación</p>
+          </div>
+        </header>
+        <p class="precio">
+          {{ texto(renta()) }}
+          <small>/ mes</small>
+        </p>
+
+        <!-- La comisión se dice en lenguaje del negocio ("un mes de
+             alquiler") y con su importe; el porcentaje es dato secundario. -->
+        <div class="comision">
+          <span class="etiqueta">Comisión inmobiliaria pactada</span>
+          <strong>
+            {{ comisionEquivalencia() }}
+            @if (comisionEstimada(); as estimada) {
+              — {{ texto(estimada) }}
+            }
+          </strong>
+          @if (comisionPorcentajeSecundario(); as pct) {
+            <span class="cl-menudo">{{ pct }} de la renta mensual</span>
+          }
+          @if (comisionEstimada()) {
+            <span class="cl-menudo">
+              Estimada sobre la renta de referencia; la liquidación definitiva se calcula al
+              cerrar el contrato.
+            </span>
+          }
+        </div>
+
+        <div class="cl-pares apiladas">
+          <div>
+            <span>Urgencia</span>
+            <strong>{{ c.urgencia !== undefined ? c.urgencia + ' / 5' : SIN_DATO }}</strong>
+          </div>
+          <div>
+            <span>Exclusividad</span>
+            <strong>
+              {{ c.exclusividad === undefined ? SIN_DATO : c.exclusividad ? 'Encargo exclusivo' : 'No exclusivo' }}
+            </strong>
+          </div>
+          <div><span>Periodo del encargo</span><strong>{{ vigencia() }}</strong></div>
+          <div>
+            <span>Restante</span>
+            <strong [class.vencido]="vigenciaVencida()">{{ diasRestantes() }}</strong>
+          </div>
+          <div><span>Captada el</span><strong>{{ fecha(c.fechaCaptacion) }}</strong></div>
+        </div>
+      </article>
+
+      @if (precios().error || precios().datos.length > 0) {
+        <article class="cl-tarjeta">
+          <header>
+            <div>
+              <h2>Histórico de precios</h2>
+              <p>Evolución por hito comercial</p>
+            </div>
+          </header>
+          @if (precios().error; as fallo) {
+            <p class="cl-aviso" role="alert">{{ fallo }}</p>
+          } @else {
+            <div class="cl-pares apiladas">
+              @for (precio of precios().datos; track precio.id) {
+                <div>
+                  <span>{{ fecha(precio.fecha) }} · {{ etiquetaHito(precio.hito) }}</span>
+                  <strong>{{ importe(precio.monto, precio.moneda) }}</strong>
+                </div>
+              }
+            </div>
+          }
+        </article>
+      }
+
+      <article class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Propietario</h2>
+            <p>Titular del encargo</p>
+          </div>
+        </header>
+
+        <div class="persona">
+          <span class="avatar" aria-hidden="true">{{ iniciales(c.propietarioNombre) }}</span>
+          <div>
+            <strong>{{ valor(c.propietarioNombre) }}</strong>
+            @if (propietario().datos; as p) {
+              <span class="cl-menudo">{{ etiquetaTipoPersona(p.tipoPersona) }}</span>
+            }
+          </div>
+        </div>
+
+        @if (propietario().error; as fallo) {
+          <p class="cl-aviso" role="alert">{{ fallo }}</p>
+        } @else if (propietario().datos; as p) {
+          <div class="cl-pares apiladas">
+            <div><span>Documento</span><strong>{{ documento(p) }}</strong></div>
+            <div><span>Teléfono</span><strong>{{ valor(p.telefono) }}</strong></div>
+            <div><span>Correo</span><strong>{{ valor(p.correo) }}</strong></div>
+          </div>
+        } @else {
+          <p class="cl-vacio">Sin datos de contacto disponibles para tu alcance.</p>
+        }
+      </article>
+
+      <article class="cl-tarjeta">
+        <header>
+          <div>
+            <h2>Agente responsable</h2>
+            <p>Quien gestiona la captación</p>
+          </div>
+        </header>
+        <div class="persona">
+          <span class="avatar" aria-hidden="true">{{ iniciales(c.agenteNombre) }}</span>
+          <div>
+            <strong>{{ c.agenteNombre || 'Sin asignar' }}</strong>
+          </div>
+        </div>
+      </article>
+    </aside>
+  </div>
+}

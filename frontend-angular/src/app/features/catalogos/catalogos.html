@@ -1,0 +1,57 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Gestión</p>
+    <h1>Catálogos del sistema</h1>
+    <p class="sub">
+      Qué significa cada código del sistema y dónde se usa. {{ totalCodigos() }} valores, de solo
+      consulta.
+    </p>
+  </div>
+</header>
+
+<p class="nota">
+  Esta tabla <strong>se genera de la misma fuente que usan las pantallas</strong>, no se escribe
+  a mano: si un catálogo cambia, esto cambia con él. Los códigos forman parte del contrato del
+  sistema y de datos ya grabados, así que no se editan desde aquí — cambiarlos no sería
+  configurar, sería cambiar el significado del historial.
+</p>
+
+<nav class="cl-pestanas" role="tablist">
+  @for (grupo of grupos; track grupo.clave) {
+    <button
+      type="button"
+      role="tab"
+      [class.activa]="activo() === grupo.clave"
+      [attr.aria-selected]="activo() === grupo.clave"
+      (click)="abrir(grupo.clave)"
+    >
+      {{ grupo.titulo }}
+    </button>
+  }
+</nav>
+
+<p class="donde">{{ grupoActivo().donde }}</p>
+
+@for (catalogo of grupoActivo().catalogos; track catalogo.titulo) {
+  <section class="catalogo">
+    <h2>{{ catalogo.titulo }}</h2>
+    <div class="tabla-envoltorio">
+      <table class="cl-tabla">
+        <thead>
+          <tr>
+            <th scope="col" class="codigo">Código</th>
+            <th scope="col">Significado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entrada of entradas(catalogo.valores); track entrada.codigo) {
+            <tr>
+              <td class="codigo"><code>{{ entrada.codigo }}</code></td>
+              <td>{{ entrada.descripcion }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+}

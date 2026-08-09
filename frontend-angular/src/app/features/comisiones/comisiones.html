@@ -1,0 +1,310 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Cierre · Comisiones</p>
+    <h1>Liquidación de comisiones</h1>
+    <p class="sub">
+      Lo generado, lo cobrado y lo pagado al agente, por cierre.
+      @if (!puedeLiquidar()) {
+        <span class="solo-lectura">Solo lectura</span>
+      }
+    </p>
+  </div>
+</header>
+
+<!--
+  Tres magnitudes separadas, nunca sumadas: facturado no es cobrado, y cobrado
+  no es pagado. Cada moneda va en su propia línea porque no se suman entre sí.
+-->
+<section class="kpis">
+  <cl-kpi etiqueta="Cierres" [valor]="resumen().cierres" tono="azul" pie="en el alcance filtrado" />
+  <cl-kpi
+    etiqueta="Sin liquidación"
+    [valor]="resumen().sinLiquidacion"
+    [tono]="resumen().sinLiquidacion > 0 ? 'ambar' : 'verde'"
+    pie="contratos sin comisión creada"
+  />
+  <cl-kpi
+    etiqueta="Por liquidar"
+    [valor]="resumen().porLiquidar"
+    [tono]="resumen().porLiquidar > 0 ? 'ambar' : 'verde'"
+    pie="pendientes o parciales"
+  />
+</section>
+
+<div class="totales">
+  <div class="cl-tarjeta">
+    <header><div><h2>Comisión generada</h2><p>Lo facturado por los cierres del alcance</p></div></header>
+    @if (resumen().comisionesGeneradas.length === 0) {
+      <p class="cl-vacio">Sin comisiones generadas.</p>
+    } @else {
+      <ul class="montos">
+        @for (item of resumen().comisionesGeneradas; track item.moneda) {
+          <li>
+            <b>{{ importe(item.monto, item.moneda) }}</b>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+
+  <div class="cl-tarjeta">
+    <header><div><h2>Cobrado</h2><p>Lo que entró de verdad</p></div></header>
+    @if (resumen().montosCobrados.length === 0) {
+      <p class="cl-vacio">Todavía sin cobros.</p>
+    } @else {
+      <ul class="montos">
+        @for (item of resumen().montosCobrados; track item.moneda) {
+          <li>
+            <b>{{ importe(item.monto, item.moneda) }}</b>
+          </li>
+        }
+      </ul>
+    }
+    @if (resumen().saldosPendientes.length > 0) {
+      <p class="cl-menudo">
+        Pendiente:
+        @for (item of resumen().saldosPendientes; track item.moneda) {
+          <span>{{ importe(item.monto, item.moneda) }}</span>
+        }
+      </p>
+    }
+  </div>
+
+  @if (veReparto()) {
+    <div class="cl-tarjeta">
+      <header><div><h2>Pagado al agente</h2><p>Del reparto ya asignado</p></div></header>
+      @if (resumen().montosPagadosAgente.length === 0) {
+        <p class="cl-vacio">Todavía sin pagos al agente.</p>
+      } @else {
+        <ul class="montos">
+          @for (item of resumen().montosPagadosAgente; track item.moneda) {
+            <li>
+              <b>{{ importe(item.monto, item.moneda) }}</b>
+            </li>
+          }
+        </ul>
+      }
+      @if (resumen().saldosPendientesAgente.length > 0) {
+        <p class="cl-menudo">
+          Pendiente:
+          @for (item of resumen().saldosPendientesAgente; track item.moneda) {
+            <span>{{ importe(item.monto, item.moneda) }}</span>
+          }
+        </p>
+      }
+    </div>
+  }
+</div>
+
+<cl-barra-filtros
+  [busqueda]="texto()"
+  (busquedaChange)="texto.set($event); aplicar()"
+  marcador="Buscar por código, cliente, local o agente…"
+  [resultados]="pagina().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  [debounceMs]="300"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los distritos"
+    [opciones]="resumen().distritosDisponibles"
+    [valor]="distrito()"
+    (valorChange)="distrito.set($event); aplicar()"
+  />
+  <cl-filtro-select
+    marcador="Todos los agentes"
+    [opciones]="agentes()"
+    [valor]="idAgente()"
+    (valorChange)="idAgente.set($event); aplicar()"
+  />
+</cl-barra-filtros>
+
+@if (aviso(); as mensaje) {
+  <p class="cl-aviso">{{ mensaje }}</p>
+}
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && pagina().items.length === 0"
+  mensajeCarga="Cargando comisiones…"
+  mensajeVacio="No hay cierres con esos filtros."
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && pagina().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Cierre</th>
+          <th>Local</th>
+          <th>Agente</th>
+          <th class="num">Generada</th>
+          @if (veReparto()) {
+            <th class="num">Agente</th>
+            <th class="num">Empresa</th>
+          }
+          <th>Comisión</th>
+          <th>Contrato</th>
+          <th class="num">Cobro</th>
+          @if (puedeLiquidar()) {
+            <th></th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (contrato of pagina().items; track contrato.id) {
+          <tr>
+            <td class="ancho">
+              <span class="principal">{{ contrato.codigoSolicitud || contrato.codigoOportunidad || sinDato }}</span>
+              <span class="cl-menudo">{{ fecha(contrato.fechaCierre) }}</span>
+            </td>
+            <td class="ancho">
+              <span class="principal">{{ contrato.direccionLocal || sinDato }}</span>
+              <span class="cl-menudo">{{ contrato.clienteNombre || sinDato }}</span>
+            </td>
+            <td>{{ contrato.agenteNombre || sinDato }}</td>
+            <td class="num">{{ importe(contrato.comisionGenerada, contrato.monedaComision) }}</td>
+            @if (veReparto()) {
+              <td class="num">{{ importe(contrato.montoAgente, contrato.monedaComision) }}</td>
+              <td class="num">{{ importe(contrato.montoEmpresa, contrato.monedaComision) }}</td>
+            }
+            <td>
+              <span class="cl-badge" [class]="tonoComision(contrato)">
+                {{ estadoComision(contrato) }}
+              </span>
+            </td>
+            <td>{{ estadoContrato(contrato) }}</td>
+            <td class="num">{{ fecha(contrato.fechaCobro) }}</td>
+            @if (puedeLiquidar()) {
+              <td class="acciones">
+                @if (liquidable(contrato)) {
+                  <button type="button" class="cl-btn" (click)="abrirAsignacion(contrato)">
+                    Asignar
+                  </button>
+                  <button type="button" class="cl-btn" (click)="abrirMovimiento(contrato)">
+                    Movimiento
+                  </button>
+                  @if (contrato.comisionEstado !== 'C') {
+                    <button type="button" class="cl-btn primario" (click)="abrirCobro(contrato)">
+                      Cerrar cobro
+                    </button>
+                  }
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <cl-paginacion
+    [total]="pagina().totalRecords"
+    [tamano]="tamano"
+    [pagina]="numeroPagina()"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}
+
+@if (asignando(); as contrato) {
+  <div class="fondo" (click)="cerrarDialogos()"></div>
+  <div class="dialogo" role="dialog" aria-label="Asignar la parte del agente">
+    <h2>Parte del agente</h2>
+    <p class="cl-menudo">
+      Comisión generada: <b>{{ importe(contrato.comisionGenerada, contrato.monedaComision) }}</b>.
+      La parte de la empresa la calcula el sistema con el resto; aquí solo se define la del agente.
+    </p>
+    @if (errorDialogo(); as mensaje) {
+      <p class="cl-aviso">{{ mensaje }}</p>
+    }
+    <label class="campo">
+      <span>Monto del agente</span>
+      <input type="number" min="0" step="0.01" [ngModel]="montoAgente()" (ngModelChange)="montoAgente.set($event)" />
+    </label>
+    <div class="botones">
+      <button type="button" class="cl-btn" (click)="cerrarDialogos()">Cancelar</button>
+      <button type="button" class="cl-btn primario" (click)="guardarAsignacion()" [disabled]="guardando()">
+        {{ guardando() ? 'Guardando…' : 'Asignar' }}
+      </button>
+    </div>
+  </div>
+}
+
+@if (cobrando(); as contrato) {
+  <div class="fondo" (click)="cerrarDialogos()"></div>
+  <div class="dialogo" role="dialog" aria-label="Cerrar el cobro de la comisión">
+    <h2>Cerrar el cobro</h2>
+    <p class="cl-menudo">
+      Es el desenlace de la comisión de
+      <b>{{ importe(contrato.comisionGenerada, contrato.monedaComision) }}</b>: cobrada por
+      completo o anulada. Para un cobro parcial usa <b>Movimiento</b>.
+    </p>
+    @if (errorDialogo(); as mensaje) {
+      <p class="cl-aviso">{{ mensaje }}</p>
+    }
+    <label class="campo">
+      <span>Desenlace</span>
+      <select [ngModel]="estadoCobro()" (ngModelChange)="estadoCobro.set($event)">
+        <option value="C">Cobrada</option>
+        <option value="A">Anulada</option>
+      </select>
+    </label>
+    <label class="campo">
+      <span>Fecha de cobro</span>
+      <input type="date" [ngModel]="fechaCobro()" (ngModelChange)="fechaCobro.set($event)" />
+    </label>
+    <label class="campo">
+      <span>Forma de pago</span>
+      <input type="text" [ngModel]="formaPago()" (ngModelChange)="formaPago.set($event)" placeholder="Transferencia, efectivo…" />
+    </label>
+    <div class="botones">
+      <button type="button" class="cl-btn" (click)="cerrarDialogos()">Cancelar</button>
+      <button type="button" class="cl-btn primario" (click)="guardarCobro()" [disabled]="guardando()">
+        {{ guardando() ? 'Guardando…' : 'Registrar' }}
+      </button>
+    </div>
+  </div>
+}
+
+@if (moviendo(); as contrato) {
+  <div class="fondo" (click)="cerrarDialogos()"></div>
+  <div class="dialogo" role="dialog" aria-label="Registrar un movimiento de comisión">
+    <h2>Movimiento de comisión</h2>
+    <p class="cl-menudo">
+      Un cobro o pago parcial deja la comisión en <b>parcial</b>, no en cobrada. La moneda es la de
+      la liquidación ({{ contrato.monedaComision || contrato.moneda }}) y la fecha no puede ser
+      futura.
+    </p>
+    @if (errorDialogo(); as mensaje) {
+      <p class="cl-aviso">{{ mensaje }}</p>
+    }
+    <label class="campo">
+      <span>Tipo</span>
+      <select [ngModel]="tipoMovimiento()" (ngModelChange)="tipoMovimiento.set($event)">
+        @for (tipo of tiposMovimiento; track tipo.valor) {
+          <option [value]="tipo.valor">{{ tipo.etiqueta }}</option>
+        }
+      </select>
+    </label>
+    <label class="campo">
+      <span>Monto</span>
+      <input type="number" min="0" step="0.01" [ngModel]="montoMovimiento()" (ngModelChange)="montoMovimiento.set($event)" />
+    </label>
+    <label class="campo">
+      <span>Fecha</span>
+      <input type="date" [ngModel]="fechaMovimiento()" (ngModelChange)="fechaMovimiento.set($event)" />
+    </label>
+    <label class="campo">
+      <span>Observación</span>
+      <input type="text" [ngModel]="observacion()" (ngModelChange)="observacion.set($event)" />
+    </label>
+    <div class="botones">
+      <button type="button" class="cl-btn" (click)="cerrarDialogos()">Cancelar</button>
+      <button type="button" class="cl-btn primario" (click)="guardarMovimiento()" [disabled]="guardando()">
+        {{ guardando() ? 'Guardando…' : 'Registrar' }}
+      </button>
+    </div>
+  </div>
+}

@@ -1,0 +1,48 @@
+<section class="constancia" aria-labelledby="constancia-titulo">
+  <div class="titulo">
+    <h3 id="constancia-titulo">Autorización de datos</h3>
+    @if (!cargando() && !error() && estado()) {
+      <span
+        class="cl-badge"
+        [class.bien]="vigente()"
+        [class.aviso]="!vigente() && !sinRegistro()"
+      >
+        {{ etiqueta() }}
+      </span>
+    }
+  </div>
+
+  @if (cargando()) {
+    <p class="nota" role="status">Consultando la autorización…</p>
+  } @else if (error(); as mensaje) {
+    <!-- No se inventa "sin autorización" cuando la consulta falla: son cosas
+         distintas, y confundirlas haría dudar de un dato que sí existe. -->
+    <p class="nota error" role="alert">{{ mensaje }}</p>
+  } @else if (estado()) {
+    @if (explicacion(); as motivo) {
+      <p class="nota">{{ motivo }}</p>
+    }
+
+    @if (!sinRegistro()) {
+      <dl class="pares">
+        @if (registradaEn(); as cuando) {
+          <div><dt>Fecha y hora</dt><dd>{{ cuando }}</dd></div>
+        }
+        <div>
+          <dt>La registró</dt>
+          <!-- Puede venir vacío: el evento no siempre guarda actor (proceso del
+               sistema), o el rol pudo darse de baja. -->
+          <dd>{{ registradaPor() ?? 'No consta' }}</dd>
+        </div>
+        @if (versionSiAporta(); as version) {
+          <!-- La versión solo aparece cuando NO es la vigente: entonces dice
+               algo (autorizó contra un aviso anterior). Si coincide, sobra. -->
+          <div>
+            <dt>Aviso citado</dt>
+            <dd>Versión {{ version }} <small>(vigente: {{ versionVigente() }})</small></dd>
+          </div>
+        }
+      </dl>
+    }
+  }
+</section>

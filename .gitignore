@@ -33,6 +33,15 @@ database.local.properties
 aws.properties
 aws.local.properties
 
+# Los tres ficheros de configuracion del stack legado desaparecieron con el
+# (2026-08-08). Los patrones se conservan como red: si alguien recupera algo
+# del historial, no vuelve a subir el secreto del token ni las credenciales de
+# la RDS. Ojo: esto NO deshace su publicacion en el commit 2832a9b — eso solo
+# lo cierra rotarlas.
+api.properties
+db.properties
+appsettings.json
+
 *.token
 *.jwt
 *.secret
@@ -57,7 +66,21 @@ hs_err_pid*
 replay_pid*
 
 # ============================================================
-# .NET
+# Angular / Node
+# ============================================================
+
+# `frontend-angular/.gitignore` ya cubre dist, node_modules y compania, pero NO
+# la cache de build del CLI, que son cientos de ficheros generados. Se ignora
+# aqui para que valga aunque alguien mueva o regenere el proyecto.
+.angular/
+**/.angular/
+
+node_modules/
+**/node_modules/
+
+# ============================================================
+# .NET (el stack C# se elimino el 2026-08-08; los patrones se
+# conservan por si alguien recupera algo del historial)
 # ============================================================
 
 **/bin/
@@ -75,6 +98,9 @@ TestResults/
 
 artifacts/
 publish/
+
+# Respaldos locales de PostgreSQL previos a saneamientos (nunca versionar)
+backend-spring/backups/
 
 *.nupkg
 *.snupkg

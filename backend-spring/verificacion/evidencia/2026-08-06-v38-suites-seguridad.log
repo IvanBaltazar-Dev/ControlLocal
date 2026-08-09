@@ -1,0 +1,336 @@
+V38 EN PIE — SUITES DE SEGURIDAD SOBRE EL ESQUEMA NUEVO
+--------------------------------------------------------
+s0-mfa 89/89 · s0-roles 48/48 · s0-sesiones 11/11 · exit 0.
+
+Estas suites NO ejercitan la recuperacion de emergencia: comprueban que anadir
+V38 (tres tablas y su bandera, apagada por defecto) no movio nada de lo que ya
+estaba. El simulacro de la concesion vive en
+`controllocal-app/.../integracion/SimulacroRecuperacionIntegrationTest`, que
+genera sus custodios por corrida y los destruye con su base efimera (D-S0-53).
+
+PENDIENTE PARA CERRAR EL SIMULACRO DEL §18.16: recorrerlo tambien sobre HTTP a
+traves del conector local (127.0.0.1). Exige publicar ese puerto en
+docker-compose.e2e.yml y generar los hashes de custodio en Invoke-E2E.ps1. El
+camino de servicio ya esta verificado; falta el del cable.
+
+== Entorno E2E aislado 20260806183851-5366 ==
+Base: controllocal_e2e_20260806183851_5366
+ Network controllocal-e2e-20260806183851-5366_default Creating 
+ Network controllocal-e2e-20260806183851-5366_default Created 
+ Container controllocal-postgres-e2e-20260806183851-5366 Creating 
+ Container controllocal-postgres-e2e-20260806183851-5366 Created 
+ Container controllocal-api-e2e-20260806183851-5366 Creating 
+ Container controllocal-api-e2e-20260806183851-5366 Created 
+ Container controllocal-postgres-e2e-20260806183851-5366 Starting 
+ Container controllocal-postgres-e2e-20260806183851-5366 Started 
+ Container controllocal-postgres-e2e-20260806183851-5366 Waiting 
+ Container controllocal-postgres-e2e-20260806183851-5366 Healthy 
+ Container controllocal-api-e2e-20260806183851-5366 Starting 
+ Container controllocal-api-e2e-20260806183851-5366 Started 
+ Container controllocal-postgres-e2e-20260806183851-5366 Waiting 
+ Container controllocal-api-e2e-20260806183851-5366 Waiting 
+ Container controllocal-api-e2e-20260806183851-5366 Healthy 
+ Container controllocal-postgres-e2e-20260806183851-5366 Healthy 
+
+== Suite s0-mfa / corrida 20260806183851-5366 ==
+
+== 0. Punto de partida: el administrador debe enrolar ==
+  OK   V37 obliga a enrolar a los administradores
+  OK   la organizacion AUN no exige MFA de gobierno (arranque seguro)
+  OK   el administrador SI puede entrar con la sesion capada
+
+== 1. La sesion capada solo alcanza lo imprescindible ==
+  OK   GET /perfil pasa
+  OK   GET /perfil/mfa pasa
+  OK   administrar agentes NO pasa
+  OK   administrar miembros NO pasa
+  OK   clientes NO pasa
+  OK   el logout SI pasa (no se encierra a nadie)
+
+== 2. Enrolamiento ==
+  OK   el enrolamiento devuelve secreto y otpauth
+  OK   la URI declara SHA1/6/30 (interoperable)
+  OK   sin confirmar, el factor NO esta activo
+  OK   confirmar con codigo invalido no activa
+  OK   y el rechazo viaja con codigo estable, no solo con texto
+  OK   confirmar devuelve 8 codigos de respaldo
+  OK   los codigos llevan identificador + secreto
+  OK   confirmar INVALIDA las sesiones vivas
+  OK   la organizacion cruza a MFA de gobierno
+  OK   confirmar SELLA el paso que uso
+
+== 3. El login pasa a dos pasos ==
+  OK   con MFA activo, /auth/login responde 401
+  OK   /auth/mfa/desafio responde 202 con desafio
+  OK   el 202 NO trae token de sesion
+  OK   el codigo del enrolamiento NO sirve luego para autenticar
+  OK   y se rechaza como REUTILIZADO, no como invalido
+  OK   con el paso temporal siguiente la autenticacion SI pasa
+  OK   verificar devuelve el LoginResponse congelado
+  OK   la sesion ya NO esta capada
+  OK   un desafio ya canjeado se distingue por codigo
+  OK   un desafio inexistente se distingue por codigo
+  OK   sin MFA el mismo endpoint responde 200 + sesion
+
+== 4. Anti-replay ATOMICO (D-S0-31) ==
+  OK   el mismo codigo entra UNA vez
+  OK   y el REPLAY del mismo codigo falla
+  OK   el paso consumido queda sellado
+
+== 5. Solo paso actual y anterior; el futuro NO (D-S0-36) ==
+  OK   el paso FUTURO (t+1) se rechaza
+  OK   dos pasos atras (t-2) se rechaza
+  OK   el paso anterior (t-1) SI vale: el cliente atrasado es el caso real
+
+== 6. Limite por desafio y acumulado por cuenta (D-S0-32) ==
+  OK   al sexto intento el desafio muere, aunque el codigo sea bueno
+  OK   los fallos se acumulan POR CUENTA entre desafios distintos
+  OK   con >=10 fallos acumulados se exige espera, aun con codigo bueno
+  OK   y la espera NO es un bloqueo indefinido
+  OK   el limite tambien se distingue por codigo
+
+== 7. Codigos de respaldo ==
+  OK   un codigo de respaldo deja entrar
+  OK   usar un codigo NO desactiva el MFA
+  OK   y queda uno menos
+  OK   el mismo codigo de respaldo NO vale dos veces
+  OK   un identificador inventado falla (localiza CERO filas)
+
+== 8. Regenerar y revocar exigen reautenticacion (D-S0-34) ==
+  OK   regenerar SIN codigo se rechaza: la sesion abierta no basta
+  OK   regenerar SIN contrasena se rechaza
+  OK   regenerar devuelve 8 codigos nuevos
+  OK   regenerar invalida TODOS los anteriores
+  OK   regenerar NO invalida sesiones
+
+== 9. Reglas de revocacion por rol ==
+  OK   un AGENTE no revoca el factor de nadie
+  OK   la elevacion se emite con contrasena + codigo
+  OK   revocar SIN elevacion se rechaza
+  OK   nadie se revoca a si mismo por esta via
+  OK   el motivo es obligatorio
+  OK   el TENANT_ADMIN SI revoca el factor de un companero
+  OK   el afectado queda obligado a enrolar
+  OK   el factor queda REVOCADO, no borrado
+  OK   la elevacion NO vale dos veces
+
+== 10. Invariante de administrador OPERATIVO (D-S0-37) ==
+  OK   no se puede revocar el factor del UNICO administrador operativo
+  OK   ni el propio titular puede, si es el ultimo operativo
+  OK   y el factor del administrador sigue ACTIVO
+
+== 11. token_acceso: el tipo es obligatorio (D-S0-23) ==
+  OK   conviven desafios y elevaciones en la misma tabla
+  OK   un DESAFIO_MFA no se canjea como recuperacion de contrasena
+  OK   el unico parcial es por (credencial, tipo)
+
+== 11b. Reautenticacion reforzada: lo que NO cambia al fallar ==
+  OK   con la contrasena mal, regenerar NO toca los codigos
+  OK   con el codigo mal, el factor sigue ACTIVO e intacto
+
+== 11c. Reemplazar el factor propio (D-S0-34) ==
+  OK   reemplazar el factor propio se acepta
+  OK   y la sesion que lo pidio muere en el acto
+  OK   la cuenta queda obligada a enrolar de nuevo
+  OK   el factor queda REVOCADO, no borrado
+  OK   sin factor, el login vuelve a ser de un solo paso
+  OK   y esa sesion SI alcanza el enrolamiento
+  OK   pero NO alcanza a operar: queda capada
+
+== 11d. Nivel 2: la cuenta afectada queda capada ==
+  OK   el afectado entra, pero con la sesion capada
+  OK   y NO puede administrar miembros
+
+== 11e. Gobierno de accesos (padron y aviso) ==
+  OK   el padron devuelve TODAS las cuentas del tenant
+  OK   y trae los DOS identificadores (persona y rol)
+  OK   el padron NO expone secretos ni hashes
+  OK   un BROKER no ve el padron
+  OK   un AGENTE tampoco
+  OK   el aviso de gobierno registra la revocacion ajena
+  OK   y trae el motivo escrito por quien revoco
+  OK   el aviso NO expone secretos ni hashes
+  OK   un BROKER no lee el aviso de gobierno
+  OK   una persona de OTRO tenant responde 404, no 403
+
+== 12. Higiene: ningun secreto en la auditoria ==
+  OK   ningun evento lleva secretos ni codigos
+  OK   se auditan los hechos de MFA
+
+== Resumen ==
+  OK: 89   FALLAS: 0
+ Container controllocal-api-e2e-20260806183851-5366 Stopping 
+ Container controllocal-api-e2e-20260806183851-5366 Stopped 
+ Container controllocal-api-e2e-20260806183851-5366 Removing 
+ Container controllocal-api-e2e-20260806183851-5366 Removed 
+ Container controllocal-postgres-e2e-20260806183851-5366 Stopping 
+ Container controllocal-postgres-e2e-20260806183851-5366 Stopped 
+ Container controllocal-postgres-e2e-20260806183851-5366 Removing 
+ Container controllocal-postgres-e2e-20260806183851-5366 Removed 
+ Network controllocal-e2e-20260806183851-5366_default Removing 
+ Network controllocal-e2e-20260806183851-5366_default Removed 
+Base controllocal_e2e_20260806183851_5366 y su entorno eliminados en 2.8 s.
+Entorno 20260806183851-5366 eliminado: sin contenedores, volumenes ni red residuales.
+
+== Entorno E2E aislado 20260806184734-1080 ==
+Base: controllocal_e2e_20260806184734_1080
+ Network controllocal-e2e-20260806184734-1080_default Creating 
+ Network controllocal-e2e-20260806184734-1080_default Created 
+ Container controllocal-postgres-e2e-20260806184734-1080 Creating 
+ Container controllocal-postgres-e2e-20260806184734-1080 Created 
+ Container controllocal-api-e2e-20260806184734-1080 Creating 
+ Container controllocal-api-e2e-20260806184734-1080 Created 
+ Container controllocal-postgres-e2e-20260806184734-1080 Starting 
+ Container controllocal-postgres-e2e-20260806184734-1080 Started 
+ Container controllocal-postgres-e2e-20260806184734-1080 Waiting 
+ Container controllocal-postgres-e2e-20260806184734-1080 Healthy 
+ Container controllocal-api-e2e-20260806184734-1080 Starting 
+ Container controllocal-api-e2e-20260806184734-1080 Started 
+ Container controllocal-postgres-e2e-20260806184734-1080 Waiting 
+ Container controllocal-api-e2e-20260806184734-1080 Waiting 
+ Container controllocal-api-e2e-20260806184734-1080 Healthy 
+ Container controllocal-postgres-e2e-20260806184734-1080 Healthy 
+
+== Suite s0-roles / corrida 20260806184734-1080 ==
+
+== 1. El backfill reparo las bandas que V6 dejo mal ==
+  OK   hay exactamente un TENANT_ADMIN sembrado
+  OK   los brokers dejaron de contarse como agentes
+  OK   no queda ninguna banda 'ADMIN' de V6
+  OK   el administrador gano su persona_rol de gobierno
+  OK   el administrador conserva su credencial (D-S0-10)
+
+== 2. El token sigue congelado; la banda la resuelve el servidor ==
+  OK   el login del admin SIGUE diciendo ADMIN (contrato congelado)
+  OK   el token no lleva TENANT_ADMIN por ningun lado
+  OK   el idDominio del admin es su rol de gobierno (R2)
+  OK   GET /sesion dice TENANT_ADMIN
+  OK   GET /sesion dice BROKER
+  OK   GET /sesion dice AGENTE
+
+== 3. Lo que el TENANT_ADMIN CONSERVA (supervision y lectura) ==
+  OK   admin CONSERVA fila 1  GET /captaciones/pendientes
+  OK   admin CONSERVA fila 2  GET /captaciones/reasignables
+  OK   admin CONSERVA fila 3  GET /captaciones/propiedades-equipo
+  OK   admin CONSERVA fila 4  GET /captaciones/propiedades-equipo/resumen
+  OK   admin CONSERVA fila 8  GET /captaciones/reasignaciones
+  OK   admin CONSERVA fila 11 GET /evaluaciones
+  OK   admin CONSERVA fila 14 GET /agentes
+  OK   admin CONSERVA fila 15 GET /agentes/resumen
+
+== 4. Lo que el TENANT_ADMIN PIERDE (operacion comercial) ==
+  OK   admin PIERDE fila 5  POST /captaciones/{id}/decision
+  OK   admin PIERDE fila 7  POST /captaciones/{id}/cierre
+  OK   admin PIERDE fila 9  PATCH documentos/{idDoc}/revisar
+  OK   admin PIERDE fila 10 PATCH documentos/conformar
+  OK   admin PIERDE fila 13 POST /evaluaciones
+  OK   el 403 conserva el mensaje congelado
+
+== 5. Lo que el BROKER PIERDE (gobierno de cuentas) ==
+  OK   fila 17 el BROKER ya no da de alta agentes
+  OK   fila 18 el BROKER ya no edita agentes
+  OK   el BROKER tampoco invita (D-S0-18)
+  OK   el BROKER no entra a /asignaciones/agentes
+  OK   el BROKER no entra a /asignaciones/brokers
+  OK   el BROKER no entra a /asignaciones/historial
+
+== 5 bis. Lo que el BROKER CONSERVA (decidir y firmar) ==
+  OK   el BROKER conserva su bandeja de revision
+  OK   el BROKER conserva el listado de evaluaciones
+
+== 6. El alta de agente cambio de dueno, no solo de gate ==
+  OK   sin idBrokerSupervisor el alta se rechaza (400)
+  OK   el TENANT_ADMIN si da de alta con supervisor explicito
+  OK   el agente queda bajo el broker que viajo en la peticion
+  OK   el alta crea tambien la membresia del nuevo usuario
+
+== 7. La auditoria dejo de mentir (H-09) ==
+  OK   el broker encuentra la captacion pendiente del seed
+  OK   el BROKER aprueba y la captacion queda activa (fila 5)
+  OK   ahora el admin la ve reasignable (fila 2)
+  OK   el TENANT_ADMIN reasigna entre equipos (fila 6)
+  OK   el gobierno audita como TENANT_ADMIN, no como BROKER (H-09)
+  OK   la reasignacion de gobierno aparece en el historial
+
+== 8. El invariante: una organizacion nunca sin gobierno ==
+ERROR:  Una organizacion no puede quedarse sin administrador operativo (organizacion 1)
+CONTEXT:  PL/pgSQL function exigir_administrador_operativo() line 53 at RAISE
+  OK   degradar al unico administrador deja la organizacion con gobierno
+  OK   y la transaccion ENTERA se deshace, no solo la degradacion
+  OK   hay un broker distinto al que relevar
+ERROR:  Una organizacion no puede quedarse sin administrador operativo (organizacion 1)
+CONTEXT:  PL/pgSQL function exigir_administrador_operativo() line 53 at RAISE
+  OK   el relevo hacia un sucesor SIN segundo factor se rechaza (D-S0-37)
+  OK   con el sucesor YA operativo, el relevo se confirma
+
+== Resumen ==
+  OK: 48   FALLAS: 0
+ Container controllocal-api-e2e-20260806184734-1080 Stopping 
+ Container controllocal-api-e2e-20260806184734-1080 Stopped 
+ Container controllocal-api-e2e-20260806184734-1080 Removing 
+ Container controllocal-api-e2e-20260806184734-1080 Removed 
+ Container controllocal-postgres-e2e-20260806184734-1080 Stopping 
+ Container controllocal-postgres-e2e-20260806184734-1080 Stopped 
+ Container controllocal-postgres-e2e-20260806184734-1080 Removing 
+ Container controllocal-postgres-e2e-20260806184734-1080 Removed 
+ Network controllocal-e2e-20260806184734-1080_default Removing 
+ Network controllocal-e2e-20260806184734-1080_default Removed 
+Base controllocal_e2e_20260806184734_1080 y su entorno eliminados en 2.2 s.
+Entorno 20260806184734-1080 eliminado: sin contenedores, volumenes ni red residuales.
+
+== Entorno E2E aislado 20260806184934-5027 ==
+Base: controllocal_e2e_20260806184934_5027
+ Network controllocal-e2e-20260806184934-5027_default Creating 
+ Network controllocal-e2e-20260806184934-5027_default Created 
+ Container controllocal-postgres-e2e-20260806184934-5027 Creating 
+ Container controllocal-postgres-e2e-20260806184934-5027 Created 
+ Container controllocal-api-e2e-20260806184934-5027 Creating 
+ Container controllocal-api-e2e-20260806184934-5027 Created 
+ Container controllocal-postgres-e2e-20260806184934-5027 Starting 
+ Container controllocal-postgres-e2e-20260806184934-5027 Started 
+ Container controllocal-postgres-e2e-20260806184934-5027 Waiting 
+ Container controllocal-postgres-e2e-20260806184934-5027 Healthy 
+ Container controllocal-api-e2e-20260806184934-5027 Starting 
+ Container controllocal-api-e2e-20260806184934-5027 Started 
+ Container controllocal-api-e2e-20260806184934-5027 Waiting 
+ Container controllocal-postgres-e2e-20260806184934-5027 Waiting 
+ Container controllocal-api-e2e-20260806184934-5027 Healthy 
+ Container controllocal-postgres-e2e-20260806184934-5027 Healthy 
+
+== Suite s0-sesiones / corrida 20260806184934-5027 ==
+
+== 1. Login y token util ==
+  OK   login del agente devuelve token
+  OK   el token lleva iat (base de D-S0-12)
+  OK   el token sigue SIN llevar la organizacion (contrato congelado)
+  OK   con el token recien emitido, GET /clientes responde 200
+
+== 2. Logout con efecto en servidor ==
+  OK   POST /auth/logout responde 204
+  OK   la credencial quedo sellada en la BD
+
+== 3. El MISMO token ya no vale ==
+  OK   el token anterior al logout responde 401
+  OK   el mensaje es el congelado y no revela el motivo
+
+== 4. Volver a entrar funciona ==
+  OK   el token nuevo (emitido despues) SI vale
+  OK   y el viejo sigue muerto
+
+== 5. El logout no toca a otras cuentas ==
+  OK   la sesion del broker sigue intacta
+
+---------------------------------------------
+  OK: 11    FALLAS: 0
+ Container controllocal-api-e2e-20260806184934-5027 Stopping 
+ Container controllocal-api-e2e-20260806184934-5027 Stopped 
+ Container controllocal-api-e2e-20260806184934-5027 Removing 
+ Container controllocal-api-e2e-20260806184934-5027 Removed 
+ Container controllocal-postgres-e2e-20260806184934-5027 Stopping 
+ Container controllocal-postgres-e2e-20260806184934-5027 Stopped 
+ Container controllocal-postgres-e2e-20260806184934-5027 Removing 
+ Container controllocal-postgres-e2e-20260806184934-5027 Removed 
+ Network controllocal-e2e-20260806184934-5027_default Removing 
+ Network controllocal-e2e-20260806184934-5027_default Removed 
+Base controllocal_e2e_20260806184934_5027 y su entorno eliminados en 2.1 s.
+Entorno 20260806184934-5027 eliminado: sin contenedores, volumenes ni red residuales.

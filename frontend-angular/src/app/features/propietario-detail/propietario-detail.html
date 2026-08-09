@@ -1,0 +1,140 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">
+      <button type="button" class="enlace" (click)="volver()">Propietarios</button>
+      · Ficha comercial
+    </p>
+    <h1>{{ texto(propietario()?.nombre) }}</h1>
+    <p class="sub">
+      {{ tipoPersona(propietario()?.tipoPersona) }} · {{ documento() }}
+    </p>
+  </div>
+  <div class="acciones">
+    @if (esAgente()) {
+      <button type="button" class="cl-btn" (click)="editar()">Editar datos</button>
+    }
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando ficha del propietario…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && propietario(); as datos) {
+  <section class="identidad">
+    <div class="dato">
+      <span class="etiqueta">Teléfono</span>
+      <span>{{ texto(datos.telefono) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Correo</span>
+      <span>{{ texto(datos.correo) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Estado</span>
+      <span class="cl-pastilla" [class.activa]="activo()">
+        {{ activo() ? 'Activo' : 'Inactivo' }}
+      </span>
+    </div>
+    <div class="dato">
+      <!-- El número bueno sale de la SECCIÓN: `cantidadLocales` de la cabecera
+           viaja en 0 por rareza del cable, y pintarlo sería mentir. -->
+      <span class="etiqueta">Locales</span>
+      <span>{{ locales() === null ? '—' : locales() }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Uso de datos</span>
+      <span>{{ datos.consentimientoUsoDato ? 'Autorizado' : 'No autorizado' }}</span>
+    </div>
+  </section>
+
+  <!-- D-27: el dato de arriba es el booleano del contrato congelado; esto es
+       la constancia REAL, derivada del registro append-only. Misma sección,
+       palabra por palabra, que en la ficha de cliente. -->
+  <section class="tarjeta-autorizacion">
+    <cl-constancia-autorizacion
+      [constancia]="autorizacion()"
+      [cargando]="cargandoAutorizacion()"
+      [error]="errorAutorizacion()"
+    />
+  </section>
+
+  <nav class="cl-pestanas" role="tablist">
+    @for (pestana of pestanas(); track pestana.clave) {
+      <button
+        type="button"
+        role="tab"
+        [class.activa]="activa() === pestana.clave"
+        [attr.aria-selected]="activa() === pestana.clave"
+        (click)="abrir(pestana.clave)"
+      >
+        {{ pestana.etiqueta }}
+        <span class="contador">{{ pestana.incognita ? '—' : pestana.total }}</span>
+      </button>
+    }
+  </nav>
+
+  <cl-estado-listado
+    [cargando]="cargandoSeccion()"
+    [error]="errorSeccion()"
+    [vacio]="!cargandoSeccion() && !errorSeccion() && filas().length === 0"
+    [mensajeCarga]="'Cargando ' + etiquetaSeccion(activa()) + '…'"
+    [mensajeVacio]="'No hay ' + etiquetaSeccion(activa()).toLowerCase() + ' en tu alcance.'"
+    (reintentar)="reintentarSeccion()"
+  />
+
+  @if (!cargandoSeccion() && !errorSeccion() && filas().length > 0) {
+    <div class="tabla-envoltorio">
+      <table class="cl-tabla">
+        <thead>
+          <tr>
+            <th scope="col">Registro</th>
+            @if (muestraLocal()) { <th scope="col">Local</th> }
+            @if (muestraDistrito()) { <th scope="col">Distrito</th> }
+            @if (muestraCliente()) { <th scope="col">Cliente</th> }
+            @if (muestraAgente()) { <th scope="col">Agente</th> }
+            <th scope="col">Estado</th>
+            <th scope="col">Fecha</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of filas(); track fila.id ?? fila.codigo) {
+            <tr>
+              <td>
+                @if (tieneDestino(fila)) {
+                  <button type="button" class="enlace" (click)="navegar(fila)">
+                    {{ texto(fila.titulo || fila.codigo) }}
+                  </button>
+                } @else {
+                  <span>{{ texto(fila.titulo || fila.codigo) }}</span>
+                }
+                @if (fila.subtitulo) {
+                  <span class="secundario">{{ fila.subtitulo }}</span>
+                }
+              </td>
+              @if (muestraLocal()) { <td>{{ texto(fila.local) }}</td> }
+              @if (muestraDistrito()) { <td>{{ texto(fila.distrito) }}</td> }
+              @if (muestraCliente()) { <td>{{ texto(fila.cliente) }}</td> }
+              @if (muestraAgente()) { <td>{{ texto(fila.agente) }}</td> }
+              <td>{{ texto(fila.estado) }}</td>
+              <td class="fecha">{{ fechaLegible(fila.fecha) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalActiva() > porPagina) {
+      <cl-paginacion
+        [total]="totalActiva()"
+        [tamano]="porPagina"
+        [pagina]="paginaActiva()"
+        (paginaChange)="cambiarPagina($event)"
+      />
+    }
+  }
+}

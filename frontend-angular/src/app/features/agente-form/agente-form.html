@@ -1,0 +1,158 @@
+<header class="cabecera">
+  <div>
+    <p class="miga">Gestión · Agentes · {{ esEdicion() ? 'Editar' : 'Nuevo' }}</p>
+    <h1>{{ titulo() }}</h1>
+    <p>
+      {{ esEdicion()
+        ? 'Actualiza contacto, zona y situación operativa. La identidad y el acceso quedaron fijados al registrarlo.'
+        : 'El alta crea su usuario, su credencial y su supervisión contigo como broker responsable.' }}
+    </p>
+  </div>
+  <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Cargando agente…"
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  @if (!puedeGuardar()) {
+    <p class="alerta" role="alert">
+      @if (!esEdicion()) {
+        El alta de un agente la hace su <strong>broker supervisor</strong>: el registro crea la
+        supervisión inicial, y el administrador no supervisa equipos.
+      } @else {
+        La edición de agentes es del broker supervisor o del administrador.
+      }
+    </p>
+  }
+  @if (errorGuardado()) { <p class="alerta" role="alert">{{ errorGuardado() }}</p> }
+
+  <form [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <section class="seccion">
+      <div class="seccion-titulo">
+        <span>1</span>
+        <div>
+          <h2>Identificación</h2>
+          <p>{{ esEdicion() ? 'No se puede cambiar tras el registro.' : 'Datos personales del agente.' }}</p>
+        </div>
+      </div>
+      <div class="grid dos">
+        <label class="campo">
+          <span>Nombre completo <b>*</b></span>
+          <input type="text" formControlName="nombre" maxlength="150" placeholder="Nombres y apellidos" />
+          @if (invalido('nombre')) {
+            <small class="mensaje-error">El nombre es obligatorio.</small>
+          }
+        </label>
+        <label class="campo">
+          <span>Tipo de documento <b>*</b></span>
+          <select formControlName="tipoDocumento">
+            <option value="D">DNI</option>
+            <option value="C">Carné de extranjería</option>
+            <option value="P">Pasaporte</option>
+          </select>
+        </label>
+        <label class="campo">
+          <span>Número de documento <b>*</b></span>
+          <input type="text" formControlName="numeroDocumento" inputmode="numeric" maxlength="15" placeholder="XXXXXXXX" />
+          @if (esEdicion()) {
+            <small class="candado">El documento no se puede modificar: la actualización no lo toca.</small>
+          }
+          @if (invalido('numeroDocumento') || documentoIncompleto) {
+            <small class="mensaje-error">{{ mensajeDocumento() }}</small>
+          }
+        </label>
+      </div>
+    </section>
+
+    <section class="seccion">
+      <div class="seccion-titulo">
+        <span>2</span>
+        <div><h2>Contacto y zona</h2><p>Cómo localizarlo y dónde opera.</p></div>
+      </div>
+      <div class="grid dos">
+        <label class="campo">
+          <span>Teléfono <b>*</b></span>
+          <div class="telefono">
+            <span class="prefijo">+51</span>
+            <input type="tel" formControlName="telefono" inputmode="numeric" maxlength="9" placeholder="999999999" />
+          </div>
+          @if (invalido('telefono')) {
+            <small class="mensaje-error">El teléfono debe tener 9 dígitos.</small>
+          }
+        </label>
+        <label class="campo">
+          <span>Correo electrónico <b>*</b></span>
+          <input type="email" formControlName="correo" maxlength="120" placeholder="agente@corredora.com" />
+          @if (invalido('correo')) {
+            <small class="mensaje-error">Escribe un correo válido.</small>
+          }
+        </label>
+        <label class="campo">
+          <span>Zona asignada</span>
+          <input type="text" formControlName="zona" maxlength="100" placeholder="Ej. Miraflores y San Isidro" />
+        </label>
+        <label class="campo">
+          <span>Situación operativa</span>
+          <select formControlName="estadoOperativo">
+            <option value="D">Disponible</option>
+            <option value="O">Ocupado</option>
+            <option value="V">Vacaciones</option>
+            <option value="S">Suspendido</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="seccion">
+      <div class="seccion-titulo">
+        <span>3</span>
+        <div>
+          <h2>Acceso al sistema</h2>
+          <p>{{ esEdicion() ? 'El usuario y la contraseña no se cambian desde aquí.' : 'Con esto entrará a ControlLocal.' }}</p>
+        </div>
+      </div>
+      <div class="grid dos">
+        <label class="campo">
+          <span>Usuario <b>*</b></span>
+          <input type="text" formControlName="usuario" maxlength="60" autocomplete="off" placeholder="vmora" />
+          @if (esEdicion()) {
+            <small class="candado">El usuario no se puede modificar: la actualización no lo toca.</small>
+          }
+          @if (invalido('usuario')) {
+            <small class="mensaje-error">El usuario es obligatorio.</small>
+          }
+        </label>
+        @if (!esEdicion()) {
+          <label class="campo">
+            <span>Contraseña <b>*</b></span>
+            <input type="password" formControlName="contrasena" maxlength="72" autocomplete="new-password" />
+            @if (invalido('contrasena')) {
+              <small class="mensaje-error">La contraseña debe tener al menos 8 caracteres.</small>
+            }
+          </label>
+        }
+      </div>
+      @if (esEdicion()) {
+        <p class="nota">
+          No hay endpoint de cambio de contraseña en el contrato actual; tampoco lo tenía el
+          sistema anterior.
+        </p>
+      }
+    </section>
+
+    <div class="acciones-formulario">
+      <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">
+        Cancelar
+      </button>
+      <button type="submit" class="primario" [disabled]="guardando() || !puedeGuardar()">
+        {{ guardando() ? 'Guardando…' : (esEdicion() ? 'Guardar cambios' : 'Registrar agente') }}
+      </button>
+    </div>
+  </form>
+}

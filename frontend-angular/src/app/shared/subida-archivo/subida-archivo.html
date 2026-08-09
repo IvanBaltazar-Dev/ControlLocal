@@ -1,0 +1,15 @@
+<label class="selector">
+  <input
+    type="file"
+    [accept]="aceptar()"
+    [multiple]="multiple()"
+    [disabled]="deshabilitado() || procesando()"
+    (change)="alSeleccionar($event)"
+  />
+  <span class="accion">{{ procesando() ? 'Validando…' : etiqueta() }}</span>
+  <span class="ayuda">{{ ayuda() }}</span>
+</label>
+
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+}

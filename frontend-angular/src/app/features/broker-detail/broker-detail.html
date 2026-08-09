@@ -1,0 +1,113 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">
+      <button type="button" class="enlace" (click)="volver()">Brokers</button> · Ficha
+    </p>
+    <h1>
+      {{ texto(broker()?.nombre) }}
+      @if (broker()?.esAdministrador) {
+        <span class="cl-badge admin">Administrador</span>
+      }
+    </h1>
+    <p class="sub">{{ texto(broker()?.codigoBroker) }} · {{ documento() }}</p>
+  </div>
+  <div class="acciones">
+    @if (esAdmin()) {
+      <button type="button" class="cl-btn" (click)="editar()">Editar datos</button>
+      <!-- Ver el comentario gemelo en la ficha del agente: el acceso se
+           gobierna por persona, y esta ficha se identifica por rol. -->
+      <a class="cl-btn" routerLink="/seguridad">Gestionar acceso</a>
+    }
+  </div>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando ficha del broker…"
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && broker(); as datos) {
+  <section class="identidad">
+    <div class="dato">
+      <span class="etiqueta">Zona</span>
+      <span>{{ texto(datos.zona) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Teléfono</span>
+      <span>{{ texto(datos.telefono) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Correo</span>
+      <span>{{ texto(datos.correo) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Usuario</span>
+      <span>{{ texto(datos.usuario) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Designación</span>
+      <span>{{ texto(datos.fechaDesignacion) }}</span>
+    </div>
+    <div class="dato">
+      <span class="etiqueta">Estado</span>
+      <span class="cl-pastilla" [class.activa]="activo()">
+        {{ activo() ? 'Activo' : 'Inactivo' }}
+      </span>
+    </div>
+  </section>
+
+  <section class="equipo">
+    <div class="equipo-cabecera">
+      <h2>Equipo vigente <span class="contador">{{ equipo().length }}</span></h2>
+      <button type="button" class="cl-btn menor" (click)="verAgentes()">Ver en Agentes</button>
+    </div>
+    <!-- Los contadores comerciales NO se muestran aquí a propósito: este
+         endpoint los devuelve en 0 aunque el agente tenga carga real. El número
+         bueno está en la bandeja de Agentes. -->
+    <p class="nota">
+      Son las supervisiones vigentes. Las captaciones y operaciones de cada agente se ven en
+      <strong>Agentes</strong>: este listado no las trae.
+    </p>
+
+    @if (equipo().length === 0) {
+      <p class="vacio">Este broker no supervisa agentes ahora mismo.</p>
+    } @else {
+      <div class="tabla-envoltorio">
+        <table class="cl-tabla">
+          <thead>
+            <tr>
+              <th scope="col">Agente</th>
+              <th scope="col">Zona</th>
+              <th scope="col">Contacto</th>
+              <th scope="col">Situación</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (agente of equipo(); track agente.id) {
+              <tr>
+                <td>
+                  <span>{{ texto(agente.nombre) }}</span>
+                  <span class="secundario">{{ texto(agente.codigoAgente) }}</span>
+                </td>
+                <td>{{ texto(agente.zona) }}</td>
+                <td>
+                  <span>{{ texto(agente.telefono) }}</span>
+                  <span class="secundario">{{ texto(agente.correo) }}</span>
+                </td>
+                <td>
+                  <span class="cl-pastilla" [class.activa]="agenteActivo(agente)">
+                    {{ agenteActivo(agente) ? 'Activo' : 'Inactivo' }}
+                  </span>
+                  <span class="secundario">{{ operativo(agente) }}</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}

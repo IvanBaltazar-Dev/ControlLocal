@@ -1,0 +1,43 @@
+-- V22 - Recupera el indice del camino caliente del listado de locales.
+--
+-- Contexto: V11 creo ix_propiedad_org_estado_id (organizacion_id, estado,
+-- id_propiedad) para que GET /locales filtrara por estado dentro del tenant y
+-- las filas salieran YA ordenadas por id, sin nodo Sort. V17 elimino la columna
+-- `estado` al partirla en estado_registro (A/I) + disponibilidad_comercial
+-- (D/R/A/T), y PostgreSQL se llevo por delante el indice que dependia de ella:
+-- el listado paginado que RC-003 dejo por debajo de 3 s se quedo sin el.
+--
+-- No es un rename. El predicado cambio de forma: el contrato D/N/I ya no es una
+-- columna sino la traduccion que hace FILTRO_ESTADO_LEGADO (PropiedadRepository)
+-- sobre las dos columnas nuevas:
+--
+--   I  ->  estado_registro = 'I'
+--   D  ->  estado_registro = 'A' AND disponibilidad_comercial =  'D'
+--   N  ->  estado_registro = 'A' AND disponibilidad_comercial <> 'D'
+--
+-- ---------------------------------------------------------------------------
+-- Por que este orden de columnas
+-- ---------------------------------------------------------------------------
+-- estado_registro es la UNICA columna con igualdad en las tres ramas, asi que
+-- va delante de id_propiedad: solo asi el indice entrega las filas ya ordenadas
+-- por id —el ORDER BY del listado— sea cual sea el estado pedido, que es
+-- exactamente la propiedad que daba el indice de V11 con su columna unica.
+-- Con el orden inverso (…, disponibilidad_comercial, id_propiedad) las ramas I
+-- y N vuelven a necesitar un Sort; medido con EXPLAIN ANALYZE sobre 30.000
+-- filas antes de elegir.
+--
+-- disponibilidad_comercial va al final, DETRAS del id. No acota el rango del
+-- barrido —ni podria, con el `<>` de la rama N—, pero PostgreSQL si la evalua
+-- como condicion dentro del indice: cuando la cartera no es mayoritariamente
+-- disponible, la rama D pasa de descartar decenas de miles de filas con un
+-- Filter sobre la PK a resolverse con Index Cond, sin bajar al heap por cada
+-- fila candidata. Es la diferencia entre el plan de RC-003 y el que vino a
+-- corregir.
+--
+-- La ruta sin filtro de estado (la carga inicial) la sigue sirviendo
+-- ix_propiedad_org_id, que V11 creo y V17 no toco.
+--
+-- No toca datos ni esquema: solo un indice. Es reversible con DROP INDEX.
+
+CREATE INDEX ix_propiedad_org_estado_registro_id_disp
+    ON propiedad (organizacion_id, estado_registro, id_propiedad, disponibilidad_comercial);

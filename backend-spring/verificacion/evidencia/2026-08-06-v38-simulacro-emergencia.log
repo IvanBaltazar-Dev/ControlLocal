@@ -1,0 +1,121 @@
+SIMULACRO DE RECUPERACION DE EMERGENCIA — POR EL CABLE
+------------------------------------------------------
+30/30, exit 0. Recorre el escenario 18.16 entero: organizacion sin gobierno
+operativo -> emision -> una aprobacion NO habilita -> el mismo custodio no
+cubre las dos partes -> secreto equivocado rechazado -> segunda aprobacion
+activa y entrega el secreto UNA vez -> accion aplicada y no repetible -> el
+titular VUELVE A ENROLAR EL MISMO -> la concesion se cierra sola -> y no creo
+personas, ni cuentas, ni roles, ni toco ninguna contrasena.
+
+Los custodios se generan en la corrida (Invoke-E2E.ps1) y mueren con la base
+efimera. No hay ningun secreto versionado (D-S0-53).
+
+UN BUG REAL, ENCONTRADO AQUI Y NO POR EL COMPILADOR
+Cuando llegaba una accion y la organizacion ya tenia gobierno, el cierre de la
+concesion y el rechazo de la accion iban en la MISMA transaccion: la excepcion
+del rechazo arrastraba el cierre y la concesion seguia figurando VIGENTE. Es el
+mismo patron que en V37 obligo a sacar de su transaccion los contadores de
+intentos y la auditoria — lo que registra un hecho no puede viajar en la
+transaccion que falla. Corregido con `CierreDeConcesiones` (REQUIRES_NEW) para
+el cierre PREVIO; el posterior se queda en la transaccion principal porque alli
+la fila ya esta modificada y una transaccion nueva sobre ella se bloquearia.
+
+CUATRO CORRIDAS ANTERIORES FALLARON POR EL ARNES, NO POR EL CODIGO
+  1. la medicion contaba objetos deserializados por Invoke-RestMethod;
+  2. el .ps1 llevaba caracteres no ASCII y PowerShell 5.1 lo lee como ANSI:
+     rompia el analisis del script entero senalando una linea correcta;
+  3. el JSON viajaba con --post-data y PowerShell 5.1 destroza las comillas
+     dobles al llamar a un ejecutable nativo -> 400 por cuerpo ilegible;
+  4. las acciones son POST sin cuerpo y BusyBox wget solo hace POST si recibe
+     --post-data/--post-file -> 405.
+Las tres primeras dejaron regla escrita en la cabecera de la suite.
+
+== Entorno E2E aislado 20260806191843-2948 ==
+Base: controllocal_e2e_20260806191843_2948
+ Network controllocal-e2e-20260806191843-2948_default Creating 
+ Network controllocal-e2e-20260806191843-2948_default Created 
+ Container controllocal-postgres-e2e-20260806191843-2948 Creating 
+ Container controllocal-postgres-e2e-20260806191843-2948 Created 
+ Container controllocal-api-e2e-20260806191843-2948 Creating 
+ Container controllocal-api-e2e-20260806191843-2948 Created 
+ Container controllocal-postgres-e2e-20260806191843-2948 Starting 
+ Container controllocal-postgres-e2e-20260806191843-2948 Started 
+ Container controllocal-postgres-e2e-20260806191843-2948 Waiting 
+ Container controllocal-postgres-e2e-20260806191843-2948 Healthy 
+ Container controllocal-api-e2e-20260806191843-2948 Starting 
+ Container controllocal-api-e2e-20260806191843-2948 Started 
+ Container controllocal-postgres-e2e-20260806191843-2948 Waiting 
+ Container controllocal-api-e2e-20260806191843-2948 Waiting 
+ Container controllocal-postgres-e2e-20260806191843-2948 Healthy 
+ Container controllocal-api-e2e-20260806191843-2948 Healthy 
+
+== Suite s0-emergencia / corrida 20260806191843-2948 ==
+
+== 0. La superficie NO existe por el puerto publico ==
+  OK   la ruta de gestion responde 404 por el puerto publico
+  OK   el conector de gestion NO sirve el API del producto
+
+== 0b. La instalacion esta preparada ==
+  OK   la recuperacion esta habilitada
+  OK   y hay DOS custodios configurados
+
+== 1. Punto de partida: la organizacion SIN gobierno operativo ==
+  OK   no hay ningun administrador operativo
+
+== 2. Emision y doble aprobacion ==
+  OK   la concesion nace PENDIENTE
+  OK   con una sola aprobacion sigue PENDIENTE
+  OK   y la primera aprobacion NO entrega ninguna concesion
+wget: server returned error: HTTP/1.1 400 
+  OK   el mismo custodio no aprueba dos veces
+wget: server returned error: HTTP/1.1 400 
+  OK   un secreto equivocado no aprueba
+  OK   la segunda aprobacion la deja VIGENTE
+  OK   y entrega el secreto de la concesion
+  OK   la fila conserva las TRES identidades
+
+== 3. Las acciones: una vez cada una ==
+  OK   REVOCAR_MFA se aplica
+  OK   y descuenta capacidad
+wget: server returned error: HTTP/1.1 400 
+  OK   la MISMA accion no se repite
+wget: server returned error: HTTP/1.1 400 
+  OK   una accion inventada no existe
+wget: server returned error: HTTP/1.1 400 
+  OK   una concesion inventada no vale
+
+== 4. El titular vuelve a enrolar EL MISMO ==
+  OK   el administrador entra con la sesion capada
+  OK   la organizacion vuelve a tener gobierno operativo
+
+== 5. La concesion se cierra sola ==
+wget: server returned error: HTTP/1.1 400 
+  OK   con el gobierno restablecido, la concesion ya no aplica nada
+  OK   y queda CERRADA por gobierno restablecido
+
+== 6. Lo que la concesion NO hizo ==
+  OK   no creo ninguna persona
+  OK   no creo ninguna cuenta
+  OK   no dejo ningun rol nuevo
+  OK   NUNCA fijo la contrasena de nadie
+  OK   solo consta la accion que se aplico
+
+== 7. Higiene de la auditoria ==
+  OK   se auditan emision, aplicacion y aprobacion fallida
+  OK   ningun evento lleva secretos ni hashes
+  OK   la base guarda el HASH del secreto, no el secreto
+
+== Resumen ==
+  OK: 30   FALLAS: 0
+ Container controllocal-api-e2e-20260806191843-2948 Stopping 
+ Container controllocal-api-e2e-20260806191843-2948 Stopped 
+ Container controllocal-api-e2e-20260806191843-2948 Removing 
+ Container controllocal-api-e2e-20260806191843-2948 Removed 
+ Container controllocal-postgres-e2e-20260806191843-2948 Stopping 
+ Container controllocal-postgres-e2e-20260806191843-2948 Stopped 
+ Container controllocal-postgres-e2e-20260806191843-2948 Removing 
+ Container controllocal-postgres-e2e-20260806191843-2948 Removed 
+ Network controllocal-e2e-20260806191843-2948_default Removing 
+ Network controllocal-e2e-20260806191843-2948_default Removed 
+Base controllocal_e2e_20260806191843_2948 y su entorno eliminados en 2.3 s.
+Entorno 20260806191843-2948 eliminado: sin contenedores, volumenes ni red residuales.

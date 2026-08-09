@@ -1,0 +1,173 @@
+<header class="cl-cabecera">
+  <div>
+    <p class="miga">Proceso · Prospecciones</p>
+    <h1>Bandeja de prospecciones</h1>
+    <p class="sub">Contactos previos a la captación y próximos seguimientos</p>
+  </div>
+  <div class="acciones">
+    @if (puedeRegistrar()) {
+      <button type="button" class="cl-btn primario" (click)="nueva()">
+        Registrar prospecto
+      </button>
+    } @else {
+      <span class="cl-badge">Solo lectura</span>
+    }
+  </div>
+</header>
+
+<section class="kpis">
+  <cl-kpi
+    etiqueta="Activas"
+    [valor]="metricas().activas"
+    tono="azul"
+    pie="En proceso de conversión"
+    [clicable]="true"
+    [activa]="filtros().estado === 'GESTION'"
+    (pulsar)="seleccionarEstado('GESTION')"
+  />
+  <cl-kpi
+    etiqueta="Recontactar"
+    [valor]="metricas().recontactar"
+    tono="ambar"
+    pie="7 días sin una acción"
+    [clicable]="true"
+    [activa]="filtros().recontactar"
+    (pulsar)="seleccionarRecontacto()"
+  />
+  <cl-kpi
+    etiqueta="Captadas"
+    [valor]="metricas().captadas"
+    tono="verde"
+    pie="Convertidas a captación"
+    [clicable]="true"
+    [activa]="filtros().estado === 'T'"
+    (pulsar)="seleccionarEstado('T')"
+  />
+  <cl-kpi
+    etiqueta="Descartadas"
+    [valor]="metricas().descartadas"
+    tono="gris"
+    pie="Fuera de gestión"
+    [clicable]="true"
+    [activa]="filtros().estado === 'D'"
+    (pulsar)="seleccionarEstado('D')"
+  />
+</section>
+
+@if (metricas().recontactar > 0 && !cargando()) {
+  <p class="alerta-recontacto" role="status">
+    Hay {{ metricas().recontactar }} prospección(es) que requieren una nueva acción comercial.
+  </p>
+}
+
+<cl-barra-filtros
+  [busqueda]="filtros().texto"
+  (busquedaChange)="cambiarTexto($event)"
+  marcador="Buscar por código, local o dirección…"
+  [debounceMs]="300"
+  [resultados]="paginaDatos().totalRecords"
+  [hayFiltros]="hayFiltros()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los estados"
+    [opciones]="opcionesEstado"
+    [valor]="filtros().estado"
+    (valorChange)="cambiarEstado($event)"
+  />
+  @if (administra()) {
+    <cl-filtro-select
+      marcador="Todos los brokers"
+      [opciones]="opcionesBroker()"
+      [valor]="filtros().idBroker ? '' + filtros().idBroker : ''"
+      (valorChange)="cambiarBroker($event)"
+    />
+  }
+  @if (supervisa()) {
+    <cl-filtro-select
+      marcador="Todos los agentes"
+      [opciones]="opcionesAgente()"
+      [valor]="filtros().idAgente ? '' + filtros().idAgente : ''"
+      (valorChange)="cambiarAgente($event)"
+    />
+  }
+  <cl-filtro-select
+    marcador="Más recientes primero"
+    [opciones]="opcionesOrden"
+    [valor]="filtros().orden"
+    (valorChange)="cambiarOrden($event)"
+  />
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
+  mensajeCarga="Cargando prospecciones…"
+  [mensajeVacio]="mensajeVacio()"
+  (reintentar)="recargar()"
+/>
+
+@if (!cargando() && !error() && paginaDatos().items.length > 0) {
+  <div class="cl-tabla-marco">
+    <table class="cl-tabla">
+      <thead>
+        <tr>
+          <th>Prospección</th>
+          <th>Local</th>
+          <th>Propietario</th>
+          @if (supervisa()) { <th>Agente</th> }
+          <th>Etapa</th>
+          <th>Último movimiento</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (p of paginaDatos().items; track p.id) {
+          <tr>
+            <td class="codigo">{{ valor(p.codigoProspeccion) }}</td>
+            <td>
+              <strong>{{ valor(p.direccion) }}</strong>
+              <span class="secundario">{{ valor(p.distrito) }} · {{ valor(p.localCodigo) }}</span>
+            </td>
+            <td>{{ valor(p.propietarioNombre) }}</td>
+            @if (supervisa()) { <td>{{ p.agenteNombre || 'Sin asignar' }}</td> }
+            <td>
+              <span class="cl-badge" [class]="tonoEstado(p.estado)">
+                {{ etiquetaEstado(p.estado) }}
+              </span>
+            </td>
+            <td>
+              <span [class.atrasado]="vencida(p)">{{ ultimoMovimiento(p) }}</span>
+              @if (vencida(p)) { <span class="secundario atrasado">Recontacto pendiente</span> }
+            </td>
+            <td class="acciones-fila">
+              <button type="button" class="cl-btn pequeno" (click)="verSeguimiento(p.id)">
+                Seguimiento
+              </button>
+              @if (p.localId) {
+                <button type="button" class="cl-btn pequeno" (click)="verLocal(p.localId)">
+                  Datos del local
+                </button>
+              }
+              @if (p.captacionCodigo) {
+                <button type="button" class="cl-btn pequeno" (click)="verResumen(p.captacionCodigo)">
+                  Resumen comercial
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!cargando() && !error() && paginaDatos().totalRecords > porPagina) {
+  <cl-paginacion
+    [total]="paginaDatos().totalRecords"
+    [tamano]="porPagina"
+    [pagina]="filtros().page"
+    (paginaChange)="cambiarPagina($event)"
+  />
+}

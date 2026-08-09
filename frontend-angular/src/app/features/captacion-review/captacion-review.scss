@@ -1,0 +1,15 @@
+:host { display: block; }
+.observaciones, .observacion-previa { margin: 0.9rem 0 0; padding: 0.75rem; border-radius: 8px; color: var(--cl-tinta-suave); font-size: 0.84rem; }
+.observaciones { background: var(--cl-fondo); }
+.observacion-previa { background: #fff7e6; color: #8a5400; }
+.origenes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+.origen { display: grid; gap: 0.25rem; padding: 0.8rem; border: 1px solid var(--cl-borde); border-radius: 9px; background: white; color: var(--cl-tinta); text-align: left; cursor: pointer; }
+.origen span { color: var(--cl-tinta-suave); font-size: 0.76rem; }
+.panel-decision button { width: 100%; margin-top: 0.45rem; }
+.panel-decision .aprobar { border-color: var(--cl-exito); color: var(--cl-exito); }
+.panel-decision .observar { border-color: #d28a12; color: #8a5400; }
+.panel-decision .rechazar { border-color: var(--cl-error); color: var(--cl-error); }
+.campos-dialogo { display: grid; gap: 0.75rem; }
+.campo-dialogo { display: grid; gap: 0.35rem; color: var(--cl-tinta-suave); font-size: 0.8rem; font-weight: 650; }
+.campo-dialogo textarea, .campo-dialogo select { width: 100%; padding: 0.6rem; border: 1px solid var(--cl-borde); border-radius: 8px; font: inherit; }
+@media (max-width: 44rem) { .origenes { grid-template-columns: 1fr; } }

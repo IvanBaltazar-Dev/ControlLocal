@@ -1,0 +1,79 @@
+// Pagina publica: no vive dentro del shell, asi que trae su propio ancho y
+// respiracion. Se lee, no se opera.
+.privacidad {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  line-height: 1.65;
+}
+
+header {
+  border-bottom: 1px solid var(--cl-borde, #e2e8f0);
+  padding-bottom: 1.5rem;
+  margin-bottom: 2rem;
+
+  h1 {
+    margin: 0.25rem 0 0.75rem;
+  }
+
+  // El orden en la pagina es: titulo, version, entrada.
+  .version {
+    margin: 0 0 1rem;
+    font-size: 0.85rem;
+    color: var(--cl-texto-suave, #64748b);
+  }
+
+  .entrada {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+}
+
+.miga {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cl-texto-suave, #64748b);
+}
+
+section {
+  margin-bottom: 2.25rem;
+
+  h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.6rem;
+  }
+
+  ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+  }
+
+  li {
+    margin-bottom: 0.45rem;
+  }
+}
+
+.nota {
+  margin-top: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--cl-texto-suave, #64748b);
+}
+
+.correo {
+  margin: 0.75rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+footer {
+  border-top: 1px solid var(--cl-borde, #e2e8f0);
+  padding-top: 1.25rem;
+
+  .copyright {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    color: var(--cl-texto-suave, #64748b);
+  }
+}

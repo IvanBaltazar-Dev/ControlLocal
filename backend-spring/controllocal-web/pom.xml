@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Capa web: @RestControllers + DTOs del contrato CONGELADO + Spring Security/JWT + OpenAPI.
+  Regla dura (ArchUnit en controllocal-app): la web solo habla con service; nunca con
+  persistence ni con las entidades del dominio (DTOs como frontera).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.controllocal</groupId>
+        <artifactId>controllocal-spring</artifactId>
+        <version>2.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>controllocal-web</artifactId>
+    <name>ControlLocal v2 - web</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.controllocal</groupId>
+            <artifactId>controllocal-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+        <!--
+          Solo el modulo `s3`, no el SDK entero: el resto de servicios de AWS no
+          pinta nada aqui y engordarian el jar sin motivo. Se excluye el cliente
+          HTTP Netty asincrono porque este almacen es SINCRONO (`S3Client`), y
+          arrastrarlo mete Netty entero en el classpath de una API que ya tiene
+          su servidor.
+        -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

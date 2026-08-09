@@ -1,0 +1,135 @@
+<div class="escena">
+  <div class="panel">
+    <div class="marca">
+      <span class="marca-logo">CL</span>
+      <div class="marca-texto">
+        <h1>Recuperar acceso</h1>
+        <p>ControlLocal</p>
+      </div>
+    </div>
+
+    @switch (paso()) {
+      @case ('listo') {
+        <div class="exito" role="status">
+          <p><strong>Tu contraseña quedó actualizada.</strong></p>
+          <p>Ya puedes entrar con ella.</p>
+        </div>
+        <button type="button" (click)="irAlLogin()">Ir a iniciar sesión</button>
+      }
+
+      @case ('canje') {
+        <!-- Define su contraseña quien tiene el enlace. Ni el administrador ni
+             el sistema la eligen por él. -->
+        <p class="intro">
+          Define tu contraseña nueva. El enlace sirve <strong>una sola vez</strong>.
+        </p>
+
+        <form [formGroup]="formularioCanje" (ngSubmit)="canjear()" novalidate>
+          @if (!tokenEnLaUrl) {
+            <label for="token">Código recibido</label>
+            <input
+              id="token"
+              type="text"
+              formControlName="token"
+              placeholder="pega aquí el código"
+              [class.invalido]="
+                formularioCanje.controls.token.touched && formularioCanje.controls.token.invalid
+              "
+            />
+          }
+
+          <label for="nueva">Contraseña nueva</label>
+          <input
+            id="nueva"
+            type="password"
+            formControlName="contrasenaNueva"
+            autocomplete="new-password"
+            placeholder="••••••••••••"
+            [class.invalido]="
+              formularioCanje.controls.contrasenaNueva.touched &&
+              formularioCanje.controls.contrasenaNueva.invalid
+            "
+          />
+          <small class="ayuda">
+            Al menos {{ largoMinimo }} caracteres. Cuanto más larga, mejor.
+          </small>
+
+          <label for="repetir">Repite la contraseña</label>
+          <input
+            id="repetir"
+            type="password"
+            formControlName="repetir"
+            autocomplete="new-password"
+            placeholder="••••••••••••"
+          />
+
+          @if (error(); as mensaje) {
+            <div class="alerta" role="alert">{{ mensaje }}</div>
+          }
+
+          <button type="submit" [disabled]="cargando()">
+            @if (cargando()) {
+              <span class="girando" aria-hidden="true"></span> Guardando…
+            } @else {
+              Guardar contraseña
+            }
+          </button>
+        </form>
+
+        <p class="pie"><a routerLink="/login">Volver a iniciar sesión</a></p>
+      }
+
+      @case ('solicitada') {
+        <!-- Mismo mensaje exista o no la cuenta: si dijera "ese usuario no
+             existe", el formulario sería un padrón de cuentas. -->
+        <div class="exito" role="status">
+          <p><strong>Solicitud registrada.</strong></p>
+          <p>Si el usuario existe, se generó un enlace de un solo uso válido 30 minutos.</p>
+          <p class="nota">
+            Todavía no hay envío automático de correo: pide el enlace al administrador de tu
+            organización, que es quien puede entregártelo.
+          </p>
+        </div>
+        <button type="button" (click)="irAlCanje()">Ya tengo el código</button>
+        <p class="pie"><a routerLink="/login">Volver a iniciar sesión</a></p>
+      }
+
+      @default {
+        <p class="intro">Escribe tu usuario y te generamos un enlace de un solo uso.</p>
+
+        <form [formGroup]="formularioSolicitud" (ngSubmit)="solicitar()" novalidate>
+          <label for="usuario">Usuario</label>
+          <input
+            id="usuario"
+            type="text"
+            formControlName="usuario"
+            autocomplete="username"
+            placeholder="tu usuario"
+            [class.invalido]="
+              formularioSolicitud.controls.usuario.touched &&
+              formularioSolicitud.controls.usuario.invalid
+            "
+          />
+
+          @if (error(); as mensaje) {
+            <div class="alerta" role="alert">{{ mensaje }}</div>
+          }
+
+          <button type="submit" [disabled]="cargando()">
+            @if (cargando()) {
+              <span class="girando" aria-hidden="true"></span> Enviando…
+            } @else {
+              Solicitar enlace
+            }
+          </button>
+        </form>
+
+        <p class="pie">
+          <a routerLink="/login">Volver a iniciar sesión</a>
+          <span aria-hidden="true"> · </span>
+          <button type="button" class="enlace" (click)="irAlCanje()">Ya tengo un código</button>
+        </p>
+      }
+    }
+  </div>
+</div>

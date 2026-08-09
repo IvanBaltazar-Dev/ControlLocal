@@ -1,0 +1,35 @@
+:host {
+  display: block;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+/* Celdas de dos líneas: el dato principal y su contexto debajo. */
+.cl-tabla .ancho {
+  white-space: normal;
+  min-width: 11rem;
+
+  .principal {
+    display: block;
+  }
+}
+
+.cl-tabla .acciones {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+
+  .cl-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+  }
+}
+
+.nota {
+  margin-top: 0.8rem;
+}

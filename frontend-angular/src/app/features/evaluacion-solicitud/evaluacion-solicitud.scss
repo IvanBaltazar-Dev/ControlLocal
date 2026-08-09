@@ -1,0 +1,86 @@
+/* Solo lo propio de la evaluación: armazón, tarjeta, tabla, badge, pares,
+   campo y botones son globales (`styles.scss`, prefijo `cl-`). */
+
+:host { display: block; }
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 9px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+
+  &.info {
+    background: color-mix(in srgb, var(--cl-primario-claro) 9%, white);
+    color: var(--cl-primario-claro);
+  }
+
+  &.atencion {
+    background: #fff7e6;
+    color: #8a5400;
+  }
+}
+
+.descripcion {
+  margin: 0.9rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--cl-borde);
+  font-size: 0.88rem;
+  color: var(--cl-tinta-suave);
+  line-height: 1.6;
+}
+
+.observacion {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: #8a5400;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.acciones-fila {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+/* Las tres decisiones, una debajo de otra: no compiten por el mismo sitio. */
+.decisiones {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+
+.historial {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.8rem;
+
+  li {
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--cl-borde) 60%, transparent);
+
+    &:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+  }
+}
+
+.linea-historial {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+
+  strong {
+    font-size: 0.86rem;
+  }
+}

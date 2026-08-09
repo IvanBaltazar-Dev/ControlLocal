@@ -1,0 +1,35 @@
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cl-tabla {
+  td strong,
+  .secundario {
+    display: block;
+  }
+
+  .secundario {
+    margin-top: 0.15rem;
+    color: var(--cl-tinta-suave);
+    font-size: 0.75rem;
+  }
+
+  // Los dos consentimientos van apilados y no en una sola celda de texto: son
+  // dos permisos distintos (uno del rol, otro de la persona) y confundirlos
+  // en la pantalla es lo que lleva a contactar a quien no lo autorizo.
+  .consentimientos {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: flex-start;
+  }
+
+  .acciones-fila {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+}

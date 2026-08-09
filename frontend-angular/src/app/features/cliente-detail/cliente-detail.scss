@@ -1,0 +1,99 @@
+// La cabecera, las tarjetas, las secciones, los avisos y los botones vienen
+// del sistema compartido (`styles.scss`): `.cl-cabecera`, `.cl-tarjeta`,
+// `.cl-seccion`, `.cl-seccion-titulo`, `.cl-aviso`, `.cl-btn`. Esta ficha los
+// tenia REDEFINIDOS con nombre propio —`.cabecera`, `.tarjeta`, `.seccion`,
+// `.alerta`, `.primario`/`.secundario`— y esa copia era la razon de que el
+// archivo pesara 7,3 kB cuando sus hermanas rondan 1,6-5 kB. Aqui queda solo
+// lo que de verdad es de esta pantalla.
+:host { display: block; }
+
+// Rejilla propia: contenido + columna fija de metricas. `.cl-resumen` es otra
+// cosa (rejilla de pares), asi que no se puede reutilizar.
+.resumen { display: grid; grid-template-columns: minmax(0, 1fr) 18rem; gap: 0.9rem; margin-bottom: 1rem; align-items: start; }
+
+// `.cl-pares` espera `> div`; esta ficha usa `<dl>/<dt>/<dd>`, que es el
+// marcado correcto para una lista de definiciones.
+.pares { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.7rem; margin: 0; }
+.pares dt { color: var(--cl-tinta-suave); font-size: 0.72rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.03em; }
+.pares dd { margin: 0.15rem 0 0; color: var(--cl-tinta); font-size: 0.86rem; }
+
+.consentimientos { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--cl-borde); }
+
+.metricas { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.metricas li { display: flex; justify-content: space-between; align-items: baseline; padding: 0.5rem 0.65rem; border-radius: 8px; background: var(--cl-fondo); }
+.metricas span { color: var(--cl-tinta-suave); font-size: 0.78rem; }
+.metricas strong { color: var(--cl-primario); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.metricas strong.pendiente { color: var(--cl-tinta-suave); font-weight: 500; }
+
+.aviso-busqueda { margin: 0.9rem 0 0; padding: 0.6rem 0.7rem; border-radius: 8px; background: color-mix(in srgb, var(--cl-exito) 10%, white); color: #1d6b45; font-size: 0.78rem; }
+.nota { margin: 0.7rem 0 0; color: var(--cl-tinta-suave); font-size: 0.72rem; line-height: 1.45; }
+
+// Las pestanas usan `.cl-pestanas` del sistema compartido.
+
+
+// El aviso lleva su boton de reintento a la derecha; `.cl-aviso` solo define
+// el bloque, no ese reparto.
+.cl-aviso { display: flex; justify-content: space-between; align-items: center; gap: 0.7rem; }
+.ancho { width: 100%; margin-top: 0.7rem; }
+
+// --- Coincidencias de cartera ---
+// El puntaje va acompañado SIEMPRE de sus motivos: un 100 % significa "cumple
+// todo lo que se pudo evaluar", no "cumple todo".
+.coincidencias { margin-bottom: 1rem; }
+.titulo-acciones { display: flex; align-items: center; gap: 0.5rem; }
+
+.lista-coincidencias {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.8rem; padding: 0.75rem 0.85rem; border: 1px solid var(--cl-borde); border-radius: 10px; }
+  .puntaje { display: grid; place-items: center; width: 3.1rem; height: 3.1rem; border-radius: 50%; background: var(--cl-fondo); color: var(--cl-tinta-suave); font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .puntaje.alto { background: color-mix(in srgb, var(--cl-exito) 14%, transparent); color: var(--cl-exito); }
+  .detalle strong { display: block; font-size: 0.9rem; }
+  .detalle .secundario { display: block; margin-top: 0.1rem; color: var(--cl-tinta-suave); font-size: 0.78rem; }
+  .criterios { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
+  .criterio { padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+  .criterio.bien { background: color-mix(in srgb, var(--cl-exito) 12%, transparent); color: var(--cl-exito); }
+  .criterio.mal { background: color-mix(in srgb, var(--cl-error) 10%, transparent); color: var(--cl-error); }
+}
+
+// --- Requerimientos: la búsqueda declarada, con su propio ciclo de vida ---
+.requerimientos { margin-bottom: 0.8rem; }
+
+.editor {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--cl-primario-claro);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cl-primario-claro) 4%, white);
+
+  h3 { margin: 0 0 0.9rem; color: var(--cl-primario); font-size: 0.95rem; }
+  .cl-campo { margin-bottom: 0; }
+  > .cl-campo { margin-top: 0.8rem; }
+}
+
+.acciones-editor { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
+
+.lista-requerimientos {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li { padding: 0.85rem 0.95rem; border: 1px solid var(--cl-borde); border-radius: 10px; }
+  .cabecera-requerimiento { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.7rem; margin-bottom: 0.7rem; }
+  .cabecera-requerimiento strong { font-size: 0.92rem; }
+  .cabecera-requerimiento .secundario { display: block; margin-top: 0.1rem; color: var(--cl-tinta-suave); font-size: 0.76rem; }
+  .observaciones { margin: 0.7rem 0 0; color: var(--cl-tinta-suave); font-size: 0.82rem; }
+  .acciones-requerimiento { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.8rem; }
+  .acciones-requerimiento button { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+}
+
+// `.cl-cabecera` ya envuelve en pantallas estrechas (flex-wrap), asi que la
+// regla que forzaba `flex-direction: column` sobre la antigua `.cabecera`
+// sobraba: apuntaba a una clase que ya no existe.
+@media (max-width: 64rem) { .resumen { grid-template-columns: 1fr; } }

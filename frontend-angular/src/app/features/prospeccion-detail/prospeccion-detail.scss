@@ -1,0 +1,86 @@
+:host { display: block; }
+
+// `.solo-lectura` vive en styles.scss: la llevan todas las fichas.
+
+.alerta-estado {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 9px;
+  font-size: 0.88rem;
+
+  &.bien { background: color-mix(in srgb, var(--cl-exito) 11%, white); color: var(--cl-exito); }
+  &.mal { background: color-mix(in srgb, var(--cl-error) 10%, white); color: var(--cl-error); }
+  &.aviso { background: #fff7e6; color: #8a5400; }
+}
+
+.observaciones {
+  margin: 0.9rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--cl-borde);
+  color: var(--cl-tinta-suave);
+  font-size: 0.86rem;
+}
+
+.linea {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    position: relative;
+    display: grid;
+    gap: 0.2rem;
+    padding: 1.4rem 0.4rem 0;
+    border-top: 3px solid var(--cl-borde);
+    color: var(--cl-tinta-suave);
+  }
+
+  .punto {
+    position: absolute;
+    top: -0.48rem;
+    left: 0;
+    width: 0.8rem;
+    height: 0.8rem;
+    border: 2px solid var(--cl-borde);
+    border-radius: 50%;
+    background: var(--cl-superficie);
+  }
+
+  li.completado { border-color: var(--cl-exito); color: var(--cl-tinta); }
+  li.completado .punto { border-color: var(--cl-exito); background: var(--cl-exito); }
+  li.actual .punto { box-shadow: 0 0 0 4px color-mix(in srgb, var(--cl-exito) 20%, transparent); }
+  strong { font-size: 0.8rem; }
+  small { font-size: 0.72rem; }
+}
+
+.acciones-comerciales {
+  button { width: 100%; margin-top: 0.45rem; }
+  .peligro { border-color: color-mix(in srgb, var(--cl-error) 45%, var(--cl-borde)); color: var(--cl-error); }
+}
+
+.campo-dialogo {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+
+  b { color: var(--cl-error); }
+  textarea {
+    width: 100%;
+    padding: 0.65rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 8px;
+    resize: vertical;
+    font: inherit;
+  }
+}
+
+@media (max-width: 46rem) {
+  .linea { grid-template-columns: minmax(0, 1fr); gap: 0.8rem; }
+  .linea li { padding: 0.3rem 0 0.3rem 1.2rem; border-top: 0; border-left: 3px solid var(--cl-borde); }
+  .linea li.completado { border-color: var(--cl-exito); }
+  .linea .punto { top: 0.45rem; left: -0.5rem; }
+}

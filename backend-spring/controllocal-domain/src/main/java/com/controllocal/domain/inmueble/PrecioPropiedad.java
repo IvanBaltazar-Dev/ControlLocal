@@ -27,6 +27,8 @@ public class PrecioPropiedad extends EntidadDeOrganizacion {
      */
     public static final String HITO_ESPERADO = "E";
     public static final String HITO_AUTORIZADO = "U";
+    /** La renta que el mercado VE. La escribe la publicacion, no la propiedad. */
+    public static final String HITO_PUBLICADO = "P";
     public static final Set<String> HITOS = Set.of("E", "R", "U", "P", "O", "A", "C");
 
     public static final String MONEDA_PEN = "PEN";

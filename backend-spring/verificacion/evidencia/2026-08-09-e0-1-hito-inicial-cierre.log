@@ -1,0 +1,35 @@
+﻿**********************
+Inicio de la transcripción de Windows PowerShell
+Hora de inicio: 20260809235810
+Nombre de usuario: DESKTOP-DI7BIQD\Ivan Piero Baltazar
+Usuario RunAs: DESKTOP-DI7BIQD\Ivan Piero Baltazar
+Nombre de la configuración: 
+Máquina: DESKTOP-DI7BIQD (Microsoft Windows NT 10.0.26200.0)
+Aplicación host: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command try { $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8' } catch {}; if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') { try { $OutputEncoding = [System.Text.UTF8Encoding]::new() } catch {}; if ($null -ne $PSStyle) { try { $PSStyle.OutputRendering = 'PlainText' } catch {} } }; $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+$env:TEST_DB_URL = "jdbc:postgresql://localhost:5433/controllocal_repositorios"
+Set-Location "D:\init\ControlLocal\backend-spring\verificacion"
+$log = "D:\init\ControlLocal\backend-spring\verificacion\evidencia\2026-08-09-e0-1-hito-inicial-cierre.log"
+Start-Transcript -Path $log -Force | Out-Null
+& powershell -ExecutionPolicy Bypass -File ".\Verificar-Cierre.ps1"
+$codigo = $LASTEXITCODE
+Stop-Transcript | Out-Null
+Write-Output "=== Verificar-Cierre exit: $codigo"
+; $_ec = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }
+; (Get-Location).Path | Out-File -FilePath 'C:\Users\IVANPI~1\AppData\Local\Temp\claude\claude-pwd-ps-06bd' -Encoding utf8 -NoNewline
+; if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') { $host.SetShouldExit($_ec) } else { exit $_ec }
+Id. de proceso: 11572
+PSVersion: 5.1.26100.8972
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8972
+BuildVersion: 10.0.26100.8972
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+
+**********************
+Fin de la transcripción de Windows PowerShell
+Hora de finalización: 20260810001107
+**********************

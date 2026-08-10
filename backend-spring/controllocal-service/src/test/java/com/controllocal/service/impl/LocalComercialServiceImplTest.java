@@ -183,6 +183,50 @@ class LocalComercialServiceImplTest {
         assertEquals(ORG, guardada.getValue().getDetalleLocal().getOrganizacionId());
     }
 
+    /**
+     * E0.1. El hueco que cierra: hasta ahora el alta NO dejaba hito, asi que el
+     * precio de SALIDA vivia solo en la columna de la propiedad y la primera
+     * edicion lo pisaba —{@code actualizar} graba el precio nuevo, nunca el
+     * anterior—. Con el alta instrumentada la serie conserva los dos numeros, y
+     * la brecha entre lo que el propietario pedia y lo que acepto se vuelve
+     * calculable. Por eso el test hace las DOS operaciones: lo que se protege no
+     * es que el alta escriba, es que la edicion posterior no borre.
+     */
+    @Test
+    void elAltaDejaElPrimerHitoAutorizadoYLaEdicionNoLoPisa() {
+        when(roles.findById(9L)).thenReturn(Optional.of(rolPropietario("Inmobiliaria Pacifico SAC")));
+        when(distritos.findByActivoTrueOrderByNombre()).thenReturn(List.of());
+        when(propiedades.save(any(Propiedad.class))).thenAnswer(inv -> conId(inv.getArgument(0), 7L));
+        when(publicaciones.codigoEstadoPublicacion(anyLong())).thenReturn("B");
+
+        service.registrar(datosValidos(), agente);
+
+        when(propiedades.buscarFicha(ORG, 7L)).thenReturn(Optional.of(propiedadExistente()));
+        when(fotos.findByIdPropiedadOrderByOrdenAscIdAsc(anyLong())).thenReturn(List.of());
+        when(prospeccionesRepo.existsByOrganizacionIdAndPropiedadIdAndAgenteId(ORG, 7L, 30L))
+                .thenReturn(true);
+
+        service.actualizar(7L, datos(null, null, null,
+                new BigDecimal("120.00"), new BigDecimal("9000.00")), agente);
+
+        ArgumentCaptor<com.controllocal.domain.inmueble.PrecioPropiedad> hitos =
+                ArgumentCaptor.forClass(com.controllocal.domain.inmueble.PrecioPropiedad.class);
+        verify(precios, org.mockito.Mockito.times(2)).save(hitos.capture());
+
+        com.controllocal.domain.inmueble.PrecioPropiedad salida = hitos.getAllValues().get(0);
+        assertEquals("U", salida.getHito());
+        assertEquals(new BigDecimal("8500.00"), salida.getMonto());
+        assertEquals("PEN", salida.getMoneda());
+        assertEquals(7L, salida.getIdPropiedad());
+        assertEquals(ORG, salida.getOrganizacionId());
+        assertEquals(java.time.LocalDate.now(), salida.getFecha());
+
+        // El segundo hito es el precio nuevo, en una fila aparte: el de salida
+        // sigue intacto. Ese es exactamente el dato que antes se perdia.
+        assertEquals(new BigDecimal("9000.00"), hitos.getAllValues().get(1).getMonto());
+        assertEquals(new BigDecimal("8500.00"), salida.getMonto());
+    }
+
     @Test
     void desactivarTransicionaAInactivoYLoAudita() {
         Propiedad propiedad = propiedadExistente();

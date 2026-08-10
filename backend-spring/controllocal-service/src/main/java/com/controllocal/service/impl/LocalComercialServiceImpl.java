@@ -224,6 +224,29 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         resolverDistrito(propiedad);
         propiedades.save(propiedad);
 
+        // E0.1 — el alta deja su PRIMER hito 'U' (autorizado).
+        //
+        // Sin esto el precio de SALIDA vivia unicamente en
+        // `propiedad.precio_referencial`, y la primera edicion lo borraba para
+        // siempre: `actualizar` graba el hito con el precio NUEVO, jamas con el
+        // anterior. Justo ese primer numero es el que mide cuanto cedio el
+        // propietario hasta el cierre, y no se reconstruye desde ninguna otra
+        // tabla.
+        //
+        // Va ANTES de sincronizar la publicacion a proposito: el orden natural
+        // de la serie es autorizado -> publicado, y ambos caen el mismo dia.
+        //
+        // Precio y moneda son no-nulos aqui: `validarObligatorios` exige el
+        // precio y `copiarCampos` normaliza la moneda con CondicionesEconomicas.
+        PrecioPropiedad inicial = new PrecioPropiedad();
+        inicial.setOrganizacionId(propiedad.getOrganizacionId());
+        inicial.setIdPropiedad(propiedad.getId());
+        inicial.setHito(PrecioPropiedad.HITO_AUTORIZADO);
+        inicial.setMoneda(propiedad.getMonedaReferencial());
+        inicial.setMonto(propiedad.getPrecioReferencial());
+        inicial.setFecha(LocalDate.now());
+        precios.save(inicial);
+
         publicaciones.sincronizar(propiedad.getId(), propiedad.getCodigo(),
                 propiedad.getPrecioReferencial(), propiedad.getMonedaReferencial(),
                 datos.estadoPublicacion(), actor);

@@ -26,6 +26,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Transiciones;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import org.springframework.data.domain.Page;
@@ -332,7 +333,10 @@ public class CaptacionServiceImpl implements CaptacionService {
             throw new ReglaNegocioException("El agente destino es obligatorio.");
         }
         Captacion cap = cargarConAcceso(id, actor);
-        exigirTexto(motivo, "El motivo de reasignacion");
+        // Hasta E1 aqui solo se exigia que el motivo no viniera vacio: la regla
+        // de longitud minima vivia SOLO en el formulario de Angular, asi que un
+        // POST directo colaba un "ok" en el historial de la captacion.
+        String motivoValidado = PoliticaComercial.exigirMotivoDeReasignacion(motivo);
         DetalleAgente agenteNuevo = agentes.findById(idAgenteNuevo)
                 .orElseThrow(() -> new ReglaNegocioException("Agente no encontrado."));
         if (!alcances.alcanza(actor, idAgenteNuevo)) {
@@ -366,7 +370,7 @@ public class CaptacionServiceImpl implements CaptacionService {
         evento.setBroker(broker);
         evento.setIdPersonaActor(actor.idPersona());
         evento.setTipoRolActor(actor.rolEfectivo());
-        evento.setMotivo(motivo);
+        evento.setMotivo(motivoValidado);
         reasignaciones.save(evento);
         return fichaDe(id, actor);
     }

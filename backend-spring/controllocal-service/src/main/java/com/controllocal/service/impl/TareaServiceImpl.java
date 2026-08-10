@@ -21,6 +21,7 @@ import com.controllocal.service.TareaService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.CoincidenciaCartera;
+import com.controllocal.service.soporte.PoliticaComercial;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,12 +55,10 @@ import java.util.Set;
 @Service
 public class TareaServiceImpl implements TareaService {
 
-    private static final int DIAS_RECONTACTO = 7;
-    private static final int DIAS_VISITA_PROXIMA = 3;
-    /** Cadencia del reporte al propietario: se vuelve a pedir pasados estos dias. */
-    private static final int DIAS_REPORTE = 15;
-    /** Puntaje minimo para sugerir una oportunidad (evita ruido en la bandeja). */
-    private static final int UMBRAL_PROPUESTA = 60;
+    // Los cuatro plazos que gobiernan los disparadores viven en
+    // PoliticaComercial, no aqui: hasta E1 este archivo tenia su propia copia
+    // del plazo de recontacto y otras tres andaban sueltas por el sistema.
+    //
     // El tope de 10 con descarte EN SILENCIO (D-F7-2) se retiro el 2026-08-08 al
     // descongelar el contrato. Era una replica de la v1 y hacia que el agente no
     // pudiera distinguir "tengo 10 tareas" de "tengo 40": la bandeja se veia
@@ -258,8 +257,9 @@ public class TareaServiceImpl implements TareaService {
         List<Derivada> out = new ArrayList<>();
         LocalDate hoy = LocalDate.now();
 
-        // 1) Recontactos vencidos (>= 7 dias sin accion de seguimiento).
-        for (CandidatoTarea c : prospecciones.paraRecontactar(org, idAgente, hoy.minusDays(DIAS_RECONTACTO))) {
+        // 1) Recontactos vencidos: prospecciones que ya pasaron su plazo.
+        for (CandidatoTarea c : prospecciones.paraRecontactar(
+                org, idAgente, PoliticaComercial.limiteDeRecontacto(hoy))) {
             String codigo = nz(c.getEntidadCodigo());
             out.add(new Derivada(Tarea.RECONTACTO, "PROSPECCION", c.getEntidadId(), codigo,
                     Tarea.ALTA, "Recontacta o evalua descartar la prospeccion " + codigo + ".",
@@ -289,7 +289,8 @@ public class TareaServiceImpl implements TareaService {
         }
 
         // 5) Visitas que requieren accion: caidas, vencidas sin cerrar o proximas.
-        for (CandidatoTarea c : visitas.queExigenAccion(org, idAgente, hoy.plusDays(DIAS_VISITA_PROXIMA))) {
+        for (CandidatoTarea c : visitas.queExigenAccion(
+                org, idAgente, PoliticaComercial.horizonteDeVisitas(hoy))) {
             LocalDate fecha = c.getFechaPlazo();
             boolean noRealizada = Visita.NO_REALIZADA.equals(c.getMarca());
             boolean vencida = fecha != null && fecha.isBefore(hoy);
@@ -335,7 +336,7 @@ public class TareaServiceImpl implements TareaService {
             if (desde == null) {
                 desde = c.getFechaPlazo() != null ? c.getFechaPlazo() : hoy;
             }
-            LocalDate vence = desde.plusDays(DIAS_REPORTE);
+            LocalDate vence = PoliticaComercial.proximoReporteAlPropietario(desde);
             if (vence.isAfter(hoy)) {
                 continue;
             }
@@ -349,7 +350,8 @@ public class TareaServiceImpl implements TareaService {
 
     /**
      * Disparador 7. Por cada requerimiento ACTIVO de un cliente del agente
-     * busca su MEJOR captacion propia compatible (puntaje >= 60) que aun no
+     * busca su captacion propia mas compatible —por encima del puntaje que la
+     * politica considera proponible ({@code coincidencia.puntaje-minimo})— que aun no
      * tenga oportunidad para ese par. Dedup por REQUERIMIENTO, y su "Resolver"
      * abre la ficha del cliente, que es donde vive el panel de propiedades
      * compatibles.
@@ -380,7 +382,7 @@ public class TareaServiceImpl implements TareaService {
                     continue;
                 }
                 int puntaje = CoincidenciaCartera.evaluar(r, c.getPropiedad()).puntaje();
-                if (puntaje >= UMBRAL_PROPUESTA && puntaje > mejorPuntaje) {
+                if (PoliticaComercial.valeLaPenaProponer(puntaje) && puntaje > mejorPuntaje) {
                     mejor = c;
                     mejorPuntaje = puntaje;
                 }

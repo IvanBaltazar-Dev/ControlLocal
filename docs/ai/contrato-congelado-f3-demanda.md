@@ -1,5 +1,13 @@
 # Contrato congelado F3 — Demanda (cliente, requerimiento, oportunidad, visita, interacción)
 
+> **El "congelado" del título es histórico.** El contrato se descongeló el
+> 2026-08-09 (`decision-contrato-v2-descongelado.md`): DTOs, endpoints, estados y
+> errores pueden cambiar con razón funcional y con sus pruebas.
+>
+> Este documento **describe el comportamiento vigente** y se sigue actualizando
+> —no es historia—, pero la autoridad son **las pruebas y OpenAPI**, no este
+> texto. Si discrepan, manda la suite.
+
 > Ingeniería inversa del cable REAL de `ClientesRest`, `RequerimientosRest`, `OportunidadesRest`,
 > `VisitasRest`, `InteraccionesRest` y `CoincidenciaCarteraSupport` (backend Jakarta), hecha el
 > 2026-07-27 para implementar la vertical F3 en `backend-spring/`.

@@ -1,5 +1,15 @@
 # Informe técnico — tecnologías, dependencias y alcance corregido de E5
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 **Fecha:** 2026-08-04 · **Naturaleza:** inventario **de solo lectura**. No se cambió ningún proveedor,
 dependencia ni configuración.
 **Restricción del encargo:** no se selecciona AWS, SES ni ningún proveedor comercial. Las opciones se

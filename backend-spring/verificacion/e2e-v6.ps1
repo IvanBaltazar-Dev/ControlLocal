@@ -89,7 +89,17 @@ $editado = Api PUT "/locales/$idLocal" $agente.token @{
     idPropietario = 43; estadoPublicacion = 'P'
 }
 Check 'PUT actualiza el precio' ($editado.precioReferencial -eq 9900) $editado.precioReferencial
-Check 'el hito de precio U nace con tenant' ((Sql "select count(*) from precio_propiedad where id_propiedad=$idLocal and hito='U' and organizacion_id=1") -eq '1') 'hito U'
+# E0.1 (2026-08-10): la serie de precios es APPEND-ONLY y el alta ya deja su
+# PRIMER hito 'U' con el precio autorizado de salida. Esta comprobacion exigia
+# UNA sola fila, y era correcta mientras el unico productor de 'U' fuera la
+# edicion. Ahora tienen que convivir los dos, en orden y sin pisarse: 9200 al
+# alta y 9900 al editar. Volver a ver un solo hito significaria que la edicion
+# machaca el precio de salida, que es exactamente lo que E0.1 vino a impedir
+# —ese primer numero es el que mide cuanto cedio el propietario hasta el cierre
+# y no se reconstruye desde ninguna otra tabla—.
+$serieU = Sql "select string_agg(monto::int::text, '>' order by id_precio) from precio_propiedad where id_propiedad=$idLocal and hito='U' and organizacion_id=1"
+Check 'el alta y la edicion dejan sus dos hitos U con tenant, sin pisarse' `
+    ($serieU -eq '9200>9900') $serieU
 
 $precio = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9500 }
 Check 'POST /precios registra el hito' ($precio.hito -eq 'O') $precio.hito

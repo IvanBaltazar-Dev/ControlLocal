@@ -1,5 +1,13 @@
 # Contrato congelado E3 — ficha comercial
 
+> **El "congelado" del título es histórico.** El contrato se descongeló el
+> 2026-08-09 (`decision-contrato-v2-descongelado.md`): DTOs, endpoints, estados y
+> errores pueden cambiar con razón funcional y con sus pruebas.
+>
+> Este documento **describe el comportamiento vigente** y se sigue actualizando
+> —no es historia—, pero la autoridad son **las pruebas y OpenAPI**, no este
+> texto. Si discrepan, manda la suite.
+
 **Estado:** CONGELADO, CORTADO Y VERIFICADO (2026-07-29)  
 **Fuente de verdad:** `backend-java/controllocal-rest/.../ClientesRest.java`,
 `PropietariosRest.java` y `FichaComercialSupport.java`.

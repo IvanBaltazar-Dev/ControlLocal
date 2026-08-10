@@ -16,6 +16,10 @@ import java.util.List;
  *
  * <p>`captacionesPendientes` se retiro el 2026-08-08: repetia `captacionesPorRevisar`
  * con otro nombre porque la v1 lo emitia asi (D-E4-3). Nadie lo pintaba.
+ *
+ * <p>`senales` se anadio en E1 (2026-08-10): son los mismos numeros que ya
+ * viajaban, pero <b>clasificados por el dominio</b> y ordenados por lo que urge
+ * primero. Ver {@link IndicadorSenalResponse}.
  */
 public record IndicadoresResponse(
         String ambito,
@@ -29,7 +33,9 @@ public record IndicadoresResponse(
         int visitas,
         int cierres,
         int cierresCohorte,
-        int conversionPropia,
+        // El unico numerico nulable de la respuesta (E2.0): `null` = no hubo
+        // captaciones en el periodo, asi que no hay tasa. Ver IndicadorService.
+        Integer conversionPropia,
         int agentesActivos,
         int brokersActivos,
         int propiedadesEquipo,
@@ -41,7 +47,9 @@ public record IndicadoresResponse(
         List<IndicadorConteoResponse> captacionesSalud,
         List<IndicadorEmbudoResponse> embudo,
         List<IndicadorDesempenoResponse> desempeno,
-        IndicadorOperativoResponse operativo) {
+        IndicadorOperativoResponse operativo,
+        List<IndicadorSenalResponse> senales,
+        int pendientesDeAtencion) {
 
     public static IndicadoresResponse desde(IndicadorService.Resumen r) {
         return new IndicadoresResponse(
@@ -68,6 +76,8 @@ public record IndicadoresResponse(
                 r.captacionesSalud().stream().map(IndicadorConteoResponse::desde).toList(),
                 r.embudo().stream().map(IndicadorEmbudoResponse::desde).toList(),
                 r.desempeno().stream().map(IndicadorDesempenoResponse::desde).toList(),
-                IndicadorOperativoResponse.desde(r.operativo()));
+                IndicadorOperativoResponse.desde(r.operativo()),
+                r.senales().stream().map(IndicadorSenalResponse::desde).toList(),
+                r.pendientesDeAtencion());
     }
 }

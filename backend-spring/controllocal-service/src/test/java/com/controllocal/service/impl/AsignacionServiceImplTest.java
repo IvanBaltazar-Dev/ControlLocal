@@ -17,6 +17,7 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.AsignacionService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.UsuariosInternos;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -151,8 +153,25 @@ class AsignacionServiceImplTest {
                         new AsignacionService.DatosReasignacion(
                                 AGENTE, DESTINO, " "), admin));
 
-        assertEquals("El motivo de reasignacion de agente es obligatorio.",
+        assertTrue(error.getMessage().contains("al menos "
+                        + PoliticaComercial.MOTIVO_REASIGNACION.valor() + " caracteres"),
                 error.getMessage());
+    }
+
+    /**
+     * E1: la longitud minima del motivo vivia SOLO en el formulario de Angular,
+     * asi que un POST directo colaba un "ok" en el historial. Ahora la exige el
+     * servicio, que es donde la regla no se puede saltar.
+     */
+    @Test
+    void reasignarRechazaUnMotivoDemasiadoCorto() {
+        prepararAdmin();
+
+        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
+                () -> service.reasignar(
+                        new AsignacionService.DatosReasignacion(AGENTE, DESTINO, "ok"), admin));
+
+        assertTrue(error.getMessage().contains("caracteres"), error.getMessage());
     }
 
     @Test

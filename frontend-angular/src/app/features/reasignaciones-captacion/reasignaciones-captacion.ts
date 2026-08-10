@@ -35,6 +35,7 @@ import {
 import { AgenteOpcion, PersonalService } from '../../core/api/personal.service';
 import { descargarCsv } from '../../core/csv';
 import { fechaHora, SIN_DATO, texto } from '../../core/formato';
+import { POLITICA_COMERCIAL } from '../../core/politica-comercial';
 import { BarraFiltros } from '../../shared/barra-filtros/barra-filtros';
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
@@ -44,6 +45,13 @@ import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
 const POR_PAGINA = 8;
 const POR_PAGINA_HISTORIAL = 10;
+
+/**
+ * Largo mínimo del motivo. **La regla es del backend** —lo rechaza igual si se
+ * llama al API directamente, que hasta E1 no ocurría—; esto solo avisa antes de
+ * enviar, que es mejor que un 400 después. Ver `core/politica-comercial.ts`.
+ */
+const MINIMO_MOTIVO = POLITICA_COMERCIAL.motivoReasignacionCaracteres;
 
 interface FiltrosReasignacionUrl {
   texto: string;
@@ -104,6 +112,7 @@ export class ReasignacionesCaptacion implements OnInit {
   protected readonly agenteHistorial = signal('');
   protected readonly paginaHistorialActual = signal(1);
   protected readonly motivo = new FormControl('', { nonNullable: true });
+  protected readonly minimoMotivo = MINIMO_MOTIVO;
 
   protected readonly porPagina = POR_PAGINA;
   protected readonly porPaginaHistorial = POR_PAGINA_HISTORIAL;
@@ -245,8 +254,10 @@ export class ReasignacionesCaptacion implements OnInit {
       this.errorAccion.set('Selecciona un agente activo y disponible de tu alcance.');
       return;
     }
-    if (motivo.length < 10) {
-      this.errorAccion.set('Explica el motivo con al menos 10 caracteres para conservar la trazabilidad.');
+    if (motivo.length < MINIMO_MOTIVO) {
+      this.errorAccion.set(
+        `Explica el motivo con al menos ${MINIMO_MOTIVO} caracteres: queda en el historial de la captación.`,
+      );
       this.motivo.markAsTouched();
       return;
     }
@@ -262,7 +273,7 @@ export class ReasignacionesCaptacion implements OnInit {
     const captacion = this.captacionSeleccionada();
     const agente = this.agenteSeleccionado();
     const motivo = this.motivo.value.trim();
-    if (!captacion || !agente || motivo.length < 10 || this.procesando()) return;
+    if (!captacion || !agente || motivo.length < MINIMO_MOTIVO || this.procesando()) return;
     this.procesando.set(true);
     this.errorAccion.set(null);
     this.exito.set(null);

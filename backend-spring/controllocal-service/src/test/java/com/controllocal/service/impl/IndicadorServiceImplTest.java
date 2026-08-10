@@ -31,7 +31,10 @@ import com.controllocal.service.IndicadorService.Conteo;
 import com.controllocal.service.IndicadorService.Desempeno;
 import com.controllocal.service.IndicadorService.Embudo;
 import com.controllocal.service.IndicadorService.Resumen;
+import com.controllocal.service.IndicadorService.Senal;
 import com.controllocal.service.soporte.Alcances;
+import com.controllocal.service.soporte.PoliticaComercial.Concepto;
+import com.controllocal.service.soporte.PoliticaComercial.NivelAtencion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -40,13 +43,16 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -473,6 +479,154 @@ class IndicadorServiceImplTest {
 
         assertEquals(2, operativo.visitasPendientes());
         assertEquals(1, operativo.solicitudesSinCierre());
+    }
+
+    // ---------- senales: el hecho ya interpretado (E1, R-07) ----------
+
+    @Test
+    void lasSenalesLleganCompletasYEnElOrdenDeLaPolitica() {
+        List<Senal> senales = service.resumen("7d", agente).senales();
+
+        assertEquals(Concepto.values().length, senales.size(),
+                "falta algun concepto: el cliente no puede distinguir 'no vino' de 'no hay'");
+        assertEquals(
+                Arrays.stream(Concepto.values())
+                        .sorted(Comparator.comparingInt(Concepto::prioridad))
+                        .map(Enum::name).toList(),
+                senales.stream().map(Senal::concepto).toList(),
+                "el orden lo fija la politica, no quien pinta");
+    }
+
+    /**
+     * El caso del enunciado de R-07: el backend no manda 9 dias esperando que
+     * Angular sepa que mas de 7 es preocupante; manda 9 <b>y</b> su lectura.
+     */
+    @Test
+    void unaDemoraDeNueveDiasViajaYaClasificada() {
+        when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                prospeccion(60L, AGENTE, "S", hoy, hoy.minusDays(7)),
+                prospeccion(62L, AGENTE, "S", hoy, hoy.minusDays(11))));
+
+        Resumen resumen = service.resumen("7d", agente);
+        Senal demora = senal(resumen, Concepto.DEMORA_DE_SEGUIMIENTO);
+
+        assertEquals(9, resumen.operativo().diasPromedioSinSeguimiento(), "(7 + 11) / 2");
+        assertEquals(9, demora.valor(), "el numero sigue viajando: al usuario le importa");
+        assertEquals(NivelAtencion.MEDIO.name(), demora.nivelAtencion());
+        assertTrue(demora.requiereAtencion());
+
+        Senal vencidos = senal(resumen, Concepto.RECONTACTO_VENCIDO);
+        assertEquals(2, vencidos.valor());
+        assertEquals(NivelAtencion.ALTO.name(), vencidos.nivelAtencion());
+    }
+
+    @Test
+    void sinNadaPendienteLoQueSeAtiendeQuedaSIN_PENDIENTESYLoInformativoSigueSiendoINFORMATIVO() {
+        Resumen resumen = service.resumen("7d", agente);
+
+        assertEquals(NivelAtencion.SIN_PENDIENTES.name(),
+                senal(resumen, Concepto.SOLICITUD_POR_EVALUAR).nivelAtencion());
+        assertEquals(NivelAtencion.SIN_PENDIENTES.name(),
+                senal(resumen, Concepto.RECONTACTO_VENCIDO).nivelAtencion());
+        assertFalse(senal(resumen, Concepto.SOLICITUD_POR_EVALUAR).requiereAtencion());
+
+        Senal visitas = senal(resumen, Concepto.VISITA_PENDIENTE);
+        assertEquals(NivelAtencion.INFORMATIVO.name(), visitas.nivelAtencion(),
+                "cero visitas agendadas no es 'todo al dia': es cero");
+        assertFalse(visitas.requiereAtencion());
+    }
+
+    @Test
+    void lasSenalesLeenLosMismosNumerosQueElResumen() {
+        when(captaciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                captacion(1L, AGENTE, "P", hoy, 101L),
+                captacion(2L, AGENTE, "P", hoy, 102L)));
+        when(solicitudes.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                solicitud(30L, AGENTE, "E", hoy, 1L, 20L, 300L)));
+
+        Resumen resumen = service.resumen("7d", agente);
+
+        assertEquals(resumen.captacionesPorRevisar(),
+                senal(resumen, Concepto.CAPTACION_POR_REVISAR).valor());
+        assertEquals(resumen.solicitudesPorEvaluar(),
+                senal(resumen, Concepto.SOLICITUD_POR_EVALUAR).valor());
+        assertEquals(resumen.cierres(), senal(resumen, Concepto.CIERRE_REGISTRADO).valor());
+        assertEquals(resumen.agentesActivos(),
+                senal(resumen, Concepto.COBERTURA_DE_AGENTES).valor());
+    }
+
+    // ---------- E2.0 / E2.1: conversion no calculable y cabecera de decision ----------
+
+    /**
+     * E2.0. Sin captaciones en el periodo no se convirtio nada <b>porque no
+     * habia nada que convertir</b>. Emitir 0 hacia indistinguibles ese caso y el
+     * de haber trabajado doce sin cerrar ninguna — y el dashboard lo "resolvia"
+     * mostrando la conversion del agente que mas cerro.
+     */
+    @Test
+    void sinCohorteLaConversionPropiaNoEsCeroSinoInexistente() {
+        assertNull(service.resumen("7d", agente).conversionPropia(),
+                "sin captaciones en el periodo no hay tasa que calcular");
+    }
+
+    @Test
+    void conCohorteLaConversionPropiaEsUnNumero() {
+        long idCap = 1L;
+        when(captaciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                captacion(idCap, AGENTE, "A", hoy, 101L),
+                captacion(2L, AGENTE, "A", hoy, 102L)));
+        when(contratos.indicadores(anyLong())).thenReturn(List.of(
+                contrato(70L, hoy, AGENTE, idCap, AGENTE, idCap)));
+
+        assertEquals(50, service.resumen("7d", agente).conversionPropia(),
+                "1 cerrada de 2 captaciones del periodo");
+    }
+
+    /**
+     * E2.1. La cabecera abre con "N cosas necesitan tu atencion", y ese N no se
+     * puede derivar sumando las senales en el cliente: la demora de seguimiento
+     * vale DIAS. Con 1 solicitud + 2 recontactos + 9 dias de atraso, el titular
+     * son 3 cosas, no 12.
+     */
+    @Test
+    void pendientesDeAtencionSumaCosasYNoMagnitudes() {
+        when(solicitudes.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                solicitud(30L, AGENTE, "E", hoy, 1L, 20L, 300L)));
+        when(prospecciones.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                prospeccion(60L, AGENTE, "S", hoy, hoy.minusDays(7)),
+                prospeccion(62L, AGENTE, "S", hoy, hoy.minusDays(11))));
+
+        Resumen resumen = service.resumen("7d", agente);
+
+        assertEquals(9, resumen.operativo().diasPromedioSinSeguimiento(), "la demora esta ahi");
+        assertEquals(3, resumen.pendientesDeAtencion(),
+                "1 solicitud por evaluar + 2 recontactos vencidos; los 9 dias NO son cosas");
+    }
+
+    @Test
+    void sinNadaPendienteLaCabeceraDiceCero() {
+        assertEquals(0, service.resumen("7d", agente).pendientesDeAtencion());
+    }
+
+    /** Lo informativo nunca entra en el titular, por muchas visitas que haya. */
+    @Test
+    void loInformativoNoCuentaComoPendiente() {
+        when(visitas.indicadores(anyLong(), anyBoolean(), anyCollection())).thenReturn(List.of(
+                visita(50L, AGENTE, "P", hoy, 20L),
+                visita(51L, AGENTE, "G", hoy, 21L)));
+
+        Resumen resumen = service.resumen("7d", agente);
+
+        assertEquals(2, resumen.operativo().visitasPendientes());
+        assertEquals(0, resumen.pendientesDeAtencion(),
+                "una visita agendada es agenda, no un pendiente que reclame");
+    }
+
+    private static Senal senal(Resumen resumen, Concepto concepto) {
+        return resumen.senales().stream()
+                .filter(s -> concepto.name().equals(s.concepto()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no viajo la senal " + concepto));
     }
 
     // ---------- avance comercial (RF-017) ----------

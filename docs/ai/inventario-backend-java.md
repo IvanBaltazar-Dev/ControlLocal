@@ -1,5 +1,15 @@
 # Inventario Backend Java — foco Base de Datos (32 tablas)
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 > Documento 3 de 7 · Fase doc-first de la migración. Inventario exhaustivo del esquema (`01_create_schema_controllocal.sql`) tabla por tabla: propósito, PK, FKs, discriminadores/estados, columnas notables, índices y oportunidades de herencia/normalización/redundancia.
 > Complementa: análisis de modelado en [`modelo-herencia-y-generalizacion.md`](modelo-herencia-y-generalizacion.md); capas de código (model/dao/bl/rest) resumidas en §10 y en las memorias de Serena (`mem:backend/core`).
 > Convención: 🔎 = observación/mejora; los IDs **MEJ-xx** se acumulan en el registro vivo (Doc 1 §7 + anexo + §9 aquí).

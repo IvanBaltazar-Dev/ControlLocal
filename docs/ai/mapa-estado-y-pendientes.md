@@ -1,5 +1,15 @@
 # Mapa de estado — qué falta para terminar ControlLocal v2
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 **Fecha: 2026-08-01.** Este documento es la **foto para entender de un vistazo** dónde está el
 proyecto, qué problemas aparecieron por el camino y qué queda por hacer.
 
@@ -166,7 +176,7 @@ Todos estos están replicados y anotados para arreglarlos **el día que se apagu
 | 3 | **La alerta de "captación nueva" casi nunca se emite**: el camino normal para crear una captación se salta el código que avisa | El broker **no recibe aviso** de las captaciones que le llegan a revisar |
 | 4 | La pantalla que "cierra la oportunidad" **siempre da error 400** | Es intencional: el cierre lo produce el contrato, no ese botón. Confunde a quien lo lee sin contexto |
 | 5 | Existen **3 formas distintas de subir un archivo**, creadas para esquivar un fallo del cliente .NET | Código duplicado que solo tiene sentido mientras viva el Blazor |
-| 6 | La bandeja de tareas **corta en 10 y descarta el resto en silencio** | El agente no puede distinguir "tengo 10 tareas" de "tengo 40" |
+| 6 | ~~La bandeja de tareas **corta en 10 y descarta el resto en silencio**~~ **RESUELTO 2026-08-08** al descongelar el contrato: el tope se retiró y `totalRecords` es el total real. El SPA lo pinta en un panel lateral, porque la tarjeta del dashboard solo compone las 5 primeras | — |
 | 7 | En el embudo, *"Con visita realizada"* **no mira el estado de la visita**: cuenta también las canceladas | El tramo del embudo exagera cuántas oportunidades llegaron a visita |
 | 8 | El primer tramo del embudo muestra **100 %** aunque no haya ninguna oportunidad | Un embudo vacío se ve "al 100 %" |
 | 9 | El dashboard manda **dos veces el mismo número** de captaciones por revisar (con dos nombres distintos) | Ninguna: la pantalla usa uno solo. Es peso muerto del contrato |

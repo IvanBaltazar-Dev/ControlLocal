@@ -6,6 +6,7 @@ import {
   OnInit,
   signal,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
@@ -14,16 +15,20 @@ import {
   esPeriodo,
   IndicadorConteo,
   IndicadoresResumen,
+  IndicadorSenal,
   PERIODO_POR_DEFECTO,
   PERIODOS_INDICADORES,
 } from '../../core/api/indicadores.service';
-import { MAXIMO_BANDEJA, Tarea, TareasService } from '../../core/api/tareas.service';
+import { ConceptoSenal, NivelAtencion } from '../../core/politica-comercial';
+import { Tarea, TareasService } from '../../core/api/tareas.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RolSesion } from '../../core/auth/sesion.model';
 import { fechaCorta, SIN_DATO } from '../../core/formato';
 import { NavegacionLegado } from '../../core/navegacion-legado';
+import { BarraFiltros } from '../../shared/barra-filtros/barra-filtros';
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { PanelLateral } from '../../shared/panel-lateral/panel-lateral';
 import { TarjetaKpi, TonoKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
 /** Una tarjeta de la fila superior: número grande y, si lleva ruta, atajo. */
@@ -45,13 +50,14 @@ interface Senal {
 
 /** Un foco del centro de control de quien supervisa (no tiene bandeja). */
 interface Foco {
+  concepto: ConceptoSenal;
   titulo: string;
   descripcion: string;
   valor: number;
   ruta: string;
   tono: TonoKpi;
-  /** Ordena los focos; el valor desempata. */
-  peso: number;
+  /** Del backend: 1 se atiende primero. El valor desempata. */
+  prioridad: number;
 }
 
 /** Un tramo de la barra apilada de captaciones. */
@@ -59,6 +65,30 @@ interface Tramo extends IndicadorConteo {
   porcentaje: number;
   color: string;
 }
+
+/** Un chip del filtro de prioridad del panel, con su cuenta ya hecha. */
+interface ChipPrioridad {
+  valor: FiltroPrioridad;
+  etiqueta: string;
+  cuenta: number;
+  tono: string;
+}
+
+type FiltroPrioridad = 'TODAS' | 'ALTA' | 'MEDIA' | 'BAJA';
+
+/**
+ * Cuántas tareas compone la tarjeta del panel. No es un tope de la bandeja —el
+ * backend ya no tiene ninguno—, es el alto que la home puede gastar sin que la
+ * columna izquierda se coma a la derecha. El resto se ve en el panel lateral.
+ */
+const TAREAS_EN_TARJETA = 5;
+
+/** Las tres prioridades del cable, en el orden en que urgen. */
+const PRIORIDADES: readonly { valor: FiltroPrioridad; etiqueta: string; tono: string }[] = [
+  { valor: 'ALTA', etiqueta: 'Alta', tono: 'mal' },
+  { valor: 'MEDIA', etiqueta: 'Media', tono: 'aviso' },
+  { valor: 'BAJA', etiqueta: 'Baja', tono: '' },
+];
 
 /**
  * Los cuatro cubos de salud son ESTADOS, no series: llevan la paleta de estado
@@ -84,6 +114,35 @@ const RAMPA_ETAPAS = ['#9dbecb', '#6ba0b4', '#3d829a', '#1d6180', '#0e3a4c'];
 const COLOR_RESTO = '#c9d4dc';
 
 /**
+ * Cómo se ve cada nivel de atención.
+ *
+ * Esta tabla es **la mitad de R-07 que sí pertenece a la pantalla**: el dominio
+ * dice cuánto urge algo y esto decide de qué color se pinta. Antes la pantalla
+ * decidía las dos cosas, con ocho ternarios que además se contradecían entre
+ * roles —el mismo recontacto vencido iba primero para el administrador y cuarto
+ * para el broker— y con un `> 7` que era la cuarta copia del plazo de
+ * recontacto.
+ *
+ * `SIN_PENDIENTES` es verde (no queda nada por atender) e `INFORMATIVO` azul
+ * (es un dato, no un pendiente): la diferencia importa, porque un cero de
+ * visitas agendadas no es una buena noticia, es un cero.
+ */
+const TONO_POR_NIVEL: Record<NivelAtencion, TonoKpi> = {
+  ALTO: 'rojo',
+  MEDIO: 'ambar',
+  INFORMATIVO: 'azul',
+  SIN_PENDIENTES: 'verde',
+};
+
+/** Lo que se asume si el concepto no viniera en la respuesta. Nunca debería faltar. */
+const SENAL_AUSENTE: Omit<IndicadorSenal, 'concepto'> = {
+  valor: 0,
+  nivelAtencion: 'SIN_PENDIENTES',
+  requiereAtencion: false,
+  prioridad: Number.MAX_SAFE_INTEGER,
+};
+
+/**
  * Home del sistema. Porta `Dashboard.razor`, pero con una diferencia de fondo:
  * el Blazor pedía indicadores y bandeja por separado, aquí las trae
  * `GET /dashboard` en **una sola llamada** (contrato congelado E4).
@@ -98,15 +157,27 @@ const COLOR_RESTO = '#c9d4dc';
  * - **Solo el AGENTE tiene bandeja.** Para BROKER y ADMIN llega vacía y **eso
  *   no es un error**: se les muestra su centro de control (los focos derivados
  *   de los indicadores), no un "no hay tareas".
- * - **La bandeja está cortada en 10** y el resto se descarta en silencio, así
- *   que el contador se rotula como "hasta 10", no como el total de pendientes.
+ * - **La bandeja ya no tiene tope.** El corte en 10 se retiró el 2026-08-08
+ *   (era D-F7-2), así que `totalRecords` es el total real y puede ser 30 o 50.
+ *   La tarjeta se queda en las **5 primeras** pase lo que pase, y el resto se ve
+ *   en un panel lateral con su propio scroll: expandir la lista dentro de la
+ *   tarjeta estiraba la columna izquierda y descuadraba la rejilla, y encima no
+ *   había vuelta atrás porque no existía "contraer".
  * - **Cancelar una tarea es definitivo**: `CANCELADA` impide que el
  *   reconciliador la vuelva a crear para esa entidad. El diálogo lo dice antes
  *   de confirmar; no es "recordar más tarde".
  */
 @Component({
   selector: 'app-dashboard',
-  imports: [DialogoConfirmacion, EstadoListado, RouterLink, TarjetaKpi],
+  imports: [
+    BarraFiltros,
+    DialogoConfirmacion,
+    EstadoListado,
+    NgTemplateOutlet,
+    PanelLateral,
+    RouterLink,
+    TarjetaKpi,
+  ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -120,8 +191,9 @@ export class Dashboard implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly periodos = PERIODOS_INDICADORES;
-  protected readonly maximoBandeja = MAXIMO_BANDEJA;
   protected readonly sinDato = SIN_DATO;
+  /** Cuántas tareas compone la tarjeta; el resto vive en el panel. */
+  protected readonly enTarjeta = TAREAS_EN_TARJETA;
 
   protected readonly periodo = signal<string>(PERIODO_POR_DEFECTO);
   protected readonly indicadores = signal<IndicadoresResumen | null>(null);
@@ -130,9 +202,25 @@ export class Dashboard implements OnInit {
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
 
-  /** La bandeja completa se pide aparte; hasta entonces solo llegan 5. */
-  protected readonly bandejaCompleta = signal(false);
-  protected readonly ampliando = signal(false);
+  /**
+   * La bandeja completa vive en el panel y se pide aparte: `/dashboard` solo
+   * compone las 5 primeras. Se recarga en **cada apertura** porque `GET /tareas`
+   * es la reconciliación —abrir el panel es la forma de ver la bandeja al día—,
+   * y cachearla mostraría tareas ya resueltas en otra pestaña.
+   */
+  protected readonly panelAbierto = signal(false);
+  protected readonly bandejaTodas = signal<Tarea[]>([]);
+  protected readonly cargandoTodas = signal(false);
+  /**
+   * Fallo al traer la bandeja completa. Va aparte de `avisoBandeja` porque este
+   * **se reintenta** y el otro no: "esa tarea no tiene pantalla" con un botón de
+   * reintentar sería una promesa falsa.
+   */
+  protected readonly errorTodas = signal<string | null>(null);
+
+  /** Filtros del panel. Ambos son en memoria: la lista ya está entera. */
+  protected readonly filtroPrioridad = signal<FiltroPrioridad>('TODAS');
+  protected readonly busquedaTareas = signal('');
 
   protected readonly porCancelar = signal<Tarea | null>(null);
   protected readonly cancelando = signal(false);
@@ -172,11 +260,10 @@ export class Dashboard implements OnInit {
     this.error.set(null);
     this.avisoBandeja.set(null);
     try {
-      const carga = await this.api.cargar(this.periodo(), 5);
+      const carga = await this.api.cargar(this.periodo(), TAREAS_EN_TARJETA);
       this.indicadores.set(carga.indicadores);
       this.bandeja.set(carga.bandeja.items ?? []);
       this.totalBandeja.set(carga.bandeja.totalRecords ?? 0);
-      this.bandejaCompleta.set((carga.bandeja.items ?? []).length >= (carga.bandeja.totalRecords ?? 0));
     } catch (fallo) {
       this.indicadores.set(null);
       this.error.set(
@@ -207,25 +294,107 @@ export class Dashboard implements OnInit {
 
   // --- Bandeja del agente -------------------------------------------------
 
-  /** Trae la bandeja entera (hasta 10). El dashboard solo compone las 5. */
-  protected async verTodas(): Promise<void> {
-    if (this.bandejaCompleta() || this.ampliando()) {
+  /** ¿Quedan tareas fuera de las que compone la tarjeta? */
+  protected readonly hayMasTareas = computed(() => this.totalBandeja() > this.bandeja().length);
+
+  /**
+   * Abre el panel y trae la bandeja entera. Un fallo **no lo cierra**: se queda
+   * abierto con el aviso y el botón de reintentar, como el resto de listados.
+   */
+  protected async abrirPanel(): Promise<void> {
+    this.panelAbierto.set(true);
+    this.limpiarFiltrosTareas();
+    this.avisoBandeja.set(null);
+    await this.recargarTodas();
+  }
+
+  protected cerrarPanel(): void {
+    // No con una confirmación abierta encima. El ESC del panel escucha en el
+    // documento, así que sin esto un ESC sobre "¿cancelar esta tarea?" se
+    // llevaba por delante el panel y dejaba el diálogo flotando solo.
+    if (this.porCancelar() !== null) {
       return;
     }
-    this.ampliando.set(true);
-    this.avisoBandeja.set(null);
+    this.panelAbierto.set(false);
+  }
+
+  /**
+   * La lectura que reconcilia (`GET /tareas` escribe). Refresca de paso las 5
+   * de la tarjeta: son un prefijo de la misma lista, y dejarlas desfasadas
+   * mientras el panel muestra otra cosa es peor que la llamada.
+   */
+  protected async recargarTodas(): Promise<void> {
+    this.cargandoTodas.set(true);
+    this.errorTodas.set(null);
     try {
       const todas = await this.tareas.bandeja();
-      this.bandeja.set(todas);
+      this.bandejaTodas.set(todas);
+      this.bandeja.set(todas.slice(0, TAREAS_EN_TARJETA));
       this.totalBandeja.set(todas.length);
-      this.bandejaCompleta.set(true);
+      // Si la prioridad filtrada se quedó sin tareas (se canceló la última
+      // ALTA), el filtro dejaría una lista vacía sin chip al que volver.
+      const prioridad = this.filtroPrioridad();
+      if (prioridad !== 'TODAS' && !todas.some((t) => t.prioridad === prioridad)) {
+        this.filtroPrioridad.set('TODAS');
+      }
     } catch (fallo) {
-      this.avisoBandeja.set(
-        fallo instanceof ApiError ? fallo.message : 'No se pudo cargar el resto de la bandeja.',
+      this.bandejaTodas.set([]);
+      this.errorTodas.set(
+        fallo instanceof ApiError ? fallo.message : 'No se pudo cargar la bandeja completa.',
       );
     } finally {
-      this.ampliando.set(false);
+      this.cargandoTodas.set(false);
     }
+  }
+
+  /**
+   * Chips de prioridad del panel. **Las cuentas salen de los datos**: ni un
+   * `<option>` a mano ni un número fijo, que es la convención de filtros del
+   * sistema. Una prioridad sin tareas no se ofrece.
+   */
+  protected readonly chipsPrioridad = computed<ChipPrioridad[]>(() => {
+    const todas = this.bandejaTodas();
+    const chips: ChipPrioridad[] = [
+      { valor: 'TODAS', etiqueta: 'Todas', cuenta: todas.length, tono: '' },
+    ];
+    for (const prioridad of PRIORIDADES) {
+      const cuenta = todas.filter((t) => t.prioridad === prioridad.valor).length;
+      if (cuenta > 0) {
+        chips.push({ ...prioridad, cuenta });
+      }
+    }
+    return chips;
+  });
+
+  /** Filtrado en memoria: la lista ya está entera, no hay que volver al API. */
+  protected readonly tareasFiltradas = computed<Tarea[]>(() => {
+    const prioridad = this.filtroPrioridad();
+    const texto = this.busquedaTareas().trim().toLowerCase();
+    return this.bandejaTodas().filter((tarea) => {
+      if (prioridad !== 'TODAS' && tarea.prioridad !== prioridad) {
+        return false;
+      }
+      if (!texto) {
+        return true;
+      }
+      return (
+        tarea.descripcion.toLowerCase().includes(texto) ||
+        (tarea.entidadCodigo ?? '').toLowerCase().includes(texto)
+      );
+    });
+  });
+
+  protected readonly hayFiltroTareas = computed(
+    () => this.filtroPrioridad() !== 'TODAS' || this.busquedaTareas().trim().length > 0,
+  );
+
+  protected filtrarPor(valor: FiltroPrioridad): void {
+    this.filtroPrioridad.set(valor);
+  }
+
+  protected limpiarFiltrosTareas(): void {
+    this.filtroPrioridad.set('TODAS');
+    this.busquedaTareas.set('');
   }
 
   protected async resolver(tarea: Tarea): Promise<void> {
@@ -252,11 +421,9 @@ export class Dashboard implements OnInit {
     try {
       await this.tareas.cancelar(tarea.id);
       this.porCancelar.set(null);
-      // Se recarga la bandeja entera: cancelar una puede destapar otra que el
-      // corte en 10 dejaba fuera.
-      const todas = await this.tareas.bandeja();
-      this.bandeja.set(this.bandejaCompleta() ? todas : todas.slice(0, 5));
-      this.totalBandeja.set(todas.length);
+      // Se recarga la bandeja entera en vez de quitar la fila en el cliente:
+      // cancelar la 3ª destapa la 6ª en la tarjeta, y esa no estaba descargada.
+      await this.recargarTodas();
     } catch (fallo) {
       this.avisoBandeja.set(
         fallo instanceof ApiError ? fallo.message : 'No se pudo cancelar la tarea.',
@@ -283,6 +450,23 @@ export class Dashboard implements OnInit {
   }
 
   // --- Tarjetas y señales -------------------------------------------------
+
+  /**
+   * Las señales del backend indexadas por concepto. Vienen ya clasificadas y
+   * ordenadas; aquí solo se buscan por nombre para componer cada tarjeta.
+   */
+  private readonly porConcepto = computed<Map<ConceptoSenal, IndicadorSenal>>(
+    () => new Map((this.indicadores()?.senales ?? []).map((s) => [s.concepto, s])),
+  );
+
+  private senal(concepto: ConceptoSenal): IndicadorSenal {
+    return this.porConcepto().get(concepto) ?? { concepto, ...SENAL_AUSENTE };
+  }
+
+  /** El color que le toca a un concepto. Lo único que decide la pantalla. */
+  private tono(concepto: ConceptoSenal): TonoKpi {
+    return TONO_POR_NIVEL[this.senal(concepto).nivelAtencion];
+  }
 
   protected readonly kpis = computed<Kpi[]>(() => {
     const i = this.indicadores();
@@ -317,13 +501,13 @@ export class Dashboard implements OnInit {
         {
           etiqueta: 'Captaciones por revisar',
           valor: i.captacionesPorRevisar,
-          tono: i.captacionesPorRevisar > 0 ? 'ambar' : 'verde',
+          tono: this.tono('CAPTACION_POR_REVISAR'),
           ruta: '/captaciones/pendientes',
         },
         {
           etiqueta: 'Solicitudes por revisar',
           valor: i.solicitudesPorEvaluar,
-          tono: i.solicitudesPorEvaluar > 0 ? 'rojo' : 'verde',
+          tono: this.tono('SOLICITUD_POR_EVALUAR'),
           ruta: '/solicitudes/revisar',
         },
         {
@@ -388,25 +572,25 @@ export class Dashboard implements OnInit {
     if (this.esAdmin()) {
       return [
         {
-          etiqueta: 'Recontactos vencidos',
+          etiqueta: 'Prospectos sin contactar a tiempo',
           valor: String(op.recontactosVencidos),
-          tono: op.recontactosVencidos > 0 ? 'rojo' : 'verde',
-          pie: 'riesgo de enfriamiento',
+          tono: this.tono('RECONTACTO_VENCIDO'),
+          pie: 'se enfrían si nadie los llama',
         },
         {
-          etiqueta: 'Aprobadas sin cierre',
+          etiqueta: 'Aprobadas sin contrato',
           valor: String(op.solicitudesSinCierre),
-          tono: op.solicitudesSinCierre > 0 ? 'ambar' : 'verde',
-          pie: 'ingreso comprometido',
+          tono: this.tono('SOLICITUD_APROBADA_SIN_CIERRE'),
+          pie: 'ya aprobadas, falta firmar',
         },
         {
-          etiqueta: 'Prospección → captación',
+          etiqueta: 'Prospectos captados',
           valor: `${op.conversionProspeccionCaptacion}%`,
           tono: 'info',
-          pie: 'captación de inventario',
+          pie: 'de los trabajados en el periodo',
         },
         {
-          etiqueta: 'Equipo activo',
+          etiqueta: 'Equipo en operación',
           valor: String(i.agentesActivos),
           tono: 'azul',
           pie: `${i.brokersActivos} brokers`,
@@ -416,55 +600,55 @@ export class Dashboard implements OnInit {
     if (this.esBroker()) {
       return [
         {
-          etiqueta: 'Recontactos vencidos',
+          etiqueta: 'Prospectos sin contactar a tiempo',
           valor: String(op.recontactosVencidos),
-          tono: op.recontactosVencidos > 0 ? 'rojo' : 'verde',
-          pie: 'seguimiento del equipo',
+          tono: this.tono('RECONTACTO_VENCIDO'),
+          pie: 'de tu equipo',
         },
         {
-          etiqueta: 'Aprobadas sin cierre',
+          etiqueta: 'Aprobadas sin contrato',
           valor: String(op.solicitudesSinCierre),
-          tono: op.solicitudesSinCierre > 0 ? 'ambar' : 'verde',
-          pie: 'contrato pendiente',
+          tono: this.tono('SOLICITUD_APROBADA_SIN_CIERRE'),
+          pie: 'falta firmar',
         },
         {
           etiqueta: 'Visitas pendientes',
           valor: String(op.visitasPendientes),
-          tono: 'azul',
-          pie: 'programadas o vencidas',
+          tono: this.tono('VISITA_PENDIENTE'),
+          pie: 'por hacer o sin resultado',
         },
         {
-          etiqueta: 'Prospección → captación',
+          etiqueta: 'Prospectos captados',
           valor: `${op.conversionProspeccionCaptacion}%`,
           tono: 'info',
-          pie: 'disciplina de captación',
+          pie: 'de los trabajados en el periodo',
         },
       ];
     }
     return [
       {
-        etiqueta: 'Recontactos vencidos',
+        etiqueta: 'Prospectos sin contactar a tiempo',
         valor: String(op.recontactosVencidos),
-        tono: op.recontactosVencidos > 0 ? 'rojo' : 'verde',
-        pie: 'atiéndelos primero',
+        tono: this.tono('RECONTACTO_VENCIDO'),
+        pie: 'empieza por aquí',
       },
       {
-        etiqueta: 'Días sin seguimiento',
+        etiqueta: 'Atraso promedio',
         valor: String(op.diasPromedioSinSeguimiento),
-        tono: op.diasPromedioSinSeguimiento > 7 ? 'ambar' : 'azul',
-        pie: 'promedio de lo vencido',
+        tono: this.tono('DEMORA_DE_SEGUIMIENTO'),
+        pie: 'días desde que debiste llamarlos',
       },
       {
         etiqueta: 'Visitas pendientes',
         valor: String(op.visitasPendientes),
-        tono: 'azul',
-        pie: 'prepara o cierra resultado',
+        tono: this.tono('VISITA_PENDIENTE'),
+        pie: 'por hacer o sin resultado',
       },
       {
-        etiqueta: 'Aprobadas sin cierre',
+        etiqueta: 'Aprobadas sin contrato',
         valor: String(op.solicitudesSinCierre),
-        tono: op.solicitudesSinCierre > 0 ? 'ambar' : 'verde',
-        pie: 'contrato pendiente',
+        tono: this.tono('SOLICITUD_APROBADA_SIN_CIERRE'),
+        pie: 'falta firmar',
       },
     ];
   });
@@ -473,95 +657,88 @@ export class Dashboard implements OnInit {
    * Centro de control de quien supervisa. Sustituye a la bandeja —que no
    * tienen— y **solo enlaza a pantallas migradas**: un foco que no lleva a
    * ninguna parte es peor que su ausencia.
+   *
+   * El orden ya no se inventa aquí. Antes cada rol traía su propia escala de
+   * pesos y las dos se contradecían: para el administrador lo primero eran los
+   * recontactos vencidos y para el broker eran los cuartos. Ahora el orden lo
+   * da la política del dominio y es el mismo para todos; lo que sigue siendo de
+   * la pantalla es **qué focos enseña cada rol** y a dónde llevan.
    */
   protected readonly focos = computed<Foco[]>(() => {
     const i = this.indicadores();
     if (!i || this.esAgente()) {
       return [];
     }
-    const op = i.operativo;
     const candidatos: Foco[] = this.esAdmin()
       ? [
-          {
-            titulo: 'Seguimiento en riesgo',
-            descripcion: 'Recontactos vencidos en toda la corredora',
-            valor: op.recontactosVencidos,
+          this.foco('RECONTACTO_VENCIDO', {
+            titulo: 'Prospectos sin contactar a tiempo',
+            descripcion: 'En toda la corredora, ya se pasaron de fecha',
             ruta: '/prospecciones',
-            tono: 'rojo',
-            peso: 96,
-          },
-          {
-            titulo: 'Cierres sin formalizar',
-            descripcion: 'Solicitudes aprobadas que aún no generan contrato',
-            valor: op.solicitudesSinCierre,
+          }),
+          this.foco('SOLICITUD_APROBADA_SIN_CIERRE', {
+            titulo: 'Aprobadas sin contrato',
+            descripcion: 'Ya se aprobaron y todavía nadie firma',
             ruta: '/solicitudes',
-            tono: 'ambar',
-            peso: 90,
-          },
-          {
-            titulo: 'Cierres registrados',
-            descripcion: 'Alquileres formalizados y su comisión',
-            valor: i.cierres,
+          }),
+          this.foco('CIERRE_REGISTRADO', {
+            titulo: 'Alquileres firmados',
+            descripcion: 'Contratos cerrados y su comisión',
             ruta: '/propiedades-alquiladas',
-            tono: 'verde',
-            peso: 78,
-          },
-          {
-            titulo: 'Cobertura de agentes',
-            descripcion: 'Asignaciones y supervisión por broker',
-            valor: i.agentesActivos,
+          }),
+          this.foco('COBERTURA_DE_AGENTES', {
+            titulo: 'Agentes en operación',
+            descripcion: 'Quién supervisa a quién',
             ruta: '/asignaciones',
-            tono: 'azul',
-            peso: 72,
-          },
+          }),
         ]
       : [
-          {
+          this.foco('SOLICITUD_POR_EVALUAR', {
             titulo: 'Solicitudes por revisar',
-            descripcion: 'Expedientes esperando tu evaluación',
-            valor: i.solicitudesPorEvaluar,
+            descripcion: 'Hay interesados esperando tu respuesta',
             ruta: '/solicitudes/revisar',
-            tono: 'rojo',
-            peso: 100,
-          },
-          {
+          }),
+          this.foco('CAPTACION_POR_REVISAR', {
             titulo: 'Captaciones por revisar',
-            descripcion: 'Captaciones esperando tu decisión',
-            valor: i.captacionesPorRevisar,
+            descripcion: 'No se pueden ofrecer hasta que las apruebes',
             ruta: '/captaciones/pendientes',
-            tono: 'ambar',
-            peso: 92,
-          },
-          {
-            titulo: 'Aprobadas sin cierre',
-            descripcion: 'Ingreso comprometido sin contrato registrado',
-            valor: op.solicitudesSinCierre,
+          }),
+          this.foco('SOLICITUD_APROBADA_SIN_CIERRE', {
+            titulo: 'Aprobadas sin contrato',
+            descripcion: 'Falta firmar; la comisión todavía no se gana',
             ruta: '/solicitudes',
-            tono: 'ambar',
-            peso: 86,
-          },
-          {
-            titulo: 'Recontactos vencidos',
-            descripcion: 'Prospecciones del equipo sin seguimiento a tiempo',
-            valor: op.recontactosVencidos,
+          }),
+          this.foco('RECONTACTO_VENCIDO', {
+            titulo: 'Prospectos sin contactar a tiempo',
+            descripcion: 'Del equipo; se enfrían si nadie los llama',
             ruta: '/prospecciones',
-            tono: 'rojo',
-            peso: 84,
-          },
-          {
+          }),
+          this.foco('VISITA_PENDIENTE', {
             titulo: 'Visitas pendientes',
-            descripcion: 'Visitas próximas o vencidas sin resultado',
-            valor: op.visitasPendientes,
+            descripcion: 'Por hacer, o hechas y sin registrar el resultado',
             ruta: '/visitas',
-            tono: 'azul',
-            peso: 72,
-          },
+          }),
         ];
     return candidatos
       .filter((foco) => foco.valor > 0)
-      .sort((a, b) => b.peso - a.peso || b.valor - a.valor)
+      .sort((a, b) => a.prioridad - b.prioridad || b.valor - a.valor)
       .slice(0, 5);
   });
+
+  /** Compone un foco con el rótulo y la ruta de la pantalla, y el resto del dominio. */
+  private foco(
+    concepto: ConceptoSenal,
+    presentacion: Pick<Foco, 'titulo' | 'descripcion' | 'ruta'>,
+  ): Foco {
+    const senal = this.senal(concepto);
+    return {
+      concepto,
+      ...presentacion,
+      valor: senal.valor,
+      tono: TONO_POR_NIVEL[senal.nivelAtencion],
+      prioridad: senal.prioridad,
+    };
+  }
 
   // --- Captaciones: barra apilada -----------------------------------------
 
@@ -619,15 +796,20 @@ export class Dashboard implements OnInit {
   );
 
   /**
-   * Conversión propia por cohorte (captaciones del periodo que ya cerraron).
-   * El backend la entrega acotada a 100; el respaldo por la fila de desempeño
-   * es el del Blazor, para cuando el periodo no tiene cohorte.
+   * Conversión propia por cohorte: de las captaciones del periodo, cuántas ya
+   * cerraron. `null` cuando no hubo ninguna, y entonces la pantalla lo dice en
+   * vez de pintar un número.
+   *
+   * Aquí había un respaldo heredado del Blazor: si la cohorte era 0, se tomaba
+   * **la conversión del primero de la tabla de desempeño**. Un agente sin
+   * cierres veía como propia la cifra del que más cerró. No era un umbral mal
+   * puesto —era un número de otra persona— y el descongelado del contrato dice
+   * justamente que una rareza de la v1 no se replica por inercia.
    */
-  protected readonly conversion = computed(() => {
-    const i = this.indicadores();
-    if (!i) return 0;
-    return i.conversionPropia > 0 ? i.conversionPropia : (i.desempeno[0]?.conversion ?? 0);
-  });
+  protected readonly conversion = computed(() => this.indicadores()?.conversionPropia ?? null);
+
+  /** Ancho de la barra del medidor. Sin muestra no hay barra que llenar. */
+  protected readonly conversionAncho = computed(() => this.conversion() ?? 0);
 
   protected iniciales(nombre: string): string {
     return nombre

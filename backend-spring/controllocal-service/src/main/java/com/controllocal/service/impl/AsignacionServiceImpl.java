@@ -16,6 +16,7 @@ import com.controllocal.service.AsignacionService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.UsuariosInternos;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -128,10 +129,10 @@ public class AsignacionServiceImpl implements AsignacionService {
             throw new ReglaNegocioException(
                     "El agente y el broker destino son obligatorios.");
         }
-        if (datos.motivo() == null || datos.motivo().isBlank()) {
-            throw new ReglaNegocioException(
-                    "El motivo de reasignacion de agente es obligatorio.");
-        }
+        // Misma regla que al reasignar una captacion, y por la misma razon: este
+        // texto es lo unico que explica, meses despues, por que un agente cambio
+        // de broker.
+        String motivo = PoliticaComercial.exigirMotivoDeReasignacion(datos.motivo());
         DetalleBroker destino = validarBrokerActivo(
                 datos.idBrokerDestino(), actor.idOrganizacion());
         if (destino.isEsAdministrador()) {
@@ -176,7 +177,7 @@ public class AsignacionServiceImpl implements AsignacionService {
         nueva.setIdRolBroker(destino.getId());
         nueva.setIdRolAgente(agente.getId());
         nueva.setFechaAsignacion(LocalDate.now());
-        nueva.setMotivo(datos.motivo());
+        nueva.setMotivo(motivo);
         supervisiones.save(nueva);
 
         ReasignacionAgenteBroker evento = new ReasignacionAgenteBroker();
@@ -189,7 +190,7 @@ public class AsignacionServiceImpl implements AsignacionService {
         // la persona y su banda.
         evento.setIdPersonaActor(actor.idPersona());
         evento.setTipoRolActor(actor.rolEfectivo());
-        evento.setMotivo(datos.motivo());
+        evento.setMotivo(motivo);
         reasignaciones.save(evento);
 
         Map<Long, String> nombresAgente = Map.of(

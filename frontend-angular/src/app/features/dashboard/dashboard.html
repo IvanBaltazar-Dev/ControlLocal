@@ -43,6 +43,43 @@
 
 @if (!cargando() && indicadores(); as i) {
   <!--
+    E2.1 — Cabecera de decisión. Lo primero que se lee no es un número suelto
+    sino una frase: cuántas cosas te reclaman y cuántas operaciones tienes
+    abiertas. El conteo de pendientes lo suma el dominio (`pendientesDeAtencion`),
+    no esta plantilla: sumar las señales aquí colaría los días de atraso entre
+    las "cosas".
+  -->
+  <section class="decision" [class.tranquila]="i.pendientesDeAtencion === 0">
+    <p class="titular">
+      @if (i.pendientesDeAtencion === 0) {
+        Nada te reclama ahora mismo
+      } @else {
+        <b>{{ i.pendientesDeAtencion }}</b>
+        {{ i.pendientesDeAtencion === 1 ? 'cosa necesita' : 'cosas necesitan' }} tu atención
+      }
+    </p>
+    <p class="apoyo">
+      @if (i.oportunidadesActivas > 0) {
+        {{ i.oportunidadesActivas }}
+        {{ i.oportunidadesActivas === 1 ? 'operación abierta' : 'operaciones abiertas' }}
+      } @else {
+        Sin operaciones abiertas
+      }
+      <!--
+        Única línea económica, y solo cuando el dato aguanta: alquileres
+        firmados en el periodo. No se muestra renta ni comisión agregada porque
+        el resumen no las trae, y no vamos a insinuar una cifra que no tenemos.
+      -->
+      @if (i.cierres > 0) {
+        <span class="separador">·</span>
+        {{ i.cierres }}
+        {{ i.cierres === 1 ? 'alquiler firmado' : 'alquileres firmados' }} en
+        {{ etiquetaPeriodo().toLowerCase() }}
+      }
+    </p>
+  </section>
+
+  <!--
     Fila de KPI: números de cabecera, no un gráfico de barras. Cada uno es
     además un atajo a la pantalla donde se trabajan, que es la convención de
     listados del sistema.
@@ -77,12 +114,17 @@
             </p>
           </div>
           @if (esAgente() && totalBandeja() > 0) {
-            <span class="cl-badge">{{ totalBandeja() }} de hasta {{ maximoBandeja }}</span>
+            <span class="cl-badge">
+              {{ totalBandeja() }} {{ totalBandeja() === 1 ? 'pendiente' : 'pendientes' }}
+            </span>
           }
         </header>
 
         @if (avisoBandeja(); as aviso) {
           <p class="cl-aviso">{{ aviso }}</p>
+        }
+        @if (errorTodas(); as fallo) {
+          <p class="cl-aviso">{{ fallo }}</p>
         }
 
         @if (esAgente()) {
@@ -92,59 +134,37 @@
               seguimiento, tus visitas y tus expedientes.
             </p>
           } @else {
+            <!--
+              La tarjeta se queda SIEMPRE en las primeras: es lo que cabe sin
+              estirar la columna izquierda por debajo de la derecha. El resto
+              se recorre en el panel, que tiene su propio scroll.
+            -->
             <ul class="tareas">
               @for (tarea of bandeja(); track tarea.id) {
                 <li>
-                  <span class="cl-badge" [class]="tonoPrioridad(tarea.prioridad)">
-                    {{ tarea.prioridad }}
-                  </span>
-                  <div class="cuerpo">
-                    <p class="titulo">{{ tarea.descripcion }}</p>
-                    <p class="cl-menudo">
-                      @if (tarea.entidadCodigo) {
-                        <span>{{ tarea.entidadCodigo }}</span>
-                        <span aria-hidden="true"> · </span>
-                      }
-                      <span>{{ diasTexto(tarea.diasSinAccion) }}</span>
-                      @if (vencimiento(tarea)) {
-                        <span aria-hidden="true"> · </span>
-                        <span>{{ vencimiento(tarea) }}</span>
-                      }
-                    </p>
-                  </div>
-                  <div class="acciones-tarea">
-                    @if (puedeResolver(tarea)) {
-                      <button type="button" class="cl-btn primario" (click)="resolver(tarea)">
-                        Resolver
-                      </button>
-                    }
-                    <button type="button" class="cl-btn" (click)="pedirCancelacion(tarea)">
-                      Cancelar
-                    </button>
-                  </div>
+                  <ng-container
+                    [ngTemplateOutlet]="filaTarea"
+                    [ngTemplateOutletContext]="{ $implicit: tarea }"
+                  />
                 </li>
               }
             </ul>
 
-            @if (!bandejaCompleta()) {
-              <button
-                type="button"
-                class="cl-btn ver-todas"
-                (click)="verTodas()"
-                [disabled]="ampliando()"
-              >
-                {{ ampliando() ? 'Cargando…' : 'Ver las ' + totalBandeja() + ' tareas' }}
+            @if (hayMasTareas()) {
+              <button type="button" class="cl-btn ver-todas" (click)="abrirPanel()">
+                <span>Ver las {{ totalBandeja() }} tareas</span>
+                <span class="restantes">+{{ totalBandeja() - bandeja().length }}</span>
               </button>
             }
           }
         } @else if (focos().length === 0) {
           <p class="cl-vacio">
-            Sin focos abiertos ahora mismo: no hay revisiones pendientes ni seguimiento vencido en
-            tu alcance.
+            Nada pendiente por ahora: no hay solicitudes ni captaciones esperando tu revisión, ni
+            prospectos sin contactar a tiempo.
           </p>
         } @else {
           <ul class="focos">
-            @for (foco of focos(); track foco.titulo) {
+            @for (foco of focos(); track foco.concepto) {
               <li>
                 <span class="valor" [class]="'tono-' + foco.tono">{{ foco.valor }}</span>
                 <div class="cuerpo">
@@ -209,12 +229,15 @@
     </div>
 
     <div>
-      <!-- Señales: cuatro lecturas de disciplina operativa -->
+      <!--
+        Cuatro lecturas del seguimiento. El tono de cada una sale del
+        `nivelAtencion` que ya trae el backend: aquí no se decide qué urge.
+      -->
       <section class="cl-tarjeta">
         <header>
           <div>
-            <h2>{{ esAgente() ? 'Disciplina comercial' : 'Riesgo operativo' }}</h2>
-            <p>Señales para decidir dónde intervenir</p>
+            <h2>{{ esAgente() ? 'Cómo va tu seguimiento' : 'Lo que necesita atención' }}</h2>
+            <p>Por dónde conviene empezar</p>
           </div>
         </header>
         <div class="senales">
@@ -235,13 +258,33 @@
           <header>
             <div>
               <h2>Mi rendimiento</h2>
-              <p>Conversión de captación a cierre, por cohorte del periodo</p>
+              <p>De las captaciones que abriste en el periodo, cuántas ya cerraron</p>
             </div>
           </header>
-          <p class="medidor-valor">{{ conversion() }}<span>%</span></p>
-          <div class="medidor" role="img" [attr.aria-label]="conversion() + ' por ciento de conversión'">
-            <i [style.width.%]="conversion()"></i>
-          </div>
+          <!--
+            Sin captaciones en el periodo no hay tasa: no es 0 %, es que no hubo
+            nada que medir. Antes se pintaba la conversión del agente que más
+            cerró, como si fuera propia.
+          -->
+          @if (conversion() === null) {
+            <p class="medidor-valor sin-dato">—</p>
+            <div class="medidor" role="img" aria-label="Sin captaciones en el periodo">
+              <i [style.width.%]="0"></i>
+            </div>
+            <p class="cl-menudo">
+              No abriste captaciones en {{ etiquetaPeriodo().toLowerCase() }}, así que todavía no
+              hay conversión que medir.
+            </p>
+          } @else {
+            <p class="medidor-valor">{{ conversion() }}<span>%</span></p>
+            <div
+              class="medidor"
+              role="img"
+              [attr.aria-label]="conversion() + ' por ciento de conversión'"
+            >
+              <i [style.width.%]="conversionAncho()"></i>
+            </div>
+          }
           <div class="cl-pares apiladas">
             <div>
               <span>Captaciones</span>
@@ -252,14 +295,17 @@
               <strong>{{ i.cierres }}</strong>
             </div>
           </div>
-          <p class="cl-menudo">
-            @if (i.cierres === 0) {
-              Aún sin cierres en {{ etiquetaPeriodo().toLowerCase() }}. Cada visita y cada
-              solicitud acercan el primero.
-            } @else {
-              {{ i.cierres }} cierre(s) sobre {{ i.captacionesTotales }} captación(es) del periodo.
-            }
-          </p>
+          @if (conversion() !== null) {
+            <p class="cl-menudo">
+              @if (i.cierres === 0) {
+                Aún sin alquileres firmados en {{ etiquetaPeriodo().toLowerCase() }}. Cada visita y
+                cada solicitud acercan el primero.
+              } @else {
+                {{ i.cierres }} de {{ i.captacionesTotales }} captaciones del periodo terminaron en
+                contrato.
+              }
+            </p>
+          }
         </section>
       } @else {
         <section class="cl-tarjeta">
@@ -302,6 +348,115 @@
       }
     </div>
   </div>
+}
+
+<!--
+  La fila de una tarea, una sola vez: la pinta la tarjeta (5 primeras) y el
+  panel (todas). Estaba duplicada y era el sitio perfecto para que "Resolver"
+  se comportara distinto en cada sitio.
+-->
+<ng-template #filaTarea let-tarea>
+  <span class="cl-badge" [class]="tonoPrioridad(tarea.prioridad)">
+    {{ tarea.prioridad }}
+  </span>
+  <div class="cuerpo">
+    <p class="titulo">{{ tarea.descripcion }}</p>
+    <p class="cl-menudo">
+      @if (tarea.entidadCodigo) {
+        <span>{{ tarea.entidadCodigo }}</span>
+        <span aria-hidden="true"> · </span>
+      }
+      <span>{{ diasTexto(tarea.diasSinAccion) }}</span>
+      @if (vencimiento(tarea)) {
+        <span aria-hidden="true"> · </span>
+        <span>{{ vencimiento(tarea) }}</span>
+      }
+    </p>
+  </div>
+  <div class="acciones-tarea">
+    @if (puedeResolver(tarea)) {
+      <button type="button" class="cl-btn primario" (click)="resolver(tarea)">Resolver</button>
+    }
+    <button type="button" class="cl-btn" (click)="pedirCancelacion(tarea)">Cancelar</button>
+  </div>
+</ng-template>
+
+<!--
+  La bandeja entera, fuera del flujo de la página: el dashboard no cambia de
+  alto tenga 6 tareas o 60, y cerrar devuelve la home intacta sin volver a
+  pedirla (`GET /tareas` reconcilia, así que cada vistazo cuesta).
+-->
+@if (esAgente()) {
+  <cl-panel-lateral
+    [abierto]="panelAbierto()"
+    titulo="Tu bandeja de trabajo"
+    subtitulo="Ordenadas por prioridad y por lo que llevan sin atención. Resolver te lleva a la pantalla donde se trabaja cada una."
+    ancho="40rem"
+    (cerrar)="cerrarPanel()"
+  >
+    <!-- Chips de prioridad: las cuentas salen de la lista, no están escritas. -->
+    @if (chipsPrioridad().length > 1) {
+      <div class="chips" role="group" aria-label="Filtrar por prioridad">
+        @for (chip of chipsPrioridad(); track chip.valor) {
+          <button
+            type="button"
+            class="chip"
+            [class]="chip.tono"
+            [class.activo]="filtroPrioridad() === chip.valor"
+            [attr.aria-pressed]="filtroPrioridad() === chip.valor"
+            (click)="filtrarPor(chip.valor)"
+          >
+            {{ chip.etiqueta }}
+            <b>{{ chip.cuenta }}</b>
+          </button>
+        }
+      </div>
+    }
+
+    <cl-barra-filtros
+      [busqueda]="busquedaTareas()"
+      (busquedaChange)="busquedaTareas.set($event)"
+      marcador="Buscar por descripción o código…"
+      [resultados]="tareasFiltradas().length"
+      [hayFiltros]="hayFiltroTareas()"
+      (limpiar)="limpiarFiltrosTareas()"
+    />
+
+    <cl-estado-listado
+      [cargando]="cargandoTodas()"
+      [error]="errorTodas()"
+      [vacio]="false"
+      mensajeCarga="Actualizando tu bandeja…"
+      (reintentar)="recargarTodas()"
+    />
+
+    @if (!cargandoTodas() && !errorTodas()) {
+      @if (avisoBandeja(); as aviso) {
+        <p class="cl-aviso">{{ aviso }}</p>
+      }
+
+      @if (tareasFiltradas().length === 0) {
+        <p class="cl-vacio">
+          @if (hayFiltroTareas()) {
+            Ninguna de tus {{ bandejaTodas().length }} tareas coincide con este filtro.
+          } @else {
+            Todo al día: no tienes tareas pendientes.
+          }
+        </p>
+      } @else {
+        <ul class="tareas en-panel">
+          @for (tarea of tareasFiltradas(); track tarea.id) {
+            <li>
+              <ng-container
+                [ngTemplateOutlet]="filaTarea"
+                [ngTemplateOutletContext]="{ $implicit: tarea }"
+              />
+            </li>
+          }
+        </ul>
+      }
+    }
+  </cl-panel-lateral>
 }
 
 <cl-confirmacion

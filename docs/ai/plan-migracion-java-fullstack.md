@@ -1,5 +1,15 @@
 # Plan de Migración — Spring Boot + Angular (Strangler)
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 > Documento 4 de 7 · Fase doc-first. Plan basado en las decisiones fijadas y en los inventarios (Docs 1-3 backend/BD, Doc 2 frontend, anexo de modelado). Consolida y prioriza el registro de mejoras **MEJ-01…MEJ-32**.
 > Arquitectura objetivo detallada → `arquitectura-objetivo-java-fullstack.md` (Doc 5). Riesgos → `riesgos-migracion.md` (Doc 6).
 

@@ -1,5 +1,15 @@
 # Estado Actual de ControlLocal
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 > Documento 1 de 7 · Fase **doc-first** de la migración Blazor/.NET → Java Fullstack.
 > Alcance: retrato *as-is* del sistema (qué existe hoy y cómo está cableado). Los inventarios exhaustivos van en `inventario-backend-java.md` (Doc 3) e `inventario-frontend-blazor.md` (Doc 2). El destino y el plan van en Docs 4–5; los riesgos en Doc 6.
 > Elaborado en modo solo-lectura, sin secretos, verificado con Serena (LSP java+csharp) sobre el código real.

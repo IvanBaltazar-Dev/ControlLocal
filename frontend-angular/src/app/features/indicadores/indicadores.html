@@ -39,14 +39,31 @@
   <!-- Un ratio contra su límite: figura + medidor, no un gráfico de una barra. -->
   <section class="cl-tarjeta hero">
     <div>
-      <p class="figura">{{ conversion() }}<span>%</span></p>
-      <p class="cl-menudo">
-        de conversión captación → cierre, por cohorte de {{ etiquetaPeriodo().toLowerCase() }}
-      </p>
+      <!-- Sin captaciones en el periodo no hay tasa: no es 0 %, es que no hubo qué medir. -->
+      @if (conversion() === null) {
+        <p class="figura">—</p>
+        <p class="cl-menudo">
+          sin captaciones abiertas en {{ etiquetaPeriodo().toLowerCase() }}, así que todavía no hay
+          conversión que medir
+        </p>
+      } @else {
+        <p class="figura">{{ conversion() }}<span>%</span></p>
+        <p class="cl-menudo">
+          de las captaciones de {{ etiquetaPeriodo().toLowerCase() }} ya terminaron en contrato
+        </p>
+      }
     </div>
     <div class="medida">
-      <div class="medidor" role="img" [attr.aria-label]="conversion() + ' por ciento de conversión'">
-        <i [style.width.%]="conversion()"></i>
+      <div
+        class="medidor"
+        role="img"
+        [attr.aria-label]="
+          conversion() === null
+            ? 'Sin captaciones en el periodo'
+            : conversion() + ' por ciento de conversión'
+        "
+      >
+        <i [style.width.%]="conversionAncho()"></i>
       </div>
       <p class="cl-menudo">
         <b>{{ i.cierresCohorte }}</b> de <b>{{ i.captacionesTotales }}</b> captaciones del periodo
@@ -239,21 +256,26 @@
       <section class="cl-tarjeta">
         <header>
           <div>
-            <h2>Disciplina operativa</h2>
-            <p>Lo que hoy está pendiente o vencido en tu alcance</p>
+            <h2>Cómo va el seguimiento</h2>
+            <p>Lo que hoy está pendiente o se pasó de fecha en tu alcance</p>
           </div>
         </header>
         <div class="cl-pares">
+          <!--
+            Los mismos conceptos que el tablero, con los mismos nombres: es el
+            mismo número y verlo llamado de dos formas hace dudar de si mide lo
+            mismo.
+          -->
           <div>
-            <span>Recontactos vencidos</span>
+            <span>Prospectos sin contactar a tiempo</span>
             <strong>{{ op.recontactosVencidos }}</strong>
           </div>
           <div>
-            <span>Recontactos al día</span>
+            <span>Prospectos contactados a tiempo</span>
             <strong>{{ op.recontactosAlDia }}</strong>
           </div>
           <div>
-            <span>Días promedio sin seguimiento</span>
+            <span>Atraso promedio (días)</span>
             <strong>{{ op.diasPromedioSinSeguimiento }}</strong>
           </div>
           <div>
@@ -261,17 +283,18 @@
             <strong>{{ op.visitasPendientes }}</strong>
           </div>
           <div>
-            <span>Aprobadas sin cierre</span>
+            <span>Aprobadas sin contrato</span>
             <strong>{{ op.solicitudesSinCierre }}</strong>
           </div>
           <div>
-            <span>Prospección → captación</span>
+            <span>Prospectos captados</span>
             <strong>{{ op.conversionProspeccionCaptacion }}%</strong>
           </div>
         </div>
         <p class="cl-menudo nota">
-          Recontactos, visitas y solicitudes son del <b>alcance completo</b>, no del periodo. Y si
-          el periodo no tuvo prospecciones, la tasa se calcula sobre <b>todas</b> las del alcance.
+          Las visitas y las solicitudes son del <b>alcance completo</b>, no del periodo. Los
+          prospectos sí: si en el periodo elegido no trabajaste ninguno, estas cifras salen en
+          cero en vez de arrastrar el historial entero.
         </p>
       </section>
     }

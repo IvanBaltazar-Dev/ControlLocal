@@ -1,5 +1,13 @@
 # Contrato congelado — F4: Solicitud, documentos, evaluación, contrato y comisión
 
+> **El "congelado" del título es histórico.** El contrato se descongeló el
+> 2026-08-09 (`decision-contrato-v2-descongelado.md`): DTOs, endpoints, estados y
+> errores pueden cambiar con razón funcional y con sus pruebas.
+>
+> Este documento **describe el comportamiento vigente** y se sigue actualizando
+> —no es historia—, pero la autoridad son **las pruebas y OpenAPI**, no este
+> texto. Si discrepan, manda la suite.
+
 Fuente de verdad: `backend-java/` (`SolicitudesRest` 633 líneas, `EvaluacionRest` 85,
 `ContratosRest` 312) + sus BL. Este documento **congela** el cable antes de implementarlo en
 `backend-spring/`, igual que se hizo con F2 y F3.

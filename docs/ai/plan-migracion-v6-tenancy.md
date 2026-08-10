@@ -1,5 +1,15 @@
 # Plan de migración V6 — Núcleo multi-tenant (tenant único de legado)
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 > Ejecuta D-16/D-18/D-20/D-22/D-24/D-25/D-26 de `arquitectura-multitenancy-colaboracion.md`.
 > **Alcance deliberadamente acotado**: solo la infraestructura transversal de tenancy, operando aún como
 > **tenant único** (organización de legado). Sin RLS activo, sin selección de organización, sin segundo

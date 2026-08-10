@@ -25,7 +25,8 @@ import java.util.List;
  * <p>Tres formas del cable que se pierden al portar:
  * <ul>
  *   <li>{@code GET /tareas} devuelve una <b>lista pelada</b>, sin sobre de
- *       paginacion, cortada en 10;</li>
+ *       paginacion y <b>sin tope</b> (el corte en 10 de la v1, D-F7-2, se
+ *       retiro el 2026-08-08);</li>
  *   <li>{@code GET /tareas/pendientes} si lleva sobre, y su {@code tamano} por
  *       defecto es <b>5</b>, no 10;</li>
  *   <li>cancelar responde <b>204 sin cuerpo</b>.</li>
@@ -53,9 +54,8 @@ public class TareasController {
     }
 
     /**
-     * La misma bandeja con sobre de paginacion. Ojo: la fuente ya viene
-     * cortada en 10 por el service, asi que esto pagina sobre ese tope — es lo
-     * que hace la v1.
+     * La misma bandeja con sobre de paginacion. Desde que se retiro el tope de
+     * 10, {@code totalRecords} es el total real de tareas abiertas del agente.
      */
     @GetMapping("pendientes")
     @PreAuthorize("hasRole('AGENTE')")

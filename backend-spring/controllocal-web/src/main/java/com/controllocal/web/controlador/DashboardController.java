@@ -27,9 +27,10 @@ import java.util.List;
  * <ul>
  *   <li><b>solo el AGENTE tiene bandeja</b>. Para BROKER y ADMIN no es un 403:
  *       es una bandeja <em>vacia</em> con el {@code pageSize} que se pidio;</li>
- *   <li>{@code tamano} por defecto es <b>5</b>, no 10, y la fuente ya viene
- *       cortada en 10 por el service (regla de F7), asi que {@code totalRecords}
- *       es el tamano de ESA fuente, no el total historico.</li>
+ *   <li>{@code tamano} por defecto es <b>5</b>, y desde que se retiro el tope
+ *       de F7 (2026-08-08) {@code totalRecords} es el <b>total real</b> de
+ *       tareas abiertas del agente, no el tamano de una fuente recortada. La
+ *       home compone las 5 primeras y el resto se pide con {@code GET /tareas}.</li>
  * </ul>
  */
 @RestController

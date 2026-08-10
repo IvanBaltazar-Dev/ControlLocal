@@ -15,8 +15,10 @@ import { Tarea } from './tareas.service';
  * - **Solo el AGENTE tiene bandeja.** Para BROKER y ADMIN `bandeja` viaja con
  *   `items: []` y `totalRecords: 0`. **No es un 403 ni un error**: es una
  *   bandeja vacía, y pintar "no se pudo cargar" ahí sería mentir.
- * - **`tamano` por defecto es 5**, y la fuente ya viene cortada en 10 por la
- *   regla de F7, así que `totalRecords` es el tamaño de esa fuente recortada.
+ * - **`tamano` por defecto es 5**, y desde que se retiró el tope de F7
+ *   (2026-08-08) `totalRecords` es el **total real** de tareas abiertas del
+ *   agente, no el tamaño de una fuente recortada. Puede ser 30 o 50, y la home
+ *   solo compone las 5 primeras: el resto se pide aparte con `GET /tareas`.
  *
  * La campana **no viaja aquí**: es chrome global y tiene su propio recurso
  * (`AlertasService`).

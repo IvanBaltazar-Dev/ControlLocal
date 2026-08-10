@@ -10,7 +10,13 @@ import java.util.Set;
 public final class CondicionesEconomicas {
 
     public static final BigDecimal COMISION_MINIMA = BigDecimal.ZERO;
-    public static final BigDecimal COMISION_MAXIMA = new BigDecimal("200");
+
+    /**
+     * El tope no se escribe aqui: lo fija {@link PoliticaComercial#COMISION_MAXIMA}
+     * junto al resto de reglas del negocio. Esta clase valida; la politica decide.
+     */
+    public static final BigDecimal COMISION_MAXIMA = PoliticaComercial.comisionMaxima();
+
     public static final Set<String> MONEDAS = Set.of("PEN", "USD");
 
     private CondicionesEconomicas() {
@@ -23,7 +29,9 @@ public final class CondicionesEconomicas {
         }
         if (porcentaje.compareTo(COMISION_MAXIMA) > 0) {
             throw new ReglaNegocioException(
-                    "La comision pactada no puede superar 200 % de la renta mensual.");
+                    "La comision pactada no puede superar "
+                            + PoliticaComercial.COMISION_MAXIMA.valor()
+                            + " % de la renta mensual.");
         }
         return porcentaje;
     }

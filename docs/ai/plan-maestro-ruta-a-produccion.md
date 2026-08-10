@@ -1,5 +1,15 @@
 # Plan maestro — ruta a producción (7 fases)
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 **Fecha de corte: 2026-08-04.** Este documento **apunta el plan acordado** de siete fases y, para
 cada punto, dice **si ya está hecho, si está planificado sin ejecutar, si está pendiente o si es
 futuro**, con la evidencia en el repositorio.

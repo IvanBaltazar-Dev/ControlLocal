@@ -24,6 +24,7 @@ import {
   importeTexto,
 } from '../../core/comision';
 import { monto, numero, SIN_DATO, texto } from '../../core/formato';
+import { POLITICA_COMERCIAL } from '../../core/politica-comercial';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 
 const LOCALES_POR_BUSQUEDA = 20;
@@ -89,7 +90,7 @@ export class CaptacionForm implements OnInit {
       idLocal: this.fb.nonNullable.control(0, Validators.min(1)),
       fechaCaptacion: this.fb.nonNullable.control(hoyIso(), Validators.required),
       fechaInicioVigencia: this.fb.nonNullable.control(hoyIso(), Validators.required),
-      fechaFinVigencia: this.fb.nonNullable.control(fechaEnMeses(6), Validators.required),
+      fechaFinVigencia: this.fb.nonNullable.control(fechaEnMeses(POLITICA_COMERCIAL.encargoMesesPorDefecto), Validators.required),
       modalidadComision: this.fb.nonNullable.control<ModalidadComision>('E1', Validators.required),
       valorComision: this.fb.control<number | null>(null, Validators.min(0)),
       monedaComision: this.fb.nonNullable.control<'PEN' | 'USD'>('PEN', Validators.required),
@@ -265,7 +266,7 @@ export class CaptacionForm implements OnInit {
     this.formulario.patchValue({
       fechaCaptacion: captacion.fechaCaptacion ?? hoyIso(),
       fechaInicioVigencia: captacion.fechaInicioVigencia ?? hoyIso(),
-      fechaFinVigencia: captacion.fechaFinVigencia ?? fechaEnMeses(6),
+      fechaFinVigencia: captacion.fechaFinVigencia ?? fechaEnMeses(POLITICA_COMERCIAL.encargoMesesPorDefecto),
       modalidadComision: modalidadDesde(captacion),
       valorComision: valorEditableDesde(captacion),
       monedaComision: monedaValida(captacion.monedaComision)

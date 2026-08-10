@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiClient } from './api.client';
+import { ConceptoSenal, NivelAtencion } from '../politica-comercial';
 
 /**
  * Contrato CONGELADO E4 (`docs/ai/contrato-congelado-e4-…`). Dos lecturas que
@@ -15,11 +16,15 @@ import { ApiClient } from './api.client';
  * - **El alcance de indicadores es SOLO por agente responsable** — la captación
  *   no amplía el de nadie aquí. Es una regla distinta de la del seguimiento
  *   comercial y **no se unifican** (D-E4-4).
- * - **Cuatro rarezas del cable se replican a propósito** (D-E4-3) y se ven en
- *   pantalla: el `100` fijo de la primera fila del embudo, "Con visita
- *   realizada" que no mira el estado de la visita, `captacionesPendientes`
- *   duplicando a `captacionesPorRevisar` y el donut que **no** depende del
- *   periodo (la salud sí).
+ * - **De las cuatro rarezas heredadas de la v1 quedan una y media.** El `100`
+ *   fijo de la primera fila del embudo y "Con visita realizada" que no miraba el
+ *   estado de la visita se corrigieron el 2026-08-08 al descongelar el contrato,
+ *   y `captacionesPendientes` —que duplicaba a `captacionesPorRevisar`— se
+ *   retiró. Sigue en pie que el donut **no** depende del periodo mientras la
+ *   salud sí, y eso no es una rareza: son dos lecturas distintas a propósito.
+ * - **Desde E1 (2026-08-10) los números que se clasifican llegan clasificados**
+ *   (`senales`). La pantalla elige el color de un `ALTO`; nunca cuándo algo pasa
+ *   a serlo.
  */
 
 /** Un cubo con nombre: etapas del donut y salud de captaciones. */
@@ -52,6 +57,29 @@ export interface IndicadorOperativo {
 }
 
 /**
+ * Un número del tablero con su lectura ya hecha por el dominio (R-07, E1).
+ *
+ * Hasta E1 el cable traía solo el número y era el componente quien decidía si
+ * eso era grave —ocho ternarios repartidos por rol, que además se contradecían
+ * entre sí, y un `> 7` que era la cuarta copia del plazo de recontacto—. Ahora
+ * la interpretación viaja resuelta y la pantalla solo elige cómo se ve.
+ *
+ * La lista viene **completa**, con los conceptos en cero incluidos: un cero
+ * clasificado es información ("no hay nada atrasado"), no una ausencia.
+ */
+export interface IndicadorSenal {
+  /** Clave del dominio, no rótulo. El texto visible se escribe en la pantalla. */
+  concepto: ConceptoSenal;
+  /** El hecho, sin interpretar: cuántos son. */
+  valor: number;
+  nivelAtencion: NivelAtencion;
+  /** `INFORMATIVO` y `SIN_PENDIENTES` no lo son. */
+  requiereAtencion: boolean;
+  /** 1 es lo que se atiende primero. Un único orden para los tres roles. */
+  prioridad: number;
+}
+
+/**
  * Espejo de `IndicadoresResponse`. **Nada es nulo**: los escalares viajan en 0
  * y las listas vacías viajan igual, así que la pantalla no necesita defensa
  * contra ausencias — pero sí contra el fallo de la llamada entera.
@@ -63,15 +91,19 @@ export interface IndicadoresResumen {
   solicitudesPorEvaluar: number;
   captacionesTotales: number;
   captacionesActivas: number;
-  /** Repite `captacionesPorRevisar`; es así en el cable (D-E4-3). */
   captacionesObservadas: number;
   oportunidadesActivas: number;
   interacciones: number;
   visitas: number;
   cierres: number;
   cierresCohorte: number;
-  /** Conversión por COHORTE: nunca pasa de 100. */
-  conversionPropia: number;
+  /**
+   * Conversión por cohorte, nunca por encima de 100 — y **`null` cuando no hay
+   * cohorte**: sin captaciones en el periodo no se convirtió nada *porque no
+   * había nada que convertir*, que no es lo mismo que haber trabajado doce y no
+   * cerrar ninguna. Es el único numérico nulable de la respuesta.
+   */
+  conversionPropia: number | null;
   agentesActivos: number;
   brokersActivos: number;
   propiedadesEquipo: number;
@@ -87,6 +119,14 @@ export interface IndicadoresResumen {
   /** Top 8: por broker para el ADMIN, por agente para BROKER y AGENTE. */
   desempeno: IndicadorDesempeno[];
   operativo: IndicadorOperativo;
+  /** Los mismos números, clasificados por el dominio y ya ordenados. */
+  senales: IndicadorSenal[];
+  /**
+   * Cuántas **cosas** reclaman atención ahora mismo. No se deriva sumando
+   * `senales`: `DEMORA_DE_SEGUIMIENTO` vale días, y colarla daría "11 cosas"
+   * donde hay 2 pendientes y 9 días de atraso. Lo suma el dominio.
+   */
+  pendientesDeAtencion: number;
 }
 
 /** Una fila del avance comercial (RF-017): una captación ACTIVA del alcance. */

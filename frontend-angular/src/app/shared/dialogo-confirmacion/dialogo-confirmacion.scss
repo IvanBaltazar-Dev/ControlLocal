@@ -1,7 +1,12 @@
 .fondo {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  /*
+   * Por encima de TODO, incluido `cl-panel-lateral` (60/61): la confirmación es
+   * la decisión terminal sobre cualquier superficie, y cancelar una tarea se
+   * pide desde dentro del panel. Con 50 el diálogo quedaba detrás.
+   */
+  z-index: 70;
   display: grid;
   place-items: center;
   padding: 1rem;

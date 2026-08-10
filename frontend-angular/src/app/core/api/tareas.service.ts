@@ -23,13 +23,13 @@ import { PageResponse } from './api.types';
  *   (BROKER y ADMIN reciben 403). En el dashboard eso no se nota porque
  *   `/dashboard` les manda una bandeja vacía en vez de fallar.
  *
- * Ojo con el tope: la fuente se corta en **10** y el resto se descarta **en
- * silencio**, así que `totalRecords` es el tamaño de esa fuente recortada, no
- * el total histórico de tareas pendientes.
+ * **Ya no hay tope.** La v1 cortaba la fuente en 10 y descartaba el resto **en
+ * silencio** (D-F7-2); se retiró el 2026-08-08 al descongelar el contrato,
+ * porque el agente no podía distinguir "tengo 10 tareas" de "tengo 40" y las 30
+ * que faltaban no aparecían en ningún sitio. `totalRecords` es desde entonces el
+ * **total real** de tareas abiertas, así que la pantalla que las pinte tiene que
+ * aguantar 30 o 50 filas sin descuadrarse.
  */
-
-/** Tope de la bandeja en el backend (`MAX_BANDEJA`). */
-export const MAXIMO_BANDEJA = 10;
 
 /** Tipos del cable. `PROPONER_OPORTUNIDAD` abre la ficha del CLIENTE. */
 export type TipoTarea =
@@ -72,7 +72,7 @@ export class TareasService {
   private readonly api = inject(ApiClient);
 
   /**
-   * La bandeja completa: **lista pelada, sin sobre de paginación**, máx. 10 y
+   * La bandeja completa: **lista pelada, sin sobre de paginación**, sin tope y
    * ya ordenada por prioridad y días sin acción.
    */
   bandeja$(): Observable<Tarea[]> {

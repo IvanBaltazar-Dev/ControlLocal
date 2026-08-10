@@ -22,6 +22,7 @@ import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Alcances.Alcance;
+import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Transiciones;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import org.springframework.data.domain.Page;
@@ -47,9 +48,6 @@ public class ProspeccionServiceImpl implements ProspeccionService {
     private static final Map<String, String> DESCRIPCION_ESTADO = Map.of(
             "P", "prospecto", "C", "contactado", "R", "reunion", "E", "propuesta entregada",
             "S", "en seguimiento", "T", "captado", "D", "descartado");
-
-    /** Plazo por defecto del encargo al captar, igual al que propone el formulario. */
-    private static final int MESES_ENCARGO_POR_DEFECTO = 6;
 
     private final ProspeccionRepository prospecciones;
     private final CaptacionRepository captaciones;
@@ -234,7 +232,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         // de DATOS con la v1, no de contrato: el request y la respuesta de
         // /captar no cambian.
         captacion.setFechaInicioVigencia(inicioEncargo);
-        captacion.setFechaFinVigencia(inicioEncargo.plusMonths(MESES_ENCARGO_POR_DEFECTO));
+        captacion.setFechaFinVigencia(PoliticaComercial.finDelEncargo(inicioEncargo));
         captacion.setPropiedad(p.getPropiedad());
         captacion.setAgente(p.getAgente());
         CondicionEconomicaCaptacion condicion = new CondicionEconomicaCaptacion();

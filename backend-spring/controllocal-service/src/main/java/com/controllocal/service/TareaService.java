@@ -32,8 +32,10 @@ public interface TareaService {
 
     /**
      * Reconcilia y devuelve la bandeja: prioridad ALTA primero, luego lo que
-     * lleva mas dias sin atencion, <b>cortada en 10</b> (el resto se descarta
-     * en silencio, D-F7-2).
+     * lleva mas dias sin atencion. <b>Sin tope</b> — el corte en 10 con
+     * descarte en silencio (D-F7-2) se retiro el 2026-08-08 al descongelar el
+     * contrato, asi que esto puede devolver 30 o 50 fichas y quien las pinte
+     * tiene que aguantarlas.
      */
     List<FichaTarea> bandejaDe(Actor actor);
 

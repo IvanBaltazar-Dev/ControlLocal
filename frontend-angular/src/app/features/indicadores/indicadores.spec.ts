@@ -48,6 +48,17 @@ const RESUMEN: IndicadoresResumen = {
     solicitudesSinCierre: 0,
     conversionProspeccionCaptacion: 40,
   },
+  // Esta pantalla no las pinta todavía; viajan en la respuesta desde E1.
+  senales: [
+    {
+      concepto: 'RECONTACTO_VENCIDO',
+      valor: 1,
+      nivelAtencion: 'ALTO',
+      requiereAtencion: true,
+      prioridad: 2,
+    },
+  ],
+  pendientesDeAtencion: 1,
 };
 
 function sesion(rol: RolSesion): Sesion {

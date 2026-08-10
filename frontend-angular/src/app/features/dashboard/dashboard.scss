@@ -21,11 +21,61 @@
   }
 }
 
+/*
+  E2.1 — Cabecera de decisión. Es lo primero que se lee, así que pesa más que
+  una tarjeta: fondo del color de la marca y una frase, no un número suelto.
+  La franja lateral cambia de acento a verde cuando no hay nada pendiente —el
+  único caso en que la cabecera es una buena noticia y no una lista de trabajo—.
+*/
+.decision {
+  margin-bottom: 1rem;
+  padding: 1rem 1.15rem;
+  border-radius: var(--cl-radio);
+  border-left: 5px solid var(--cl-acento);
+  background: var(--cl-primario);
+  color: #fff;
+  box-shadow: var(--cl-sombra);
+
+  &.tranquila {
+    border-left-color: var(--cl-exito);
+  }
+
+  .titular {
+    margin: 0;
+    font-size: 1.18rem;
+    line-height: 1.35;
+    font-weight: 500;
+
+    b {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-right: 0.15rem;
+    }
+  }
+
+  .apoyo {
+    margin: 0.3rem 0 0;
+    font-size: 0.87rem;
+    /* Legible sobre el fondo oscuro sin competir con el titular. */
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .separador {
+    margin: 0 0.4rem;
+    color: rgba(255, 255, 255, 0.45);
+  }
+}
+
 .kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: 0.75rem;
   margin-bottom: 1rem;
+}
+
+/* Sin muestra no hay porcentaje: el guion ocupa el sitio del número. */
+.medidor-valor.sin-dato {
+  color: var(--cl-tinta-suave);
 }
 
 /* El KPI enlazado se comporta como tarjeta clicable sin heredar el subrayado. */
@@ -129,8 +179,100 @@
   }
 }
 
+/*
+ * Abre el panel con la bandeja entera. Ocupa el ancho de la tarjeta y lleva
+ * cuántas quedan fuera: sin ese número, "Ver las 32" no dice si te estás
+ * perdiendo dos o veintisiete.
+ */
 .ver-todas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
   margin-top: 0.7rem;
+
+  .restantes {
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--cl-primario-claro) 12%, transparent);
+    color: var(--cl-primario);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* En el panel el fondo ya es gris: las filas van en blanco o se pierden. */
+.tareas.en-panel li {
+  background: var(--cl-superficie);
+}
+
+/*
+ * Chips de prioridad del panel. Filtro de un solo eje y con pocos valores:
+ * botones a la vista, no un `<select>` que esconde las opciones y su cuenta.
+ */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.chip {
+  --tono-chip: var(--cl-primario);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--cl-borde);
+  border-radius: 999px;
+  background: var(--cl-superficie);
+  color: var(--cl-tinta-suave);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+
+  &.mal {
+    --tono-chip: var(--cl-error);
+  }
+
+  &.aviso {
+    --tono-chip: #8a5400;
+  }
+
+  b {
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--tono-chip) 12%, transparent);
+    color: var(--tono-chip);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &:hover:not(.activo) {
+    border-color: var(--tono-chip);
+    color: var(--cl-tinta);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--cl-primario-claro);
+    outline-offset: 1px;
+  }
+
+  &.activo {
+    border-color: var(--tono-chip);
+    background: var(--tono-chip);
+    color: #fff;
+
+    b {
+      background: rgba(255, 255, 255, 0.24);
+      color: #fff;
+    }
+  }
 }
 
 /*

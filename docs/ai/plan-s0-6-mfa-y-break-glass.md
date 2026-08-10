@@ -1,5 +1,15 @@
 # Bloque 6 — MFA administrativo y recuperación de emergencia (DISEÑO)
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 **Fecha: 2026-08-06** · **V37 IMPLEMENTADO Y VERIFICADO** · **V38 NO aprobado todavía (§17).**
 
 Desarrolla el §6.1 y el §6.2 del [Plan S0](plan-s0-seguridad-identidad-gobierno.md). Se apoya en el

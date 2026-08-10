@@ -30,6 +30,9 @@ import com.controllocal.service.IndicadorService;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Descripciones;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.PoliticaComercial;
+import com.controllocal.service.soporte.PoliticaComercial.Concepto;
+import com.controllocal.service.soporte.PoliticaComercial.NivelAtencion;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +41,9 @@ import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -78,9 +83,6 @@ public class IndicadorServiceImpl implements IndicadorService {
     private static final String[] MESES = {
             "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
     };
-
-    /** Mismo umbral que la bandeja de F7, a proposito: los dos numeros deben cuadrar. */
-    private static final int DIAS_RECONTACTO = 7;
 
     private static final int TOPE_DESEMPENO = 8;
 
@@ -215,6 +217,17 @@ public class IndicadorServiceImpl implements IndicadorService {
                         .filter(b -> !b.isEsAdministrador()).count()
                 : (actor.esAgente() ? 0 : 1);
 
+        // Descongelado 2026-08-08: antes decia `prosPeriodo.isEmpty() ? pros : prosPeriodo`.
+        // Si la ventana no tenia ni una prospeccion, el operativo caia a TODO el
+        // historial del alcance, asi que "ultimos 7 dias" pasaba a significar
+        // "desde siempre" sin avisar — y los recontactos vencidos de hace un ano
+        // aparecian como si fueran de esta semana. Un periodo vacio ahora se
+        // informa vacio, que es lo que es.
+        Operativo operativo = operativo(prosPeriodo, vis, sols, hoy);
+
+        Map<Concepto, Integer> valores = valoresPorConcepto(captacionesPorRevisar,
+                solicitudesPorEvaluar, contsPeriodo.size(), agentesActivos, operativo);
+
         return new Resumen(
                 ambito(actor),
                 captacionesPorRevisar,
@@ -227,7 +240,7 @@ public class IndicadorServiceImpl implements IndicadorService {
                 visPeriodo.size(),
                 contsPeriodo.size(),
                 capsPeriodoCerradas.size(),
-                porcentaje(capsPeriodoCerradas.size(), capsPeriodo.size()),
+                conversionPropia(capsPeriodoCerradas.size(), capsPeriodo.size()),
                 agentesActivos,
                 brokersActivos,
                 propiedadesEquipo,
@@ -239,13 +252,70 @@ public class IndicadorServiceImpl implements IndicadorService {
                 salud,
                 embudo,
                 desempeno,
-                // Descongelado 2026-08-08: antes decia `prosPeriodo.isEmpty() ? pros : prosPeriodo`.
-                // Si la ventana no tenia ni una prospeccion, el operativo caia a
-                // TODO el historial del alcance, asi que "ultimos 7 dias" pasaba a
-                // significar "desde siempre" sin avisar — y los recontactos
-                // vencidos de hace un ano aparecian como si fueran de esta semana.
-                // Un periodo vacio ahora se informa vacio, que es lo que es.
-                operativo(prosPeriodo, vis, sols, hoy));
+                operativo,
+                senales(valores),
+                pendientesDeAtencion(valores));
+    }
+
+    /** El valor que le toca a cada concepto del tablero, en un solo sitio. */
+    private static Map<Concepto, Integer> valoresPorConcepto(int captacionesPorRevisar,
+                                                             int solicitudesPorEvaluar,
+                                                             int cierres,
+                                                             int agentesActivos,
+                                                             Operativo op) {
+        Map<Concepto, Integer> valores = new EnumMap<>(Concepto.class);
+        valores.put(Concepto.SOLICITUD_POR_EVALUAR, solicitudesPorEvaluar);
+        valores.put(Concepto.RECONTACTO_VENCIDO, op.recontactosVencidos());
+        valores.put(Concepto.CAPTACION_POR_REVISAR, captacionesPorRevisar);
+        valores.put(Concepto.SOLICITUD_APROBADA_SIN_CIERRE, op.solicitudesSinCierre());
+        valores.put(Concepto.DEMORA_DE_SEGUIMIENTO, op.diasPromedioSinSeguimiento());
+        valores.put(Concepto.VISITA_PENDIENTE, op.visitasPendientes());
+        valores.put(Concepto.CIERRE_REGISTRADO, cierres);
+        valores.put(Concepto.COBERTURA_DE_AGENTES, agentesActivos);
+        return valores;
+    }
+
+    /**
+     * Cuantas <b>cosas</b> reclaman atencion ahora mismo (E2.1). Es el numero
+     * con el que abre el tablero, y por eso no puede salir de sumar lo que haya:
+     * solo entran los conceptos que cuentan unidades —{@code
+     * DEMORA_DE_SEGUIMIENTO} vale dias— y solo los que el dominio clasifico como
+     * pendientes.
+     */
+    private static int pendientesDeAtencion(Map<Concepto, Integer> valores) {
+        int total = 0;
+        for (Map.Entry<Concepto, Integer> entrada : valores.entrySet()) {
+            Concepto concepto = entrada.getKey();
+            int valor = entrada.getValue();
+            if (concepto.cuentaCosas()
+                    && PoliticaComercial.requiereAtencion(
+                            PoliticaComercial.clasificar(concepto, valor))) {
+                total += valor;
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Los hechos del tablero, ya interpretados (R-07). Uno por concepto y en el
+     * orden en que la politica dice que se atienden; la pantalla filtra los que
+     * su rol muestra, pero no reclasifica ni reordena.
+     *
+     * <p>Se emiten <b>todos</b>, incluidos los que estan en cero: un cero
+     * clasificado como {@code SIN_PENDIENTES} es informacion ("no hay nada
+     * atrasado"), y omitirlo obligaria al cliente a distinguir "no vino" de "no
+     * hay", que es justo la ambiguedad que este bloque viene a quitar.
+     */
+    private static List<IndicadorService.Senal> senales(Map<Concepto, Integer> valores) {
+        return Arrays.stream(Concepto.values())
+                .sorted(Comparator.comparingInt(Concepto::prioridad))
+                .map(concepto -> {
+                    int valor = valores.getOrDefault(concepto, 0);
+                    NivelAtencion nivel = PoliticaComercial.clasificar(concepto, valor);
+                    return new IndicadorService.Senal(concepto.name(), valor, nivel.name(),
+                            PoliticaComercial.requiereAtencion(nivel), concepto.prioridad());
+                })
+                .toList();
     }
 
     @Override
@@ -572,7 +642,7 @@ public class IndicadorServiceImpl implements IndicadorService {
                                 List<IndicadorVisita> vis,
                                 List<IndicadorSolicitud> sols,
                                 LocalDate hoy) {
-        LocalDate limiteVencido = hoy.minusDays(DIAS_RECONTACTO);
+        LocalDate limiteVencido = PoliticaComercial.limiteDeRecontacto(hoy);
         int vencidos = 0;
         int alDia = 0;
         long sumaAtraso = 0;
@@ -584,8 +654,8 @@ public class IndicadorServiceImpl implements IndicadorService {
             if (recontacto == null) {
                 continue;
             }
-            // Vencido = atrasado >= DIAS_RECONTACTO, igual que la bandeja. Un recontacto
-            // recien cumplido (entre hoy-7 y hoy) todavia no escala: cuenta como al dia.
+            // Vencido = pasado el plazo de la politica, igual que la bandeja. Un
+            // recontacto recien cumplido todavia no escala: cuenta como al dia.
             if (recontacto.isAfter(limiteVencido)) {
                 alDia++;
             } else {
@@ -746,6 +816,20 @@ public class IndicadorServiceImpl implements IndicadorService {
 
     private static String textoSeguro(String texto) {
         return texto == null ? "" : texto;
+    }
+
+    /**
+     * Conversion de la cohorte, o {@code null} cuando <b>no hay cohorte</b>
+     * (E2.0).
+     *
+     * <p>Es la unica tasa del resumen que puede no existir, y por eso no usa
+     * {@link #porcentaje}: sin captaciones en el periodo no se convirtio nada
+     * <i>porque no habia nada que convertir</i>, que no es lo mismo que haber
+     * trabajado doce y no cerrar ninguna. Las dos situaciones daban 0 y la
+     * pantalla no podia distinguirlas.
+     */
+    private static Integer conversionPropia(int cerradas, int captaciones) {
+        return captaciones <= 0 ? null : porcentaje(cerradas, captaciones);
     }
 
     /**

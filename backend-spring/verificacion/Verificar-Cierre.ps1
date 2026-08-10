@@ -28,6 +28,7 @@ $ErrorActionPreference = 'Stop'
 $raiz = Join-Path $PSScriptRoot '..'
 $integracion = @(
     'BusquedaLocalesIntegrationTest',
+    'HistoricoPrecioIntegrationTest',
     'InvariantesComisionIntegrationTest',
     'OcupacionInmuebleIntegrationTest',
     'PadronDeGobiernoIntegrationTest',

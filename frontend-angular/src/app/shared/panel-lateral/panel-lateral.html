@@ -1,0 +1,34 @@
+@if (abierto()) {
+  <div class="fondo" (click)="alCerrar()"></div>
+
+  <!-- tabindex=-1: el panel recibe el foco al abrirse, no es tabulable a mano. -->
+  <aside
+    #panel
+    class="panel"
+    [style.--ancho-panel]="ancho()"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="titulo()"
+    tabindex="-1"
+  >
+    <header>
+      <div>
+        <h2>{{ titulo() }}</h2>
+        @if (subtitulo(); as texto) {
+          <p>{{ texto }}</p>
+        }
+      </div>
+      <button type="button" class="cerrar" (click)="alCerrar()" aria-label="Cerrar el panel">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </header>
+
+    <!-- El scroll vive aquí: la cabecera queda fija y la página no crece. -->
+    <div class="cuerpo">
+      <ng-content />
+    </div>
+
+    <!-- Barra de acciones opcional, anclada abajo. -->
+    <ng-content select="[pie]" />
+  </aside>
+}

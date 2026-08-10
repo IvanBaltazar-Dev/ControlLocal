@@ -1,5 +1,13 @@
 # Contrato congelado E4 — dashboard, indicadores y seguimiento comercial
 
+> **El "congelado" del título es histórico.** El contrato se descongeló el
+> 2026-08-09 (`decision-contrato-v2-descongelado.md`): DTOs, endpoints, estados y
+> errores pueden cambiar con razón funcional y con sus pruebas.
+>
+> Este documento **describe el comportamiento vigente** y se sigue actualizando
+> —no es historia—, pero la autoridad son **las pruebas y OpenAPI**, no este
+> texto. Si discrepan, manda la suite.
+
 **Estado:** CONGELADO, CORTADO Y VERIFICADO (2026-07-29)
 **Fuente de verdad:** `backend-java/controllocal-rest/.../DashboardRest.java` (62),
 `IndicadoresRest.java` (813) y `SeguimientoComercialRest.java` (684), mas
@@ -109,7 +117,8 @@ accionables del menu:
 - `interacciones`, `visitas` = filas de la ventana
 - `cierres` = contratos con `fechaCierre` en la ventana
 - `cierresCohorte` = captaciones **de la ventana** que ya tienen contrato
-- `conversionPropia` = `porcentaje(cierresCohorte, captacionesTotales)`
+- `conversionPropia` = `porcentaje(cierresCohorte, captacionesTotales)`, y
+  **`null` si `captacionesTotales == 0`** (E2.0) — ver §3.11
 - `captacionesSalud`, `embudo`, `desempeno` — ver abajo
 
 `porcentaje(parte, total)` = `0` si `total <= 0`; si no,
@@ -190,15 +199,19 @@ captaciones de la ventana que ya cerraron, agrupadas por su `fechaCaptacion`
 
 ### 3.9 `operativo`
 
-**La rareza mas facil de perder:** la fuente de prospecciones es
-`prosPeriodo.isEmpty() ? pros : prosPeriodo` — si no hubo ninguna prospeccion en
-la ventana, **cae a todas las del alcance**. Visitas y solicitudes, en cambio,
-siempre son las del alcance completo (sin ventana).
+~~La fuente de prospecciones es `prosPeriodo.isEmpty() ? pros : prosPeriodo`~~ —
+ese fallback se retiro el **2026-08-08** al descongelar el contrato: si la
+ventana no tenia ni una prospeccion, "ultimos 7 dias" pasaba a significar "desde
+siempre" sin avisar. Un periodo vacio ahora se informa vacio. Visitas y
+solicitudes siguen siendo las del alcance completo (sin ventana), y eso si es
+del contrato.
 
 - `recontactosVencidos` / `recontactosAlDia`: solo prospecciones con
   `fechaRecontacto` y estado distinto de `T` y `D`. Vencida si
-  `fechaRecontacto <= hoy - 7`; si no, al dia. El umbral de 7 dias es el mismo
-  de la bandeja de F7, a proposito.
+  `fechaRecontacto <= hoy - recontacto.dias`; si no, al dia. **El plazo lo fija
+  `PoliticaComercial.RECONTACTO`** (E1, 2026-08-10) y es literalmente el mismo
+  objeto que usan la bandeja de F7 y la campana de F6: antes eran cuatro copias
+  del numero 7 coordinadas por un comentario.
 - `diasPromedioSinSeguimiento` = `round(sum(dias de atraso) / vencidos)`, `0` si
   no hay vencidos.
 - `visitasPendientes` = visitas en `P` o `G`.
@@ -221,18 +234,64 @@ siempre son las del alcance completo (sin ventana).
 
 ```
 ambito, captacionesPorRevisar, solicitudesPorEvaluar, captacionesTotales,
-captacionesActivas, captacionesPendientes, captacionesObservadas,
+captacionesActivas, captacionesObservadas,
 oportunidadesActivas, interacciones, visitas, cierres, cierresCohorte,
 conversionPropia, agentesActivos, brokersActivos, propiedadesEquipo,
 mesesEtiquetas[], cierresPorMes[], conversionPorPeriodo[],
 captacionesPorPeriodo[], etapas[{nombre,valor}], captacionesSalud[{nombre,valor}],
 embudo[{etapa,valor,porcentaje}], desempeno[{nombre,captaciones,cierres,conversion}],
 operativo{recontactosVencidos,recontactosAlDia,diasPromedioSinSeguimiento,
-          visitasPendientes,solicitudesSinCierre,conversionProspeccionCaptacion}
+          visitasPendientes,solicitudesSinCierre,conversionProspeccionCaptacion},
+senales[{concepto,valor,nivelAtencion,requiereAtencion,prioridad}],
+pendientesDeAtencion
 ```
 
-Todos los numericos son `int` y viajan siempre (nunca nulos). Las listas viajan
-siempre, aunque vacias.
+Los numericos viajan siempre y las listas tambien, aunque vacias. **La unica
+excepcion es `conversionPropia`, que es nulable a proposito desde E2.0**
+(2026-08-10): sin captaciones en el periodo no hay tasa que calcular. Emitir `0`
+hacia indistinguible "medi doce y no cerre ninguna" de "no habia nada que
+medir", y el dashboard resolvia esa ambiguedad **mostrando la conversion del
+agente que mas cerro** como si fuera propia. `null` significa *no calculable*, y
+la pantalla lo dice con un guion.
+
+`pendientesDeAtencion` (E2.1) es **cuantas cosas reclaman atencion ahora mismo**:
+la suma de las senales pendientes que cuentan unidades. No se puede derivar
+sumando `senales` en el cliente —`DEMORA_DE_SEGUIMIENTO` vale dias— y por eso lo
+suma el dominio.
+
+`captacionesPendientes` **se retiro el 2026-08-08**: repetia
+`captacionesPorRevisar` con otro nombre porque la v1 lo emitia asi (D-E4-3), y
+nadie lo pintaba.
+
+### 3.12 `senales` — el hecho ya interpretado (E1, 2026-08-10)
+
+No trae ningun numero nuevo: trae **la lectura** de los que ya viajaban. Antes,
+el cliente recibia `diasPromedioSinSeguimiento: 9` y tenia que saber por su
+cuenta que mas de 7 es preocupante; era la cuarta copia del plazo, esta vez en
+`dashboard.ts`. La regla que lo cierra es **R-07**: el dominio decide *cuando*
+algo pasa a ser ALTO, la pantalla solo decide *como se ve* un ALTO.
+
+| Campo | Que es |
+|---|---|
+| `concepto` | clave estable del dominio, **no rotulo**: `SOLICITUD_POR_EVALUAR`, `RECONTACTO_VENCIDO`, `CAPTACION_POR_REVISAR`, `SOLICITUD_APROBADA_SIN_CIERRE`, `DEMORA_DE_SEGUIMIENTO`, `VISITA_PENDIENTE`, `CIERRE_REGISTRADO`, `COBERTURA_DE_AGENTES` |
+| `valor` | el hecho, sin interpretar; sigue viajando porque al usuario le importa cuantos son |
+| `nivelAtencion` | `ALTO` · `MEDIO` · `INFORMATIVO` · `SIN_PENDIENTES` |
+| `requiereAtencion` | atajo de lo anterior: solo `ALTO` y `MEDIO` |
+| `prioridad` | 1 se atiende primero. **Un unico orden para los tres roles** |
+
+Tres formas del cable que conviene no perder:
+
+- **Viaja completa y en orden de `prioridad`.** Los conceptos en cero tambien:
+  un cero clasificado es informacion ("no hay nada atrasado"), y omitirlo
+  obligaria al cliente a distinguir "no vino" de "no hay".
+- **`INFORMATIVO` no baja a `SIN_PENDIENTES` cuando el valor es 0.** Cero visitas
+  agendadas no es "todo al dia": es cero.
+- **`DEMORA_DE_SEGUIMIENTO` no se clasifica por conteo** sino contra el propio
+  plazo de recontacto: preocupa cuando el atraso medio ya supera la ventana
+  entera que se daba para volver a llamar.
+
+Que subconjunto ve cada rol y con que palabras lo rotula **es del SPA**, no del
+contrato: el backend no emite texto para mostrar.
 
 ## 4. `GET /indicadores/avance` (RF-017)
 
@@ -282,9 +341,11 @@ normalizado a `[1, 100]`.
 `items: []`, `totalRecords: 0`, `page: 1` y el `pageSize` pedido. No es un 403:
 es una bandeja vacia.
 
-La bandeja se toma de la fuente de tareas **ya cortada en 10** por el service
-(regla de F7) y luego se recorta a `tamano`; `totalRecords` es el tamano de esa
-fuente, no el total historico.
+La bandeja se toma de la fuente de tareas y se recorta a `tamano`. ~~ya cortada
+en 10 por el service~~ — el tope se retiro el 2026-08-08 (D-F7-2), asi que
+`totalRecords` es el **total real** de tareas abiertas del agente y puede ser
+30 o 50. El SPA pide `tamano=5` para la tarjeta de la home y trae el resto con
+`GET /tareas` cuando se abre el panel lateral de la bandeja.
 
 ## 6. `GET /seguimiento-comercial`
 

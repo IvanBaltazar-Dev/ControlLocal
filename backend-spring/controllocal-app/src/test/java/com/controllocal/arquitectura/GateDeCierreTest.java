@@ -75,6 +75,8 @@ class GateDeCierreTest {
 
         assertEquals(List.of(
                         "BusquedaLocalesIntegrationTest",
+                        // E0.2 — el historico economico contra PostgreSQL real.
+                        "HistoricoPrecioIntegrationTest",
                         "InvariantesComisionIntegrationTest",
                         "OcupacionInmuebleIntegrationTest",
                         "PadronDeGobiernoIntegrationTest",

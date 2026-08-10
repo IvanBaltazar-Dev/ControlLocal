@@ -32,8 +32,12 @@ import java.time.OffsetDateTime;
 @Table(name = "prospeccion")
 public class Prospeccion extends EntidadDeOrganizacion implements Transicionable {
 
-    /** Dias sin nueva accion de seguimiento tras los cuales toca recontactar (alerta el dia 8). */
-    public static final int DIAS_RECONTACTO = 7;
+    // Aqui vivia una QUINTA copia del plazo de recontacto, `DIAS_RECONTACTO = 7`,
+    // que nadie leia: publica, con javadoc, y muerta. El inventario de E1 no la
+    // encontro —solo busco las que se usaban— y la destapo el gate
+    // PoliticaUnicaTest. Es la peor clase de copia: la que alguien reutiliza de
+    // buena fe seis meses despues porque parece la definicion oficial. El plazo
+    // lo fija PoliticaComercial.RECONTACTO, en la capa de servicio.
 
     public static final String PROSPECTO = Codigos.Prospeccion.PROSPECTO;
     public static final String CONTACTADO = Codigos.Prospeccion.CONTACTADO;

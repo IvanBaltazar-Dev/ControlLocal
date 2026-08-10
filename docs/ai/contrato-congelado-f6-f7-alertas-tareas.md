@@ -1,5 +1,13 @@
 # Contrato congelado — F6 alertas y F7 tareas
 
+> **El "congelado" del título es histórico.** El contrato se descongeló el
+> 2026-08-09 (`decision-contrato-v2-descongelado.md`): DTOs, endpoints, estados y
+> errores pueden cambiar con razón funcional y con sus pruebas.
+>
+> Este documento **describe el comportamiento vigente** y se sigue actualizando
+> —no es historia—, pero la autoridad son **las pruebas y OpenAPI**, no este
+> texto. Si discrepan, manda la suite.
+
 Fuente de verdad: `backend-java/` (`AlertasRest` 107 líneas, `TareasRest` 88) + sus BL
 (`AlertaBusinessLogicImpl` 90, **`TareaBusinessLogicImpl` 649**) y los **nueve puntos del flujo
 comercial que emiten alertas**. Este documento **congela** el cable antes de implementarlo en
@@ -149,9 +157,19 @@ pierden al portar:
 2. **Deriva** qué tareas *deberían* existir (§5.1).
 3. **Lee** las que existen y calcula dos conjuntos de claves (`entidadTipo:entidadId`).
 4. **Escribe, en una transacción**: crea las que faltan y **auto-completa** las que ya no aplican.
-5. **Lee otra vez**, enriquece, ordena y **corta en 10**.
+5. **Lee otra vez**, enriquece y ordena. ~~y **corta en 10**~~ — el corte se retiró el 2026-08-08
+   (ver D-F7-2 en §7): devuelve todas las tareas abiertas del agente.
 
 ### 5.1 Los siete disparadores
+
+> **Los cuatro plazos en negrita ya no están escritos aquí ni en el service.**
+> Desde E1 (2026-08-10) salen de `PoliticaComercial` —`recontacto.dias`,
+> `visita.dias-de-aviso`, `reporte-propietario.dias` y
+> `coincidencia.puntaje-minimo`—, que es el mismo objeto que consultan el
+> indicador de E4 y la campana de F6. Antes eran copias sueltas coordinadas por
+> un comentario, y el plazo de recontacto llegó a estar en cinco sitios. Si
+> cambian, cambian en los tres sitios a la vez; los números de esta tabla son
+> los vigentes, no la fuente.
 
 | # | Dispara cuando | Tipo | Prioridad |
 |---|---|---|---|
@@ -164,7 +182,7 @@ pierden al portar:
 | 7 | Requerimiento ACTIVO con captación propia compatible (puntaje ≥ **60**) y sin oportunidad para ese par | `PROPONER_OPORTUNIDAD` | MEDIA |
 
 Constantes del cable: `DIAS_RECONTACTO=7`, `DIAS_VISITA_PROXIMA=3`, `DIAS_REPORTE=15`,
-`UMBRAL_PROPUESTA=60`, `MAX_BANDEJA=10`.
+`UMBRAL_PROPUESTA=60`. (`MAX_BANDEJA=10` era de la v1 y ya no existe: ver D-F7-2 en §7.)
 
 ### 5.2 El reconcile, con sus dos trampas
 
@@ -245,8 +263,12 @@ recurso del sistema sin acceso de ADMIN.
 - **D-F7-1 · `reporte_propietario`**: crear la tabla en V9 e implementar **solo** la consulta que
   la bandeja necesita, dejando `/captaciones/{id}/reportes-propietario` para su turno.
   **Propuesta: sí**, es lo que mantiene `GET /tareas` byte-compatible al menor costo.
-- **D-F7-2 · el tope silencioso de 10**: se replica. Queda anotado como cosa a revisar al retirar
-  el contrato congelado (el cliente no puede distinguir "tengo 10 acciones" de "tengo 40").
+- **D-F7-2 · el tope silencioso de 10** — ~~se replica~~ **RETIRADO el 2026-08-08** al descongelar
+  el contrato (`decision-contrato-v2-descongelado.md`), que era justo la revisión que quedaba
+  anotada aquí. `bandejaDe` ya no corta y `totalRecords` es el total real de tareas abiertas. La
+  consecuencia para el SPA: la home no puede volcar la lista entera en la tarjeta —el dashboard se
+  descuadra a partir de ~10 filas—, así que compone las **5 primeras** y el resto se recorre en un
+  panel lateral con su propio scroll.
 - **D-F7-3 · `GET` que escribe**: `GET /tareas` reconcilia y por tanto muta. Se replica; es la
   única forma de que la bandeja esté al día sin planificador.
 - **D-F6-4 · `INMUEBLE` vs `PROPIEDAD` — decidida al escribir V9**: el `entidad_tipo` de alertas y

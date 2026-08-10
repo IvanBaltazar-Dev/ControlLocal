@@ -1,5 +1,15 @@
 # Arquitectura Objetivo — Spring Boot + Angular (rev. tras revisión adversarial)
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.**
+> Describe el mundo de la migración: v1 sobre GlassFish, SPA Blazor, contrato
+> congelado y corte del legado. Ese stack se borró el 2026-08-08 y el contrato se
+> descongeló el 2026-08-09. Se conserva porque explica **por qué** las cosas son
+> como son, no **qué** hacer ahora.
+>
+> El orden vigente sale solo de `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar
+> la etapa).
+
 > Documento 5 de 7 · Fase doc-first. **Revisado** tras una revisión adversarial multi-agente (5 lentes) que lo declaró "con huecos". Esta versión incorpora las correcciones y **dos decisiones nuevas**: **PostgreSQL v2 + sincronización** durante el Strangler, y **Party-Role real (con vigencia)**.
 > Alcance 1ª ola = **paridad** (alquiler de locales) sobre fundación extensible a la plataforma (compra/venta, multi-inmueble, IA).
 > Cambios vs v1: Party-Role real (no @OneToOne-por-rol); contrato **contract-first congelado** como seam; **matriz operación→rol** como entregable (RouteAccess es página→rol, no operación→rol); familia touchpoint `interaccion`+`visita` modelada; `OperacionComercial` con condiciones por composición; auditoría por **aspecto + test de cobertura**; unicidad parcial con **índices parciales nativos de Postgres**; tabla de trazabilidad 32→destino.

@@ -129,9 +129,20 @@ Check 'las tres series comparten longitud con las etiquetas' `
 Check 'ninguna conversion por periodo supera 100' `
     (($siete.conversionPorPeriodo + $seisMeses.conversionPorPeriodo | Where-Object { $_ -gt 100 }).Count -eq 0) `
     'cohorte'
-Check 'conversionPropia nunca supera 100' `
-    ($seisMeses.conversionPropia -le 100 -and $siete.conversionPropia -le 100) `
+# E2.0 (2026-08-10): conversionPropia es el UNICO numerico nulable del resumen.
+# Sin captaciones en el periodo no hay tasa que calcular, y decir 0 hacia
+# indistinguible ese caso del de haber trabajado doce y no cerrar ninguna. Cuando
+# viene, sigue acotada a 100.
+Check 'conversionPropia, cuando existe, nunca supera 100' `
+    (($null -eq $siete.conversionPropia -or $siete.conversionPropia -le 100) -and `
+     ($null -eq $seisMeses.conversionPropia -or $seisMeses.conversionPropia -le 100)) `
     "$($siete.conversionPropia) / $($seisMeses.conversionPropia)"
+Check 'sin captaciones en el periodo la conversion viaja nula, no cero' `
+    ($siete.captacionesTotales -gt 0 -or $null -eq $siete.conversionPropia) `
+    "caps=$($siete.captacionesTotales) conv=$($siete.conversionPropia)"
+Check 'con captaciones en el periodo la conversion viaja como numero' `
+    ($seisMeses.captacionesTotales -eq 0 -or $null -ne $seisMeses.conversionPropia) `
+    "caps=$($seisMeses.captacionesTotales) conv=$($seisMeses.conversionPropia)"
 
 Write-Host "`n== 4. Forma congelada del resumen ==" -ForegroundColor Cyan
 Check 'el donut trae las 5 etapas con sus nombres exactos' `
@@ -163,6 +174,56 @@ Check 'el operativo trae sus 6 campos' `
         -and $null -ne $siete.operativo.visitasPendientes `
         -and $null -ne $siete.operativo.solicitudesSinCierre `
         -and $null -ne $siete.operativo.conversionProspeccionCaptacion) 'operativo'
+
+# --- E1: el hecho ya interpretado (R-07) ------------------------------------
+# El backend clasifica; Angular pinta. Si estas cuatro caen, la pantalla habria
+# tenido que volver a decidir por su cuenta que numero duele, que es justo la
+# duplicacion que E1 vino a cerrar.
+$conceptos = @('SOLICITUD_POR_EVALUAR', 'RECONTACTO_VENCIDO', 'CAPTACION_POR_REVISAR',
+    'SOLICITUD_APROBADA_SIN_CIERRE', 'DEMORA_DE_SEGUIMIENTO', 'VISITA_PENDIENTE',
+    'CIERRE_REGISTRADO', 'COBERTURA_DE_AGENTES')
+$senales = @($siete.senales)
+Check 'las senales traen los 8 conceptos, incluidos los que estan en cero' `
+    ((($senales | ForEach-Object { $_.concepto }) -join '|') -eq ($conceptos -join '|')) `
+    (($senales | ForEach-Object { $_.concepto }) -join '|')
+Check 'las senales llegan ordenadas por la prioridad del dominio' `
+    ((($senales | ForEach-Object { $_.prioridad }) -join ',') -eq `
+        ((($senales | ForEach-Object { $_.prioridad }) | Sort-Object) -join ',')) `
+    (($senales | ForEach-Object { $_.prioridad }) -join ',')
+$niveles = @($senales | ForEach-Object { $_.nivelAtencion } | Sort-Object -Unique)
+Check 'cada senal viaja con un nivel del vocabulario acordado' `
+    (@($niveles | Where-Object {
+        $_ -notin @('ALTO', 'MEDIO', 'INFORMATIVO', 'SIN_PENDIENTES')
+    }).Count -eq 0) ($niveles -join '|')
+# Un informativo en cero NO es "todo al dia": es cero. La diferencia importa
+# porque decide el color y el usuario la lee como buena noticia.
+$visitas = $senales | Where-Object { $_.concepto -eq 'VISITA_PENDIENTE' }
+Check 'un concepto informativo nunca baja a SIN_PENDIENTES' `
+    ($visitas.nivelAtencion -eq 'INFORMATIVO' -and -not $visitas.requiereAtencion) `
+    "$($visitas.nivelAtencion)/$($visitas.requiereAtencion)"
+$vencidos = $senales | Where-Object { $_.concepto -eq 'RECONTACTO_VENCIDO' }
+Check 'la senal de recontacto repite el numero del operativo, ya clasificado' `
+    ($vencidos.valor -eq $siete.operativo.recontactosVencidos `
+        -and $vencidos.nivelAtencion -eq $(if ($vencidos.valor -gt 0) { 'ALTO' } else { 'SIN_PENDIENTES' })) `
+    "valor=$($vencidos.valor) nivel=$($vencidos.nivelAtencion)"
+
+# E2.1: la cabecera del tablero abre con "N cosas necesitan tu atencion". Ese N
+# lo suma el dominio y NO se puede derivar sumando las senales en el cliente:
+# DEMORA_DE_SEGUIMIENTO vale dias, no cosas.
+$cosasPendientes = 0
+foreach ($s in $senales) {
+    if ($s.requiereAtencion -and $s.concepto -ne 'DEMORA_DE_SEGUIMIENTO') {
+        $cosasPendientes += $s.valor
+    }
+}
+Check 'pendientesDeAtencion suma las senales que cuentan cosas' `
+    ($siete.pendientesDeAtencion -eq $cosasPendientes) `
+    "backend=$($siete.pendientesDeAtencion) recalculado=$cosasPendientes"
+$demora = $senales | Where-Object { $_.concepto -eq 'DEMORA_DE_SEGUIMIENTO' }
+Check 'los dias de atraso no se cuelan entre las cosas pendientes' `
+    ($demora.valor -eq 0 -or $siete.pendientesDeAtencion -lt ($cosasPendientes + $demora.valor)) `
+    "atraso=$($demora.valor) pendientes=$($siete.pendientesDeAtencion)"
+
 Check 'el desempeno corta en 8 filas' ($siete.desempeno.Count -le 8) $siete.desempeno.Count
 Check 'el desempeno del ADMIN compara brokers, no agentes' `
     ($antesAdmin.brokersActivos -ge 1) "brokersActivos=$($antesAdmin.brokersActivos)"

@@ -10,6 +10,7 @@ import com.controllocal.service.AlertaService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.soporte.Alcances;
+import com.controllocal.service.soporte.PoliticaComercial;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -26,8 +27,6 @@ import java.util.List;
 @Service
 public class AlertaServiceImpl implements AlertaService {
 
-    /** Dia 8 sin accion: la v1 usa el mismo umbral que la tarea de recontacto. */
-    private static final int DIAS_RECONTACTO = 7;
     /** Tope del barrido: acota una operacion que en la v1 no tenia ninguno. */
     private static final int TOPE_BARRIDO = 500;
 
@@ -115,7 +114,10 @@ public class AlertaServiceImpl implements AlertaService {
     @Override
     @Transactional
     public int sincronizarRecontacto(Actor actor) {
-        LocalDate limite = LocalDate.now().minusDays(DIAS_RECONTACTO);
+        // El plazo es el de PoliticaComercial, el mismo que dispara la tarea de
+        // la bandeja y el que cuenta el indicador: la campana no puede avisar de
+        // un atraso que el tablero todavia no reconoce.
+        LocalDate limite = PoliticaComercial.limiteDeRecontacto(LocalDate.now());
         // El barrido es del TENANT entero, no del alcance del que consulta: la
         // v1 recorre todas las prospecciones por recontactar sin mirar quien
         // abrio la campana. Lo unico que se le anade es la frontera de

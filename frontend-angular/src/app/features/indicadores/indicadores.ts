@@ -141,7 +141,10 @@ export class Indicadores implements OnInit {
    * ya cerraron. Por eso nunca pasa de 100 — y por eso no coincide con
    * "cierres del periodo", que incluye cierres de captaciones anteriores.
    */
-  protected readonly conversion = computed(() => this.datos()?.conversionPropia ?? 0);
+  protected readonly conversion = computed(() => this.datos()?.conversionPropia ?? null);
+
+  /** Ancho del medidor. Sin muestra no hay barra que llenar. */
+  protected readonly conversionAncho = computed(() => this.conversion() ?? 0);
 
   protected readonly kpis = computed<Kpi[]>(() => {
     const i = this.datos();

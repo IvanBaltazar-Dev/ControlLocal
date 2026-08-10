@@ -70,7 +70,7 @@
 
   <article class="cl-panel paso motivo">
     <header><span class="numero-paso">3</span><div><h2>Motivo y confirmación</h2><p>Queda registrado en el historial.</p></div></header>
-    <label><span>Motivo *</span><textarea rows="5" maxlength="1000" [formControl]="motivo" placeholder="Explica por qué se mueve este expediente (mínimo 10 caracteres)"></textarea></label>
+    <label><span>Motivo *</span><textarea rows="5" maxlength="1000" [formControl]="motivo" [placeholder]="'Explica por qué esta captación cambia de agente (mínimo ' + minimoMotivo + ' caracteres)'"></textarea></label>
     <dl class="resumen">
       <dt>Captación</dt><dd>{{ valor(captacionSeleccionada()?.codigoCaptacion) }}</dd>
       <dt>Agente actual</dt><dd>{{ valor(captacionSeleccionada()?.agenteNombre) }}</dd>

@@ -1,5 +1,13 @@
 # Contrato congelado F2 — Prospección + Captación
 
+> **El "congelado" del título es histórico.** El contrato se descongeló el
+> 2026-08-09 (`decision-contrato-v2-descongelado.md`): DTOs, endpoints, estados y
+> errores pueden cambiar con razón funcional y con sus pruebas.
+>
+> Este documento **describe el comportamiento vigente** y se sigue actualizando
+> —no es historia—, pero la autoridad son **las pruebas y OpenAPI**, no este
+> texto. Si discrepan, manda la suite.
+
 > Ingeniería inversa del cable REAL de `ProspeccionesRest.java` y `CaptacionesRest.java`
 > (backend Jakarta) hecha el 2026-07-14, para implementar la vertical F2 en `backend-spring/`.
 > Regla del Strangler: forma, códigos de estado CHAR(1), mensajes y semántica se replican

@@ -1,8 +1,10 @@
 package com.controllocal.web.controlador;
 
+import com.controllocal.service.HallazgoService;
 import com.controllocal.service.IndicadorService;
 import com.controllocal.service.TareaService;
 import com.controllocal.web.dto.DashboardResponse;
+import com.controllocal.web.dto.HallazgoResponse;
 import com.controllocal.web.dto.IndicadoresResponse;
 import com.controllocal.web.dto.TareaResponse;
 import com.controllocal.web.http.PageResponse;
@@ -39,10 +41,13 @@ public class DashboardController {
 
     private final IndicadorService indicadores;
     private final TareaService tareas;
+    private final HallazgoService hallazgos;
 
-    public DashboardController(IndicadorService indicadores, TareaService tareas) {
+    public DashboardController(IndicadorService indicadores, TareaService tareas,
+                               HallazgoService hallazgos) {
         this.indicadores = indicadores;
         this.tareas = tareas;
+        this.hallazgos = hallazgos;
     }
 
     @GetMapping
@@ -55,13 +60,21 @@ public class DashboardController {
 
         if (!actor.esAgente()) {
             return new DashboardResponse(resumen,
-                    new PageResponse<>(List.of(), 0, 1, tamanoValido));
+                    new PageResponse<>(List.of(), 0, 1, tamanoValido), List.of());
         }
         List<TareaResponse> fuente = tareas.bandejaDe(actor).stream()
                 .map(TareaResponse::desde)
                 .toList();
         int hasta = Math.min(tamanoValido, fuente.size());
+
+        // Los hallazgos NO se recortan con `tamano`: ese parametro pagina la
+        // bandeja, y aplicarselo tambien seria hacer que dos colecciones
+        // distintas compartieran un tope pensado para una sola.
+        List<HallazgoResponse> descubiertos = hallazgos.de(actor).stream()
+                .map(HallazgoResponse::desde)
+                .toList();
+
         return new DashboardResponse(resumen, new PageResponse<>(
-                fuente.subList(0, hasta), fuente.size(), 1, tamanoValido));
+                fuente.subList(0, hasta), fuente.size(), 1, tamanoValido), descubiertos);
     }
 }

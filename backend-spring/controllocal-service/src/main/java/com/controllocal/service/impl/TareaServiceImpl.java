@@ -1,7 +1,5 @@
 package com.controllocal.service.impl;
 
-import com.controllocal.domain.comercial.Captacion;
-import com.controllocal.domain.comercial.RequerimientoCliente;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
 import com.controllocal.domain.comercial.Tarea;
 import com.controllocal.domain.comercial.Visita;
@@ -9,10 +7,8 @@ import com.controllocal.persistence.query.CandidatoTarea;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.ReportePropietarioRepository;
-import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.TareaRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
@@ -20,9 +16,6 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.TareaService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.CoincidenciaCartera;
-import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresDePropiedad;
 import com.controllocal.service.soporte.LadoDeLaOperacion;
 import com.controllocal.service.soporte.NaturalezaDelAsunto;
 import com.controllocal.service.soporte.PoliticaComercial;
@@ -39,7 +32,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -53,10 +45,10 @@ import java.util.Set;
  * RC-003). El enriquecimiento ya no necesita el mapa-por-id de la v1 porque la
  * consulta trae el codigo y la fecha de plazo consigo.
  *
- * <p>La unica parte que sigue trabajando en memoria es el <b>disparador 7</b>
- * (coincidencias de cartera): {@code CoincidenciaCartera.evaluar} necesita el
- * requerimiento y la propiedad enteros, y el puntaje no se puede expresar en
- * SQL sin duplicar la regla.
+ * <p>Desde E2.3 <b>todos</b> los disparadores bajan su condicion al WHERE. El
+ * septimo -- coincidencias de cartera, que si trabajaba en memoria porque el
+ * puntaje no se puede expresar en SQL sin duplicar la regla -- se fue entero a
+ * {@code HallazgoService}: una coincidencia no es una tarea.
  */
 @Service
 public class TareaServiceImpl implements TareaService {
@@ -108,19 +100,13 @@ public class TareaServiceImpl implements TareaService {
     private final CaptacionRepository captaciones;
     private final ContratoAlquilerRepository contratos;
     private final ReportePropietarioRepository reportes;
-    private final RequerimientoClienteRepository requerimientos;
-    private final OportunidadComercialRepository oportunidades;
     private final DetalleAgenteRepository agentes;
-    private final LectorPorAutoridad lector;
 
     public TareaServiceImpl(TareaRepository tareas, ProspeccionRepository prospecciones,
                             SolicitudAlquilerRepository solicitudes, VisitaRepository visitas,
                             CaptacionRepository captaciones, ContratoAlquilerRepository contratos,
                             ReportePropietarioRepository reportes,
-                            RequerimientoClienteRepository requerimientos,
-                            OportunidadComercialRepository oportunidades,
-                            DetalleAgenteRepository agentes,
-                            LectorPorAutoridad lector) {
+                            DetalleAgenteRepository agentes) {
         this.tareas = tareas;
         this.prospecciones = prospecciones;
         this.solicitudes = solicitudes;
@@ -128,10 +114,7 @@ public class TareaServiceImpl implements TareaService {
         this.captaciones = captaciones;
         this.contratos = contratos;
         this.reportes = reportes;
-        this.requerimientos = requerimientos;
-        this.oportunidades = oportunidades;
         this.agentes = agentes;
-        this.lector = lector;
     }
 
     @Override
@@ -332,8 +315,15 @@ public class TareaServiceImpl implements TareaService {
         // 6) Reporte periodico al propietario de las captaciones ACTIVAS.
         derivarReportes(org, idAgente, hoy, out);
 
-        // 7) Coincidencias de cartera: proponer una oportunidad prellenada.
-        derivarCoincidencias(org, idAgente, out);
+        // El septimo disparador se fue en E2.3: una coincidencia de cartera NO
+        // es una tarea. Vive en `HallazgoService`, que usa exactamente la misma
+        // evaluacion de `CoincidenciaCartera` y la publica en `hallazgos[]`.
+        //
+        // Mientras estuvo aqui competia por los cinco puestos del foco -- y los
+        // ganaba, porque la politica la trata como ocasion, que lo es. El agente
+        // abria su Inicio y encontraba sugerencias por encima de lo que de
+        // verdad le reclamaba algo. `PoliticaDeOrdenUnicaTest` y
+        // `HallazgoFueraDelFocoTest` impiden que vuelva.
 
         return out;
     }
@@ -368,67 +358,6 @@ public class TareaServiceImpl implements TareaService {
                     Tarea.MEDIA,
                     "Reporta avances al propietario de la captacion " + codigo + ".",
                     vence, desde));
-        }
-    }
-
-    /**
-     * Disparador 7. Por cada requerimiento ACTIVO de un cliente del agente
-     * busca su captacion propia mas compatible —por encima del puntaje que la
-     * politica considera proponible ({@code coincidencia.puntaje-minimo})— que aun no
-     * tenga oportunidad para ese par. Dedup por REQUERIMIENTO, y su "Resolver"
-     * abre la ficha del cliente, que es donde vive el panel de propiedades
-     * compatibles.
-     */
-    private void derivarCoincidencias(long org, long idAgente, List<Derivada> out) {
-        List<Captacion> disponibles = captaciones.activasConLocalDisponible(org, idAgente);
-        if (disponibles.isEmpty()) {
-            return;
-        }
-        List<Long> roles = List.of(idAgente);
-        Set<Long> misClientes = new HashSet<>(oportunidades.idsClienteDelEquipo(org, roles));
-        if (misClientes.isEmpty()) {
-            return;
-        }
-        // Los gobernados de las candidatas, UNA consulta antes de los dos bucles
-        // anidados. `frente` entra en el puntaje (D-E4-3) y su columna espejo
-        // desaparece en el paso 9: leerlo de la entidad daria 0 sin fallar.
-        Map<Long, ValoresDePropiedad> valoresPorPropiedad = lector.deVarias(org,
-                disponibles.stream().map(Captacion::getPropiedad).filter(Objects::nonNull)
-                        .distinct().toList());
-        Set<String> yaPropuesto = new HashSet<>();
-        for (Object[] par : oportunidades.paresClienteCaptacionDelEquipo(org, roles)) {
-            yaPropuesto.add(par[0] + "#" + par[1]);
-        }
-        for (RequerimientoCliente r : requerimientos.listarActivos(org)) {
-            Long idCliente = r.getCliente() != null ? r.getCliente().getId() : null;
-            if (idCliente == null || !misClientes.contains(idCliente)) {
-                continue;
-            }
-            Captacion mejor = null;
-            int mejorPuntaje = 0;
-            for (Captacion c : disponibles) {
-                if (yaPropuesto.contains(idCliente + "#" + c.getId())) {
-                    continue;
-                }
-                Long idPropiedad = c.getPropiedad() == null ? null : c.getPropiedad().getId();
-                int puntaje = CoincidenciaCartera.evaluar(r, c.getPropiedad(),
-                        valoresPorPropiedad.getOrDefault(idPropiedad,
-                                ValoresDePropiedad.vacio())).puntaje();
-                if (PoliticaComercial.valeLaPenaProponer(puntaje) && puntaje > mejorPuntaje) {
-                    mejor = c;
-                    mejorPuntaje = puntaje;
-                }
-            }
-            if (mejor != null) {
-                // Su "Resolver" abre la ficha del CLIENTE —ahi vive el panel de
-                // propiedades compatibles—, no el requerimiento. Por eso esta
-                // derivada trae su ruta puesta y no la deduce del tipo.
-                out.add(new Derivada(Tarea.PROPONER_OPORTUNIDAD, "REQUERIMIENTO", r.getId(),
-                        "REQ-" + r.getId(), Tarea.MEDIA,
-                        "Coincidencia de cartera (" + mejorPuntaje + "%): propon "
-                                + nz(mejor.getCodigoCaptacion()) + " a un cliente interesado.",
-                        null, null, "cliente-detail/" + idCliente));
-            }
         }
     }
 

@@ -10,7 +10,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
-import { DashboardService } from '../../core/api/dashboard.service';
+import { DashboardService, Hallazgo } from '../../core/api/dashboard.service';
 import {
   esPeriodo,
   IndicadorConteo,
@@ -201,6 +201,19 @@ export class Dashboard implements OnInit {
   protected readonly periodo = signal<string>(PERIODO_POR_DEFECTO);
   protected readonly indicadores = signal<IndicadoresResumen | null>(null);
   protected readonly bandeja = signal<Tarea[]>([]);
+
+  /**
+   * Lo que BROX encontro. **Coleccion aparte, no una bandeja filtrada.**
+   *
+   * Una tarea reclama; un hallazgo propone. Mientras compartieron lista, la
+   * coincidencia de cartera competia por los cinco puestos del foco -- y los
+   * ganaba, porque la politica la trata como ocasion, que lo es. El agente
+   * abria su Inicio y encontraba sugerencias donde esperaba obligaciones (E2.3).
+   *
+   * Llega ordenada y con su `porQue` ya redactado: aqui no se puntua ni se
+   * recomienda nada.
+   */
+  protected readonly hallazgos = signal<Hallazgo[]>([]);
   protected readonly totalBandeja = signal(0);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -267,6 +280,7 @@ export class Dashboard implements OnInit {
       this.indicadores.set(carga.indicadores);
       this.bandeja.set(carga.bandeja.items ?? []);
       this.totalBandeja.set(carga.bandeja.totalRecords ?? 0);
+      this.hallazgos.set(carga.hallazgos ?? []);
     } catch (fallo) {
       this.indicadores.set(null);
       this.error.set(

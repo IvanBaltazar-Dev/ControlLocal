@@ -6,6 +6,36 @@ import { IndicadoresResumen } from './indicadores.service';
 import { Tarea } from './tareas.service';
 
 /**
+ * Un descubrimiento de BROX: algo que vale la pena mirar.
+ *
+ * NO es una tarea. Una tarea dice «hay algo que debes resolver»; esto dice
+ * «encontré algo». Una coincidencia de cartera puede ser muy valiosa sin ser
+ * una obligación, y por eso viaja en su propia colección: mientras compartió
+ * lista con la bandeja, le ganaba el puesto a lo que de verdad reclamaba una
+ * acción (E2.3).
+ *
+ * `porQue` llega REDACTADO por el dominio. No se compone aquí: si esta pantalla
+ * escribiera su versión, KAIROS tendría que escribir la suya para decir lo mismo
+ * por WhatsApp, y las dos empezarían a divergir.
+ */
+export interface Hallazgo {
+  /** Identidad estable entre recargas: la misma coincidencia, el mismo id. */
+  id: string;
+  tipo: string;
+  titulo: string;
+  /** Por qué vale la pena mirarlo, ya escrito. */
+  porQue: string;
+  puntaje: number;
+  cumple: string[];
+  noCumple: string[];
+  /** Ruta real del SPA donde se actúa. */
+  destino: string;
+  idCliente: number | null;
+  idCaptacion: number | null;
+  codigoCaptacion: string | null;
+}
+
+/**
  * Contrato CONGELADO E4: la home en **una sola llamada**. Compone el
  * `/indicadores/resumen` del mismo periodo con la primera página de la bandeja,
  * sin lógica propia.
@@ -32,6 +62,8 @@ import { Tarea } from './tareas.service';
 export interface DashboardCarga {
   indicadores: IndicadoresResumen;
   bandeja: PageResponse<Tarea>;
+  /** Lo que BROX encontro. Coleccion aparte, no una bandeja filtrada (E2.3). */
+  hallazgos: Hallazgo[];
 }
 
 @Injectable({ providedIn: 'root' })

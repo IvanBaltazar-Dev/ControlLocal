@@ -392,3 +392,90 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------------------------------------------------------------------
+   LO QUE BROX ENCONTRÓ
+
+   Separada de la bandeja también en lo visual: la bandeja reclama y esto
+   propone. Sin numeración (no compite por un puesto), sin semáforo (no hay
+   nada vencido) y con el canto verde que D-E2-1 §? reserva para las buenas
+   noticias.
+   --------------------------------------------------------------------- */
+.hallazgos {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--cl-borde, #e5e7eb);
+}
+
+.hallazgos h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cl-tinta-2, #4b5563);
+}
+
+.hallazgos h3 .cuenta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  background: var(--cl-verde-suave, #dcfce7);
+  color: var(--cl-verde-tinta, #166534);
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+}
+
+.hallazgos .cl-sub {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--cl-tinta-3, #6b7280);
+}
+
+.hallazgos ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.hallazgos a {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--cl-borde, #e5e7eb);
+  border-left: 3px solid var(--cl-verde, #16a34a);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 120ms ease;
+}
+
+.hallazgos a:hover,
+.hallazgos a:focus-visible {
+  background: var(--cl-fondo-2, #f9fafb);
+}
+
+.hallazgos .titulo {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--cl-tinta, #111827);
+}
+
+.hallazgos .porque {
+  font-size: 0.8125rem;
+  color: var(--cl-tinta-2, #4b5563);
+}
+
+.hallazgos .origen {
+  font-size: 0.75rem;
+  color: var(--cl-tinta-3, #6b7280);
+}

@@ -156,6 +156,10 @@ function carga(parcial: Partial<DashboardCarga> = {}): DashboardCarga {
   return {
     indicadores: INDICADORES,
     bandeja: { items: [TAREA], totalRecords: 3, page: 1, pageSize: 5 },
+    // Sin hallazgos por defecto: lo que estos tests blindan es la bandeja, y
+    // un hallazgo NO es una tarea (E2.3). Quien pruebe la superficie de
+    // hallazgos la pasa por `parcial`.
+    hallazgos: [],
     ...parcial,
   };
 }

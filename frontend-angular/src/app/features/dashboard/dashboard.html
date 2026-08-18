@@ -157,6 +157,41 @@
               </button>
             }
           }
+
+          <!--
+            LO QUE BROX ENCONTRO — superficie propia, fuera de la bandeja.
+
+            Va DESPUES y separada a proposito. Una tarea dice "hay algo que debes
+            resolver"; un hallazgo dice "encontre algo que vale la pena mirar", y
+            mezclarlos hacia que una coincidencia de cartera desplazara a una
+            solicitud pendiente de los cinco puestos del foco (E2.3).
+
+            Ni puntaje ni recomendacion se componen aqui: `porQue` llega escrito
+            desde el dominio.
+          -->
+          @if (hallazgos().length > 0) {
+            <section class="hallazgos">
+              <h3>
+                Lo que BROX encontró
+                <span class="cuenta">{{ hallazgos().length }}</span>
+              </h3>
+              <p class="cl-sub">No te reclaman nada; están aquí por si valen la pena.</p>
+
+              <ul>
+                @for (hallazgo of hallazgos(); track hallazgo.id) {
+                  <li>
+                    <a [routerLink]="['/' + hallazgo.destino]">
+                      <span class="titulo">{{ hallazgo.titulo }}</span>
+                      <span class="porque">{{ hallazgo.porQue }}</span>
+                      @if (hallazgo.codigoCaptacion) {
+                        <span class="origen">{{ hallazgo.codigoCaptacion }}</span>
+                      }
+                    </a>
+                  </li>
+                }
+              </ul>
+            </section>
+          }
         } @else if (focos().length === 0) {
           <p class="cl-vacio">
             Nada pendiente por ahora: no hay solicitudes ni captaciones esperando tu revisión, ni

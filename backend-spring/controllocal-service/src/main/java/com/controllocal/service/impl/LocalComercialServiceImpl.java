@@ -181,7 +181,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
 
         return new Pagina<>(filas.stream()
                 .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
-                        gobernados.getOrDefault(p.getId(), ValoresDePropiedad.vacio())))
+                        LectorPorAutoridad.de(gobernados, p.getId())))
                 .toList(), total);
     }
 
@@ -410,7 +410,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         List<FichaLocal> items = pagina.stream()
                 .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
                         nombrePropietario(p),
-                        valores.getOrDefault(p.getId(), ValoresDePropiedad.vacio())))
+                        LectorPorAutoridad.de(valores, p.getId())))
                 .toList();
         return new Pagina<>(items, pagina.getTotalElements());
     }

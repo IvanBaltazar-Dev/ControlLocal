@@ -95,7 +95,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
                     continue;
                 }
                 ValoresDePropiedad suyos =
-                        valores.getOrDefault(propiedad.getId(), ValoresDePropiedad.vacio());
+                        LectorPorAutoridad.de(valores, propiedad.getId());
                 Evaluacion mejor = null;
                 for (RequerimientoCliente r : activos) {
                     Evaluacion e = CoincidenciaCartera.evaluar(r, propiedad, suyos);

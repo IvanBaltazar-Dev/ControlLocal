@@ -11,10 +11,8 @@ import com.controllocal.persistence.query.CandidatoTarea;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
-import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.ReportePropietarioRepository;
-import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.TareaRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
@@ -22,7 +20,6 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.TareaService.FichaTarea;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
-import com.controllocal.service.soporte.LectorPorAutoridad;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -81,14 +78,10 @@ class TareaServiceImplTest {
     private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
     private final ContratoAlquilerRepository contratos = mock(ContratoAlquilerRepository.class);
     private final ReportePropietarioRepository reportes = mock(ReportePropietarioRepository.class);
-    private final RequerimientoClienteRepository requerimientos = mock(RequerimientoClienteRepository.class);
-    private final OportunidadComercialRepository oportunidades = mock(OportunidadComercialRepository.class);
     private final DetalleAgenteRepository agentes = mock(DetalleAgenteRepository.class);
-    private final LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
 
     private final TareaServiceImpl service = new TareaServiceImpl(tareas, prospecciones, solicitudes,
-            visitas, captaciones, contratos, reportes, requerimientos, oportunidades, agentes,
-            lector);
+            visitas, captaciones, contratos, reportes, agentes);
 
     private final Actor agente = new Actor(ORG, 3L, ROL_AGENTE, "AGENTE");
     private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");

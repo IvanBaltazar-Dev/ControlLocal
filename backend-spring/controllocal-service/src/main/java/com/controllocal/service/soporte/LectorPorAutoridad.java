@@ -115,6 +115,22 @@ public class LectorPorAutoridad {
         return resultado;
     }
 
+    /**
+     * Los valores de una propiedad dentro de un lote ya hidratado, tolerando
+     * un id nulo.
+     *
+     * <p>Existe porque { Map.of()} -- lo que devuelve { #deVarias}
+     * cuando no hay nada que hidratar -- <b>lanza NPE al preguntarle por una
+     * clave nula</b>, incluso desde { getOrDefault}. Un
+     * { getOrDefault(idPropiedad, vacio())} escrito a mano parece seguro y
+     * revienta justo en el caso menos probado: cartera sin atributos y una
+     * captacion sin propiedad.
+     */
+    public static ValoresDePropiedad de(Map<Long, ValoresDePropiedad> lote, Long idPropiedad) {
+        ValoresDePropiedad valores = idPropiedad == null ? null : lote.get(idPropiedad);
+        return valores == null ? ValoresDePropiedad.vacio() : valores;
+    }
+
     // ------------------------------------------------------------------
 
     private Map<Long, List<AtributoPropiedad>> agrupar(Collection<Long> ids) {

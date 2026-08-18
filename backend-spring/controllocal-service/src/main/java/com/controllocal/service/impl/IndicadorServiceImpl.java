@@ -308,13 +308,22 @@ public class IndicadorServiceImpl implements IndicadorService {
      */
     private static List<IndicadorService.Senal> senales(Map<Concepto, Integer> valores) {
         return Arrays.stream(Concepto.values())
-                .sorted(Comparator.comparingInt(Concepto::prioridad))
                 .map(concepto -> {
                     int valor = valores.getOrDefault(concepto, 0);
                     NivelAtencion nivel = PoliticaComercial.clasificar(concepto, valor);
                     return new IndicadorService.Senal(concepto.name(), valor, nivel.name(),
                             PoliticaComercial.requiereAtencion(nivel), concepto.prioridad());
                 })
+                // A igual prioridad, primero lo que tiene mas casos detras.
+                //
+                // Este desempate vivia en el SPA, dentro de un `.sort()` que
+                // ademas reordenaba por prioridad: una segunda politica de
+                // despacho en el cliente. Se muda aqui para no perder el
+                // comportamiento al retirarlo de alli (E2.2), porque entre dos
+                // avisos igual de urgentes el que afecta a mas casos es el que
+                // merece mirarse primero.
+                .sorted(Comparator.comparingInt(IndicadorService.Senal::prioridad)
+                        .thenComparing(IndicadorService.Senal::valor, Comparator.reverseOrder()))
                 .toList();
     }
 

@@ -333,9 +333,22 @@ class TareaServiceImplTest {
 
         assertEquals(40, bandeja.size(), "ninguna se descarta");
         assertEquals(40, tabla.size(), "y siguen siendo las mismas que se crearon");
-        // El orden por prioridad no cambia: la mas rezagada sigue primera, que
-        // es lo que hacia util el corte y ahora se conserva sin mentir.
-        assertEquals(40L, bandeja.get(0).entidadId());
+        // El orden ya NO lo decide "la mas rezagada primero".
+        //
+        // Antes ganaba la de 48 dias sin accion, simplemente por ser la mas
+        // vieja. La politica de despacho (E2.2) topa la antiguedad en 12 dias a
+        // proposito: pasado el tope, esperar mas no suma, porque si no lo mas
+        // viejo copa el foco para siempre y nada nuevo entra nunca.
+        //
+        // Aqui las 40 estan vencidas y 37 de ellas superan el tope, asi que
+        // empatan a peso. Con empate manda el criterio 6 -- estabilidad -- y sin
+        // orden previo desempata el id, que es determinista: gana la primera que
+        // se creo de entre las empatadas (i = 4, la primera con 12 dias).
+        assertEquals(4L, bandeja.get(0).entidadId(),
+                "con la antiguedad topada, la mas vieja deja de ganar por serlo");
+        assertEquals(bandeja.stream().map(FichaTarea::entidadId).toList(),
+                service.bandejaDe(agente).stream().map(FichaTarea::entidadId).toList(),
+                "y dos llamadas seguidas con los mismos datos devuelven el mismo orden");
     }
 
     // ------------------------------------------------------------------

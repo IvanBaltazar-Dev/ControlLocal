@@ -24,15 +24,34 @@ public interface TareaService {
      * Espejo de TareaResponse. Los cuatro ultimos campos <b>no estan en la
      * tabla</b>: se derivan al leer (§5.3).
      */
+    /**
+     * Un asunto de la bandeja.
+     *
+     * <p>{@code dependeDeMi}, {@code lado} y {@code paso} son <b>derivados</b>, no
+     * columnas: salen del tipo del asunto y del tipo de su entidad, que ya estan
+     * guardados. Existen para que el cliente no tenga que deducirlos -- que es
+     * como Angular acabo con su propia tabla de urgencia y su propio orden.
+     *
+     * <p>{@code prioridad} sigue viajando porque el filtro de la bandeja la usa,
+     * pero <b>ya no ordena</b>: el orden lo decide {@code PoliticaDeDespacho} con
+     * sus seis criterios, y la lista llega ordenada.
+     */
     record FichaTarea(Long id, String tipo, String entidadTipo, Long entidadId, String entidadCodigo,
                       String rutaResolver, String descripcion, String estado, String prioridad,
                       OffsetDateTime fechaProgramada, Integer diasSinAccion,
-                      LocalDate fechaVencimiento) {
+                      LocalDate fechaVencimiento,
+                      boolean dependeDeMi, String lado, String paso) {
     }
 
     /**
-     * Reconcilia y devuelve la bandeja: prioridad ALTA primero, luego lo que
-     * lleva mas dias sin atencion. <b>Sin tope</b> — el corte en 10 con
+     * Reconcilia y devuelve la bandeja <b>en el orden definitivo</b>, el que
+     * decide {@code PoliticaDeDespacho} con los seis criterios de D-E2-1 seccion 3.
+     * Quien la pinta no reordena: consume el orden.
+     *
+     * <p>Lo accionable va primero; lo que espera a otro va detras, tambien
+     * ordenado, porque la cola completa se lee y merece un orden estable.
+     *
+     * <b>Sin tope</b> — el corte en 10 con
      * descarte en silencio (D-F7-2) se retiro el 2026-08-08 al descongelar el
      * contrato, asi que esto puede devolver 30 o 50 fichas y quien las pinte
      * tiene que aguantarlas.

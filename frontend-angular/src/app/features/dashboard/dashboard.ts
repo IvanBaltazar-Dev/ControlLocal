@@ -48,6 +48,9 @@ interface Senal {
   pie: string;
 }
 
+/** Cuantos focos caben en el centro de control. Es layout, no politica. */
+const MAXIMO_FOCOS = 5;
+
 /** Un foco del centro de control de quien supervisa (no tiene bandeja). */
 interface Foco {
   concepto: ConceptoSenal;
@@ -669,60 +672,99 @@ export class Dashboard implements OnInit {
     if (!i || this.esAgente()) {
       return [];
     }
-    const candidatos: Foco[] = this.esAdmin()
-      ? [
-          this.foco('RECONTACTO_VENCIDO', {
-            titulo: 'Prospectos sin contactar a tiempo',
-            descripcion: 'En toda la corredora, ya se pasaron de fecha',
-            ruta: '/prospecciones',
-          }),
-          this.foco('SOLICITUD_APROBADA_SIN_CIERRE', {
-            titulo: 'Aprobadas sin contrato',
-            descripcion: 'Ya se aprobaron y todavía nadie firma',
-            ruta: '/solicitudes',
-          }),
-          this.foco('CIERRE_REGISTRADO', {
-            titulo: 'Alquileres firmados',
-            descripcion: 'Contratos cerrados y su comisión',
-            ruta: '/propiedades-alquiladas',
-          }),
-          this.foco('COBERTURA_DE_AGENTES', {
-            titulo: 'Agentes en operación',
-            descripcion: 'Quién supervisa a quién',
-            ruta: '/asignaciones',
-          }),
-        ]
-      : [
-          this.foco('SOLICITUD_POR_EVALUAR', {
-            titulo: 'Solicitudes por revisar',
-            descripcion: 'Hay interesados esperando tu respuesta',
-            ruta: '/solicitudes/revisar',
-          }),
-          this.foco('CAPTACION_POR_REVISAR', {
-            titulo: 'Captaciones por revisar',
-            descripcion: 'No se pueden ofrecer hasta que las apruebes',
-            ruta: '/captaciones/pendientes',
-          }),
-          this.foco('SOLICITUD_APROBADA_SIN_CIERRE', {
-            titulo: 'Aprobadas sin contrato',
-            descripcion: 'Falta firmar; la comisión todavía no se gana',
-            ruta: '/solicitudes',
-          }),
-          this.foco('RECONTACTO_VENCIDO', {
-            titulo: 'Prospectos sin contactar a tiempo',
-            descripcion: 'Del equipo; se enfrían si nadie los llama',
-            ruta: '/prospecciones',
-          }),
-          this.foco('VISITA_PENDIENTE', {
-            titulo: 'Visitas pendientes',
-            descripcion: 'Por hacer, o hechas y sin registrar el resultado',
-            ruta: '/visitas',
-          }),
-        ];
-    return candidatos
-      .filter((foco) => foco.valor > 0)
-      .sort((a, b) => a.prioridad - b.prioridad || b.valor - a.valor)
-      .slice(0, 5);
+
+    // Lo que SIGUE siendo de la pantalla: qué focos enseña cada rol, cómo se
+    // rotulan y a dónde llevan. Eso es presentación y navegación, y no tiene
+    // dueño en el dominio.
+    const presentacion: ReadonlyMap<ConceptoSenal, Pick<Foco, 'titulo' | 'descripcion' | 'ruta'>> =
+      this.esAdmin()
+        ? new Map([
+            [
+              'RECONTACTO_VENCIDO' as ConceptoSenal,
+              {
+                titulo: 'Prospectos sin contactar a tiempo',
+                descripcion: 'En toda la corredora, ya se pasaron de fecha',
+                ruta: '/prospecciones',
+              },
+            ],
+            [
+              'SOLICITUD_APROBADA_SIN_CIERRE' as ConceptoSenal,
+              {
+                titulo: 'Aprobadas sin contrato',
+                descripcion: 'Ya se aprobaron y todavía nadie firma',
+                ruta: '/solicitudes',
+              },
+            ],
+            [
+              'CIERRE_REGISTRADO' as ConceptoSenal,
+              {
+                titulo: 'Alquileres firmados',
+                descripcion: 'Contratos cerrados y su comisión',
+                ruta: '/propiedades-alquiladas',
+              },
+            ],
+            [
+              'COBERTURA_DE_AGENTES' as ConceptoSenal,
+              {
+                titulo: 'Agentes en operación',
+                descripcion: 'Quién supervisa a quién',
+                ruta: '/asignaciones',
+              },
+            ],
+          ])
+        : new Map([
+            [
+              'SOLICITUD_POR_EVALUAR' as ConceptoSenal,
+              {
+                titulo: 'Solicitudes por revisar',
+                descripcion: 'Hay interesados esperando tu respuesta',
+                ruta: '/solicitudes/revisar',
+              },
+            ],
+            [
+              'CAPTACION_POR_REVISAR' as ConceptoSenal,
+              {
+                titulo: 'Captaciones por revisar',
+                descripcion: 'No se pueden ofrecer hasta que las apruebes',
+                ruta: '/captaciones/pendientes',
+              },
+            ],
+            [
+              'SOLICITUD_APROBADA_SIN_CIERRE' as ConceptoSenal,
+              {
+                titulo: 'Aprobadas sin contrato',
+                descripcion: 'Falta firmar; la comisión todavía no se gana',
+                ruta: '/solicitudes',
+              },
+            ],
+            [
+              'RECONTACTO_VENCIDO' as ConceptoSenal,
+              {
+                titulo: 'Prospectos sin contactar a tiempo',
+                descripcion: 'Del equipo; se enfrían si nadie los llama',
+                ruta: '/prospecciones',
+              },
+            ],
+            [
+              'VISITA_PENDIENTE' as ConceptoSenal,
+              {
+                titulo: 'Visitas pendientes',
+                descripcion: 'Por hacer, o hechas y sin registrar el resultado',
+                ruta: '/visitas',
+              },
+            ],
+          ]);
+
+    // Y el ORDEN se recorre, no se calcula: `senales[]` llega en el orden que
+    // decide la política del dominio, y su contrato dice que la pantalla filtra
+    // pero «no reclasifica ni reordena». Aquí había un
+    // `.sort((a, b) => a.prioridad - b.prioridad || b.valor - a.valor)` que lo
+    // incumplía: una segunda política de despacho, en el cliente, que podía
+    // discrepar del backend sin que nadie lo notara (E2.2).
+    return i.senales
+      .filter((senal) => presentacion.has(senal.concepto as ConceptoSenal) && senal.valor > 0)
+      .slice(0, MAXIMO_FOCOS)
+      .map((senal) => this.foco(senal.concepto as ConceptoSenal, presentacion.get(senal.concepto as ConceptoSenal)!));
   });
 
   /** Compone un foco con el rótulo y la ruta de la pantalla, y el resto del dominio. */

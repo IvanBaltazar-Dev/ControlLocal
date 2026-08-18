@@ -23,7 +23,10 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.CoincidenciaCartera;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.LadoDeLaOperacion;
+import com.controllocal.service.soporte.NaturalezaDelAsunto;
 import com.controllocal.service.soporte.PoliticaComercial;
+import com.controllocal.service.soporte.PoliticaDeDespacho;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,15 +81,25 @@ public class TareaServiceImpl implements TareaService {
             "PROSPECCION", "SOLICITUD_ALQUILER", "CONTRATO_ALQUILER",
             "VISITA", "CAPTACION", "REQUERIMIENTO");
 
-    /** ALTA antes que MEDIA y BAJA; a igual prioridad, lo mas rezagado primero. */
-    private static final Comparator<FichaTarea> ORDEN_BANDEJA = Comparator
-            .comparingInt((FichaTarea t) -> switch (t.prioridad()) {
-                case Tarea.ALTA -> 0;
-                case Tarea.MEDIA -> 1;
-                default -> 2;
-            })
-            .thenComparing(t -> t.diasSinAccion() == null ? 0 : t.diasSinAccion(),
-                    Comparator.reverseOrder());
+    /**
+     * <b>El orden ya no se decide aqui.</b>
+     *
+     * <p>Aqui vivia `ALTA antes que MEDIA, y a igual prioridad lo mas rezagado
+     * primero`: dos criterios, mientras la pantalla aplicaba los suyos y el
+     * diseno declaraba seis. Tres opiniones sobre lo mismo.
+     *
+     * <p>Ahora la unica es {@link PoliticaDeDespacho}, y este servicio solo le
+     * dice los HECHOS de cada asunto.
+     */
+    private static PoliticaDeDespacho.Asunto comoAsunto(FichaTarea t, LocalDate hoy) {
+        return new PoliticaDeDespacho.Asunto(
+                t.id() == null ? 0L : t.id(),
+                t.dependeDeMi(),
+                PoliticaDeDespacho.margenHasta(t.fechaVencimiento(), hoy),
+                NaturalezaDelAsunto.esOcasion(t.tipo()),
+                NaturalezaDelAsunto.desbloquea(t.tipo()),
+                t.diasSinAccion() == null ? 0 : t.diasSinAccion());
+    }
 
     private final TareaRepository tareas;
     private final ProspeccionRepository prospecciones;
@@ -167,11 +180,15 @@ public class TareaServiceImpl implements TareaService {
         }
 
         LocalDate hoy = LocalDate.now();
-        return tareas.porAgente(org, idAgente).stream()
+        List<FichaTarea> abiertas = tareas.porAgente(org, idAgente).stream()
                 .filter(Tarea::estaAbierta)
                 .map(t -> ficha(t, derivadaPorClave.get(t.claveEntidad()), hoy))
-                .sorted(ORDEN_BANDEJA)
                 .toList();
+
+        // El orden lo decide la politica, y solo ella. Sin orden previo en esta
+        // llamada el criterio 6 desempata por id, que es determinista: dos
+        // peticiones seguidas con los mismos datos devuelven lo mismo.
+        return PoliticaDeDespacho.despachar(abiertas, t -> comoAsunto(t, hoy), List.of());
     }
 
     @Override
@@ -451,10 +468,19 @@ public class TareaServiceImpl implements TareaService {
         String ruta = d != null && d.rutaExplicita() != null
                 ? d.rutaExplicita()
                 : ruta(t.getEntidadTipo(), t.getEntidadId(), codigo);
+        // Los tres derivados de E2.2. Salen del tipo del asunto y del tipo de su
+        // entidad: ninguno es columna, y por eso una tarea vieja los responde
+        // igual que una recien creada.
+        LadoDeLaOperacion.Ubicacion ubicacion = LadoDeLaOperacion.de(t.getEntidadTipo());
+        boolean dependeDeMi = NaturalezaDelAsunto.dependeDelAgente(t.getTipo(), t.getEntidadTipo());
+
         return new FichaTarea(t.getId(), t.getTipo(), t.getEntidadTipo(), t.getEntidadId(),
                 codigo, ruta, t.getDescripcion(),
                 t.getEstado(), t.getPrioridad(), t.getFechaProgramada(), dias(base, hoy),
-                d != null ? d.fechaVencimiento() : null);
+                d != null ? d.fechaVencimiento() : null,
+                dependeDeMi,
+                ubicacion == null ? null : ubicacion.lado().name(),
+                ubicacion == null ? null : ubicacion.paso());
     }
 
     /**

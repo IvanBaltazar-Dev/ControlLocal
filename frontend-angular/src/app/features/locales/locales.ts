@@ -36,8 +36,9 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const ESTADOS_VALIDOS = new Set(['D', 'N', 'I']);
 const RESUMEN_VACIO: ResumenLocales = {
   total: 0,
@@ -183,7 +184,7 @@ export class Locales implements OnInit {
   }
 
   protected nuevo(): void {
-    void this.router.navigate(['/locales/nuevo']);
+    void this.router.navigate(['/propiedades/nueva']);
   }
 
   /** Alterna entre la cartera de la corredora y los locales de sus captaciones. */
@@ -192,11 +193,11 @@ export class Locales implements OnInit {
   }
 
   protected ver(id: number): void {
-    void this.router.navigate(['/locales', id]);
+    void this.router.navigate(['/propiedades', id]);
   }
 
   protected editar(id: number): void {
-    void this.router.navigate(['/locales', id, 'editar']);
+    void this.router.navigate(['/propiedades', id, 'editar']);
   }
 
   /** El KPI y el select escriben exactamente el mismo `estado` de la URL. */

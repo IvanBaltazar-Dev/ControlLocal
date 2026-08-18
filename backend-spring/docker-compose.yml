@@ -2,7 +2,12 @@
 # Puerto 5433 en el host para no chocar con un PostgreSQL local en 5432.
 services:
   postgres:
-    image: postgres:17-alpine
+    # PostGIS, no postgres a secas: el modelo universal (D-E4-1) guarda la
+    # ubicacion como geography(Point,4326) para poder buscar por cercania y,
+    # mas adelante, por poligono de zona. La imagen esta construida SOBRE
+    # postgres:17-alpine, asi que el volumen de datos existente se monta sin
+    # migracion: mismo major, mismo formato de datadir.
+    image: postgis/postgis:17-3.5-alpine
     container_name: controllocal-postgres-v2
     environment:
       POSTGRES_DB: controllocal_dev

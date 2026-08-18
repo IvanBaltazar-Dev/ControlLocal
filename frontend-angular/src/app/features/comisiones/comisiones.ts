@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse, paginaVacia } from '../../core/api/api.types';
 import { describir, ESTADO_COMISION, ESTADO_CONTRATO } from '../../core/api/codigos';
@@ -25,7 +26,7 @@ import { FiltroSelect } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
 const RESUMEN_VACIO: ResumenCierres = {
   cierres: 0,

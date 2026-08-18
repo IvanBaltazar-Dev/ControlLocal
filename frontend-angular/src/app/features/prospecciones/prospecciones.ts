@@ -23,6 +23,7 @@ import {
   switchMap,
   tap,
 } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import { describir, ESTADO_PROSPECCION } from '../../core/api/codigos';
@@ -43,7 +44,7 @@ import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-se
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const DIAS_RECONTACTO = 7;
 const ESTADOS_VALIDOS = new Set(['GESTION', 'P', 'C', 'R', 'S', 'T', 'D']);
 
@@ -188,12 +189,12 @@ export class Prospecciones implements OnInit {
 
   protected nueva(): void {
     // El alta del local crea su prospección inicial en el backend.
-    void this.router.navigate(['/locales/nuevo']);
+    void this.router.navigate(['/propiedades/nueva']);
   }
 
   protected verLocal(idLocal: number | undefined): void {
     if (idLocal) {
-      void this.router.navigate(['/locales', idLocal]);
+      void this.router.navigate(['/propiedades', idLocal]);
     }
   }
 

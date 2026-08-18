@@ -248,6 +248,18 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         condicion.setMonedaComision(condicion.getMonedaReferencia());
         condicion.setTratamientoIgv(CondicionEconomicaCaptacion.IGV_NO_APLICA);
         captacion.setCondicionEconomica(condicion);
+        // La operacion del encargo se toma de SU condicion economica, que es
+        // quien acaba de declararla tres lineas mas arriba. Escribirla dos veces
+        // seria dos sitios que pueden divergir, y el trigger
+        // `tg_captacion_operacion_coherente` (V50) existe justamente porque
+        // divergen: rechaza un encargo cuya operacion no coincide con la de su
+        // condicion.
+        //
+        // Este camino —captar desde una prospeccion— es el NORMAL, y dependia
+        // del defecto `= "A"` de la entidad para rellenar `motivo_operacion`.
+        // Al retirarlo (D-E4-1) dejo de escribirse y la columna es NOT NULL:
+        // captar desde una prospeccion fallaba entero. Lo encontro `f4-solicitud`.
+        captacion.setMotivoOperacion(condicion.getTipoOperacion());
         transiciones.iniciar(captacion, Captacion.PENDIENTE_REVISION);
         captaciones.save(captacion);
 

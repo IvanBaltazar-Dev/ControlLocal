@@ -1,6 +1,7 @@
 package com.controllocal.service.soporte;
 
 import com.controllocal.domain.comercial.RequerimientoCliente;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.DetalleLocalComercial;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.Propiedad;
@@ -44,8 +45,19 @@ public final class CoincidenciaCartera {
 
     private static final Criterio NA = new Criterio(Resultado.NO_APLICA, "");
 
-    /** Evalua un requerimiento contra una propiedad; null-safe (dato faltante = criterio no aplicable). */
-    public static Evaluacion evaluar(RequerimientoCliente r, Propiedad propiedad) {
+    /**
+     * Evalua un requerimiento contra una propiedad; null-safe (dato faltante =
+     * criterio no aplicable).
+     *
+     * <p><b>{@code valores} no es opcional aunque el parametro admita vacio.</b>
+     * `frente` es un atributo gobernado (D-E4-3) y su columna espejo desaparece
+     * en el paso 9. Pasar {@link ValoresDePropiedad#vacio()} no rompe nada
+     * visible: simplemente convierte el criterio del frente en NO APLICA, y con
+     * ello altera el puntaje sin avisar. Ese es el fallo silencioso que este
+     * parametro obliga a resolver en cada llamada.
+     */
+    public static Evaluacion evaluar(RequerimientoCliente r, Propiedad propiedad,
+                                     ValoresDePropiedad valores) {
         if (r == null || propiedad == null) {
             return new Evaluacion(0, List.of(), List.of());
         }
@@ -55,7 +67,7 @@ public final class CoincidenciaCartera {
                 evalTipo(r, propiedad),
                 evalRenta(r, propiedad),
                 evalArea(r, propiedad),
-                evalFrente(r, propiedad));
+                evalFrente(r, valores));
         List<String> cumple = new ArrayList<>();
         List<String> noCumple = new ArrayList<>();
         int aplicables = 0;
@@ -158,9 +170,10 @@ public final class CoincidenciaCartera {
                 : new Criterio(Resultado.NO_CUMPLE, "Area " + plain(m) + " m2 fuera de rango (" + rango + ")");
     }
 
-    private static Criterio evalFrente(RequerimientoCliente r, Propiedad propiedad) {
+    /** El frente sale de su autoridad, no de la columna espejo (D-E4-3). */
+    private static Criterio evalFrente(RequerimientoCliente r, ValoresDePropiedad valores) {
         BigDecimal fmin = r.getFrenteMinimo();
-        BigDecimal f = propiedad.getFrente();
+        BigDecimal f = valores.decimal(CatalogoAtributo.CLAVE_FRENTE);
         if (fmin == null || f == null) {
             return NA;
         }

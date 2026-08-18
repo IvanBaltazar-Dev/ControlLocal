@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { PageResponse, paginaVacia } from '../../core/api/api.types';
 import { ResumenVisitas, Visita, VisitasService } from '../../core/api/visitas.service';
@@ -74,7 +75,7 @@ describe('Visitas', () => {
 
     expect(api.pagina$).toHaveBeenCalledWith({
       pagina: 2,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       estado: 'P',
       distrito: 'Miraflores',
       query: 'larco',

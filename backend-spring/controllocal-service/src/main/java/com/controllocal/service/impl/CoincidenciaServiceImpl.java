@@ -3,6 +3,7 @@ package com.controllocal.service.impl;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.Prospeccion;
 import com.controllocal.domain.comercial.RequerimientoCliente;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.DetalleLocalComercial;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.Propiedad;
@@ -21,6 +22,8 @@ import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.CoincidenciaCartera;
 import com.controllocal.service.soporte.CoincidenciaCartera.Evaluacion;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,17 +58,20 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
     private final DetalleClienteRepository clientes;
     private final OportunidadComercialRepository oportunidades;
     private final Alcances alcances;
+    private final LectorPorAutoridad lector;
 
     public CoincidenciaServiceImpl(CaptacionRepository captaciones, ProspeccionRepository prospecciones,
                                    RequerimientoClienteRepository requerimientos,
                                    DetalleClienteRepository clientes,
-                                   OportunidadComercialRepository oportunidades, Alcances alcances) {
+                                   OportunidadComercialRepository oportunidades, Alcances alcances,
+                                   LectorPorAutoridad lector) {
         this.captaciones = captaciones;
         this.prospecciones = prospecciones;
         this.requerimientos = requerimientos;
         this.clientes = clientes;
         this.oportunidades = oportunidades;
         this.alcances = alcances;
+        this.lector = lector;
     }
 
     @Override
@@ -76,20 +82,29 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
                 requerimientos.listarActivosPorCliente(actor.idOrganizacion(), idCliente);
         List<Coincidencia> items = new ArrayList<>();
         if (!activos.isEmpty()) {
-            for (Captacion captacion : captacionesCandidatas(actor)) {
+            List<Captacion> candidatas = captacionesCandidatas(actor);
+            // Los atributos gobernados de TODA la cartera candidata, en una sola
+            // consulta. Dentro del bucle serian tantas como candidatas: el N+1
+            // que RC-003 quito, reintroducido por la puerta de la autoridad.
+            Map<Long, ValoresDePropiedad> valores = lector.deVarias(actor.idOrganizacion(),
+                    candidatas.stream().map(Captacion::getPropiedad).filter(Objects::nonNull)
+                            .distinct().toList());
+            for (Captacion captacion : candidatas) {
                 Propiedad propiedad = captacion.getPropiedad();
                 if (propiedad == null || !Propiedad.LEGADO_DISPONIBLE.equals(propiedad.estadoLegado())) {
                     continue;
                 }
+                ValoresDePropiedad suyos =
+                        valores.getOrDefault(propiedad.getId(), ValoresDePropiedad.vacio());
                 Evaluacion mejor = null;
                 for (RequerimientoCliente r : activos) {
-                    Evaluacion e = CoincidenciaCartera.evaluar(r, propiedad);
+                    Evaluacion e = CoincidenciaCartera.evaluar(r, propiedad, suyos);
                     if (mejor == null || e.puntaje() > mejor.puntaje()) {
                         mejor = e;
                     }
                 }
                 if (mejor != null && mejor.puntaje() > 0) {
-                    items.add(filaPropiedad(captacion, propiedad, mejor, idCliente));
+                    items.add(filaPropiedad(captacion, propiedad, mejor, idCliente, suyos));
                 }
             }
         }
@@ -131,6 +146,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
             return List.of();
         }
         Set<Long> permitidos = idsClientesDelActor(actor); // null = sin limite (ADMIN)
+        ValoresDePropiedad valores = lector.de(actor.idOrganizacion(), propiedad);
         Map<Long, Evaluacion> mejorPorCliente = new LinkedHashMap<>();
         Map<Long, RequerimientoCliente> reqPorCliente = new LinkedHashMap<>();
 
@@ -143,7 +159,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
             if (permitidos != null && !permitidos.contains(idCliente)) {
                 continue;
             }
-            Evaluacion e = CoincidenciaCartera.evaluar(r, propiedad);
+            Evaluacion e = CoincidenciaCartera.evaluar(r, propiedad, valores);
             if (e.puntaje() <= 0) {
                 continue;
             }
@@ -175,7 +191,8 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
     }
 
     private static Coincidencia filaPropiedad(Captacion captacion, Propiedad propiedad,
-                                              Evaluacion e, long idCliente) {
+                                              Evaluacion e, long idCliente,
+                                              ValoresDePropiedad valores) {
         DetalleLocalComercial detalle = propiedad.getDetalleLocal();
         String proponer = captacion.getId() != null
                 ? "oportunidad-form?clienteId=" + idCliente + "&captacionId=" + captacion.getId()
@@ -189,7 +206,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
                 texto(propiedad.getDistrito()),
                 monto(propiedad.getPrecioReferencial()),
                 medida(propiedad.getMetraje(), "m2"),
-                medida(propiedad.getFrente(), "m de frente"),
+                medida(valores.decimal(CatalogoAtributo.CLAVE_FRENTE), "m de frente"),
                 e.puntaje(), e.cumple(), e.noCumple(),
                 idCliente, captacion.getId(), proponer);
     }

@@ -25,6 +25,7 @@ import {
   PosibleDuplicadoLocal,
 } from '../../core/api/locales.service';
 import {
+  DatosPropietario,
   Propietario,
   PropietariosService,
 } from '../../core/api/propietarios.service';
@@ -37,6 +38,9 @@ import {
 } from './catalogos-local';
 
 const PROPIETARIOS_POR_PAGINA = 50;
+
+/** Mismo criterio que el alta completa: DNI 8, RUC 11. */
+const LARGO_DOCUMENTO: Readonly<Record<string, number>> = { D: 8, R: 11 };
 
 @Component({
   selector: 'app-local-form',
@@ -124,6 +128,28 @@ export class LocalForm implements OnInit {
     aptoLicencia: this.fb.nonNullable.control(''),
   });
 
+  /* ---- Alta en contexto (D-E2-3 §3.1) ----
+     Cuatro campos y ni uno mas. El resto de la ficha se completa despues en
+     el catalogo: aqui el objetivo es no romper el hilo de quien esta
+     registrando el local. */
+  protected readonly altaAbierta = signal(false);
+  protected readonly altaGuardando = signal(false);
+  protected readonly altaError = signal<string | null>(null);
+  protected readonly altaJuridica = signal(false);
+
+  protected readonly formAlta = this.fb.group({
+    tipoPersona: this.fb.nonNullable.control<'N' | 'J'>('N', Validators.required),
+    tipoDocumento: this.fb.nonNullable.control<'D' | 'R' | 'C' | 'P'>('D', Validators.required),
+    numeroDocumento: this.fb.nonNullable.control('', Validators.required),
+    nombre: this.fb.nonNullable.control('', Validators.required),
+    telefono: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{9}$/)]),
+  });
+
+  /** La busqueda no encontro a nadie y hay algo escrito: hay que ofrecerlo. */
+  protected readonly sinCoincidencias = computed(
+    () => this.busquedaPropietario().trim().length > 0 && this.propietariosVisibles().length === 0,
+  );
+
   protected readonly pasoPropietario = signal(false);
   protected readonly pasoUbicacion = signal(false);
   protected readonly pasoCaracteristicas = signal(false);
@@ -151,6 +177,114 @@ export class LocalForm implements OnInit {
     this.busquedaPropietario.set((evento.target as HTMLInputElement).value);
   }
 
+  /**
+   * Abre el alta en contexto con lo que el agente ya escribio en la
+   * busqueda: si tecleo un nombre va al nombre, y si tecleo digitos va al
+   * documento. No se le hace escribirlo dos veces.
+   */
+  protected abrirAlta(): void {
+    const escrito = this.busquedaPropietario().trim();
+    this.formAlta.reset({
+      tipoPersona: 'N',
+      tipoDocumento: 'D',
+      numeroDocumento: /^\d+$/.test(escrito) ? escrito : '',
+      nombre: /^\d+$/.test(escrito) ? '' : escrito,
+      telefono: '',
+    });
+    this.altaJuridica.set(false);
+    this.altaError.set(null);
+    this.altaAbierta.set(true);
+  }
+
+  protected cerrarAlta(): void {
+    this.altaAbierta.set(false);
+    this.altaError.set(null);
+  }
+
+  /** Persona juridica: el documento es RUC y deja de elegirse. */
+  protected cambiarTipoPersona(tipo: 'N' | 'J'): void {
+    this.formAlta.controls.tipoPersona.setValue(tipo);
+    this.altaJuridica.set(tipo === 'J');
+    const documento = this.formAlta.controls.tipoDocumento;
+    if (tipo === 'J') {
+      documento.setValue('R');
+      documento.disable();
+    } else {
+      if (documento.value === 'R') documento.setValue('D');
+      documento.enable();
+    }
+  }
+
+  protected altaInvalido(nombre: keyof typeof this.formAlta.controls): boolean {
+    const control = this.formAlta.controls[nombre];
+    return control.invalid && (control.touched || control.dirty);
+  }
+
+  protected etiquetaDocumentoAlta(): string {
+    return { D: 'DNI', R: 'RUC', C: 'Carné de extranjería', P: 'Pasaporte' }[
+      this.formAlta.controls.tipoDocumento.value
+    ]!;
+  }
+
+  /**
+   * Guarda y **deja el propietario seleccionado**. Si esto no seleccionara,
+   * el agente tendria que volver a buscarlo y el desvio seguiria ahi, solo
+   * que mas corto.
+   */
+  protected async guardarAlta(): Promise<void> {
+    if (this.altaGuardando()) {
+      return;
+    }
+    if (this.formAlta.invalid) {
+      this.formAlta.markAllAsTouched();
+      this.altaError.set('Revisa los campos obligatorios.');
+      return;
+    }
+    const largo = LARGO_DOCUMENTO[this.formAlta.controls.tipoDocumento.value];
+    const numero = this.formAlta.controls.numeroDocumento.value.trim();
+    if (largo && numero.length !== largo) {
+      this.formAlta.controls.numeroDocumento.markAsTouched();
+      this.altaError.set(`El ${this.etiquetaDocumentoAlta()} debe tener ${largo} dígitos.`);
+      return;
+    }
+    /* Duplicado por documento: la misma persona dos veces ensucia la
+       busqueda de toda captacion futura, y el backend no lo impide. */
+    const yaEsta = this.propietarios().find(
+      (propietario) => propietario.numeroDocumento?.trim() === numero,
+    );
+    if (yaEsta) {
+      this.seleccionarPropietario(yaEsta.id);
+      this.busquedaPropietario.set(yaEsta.nombre);
+      this.cerrarAlta();
+      return;
+    }
+
+    this.altaGuardando.set(true);
+    this.altaError.set(null);
+    try {
+      const v = this.formAlta.getRawValue();
+      const datos: DatosPropietario = {
+        tipoPersona: v.tipoPersona,
+        tipoDocumento: v.tipoDocumento,
+        numeroDocumento: numero,
+        nombre: v.nombre.trim(),
+        telefono: v.telefono.trim(),
+      };
+      const creado = await this.propietariosApi.registrar(datos);
+      this.agregarPropietarios([creado]);
+      this.totalPropietarios.update((total) => total + 1);
+      this.seleccionarPropietario(creado.id);
+      this.busquedaPropietario.set(creado.nombre);
+      this.altaAbierta.set(false);
+    } catch (error) {
+      this.altaError.set(
+        error instanceof ApiError ? error.message : 'No se pudo registrar el propietario.',
+      );
+    } finally {
+      this.altaGuardando.set(false);
+    }
+  }
+
   protected cargarMasPropietarios(): void {
     if (!this.cargandoPropietarios() && this.hayMasPropietarios()) {
       void this.cargarPaginaPropietarios(this.paginaPropietarios + 1);
@@ -163,7 +297,7 @@ export class LocalForm implements OnInit {
   }
 
   protected cancelar(): void {
-    void this.router.navigate(['/locales']);
+    void this.router.navigate(['/propiedades']);
   }
 
   protected reintentar(): void {
@@ -203,7 +337,7 @@ export class LocalForm implements OnInit {
       } else {
         await this.locales.registrar(datos);
       }
-      await this.router.navigate(['/locales'], { replaceUrl: true });
+      await this.router.navigate(['/propiedades'], { replaceUrl: true });
     } catch (error) {
       this.errorGuardado.set(
         error instanceof ApiError ? error.message : 'No se pudo guardar el local.',

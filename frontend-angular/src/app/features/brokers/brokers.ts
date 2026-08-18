@@ -10,6 +10,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { catchError, distinctUntilChanged, map, Observable, of, startWith, Subject, switchMap } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import { Broker, BrokersService } from '../../core/api/brokers.service';
@@ -18,7 +19,7 @@ import { texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
 type ResultadoCarga = { pagina: PageResponse<Broker> } | { error: string };
 

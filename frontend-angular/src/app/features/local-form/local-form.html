@@ -79,6 +79,88 @@
                 <p class="sin-resultados">No hay propietarios que coincidan.</p>
               }
             </div>
+
+            <!--
+              D-E2-3 §3.1. Sin esto, un propietario que no está obliga a salir
+              del formulario, crearlo y volver a empezar — y el dato es fresco
+              justo aquí, delante del inmueble.
+            -->
+            @if (sinCoincidencias() && !altaAbierta()) {
+              <button type="button" class="alta-contexto" (click)="abrirAlta()">
+                <span class="mas" aria-hidden="true">+</span>
+                Registrar a «{{ busquedaPropietario().trim() }}» como propietario nuevo
+              </button>
+            }
+
+            @if (altaAbierta()) {
+              <div class="alta-panel" role="group" aria-label="Registrar propietario nuevo">
+                <div class="alta-cab">
+                  <strong>Propietario nuevo</strong>
+                  <button type="button" class="enlace" (click)="cerrarAlta()">Cancelar</button>
+                </div>
+                <p class="ayuda">
+                  Lo mínimo para poder seguir. El resto de la ficha se completa
+                  después en Propietarios.
+                </p>
+
+                <div class="alta-tipo" role="radiogroup" aria-label="Tipo de persona">
+                  <button
+                    type="button"
+                    [class.on]="!altaJuridica()"
+                    [attr.aria-checked]="!altaJuridica()"
+                    role="radio"
+                    (click)="cambiarTipoPersona('N')"
+                  >Persona natural</button>
+                  <button
+                    type="button"
+                    [class.on]="altaJuridica()"
+                    [attr.aria-checked]="altaJuridica()"
+                    role="radio"
+                    (click)="cambiarTipoPersona('J')"
+                  >Persona jurídica</button>
+                </div>
+
+                <div class="alta-campos" [formGroup]="formAlta">
+                  <label class="campo">
+                    <span>{{ altaJuridica() ? 'Razón social' : 'Nombre completo' }} <b>*</b></span>
+                    <input type="text" formControlName="nombre" autocomplete="off" />
+                  </label>
+
+                  <label class="campo">
+                    <span>Documento <b>*</b></span>
+                    <select formControlName="tipoDocumento">
+                      <option value="D">DNI</option>
+                      <option value="R">RUC</option>
+                      <option value="C">Carné de extranjería</option>
+                      <option value="P">Pasaporte</option>
+                    </select>
+                  </label>
+
+                  <label class="campo">
+                    <span>Número de {{ etiquetaDocumentoAlta() }} <b>*</b></span>
+                    <input type="text" formControlName="numeroDocumento" inputmode="numeric" autocomplete="off" />
+                  </label>
+
+                  <label class="campo">
+                    <span>Teléfono <b>*</b></span>
+                    <input type="tel" formControlName="telefono" inputmode="numeric" autocomplete="off" />
+                  </label>
+                </div>
+
+                @if (altaError()) {
+                  <p class="mensaje-error">{{ altaError() }}</p>
+                }
+
+                <button
+                  type="button"
+                  class="boton-primario"
+                  [disabled]="altaGuardando()"
+                  (click)="guardarAlta()"
+                >
+                  {{ altaGuardando() ? 'Registrando…' : 'Registrar y continuar' }}
+                </button>
+              </div>
+            }
             @if (invalido('idPropietario')) {
               <p class="mensaje-error">Selecciona un propietario.</p>
             }

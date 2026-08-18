@@ -11,6 +11,8 @@ import { ApiError } from '../../core/api/api.types';
 import { AvanceComercial, IndicadoresService } from '../../core/api/indicadores.service';
 import { descargarCsv } from '../../core/csv';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { Paginacion } from '../../shared/paginacion/paginacion';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
 /**
@@ -31,8 +33,10 @@ import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
  * - **`interesados` de la cabecera no es la suma de la columna**: son los
  *   clientes **distintos** a nivel global, así que un mismo cliente interesado
  *   en dos propiedades cuenta una vez arriba y dos abajo. No es un descuadre.
- * - **Sin tope de filas.** El backend no pagina esto, así que la tabla puede
- *   ser larga; por eso la exportación recorre exactamente lo que se ve.
+ * - **El backend no pagina esto**: devuelve el avance de toda la cartera de
+ *   una vez, porque las tarjetas de arriba y la exportación necesitan el
+ *   conjunto entero. La tabla se pagina en la VISTA para poder leerla; la
+ *   exportación sigue llevando todas las filas.
  *
  * **No lleva botón "Exportar PDF"**: los cinco endpoints Jasper quedaron fuera
  * del alcance de la migración (D-F5-1) y la impresión se decidirá cuando exista
@@ -41,7 +45,7 @@ import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
  */
 @Component({
   selector: 'app-reportes',
-  imports: [EstadoListado, TarjetaKpi],
+  imports: [EstadoListado, Paginacion, TarjetaKpi],
   templateUrl: './reportes.html',
   styleUrl: './reportes.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -60,6 +64,32 @@ export class Reportes implements OnInit {
   protected readonly sinMovimiento = computed(
     () => this.filas().filter((fila) => fila.oportunidadesTotales === 0).length,
   );
+
+  /**
+   * <b>Aquí la paginación es de la VISTA, no de la consulta</b>, y es la única
+   * pantalla donde eso es lo correcto.
+   *
+   * `GET /indicadores/avance` es un agregado: devuelve el avance de toda la
+   * cartera de una vez porque las tres tarjetas de arriba y el botón de
+   * exportar necesitan el conjunto entero. Pedir páginas al backend obligaría
+   * a recorrerlo entero igualmente para exportar, y a recalcular los
+   * agregados en cada página.
+   *
+   * Lo que sí estaba mal es volcar las 40 filas de golpe: la tabla se leía
+   * como un muro. Se pagina lo que se MUESTRA, con el mismo tamaño que el
+   * resto de BROX, y se exporta todo.
+   */
+  protected readonly porPagina = RESULTADOS_POR_PAGINA;
+  protected readonly pagina = signal(1);
+
+  protected readonly filasVisibles = computed(() => {
+    const desde = (this.pagina() - 1) * this.porPagina;
+    return this.filas().slice(desde, desde + this.porPagina);
+  });
+
+  protected irAPagina(pagina: number): void {
+    this.pagina.set(pagina);
+  }
 
   ngOnInit(): void {
     void this.cargar();
@@ -80,7 +110,7 @@ export class Reportes implements OnInit {
     }
   }
 
-  /** Recorre lo que se ve: la lectura ya viene entera, no hay que paginarla. */
+  /** Exporta TODO, no la página visible: quien descarga quiere el conjunto. */
   protected exportar(): void {
     const nombre = descargarCsv(
       'avance_comercial',

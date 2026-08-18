@@ -17,21 +17,106 @@
     gap: 0.6rem;
     padding: 0.25rem 0.5rem 1rem;
 
-    &-logo {
-      display: grid;
-      place-items: center;
-      width: 2.2rem;
-      height: 2.2rem;
-      border-radius: 9px;
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--cl-acento);
-      font-weight: 800;
-      font-size: 0.9rem;
-    }
+    // La marca es tipográfica, como en el prototipo: el nombre y lo que BROX
+    // dice ser. Sin cuadrito de iniciales — un logo improvisado compite con el
+    // acento y no aporta nada que el nombre no diga.
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
 
     &-nombre {
       font-weight: 700;
-      letter-spacing: 0.01em;
+      font-size: 1.05rem;
+      letter-spacing: 0.08em;
+      color: #fff;
+    }
+
+    &-bajada {
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.45);
+    }
+  }
+
+  // `+ Registrar`: crear, no navegar. Por eso es un botón y está separado del
+  // menú, no una entrada más (D-E3-1 §2.0).
+  .registrar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    margin: 0 0 0.35rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    span {
+      font-size: 1.05rem;
+      line-height: 1;
+      color: var(--cl-acento);
+    }
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+  }
+
+  .registro-fondo {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+  }
+
+  .registro {
+    position: absolute;
+    z-index: 41;
+    left: 0.9rem;
+    right: 0.9rem;
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.5rem;
+    border-radius: 11px;
+    background: #10333f;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+
+    &-titulo {
+      margin: 0.15rem 0.5rem 0.35rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    a {
+      display: grid;
+      gap: 0.05rem;
+      padding: 0.5rem 0.6rem;
+      border-radius: 8px;
+      text-decoration: none;
+      color: inherit;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+    }
+
+    &-que {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    &-para {
+      font-size: 0.76rem;
+      color: rgba(255, 255, 255, 0.5);
     }
   }
 
@@ -95,24 +180,20 @@
   min-width: 0;
 }
 
+/* Sin titulo: el contexto lo da la pagina, no el cascaron. La barra solo
+   sostiene los avisos y la cuenta, asi que su contenido va a la derecha. */
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 0.9rem;
   padding: 0.8rem 1.5rem;
   background: var(--cl-superficie);
   border-bottom: 1px solid var(--cl-borde);
-
-  .titulo {
-    font-weight: 700;
-    color: var(--cl-primario);
-  }
 }
 
-.usuario {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
+.cuenta {
+  position: relative;
 
   .avatar {
     display: grid;
@@ -154,18 +235,86 @@
     }
   }
 
-  .salir {
-    border: 1px solid var(--cl-borde);
+  /* La identidad ES el disparador del menú, así que tiene que parecer
+     pulsable: cambia de fondo al pasar por encima y marca su estado abierto. */
+  .identidad {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.3rem 0.5rem 0.3rem 0.3rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
     background: transparent;
-    border-radius: 8px;
-    padding: 0.4rem 0.8rem;
+    font-family: inherit;
+    color: inherit;
+    text-align: left;
     cursor: pointer;
-    color: var(--cl-tinta-suave);
-    transition: border-color 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
 
-    &:hover {
-      border-color: var(--cl-error);
-      color: var(--cl-error);
+    &:hover,
+    &.abierta {
+      background: var(--cl-fondo);
+      border-color: var(--cl-borde);
+    }
+
+    .chevron {
+      font-size: 0.7rem;
+      color: var(--cl-tinta-suave);
+    }
+  }
+
+  .cuenta-fondo {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+  }
+
+  .cuenta-menu {
+    position: absolute;
+    z-index: 41;
+    top: calc(100% + 0.45rem);
+    right: 0;
+    min-width: 12rem;
+    display: grid;
+    gap: 0.1rem;
+    padding: 0.35rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 11px;
+    background: var(--cl-superficie);
+    box-shadow: 0 12px 28px rgba(12, 43, 58, 0.16);
+
+    a,
+    .salir {
+      display: block;
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border: 0;
+      border-radius: 8px;
+      background: none;
+      font-family: inherit;
+      font-size: 0.9rem;
+      text-align: left;
+      text-decoration: none;
+      color: var(--cl-tinta);
+      cursor: pointer;
+
+      &:hover {
+        background: var(--cl-fondo);
+      }
+    }
+
+    /* Cerrar sesión, separado del resto: no es una pantalla más y pulsarlo
+       por error cuesta volver a entrar. */
+    .salir {
+      margin-top: 0.25rem;
+      padding-top: 0.6rem;
+      border-top: 1px solid var(--cl-borde);
+      border-radius: 0 0 8px 8px;
+      color: var(--cl-tinta-suave);
+
+      &:hover {
+        color: var(--cl-error);
+      }
     }
   }
 }

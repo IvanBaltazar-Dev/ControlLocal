@@ -50,7 +50,7 @@ const ETIQUETAS: Readonly<Record<string, string>> = {
  * `LocalDetail` con "Crear captación").
  */
 const RUTAS_MIGRADAS: Readonly<Record<string, (id: string) => string[]>> = {
-  'local-detail': (id) => ['/locales', id],
+  'local-detail': (id) => ['/propiedades', id],
   'cliente-detail': (id) => ['/clientes', id],
   'prospeccion-detail': (id) => ['/prospecciones', id],
   'captacion-detail': (id) => ['/captaciones', id],

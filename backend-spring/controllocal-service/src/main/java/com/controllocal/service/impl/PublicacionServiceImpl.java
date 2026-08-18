@@ -1,5 +1,6 @@
 package com.controllocal.service.impl;
 
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.domain.inmueble.Publicacion;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
@@ -246,6 +247,11 @@ public class PublicacionServiceImpl implements PublicacionService {
         PrecioPropiedad hito = new PrecioPropiedad();
         hito.setOrganizacionId(publicacion.getOrganizacionId());
         hito.setIdPropiedad(publicacion.getIdPropiedad());
+        // `Publicacion.rentaPublicada` es lo que su nombre dice: una RENTA. La
+        // publicacion de una venta llegara con el encargo de venta y su propio
+        // importe, y entonces esta linea dejara de ser una constante. Mientras
+        // tanto se declara, que es distinto de suponerse.
+        hito.setOperacion(OperacionInmobiliaria.ALQUILER);
         hito.setHito(PrecioPropiedad.HITO_PUBLICADO);
         hito.setMoneda(publicacion.getMoneda());
         hito.setMonto(publicacion.getRentaPublicada());

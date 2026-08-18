@@ -26,12 +26,20 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $raiz = Join-Path $PSScriptRoot '..'
+# Tiene que coincidir con el inventario de GateDeCierreTest: ese test rompe el
+# build si aparece una prueba de integracion nueva y no se declara, y esta lista
+# es la que comprueba que ademas se EJECUTO.
 $integracion = @(
     'BusquedaLocalesIntegrationTest',
     'HistoricoPrecioIntegrationTest',
     'InvariantesComisionIntegrationTest',
+    # D-E4-1: las piezas del nucleo universal (titularidad, atributos, outbox).
+    'NucleoUniversalIntegrationTest',
     'OcupacionInmuebleIntegrationTest',
     'PadronDeGobiernoIntegrationTest',
+    # D-E4-1 / D-E4-2: los escenarios de aceptacion de la propiedad universal y
+    # la captura. Es el unico que COMETE de verdad, en tenants propios.
+    'PropiedadUniversalIntegrationTest',
     'RepositorioEstadosIntegrationTest',
     'SimulacroRecuperacionIntegrationTest',
     'VocabularioPersistidoIntegrationTest'

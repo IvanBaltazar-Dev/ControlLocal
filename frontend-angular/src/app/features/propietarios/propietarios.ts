@@ -19,6 +19,7 @@ import {
   Subject,
   switchMap,
 } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import { describir, TIPO_DOCUMENTO, TIPO_PERSONA } from '../../core/api/codigos';
@@ -35,7 +36,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
 const RESUMEN_VACIO: ResumenPropietarios = { total: 0, activos: 0, inactivos: 0 };
 

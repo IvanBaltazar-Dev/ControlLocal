@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { PageResponse } from '../../core/api/api.types';
 import { Interaccion, InteraccionesService } from '../../core/api/interacciones.service';
@@ -64,7 +65,7 @@ describe('Interacciones', () => {
 
     expect(api.pagina$).toHaveBeenCalledWith({
       pagina: 2,
-      tamano: 20,
+      tamano: RESULTADOS_POR_PAGINA,
       grupo: 'PROPIETARIO',
       canal: 'W',
       resultado: 'DOCS_SOLICITADOS',

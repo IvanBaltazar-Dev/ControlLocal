@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import { Captacion, CaptacionesService, FiltrosCaptacionesPendientes } from '../../core/api/captaciones.service';
@@ -23,7 +24,7 @@ describe('BandejaCaptaciones', () => {
   beforeEach(() => {
     api = jasmine.createSpyObj<CaptacionesService>('CaptacionesService', ['pendientes$']);
     api.pendientes$.and.callFake((f: FiltrosCaptacionesPendientes = {}) => {
-      if (f.tamano === 10) return of(pagina([FILA], 12));
+      if (f.tamano === RESULTADOS_POR_PAGINA) return of(pagina([FILA], 12));
       return of(pagina([], f.estado === 'P' ? 8 : 4, 1));
     });
     personal = jasmine.createSpyObj<PersonalService>('PersonalService', ['agentes$']);
@@ -34,8 +35,8 @@ describe('BandejaCaptaciones', () => {
 
   it('baja búsqueda, estado, agente y página al endpoint de pendientes', async () => {
     await montar({ texto: 'larco', estado: 'o', idAgente: '30', page: '2' });
-    const llamada = api.pendientes$.calls.allArgs().find(([f]) => f?.tamano === 10)![0];
-    expect(llamada).toEqual({ pagina: 2, tamano: 10, estado: 'O', idAgente: 30, q: 'larco' });
+    const llamada = api.pendientes$.calls.allArgs().find(([f]) => f?.tamano === RESULTADOS_POR_PAGINA)![0];
+    expect(llamada).toEqual({ pagina: 2, tamano: RESULTADOS_POR_PAGINA, estado: 'O', idAgente: 30, q: 'larco' });
   });
 
   it('los KPI cuentan P y O fuera de la página visible', async () => {

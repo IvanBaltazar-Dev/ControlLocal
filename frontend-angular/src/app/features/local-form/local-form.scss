@@ -364,3 +364,78 @@ button:disabled {
     flex-direction: column;
   }
 }
+
+
+/* ==========================================================
+   ALTA DE PROPIETARIO EN CONTEXTO (D-E2-3 §3.1)
+   El panel vive DENTRO del paso 1: no es un modal. Un modal taparia el
+   formulario y haria dudar de si lo escrito sigue ahi -- que es justo el
+   miedo que esto viene a quitar.
+   ========================================================== */
+.alta-contexto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--accion-b, #bfdbfe);
+  border-radius: 6px;
+  background: var(--accion-p, #eff6ff);
+  color: var(--accion, #2563eb);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.alta-contexto:hover { border-style: solid; }
+.alta-contexto .mas { font-size: 16px; line-height: 1; }
+
+.alta-panel {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid var(--accion-b, #bfdbfe);
+  border-left: 2px solid var(--accion, #2563eb);
+  border-radius: 6px;
+  background: #fff;
+}
+.alta-panel .alta-cab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.alta-panel .ayuda { margin: 0 0 12px; }
+
+.alta-panel .alta-tipo {
+  display: flex;
+  margin-bottom: 12px;
+  border: 1px solid #e6e7e2;
+  border-radius: 5px;
+  overflow: hidden;
+  width: fit-content;
+}
+.alta-panel .alta-tipo button {
+  padding: 6px 14px;
+  border: 0;
+  background: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6c7681;
+  cursor: pointer;
+}
+.alta-panel .alta-tipo button + button { border-left: 1px solid #e6e7e2; }
+.alta-panel .alta-tipo button.on { background: #fafaf8; color: #14191e; box-shadow: inset 0 -2px 0 var(--accion, #2563eb); }
+
+.alta-panel .alta-campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (max-width: 720px) {
+  .alta-panel .alta-campos { grid-template-columns: 1fr; }
+}

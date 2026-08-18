@@ -23,6 +23,7 @@ import {
   switchMap,
   tap,
 } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import { describir, ESTADO_SOLICITUD, opcionesDe } from '../../core/api/codigos';
@@ -39,7 +40,7 @@ import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-se
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const ESTADOS_VALIDOS = new Set(['G', 'E', 'O', 'A', 'R', 'D', 'C']);
 
 export interface FiltrosSolicitudesUrl {

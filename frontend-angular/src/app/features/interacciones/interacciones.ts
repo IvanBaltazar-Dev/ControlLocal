@@ -22,6 +22,7 @@ import {
   switchMap,
   tap,
 } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import {
@@ -40,7 +41,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 
-const POR_PAGINA = 20;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const GRUPOS_VALIDOS = new Set(['TODAS', 'PROPIETARIO', 'CLIENTE']);
 
 interface Pestana {

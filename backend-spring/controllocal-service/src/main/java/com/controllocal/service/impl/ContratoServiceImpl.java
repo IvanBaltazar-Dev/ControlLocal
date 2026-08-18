@@ -9,6 +9,7 @@ import com.controllocal.domain.comercial.RevisionDisponibilidad;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
 import com.controllocal.domain.comun.EstadosDominio.DisponibilidadComercial;
 import com.controllocal.domain.comun.EstadosDominio.EstadoContrato;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.inmueble.Publicacion;
@@ -773,6 +774,10 @@ public class ContratoServiceImpl implements ContratoService {
         PrecioPropiedad precio = new PrecioPropiedad();
         precio.setOrganizacionId(propiedad.getOrganizacionId());
         precio.setIdPropiedad(propiedad.getId());
+        // Un ContratoAlquiler cierra un alquiler; el cierre de una venta es el
+        // expediente de compraventa (V51), que tiene sus propios hitos. La
+        // operacion se declara, no se hereda de ningun defecto.
+        precio.setOperacion(OperacionInmobiliaria.ALQUILER);
         precio.setHito("C");
         precio.setMoneda(moneda);
         precio.setMonto(renta);

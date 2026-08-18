@@ -27,7 +27,11 @@ import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Transiciones;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -68,9 +72,33 @@ class LocalComercialServiceImplTest {
     private final ProspeccionRepository prospeccionesRepo = mock(ProspeccionRepository.class);
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
 
+    /**
+     * Las dos mitades de D-E4-3. Se mockean y no se stubbean con valores porque
+     * este test blinda los mensajes y el shaping de /locales, no la resolucion
+     * de autoridades: eso lo prueba `AutoridadDelDatoIntegrationTest`, que si
+     * pasa por la base.
+     */
+    private final LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
+    private final AtributosGobernados gobierno = mock(AtributosGobernados.class);
+
     private final LocalComercialServiceImpl service = new LocalComercialServiceImpl(
             propiedades, roles, distritos, fotos, precios, publicaciones, prospecciones,
-            captaciones, prospeccionesRepo, new Transiciones(historial), mock(AlertaService.class));
+            captaciones, prospeccionesRepo, new Transiciones(historial), mock(AlertaService.class),
+            lector, gobierno);
+
+    /**
+     * El lector devuelve "no se sabe nada" en vez de null.
+     *
+     * <p>No es una comodidad del mock: {@link ValoresDePropiedad#vacio()} es un
+     * valor legitimo del dominio -- una propiedad sin ningun gobernado escrito --
+     * y este test comprueba precisamente que ese caso no rompe el mapeo. Stubbearlo
+     * con valores concretos convertiria este test unitario en una prueba del
+     * enrutador, que ya tiene la suya contra PostgreSQL.
+     */
+    @BeforeEach
+    void elLectorNoDevuelveNull() {
+        when(lector.de(anyLong(), any())).thenReturn(ValoresDePropiedad.vacio());
+    }
 
     /** Organizacion de legado: el tenant que el backend resuelve para la sesion (V6). */
     private static final long ORG = 1L;

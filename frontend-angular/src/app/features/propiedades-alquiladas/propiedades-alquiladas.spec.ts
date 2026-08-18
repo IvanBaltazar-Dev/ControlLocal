@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import {
@@ -82,7 +83,7 @@ describe('PropiedadesAlquiladas', () => {
 
     expect(contratos.pagina$).toHaveBeenCalledOnceWith({
       pagina: 2,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       texto: 'larco',
       distrito: 'Miraflores',
       idAgente: 28,

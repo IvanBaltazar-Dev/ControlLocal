@@ -24,6 +24,7 @@ import {
   switchMap,
   tap,
 } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import {
@@ -43,8 +44,8 @@ import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-se
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
-const POR_PAGINA = 8;
-const POR_PAGINA_HISTORIAL = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
+const POR_PAGINA_HISTORIAL = RESULTADOS_POR_PAGINA;
 
 /**
  * Largo mínimo del motivo. **La regla es del backend** —lo rechaza igual si se

@@ -210,11 +210,11 @@ export class LocalDetail implements OnInit {
   }
 
   protected volver(): void {
-    void this.router.navigate(['/locales']);
+    void this.router.navigate(['/propiedades']);
   }
 
   protected editarLocal(): void {
-    void this.router.navigate(['/locales', this.idLocal(), 'editar']);
+    void this.router.navigate(['/propiedades', this.idLocal(), 'editar']);
   }
 
   /**

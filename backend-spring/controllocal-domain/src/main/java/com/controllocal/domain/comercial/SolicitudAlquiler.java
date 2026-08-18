@@ -47,6 +47,11 @@ public class SolicitudAlquiler extends EntidadDeOrganizacion implements Transici
     public static final String RECHAZADA = Codigos.Solicitud.RECHAZADA;
     public static final String DESISTIDA = Codigos.Solicitud.DESISTIDA;
     public static final String CERRADA = Codigos.Solicitud.CERRADA;
+    /** Expediente de alquiler. Es lo unico que la v1 sabia hacer. */
+    public static final String TIPO_ALQUILER = "A";
+    /** Expediente de compraventa (V51): arras, financiacion e hitos registrales. */
+    public static final String TIPO_COMPRAVENTA = "V";
+
     public static final Set<String> ESTADOS = Set.of(REGISTRADA, EN_REVISION,
             OBSERVADA, APROBADA, RECHAZADA, DESISTIDA, CERRADA);
 
@@ -98,6 +103,25 @@ public class SolicitudAlquiler extends EntidadDeOrganizacion implements Transici
 
     @Column(name = "meses_adelanto")
     private Integer mesesAdelanto;
+
+    /**
+     * <b>Que clase de expediente es</b>: {@code A} alquiler, {@code V}
+     * compraventa (D-E4-1 M5, V51).
+     *
+     * <p><b>Se DERIVA de la operacion del encargo</b>, no se elige: un
+     * expediente de compraventa sobre un encargo de alquiler es un dato que
+     * miente, y el trigger {@code tg_expediente_tipo_del_encargo} lo rechaza en
+     * la base. {@link #derivarTipoDe(String)} lo fija a partir de
+     * {@code captacion.motivo_operacion}.
+     *
+     * <p>La columna es NOT NULL sin DEFAULT desde V51. Que la entidad no la
+     * mapeara hacia que <b>cualquier alta de expediente fallara</b> — el mismo
+     * fallo que tuvo {@code precio_propiedad.operacion} con V49, y por la misma
+     * razon: una migracion que anade una columna obligatoria y un mapeo que no
+     * se entera. Solo lo ve una escritura real, y por eso lo encontro el E2E.
+     */
+    @Column(name = "tipo", nullable = false, length = 1)
+    private String tipo = TIPO_ALQUILER;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_oportunidad", nullable = false)
@@ -259,6 +283,32 @@ public class SolicitudAlquiler extends EntidadDeOrganizacion implements Transici
 
     public void setMesesAdelanto(Integer mesesAdelanto) {
         this.mesesAdelanto = mesesAdelanto;
+    }
+
+    public String getTipo() {
+        return tipo;
+    }
+
+    /**
+     * Fija el tipo a partir de la operacion del encargo
+     * ({@code captacion.motivo_operacion}: {@code A} o {@code V}).
+     *
+     * <p>No hay un setter libre a proposito. El tipo no es una eleccion del
+     * usuario ni del cliente: lo determina el encargo del que cuelga la
+     * oportunidad, y elegirlo aparte solo permitiria contradecirlo.
+     */
+    public void derivarTipoDe(String operacionDelEncargo) {
+        if (!TIPO_ALQUILER.equals(operacionDelEncargo) && !TIPO_COMPRAVENTA.equals(operacionDelEncargo)) {
+            throw new IllegalArgumentException(
+                    "El expediente hereda su tipo de la operacion del encargo, y llego \""
+                            + operacionDelEncargo + "\".");
+        }
+        this.tipo = operacionDelEncargo;
+    }
+
+    @Transient
+    public boolean esCompraventa() {
+        return TIPO_COMPRAVENTA.equals(tipo);
     }
 
     public OportunidadComercial getOportunidad() {

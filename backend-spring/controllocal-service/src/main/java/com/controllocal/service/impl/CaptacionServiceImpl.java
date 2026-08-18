@@ -6,6 +6,7 @@ import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comercial.ReasignacionCaptacion;
 import com.controllocal.domain.inmueble.DetalleLocalComercial;
 import com.controllocal.domain.inmueble.FotoPropiedad;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleBroker;
@@ -26,6 +27,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.OperacionDelEncargo;
 import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Transiciones;
 import com.controllocal.service.soporte.CondicionesEconomicas;
@@ -222,10 +224,8 @@ public class CaptacionServiceImpl implements CaptacionService {
                 .orElseThrow(() -> new ReglaNegocioException("El local de la captacion no existe."));
         validarEncargo(datos.fechaInicioVigencia(), datos.fechaFinVigencia());
         CondicionEconomicaCaptacion condicion = condicion(datos, propiedad, actor.idOrganizacion());
-        if (captaciones.existsByOrganizacionIdAndPropiedadIdAndEstado(
-                actor.idOrganizacion(), propiedad.getId(), Captacion.ACTIVA)) {
-            throw new ReglaNegocioException("Solo una captacion del mismo local puede estar ACTIVA.");
-        }
+        exigirEncargoLibre(actor.idOrganizacion(), propiedad.getId(),
+                OperacionInmobiliaria.deCodigo(condicion.getTipoOperacion()), null);
 
         Captacion cap = new Captacion();
         cap.setOrganizacionId(actor.idOrganizacion());
@@ -295,10 +295,8 @@ public class CaptacionServiceImpl implements CaptacionService {
 
         switch (accion.trim().toUpperCase(Locale.ROOT)) {
             case "APROBAR", "A" -> {
-                if (captaciones.existsByOrganizacionIdAndPropiedadIdAndEstado(
-                        actor.idOrganizacion(), cap.getPropiedad().getId(), Captacion.ACTIVA)) {
-                    throw new ReglaNegocioException("Solo una captacion del mismo local puede estar ACTIVA.");
-                }
+                exigirEncargoLibre(actor.idOrganizacion(), cap.getPropiedad().getId(),
+                        cap.operacion(), cap.getId());
                 validarActivacion(cap);
                 cap.registrarRevision(broker, observacion);
                 transiciones.aplicar(cap, id, Captacion.ACTIVA, actor, "Captacion aprobada por el broker.");
@@ -548,7 +546,13 @@ public class CaptacionServiceImpl implements CaptacionService {
                                                            long organizacionId) {
         CondicionEconomicaCaptacion ce = new CondicionEconomicaCaptacion();
         ce.setOrganizacionId(organizacionId);
-        String operacion = textoO(datos.tipoOperacion(), datos.motivoOperacion(), "A");
+        // Sin ultimo recurso: si el cuerpo no declara la operacion, no se supone
+        // alquiler. `deTexto` da el mismo mensaje que el dominio pero como
+        // ReglaNegocioException, que es lo que la web convierte en 400: un
+        // IllegalArgumentException escapando de aqui seria un 500 por un dato
+        // que el cliente escribio mal.
+        String operacion = OperacionDelEncargo
+                .deTexto(textoO(datos.tipoOperacion(), datos.motivoOperacion(), null)).codigo();
         BigDecimal referencia = datos.importeReferencia() != null
                 ? datos.importeReferencia() : propiedad.getPrecioReferencial();
         String monedaReferencia = CondicionesEconomicas.moneda(
@@ -592,6 +596,39 @@ public class CaptacionServiceImpl implements CaptacionService {
         ce.setTratamientoIgv(igv);
         ce.setMotivoSinComision(datos.motivoSinComision() == null ? null : datos.motivoSinComision().trim());
         return ce;
+    }
+
+    /**
+     * <b>Un encargo vivo por (propiedad, OPERACION)</b>, no uno por propiedad.
+     *
+     * <p>La regla de la v1 era "una propiedad, una captacion activa", y tenia
+     * sentido cuando una propiedad solo podia alquilarse. Con venta y alquiler
+     * en el modelo, esa regla prohibe justamente el caso que el modelo
+     * universal existe para admitir: la misma casa en venta y en alquiler a la
+     * vez, cada una con su precio y su historico (D-E4-1).
+     *
+     * <p>Lo que sigue prohibido — y ahora tambien en estado PENDIENTE y
+     * OBSERVADA, no solo ACTIVA — es un segundo encargo de la MISMA operacion.
+     * Es la invariante que impone {@code uq_captacion_viva_por_operacion}
+     * (V50); esto solo la anticipa con un mensaje que se entiende.
+     *
+     * @param idExcluir el encargo que se esta aprobando, para que no se
+     *                  detecte a si mismo
+     */
+    private void exigirEncargoLibre(long idOrganizacion, Long idPropiedad,
+                                    OperacionInmobiliaria operacion, Long idExcluir) {
+        if (idPropiedad == null || operacion == null) {
+            return;
+        }
+        captaciones.encargoVivoDe(idOrganizacion, idPropiedad, operacion.codigo()).stream()
+                .filter(otro -> !otro.getId().equals(idExcluir))
+                .findFirst()
+                .ifPresent(otro -> {
+                    throw new ReglaNegocioException(
+                            "Esta propiedad ya tiene un encargo de " + operacion.name()
+                                    + " vivo (" + otro.getCodigoCaptacion() + "). Cierralo antes de "
+                                    + "abrir otro. Un encargo de la OTRA operacion si es posible.");
+                });
     }
 
     private static String textoO(String primero, String segundo, String tercero) {

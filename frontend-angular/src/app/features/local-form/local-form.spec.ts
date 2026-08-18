@@ -42,6 +42,13 @@ const LOCAL_EXISTENTE: Local = {
 interface AccesoLocalForm {
   formulario: FormGroup;
   guardar(): Promise<void>;
+  formAlta: FormGroup;
+  busquedaPropietario: { set(v: string): void; (): string };
+  sinCoincidencias(): boolean;
+  altaAbierta(): boolean;
+  abrirAlta(): void;
+  guardarAlta(): Promise<void>;
+  cambiarTipoPersona(tipo: 'N' | 'J'): void;
 }
 
 describe('LocalForm', () => {
@@ -64,7 +71,9 @@ describe('LocalForm', () => {
     propietarios = jasmine.createSpyObj<PropietariosService>('PropietariosService', [
       'pagina',
       'obtener',
+      'registrar',
     ]);
+    propietarios.registrar.and.resolveTo({ ...PROPIETARIO, id: 99, nombre: 'Bruno Aliaga' });
     propietarios.pagina.and.resolveTo(paginaPropietarios([PROPIETARIO]));
     propietarios.obtener.and.resolveTo(PROPIETARIO);
 
@@ -110,7 +119,7 @@ describe('LocalForm', () => {
         aptoLicenciaFuncionamiento: true,
       }),
     );
-    expect(router.navigate).toHaveBeenCalledWith(['/locales'], { replaceUrl: true });
+    expect(router.navigate).toHaveBeenCalledWith(['/propiedades'], { replaceUrl: true });
   });
 
   it('edita sin permitir cambiar propietario, codigo ni estado de publicacion', async () => {
@@ -148,6 +157,105 @@ describe('LocalForm', () => {
     expect(generarCodigoLocal(new Date('2026-07-30T20:15:16.007Z'))).toBe(
       'LC-260730201516007',
     );
+  });
+
+  /* ---- Alta de propietario en contexto (D-E2-3 §3.1) ----
+     Lo que se protege no es el panel: es que el agente NO tenga que salir
+     del formulario, y que al volver el propietario quede seleccionado. */
+  it('ofrece registrar al propietario cuando la busqueda no encuentra a nadie', async () => {
+    const fixture = await montar(null);
+    const acceso = fixture.componentInstance as unknown as AccesoLocalForm;
+
+    expect(acceso.sinCoincidencias()).toBeFalse();
+    acceso.busquedaPropietario.set('Aliaga');
+    expect(acceso.sinCoincidencias()).toBeTrue();
+  });
+
+  it('reaprovecha lo escrito: nombre al nombre, digitos al documento', async () => {
+    const fixture = await montar(null);
+    const acceso = fixture.componentInstance as unknown as AccesoLocalForm;
+
+    acceso.busquedaPropietario.set('Bruno Aliaga');
+    acceso.abrirAlta();
+    expect(acceso.formAlta.get('nombre')!.value).toBe('Bruno Aliaga');
+    expect(acceso.formAlta.get('numeroDocumento')!.value).toBe('');
+
+    acceso.busquedaPropietario.set('44556677');
+    acceso.abrirAlta();
+    expect(acceso.formAlta.get('nombre')!.value).toBe('');
+    expect(acceso.formAlta.get('numeroDocumento')!.value).toBe('44556677');
+  });
+
+  it('registra sin salir del formulario y deja el propietario SELECCIONADO', async () => {
+    const fixture = await montar(null);
+    const acceso = fixture.componentInstance as unknown as AccesoLocalForm;
+
+    acceso.formulario.patchValue({ direccion: 'Jr. Ica 118', metraje: 85 });
+    acceso.busquedaPropietario.set('Bruno Aliaga');
+    acceso.abrirAlta();
+    acceso.formAlta.patchValue({
+      nombre: 'Bruno Aliaga',
+      tipoDocumento: 'D',
+      numeroDocumento: '44556677',
+      telefono: '987654321',
+    });
+
+    await acceso.guardarAlta();
+
+    expect(propietarios.registrar).toHaveBeenCalledWith(
+      jasmine.objectContaining({ nombre: 'Bruno Aliaga', numeroDocumento: '44556677' }),
+    );
+    // Lo que importa: queda elegido y el formulario del local NO se perdio.
+    expect(acceso.formulario.get('idPropietario')!.value).toBe(99);
+    expect(acceso.formulario.get('direccion')!.value).toBe('Jr. Ica 118');
+    expect(acceso.altaAbierta()).toBeFalse();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('no crea un duplicado: si el documento ya existe, selecciona al que hay', async () => {
+    const fixture = await montar(null);
+    const acceso = fixture.componentInstance as unknown as AccesoLocalForm;
+
+    acceso.busquedaPropietario.set('12345678');
+    acceso.abrirAlta();
+    acceso.formAlta.patchValue({
+      nombre: 'Ana Torres Duplicada',
+      tipoDocumento: 'D',
+      numeroDocumento: PROPIETARIO.numeroDocumento,
+      telefono: '987654321',
+    });
+
+    await acceso.guardarAlta();
+
+    expect(propietarios.registrar).not.toHaveBeenCalled();
+    expect(acceso.formulario.get('idPropietario')!.value).toBe(PROPIETARIO.id);
+  });
+
+  it('persona juridica fuerza RUC y bloquea el tipo de documento', async () => {
+    const fixture = await montar(null);
+    const acceso = fixture.componentInstance as unknown as AccesoLocalForm;
+
+    acceso.abrirAlta();
+    acceso.cambiarTipoPersona('J');
+    expect(acceso.formAlta.get('tipoDocumento')!.value).toBe('R');
+    expect(acceso.formAlta.get('tipoDocumento')!.disabled).toBeTrue();
+  });
+
+  it('rechaza un DNI que no tiene 8 digitos', async () => {
+    const fixture = await montar(null);
+    const acceso = fixture.componentInstance as unknown as AccesoLocalForm;
+
+    acceso.abrirAlta();
+    acceso.formAlta.patchValue({
+      nombre: 'Bruno Aliaga',
+      tipoDocumento: 'D',
+      numeroDocumento: '4455',
+      telefono: '987654321',
+    });
+
+    await acceso.guardarAlta();
+
+    expect(propietarios.registrar).not.toHaveBeenCalled();
   });
 
   async function montar(id: string | null): Promise<ComponentFixture<LocalForm>> {

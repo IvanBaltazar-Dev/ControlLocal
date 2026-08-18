@@ -4,7 +4,7 @@
 **Dónde estamos:** `mapa-ejecucion-brox.md`. Este documento no lleva la cuenta;
 lleva los requisitos.
 
-**Actualizado:** 2026-08-10
+**Actualizado:** 2026-08-18
 
 ---
 
@@ -75,8 +75,14 @@ Requisito propio de la etapa, además del gate/pruebas/evidencia:
       cuántas operaciones hay abiertas, más la línea económica **solo cuando el
       dato aguanta** (alquileres firmados en el periodo). El conteo lo suma el
       dominio: `Concepto` distingue lo que cuenta cosas de lo que mide días
+- [x] **E2.D** Diseño congelado (2026-08-11) — `decision-inicio-foco-y-resolucion.md`
+      (Inicio: 5 asuntos + Radar de dos modos, política de despacho, regla contra
+      duplicados) y `decision-indicadores-comerciales.md` (4 KPI canónicos, ritmo
+      contra meta, agente vs broker). Maqueta verificada con 85 comprobaciones
 - [ ] **E2.2** La pelota — de las abiertas, cuáles dependen de ti y de quién
-      dependen las demás (propietario, interesado, broker, documentación)
+      dependen las demás (propietario, interesado, broker, documentación).
+      **Es el primer filtro del despacho** (D-E2-1 §3): solo `DEPENDE_DE_MI`
+      compite por uno de los cinco sitios del Inicio
 - [ ] **E2.3** Inmuebles que necesitan atención — embudo por inmueble y **dónde se
       frena**, sobre `/indicadores/avance` (RF-017), que ya existe
 - [ ] **E2.4** Encargos por vencer y propietarios sin novedades, separados del
@@ -86,6 +92,43 @@ Requisito propio de la etapa, además del gate/pruebas/evidencia:
 - [ ] **Pruebas** — Angular verde + `e4-dashboard` verde · *al día: **550/550** y
       **129/129** tras E2.1*
 - [ ] **Evidencia** — capturas del tablero por subtanda
+
+## Ruta a BROX 1.0 · bloques 2 y 3 ✅ CERRADOS (2026-08-18)
+
+**Propiedad Universal Operativa + Captura v1.** El esquema de V46–V52 pasó a ser
+capacidad: hay un caso de uso que registra, lee y edita una propiedad por el
+modelo nuevo, y un motor de captura que decide qué preguntar desde el catálogo.
+
+| | Gate | Pruebas | Evidencia |
+|---|---|---|---|
+| **2** · Núcleo universal | V54–V58 + `MatrizOperacionRolTest` + `PoliticaUnicaTest` + inventario de `GateDeCierreTest` | `PropiedadUniversalIntegrationTest` **24/24** contra PostgreSQL real | `2026-08-18-propiedad-universal-y-captura.md` |
+| **3** · Motor de registro | `service/captura` + `borrador_captura` con su CHECK de intención | recorrido completo de 6 pasos, ejecutado y retomado | ídem |
+
+**Los dos pendientes técnicos se cerraron dentro de esta tanda**, no en una
+etapa aparte:
+
+1. **El simulacro de recuperación** dejó de leer el estado de la base compartida
+   y pasa a **construir su precondición**: tenant propio con un `TENANT_ADMIN`
+   sin factor MFA. Repetible, y ya no hay error conocido que arrastrar.
+2. **La operación inmobiliaria dejó de inferirse.** `= OPERACION_ALQUILER` en
+   `PrecioPropiedad` y `= "A"` en `Captacion` se retiraron. Toda escritura
+   económica declara VENTA o ALQUILER; si no se sabe, se **declara faltante**.
+
+**Vocabulario congelado:** solo `VENTA` y `ALQUILER`. Una propiedad disponible
+para las dos cosas se representa con **dos encargos independientes** — el enum
+rechaza `AMBAS` y `COMPRA` explicando por qué, no con «valor inválido».
+
+**El hallazgo:** V50 creía admitir venta y alquiler simultáneos, pero
+`uq_captacion_activa_por_local` seguía en pie y no distingue operación. Funcionaba
+con los dos encargos PENDIENTES —así se verificó— y fallaba al aprobar el
+segundo. **V58** lo sustituye por la invariante correcta: un encargo vivo por
+(propiedad, operación).
+
+**Lo que NO se construyó, a propósito:** matcher v2, negociación E3, compraventa
+completa, Neo4j, WhatsApp, LLM, voz, embeddings, memoria vectorial, LangGraph y
+automatizaciones autónomas de KAIROS. Todos dependían de este spine.
+
+---
 
 ## E3 · Negociación ⬜
 

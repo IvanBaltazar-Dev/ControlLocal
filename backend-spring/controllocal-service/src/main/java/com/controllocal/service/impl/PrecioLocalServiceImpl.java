@@ -1,5 +1,6 @@
 package com.controllocal.service.impl;
 
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
@@ -8,6 +9,7 @@ import com.controllocal.service.PrecioLocalService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.OperacionDelEncargo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,10 +26,13 @@ public class PrecioLocalServiceImpl implements PrecioLocalService {
 
     private final PrecioPropiedadRepository precios;
     private final PropiedadRepository propiedades;
+    private final OperacionDelEncargo operaciones;
 
-    public PrecioLocalServiceImpl(PrecioPropiedadRepository precios, PropiedadRepository propiedades) {
+    public PrecioLocalServiceImpl(PrecioPropiedadRepository precios, PropiedadRepository propiedades,
+                                  OperacionDelEncargo operaciones) {
         this.precios = precios;
         this.propiedades = propiedades;
+        this.operaciones = operaciones;
     }
 
     @Override
@@ -58,19 +63,26 @@ public class PrecioLocalServiceImpl implements PrecioLocalService {
             throw new ReglaNegocioException("El local no existe.");
         }
 
-        PrecioPropiedad precio = new PrecioPropiedad();
-        precio.setOrganizacionId(actor.idOrganizacion());
-        precio.setIdPropiedad(idPropiedad);
-        precio.setHito(datos.hito());
-        precio.setMoneda(moneda);
-        precio.setMonto(datos.monto());
-        precio.setFecha(datos.fecha() != null ? datos.fecha() : LocalDate.now());
+        // De que operacion es este importe. Declarada si viene; deducida del
+        // unico encargo vivo si no; y si no hay forma de saberlo, se rechaza en
+        // vez de archivarlo como alquiler (D-E4-1).
+        OperacionInmobiliaria operacion =
+                operaciones.resolver(actor.idOrganizacion(), idPropiedad, datos.operacion());
+
+        PrecioPropiedad precio = PrecioPropiedad.hito(actor.idOrganizacion(), idPropiedad, operacion,
+                datos.hito(), moneda, datos.monto(),
+                datos.fecha() != null ? datos.fecha() : LocalDate.now());
+        // Atado a su encargo cuando lo hay: es lo que permite que una venta y un
+        // alquiler de la misma propiedad tengan series separadas de verdad.
+        operaciones.encargoDe(actor.idOrganizacion(), idPropiedad, operacion)
+                .ifPresent(encargo -> precio.delEncargo(encargo.getId()));
         precios.save(precio);
         return ficha(precio);
     }
 
     private static FichaPrecio ficha(PrecioPropiedad p) {
         return new FichaPrecio(p.getId(), p.getIdPropiedad(), p.getHito(), p.getMoneda(),
-                p.getMonto(), p.getFecha(), Fechas.local(p.getFechaCreacion()));
+                p.getMonto(), p.getFecha(), Fechas.local(p.getFechaCreacion()),
+                OperacionInmobiliaria.deCodigo(p.getOperacion()).name());
     }
 }

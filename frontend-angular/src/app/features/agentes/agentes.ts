@@ -19,6 +19,7 @@ import {
   Subject,
   switchMap,
 } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { Agente, AgentesService, ResumenAgentes } from '../../core/api/agentes.service';
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
@@ -31,7 +32,7 @@ import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-se
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
 const RESUMEN_VACIO: ResumenAgentes = {
   total: 0,

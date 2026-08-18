@@ -77,7 +77,7 @@ export class ProspeccionDetail implements OnInit {
 
   protected verLocal(): void {
     const id = this.prospeccion()?.localId;
-    if (id) void this.router.navigate(['/locales', id]);
+    if (id) void this.router.navigate(['/propiedades', id]);
   }
 
   protected verResumen(): void {

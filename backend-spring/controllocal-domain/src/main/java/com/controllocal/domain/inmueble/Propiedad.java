@@ -110,11 +110,18 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     @Column(name = "uso", nullable = false, length = 1)
     private String uso = USO_COMERCIAL;
 
-    @Column(name = "ambientes")
-    private Integer ambientes;
-
-    @Column(name = "antiguedad_anios")
-    private Integer antiguedadAnios;
+    // ------------------------------------------------------------------
+    // Aqui vivian ambientes, antiguedad_anios, frente, zonificacion,
+    // numero_estacionamientos y cuota_mantenimiento. Su autoridad es
+    // `atributo_propiedad` desde D-E4-3, y V62 retiro las columnas.
+    //
+    // No se reponen "por comodidad de mapeo": tener el campo aqui es lo que
+    // permitiria escribirlo, y un valor escrito donde nadie lee es el fallo
+    // que esta tanda cerro. Se leen y se escriben por LectorPorAutoridad y
+    // AtributosGobernados.
+    //
+    // `metraje` sigue arriba, y es correcto: es el unico estructural.
+    // ------------------------------------------------------------------
 
     @Column(name = "zona_urbanizacion", length = 150)
     private String zonaUrbanizacion;
@@ -124,18 +131,6 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
 
     @Column(name = "geo_long", precision = 10, scale = 7)
     private BigDecimal geoLong;
-
-    @Column(name = "frente", precision = 8, scale = 2)
-    private BigDecimal frente;
-
-    @Column(name = "zonificacion", length = 40)
-    private String zonificacion;
-
-    @Column(name = "numero_estacionamientos")
-    private Integer numeroEstacionamientos;
-
-    @Column(name = "cuota_mantenimiento", precision = 10, scale = 2)
-    private BigDecimal cuotaMantenimiento;
 
     /**
      * Rol PROPIETARIO de la persona duena (la columna tipo_rol_propietario
@@ -350,22 +345,6 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
         this.uso = uso;
     }
 
-    public Integer getAmbientes() {
-        return ambientes;
-    }
-
-    public void setAmbientes(Integer ambientes) {
-        this.ambientes = ambientes;
-    }
-
-    public Integer getAntiguedadAnios() {
-        return antiguedadAnios;
-    }
-
-    public void setAntiguedadAnios(Integer antiguedadAnios) {
-        this.antiguedadAnios = antiguedadAnios;
-    }
-
     public String getZonaUrbanizacion() {
         return zonaUrbanizacion;
     }
@@ -388,38 +367,6 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
 
     public void setGeoLong(BigDecimal geoLong) {
         this.geoLong = geoLong;
-    }
-
-    public BigDecimal getFrente() {
-        return frente;
-    }
-
-    public void setFrente(BigDecimal frente) {
-        this.frente = frente;
-    }
-
-    public String getZonificacion() {
-        return zonificacion;
-    }
-
-    public void setZonificacion(String zonificacion) {
-        this.zonificacion = zonificacion;
-    }
-
-    public Integer getNumeroEstacionamientos() {
-        return numeroEstacionamientos;
-    }
-
-    public void setNumeroEstacionamientos(Integer numeroEstacionamientos) {
-        this.numeroEstacionamientos = numeroEstacionamientos;
-    }
-
-    public BigDecimal getCuotaMantenimiento() {
-        return cuotaMantenimiento;
-    }
-
-    public void setCuotaMantenimiento(BigDecimal cuotaMantenimiento) {
-        this.cuotaMantenimiento = cuotaMantenimiento;
     }
 
     public String getInteriorUnidad() { return interiorUnidad; }

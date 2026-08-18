@@ -55,7 +55,7 @@ describe('rolGuard por operacion', () => {
     return TestBed.runInInjectionContext(() =>
       rolGuard(
         { data: { roles } } as unknown as ActivatedRouteSnapshot,
-        { url: '/locales/nuevo' } as RouterStateSnapshot,
+        { url: '/propiedades/nueva' } as RouterStateSnapshot,
       ),
     ) as boolean | UrlTree;
   }

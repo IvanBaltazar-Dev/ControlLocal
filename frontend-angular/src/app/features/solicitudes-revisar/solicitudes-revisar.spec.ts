@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { PageResponse } from '../../core/api/api.types';
 import {
@@ -65,7 +66,7 @@ describe('SolicitudesRevisar', () => {
     await montar();
 
     expect(api.pagina$).toHaveBeenCalledWith(
-      jasmine.objectContaining({ estado: PENDIENTES, pagina: 1, tamano: 10 }),
+      jasmine.objectContaining({ estado: PENDIENTES, pagina: 1, tamano: RESULTADOS_POR_PAGINA }),
     );
   });
 

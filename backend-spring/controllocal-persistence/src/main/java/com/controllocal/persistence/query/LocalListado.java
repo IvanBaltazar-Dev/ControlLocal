@@ -10,6 +10,11 @@ import java.time.OffsetDateTime;
  * {@code LocalResponse}. Proyectarlos evita inicializar, una por una, las
  * asociaciones LAZY de propietario y detalle comercial al mapear la pagina.
  * La portada y el estado de publicacion se completan con consultas en lote.
+ *
+ * <p><b>Las seis claves gobernadas no estan aqui</b> (D-E4-3): su autoridad es
+ * {@code atributo_propiedad}, y se hidratan por lote para los ids de la pagina.
+ * {@code metraje} si esta, porque es el unico estructural y un listado tiene
+ * que poder ordenarse por el en SQL.
  */
 public interface LocalListado {
 
@@ -41,27 +46,15 @@ public interface LocalListado {
 
     String getUso();
 
-    Integer getAmbientes();
-
-    Integer getAntiguedadAnios();
-
     String getZonaUrbanizacion();
 
     BigDecimal getGeoLat();
 
     BigDecimal getGeoLong();
 
-    BigDecimal getFrente();
-
-    String getZonificacion();
-
     Boolean getAptoLicenciaFuncionamiento();
 
     BigDecimal getCargaElectricaKw();
-
-    Integer getNumeroEstacionamientos();
-
-    BigDecimal getCuotaMantenimiento();
 
     Long getIdDistrito();
 

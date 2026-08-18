@@ -1,6 +1,7 @@
 package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import jakarta.persistence.EntityManager;
@@ -165,15 +166,17 @@ class HistoricoPrecioIntegrationTest {
                 "la columna normaliza a dos decimales: por eso equals no sirve para deduplicar");
     }
 
+    /**
+     * <b>La operacion se declara.</b> Antes no hacia falta porque la entidad la
+     * rellenaba con ALQUILER, y ese defecto se retiro en D-E4-1: la columna es
+     * NOT NULL sin DEFAULT y ahora Java sostiene la misma exigencia. Estas
+     * pruebas son de la serie de una renta, asi que dicen ALQUILER — que es
+     * distinto de que alguien lo suponga por ellas.
+     */
     private PrecioPropiedad guardar(Long idOrganizacion, Long idPropiedad,
                                     BigDecimal monto, LocalDate fecha) {
-        PrecioPropiedad hito = new PrecioPropiedad();
-        hito.setOrganizacionId(idOrganizacion);
-        hito.setIdPropiedad(idPropiedad);
-        hito.setHito(PrecioPropiedad.HITO_PUBLICADO);
-        hito.setMoneda(PrecioPropiedad.MONEDA_PEN);
-        hito.setMonto(monto);
-        hito.setFecha(fecha);
-        return precios.saveAndFlush(hito);
+        return precios.saveAndFlush(PrecioPropiedad.hito(idOrganizacion, idPropiedad,
+                OperacionInmobiliaria.ALQUILER, PrecioPropiedad.HITO_PUBLICADO,
+                PrecioPropiedad.MONEDA_PEN, monto, fecha));
     }
 }

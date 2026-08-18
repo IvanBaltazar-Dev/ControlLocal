@@ -2,6 +2,7 @@ package com.controllocal.service.impl;
 
 import com.controllocal.domain.auditoria.HistorialEstado;
 import com.controllocal.domain.comercial.Captacion;
+import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comercial.Prospeccion;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
@@ -336,6 +337,21 @@ class ProspeccionServiceImplTest {
         // la v1 dejaba nacer el borrador sin fechas y la columna ya no lo admite.
         assertEquals(LocalDate.now(), captacion.getValue().getFechaInicioVigencia());
         assertEquals(LocalDate.now().plusMonths(6), captacion.getValue().getFechaFinVigencia());
+
+        // Y la OPERACION va escrita, no supuesta (D-E4-1). Este camino dependia
+        // del defecto `= "A"` de la entidad; al retirarlo dejo de escribirse y
+        // `captacion.motivo_operacion` es NOT NULL, asi que captar desde una
+        // prospeccion —el camino NORMAL— fallaba entero. No lo vio ningun test
+        // de servicio porque con el repositorio simulado nada llega a la BD; lo
+        // encontro la suite `f4-solicitud`.
+        //
+        // Se comprueba contra la condicion economica a proposito: son la misma
+        // declaracion, y `tg_captacion_operacion_coherente` (V50) rechaza que
+        // difieran.
+        assertEquals(CondicionEconomicaCaptacion.ARRENDAMIENTO,
+                captacion.getValue().getMotivoOperacion());
+        assertEquals(captacion.getValue().getCondicionEconomica().getTipoOperacion(),
+                captacion.getValue().getMotivoOperacion());
 
         // Una sola fila de historial: S->T de la prospeccion (el alta de la
         // captacion es estado inicial, no transicion).

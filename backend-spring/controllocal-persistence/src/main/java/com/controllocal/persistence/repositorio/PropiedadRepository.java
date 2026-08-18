@@ -94,6 +94,19 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
      * listado sin texto (filtro en el propio WHERE) y el listado con texto,
      * que primero resuelve el conjunto de candidatos y despues carga solo la
      * pagina. La forma de la fila tiene que ser identica en ambos.
+     *
+     * <p><b>Aqui NO estan las seis claves gobernadas</b> —ambientes, frente,
+     * zonificacion, cuota de mantenimiento, estacionamientos y antiguedad—
+     * porque su autoridad dejo de ser la columna de {@code propiedad} (D-E4-3).
+     * Se hidratan despues, para los ids de la pagina, con una sola consulta a
+     * {@code atributo_propiedad}: dos consultas por pagina, no N+1.
+     *
+     * <p>{@code metraje} SI se queda, y no por comodidad: es el unico de los
+     * siete que quedo clasificado como estructural, y un listado tiene que poder
+     * ordenar y filtrar por el — y eso solo se hace en SQL, antes del
+     * {@code LIMIT}. El dia que alguna de las seis entre en un filtro o en un
+     * orden, la solucion NO es devolverla a esta proyeccion sino unir contra
+     * {@code atributo_propiedad} antes de paginar (§4 bis de D-E4-3).
      */
     String PROYECCION_LISTADO = """
             select p.id as id,
@@ -111,17 +124,11 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                    per.nombresORazonSocial as propietarioNombre,
                    p.tipoInmueble as tipoInmueble,
                    p.uso as uso,
-                   p.ambientes as ambientes,
-                   p.antiguedadAnios as antiguedadAnios,
                    p.zonaUrbanizacion as zonaUrbanizacion,
                    p.geoLat as geoLat,
                    p.geoLong as geoLong,
-                   p.frente as frente,
-                   p.zonificacion as zonificacion,
                    d.aptoLicenciaFuncionamiento as aptoLicenciaFuncionamiento,
                    d.cargaElectricaKw as cargaElectricaKw,
-                   p.numeroEstacionamientos as numeroEstacionamientos,
-                   p.cuotaMantenimiento as cuotaMantenimiento,
                    p.idDistrito as idDistrito,
                    p.fechaRegistro as fechaRegistro
             """ + ASOCIACIONES_LISTADO + """
@@ -290,6 +297,13 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
 
     /** Existencia dentro del tenant: un local de otra corredora "no existe". */
     boolean existsByOrganizacionIdAndId(long idOrganizacion, long id);
+
+    /**
+     * Correlativo PROP-#### por organizacion, igual que las captaciones (V6.3):
+     * cada corredora numera desde 0001 y no deduce del codigo cuantas
+     * propiedades lleva la de al lado.
+     */
+    long countByOrganizacionId(long idOrganizacion);
 
     // ------------------------------------------------------------------
     // Propietario -> locales EN SEGUIMIENTO (contador del cable y alcance

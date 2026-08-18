@@ -266,7 +266,7 @@ export class FichaPropiedad implements OnInit {
   }
 
   protected volver(): void {
-    void this.router.navigate(['/locales']);
+    void this.router.navigate(['/propiedades']);
   }
 
   protected recargar(): void {
@@ -276,7 +276,7 @@ export class FichaPropiedad implements OnInit {
   protected verLocal(): void {
     const idLocal = this.captacion()?.idLocal;
     if (idLocal) {
-      void this.router.navigate(['/locales', idLocal]);
+      void this.router.navigate(['/propiedades', idLocal]);
     }
   }
 

@@ -618,7 +618,15 @@ Check 'un contrato rescindido no se reactiva' ($reactivar.codigo -eq 400) "http=
 $huerfanas = Sql @"
 select coalesce(sum(nulos),0) from (
   select (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I where organizacion_id is null', table_name), false, true, '')))[1]::text::int as nulos
-  from information_schema.columns where column_name='organizacion_id' and table_schema='public') t
+  from information_schema.columns
+   where column_name='organizacion_id' and table_schema='public'
+     -- catalogo_atributo es HIBRIDO a proposito (D-E4-1 M2, V48): sus filas
+     -- del sistema llevan organizacion_id NULL y son las MISMAS para toda
+     -- corredora. Son lo que permite que dos propiedades se comparen; si
+     -- llevaran tenant, el vocabulario dejaria de ser comun y el matcher
+     -- entre organizaciones no podria existir. Es la misma excepcion que
+     -- ArquitecturaTenancyTest ya declara, con la misma razon.
+     and table_name <> 'catalogo_atributo') t
 "@
 Check 'cero filas con organizacion_id NULL en toda la BD' ($huerfanas -eq '0') "nulos=$huerfanas"
 

@@ -47,7 +47,20 @@ class ArquitecturaTenancyTest {
             // solo los intentos contra cuentas existentes convertiria el
             // bloqueo en un oraculo del padron de usuarios. Lleva
             // organizacion_id como dato informativo y nullable.
-            "com.controllocal.domain.seguridad.IntentoAcceso");
+            "com.controllocal.domain.seguridad.IntentoAcceso",
+            // Catalogo HIBRIDO de caracteristicas del inmueble (D-E4-1 M2, V48).
+            // Sus filas del sistema (organizacion_id NULL) son las MISMAS para
+            // toda corredora y ninguna puede borrarlas ni redefinir su tipo:
+            // son lo que permite que dos propiedades se puedan comparar y que
+            // el matcher exista. Encima de ellas, cada organizacion anade las
+            // suyas, y esas SI llevan organizacion_id. El discriminador es
+            // anulable a proposito, como en IntentoAcceso, y por eso la entidad
+            // no puede heredar de EntidadDeOrganizacion.
+            //
+            // Ojo: el VALOR de un atributo (AtributoPropiedad) no esta aqui.
+            // Ese es privado de una organizacion y lleva su discriminador
+            // NOT NULL como cualquier otra fila de negocio.
+            "com.controllocal.domain.inmueble.CatalogoAtributo");
 
     private static final JavaClasses CLASES = new ClassFileImporter()
             .withImportOption(new ImportOption.DoNotIncludeTests())

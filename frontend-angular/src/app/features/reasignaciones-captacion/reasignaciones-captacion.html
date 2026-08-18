@@ -41,7 +41,7 @@
         }
       </div>
     }
-    @if (paginaDatos().totalRecords > porPagina) {
+    @if (paginaDatos().totalRecords > 0) {
       <cl-paginacion [total]="paginaDatos().totalRecords" [tamano]="porPagina" [pagina]="filtros().page" (paginaChange)="cambiarPagina($event)" />
     }
   </article>
@@ -129,7 +129,7 @@
       </table>
     </div>
   }
-  @if (historialFiltrado().length > porPaginaHistorial) {
+  @if (historialFiltrado().length > 0) {
     <cl-paginacion [total]="historialFiltrado().length" [tamano]="porPaginaHistorial" [pagina]="paginaHistorialActual()" (paginaChange)="cambiarPaginaHistorial($event)" />
   }
 </section>

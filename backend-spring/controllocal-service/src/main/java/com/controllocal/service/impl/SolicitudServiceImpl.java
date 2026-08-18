@@ -298,6 +298,13 @@ public class SolicitudServiceImpl implements SolicitudService {
         solicitud.setMesesAdelanto(datos.mesesAdelanto());
         solicitud.setOportunidad(oportunidad);
         solicitud.setAgente(agente);
+        // El tipo del expediente lo DERIVA su encargo (D-E4-1 M5, V51): un
+        // expediente de compraventa sobre un encargo de alquiler es un dato que
+        // miente, y `tg_expediente_tipo_del_encargo` lo rechaza. Aqui se lee de
+        // la fuente en vez de dejarlo al defecto de la entidad, para que el dia
+        // que la oportunidad venga de un encargo de VENTA el expediente nazca
+        // siendo de compraventa sin tocar nada.
+        solicitud.derivarTipoDe(operacionDelEncargoDe(oportunidad));
         transiciones.iniciar(solicitud, SolicitudAlquiler.REGISTRADA);
         SolicitudAlquiler guardada = solicitudes.save(solicitud);
 
@@ -438,6 +445,23 @@ public class SolicitudServiceImpl implements SolicitudService {
      * unico esta duplicado"; el indice sigue siendo el guardian real y es quien
      * cubre la carrera entre dos altas simultaneas.
      */
+    /**
+     * La operacion del encargo del que cuelga la oportunidad. Es la fuente del
+     * tipo de expediente (V51).
+     *
+     * <p>Si la oportunidad no trae captacion —el modelo lo admite: hay
+     * oportunidades que nacen de una prospeccion sin encargo formal— cae a
+     * ALQUILER, que es lo unico que ese camino sabe producir hoy. Es una
+     * decision explicita y acotada a este hueco del modelo, no un defecto
+     * general: en cuanto la oportunidad tiene encargo, manda el encargo.
+     */
+    private static String operacionDelEncargoDe(OportunidadComercial oportunidad) {
+        Captacion encargo = oportunidad == null ? null : oportunidad.getCaptacion();
+        return encargo == null || encargo.getMotivoOperacion() == null
+                ? SolicitudAlquiler.TIPO_ALQUILER
+                : encargo.getMotivoOperacion();
+    }
+
     private String codigo(String codigoSolicitado, long idOrganizacion) {
         if (codigoSolicitado == null || codigoSolicitado.isBlank()) {
             return "SOL-" + LocalDateTime.now().format(CODIGO);

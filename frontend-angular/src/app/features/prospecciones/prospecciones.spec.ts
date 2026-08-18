@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import { PersonalService } from '../../core/api/personal.service';
@@ -55,10 +56,10 @@ describe('Prospecciones', () => {
       page: '2',
     });
 
-    const llamada = service.pagina$.calls.allArgs().find(([f]) => f?.tamano === 10)![0];
+    const llamada = service.pagina$.calls.allArgs().find(([f]) => f?.tamano === RESULTADOS_POR_PAGINA)![0];
     expect(llamada).toEqual({
       pagina: 2,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       estado: 'GESTION',
       idAgente: 30,
       idBrokerSupervisor: 23,
@@ -70,7 +71,7 @@ describe('Prospecciones', () => {
   it('la tarjeta de recontacto usa la bandeja especial, no un filtro inventado', async () => {
     await montar('AGENTE', { recontactar: '1', page: '2' });
 
-    expect(service.recontactar$).toHaveBeenCalledWith(7, 2, 10);
+    expect(service.recontactar$).toHaveBeenCalledWith(7, 2, RESULTADOS_POR_PAGINA);
   });
 
   it('distingue las acciones por lo que realmente muestran', async () => {
@@ -83,7 +84,7 @@ describe('Prospecciones', () => {
     elementos[1].click();
     elementos[2].click();
     expect(router.navigate).toHaveBeenCalledWith(['/prospecciones', 5]);
-    expect(router.navigate).toHaveBeenCalledWith(['/locales', 9]);
+    expect(router.navigate).toHaveBeenCalledWith(['/propiedades', 9]);
     expect(router.navigate).toHaveBeenCalledWith(['/captaciones', 'CAP-0002', 'ficha']);
   });
 

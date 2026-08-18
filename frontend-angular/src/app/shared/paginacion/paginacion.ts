@@ -1,4 +1,5 @@
 import { Component, computed, input, model } from '@angular/core';
+import { RESULTADOS_POR_PAGINA } from './tamano-pagina';
 
 /**
  * Paginación de las listas: "Mostrando X–Y de Z" más la ventana de páginas
@@ -18,7 +19,7 @@ import { Component, computed, input, model } from '@angular/core';
 })
 export class Paginacion {
   readonly total = input.required<number>();
-  readonly tamano = input(10);
+  readonly tamano = input(RESULTADOS_POR_PAGINA);
   /** Página actual, 1-based. */
   readonly pagina = model(1);
 

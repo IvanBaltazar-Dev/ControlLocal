@@ -1,17 +1,42 @@
 <div class="marco">
   <aside class="lateral">
     <div class="marca">
-      <span class="marca-logo">CL</span>
-      <span class="marca-nombre">ControlLocal</span>
+      <span class="marca-nombre">BROX</span>
+      <span class="marca-bajada">Inteligencia inmobiliaria</span>
     </div>
 
-    <nav>
-      @for (grupo of menu(); track grupo.seccion) {
-        <p class="seccion">{{ grupo.seccion }}</p>
+    <!--
+      `+ Registrar` NO es una entrada del menú. El sidebar sirve para entrar al
+      trabajo; esto sirve para crear. Convertirlo en cinco entradas (Nueva
+      propiedad, Nuevo cliente, Nueva visita...) devolvería el menú a 25
+      enlaces, que es justo lo que la auditoría vino a quitar (D-E3-1 §2.0).
+    -->
+    @if (altas().length) {
+      <button type="button" class="registrar" (click)="abrirRegistro()">
+        <span aria-hidden="true">+</span> Registrar
+      </button>
+    }
 
-        <!-- Todo módulo del menú tiene ruta: ya no hay entradas "pendientes".
-             La última que quedaba, "Mis locales", pasó a ser un filtro dentro
-             de Locales en vez de una pantalla propia. -->
+    @if (registroAbierto()) {
+      <div class="registro-fondo" (click)="cerrarRegistro()"></div>
+      <div class="registro" role="dialog" aria-label="Qué quieres registrar">
+        <p class="registro-titulo">¿Qué quieres registrar?</p>
+        @for (alta of altas(); track alta.ruta) {
+          <a [routerLink]="'/' + alta.ruta" (click)="cerrarRegistro()">
+            <span class="registro-que">{{ alta.etiqueta }}</span>
+            <span class="registro-para">{{ alta.descripcion }}</span>
+          </a>
+        }
+      </div>
+    }
+
+    <nav aria-label="Secciones">
+      @for (grupo of menu(); track grupo.seccion) {
+        <!-- «Inicio» va suelto arriba: es a lo que se vuelve, no una categoría. -->
+        @if (grupo.seccion !== 'Inicio') {
+          <p class="seccion">{{ grupo.seccion }}</p>
+        }
+
         @for (modulo of grupo.modulos; track modulo.ruta) {
           <a
             [routerLink]="'/' + modulo.ruta"
@@ -24,47 +49,77 @@
       }
     </nav>
 
-    <div class="version">backend v2 · Spring + Angular</div>
+    <!-- Aquí NO va la cuenta. El lateral es navegación del producto; perfil y
+         cerrar sesión viven en el menú de la identidad, arriba a la derecha,
+         que es donde el usuario los busca. -->
   </aside>
 
   <div class="principal">
-    <header class="topbar">
-      <span class="titulo">Panel</span>
+    <!--
+      La barra superior NO lleva título.
 
+      Llevaba el literal «Panel» sobre todas las pantallas de BROX: no daba
+      contexto —era el mismo en Propiedades, en Captaciones y en el alta— y
+      encima competía con el título real de la página, que sí lo da. La
+      auditoría lo señaló como un residuo del cascarón.
+    -->
+    <header class="topbar">
       @if (auth.sesion(); as sesion) {
-        <div class="usuario">
-          <!--
-            La campana es chrome global, no una pantalla: vive aquí y no en el
-            dashboard porque los avisos siguen llegando mientras se trabaja en
-            cualquier otra parte.
-          -->
-          <cl-campana />
-          <!-- Iniciales solo mientras no haya foto: es el caso por defecto y
-               tiene que verse bien, no como un hueco esperando una imagen. -->
-          @if (fotoPerfil(); as clave) {
-            <cl-imagen-segura
-              class="avatar avatar-foto"
-              [clave]="clave"
-              [alt]="'Foto de ' + sesion.nombre"
-            />
-          } @else {
-            <span class="avatar">{{ iniciales(sesion.nombre) }}</span>
-          }
-          <div class="datos">
-            <span class="nombre">{{ sesion.nombre }}</span>
-            <span class="rol">{{ etiquetaRol[sesion.rol] }}</span>
-          </div>
-          <!-- `salir()` y no `cerrarSesion()`: avisa al servidor para que el
-               token deje de valer de verdad. Cierra TODAS las sesiones de la
-               cuenta, y el título lo dice para no prometer otra cosa. -->
+        <!--
+          La campana es chrome global, no una pantalla: vive aquí y no en el
+          tablero porque los avisos siguen llegando mientras se trabaja en
+          cualquier otra parte.
+        -->
+        <cl-campana />
+
+        <div class="cuenta">
           <button
             type="button"
-            class="salir"
-            title="Cierra la sesión en todos tus dispositivos"
-            (click)="salir()"
+            class="identidad"
+            [class.abierta]="cuentaAbierta()"
+            [attr.aria-expanded]="cuentaAbierta()"
+            aria-haspopup="menu"
+            (click)="alternarCuenta()"
           >
-            Salir
+            <!-- Iniciales solo mientras no haya foto: es el caso por defecto y
+                 tiene que verse bien, no como un hueco esperando una imagen. -->
+            @if (fotoPerfil(); as clave) {
+              <cl-imagen-segura
+                class="avatar avatar-foto"
+                [clave]="clave"
+                [alt]="'Foto de ' + sesion.nombre"
+              />
+            } @else {
+              <span class="avatar">{{ iniciales(sesion.nombre) }}</span>
+            }
+            <span class="datos">
+              <span class="nombre">{{ sesion.nombre }}</span>
+              <span class="rol">{{ etiquetaRol[sesion.rol] }}</span>
+            </span>
+            <span class="chevron" aria-hidden="true">▾</span>
           </button>
+
+          @if (cuentaAbierta()) {
+            <div class="cuenta-fondo" (click)="cerrarCuenta()"></div>
+            <div class="cuenta-menu" role="menu">
+              @for (opcion of cuenta(); track opcion.ruta) {
+                <a role="menuitem" [routerLink]="'/' + opcion.ruta" (click)="cerrarCuenta()">
+                  {{ opcion.etiqueta }}
+                </a>
+              }
+              <!-- Separado al final: cerrar sesión no es una pantalla más, y
+                   pulsarlo por error cuesta volver a entrar. -->
+              <button
+                role="menuitem"
+                type="button"
+                class="salir"
+                title="Cierra la sesión en todos tus dispositivos"
+                (click)="salir()"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          }
         </div>
       }
     </header>

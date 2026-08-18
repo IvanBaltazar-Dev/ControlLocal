@@ -21,6 +21,8 @@ import com.controllocal.service.TareaService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.CoincidenciaCartera;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import com.controllocal.service.soporte.PoliticaComercial;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -95,6 +98,7 @@ public class TareaServiceImpl implements TareaService {
     private final RequerimientoClienteRepository requerimientos;
     private final OportunidadComercialRepository oportunidades;
     private final DetalleAgenteRepository agentes;
+    private final LectorPorAutoridad lector;
 
     public TareaServiceImpl(TareaRepository tareas, ProspeccionRepository prospecciones,
                             SolicitudAlquilerRepository solicitudes, VisitaRepository visitas,
@@ -102,7 +106,8 @@ public class TareaServiceImpl implements TareaService {
                             ReportePropietarioRepository reportes,
                             RequerimientoClienteRepository requerimientos,
                             OportunidadComercialRepository oportunidades,
-                            DetalleAgenteRepository agentes) {
+                            DetalleAgenteRepository agentes,
+                            LectorPorAutoridad lector) {
         this.tareas = tareas;
         this.prospecciones = prospecciones;
         this.solicitudes = solicitudes;
@@ -113,6 +118,7 @@ public class TareaServiceImpl implements TareaService {
         this.requerimientos = requerimientos;
         this.oportunidades = oportunidades;
         this.agentes = agentes;
+        this.lector = lector;
     }
 
     @Override
@@ -366,6 +372,12 @@ public class TareaServiceImpl implements TareaService {
         if (misClientes.isEmpty()) {
             return;
         }
+        // Los gobernados de las candidatas, UNA consulta antes de los dos bucles
+        // anidados. `frente` entra en el puntaje (D-E4-3) y su columna espejo
+        // desaparece en el paso 9: leerlo de la entidad daria 0 sin fallar.
+        Map<Long, ValoresDePropiedad> valoresPorPropiedad = lector.deVarias(org,
+                disponibles.stream().map(Captacion::getPropiedad).filter(Objects::nonNull)
+                        .distinct().toList());
         Set<String> yaPropuesto = new HashSet<>();
         for (Object[] par : oportunidades.paresClienteCaptacionDelEquipo(org, roles)) {
             yaPropuesto.add(par[0] + "#" + par[1]);
@@ -381,7 +393,10 @@ public class TareaServiceImpl implements TareaService {
                 if (yaPropuesto.contains(idCliente + "#" + c.getId())) {
                     continue;
                 }
-                int puntaje = CoincidenciaCartera.evaluar(r, c.getPropiedad()).puntaje();
+                Long idPropiedad = c.getPropiedad() == null ? null : c.getPropiedad().getId();
+                int puntaje = CoincidenciaCartera.evaluar(r, c.getPropiedad(),
+                        valoresPorPropiedad.getOrDefault(idPropiedad,
+                                ValoresDePropiedad.vacio())).puntaje();
                 if (PoliticaComercial.valeLaPenaProponer(puntaje) && puntaje > mejorPuntaje) {
                     mejor = c;
                     mejorPuntaje = puntaje;

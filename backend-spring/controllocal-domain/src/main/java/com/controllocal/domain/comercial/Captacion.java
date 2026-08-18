@@ -4,6 +4,7 @@ import com.controllocal.domain.comun.EntidadDeOrganizacion;
 import com.controllocal.domain.comun.EstadosDominio.Codigos;
 import com.controllocal.domain.comun.EstadosDominio.EstadoCaptacion;
 import com.controllocal.domain.comun.Transicionable;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.DetalleBroker;
@@ -95,9 +96,20 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
     @JoinColumn(name = "id_rol_broker_revisor")
     private DetalleBroker brokerRevisor;
 
-    /** Semilla de OperacionComercial: la 1a ola solo admite alquiler ('A'). */
+    /**
+     * <b>La operacion vive AQUI, en el encargo, y no en la propiedad</b>
+     * (D-E4-1). Una misma propiedad puede tener un encargo de venta y otro de
+     * alquiler a la vez, cada uno con su precio y su historico; ponerla en
+     * {@code propiedad} obligaria a elegir una de las dos.
+     *
+     * <p><b>Sin valor por defecto.</b> Tuvo {@code = "A"} mientras el sistema
+     * solo sabia alquilar, y eso convertia el olvido de un productor en un
+     * encargo de alquiler perfectamente valido y perfectamente falso. V50 quito
+     * el DEFAULT de la columna; esto quita el de la clase, que era el que de
+     * verdad se aplicaba.
+     */
     @Column(name = "motivo_operacion", nullable = false, length = 1)
-    private String motivoOperacion = "A";
+    private String motivoOperacion;
 
     @Column(name = "urgencia")
     private Integer urgencia;
@@ -262,12 +274,19 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
         return motivoOperacion;
     }
 
-    /** El dominio soporta alquiler y venta; la interfaz actual solo ofrece alquiler. */
+    /**
+     * VENTA o ALQUILER, declarada. Acepta el nombre o el codigo, y <b>rechaza
+     * el nulo</b>: un encargo sin operacion no es un encargo a medias, es un
+     * encargo que nadie puede cumplir — no se sabe si el titular quiere vender
+     * o alquilar, que es lo primero que hay que saber.
+     */
     public void setMotivoOperacion(String motivoOperacion) {
-        if (motivoOperacion != null && !"A".equals(motivoOperacion) && !"V".equals(motivoOperacion)) {
-            throw new IllegalArgumentException("Tipo de operacion invalido.");
-        }
-        this.motivoOperacion = motivoOperacion == null ? "A" : motivoOperacion;
+        this.motivoOperacion = OperacionInmobiliaria.desde(motivoOperacion).codigo();
+    }
+
+    /** La operacion como valor, para no comparar cadenas de una letra por ahi. */
+    public OperacionInmobiliaria operacion() {
+        return OperacionInmobiliaria.deCodigo(motivoOperacion);
     }
 
     public Integer getUrgencia() {

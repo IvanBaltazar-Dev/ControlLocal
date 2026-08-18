@@ -101,9 +101,25 @@ $serieU = Sql "select string_agg(monto::int::text, '>' order by id_precio) from 
 Check 'el alta y la edicion dejan sus dos hitos U con tenant, sin pisarse' `
     ($serieU -eq '9200>9900') $serieU
 
-$precio = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9500 }
+# D-E4-1 (2026-08-18): un hito de precio declara de que OPERACION es. Antes se
+# suponia alquiler cuando el cuerpo no lo decia, y con la venta en el modelo esa
+# suposicion archiva un precio de venta en la serie de alquiler sin que ningun
+# CHECK pueda notarlo. Si la propiedad tiene un unico encargo vivo, el servidor
+# lo deduce de ahi; esta no lo tiene todavia, asi que se declara.
+$precio = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9500; operacion = 'ALQUILER' }
 Check 'POST /precios registra el hito' ($precio.hito -eq 'O') $precio.hito
+Check 'el hito declara su operacion' ($precio.operacion -eq 'ALQUILER') $precio.operacion
 Check 'el precio manual lleva tenant' ((Sql "select organizacion_id from precio_propiedad where id_precio=$($precio.id)") -eq '1') 'organizacion_id'
+
+# Y sin operacion declarada NO se inventa ninguna: se rechaza. Este local no
+# tiene encargo vivo todavia, asi que no hay de donde deducirla.
+$rechazado = $false
+try {
+    Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9600 } | Out-Null
+} catch {
+    $rechazado = $true
+}
+Check 'un hito sin operacion se rechaza en vez de suponer alquiler' $rechazado 'rechazado'
 
 $publicacion = Api POST "/locales/$idLocal/publicaciones" $agente.token @{ canal = 'URBANIA'; rentaPublicada = 9900; moneda = 'PEN'; estado = 'P' }
 Check 'POST /publicaciones crea el anuncio' ($publicacion.estado -eq 'P') $publicacion.estado
@@ -180,7 +196,15 @@ Write-Host "`n== 8. Ninguna fila del tenant quedo huerfana ==" -ForegroundColor 
 $huerfanas = Sql @"
 select coalesce(sum(nulos),0) from (
   select (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I where organizacion_id is null', table_name), false, true, '')))[1]::text::int as nulos
-  from information_schema.columns where column_name='organizacion_id' and table_schema='public') t
+  from information_schema.columns
+   where column_name='organizacion_id' and table_schema='public'
+     -- catalogo_atributo es HIBRIDO a proposito (D-E4-1 M2, V48): sus filas
+     -- del sistema llevan organizacion_id NULL y son las MISMAS para toda
+     -- corredora. Son lo que permite que dos propiedades se comparen; si
+     -- llevaran tenant, el vocabulario dejaria de ser comun y el matcher
+     -- entre organizaciones no podria existir. Es la misma excepcion que
+     -- ArquitecturaTenancyTest ya declara, con la misma razon.
+     and table_name <> 'catalogo_atributo') t
 "@
 Check 'cero filas con organizacion_id NULL en toda la BD' ($huerfanas -eq '0') "nulos=$huerfanas"
 

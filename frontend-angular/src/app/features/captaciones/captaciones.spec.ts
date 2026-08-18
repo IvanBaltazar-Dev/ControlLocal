@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import { Captacion, CaptacionesService, FiltrosCaptaciones } from '../../core/api/captaciones.service';
@@ -34,7 +35,7 @@ describe('Captaciones', () => {
   beforeEach(() => {
     service = jasmine.createSpyObj<CaptacionesService>('CaptacionesService', ['pagina$']);
     service.pagina$.and.callFake((f: FiltrosCaptaciones = {}) => {
-      if (f.tamano === 10) return of(pagina([FILA], 14));
+      if (f.tamano === RESULTADOS_POR_PAGINA) return of(pagina([FILA], 14));
       const totales: Record<string, number> = { P: 3, O: 2, A: 8, C: 1, R: 4, V: 5 };
       return of(pagina([], f.estado ? (totales[f.estado] ?? 0) : 23, 1));
     });
@@ -46,9 +47,9 @@ describe('Captaciones', () => {
 
   it('lleva búsqueda, estado, agente y página al listado SQL', async () => {
     await montar('BROKER', { texto: 'arequipa', estado: 'a', idAgente: '30', page: '2' });
-    const llamada = service.pagina$.calls.allArgs().find(([f]) => f?.tamano === 10)![0];
+    const llamada = service.pagina$.calls.allArgs().find(([f]) => f?.tamano === RESULTADOS_POR_PAGINA)![0];
     expect(llamada).toEqual({
-      pagina: 2, tamano: 10, estado: 'A', idAgente: 30, q: 'arequipa',
+      pagina: 2, tamano: RESULTADOS_POR_PAGINA, estado: 'A', idAgente: 30, q: 'arequipa',
     });
   });
 
@@ -71,7 +72,7 @@ describe('Captaciones', () => {
     botones[0].click();
     botones[1].click();
     botones[2].click();
-    expect(router.navigate).toHaveBeenCalledWith(['/locales', 7]);
+    expect(router.navigate).toHaveBeenCalledWith(['/propiedades', 7]);
     expect(router.navigate).toHaveBeenCalledWith(['/captaciones', 'CAP-0009']);
     expect(router.navigate).toHaveBeenCalledWith(['/captaciones', 'CAP-0009', 'ficha']);
   });

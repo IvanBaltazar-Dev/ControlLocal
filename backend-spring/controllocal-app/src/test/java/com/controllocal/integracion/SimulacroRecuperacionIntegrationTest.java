@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,10 +36,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * es requisito de <i>activacion</i>, no de implementacion, y esta clase existe
  * para demostrar exactamente eso.
  *
- * <p>Lo que se comprueba es lo que el §18.16 del diseño pide del simulacro: que
+ * <p>Lo que se comprueba es lo que el §18.16 del diseno pide del simulacro: que
  * una sola aprobacion no autoriza nada, que las tres acciones valen una vez
  * cada una, que la concesion <b>se cierra sola</b> al volver el gobierno, y que
  * <b>no creo cuentas, no fijo contrasenas y no dejo roles nuevos</b>.
+ *
+ * <h2>Por que el simulacro tiene su PROPIO tenant</h2>
+ * Una recuperacion de emergencia solo tiene sentido en una organizacion que se
+ * quedo <b>sin administrador operativo</b>: si el tenant puede gobernarse, la
+ * concesion se cierra sola y rechaza la accion — que es justo lo que
+ * {@code aplicar} comprueba antes de obrar.
+ *
+ * <p>Apuntando a la organizacion 1, el resultado dependia del ESTADO de la base
+ * de desarrollo compartida: ahi hay un administrador con su segundo factor
+ * activo, asi que el simulacro moria con "La organizacion ya tiene un
+ * administrador operativo". No era un fallo de codigo: era el gate de cierre
+ * contando como error una precondicion que la prueba nunca fijo.
+ *
+ * <p>Por eso {@link #prepararTenantSinGobierno()} construye un tenant propio con
+ * un TENANT_ADMIN <b>sin factor MFA</b>: membresia activa — que es lo que el
+ * trigger de V44 exige mientras {@code mfa_gobierno_exigido} sea falso — pero
+ * no operativo, que es la definicion misma de la emergencia. La prueba deja de
+ * leer el estado de nadie y pasa a construir el suyo.
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
@@ -48,7 +65,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         properties = "controllocal.recuperacion.habilitada=true")
 class SimulacroRecuperacionIntegrationTest {
 
-    private static final long ORGANIZACION = 1L;
+    /** El tenant del simulacro. Se reconoce por su codigo, nunca por su id. */
+    private static final String CODIGO_TENANT = "SIMULACRO-RECUPERACION";
 
     private static final String ID_A = "custodio-e2e-a";
     private static final String ID_B = "custodio-e2e-b";
@@ -74,33 +92,115 @@ class SimulacroRecuperacionIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+    @Autowired RecuperacionEmergenciaService recuperacion;
+
+    /** Id del tenant aislado, resuelto en cada prueba. */
+    private long organizacion;
+
+    /** La persona sobre la que obra la concesion: el administrador sin factor. */
+    private long objetivo;
 
     /**
-     * <b>El simulacro tiene que poder repetirse contra la misma base.</b>
+     * <b>El simulacro construye su precondicion en vez de encontrarla.</b>
      *
-     * <p>Sin esto dejaba su concesion en la tabla y la SEGUNDA corrida moria en
-     * la emision con "Ya hay una concesion en curso": el indice parcial
-     * {@code uq_concesion_viva_por_organizacion} solo admite una viva por
-     * tenant, que es justo lo que este test viene a proteger. El reactor pasaba
-     * una vez y fallaba a la siguiente, y eso no sirve como gate de cierre
-     * (punto 6): el verde tiene que ser reproducible, no depender de si alguien
-     * corrio antes.
+     * <p>Crea — o reutiliza — un tenant con un TENANT_ADMIN activo y <b>sin
+     * segundo factor</b>. Con {@code mfa_gobierno_exigido} en falso, el trigger
+     * de V44 se conforma con que exista la membresia, asi que el tenant es
+     * legal; y como {@code contarAdministradoresOperativos} exige un factor en
+     * estado {@code A}, {@code hayAlgunoOperativo} devuelve falso durante toda
+     * la corrida. Esa es la emergencia que el mecanismo viene a resolver.
      *
-     * <p>Se limpia ANTES, no despues: si una corrida anterior murio a mitad
-     * -que es exactamente cuando esto duele- el {@code @AfterEach} de aquella
-     * no llego a ejecutarse.
+     * <p>Es idempotente a proposito: la segunda corrida contra la misma base
+     * encuentra el tenant hecho y solo retira las concesiones de la anterior.
+     * <b>Se limpia ANTES, no despues</b> — si una corrida murio a mitad, que es
+     * cuando esto duele, su limpieza final nunca llego a ejecutarse.
      */
     @BeforeEach
-    void retirarRastroDeCorridasAnteriores() {
-        jdbc.update("delete from accion_recuperacion");
-        jdbc.update("delete from aprobacion_recuperacion");
-        jdbc.update("delete from concesion_recuperacion");
+    void prepararTenantSinGobierno() {
+        organizacion = idDelTenant();
+        objetivo = idDelAdministradorSinFactor();
+
+        // Solo lo de ESTE tenant: el simulacro ya no puede estropear el estado
+        // de otra organizacion, ni depender de el.
+        jdbc.update("delete from accion_recuperacion where organizacion_id = ?", organizacion);
+        jdbc.update("delete from aprobacion_recuperacion where organizacion_id = ?", organizacion);
+        jdbc.update("delete from concesion_recuperacion where organizacion_id = ?", organizacion);
+
+        assertEquals(0L, contar("""
+                        select count(*)
+                          from usuario_organizacion uo
+                          join credencial_usuario cu on cu.id_persona_rol = uo.id_usuario
+                          join factor_autenticacion fa on fa.id_credencial = cu.id_persona_rol
+                         where uo.organizacion_id = %d and uo.estado = 'A'
+                           and uo.rol = 'TENANT_ADMIN' and fa.estado = 'A'
+                        """.formatted(organizacion)),
+                "el simulacro exige un tenant sin administrador operativo: es la emergencia misma");
     }
-    @Autowired RecuperacionEmergenciaService recuperacion;
+
+    private long idDelTenant() {
+        List<Map<String, Object>> filas = jdbc.queryForList(
+                "select id_organizacion from organizacion where codigo = ?", CODIGO_TENANT);
+        if (!filas.isEmpty()) {
+            return ((Number) filas.get(0).get("id_organizacion")).longValue();
+        }
+        return jdbc.queryForObject("""
+                insert into organizacion (codigo, nombre, estado, mfa_gobierno_exigido)
+                values (?, 'Tenant del simulacro de recuperacion', 'A', false)
+                returning id_organizacion
+                """, Long.class, CODIGO_TENANT);
+    }
+
+    /**
+     * Persona + rol interno + credencial + membresia TENANT_ADMIN, y ningun
+     * {@code factor_autenticacion}. Las tres acciones de la concesion necesitan
+     * exactamente esto: {@code REACTIVAR_CUENTA} y {@code REPONER_MEMBRESIA}
+     * fallan si no hay credencial o si la membresia no esta activa.
+     */
+    private long idDelAdministradorSinFactor() {
+        List<Map<String, Object>> filas = jdbc.queryForList("""
+                select uo.id_persona
+                  from usuario_organizacion uo
+                 where uo.organizacion_id = ? and uo.estado = 'A' and uo.rol = 'TENANT_ADMIN'
+                 limit 1""", organizacion);
+        if (!filas.isEmpty()) {
+            return ((Number) filas.get(0).get("id_persona")).longValue();
+        }
+
+        Long idPersona = jdbc.queryForObject("""
+                insert into persona (organizacion_id, tipo_persona, tipo_documento, numero_documento,
+                                     nombres_o_razon_social, correo, estado)
+                values (?, 'N', 'D', '90000001', 'Administrador del simulacro',
+                        'simulacro@controllocal.test', 'A')
+                returning id_persona
+                """, Long.class, organizacion);
+
+        Long idRol = jdbc.queryForObject("""
+                insert into persona_rol (organizacion_id, id_persona, tipo_rol, vigencia_desde)
+                values (?, ?, 'USUARIO_INTERNO', current_date)
+                returning id_persona_rol
+                """, Long.class, organizacion, idPersona);
+
+        // El hash no se usa: nadie inicia sesion con esta cuenta. La columna es
+        // NOT NULL, y una cadena que no es un hash valido no autentica a nadie.
+        jdbc.update("""
+                insert into credencial_usuario (id_persona_rol, tipo_rol, nombre_usuario, contrasena_hash,
+                                                estado_administrativo, organizacion_id,
+                                                debe_cambiar_contrasena, debe_enrolar_mfa)
+                values (?, 'USUARIO_INTERNO', 'simulacro-recuperacion', 'sin-inicio-de-sesion',
+                        'A', ?, false, false)
+                """, idRol, organizacion);
+
+        jdbc.update("""
+                insert into usuario_organizacion (organizacion_id, id_usuario, rol, nombre_visible,
+                                                  estado, id_persona)
+                values (?, ?, 'TENANT_ADMIN', 'Administrador del simulacro', 'A', ?)
+                """, organizacion, idRol, idPersona);
+
+        return idPersona;
+    }
 
     @Test
     void elSimulacroCompleto() {
-        long objetivo = unAdministrador();
         long personasAntes = contar("SELECT count(*) FROM persona");
         long credencialesAntes = contar("SELECT count(*) FROM credencial_usuario");
         long rolesAntes = contar("SELECT count(*) FROM persona_rol");
@@ -111,7 +211,7 @@ class SimulacroRecuperacionIntegrationTest {
 
         // --- emision: PENDIENTE, y no autoriza nada -----------------------
         long id = recuperacion.emitir(new RecuperacionEmergenciaService.Emision(
-                ORGANIZACION, objetivo, OPERADOR, "simulacro: sin administrador operativo"));
+                organizacion, objetivo, OPERADOR, "simulacro: sin administrador operativo"));
         assertEquals(ConcesionRecuperacion.PENDIENTE, recuperacion.consultar(id).estado());
 
         // --- una sola aprobacion NO habilita nada -------------------------
@@ -154,8 +254,8 @@ class SimulacroRecuperacionIntegrationTest {
         // P y V, asi que una agotada no bloquea la emision de otra.
         assertEquals(0L, contar("""
                 SELECT count(*) FROM concesion_recuperacion
-                 WHERE organizacion_id = 1 AND estado IN ('P', 'V')
-                """));
+                 WHERE organizacion_id = %d AND estado IN ('P', 'V')
+                """.formatted(organizacion)));
 
         // --- lo que NO cambio ---------------------------------------------
         assertEquals(personasAntes, contar("SELECT count(*) FROM persona"),
@@ -188,11 +288,11 @@ class SimulacroRecuperacionIntegrationTest {
 
     @Test
     void elOperadorNoPuedeSerCustodio() {
-        // «Quien ejecuta no custodia» (D-S0-52). La guarda da el mensaje; el
+        // "Quien ejecuta no custodia" (D-S0-52). La guarda da el mensaje; el
         // CHECK de la tabla lo garantiza aunque alguien la esquive.
         assertThrows(ReglaNegocioException.class,
                 () -> recuperacion.emitir(new RecuperacionEmergenciaService.Emision(
-                        ORGANIZACION, unAdministrador(), ID_A, "intento invalido")));
+                        organizacion, objetivo, ID_A, "intento invalido")));
     }
 
     @Test
@@ -203,19 +303,8 @@ class SimulacroRecuperacionIntegrationTest {
                 INSERT INTO concesion_recuperacion
                     (organizacion_id, id_persona_objetivo, operador, custodio_a, custodio_b,
                      hash_secreto, motivo)
-                VALUES (1, ?, 'mismo', 'mismo', 'otro', 'x', 'saltandose la guarda')
-                """, unAdministrador()));
-    }
-
-    private long unAdministrador() {
-        List<Map<String, Object>> filas = jdbc.queryForList("""
-                SELECT r.id_persona
-                  FROM usuario_organizacion uo
-                  JOIN persona_rol r ON r.id_persona_rol = uo.id_usuario
-                 WHERE uo.organizacion_id = ? AND uo.estado = 'A' AND uo.rol = 'TENANT_ADMIN'
-                 LIMIT 1""", ORGANIZACION);
-        assertFalse(filas.isEmpty(), "el seed debe tener un TENANT_ADMIN");
-        return ((Number) filas.get(0).get("id_persona")).longValue();
+                VALUES (?, ?, 'mismo', 'mismo', 'otro', 'x', 'saltandose la guarda')
+                """, organizacion, objetivo));
     }
 
     private long contar(String sql) {

@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import {
@@ -65,7 +66,7 @@ describe('Oportunidades', () => {
 
     expect(api.pagina$).toHaveBeenCalledWith({
       pagina: 2,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       estado: 'A',
       query: 'larco',
     });
@@ -83,7 +84,7 @@ describe('Oportunidades', () => {
 
     expect(api.pagina$).toHaveBeenCalledWith({
       pagina: 1,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       estado: undefined,
       query: undefined,
     });

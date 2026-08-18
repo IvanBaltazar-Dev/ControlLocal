@@ -218,6 +218,41 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
     long countByOrganizacionId(long idOrganizacion);
 
     /**
+     * Los encargos VIVOS de una propiedad (D-E4-1).
+     *
+     * <p>"Vivo" es {@code P}, {@code O} o {@code A} — la misma definicion que
+     * usa el indice {@code uq_captacion_viva_por_operacion} de V50, y por eso
+     * esta consulta puede devolver como mucho DOS filas: una de venta y otra de
+     * alquiler. Dos de la misma operacion las impide la base.
+     *
+     * <p>Es la consulta que responde "¿de que operacion es este importe?"
+     * cuando el productor no lo dice. Si devuelve una, la respuesta es esa; si
+     * devuelve dos, la pregunta sigue abierta y hay que declararla; si devuelve
+     * cero, no hay encargo del que deducirla.
+     */
+    @Query("""
+            select c from Captacion c
+            where c.organizacionId = :idOrganizacion
+              and c.propiedad.id = :idPropiedad
+              and c.estado in ('P', 'O', 'A')
+            order by c.motivoOperacion asc
+            """)
+    List<Captacion> encargosVivosDe(@Param("idOrganizacion") long idOrganizacion,
+                                    @Param("idPropiedad") long idPropiedad);
+
+    /** El encargo vivo de UNA operacion concreta. Como mucho hay uno (V50). */
+    @Query("""
+            select c from Captacion c
+            where c.organizacionId = :idOrganizacion
+              and c.propiedad.id = :idPropiedad
+              and c.motivoOperacion = :operacion
+              and c.estado in ('P', 'O', 'A')
+            """)
+    Optional<Captacion> encargoVivoDe(@Param("idOrganizacion") long idOrganizacion,
+                                      @Param("idPropiedad") long idPropiedad,
+                                      @Param("operacion") String operacion);
+
+    /**
      * Oferta candidata del matching de cartera (§7): las captaciones ACTIVAS
      * del alcance, con la propiedad y su detalle ya cargados porque el scoring
      * los lee criterio a criterio. No se pagina: el cruce se hace completo y

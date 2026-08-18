@@ -23,6 +23,7 @@ import {
   switchMap,
   tap,
 } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import { describir, ESTADO_SOLICITUD } from '../../core/api/codigos';
@@ -40,7 +41,7 @@ import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 import { RESUMEN_SOLICITUDES_VACIO } from '../solicitudes/solicitudes';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = RESULTADOS_POR_PAGINA;
 /** Los tres cubos que la cola ofrece; `PENDIENTES` es el defecto. */
 const VISTAS_VALIDAS = new Set([PENDIENTES, 'E', 'O']);
 

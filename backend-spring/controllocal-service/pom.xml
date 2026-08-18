@@ -24,6 +24,29 @@
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
 
+        <!--
+            Serializador de verdad para la capa de servicio.
+
+            Tres tablas guardan JSON como texto — `evento_dominio.carga_util`
+            (V53), `borrador_captura.datos_conocidos` (V56) y
+            `comando_idempotente.resultado` (V57) — y las tres lo hacen porque
+            `controllocal-domain` depende SOLO de `jakarta.persistence-api`:
+            mapear jsonb exigiria `@JdbcTypeCode`, que es de Hibernate, y meter
+            el ORM en el dominio por una columna es mal negocio.
+
+            La consecuencia es que el JSON lo tiene que fabricar ESTA capa. Y
+            fabricarlo a mano — como todavia hace `EventosSeguridad`, que solo
+            escribe mapas de cadena a cadena — se rompe con la primera comilla
+            en el nombre de una calle, que en una direccion peruana llega
+            pronto. `spring-boot-starter-json` es la parte de Jackson que ya
+            entra por `spring-boot-starter-web` en el modulo web: no anade nada
+            nuevo al artefacto final, solo lo hace visible aqui.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

@@ -4,9 +4,11 @@ import com.controllocal.domain.comercial.Alerta;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comun.EstadosDominio.DisponibilidadComercial;
 import com.controllocal.domain.comun.EstadosDominio.EstadoRegistroPropiedad;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.DetalleLocalComercial;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.FotoPropiedad;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.PersonaRol;
@@ -27,7 +29,10 @@ import com.controllocal.service.Pagina;
 import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Transiciones;
 import org.springframework.data.domain.Page;
@@ -59,6 +64,22 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     /** Tope por pagina del cable congelado (el controlador ya acotaba a 100). */
     private static final int MAXIMO_POR_PAGINA = 100;
 
+    /**
+     * <b>La operacion de este recurso, declarada donde se escribe.</b>
+     *
+     * <p>{@code /locales} es el alta heredada de la v1: un local comercial
+     * <b>en alquiler</b>. No es una suposicion sobre datos ajenos —es lo que
+     * este endpoint significa— y por eso se escribe aqui, con nombre, en vez
+     * de dejar que la entidad lo rellene sola. La diferencia no es cosmetica:
+     * un defecto en {@code PrecioPropiedad} se aplicaba tambien al camino
+     * universal, donde la operacion puede perfectamente ser VENTA.
+     *
+     * <p>El alta universal —la que admite los siete tipos y las dos
+     * operaciones— la recibe del llamante y no tiene ninguna constante como
+     * esta.
+     */
+    private static final OperacionInmobiliaria OPERACION_DEL_ALTA = OperacionInmobiliaria.ALQUILER;
+
     private final PropiedadRepository propiedades;
     private final PersonaRolRepository roles;
     private final DistritoRepository distritos;
@@ -71,6 +92,19 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     private final Transiciones transiciones;
     private final AlertaService alertas;
 
+    /**
+     * Las dos mitades de D-E4-3, y van juntas a proposito.
+     *
+     * <p>Este recurso escribia seis conceptos en columnas de {@code propiedad}
+     * y los leia de las mismas columnas: una isla coherente consigo misma y
+     * ciega respecto del modelo universal, que ya los guardaba como atributos
+     * gobernados. Migrar solo el lector dejaria cada PUT escribiendo donde
+     * nadie lee; migrar solo el escritor, al reves. Por eso entran los dos en
+     * el mismo cambio.
+     */
+    private final LectorPorAutoridad lector;
+    private final AtributosGobernados gobierno;
+
     public LocalComercialServiceImpl(PropiedadRepository propiedades,
                                      PersonaRolRepository roles,
                                      DistritoRepository distritos,
@@ -81,7 +115,9 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                                      CaptacionRepository captaciones,
                                      ProspeccionRepository prospeccionesRepo,
                                      Transiciones transiciones,
-                                     AlertaService alertas) {
+                                     AlertaService alertas,
+                                     LectorPorAutoridad lector,
+                                     AtributosGobernados gobierno) {
         this.alertas = alertas;
         this.propiedades = propiedades;
         this.roles = roles;
@@ -93,6 +129,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         this.captaciones = captaciones;
         this.prospeccionesRepo = prospeccionesRepo;
         this.transiciones = transiciones;
+        this.lector = lector;
+        this.gobierno = gobierno;
     }
 
     /**
@@ -135,8 +173,15 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         Map<Long, String> estadosPublicacion =
                 ids.isEmpty() ? Map.of() : publicaciones.codigosEstadoPublicacion(ids);
 
+        // TERCERA consulta en lote, y por la misma razon que las dos de arriba:
+        // las seis claves gobernadas ya no viajan en la proyeccion porque su
+        // autoridad dejo de ser la columna (D-E4-3). Se piden para los ids de
+        // ESTA pagina, nunca dentro del bucle.
+        Map<Long, ValoresDePropiedad> gobernados = lector.gobernadosDeVarias(ids);
+
         return new Pagina<>(filas.stream()
-                .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId())))
+                .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
+                        gobernados.getOrDefault(p.getId(), ValoresDePropiedad.vacio())))
                 .toList(), total);
     }
 
@@ -201,7 +246,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     @Transactional(readOnly = true)
     public Optional<FichaLocal> buscarPorId(long id, Actor actor) {
         validarId(id, "El id de local comercial");
-        return propiedades.buscarFicha(actor.idOrganizacion(), id).map(this::fichaCompleta);
+        return propiedades.buscarFicha(actor.idOrganizacion(), id)
+                .map(p -> fichaCompleta(actor.idOrganizacion(), p));
     }
 
     @Override
@@ -223,6 +269,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         propiedad.aplicarEstadoLegado(estado);
         resolverDistrito(propiedad);
         propiedades.save(propiedad);
+        fijarGobernados(actor.idOrganizacion(), propiedad, datos);
 
         // E0.1 — el alta deja su PRIMER hito 'U' (autorizado).
         //
@@ -241,6 +288,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         PrecioPropiedad inicial = new PrecioPropiedad();
         inicial.setOrganizacionId(propiedad.getOrganizacionId());
         inicial.setIdPropiedad(propiedad.getId());
+        inicial.setOperacion(OPERACION_DEL_ALTA);
         inicial.setHito(PrecioPropiedad.HITO_AUTORIZADO);
         inicial.setMoneda(propiedad.getMonedaReferencial());
         inicial.setMonto(propiedad.getPrecioReferencial());
@@ -258,7 +306,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
 
         // Paridad v1 del POST: no se re-lee la fila, asi que propietarioNombre,
         // fechaRegistro y portada salen nulos en la respuesta del alta.
-        return ficha(propiedad, publicaciones.codigoEstadoPublicacion(propiedad.getId()), null, null);
+        return ficha(propiedad, publicaciones.codigoEstadoPublicacion(propiedad.getId()), null, null,
+                lector.de(actor.idOrganizacion(), propiedad));
     }
 
     @Override
@@ -281,6 +330,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
             PrecioPropiedad hito = new PrecioPropiedad();
             hito.setOrganizacionId(original.getOrganizacionId());
             hito.setIdPropiedad(id);
+            hito.setOperacion(OPERACION_DEL_ALTA);
             hito.setHito(PrecioPropiedad.HITO_AUTORIZADO);
             hito.setMoneda(datos.monedaReferencial());
             hito.setMonto(datos.precioReferencial());
@@ -314,12 +364,13 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         original.setRolPropietario(rolPropietario);
         resolverDistrito(original);
         propiedades.save(original);
+        fijarGobernados(actor.idOrganizacion(), original, datos);
 
         publicaciones.sincronizar(id, original.getCodigo(),
                 original.getPrecioReferencial(), original.getMonedaReferencial(),
                 datos.estadoPublicacion(), actor);
 
-        return fichaCompleta(original);
+        return fichaCompleta(actor.idOrganizacion(), original);
     }
 
     @Override
@@ -354,8 +405,12 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         Map<Long, String> portadas = ids.isEmpty() ? Map.of() : fotos.portadas(ids).stream()
                 .collect(Collectors.toMap(f -> f.getIdPropiedad(), f -> f.getClave()));
         Map<Long, String> estadosPublicacion = publicaciones.codigosEstadoPublicacion(ids);
+        Map<Long, ValoresDePropiedad> valores =
+                lector.deVarias(actor.idOrganizacion(), pagina.getContent());
         List<FichaLocal> items = pagina.stream()
-                .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()), nombrePropietario(p)))
+                .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
+                        nombrePropietario(p),
+                        valores.getOrDefault(p.getId(), ValoresDePropiedad.vacio())))
                 .toList();
         return new Pagina<>(items, pagina.getTotalElements());
     }
@@ -512,21 +567,57 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         propiedad.setMonedaReferencial(
                 CondicionesEconomicas.moneda(datos.monedaReferencial(), "del precio referencial"));
         propiedad.setDescripcion(datos.descripcion());
-        propiedad.setAmbientes(datos.ambientes());
-        propiedad.setAntiguedadAnios(datos.antiguedadAnios());
         propiedad.setZonaUrbanizacion(datos.zonaUrbanizacion());
         propiedad.setGeoLat(datos.geoLat());
         propiedad.setGeoLong(datos.geoLong());
-        propiedad.setFrente(datos.frente());
-        propiedad.setZonificacion(datos.zonificacion());
-        propiedad.setNumeroEstacionamientos(datos.numeroEstacionamientos());
-        propiedad.setCuotaMantenimiento(datos.cuotaMantenimiento());
+        // Los seis gobernados NO se copian aqui: se fijan tras el save, por
+        // `fijarGobernados`, porque un atributo necesita el id de la propiedad.
         propiedad.setInteriorUnidad(enBlancoANulo(datos.interiorUnidad()));
         propiedad.setPiso(enBlancoANulo(datos.piso()));
         propiedad.setReferenciaInterna(enBlancoANulo(datos.referenciaInterna()));
         propiedad.setNombreEdificioGaleria(enBlancoANulo(datos.nombreEdificioGaleria()));
         propiedad.asignarDetalleLocal(datos.rubroPermitido(), datos.aptoLicenciaFuncionamiento(),
                 datos.cargaElectricaKw());
+    }
+
+    /**
+     * <b>Los seis conceptos que este endpoint sigue publicando, escritos donde
+     * manda su autoridad</b> (D-E4-3, paso 7).
+     *
+     * <p>Va DESPUES de {@code save} y no dentro de {@link #copiarCampos}
+     * porque un atributo gobernado cuelga del id de la propiedad, y en el alta
+     * ese id no existe hasta que la fila esta escrita.
+     *
+     * <p><b>Un null aqui significa \"ya no lo se\", no \"no lo toques\"</b>. Es
+     * el comportamiento que este recurso ya tenia —manda el objeto entero y
+     * cada PUT reescribia las seis columnas, nulos incluidos— y se conserva
+     * tal cual: {@code fijar} retira la fila cuando el valor llega vacio. Si
+     * se hubiera cambiado a \"solo escribo lo que venga con valor\", borrar un
+     * dato desde la pantalla dejaria de funcionar sin que nadie lo pidiera.
+     *
+     * <p>Y la aplicabilidad la decide el catalogo, no este metodo: mandar un
+     * {@code frente} para una OFICINA se rechaza con el mensaje del catalogo.
+     * Antes se aceptaba en silencio porque una columna no sabe a que tipo de
+     * inmueble pertenece.
+     */
+    private void fijarGobernados(long idOrganizacion, Propiedad propiedad, DatosLocal datos) {
+        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_AMBIENTES,
+                texto(datos.ambientes()));
+        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_ANTIGUEDAD_ANIOS,
+                texto(datos.antiguedadAnios()));
+        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_FRENTE,
+                texto(datos.frente()));
+        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_ZONIFICACION,
+                datos.zonificacion());
+        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_ESTACIONAMIENTOS,
+                texto(datos.numeroEstacionamientos()));
+        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO,
+                texto(datos.cuotaMantenimiento()));
+    }
+
+    /** El numero como lo espera el enrutador, o null si no hay numero. */
+    private static String texto(Number valor) {
+        return valor == null ? null : valor.toString();
     }
 
     /**
@@ -597,12 +688,13 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     }
 
     /** Ficha del detalle: portada real y estado de publicacion frescos (GET/PUT). */
-    private FichaLocal fichaCompleta(Propiedad p) {
+    private FichaLocal fichaCompleta(long idOrganizacion, Propiedad p) {
         String portada = fotos.findByIdPropiedadOrderByOrdenAscIdAsc(p.getId()).stream()
                 .findFirst()
                 .map(FotoPropiedad::getClave)
                 .orElse(null);
-        return ficha(p, publicaciones.codigoEstadoPublicacion(p.getId()), portada, nombrePropietario(p));
+        return ficha(p, publicaciones.codigoEstadoPublicacion(p.getId()), portada, nombrePropietario(p),
+                lector.de(idOrganizacion, p));
     }
 
     private String nombrePropietario(Propiedad p) {
@@ -627,8 +719,16 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 "Actualizacion de disponibilidad comercial");
     }
 
+    /**
+     * <b>El consumidor pide por clave logica; no sabe donde vive cada valor.</b>
+     *
+     * <p>{@code metraje} sale del agregado y los seis de {@code valores}, pero
+     * esa diferencia no la decide este metodo: la decide la autoridad declarada
+     * en el catalogo, y {@link LectorPorAutoridad} ya la resolvio. Si manana
+     * {@code ambientes} se promoviera a estructural, aqui no cambia una linea.
+     */
     private FichaLocal ficha(Propiedad p, String estadoPublicacion, String fotoPortadaClave,
-                             String propietarioNombre) {
+                             String propietarioNombre, ValoresDePropiedad valores) {
         DetalleLocalComercial detalle = p.getDetalleLocal();
         return new FichaLocal(
                 p.getId(), p.getCodigo(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
@@ -637,28 +737,44 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 p.getDescripcion(), p.estadoLegado(),
                 p.getRolPropietario() != null ? p.getRolPropietario().getId() : null,
                 propietarioNombre,
-                p.getTipoInmueble(), p.getUso(), p.getAmbientes(), p.getAntiguedadAnios(),
+                p.getTipoInmueble(), p.getUso(),
+                valores.entero(CatalogoAtributo.CLAVE_AMBIENTES),
+                valores.entero(CatalogoAtributo.CLAVE_ANTIGUEDAD_ANIOS),
                 p.getZonaUrbanizacion(), p.getGeoLat(), p.getGeoLong(), estadoPublicacion,
-                p.getFrente(), p.getZonificacion(),
+                valores.decimal(CatalogoAtributo.CLAVE_FRENTE),
+                valores.texto(CatalogoAtributo.CLAVE_ZONIFICACION),
                 detalle != null ? detalle.getAptoLicenciaFuncionamiento() : null,
                 detalle != null ? detalle.getCargaElectricaKw() : null,
-                p.getNumeroEstacionamientos(), p.getCuotaMantenimiento(), p.getIdDistrito(),
+                valores.entero(CatalogoAtributo.CLAVE_ESTACIONAMIENTOS),
+                valores.decimal(CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO), p.getIdDistrito(),
                 Fechas.local(p.getFechaRegistro()), fotoPortadaClave,
                 p.getEstadoRegistro(), p.getDisponibilidadComercial(), p.getInteriorUnidad(),
                 p.getPiso(), p.getReferenciaInterna(), p.getNombreEdificioGaleria());
     }
 
-    /** Mapea la proyeccion del listado sin tocar asociaciones de entidades. */
-    private FichaLocal ficha(LocalListado p, String estadoPublicacion, String fotoPortadaClave) {
+    /**
+     * Mapea la proyeccion del listado sin tocar asociaciones de entidades.
+     *
+     * <p>La proyeccion trae lo estructural —{@code metraje} entre ello— porque
+     * eso es lo que un listado puede ordenar y filtrar en SQL; {@code valores}
+     * trae lo gobernado, ya hidratado en lote para los ids de la pagina.
+     */
+    private FichaLocal ficha(LocalListado p, String estadoPublicacion, String fotoPortadaClave,
+                             ValoresDePropiedad valores) {
         return new FichaLocal(
                 p.getId(), p.getCodigoLocal(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
                 p.getPrecioReferencial(), p.getMonedaReferencial(),
                 p.getRubroPermitido(), p.getDescripcion(), p.getEstado(),
                 p.getIdPropietario(), p.getPropietarioNombre(), p.getTipoInmueble(), p.getUso(),
-                p.getAmbientes(), p.getAntiguedadAnios(), p.getZonaUrbanizacion(), p.getGeoLat(),
-                p.getGeoLong(), estadoPublicacion, p.getFrente(), p.getZonificacion(),
+                valores.entero(CatalogoAtributo.CLAVE_AMBIENTES),
+                valores.entero(CatalogoAtributo.CLAVE_ANTIGUEDAD_ANIOS),
+                p.getZonaUrbanizacion(), p.getGeoLat(),
+                p.getGeoLong(), estadoPublicacion,
+                valores.decimal(CatalogoAtributo.CLAVE_FRENTE),
+                valores.texto(CatalogoAtributo.CLAVE_ZONIFICACION),
                 p.getAptoLicenciaFuncionamiento(), p.getCargaElectricaKw(),
-                p.getNumeroEstacionamientos(), p.getCuotaMantenimiento(), p.getIdDistrito(),
+                valores.entero(CatalogoAtributo.CLAVE_ESTACIONAMIENTOS),
+                valores.decimal(CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO), p.getIdDistrito(),
                 Fechas.local(p.getFechaRegistro()), fotoPortadaClave,
                 null, null, null, null, null, null);
     }

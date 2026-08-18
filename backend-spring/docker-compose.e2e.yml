@@ -5,7 +5,12 @@
 # tmpfs y `docker compose down -v` retira tambien el almacen de documentos.
 services:
   postgres-e2e:
-    image: postgres:17-alpine
+    # PostGIS, igual que el compose de desarrollo. V46 hace
+    # `CREATE EXTENSION postgis` sobre una base VACIA, asi que aqui la
+    # dependencia no es opcional: sin la extension, Flyway aborta en la primera
+    # migracion del modelo universal y la suite entera muere antes de arrancar.
+    # Es la infraestructura que produccion tambien va a necesitar.
+    image: postgis/postgis:17-3.5-alpine
     container_name: ${CONTROLLOCAL_E2E_POSTGRES_CONTAINER:?CONTROLLOCAL_E2E_POSTGRES_CONTAINER requerido}
     environment:
       POSTGRES_DB: ${CONTROLLOCAL_E2E_DB:?CONTROLLOCAL_E2E_DB requerido}

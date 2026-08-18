@@ -103,7 +103,7 @@ export interface ResumenLocales {
   inactivos: number;
 }
 
-/** Contrato CONGELADO: espejo de `PrecioResponse`. Hito E/R/U/P/O/A/C. */
+/** Espejo de `PrecioResponse`. Hito E/R/U/P/O/A/C. */
 export interface PrecioLocal {
   id: number;
   idLocal?: number;
@@ -113,6 +113,12 @@ export interface PrecioLocal {
   /** ISO `YYYY-MM-DD`. */
   fecha?: string;
   fechaCreacion?: string;
+  /**
+   * `VENTA` o `ALQUILER` (D-E4-1). Una propiedad puede tener las dos series a
+   * la vez, y sin este campo llegan mezcladas: 180 000 y 2 900 en la misma
+   * lista solo se distinguen por magnitud, que es adivinar.
+   */
+  operacion?: 'VENTA' | 'ALQUILER';
 }
 
 /** Contrato CONGELADO: espejo de `PublicacionResponse`. Estado B/P/S/C. */

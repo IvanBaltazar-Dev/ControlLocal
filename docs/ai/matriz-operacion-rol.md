@@ -1,6 +1,6 @@
 # Matriz operación → rol
 
-**Las 166 operaciones REST del backend v2, con quién puede llamarlas y dónde se decide qué ve.**
+**Las 180 operaciones REST del backend v2, con quién puede llamarlas y dónde se decide qué ve.**
 
 Este documento es la **fuente de verdad**, no un resumen: `MatrizOperacionRolTest`
 (`controllocal-app/src/test/java/com/controllocal/arquitectura/`) lo parsea y **rompe el build**
@@ -34,7 +34,7 @@ Está pensado para el SPA Angular: es la entrada directa del estado por rol y de
 >
 > Si una persona gobierna **y** opera, lleva **dos roles explícitos** y la auditoría dice cuál usó.
 
-**79 de las 166 operaciones no llevan gate de rol** (7 públicas + 72 autenticadas). No es un olvido:
+**87 de las 180 operaciones no llevan gate de rol** (7 públicas + 79 autenticadas). No es un olvido:
 en la v1 el control de esas operaciones es de *alcance*, no de *acceso* — todos entran y cada uno
 recibe su porción. Por eso la columna **Alcance** es la parte importante de esta tabla, y la que el
 SPA necesita para no prometer en pantalla lo que el backend va a devolver vacío.
@@ -102,6 +102,33 @@ dar de alta y editar agentes pasó a ser gobierno (filas 17 y 18). La tabla list
 | POST | `/locales/{id}/fotos` | AGENTE | Máximo 6 por local; el binario ya está en el almacén. | F2 |
 | DELETE | `/locales/{id}/fotos/{idFoto}` | AGENTE | Devuelve la clave para limpiar el almacén. | F2 |
 
+## E4 — Propiedad universal y captura
+
+**El modelo nuevo (D-E4-1, D-E4-2).** `/locales` sigue siendo el alta de la v1 —un local comercial
+en alquiler, un propietario, el precio en una columna— y no se toca. `/propiedades` es el modelo
+entero: siete tipos, copropiedad con cuotas, atributos gobernados por catálogo y **una o dos
+operaciones simultáneas**, cada una con su encargo, su precio y su histórico.
+
+`/captura` es el motor de preguntas, y lo consumen **Angular y KAIROS por igual**: qué se sabe, qué
+falta, qué se pregunta ahora y si ya hay suficiente para ejecutar. Ninguno de los dos clientes
+puede tener una segunda copia de esas reglas — salen del catálogo.
+
+Dos cabeceras cruzan todo el bloque. `Idempotency-Key` hace que un reintento devuelva lo que
+produjo el primer intento en vez de duplicar la propiedad; `X-Origen` (UI, KAIROS, API, SISTEMA)
+viaja al evento de dominio y es lo que responde *«quién decidió esto»*.
+
+| Método | Ruta | Roles | Alcance | Vertical |
+|---|---|---|---|---|
+| POST | `/propiedades` | AGENTE | Alta universal en la organización del actor, en **una sola transacción**: propiedad, ubicación, titulares, atributos, encargos, condición económica, primer hito `U` y evento. El encargo nace PENDIENTE — el agente registra, el broker decide. | E4 |
+| GET | `/propiedades/{id}` | TODOS | Cartera de la organización; un id de otro tenant responde **404**. Devuelve titulares, atributos y encargos con el histórico **separado por operación**. | E4 |
+| PUT | `/propiedades/{id}` | AGENTE | Edición parcial sobre la cartera del tenant: lo que llega `null` no se toca. Cambiar el importe **añade** un hito; nunca sobrescribe el anterior. | E4 |
+| GET | `/propiedades/catalogo/{tipoPropiedad}` | TODOS | Qué se pregunta para ese tipo, derivado de `catalogo_atributo` (comunes de BROX + privados del tenant). Un TERRENO no devuelve dormitorios. | E4 |
+| POST | `/captura` | TODOS | Abre o continúa un borrador del tenant. **No escribe nada del negocio**: sólo anota lo conocido y responde qué falta. | E4 |
+| GET | `/captura` | TODOS | Los borradores en curso de la **organización**, no los de quien pregunta: es lo que permite que una captura iniciada por KAIROS la termine otra persona. | E4 |
+| GET | `/captura/definicion` | TODOS | Qué campos aplican a un `tipoPropiedad` + `operacion`, en tres familias: comunes, del tipo y de la operación. Sin alcance porque no devuelve datos de nadie — devuelve la **definición**, que sale del catálogo del tenant (`catalogo_atributo`). Existe para que ni Angular ni KAIROS tengan su propia matriz «tipo → campos». | E4 |
+| GET | `/captura/{id}` | TODOS | Un borrador del tenant. | E4 |
+| POST | `/captura/{id}/ejecutar` | AGENTE | Corre el caso de uso con lo que el borrador sabe. Falla con la lista de lo que falta si no hay suficiente. | E4 |
+| DELETE | `/captura/{id}` | TODOS | Descarta el borrador del tenant. No lo borra: que alguien lo empezara también es un hecho. | E4 |
 ## F2 — Proceso (prospección y captación)
 
 | Método | Ruta | Roles | Alcance | Vertical |

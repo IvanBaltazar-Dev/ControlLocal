@@ -66,14 +66,14 @@ export const routes: Routes = [
         loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
       },
       {
-        path: 'locales/nuevo',
+        path: 'propiedades/nueva',
         canActivate: [rolGuard],
         data: { roles: ['AGENTE'] },
         loadComponent: () =>
           import('./features/local-form/local-form').then((m) => m.LocalForm),
       },
       {
-        path: 'locales/:id/editar',
+        path: 'propiedades/:id/editar',
         canActivate: [rolGuard],
         data: { roles: ['AGENTE'] },
         loadComponent: () =>
@@ -236,11 +236,6 @@ export const routes: Routes = [
         path: 'reportes',
         canActivate: [rolGuard],
         loadComponent: () => import('./features/reportes/reportes').then((m) => m.Reportes),
-      },
-      {
-        path: 'catalogos',
-        canActivate: [rolGuard],
-        loadComponent: () => import('./features/catalogos/catalogos').then((m) => m.Catalogos),
       },
       {
         path: 'perfil',
@@ -479,16 +474,35 @@ export const routes: Routes = [
       {
         // Después de `locales/nuevo`: el router resuelve por orden y `:id`
         // capturaría también el literal "nuevo".
-        path: 'locales/:id',
+        path: 'propiedades/:id',
         canActivate: [rolGuard],
         loadComponent: () =>
           import('./features/local-detail/local-detail').then((m) => m.LocalDetail),
       },
       {
-        path: 'locales',
+        path: 'propiedades',
         canActivate: [rolGuard],
         loadComponent: () => import('./features/locales/locales').then((m) => m.Locales),
       },
+
+      // ----------------------------------------------------------------
+      // Compatibilidad: `/locales` fue la ruta hasta el 2026-08-18.
+      //
+      // El dominio se generalizó —siete tipos de propiedad, venta y alquiler—
+      // y la URL tenía que seguirlo: mantener `/locales` como nombre principal
+      // habría dejado el producto diciendo una cosa en el menú y otra en la
+      // barra de direcciones. La canónica es `/propiedades`.
+      //
+      // Estos redirects existen para los enlaces ya guardados y para el
+      // historial del navegador de quien lleva meses usando BROX. **Son
+      // temporales**: código nuevo, navegación y pruebas apuntan a la
+      // canónica, y estas cuatro filas se retiran cuando deje de haber
+      // tráfico hacia ellas.
+      // ----------------------------------------------------------------
+      { path: 'locales/nuevo', redirectTo: 'propiedades/nueva', pathMatch: 'full' },
+      { path: 'locales/:id/editar', redirectTo: 'propiedades/:id/editar', pathMatch: 'full' },
+      { path: 'locales/:id', redirectTo: 'propiedades/:id', pathMatch: 'full' },
+      { path: 'locales', redirectTo: 'propiedades', pathMatch: 'full' },
       {
         // Sin rolGuard a propósito: es el destino cuando el guard rechaza, y
         // protegerla provocaría un bucle de redirecciones.

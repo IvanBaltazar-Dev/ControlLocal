@@ -1,0 +1,595 @@
+package com.controllocal.service.captura;
+
+import com.controllocal.domain.captura.BorradorCaptura;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
+import com.controllocal.persistence.repositorio.BorradorCapturaRepository;
+import com.controllocal.service.Actor;
+import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
+import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
+import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
+import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
+import com.controllocal.service.PropiedadUniversalService.ResultadoRegistro;
+import com.controllocal.service.PropiedadUniversalService.Titular;
+import com.controllocal.service.PropiedadUniversalService.Ubicacion;
+import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
+import com.controllocal.service.excepcion.NoEncontradoException;
+import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.service.soporte.Documentos;
+import com.controllocal.service.soporte.OperacionDelEncargo;
+import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.Procedencia;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * El motor, para la intencion {@code REGISTRAR_PROPIEDAD}.
+ *
+ * <h2>Como decide que falta</h2>
+ * Suma dos listas y resta lo que ya sabe:
+ * <ol>
+ *   <li>lo <b>estructural</b> obligatorio, que declara {@link GuionRegistroPropiedad}
+ *       y es igual para los siete tipos;</li>
+ *   <li>lo <b>obligatorio del catalogo</b> para ese tipo, que sale de
+ *       {@code catalogo_atributo} — y por eso un terreno pide zonificacion y un
+ *       departamento pide dormitorios sin que este fichero sepa nada de
+ *       ninguno de los dos.</li>
+ * </ol>
+ *
+ * <p>La segunda lista <b>no se puede calcular hasta conocer el tipo</b>, y eso
+ * explica el orden: mientras {@code tipoPropiedad} falte, lo unico que el motor
+ * puede preguntar es el tipo.
+ *
+ * <h2>Validar al anotar, no al ejecutar</h2>
+ * Cada valor se comprueba cuando entra: la operacion contra
+ * {@link OperacionInmobiliaria}, los atributos contra su tipo de dato del
+ * catalogo. Guardar en el borrador un "dormitorios: muchos" y descubrirlo al
+ * final significa hacer al usuario recorrer otra vez todas las preguntas.
+ */
+@Service
+public class MotorDeCapturaImpl implements MotorDeCaptura {
+
+    private final BorradorCapturaRepository borradores;
+    private final PropiedadUniversalService propiedades;
+    private final AtributosGobernados gobierno;
+    private final Documentos documentos;
+
+    public MotorDeCapturaImpl(BorradorCapturaRepository borradores,
+                              PropiedadUniversalService propiedades,
+                              AtributosGobernados gobierno, Documentos documentos) {
+        this.borradores = borradores;
+        this.propiedades = propiedades;
+        this.gobierno = gobierno;
+        this.documentos = documentos;
+    }
+
+    // ==================================================================
+
+    @Override
+    @Transactional
+    public EstadoCaptura avanzar(String intencion, Long idBorrador, Map<String, String> datos,
+                                 Procedencia procedente, Actor actor) {
+        Procedencia procedencia = Procedencia.oPantalla(procedente);
+        String intencionValidada = intencionValidada(intencion);
+        BorradorCaptura borrador = idBorrador == null
+                ? abrir(actor, intencionValidada, procedencia)
+                : cargar(idBorrador, actor);
+
+        if (!borrador.estaEnCurso()) {
+            throw new ReglaNegocioException(
+                    "El borrador " + borrador.getCodigo() + " ya no esta en curso: se "
+                            + (BorradorCaptura.EJECUTADO.equals(borrador.getEstado())
+                                    ? "ejecuto y produjo " + borrador.getEntidadObjetivoTipo() + " "
+                                            + borrador.getEntidadObjetivoId()
+                                    : "descarto") + ".");
+        }
+        // El canal puede cambiar a mitad: empieza KAIROS, sigue la pantalla. Se
+        // queda el ultimo que escribio, que es quien responde por el dato.
+        borrador.setCanal(procedencia.canal());
+        borrador.setAgente(procedencia.agente());
+        // La conversacion, en cambio, se estampa UNA vez (V59): un borrador
+        // nace de una conversacion o de ninguna, y si la ultima que lo tocara
+        // pudiera sobrescribirla, el rastro diria que la propiedad salio de la
+        // conversacion equivocada.
+        borrador.nacioEn(procedencia.conversacionId());
+
+        Map<String, Object> conocido = documentos.comoMapa(borrador.getDatosConocidos());
+        incorporar(actor, conocido, datos);
+
+        List<String> faltante = loQueFalta(actor, conocido);
+        borrador.anotar(documentos.objeto(conocido), documentos.lista(faltante));
+        borradores.save(borrador);
+
+        return estado(borrador, conocido, faltante, actor);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EstadoCaptura consultar(long idBorrador, Actor actor) {
+        BorradorCaptura borrador = cargar(idBorrador, actor);
+        Map<String, Object> conocido = documentos.comoMapa(borrador.getDatosConocidos());
+        return estado(borrador, conocido, documentos.comoLista(borrador.getDatosFaltantes()), actor);
+    }
+
+    /**
+     * <b>Aquí es donde el catálogo decide, y por eso el cliente no tiene que
+     * saber nada.</b>
+     *
+     * <p>Lo estructural sale de {@link GuionRegistroPropiedad} —y filtrado por
+     * tipo: un terreno no tiene interior, ni piso, ni edificio—; lo del tipo
+     * sale de {@code catalogo_atributo}, así que dar de alta un almacén no
+     * necesita tocar este método; y lo económico se rotula según la operación,
+     * porque «Renta mensual» sobre una venta es sencillamente falso.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public DefinicionCaptura definicion(String intencion, String tipoPropiedad, String operacion,
+                                        Actor actor) {
+        String intencionValidada = intencionValidada(intencion);
+        String codigoTipo = AtributosGobernados.codigoDelTipo(tipoPropiedad)
+                .orElseThrow(() -> new ReglaNegocioException(
+                        "Tipo de propiedad desconocido: \"" + tipoPropiedad + "\". Son siete: LOCAL, "
+                                + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
+        // La operación se exige aquí igual que en la escritura: sin ella no se
+        // puede rotular el importe, y un importe sin nombre es el error que el
+        // modelo universal vino a impedir.
+        OperacionInmobiliaria op = OperacionDelEncargo.deTexto(operacion);
+
+        List<Pregunta> comunes = new ArrayList<>();
+        for (String clave : GuionRegistroPropiedad.COMUNES) {
+            Pregunta pregunta = GuionRegistroPropiedad.pregunta(clave);
+            if (pregunta != null) {
+                comunes.add(pregunta.en(Pregunta.FAMILIA_COMUN, comunes.size()));
+            }
+        }
+
+        // Estructurales condicionadas al tipo + todo lo que el catálogo declare
+        // aplicable a ese tipo. Las dos cosas dependen del tipo físico, así que
+        // viajan juntas y se descartan juntas al cambiarlo.
+        List<Pregunta> delTipo = new ArrayList<>();
+        for (String clave : List.of(GuionRegistroPropiedad.INTERIOR,
+                GuionRegistroPropiedad.PISO_UNIDAD, GuionRegistroPropiedad.EDIFICIO)) {
+            if (GuionRegistroPropiedad.aplicaAlTipo(clave, codigoTipo)) {
+                delTipo.add(GuionRegistroPropiedad.pregunta(clave)
+                        .en(Pregunta.FAMILIA_TIPO, delTipo.size()));
+            }
+        }
+        for (CatalogoAtributo atributo : gobierno.aplicablesA(actor.idOrganizacion(), codigoTipo)) {
+            delTipo.add(new Pregunta(atributo.getClave(), atributo.getRotulo(),
+                    atributo.getTipoDato(), atributo.getUnidad(), null,
+                    atributo.esRequeridoPara(codigoTipo), null)
+                    .en(Pregunta.FAMILIA_TIPO, delTipo.size()));
+        }
+
+        List<Pregunta> deLaOperacion = new ArrayList<>();
+        for (String clave : GuionRegistroPropiedad.DE_LA_OPERACION) {
+            Pregunta pregunta = GuionRegistroPropiedad.pregunta(clave);
+            if (pregunta == null) {
+                continue;
+            }
+            if (GuionRegistroPropiedad.IMPORTE.equals(clave)) {
+                // El mismo campo, dos nombres: 180 000 y 2 900 no se distinguen
+                // por magnitud, se distinguen por rótulo.
+                pregunta = new Pregunta(pregunta.clave(), mayuscula(op.nombreDelImporte()),
+                        pregunta.tipoDato(), pregunta.unidad(), pregunta.opciones(),
+                        pregunta.obligatoria(), pregunta.ayuda());
+            }
+            deLaOperacion.add(pregunta.en(Pregunta.FAMILIA_OPERACION, deLaOperacion.size()));
+        }
+
+        return new DefinicionCaptura(intencionValidada, nombreDelTipo(codigoTipo), op.name(),
+                List.copyOf(comunes), List.copyOf(delTipo), List.copyOf(deLaOperacion));
+    }
+
+    private static String mayuscula(String texto) {
+        return texto.isEmpty() ? texto : Character.toUpperCase(texto.charAt(0)) + texto.substring(1);
+    }
+
+    private static String nombreDelTipo(String codigoTipo) {
+        return AtributosGobernados.nombreDelTipo(codigoTipo);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EstadoCaptura> enCurso(Actor actor) {
+        return borradores.enCurso(actor.idOrganizacion()).stream()
+                .map(borrador -> estado(borrador, documentos.comoMapa(borrador.getDatosConocidos()),
+                        documentos.comoLista(borrador.getDatosFaltantes()), actor))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public Ejecucion ejecutar(long idBorrador, String claveIdempotencia, Procedencia procedente,
+                              Actor actor) {
+        Procedencia procedencia = Procedencia.oPantalla(procedente);
+        BorradorCaptura borrador = cargar(idBorrador, actor);
+
+        // Un borrador ya ejecutado devuelve lo que produjo, en vez de fallar.
+        // Es la misma promesa que la idempotencia de comandos: reintentar y
+        // acertar a la primera tienen que ser indistinguibles.
+        //
+        // Y "lo mismo" es LO MISMO, no solo el id: la respuesta se reconstruye
+        // leyendo la propiedad. Devolver aqui `null` y una lista vacia —que es
+        // lo que hacia -- dejaba al reintento sin el codigo ni los encargos, y
+        // un canal conversacional que reintenta no puede recibir una respuesta
+        // mas pobre que la del intento que si llego.
+        if (BorradorCaptura.EJECUTADO.equals(borrador.getEstado())) {
+            return reconstruir(borrador, actor);
+        }
+        if (!borrador.estaEnCurso()) {
+            throw new ReglaNegocioException(
+                    "El borrador " + borrador.getCodigo() + " esta descartado.");
+        }
+
+        Map<String, Object> conocido = documentos.comoMapa(borrador.getDatosConocidos());
+        List<String> faltante = loQueFalta(actor, conocido);
+        if (!faltante.isEmpty()) {
+            throw new ReglaNegocioException(
+                    "Todavia falta: " + String.join(", ", faltante)
+                            + ". El alta no se ejecuta a medias.");
+        }
+
+        ResultadoRegistro resultado = propiedades.registrar(
+                comandoDesde(actor, conocido, borrador, claveIdempotencia,
+                        procedenciaDelAlta(borrador, procedencia)), actor);
+
+        // `registrar` ya cierra el borrador cuando recibe su id. Se relee para
+        // no devolver el objeto en memoria con un estado que la otra rama pudo
+        // haber cambiado.
+        BorradorCaptura despues = cargar(idBorrador, actor);
+        if (despues.estaEnCurso()) {
+            despues.ejecutado("PROPIEDAD", resultado.idPropiedad());
+            borradores.save(despues);
+        }
+        return new Ejecucion(borrador.getId(), resultado.idPropiedad(), resultado.codigo(),
+                resultado.idsEncargos(), resultado.reintento());
+    }
+
+    /**
+     * La respuesta de un borrador que ya se ejecuto, leida de la propiedad que
+     * produjo.
+     *
+     * <p>Se reconstruye en vez de guardarse porque la propiedad es la fuente:
+     * si desde entonces se abrio un segundo encargo —el de alquiler junto al de
+     * venta, que es el caso que el modelo universal existe para admitir—, la
+     * respuesta lo refleja en vez de repetir una foto vieja.
+     */
+    private Ejecucion reconstruir(BorradorCaptura borrador, Actor actor) {
+        Long idPropiedad = borrador.getEntidadObjetivoId();
+        if (idPropiedad == null) {
+            // No deberia poder pasar: `ck_borrador_objetivo` (V56) exige la
+            // entidad cuando el estado es ejecutado. Si pasara, se dice.
+            return new Ejecucion(borrador.getId(), null, null, List.of(), true);
+        }
+        FichaPropiedadUniversal ficha = propiedades.consultar(idPropiedad, actor);
+        return new Ejecucion(borrador.getId(), idPropiedad, ficha.codigo(),
+                ficha.encargos().stream().map(EncargoFicha::idEncargo).toList(), true);
+    }
+
+    @Override
+    @Transactional
+    public EstadoCaptura descartar(long idBorrador, Actor actor) {
+        BorradorCaptura borrador = cargar(idBorrador, actor);
+        if (borrador.estaEnCurso()) {
+            borrador.descartar();
+            borradores.save(borrador);
+        }
+        return estado(borrador, documentos.comoMapa(borrador.getDatosConocidos()),
+                List.of(), actor);
+    }
+
+    // ==================================================================
+    // Lo que sabe y lo que falta
+    // ==================================================================
+
+    /**
+     * Incorpora lo que acaba de llegar, validando cada valor <b>al entrar</b>.
+     * Un valor invalido guardado ahora es una pregunta repetida al final.
+     */
+    private void incorporar(Actor actor, Map<String, Object> conocido, Map<String, String> datos) {
+        if (datos == null || datos.isEmpty()) {
+            return;
+        }
+        datos.forEach((clave, valor) -> {
+            if (clave == null || clave.isBlank()) {
+                return;
+            }
+            String limpia = clave.trim();
+            if (valor == null || valor.isBlank()) {
+                // Vaciar un dato es legitimo: el usuario se corrige.
+                conocido.remove(limpia);
+                return;
+            }
+            conocido.put(limpia, validar(actor, conocido, limpia, valor.trim()));
+        });
+    }
+
+    private Object validar(Actor actor, Map<String, Object> conocido, String clave, String valor) {
+        switch (clave) {
+            case GuionRegistroPropiedad.TIPO_PROPIEDAD -> {
+                return AtributosGobernados.codigoDelTipo(valor)
+                        .map(AtributosGobernados::nombreDelTipo)
+                        .orElseThrow(() -> new ReglaNegocioException(
+                                "Tipo de propiedad desconocido: \"" + valor + "\". Son siete: LOCAL, "
+                                        + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
+            }
+            case GuionRegistroPropiedad.OPERACION -> {
+                try {
+                    return OperacionInmobiliaria.desde(valor).name();
+                } catch (IllegalArgumentException e) {
+                    throw new ReglaNegocioException(e.getMessage());
+                }
+            }
+            case GuionRegistroPropiedad.IMPORTE -> {
+                try {
+                    return new BigDecimal(valor.replace(",", ""));
+                } catch (NumberFormatException e) {
+                    throw new ReglaNegocioException("El importe llego como \"" + valor + "\".");
+                }
+            }
+            case GuionRegistroPropiedad.MONEDA -> {
+                String moneda = valor.toUpperCase(java.util.Locale.ROOT);
+                if (!"PEN".equals(moneda) && !"USD".equals(moneda)) {
+                    throw new ReglaNegocioException("Moneda desconocida: \"" + valor + "\".");
+                }
+                return moneda;
+            }
+            case GuionRegistroPropiedad.TITULARES -> {
+                // Se valida la FORMA aqui; que las personas existan y que las
+                // cuotas sumen 100 lo comprueba el caso de uso, que es quien
+                // puede consultarlo.
+                titularesDe(valor);
+                return valor;
+            }
+            default -> {
+                if (GuionRegistroPropiedad.esEstructural(clave)) {
+                    return valor;
+                }
+                // No es estructural: entonces tiene que ser del catalogo, y su
+                // valor tiene que encajar con el tipo de dato declarado.
+                return validarAtributo(actor, conocido, clave, valor);
+            }
+        }
+    }
+
+    private Object validarAtributo(Actor actor, Map<String, Object> conocido, String clave,
+                                   String valor) {
+        CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
+        String tipo = codigoDelTipoConocido(conocido);
+        if (tipo != null && !definicion.aplicaA(tipo)) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" no aplica a una propiedad de tipo "
+                            + AtributosGobernados.nombreDelTipo(tipo) + ".");
+        }
+        // Solo se comprueba que el VALOR encaja con su tipo de dato. La
+        // aplicabilidad ya se miro arriba SI el tipo se conoce: alguien puede
+        // dictar "tres dormitorios" antes de decir que es un departamento, y
+        // rechazarlo entonces seria mentir sobre un dato correcto. Al guardar
+        // se comprueba otra vez, ya con el tipo definitivo.
+        gobierno.exigirValorCompatible(actor.idOrganizacion(), clave, valor);
+        return valor;
+    }
+
+    /**
+     * Lo estructural que falta, mas lo obligatorio del catalogo para el tipo.
+     *
+     * <p>Mientras no se sepa el tipo, la segunda lista no existe: el catalogo
+     * no puede decir que se pregunta de algo que todavia no se sabe que es.
+     */
+    private List<String> loQueFalta(Actor actor, Map<String, Object> conocido) {
+        List<String> faltante = new ArrayList<>();
+        for (String clave : GuionRegistroPropiedad.OBLIGATORIAS) {
+            if (!conocido.containsKey(clave)) {
+                faltante.add(clave);
+            }
+        }
+        String tipo = codigoDelTipoConocido(conocido);
+        if (tipo != null) {
+            faltante.addAll(gobierno.faltantesEntre(actor.idOrganizacion(), tipo, conocido.keySet()));
+        }
+        return faltante;
+    }
+
+    private EstadoCaptura estado(BorradorCaptura borrador, Map<String, Object> conocido,
+                                 List<String> faltante, Actor actor) {
+        Pregunta siguiente = faltante.isEmpty()
+                ? null
+                : preguntaDe(actor, conocido, faltante.get(0));
+        return new EstadoCaptura(borrador.getId(), borrador.getCodigo(), borrador.getIntencion(),
+                borrador.getEstado(), borrador.getCanal(), conocido, faltante, siguiente,
+                faltante.isEmpty() && borrador.estaEnCurso(), borrador.getEntidadObjetivoTipo(),
+                borrador.getEntidadObjetivoId(), Fechas.local(borrador.getActualizadoEn()));
+    }
+
+    /** La siguiente pregunta: del guion si es estructural, del catalogo si no. */
+    private Pregunta preguntaDe(Actor actor, Map<String, Object> conocido, String clave) {
+        Pregunta estructural = GuionRegistroPropiedad.pregunta(clave);
+        if (estructural != null) {
+            return estructural;
+        }
+        CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
+        String tipo = codigoDelTipoConocido(conocido);
+        return new Pregunta(definicion.getClave(), definicion.getRotulo(), definicion.getTipoDato(),
+                definicion.getUnidad(), null,
+                tipo != null && definicion.esRequeridoPara(tipo), null);
+    }
+
+    // ==================================================================
+    // Del borrador al comando
+    // ==================================================================
+
+    /**
+     * De donde sale el alta que produce un borrador.
+     *
+     * <p>Es una <b>fusion</b>, y las dos mitades vienen de sitios distintos a
+     * proposito. El origen y el turno los pone quien ejecuta AHORA: si el
+     * agente confirma desde la pantalla, el hecho lo pidio la pantalla y eso es
+     * lo cierto. La <b>conversacion</b>, en cambio, la pone el borrador, porque
+     * la conversacion que produjo la propiedad es aquella en la que se dictaron
+     * los datos, no aquella —si es que hubo alguna— desde la que se apreto el
+     * boton.
+     *
+     * <p>Es literalmente la frase que V56 se comprometio a poder construir:
+     * <i>"esta propiedad la registro KAIROS a partir de la conversacion del
+     * martes"</i>. Sin esta fusion, un alta dictada el martes y confirmada el
+     * miercoles por pantalla se quedaria sin conversacion, que es justo el caso
+     * que el borrador existe para permitir.
+     */
+    private static Procedencia procedenciaDelAlta(BorradorCaptura borrador, Procedencia ejecuta) {
+        if (ejecuta.conversacionId() != null || borrador.getConversacionId() == null) {
+            return ejecuta;
+        }
+        return new Procedencia(ejecuta.canal(), ejecuta.agente(), ejecuta.modelo(),
+                ejecuta.modeloVersion(), borrador.getConversacionId(), ejecuta.turnoId(),
+                ejecuta.mensajeId(), ejecuta.peticion(), ejecuta.herramienta());
+    }
+
+    private ComandoRegistro comandoDesde(Actor actor, Map<String, Object> conocido,
+                                         BorradorCaptura borrador, String claveIdempotencia,
+                                         Procedencia procedencia) {
+        String tipo = texto(conocido, GuionRegistroPropiedad.TIPO_PROPIEDAD);
+        String moneda = texto(conocido, GuionRegistroPropiedad.MONEDA);
+
+        OperacionSolicitada operacion = new OperacionSolicitada(
+                texto(conocido, GuionRegistroPropiedad.OPERACION),
+                numero(conocido, GuionRegistroPropiedad.IMPORTE), moneda,
+                null, null, null, null,
+                booleano(conocido, GuionRegistroPropiedad.EXCLUSIVIDAD), null, null);
+
+        Ubicacion ubicacion = new Ubicacion(
+                texto(conocido, GuionRegistroPropiedad.DIRECCION),
+                texto(conocido, GuionRegistroPropiedad.DISTRITO),
+                texto(conocido, GuionRegistroPropiedad.ZONA),
+                numero(conocido, GuionRegistroPropiedad.LATITUD),
+                numero(conocido, GuionRegistroPropiedad.LONGITUD),
+                texto(conocido, GuionRegistroPropiedad.INTERIOR),
+                texto(conocido, GuionRegistroPropiedad.PISO_UNIDAD),
+                texto(conocido, GuionRegistroPropiedad.REFERENCIA),
+                texto(conocido, GuionRegistroPropiedad.EDIFICIO));
+
+        // Todo lo que no es estructural es un atributo del catalogo. No hay
+        // lista blanca: si el motor lo acepto al entrar, es porque el catalogo
+        // lo reconocio.
+        List<ValorAtributo> atributos = new ArrayList<>();
+        conocido.forEach((clave, valor) -> {
+            if (!GuionRegistroPropiedad.esEstructural(clave) && valor != null) {
+                atributos.add(new ValorAtributo(clave, valor.toString()));
+            }
+        });
+
+        return new ComandoRegistro(claveIdempotencia, procedencia,
+                texto(conocido, GuionRegistroPropiedad.CODIGO), tipo,
+                texto(conocido, GuionRegistroPropiedad.USO),
+                texto(conocido, GuionRegistroPropiedad.DESCRIPCION), ubicacion,
+                titularesDe(texto(conocido, GuionRegistroPropiedad.TITULARES)), atributos,
+                List.of(operacion), borrador.getId());
+    }
+
+    /**
+     * {@code "12:60,13:40"} o {@code "12"}. El formato es deliberadamente
+     * pobre: lo escribe una maquina —el cliente, que ya resolvio los nombres
+     * con el buscador de propietarios— y no una persona.
+     */
+    static List<Titular> titularesDe(String valor) {
+        if (valor == null || valor.isBlank()) {
+            return List.of();
+        }
+        List<Titular> titulares = new ArrayList<>();
+        for (String parte : valor.split(",")) {
+            String[] trozos = parte.trim().split(":");
+            long idRol;
+            try {
+                idRol = Long.parseLong(trozos[0].trim());
+            } catch (NumberFormatException e) {
+                throw new ReglaNegocioException(
+                        "Los titulares se declaran por id: \"" + parte.trim() + "\" no lo es. "
+                                + "Formato: 12:60,13:40");
+            }
+            BigDecimal cuota = null;
+            if (trozos.length > 1 && !trozos[1].isBlank()) {
+                try {
+                    cuota = new BigDecimal(trozos[1].trim());
+                } catch (NumberFormatException e) {
+                    throw new ReglaNegocioException(
+                            "La cuota del titular " + idRol + " llego como \"" + trozos[1] + "\".");
+                }
+            }
+            titulares.add(new Titular(idRol, cuota, titulares.isEmpty()));
+        }
+        return titulares;
+    }
+
+    // ==================================================================
+
+    private BorradorCaptura abrir(Actor actor, String intencion, Procedencia procedencia) {
+        long correlativo = borradores.countByOrganizacionId(actor.idOrganizacion()) + 1;
+        BorradorCaptura borrador = BorradorCaptura.abrir(actor.idOrganizacion(),
+                "CAP-%05d".formatted(correlativo), actor.idRolOperativo(), intencion,
+                procedencia.canal(), procedencia.agente());
+        borrador.nacioEn(procedencia.conversacionId());
+        return borradores.save(borrador);
+    }
+
+    private BorradorCaptura cargar(long idBorrador, Actor actor) {
+        return borradores.findByOrganizacionIdAndId(actor.idOrganizacion(), idBorrador)
+                .orElseThrow(() -> new NoEncontradoException("Borrador de captura"));
+    }
+
+    private static String intencionValidada(String intencion) {
+        String limpia = intencion == null || intencion.isBlank()
+                ? REGISTRAR_PROPIEDAD : intencion.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!BorradorCaptura.INTENCIONES.contains(limpia)) {
+            throw new ReglaNegocioException(
+                    "Intencion de captura desconocida: \"" + intencion + "\". Por ahora solo "
+                            + REGISTRAR_PROPIEDAD + ".");
+        }
+        return limpia;
+    }
+
+    private static String codigoDelTipoConocido(Map<String, Object> conocido) {
+        Object tipo = conocido.get(GuionRegistroPropiedad.TIPO_PROPIEDAD);
+        return tipo == null
+                ? null
+                : AtributosGobernados.codigoDelTipo(tipo.toString()).orElse(null);
+    }
+
+    private static String texto(Map<String, Object> conocido, String clave) {
+        Object valor = conocido.get(clave);
+        return valor == null ? null : valor.toString();
+    }
+
+    private static BigDecimal numero(Map<String, Object> conocido, String clave) {
+        Object valor = conocido.get(clave);
+        if (valor == null) {
+            return null;
+        }
+        if (valor instanceof BigDecimal numero) {
+            return numero;
+        }
+        try {
+            return new BigDecimal(valor.toString());
+        } catch (NumberFormatException e) {
+            throw new ReglaNegocioException("El valor de \"" + clave + "\" no es un numero.");
+        }
+    }
+
+    private static Boolean booleano(Map<String, Object> conocido, String clave) {
+        Object valor = conocido.get(clave);
+        if (valor == null) {
+            return null;
+        }
+        if (valor instanceof Boolean booleano) {
+            return booleano;
+        }
+        String texto = valor.toString().toLowerCase(java.util.Locale.ROOT);
+        return "true".equals(texto) || "si".equals(texto) || "1".equals(texto);
+    }
+}

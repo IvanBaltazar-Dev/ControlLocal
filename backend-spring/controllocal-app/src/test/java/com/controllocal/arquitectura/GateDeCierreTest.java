@@ -74,12 +74,24 @@ class GateDeCierreTest {
         }
 
         assertEquals(List.of(
+                        // D-E4-3 — una autoridad persistente por clave publicada.
+                        "AutoridadDelDatoIntegrationTest",
                         "BusquedaLocalesIntegrationTest",
                         // E0.2 — el historico economico contra PostgreSQL real.
                         "HistoricoPrecioIntegrationTest",
                         "InvariantesComisionIntegrationTest",
+                        // D-E4-1 — las tres piezas del nucleo universal contra
+                        // PostgreSQL: titularidad, atributos gobernados y outbox.
+                        "NucleoUniversalIntegrationTest",
                         "OcupacionInmuebleIntegrationTest",
                         "PadronDeGobiernoIntegrationTest",
+                        // D-E4-1 / D-E4-2 — los 15 escenarios de aceptacion de la
+                        // propiedad universal y la captura. Es el unico que COMETE
+                        // de verdad, en tenants propios: cuatro de sus invariantes
+                        // (cuotas diferidas, idempotencia, rollback y encargos
+                        // simultaneos) no existen dentro de una transaccion que se
+                        // deshace.
+                        "PropiedadUniversalIntegrationTest",
                         "RepositorioEstadosIntegrationTest",
                         "SimulacroRecuperacionIntegrationTest",
                         "VocabularioPersistidoIntegrationTest"),

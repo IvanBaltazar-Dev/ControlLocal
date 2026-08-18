@@ -39,6 +39,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -51,9 +52,16 @@ import static org.mockito.Mockito.when;
 
 /**
  * Blinda la revision del broker (MEJ-03: observacion obligatoria en O/R),
- * el invariante "una sola captacion ACTIVA por local", el reenvio O->P y la
- * reasignacion como EVENTO de actor (sin transicion de estado). Mensajes
- * identicos al CaptacionBusinessLogicImpl v1.
+ * el invariante <b>un encargo vivo por (local, OPERACION)</b>, el reenvio O-&gt;P
+ * y la reasignacion como EVENTO de actor (sin transicion de estado).
+ *
+ * <p><b>El invariante cambio en D-E4-1</b>, y no por comodidad. Era "una sola
+ * captacion ACTIVA por local", y tenia sentido mientras una propiedad solo
+ * pudiera alquilarse. Con la venta dentro del modelo, esa regla prohibe
+ * justamente el caso que el modelo universal existe para admitir: la misma casa
+ * en venta y en alquiler a la vez, cada una con su precio y su historico. Lo
+ * que sigue prohibido —y ahora tambien en PENDIENTE y OBSERVADA, no solo en
+ * ACTIVA— es un segundo encargo de la MISMA operacion.
  */
 class CaptacionServiceImplTest {
 
@@ -130,7 +138,9 @@ class CaptacionServiceImplTest {
     void aprobarActivaLaCaptacionYAuditaConElBroker() {
         captacionEnEstado(Captacion.PENDIENTE_REVISION);
         when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-        when(captaciones.existsByOrganizacionIdAndPropiedadIdAndEstado(ORG, 7L, Captacion.ACTIVA)).thenReturn(false);
+        // Sin otro encargo de ALQUILER vivo sobre el mismo local. Que exista
+        // uno de VENTA no estorbaria: la exclusion es POR OPERACION (D-E4-1).
+        when(captaciones.encargoVivoDe(ORG, 7L, "A")).thenReturn(Optional.empty());
 
         FichaCaptacion ficha = service.decidir(9L, "A", "Sin observaciones", broker);
 
@@ -146,13 +156,17 @@ class CaptacionServiceImplTest {
     }
 
     @Test
-    void aprobarConOtraActivaEnElLocalRespondeElMensajeV1() {
+    void aprobarConOtroEncargoVivoDeLaMismaOperacionSeRechaza() {
         captacionEnEstado(Captacion.PENDIENTE_REVISION);
         when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
-        when(captaciones.existsByOrganizacionIdAndPropiedadIdAndEstado(ORG, 7L, Captacion.ACTIVA)).thenReturn(true);
+        when(captaciones.encargoVivoDe(ORG, 7L, "A")).thenReturn(Optional.of(otroEncargo(99L, "A")));
+
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
                 () -> service.decidir(9L, "A", null, broker));
-        assertEquals("Solo una captacion del mismo local puede estar ACTIVA.", error.getMessage());
+
+        assertTrue(error.getMessage().contains("ALQUILER"), error.getMessage());
+        assertTrue(error.getMessage().contains("CAP-0099"),
+                "el mensaje dice CUAL es el encargo que estorba: " + error.getMessage());
     }
 
     @Test
@@ -184,13 +198,35 @@ class CaptacionServiceImplTest {
     }
 
     @Test
-    void registrarConOtraActivaEnElLocalRespondeElMensajeV1() {
+    void registrarConOtroEncargoVivoDeLaMismaOperacionSeRechaza() {
         when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
         when(propiedades.findByOrganizacionIdAndId(ORG, 7L)).thenReturn(Optional.of(propiedad(7L)));
-        when(captaciones.existsByOrganizacionIdAndPropiedadIdAndEstado(ORG, 7L, Captacion.ACTIVA)).thenReturn(true);
+        when(captaciones.encargoVivoDe(ORG, 7L, "A")).thenReturn(Optional.of(otroEncargo(99L, "A")));
+
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
                 () -> service.registrar(datos("CAP-0100"), agente));
-        assertEquals("Solo una captacion del mismo local puede estar ACTIVA.", error.getMessage());
+
+        assertTrue(error.getMessage().contains("ALQUILER"), error.getMessage());
+        assertTrue(error.getMessage().contains("OTRA operacion si es posible"),
+                "el mensaje tiene que ensenar que venta y alquiler pueden convivir: "
+                        + error.getMessage());
+    }
+
+    @Test
+    void unEncargoSinOperacionNoSePuedeRegistrar() {
+        // D-E4-1: se acabo el defecto silencioso a alquiler. Sin operacion
+        // declarada, el encargo no se abre -- no se sabe si el titular quiere
+        // vender o alquilar, que es lo primero que hay que saber.
+        DatosCaptacion sinOperacion = new DatosCaptacion("CAP-0100", LocalDate.of(2026, 7, 10),
+                LocalDate.of(2026, 7, 10), LocalDate.of(2027, 7, 10), new BigDecimal("100.00"),
+                "Encargo sin operacion", 7L, 30L, null, 3, Boolean.TRUE);
+
+        when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
+        when(propiedades.findByOrganizacionIdAndId(ORG, 7L)).thenReturn(Optional.of(propiedad(7L)));
+
+        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
+                () -> service.registrar(sinOperacion, agente));
+        assertTrue(error.getMessage().contains("VENTA o ALQUILER"), error.getMessage());
     }
 
     @Test
@@ -310,6 +346,9 @@ class CaptacionServiceImplTest {
         cap.setFechaFinVigencia(LocalDate.of(2027, 7, 1));
         cap.setComisionPactada(new BigDecimal("4250.00"));
         cap.setExclusividad(Boolean.TRUE);
+        // La operacion ya no tiene defecto en la entidad (D-E4-1): un encargo
+        // de prueba sin declararla seria un encargo que la BD no admitiria.
+        cap.setMotivoOperacion("A");
         cap.setPropiedad(propiedad(7L));
         cap.setAgente(detalleAgente(30L, "Valentina Mora"));
         new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(cap, estado);
@@ -318,6 +357,17 @@ class CaptacionServiceImplTest {
         when(alcances.alcanza(actor, 30L)).thenReturn(true);
         when(fotos.findByIdPropiedadOrderByOrdenAscIdAsc(anyLong())).thenReturn(List.of());
         return cap;
+    }
+
+    /** Otro encargo vivo sobre el mismo local, para probar la exclusion por operacion. */
+    private static Captacion otroEncargo(long id, String operacion) {
+        Captacion otro = new Captacion();
+        otro.setOrganizacionId(ORG);
+        otro.setCodigoCaptacion("CAP-%04d".formatted(id));
+        otro.setMotivoOperacion(operacion);
+        otro.setPropiedad(propiedad(7L));
+        ReflectionTestUtils.setField(otro, "id", id);
+        return otro;
     }
 
     private static DatosCaptacion datos(String codigo) {

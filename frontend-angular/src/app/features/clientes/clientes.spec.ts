@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import { Cliente, ClientesService, ResumenClientes } from '../../core/api/clientes.service';
@@ -63,7 +64,7 @@ describe('Clientes', () => {
 
     expect(service.pagina$).toHaveBeenCalledWith({
       pagina: 2,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       texto: 'retail',
       tipoPersona: 'J',
       rubro: 'Retail',
@@ -102,7 +103,7 @@ describe('Clientes', () => {
 
     expect(service.pagina$).toHaveBeenCalledWith({
       pagina: 1,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       texto: undefined,
       tipoPersona: undefined,
       rubro: undefined,

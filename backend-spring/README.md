@@ -212,6 +212,31 @@ docker compose up -d
   **V28 autorización de datos personales** (D-27), **V29 invalidación de sesiones** (D-S0-12) y
   **V30 auditoría de seguridad + bloqueo de accesos** (D-S0-21).
   El esquema lo posee Flyway; Hibernate solo `validate`.
+- **Propiedad universal y captura (D-E4-1 / D-E4-2, 2026-08-18, V46–V58)** — cuatro cosas que
+  hay que saber antes de tocar oferta o precios:
+  1. **La operación vive en el ENCARGO, no en la propiedad**, y nunca se infiere. `VENTA` y
+     `ALQUILER` son los dos únicos valores (`OperacionInmobiliaria`); `AMBAS` y `COMPRA` se
+     rechazan **con la explicación**. Una propiedad disponible para las dos cosas lleva **dos
+     encargos independientes**, cada uno con su precio, su vigencia y su histórico. La
+     invariante es *un encargo vivo por (propiedad, operación)* — V58 retiró
+     `uq_captacion_activa_por_local`, que prohibía el caso bueno.
+  2. **Ni `precio_propiedad.operacion` ni `captacion.motivo_operacion` tienen valor por
+     defecto**, ni en la BD ni en la entidad. Quien escribe declara; si no lo sabe, el error
+     dice que falta. Un defecto a alquiler archiva precios de venta en la serie equivocada y
+     **ningún CHECK puede notarlo**.
+  3. **`/propiedades` es el modelo nuevo entero** (siete tipos, copropiedad con cuotas,
+     atributos gobernados por catálogo, una o dos operaciones) y **`/locales` sigue siendo el
+     alta de la v1**. Los dos escriben en las mismas tablas; migrar las 57 pantallas es otra
+     tanda.
+  4. **`/captura` es el motor de preguntas y lo comparten Angular y KAIROS.** Qué se sabe, qué
+     falta, qué se pregunta ahora. La lista de campos de cada tipo **sale del catálogo**, no
+     del cliente: añadir un atributo es una fila, no un despliegue de tres piezas.
+
+  Y un gate que conviene conocer: `todaColumnaObligatoriaEstaMapeada` cruza
+  `information_schema` con las fuentes del dominio. Existe porque el mismo fallo entró dos
+  veces —V49 con `precio_propiedad.operacion`, V51 con `solicitud_alquiler.tipo`— y
+  `ddl-auto: validate` **no lo ve**: comprueba que lo mapeado exista, no que exista lo
+  obligatorio.
 - **Puente tipado de estados**: cada entidad conserva un único atributo `String` persistido y
   consultable para no romper JPQL histórico. El accessor `@Transient` deriva el enum mediante
   `EstadosDominio`, y los métodos de dominio traducen enum→código al escribir. El REST sigue

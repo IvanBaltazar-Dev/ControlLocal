@@ -99,7 +99,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (fila of filas(); track fila.idCaptacion) {
+          @for (fila of filasVisibles(); track fila.idCaptacion) {
             <tr [class.inerte]="fila.oportunidadesTotales === 0">
               <td>{{ fila.codigoCaptacion }}</td>
               <td class="ancho">
@@ -126,11 +126,18 @@
       </table>
     </div>
 
+    <cl-paginacion
+      [total]="filas().length"
+      [tamano]="porPagina"
+      [pagina]="pagina()"
+      (paginaChange)="irAPagina($event)"
+    />
+
     <p class="cl-menudo nota">
       Ordenado por oportunidades abiertas y, a igualdad, por interacciones. Las filas
       <b>atenuadas</b> son propiedades sin ninguna oportunidad: captadas y quietas.
-      Esta lectura <b>no se pagina</b>, así que la exportación lleva exactamente estas
-      {{ filas().length }} filas.
+      La tabla se pagina para poder leerla, pero <b>la exportación lleva las
+      {{ filas().length }} filas</b>, no solo la página que estás viendo.
     </p>
   </div>
 }

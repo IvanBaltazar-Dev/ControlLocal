@@ -128,7 +128,7 @@
       </table>
     </div>
 
-    @if (totalActiva() > porPagina) {
+    @if (totalActiva() > 0) {
       <cl-paginacion
         [total]="totalActiva()"
         [tamano]="porPagina"

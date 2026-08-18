@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { convertToParamMap, ActivatedRoute, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, PageResponse } from '../../core/api/api.types';
 import {
@@ -54,7 +55,7 @@ describe('PropiedadesEquipo', () => {
 
     expect(captaciones.propiedadesEquipo$).toHaveBeenCalledOnceWith({
       pagina: 2,
-      tamano: 10,
+      tamano: RESULTADOS_POR_PAGINA,
       texto: 'larco',
       distrito: 'Miraflores',
     });

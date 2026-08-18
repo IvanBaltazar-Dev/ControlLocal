@@ -1,6 +1,7 @@
 package com.controllocal.service.soporte;
 
 import com.controllocal.domain.comercial.RequerimientoCliente;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.service.soporte.CoincidenciaCartera.Evaluacion;
@@ -23,7 +24,7 @@ class CoincidenciaCarteraTest {
 
     @Test
     void seisCriteriosCumplidosDanCien() {
-        Evaluacion e = CoincidenciaCartera.evaluar(requerimientoCompleto(), propiedadCompleta());
+        Evaluacion e = CoincidenciaCartera.evaluar(requerimientoCompleto(), propiedadCompleta(), valoresCompletos());
 
         assertEquals(100, e.puntaje());
         assertEquals(6, e.cumple().size());
@@ -36,7 +37,7 @@ class CoincidenciaCarteraTest {
         RequerimientoCliente r = requerimientoCompleto();
         r.setRentaMax(new BigDecimal("5000"));
 
-        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta());
+        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta(), valoresCompletos());
 
         assertEquals(83, e.puntaje());
         assertEquals(List.of("Renta 8500 fuera de rango (3000 - 5000)"), e.noCumple());
@@ -53,7 +54,7 @@ class CoincidenciaCarteraTest {
         r.setRentaMin(null);
         r.setRentaMax(null);
 
-        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta());
+        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta(), valoresCompletos());
 
         assertEquals(100, e.puntaje());
         assertEquals(3, e.cumple().size());
@@ -67,7 +68,7 @@ class CoincidenciaCarteraTest {
         propiedad.setDistrito("MIRAFLÓRES");
         r.setDistritos(List.of(distrito("Miraflores")));
 
-        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedad);
+        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedad, valoresCompletos());
 
         // "MIRAFLÓRES" ~ "Miraflores" y "cafeteria" ~ "Cafeteria y panaderia".
         assertEquals(100, e.puntaje());
@@ -80,7 +81,7 @@ class CoincidenciaCarteraTest {
         RequerimientoCliente r = requerimientoCompleto();
         r.setTipoInmueble("DEPOSITO_ALMACEN");
 
-        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta());
+        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta(), valoresCompletos());
 
         assertEquals(100, e.puntaje());
         assertEquals(5, e.cumple().size());
@@ -91,7 +92,7 @@ class CoincidenciaCarteraTest {
         RequerimientoCliente r = requerimientoCompleto();
         r.setTipoInmueble("OFICINA");
 
-        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta());
+        Evaluacion e = CoincidenciaCartera.evaluar(r, propiedadCompleta(), valoresCompletos());
 
         assertEquals(83, e.puntaje());
         assertEquals(List.of("Tipo: busca OFICINA, local es Local"), e.noCumple());
@@ -101,7 +102,7 @@ class CoincidenciaCarteraTest {
     void sinCriteriosAplicablesElPuntajeEsCero() {
         RequerimientoCliente r = new RequerimientoCliente();
         r.setRubro(null);
-        Evaluacion e = CoincidenciaCartera.evaluar(r, new Propiedad());
+        Evaluacion e = CoincidenciaCartera.evaluar(r, new Propiedad(), ValoresDePropiedad.vacio());
 
         assertEquals(0, e.puntaje());
         assertTrue(e.cumple().isEmpty());
@@ -110,8 +111,8 @@ class CoincidenciaCarteraTest {
 
     @Test
     void unRequerimientoOUnaPropiedadNulosNoRompen() {
-        assertEquals(0, CoincidenciaCartera.evaluar(null, propiedadCompleta()).puntaje());
-        assertEquals(0, CoincidenciaCartera.evaluar(requerimientoCompleto(), null).puntaje());
+        assertEquals(0, CoincidenciaCartera.evaluar(null, propiedadCompleta(), valoresCompletos()).puntaje());
+        assertEquals(0, CoincidenciaCartera.evaluar(requerimientoCompleto(), null, valoresCompletos()).puntaje());
     }
 
     // ------------------------------------------------------------------
@@ -140,9 +141,23 @@ class CoincidenciaCarteraTest {
         propiedad.setTipoInmueble(Propiedad.TIPO_LOCAL);
         propiedad.setMetraje(new BigDecimal("120.00"));
         propiedad.setPrecioReferencial(new BigDecimal("8500.00"));
-        propiedad.setFrente(new BigDecimal("8.00"));
+        // Ya no hay `propiedad.setFrente`: V62 retiro la columna y el campo. La
+        // trampa que habia aqui —columna con un valor que no cumple— la hace
+        // ahora el compilador, que es mejor guardia que un test.
         propiedad.asignarDetalleLocal("Cafeteria y panaderia", null, null);
         return propiedad;
+    }
+
+    /**
+     * El frente, leido de su AUTORIDAD. Es un atributo gobernado desde D-E4-3:
+     * su columna en {@code propiedad} desaparece en el paso 9 y hasta entonces
+     * conserva un valor que no cumple, para que este test falle si alguien
+     * devuelve el scoring a leerla.
+     */
+    private static ValoresDePropiedad valoresCompletos() {
+        return ValoresDePropiedad.constructor()
+                .con(CatalogoAtributo.CLAVE_FRENTE, ValorLogico.deNumero(new BigDecimal("8.00")))
+                .construir();
     }
 
     private static Distrito distrito(String nombre) {

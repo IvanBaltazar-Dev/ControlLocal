@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { RESULTADOS_POR_PAGINA } from './tamano-pagina';
 import { Paginacion } from './paginacion';
 
 /**
@@ -42,10 +43,29 @@ describe('Paginacion', () => {
     expect(render(35, 10, 4).rango).toBe('Mostrando 31–35 de 35 resultados');
   });
 
-  it('con lista vacía muestra 0–0 y una sola página', () => {
+  /**
+   * El RANGO se muestra siempre; los BOTONES solo cuando hay más de una página.
+   *
+   * Antes se dibujaba un «‹ 1 ›» con las tres cosas inertes: no llevaba a
+   * ninguna parte y ocupaba el sitio de algo útil. Y la decisión de mostrar u
+   * ocultar el componente entero vivía repetida en 18 plantillas como
+   * `@if (total > porPagina)`, así que una lista de 8 resultados no enseñaba
+   * ni siquiera cuántos había.
+   */
+  it('con lista vacía muestra el rango y ningún botón', () => {
     const { rango, botones } = render(0, 10, 1);
     expect(rango).toBe('Mostrando 0–0 de 0 resultados');
-    expect(botones).toEqual(['‹', '1', '›']);
+    expect(botones).toEqual([]);
+  });
+
+  it('con una sola página muestra el rango y ningún botón', () => {
+    const { rango, botones } = render(8, RESULTADOS_POR_PAGINA, 1);
+    expect(rango).toBe('Mostrando 1–8 de 8 resultados');
+    expect(botones).toEqual([]);
+  });
+
+  it('en cuanto hay dos páginas aparecen los botones', () => {
+    expect(render(9, RESULTADOS_POR_PAGINA, 1).botones).toEqual(['‹', '1', '2', '›']);
   });
 
   it('hasta 5 páginas las lista todas, sin elipsis', () => {

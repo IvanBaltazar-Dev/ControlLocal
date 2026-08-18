@@ -79,7 +79,7 @@ export class CaptacionReview implements OnInit {
 
   protected verLocal(): void {
     const id = this.captacion()?.idLocal;
-    if (id) void this.router.navigate(['/locales', id]);
+    if (id) void this.router.navigate(['/propiedades', id]);
   }
 
   protected verProspeccion(): void {

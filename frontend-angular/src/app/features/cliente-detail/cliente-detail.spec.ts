@@ -221,7 +221,7 @@ describe('ClienteDetail', () => {
     expect(botonesTabla(fixture)).toEqual(['Ver detalle']);
     const acceso = acceder(fixture);
     acceso.navegar({ ruta: 'local-detail/9' });
-    expect(router.navigate).toHaveBeenCalledWith(['/locales', '9']);
+    expect(router.navigate).toHaveBeenCalledWith(['/propiedades', '9']);
   });
 
   it('las métricas salen de los totales de las secciones', async () => {

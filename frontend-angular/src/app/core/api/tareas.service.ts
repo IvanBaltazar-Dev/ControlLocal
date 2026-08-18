@@ -51,6 +51,65 @@ export type PrioridadTarea = 'ALTA' | 'MEDIA' | 'BAJA';
  * `diasSinAccion` cuenta desde el **plazo real de la entidad** (recontacto,
  * cambio de estado, fecha de visita), no desde que se creó la tarea.
  */
+/**
+ * El estado de UN hecho, no del asunto.
+ *
+ * Lo decide el dominio. Angular mapea estado → marca y color, y nada más: si
+ * lo dedujera del tono del asunto, un asunto en rojo pintaría de rojo también
+ * sus buenas noticias — que es el problema que D-E2-1 §10.1 arregló.
+ *
+ * El vocabulario es de cinco y no crece.
+ */
+export type EstadoDelHecho = 'HECHO' | 'FALTA' | 'PLAZO' | 'FRENO' | 'DATO';
+
+export interface HechoDelAsunto {
+  estado: EstadoDelHecho;
+  texto: string;
+}
+
+/** Cuánto se lleva de algo contable de verdad. Ausente = no hay nada que contar. */
+export interface AvanceDelAsunto {
+  hechos: number;
+  total: number;
+  unidad: string;
+}
+
+export interface ComoEsta {
+  avance: AvanceDelAsunto | null;
+  /** Como máximo tres. Tres viñetas, sin párrafos. */
+  hechos: HechoDelAsunto[];
+}
+
+/** Cuánto se ha consumido de una ventana. Lleva los dos números, no el %. */
+export interface VentanaDelRenglon {
+  consumido: number;
+  total: number;
+}
+
+/** Un renglón del expediente comercial. `estado` ausente = historial, sin color. */
+export interface RenglonExpediente {
+  rotulo: string;
+  valor: string;
+  estado: 'BIEN' | 'OJO' | 'MAL' | null;
+  ventana: VentanaDelRenglon | null;
+  /** La chispa de la renta; sale del histórico económico (E0). */
+  serie: number[] | null;
+}
+
+/**
+ * La interpretación de un asunto (E2.4).
+ *
+ * `lectura` llega REDACTADA: sintetiza los cuatro renglones sin recitarlos, y
+ * viaja `null` cuando no hay nada que concluir. Una lectura de relleno enseña a
+ * no leerla, así que su ausencia se respeta.
+ */
+export interface InterpretacionDelAsunto {
+  comoEsta: ComoEsta;
+  /** Cuatro renglones, o ninguno. Nunca cuatro guiones. */
+  expediente: RenglonExpediente[];
+  lectura: string | null;
+}
+
 export interface Tarea {
   id: number;
   tipo: string;
@@ -65,6 +124,14 @@ export interface Tarea {
   fechaProgramada?: string;
   diasSinAccion?: number;
   fechaVencimiento?: string;
+  /** De quién es la pelota. Lo decide el dominio (E2.2). */
+  dependeDeMi?: boolean;
+  /** OFERTA (propietario) o DEMANDA (cliente). */
+  lado?: string | null;
+  /** Dónde cae en SU cadena: PROSPECCION…PUBLICACION o OPORTUNIDAD…CONTRATO. */
+  paso?: string | null;
+  /** Cómo está, su expediente y la lectura que lo sintetiza (E2.4). */
+  interpretacion?: InterpretacionDelAsunto | null;
 }
 
 @Injectable({ providedIn: 'root' })

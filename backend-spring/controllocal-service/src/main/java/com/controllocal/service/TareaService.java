@@ -1,5 +1,6 @@
 package com.controllocal.service;
 
+import com.controllocal.service.soporte.InterpretacionDelAsunto;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -40,7 +41,8 @@ public interface TareaService {
                       String rutaResolver, String descripcion, String estado, String prioridad,
                       OffsetDateTime fechaProgramada, Integer diasSinAccion,
                       LocalDate fechaVencimiento,
-                      boolean dependeDeMi, String lado, String paso) {
+                      boolean dependeDeMi, String lado, String paso,
+                      InterpretacionDelAsunto.Interpretacion interpretacion) {
     }
 
     /**

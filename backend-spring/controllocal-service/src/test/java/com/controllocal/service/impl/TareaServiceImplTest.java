@@ -20,6 +20,7 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.TareaService.FichaTarea;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.InterpreteDeLaBandeja;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -79,9 +80,10 @@ class TareaServiceImplTest {
     private final ContratoAlquilerRepository contratos = mock(ContratoAlquilerRepository.class);
     private final ReportePropietarioRepository reportes = mock(ReportePropietarioRepository.class);
     private final DetalleAgenteRepository agentes = mock(DetalleAgenteRepository.class);
+    private final InterpreteDeLaBandeja interprete = mock(InterpreteDeLaBandeja.class);
 
     private final TareaServiceImpl service = new TareaServiceImpl(tareas, prospecciones, solicitudes,
-            visitas, captaciones, contratos, reportes, agentes);
+            visitas, captaciones, contratos, reportes, agentes, interprete);
 
     private final Actor agente = new Actor(ORG, 3L, ROL_AGENTE, "AGENTE");
     private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");

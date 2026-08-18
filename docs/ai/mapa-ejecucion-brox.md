@@ -86,8 +86,8 @@ para ser partes de una misma pantalla**:
 | **E2.1** | Cabecera de decisión: "8 cosas necesitan tu atención · 4 operaciones abiertas" | ✅ |
 | **E2.2** | La pelota y el orden: `DEPENDE_DE_MI` + `lado`/`paso` + política de 6 criterios | ✅ |
 | **E2.3** | El hallazgo sale de la cola: mismo motor, otra salida | ✅ |
-| **E2.4** | Capa de interpretación: `ComoEsta`, lectura y expediente de 4 renglones | ⬜ **siguiente** |
-| **E2.5** | El Radar del broker (exige revisar antes «la bandeja no es un tablero») | ⬜ |
+| **E2.4** | Capa de interpretación: `ComoEsta`, lectura y expediente de 4 renglones | ✅ |
+| **E2.5** | El Radar del broker (exige revisar antes «la bandeja no es un tablero») | ⬜ **siguiente** |
 | **E2.6** | Contraste, pie y metas | ⬜ |
 
 > **El orden cambió el 2026-08-11** tras inventariar el backend

@@ -2,6 +2,7 @@ package com.controllocal.persistence.repositorio;
 
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.inmueble.Propiedad;
+import com.controllocal.persistence.query.ExpedienteDeLaPropiedad;
 import com.controllocal.persistence.query.CandidatoTarea;
 import com.controllocal.persistence.query.ConteoPorAgente;
 import com.controllocal.persistence.query.ConteoPorEstado;
@@ -393,4 +394,94 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
      */
     @Query(FICHA + " where cap.organizacionId = :idOrganizacion")
     List<Captacion> listarSeguimiento(@Param("idOrganizacion") long idOrganizacion);
+
+    /**
+     * <b>Los cuatro renglones del expediente comercial, por lote</b> (E2.4).
+     *
+     * <p>Los datos existian repartidos en cinco sitios y lo que faltaba era la
+     * vista que los junta. Esta es esa vista: una consulta para toda la pagina de
+     * asuntos, no cuatro por asunto.
+     *
+     * <p>Las visitas se cuentan con subconsulta y no con {@code join} + 
+     * {@code group by} a proposito: un join multiplicaria la fila de la captacion
+     * por cada visita y el resto de los renglones habria que agruparlos tambien,
+     * que es como una consulta de expediente acaba devolviendo rentas sumadas.
+     *
+     * <p>{@code rentaDesde} sale del ultimo hito del historico economico (E0), que
+     * es lo que permite decir «sin cambios desde junio» en vez de repetir el
+     * numero que ya esta arriba.
+     */
+    @Query("""
+            select p.id as idPropiedad,
+                   c.fechaInicioEncargo as inicioVigencia,
+                   c.fechaFinEncargo as finVigencia,
+                   c.fechaCaptacion as fechaCaptacion,
+                   p.precioReferencial as renta,
+                   p.monedaReferencial as moneda,
+                   (select max(pr.fecha) from PrecioPropiedad pr
+                     where pr.idPropiedad = p.id) as rentaDesde,
+                   (select count(v) from Visita v join v.oportunidad o
+                     where o.captacion = c and v.estado = 'R') as visitasRealizadas,
+                   (select count(v2) from Visita v2 join v2.oportunidad o2
+                     where o2.captacion = c) as visitasTotales,
+                   per.nombresORazonSocial as propietario,
+                   p.direccion as direccion,
+                   p.distrito as distrito
+              from Captacion c
+              join c.propiedad p
+              join p.rolPropietario rp
+              join rp.persona per
+             where c.organizacionId = :idOrganizacion
+               and p.id in :idsPropiedad
+             order by p.id, c.id desc
+            """)
+    List<ExpedienteDeLaPropiedad> expedientesDe(@Param("idOrganizacion") long idOrganizacion,
+                                                @Param("idsPropiedad") Collection<Long> idsPropiedad);
+
+    /**
+     * <b>De que propiedad habla cada asunto</b> (E2.4).
+     *
+     * <p>Un asunto de la bandeja cuelga de seis entidades distintas y todas
+     * acaban -- por caminos distintos -- en la misma propiedad. Sin esto habria
+     * que preguntarlo seis veces, una por tipo, o resolverlo asunto a asunto.
+     *
+     * <p>Es SQL nativo con UNION y no JPQL porque cada rama parte de una tabla
+     * distinta: JPQL no sabe unir seis consultas sin entidad comun, y forzarlo
+     * con seis metodos separados devolveria el N+1 por la puerta del repositorio.
+     *
+     * <p>PROSPECCION no esta: una prospeccion es anterior a la propiedad -- se
+     * prospecta a un propietario, no a un local -- y darle un expediente de
+     * inmueble seria inventarle uno.
+     *
+     * @return filas {@code (entidad_tipo, entidad_id, id_propiedad)}
+     */
+    @Query(nativeQuery = true, value = """
+            select 'CAPTACION' as entidad_tipo, c.id_captacion as entidad_id,
+                   c.id_propiedad as id_propiedad
+              from captacion c
+             where c.organizacion_id = :idOrganizacion
+            union all
+            select 'INMUEBLE', p.id_propiedad, p.id_propiedad
+              from propiedad p
+             where p.organizacion_id = :idOrganizacion
+            union all
+            select 'VISITA', v.id_visita, c.id_propiedad
+              from visita v
+              join oportunidad_comercial o on o.id_oportunidad = v.id_oportunidad
+              join captacion c on c.id_captacion = o.id_captacion
+             where v.organizacion_id = :idOrganizacion
+            union all
+            select 'SOLICITUD_ALQUILER', s.id_solicitud, c.id_propiedad
+              from solicitud_alquiler s
+              join oportunidad_comercial o on o.id_oportunidad = s.id_oportunidad
+              join captacion c on c.id_captacion = o.id_captacion
+             where s.organizacion_id = :idOrganizacion
+            union all
+            select 'CONTRATO_ALQUILER', k.id_contrato_alquiler, c.id_propiedad
+              from contrato_alquiler k
+              join oportunidad_comercial o on o.id_oportunidad = k.id_oportunidad
+              join captacion c on c.id_captacion = o.id_captacion
+             where k.organizacion_id = :idOrganizacion
+            """)
+    List<Object[]> propiedadPorAsunto(@Param("idOrganizacion") long idOrganizacion);
 }

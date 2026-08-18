@@ -479,3 +479,60 @@
   font-size: 0.75rem;
   color: var(--cl-tinta-3, #6b7280);
 }
+
+/* ---------------------------------------------------------------------
+   CÓMO ESTÁ — cada hecho con su marca y su color
+
+   Solo FRENO va en tinta plena: la marca roja ya carga la alarma, y subir
+   además el peso hacía que la consecuencia compitiera con el titular, que
+   es lo único que se pide leer primero (D-E2-1 §10.1).
+   --------------------------------------------------------------------- */
+.como-esta {
+  margin: 0.4rem 0 0.35rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.como-esta li {
+  display: grid;
+  grid-template-columns: 1rem 1fr;
+  gap: 0.35rem;
+  align-items: baseline;
+  font-size: 0.8125rem;
+  color: var(--cl-tinta-2, #4b5563);
+}
+
+.como-esta .marca {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.como-esta .hecho-hecho .marca,
+.como-esta li.hecho-hecho .marca { color: var(--cl-verde, #16a34a); }
+.como-esta li.hecho-falta .marca { color: var(--cl-ambar, #d97706); }
+.como-esta li.hecho-plazo .marca { color: var(--cl-rojo, #dc2626); }
+.como-esta li.hecho-freno .marca { color: var(--cl-rojo, #dc2626); }
+.como-esta li.hecho-dato  .marca { color: var(--cl-tinta-3, #9ca3af); }
+
+/* La consecuencia, y solo ella, en tinta plena. */
+.como-esta li.hecho-freno .texto {
+  color: var(--cl-tinta, #111827);
+  font-weight: 500;
+}
+
+/* La lectura de BROX: sintetiza, no recita. */
+.lectura {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--cl-tinta-2, #4b5563);
+}
+
+.lectura span[aria-hidden] {
+  font-style: normal;
+  margin-right: 0.25rem;
+  color: var(--cl-azul, #2563eb);
+}

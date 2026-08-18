@@ -396,6 +396,28 @@
   </span>
   <div class="cuerpo">
     <p class="titulo">{{ tarea.descripcion }}</p>
+
+    <!--
+      CÓMO ESTÁ — cada hecho con SU estado, no con el del asunto.
+
+      La marca y el color salen de `hecho.estado`, que decide el dominio. Si se
+      dedujeran del tono de la fila, un asunto en rojo pintaría de rojo también
+      sus buenas noticias — que es justo lo que D-E2-1 §10.1 arregló.
+
+      El orden es el que llega: narrativo (lo que está → lo que falta → lo que
+      frena), no por gravedad. Reordenar aquí lo rompería.
+    -->
+    @if (tarea.interpretacion?.comoEsta?.hechos?.length) {
+      <ul class="como-esta">
+        @for (hecho of tarea.interpretacion.comoEsta.hechos; track $index) {
+          <li [class]="'hecho-' + hecho.estado.toLowerCase()">
+            <span class="marca" aria-hidden="true">{{ marcaDelHecho(hecho.estado) }}</span>
+            <span class="texto">{{ hecho.texto }}</span>
+          </li>
+        }
+      </ul>
+    }
+
     <p class="cl-menudo">
       @if (tarea.entidadCodigo) {
         <span>{{ tarea.entidadCodigo }}</span>
@@ -407,6 +429,11 @@
         <span>{{ vencimiento(tarea) }}</span>
       }
     </p>
+
+    <!-- La lectura de BROX: sintetiza el expediente. Ausente = nada que concluir. -->
+    @if (tarea.interpretacion?.lectura) {
+      <p class="lectura"><span aria-hidden="true">◇</span> {{ tarea.interpretacion.lectura }}</p>
+    }
   </div>
   <div class="acciones-tarea">
     @if (puedeResolver(tarea)) {

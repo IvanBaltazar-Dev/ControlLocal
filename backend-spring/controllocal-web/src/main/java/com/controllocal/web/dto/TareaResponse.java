@@ -1,6 +1,7 @@
 package com.controllocal.web.dto;
 
 import com.controllocal.service.TareaService;
+import com.controllocal.service.soporte.InterpretacionDelAsunto;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -18,12 +19,13 @@ public record TareaResponse(Long id, String tipo, String entidadTipo, Long entid
                             String entidadCodigo, String rutaResolver, String descripcion,
                             String estado, String prioridad, OffsetDateTime fechaProgramada,
                             Integer diasSinAccion, LocalDate fechaVencimiento,
-                            boolean dependeDeMi, String lado, String paso) {
+                            boolean dependeDeMi, String lado, String paso,
+                            InterpretacionDelAsunto.Interpretacion interpretacion) {
 
     public static TareaResponse desde(TareaService.FichaTarea f) {
         return new TareaResponse(f.id(), f.tipo(), f.entidadTipo(), f.entidadId(), f.entidadCodigo(),
                 f.rutaResolver(), f.descripcion(), f.estado(), f.prioridad(), f.fechaProgramada(),
                 f.diasSinAccion(), f.fechaVencimiento(),
-                f.dependeDeMi(), f.lado(), f.paso());
+                f.dependeDeMi(), f.lado(), f.paso(), f.interpretacion());
     }
 }

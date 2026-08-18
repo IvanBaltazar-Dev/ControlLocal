@@ -20,7 +20,7 @@ import {
   PERIODOS_INDICADORES,
 } from '../../core/api/indicadores.service';
 import { ConceptoSenal, NivelAtencion } from '../../core/politica-comercial';
-import { Tarea, TareasService } from '../../core/api/tareas.service';
+import { EstadoDelHecho, Tarea, TareasService } from '../../core/api/tareas.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RolSesion } from '../../core/auth/sesion.model';
 import { fechaCorta, SIN_DATO } from '../../core/formato';
@@ -200,6 +200,29 @@ export class Dashboard implements OnInit {
 
   protected readonly periodo = signal<string>(PERIODO_POR_DEFECTO);
   protected readonly indicadores = signal<IndicadoresResumen | null>(null);
+  /**
+   * La marca de un hecho. **Es lo unico que la pantalla decide sobre el.**
+   *
+   * El ESTADO lo pone el dominio; aqui solo se traduce a su simbolo, igual que
+   * el color se traduce en la hoja de estilos. Deducirlo del tono de la fila
+   * devolveria el problema que D-E2-1 seccion 10.1 arreglo: un asunto en rojo
+   * pintando de rojo tambien sus buenas noticias.
+   */
+  protected marcaDelHecho(estado: EstadoDelHecho): string {
+    switch (estado) {
+      case 'HECHO':
+        return '✓';
+      case 'FALTA':
+        return '○';
+      case 'PLAZO':
+        return '⏱';
+      case 'FRENO':
+        return '⊘';
+      default:
+        return '–';
+    }
+  }
+
   protected readonly bandeja = signal<Tarea[]>([]);
 
   /**

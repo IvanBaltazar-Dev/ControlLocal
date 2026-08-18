@@ -79,6 +79,7 @@ class GateDeCierreTest {
                         "BusquedaLocalesIntegrationTest",
                         // E0.2 — el historico economico contra PostgreSQL real.
                         "HistoricoPrecioIntegrationTest",
+                        "InterpretacionDelInicioIntegrationTest",
                         "InvariantesComisionIntegrationTest",
                         // D-E4-1 — las tres piezas del nucleo universal contra
                         // PostgreSQL: titularidad, atributos gobernados y outbox.

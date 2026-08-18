@@ -32,6 +32,9 @@ $raiz = Join-Path $PSScriptRoot '..'
 $integracion = @(
     'BusquedaLocalesIntegrationTest',
     'HistoricoPrecioIntegrationTest',
+    # D-E2-1 seccion 10 / E2.4: la capa de interpretacion del Inicio -- como esta,
+    # el expediente de cuatro renglones y la lectura que los sintetiza.
+    'InterpretacionDelInicioIntegrationTest',
     'InvariantesComisionIntegrationTest',
     # D-E4-1: las piezas del nucleo universal (titularidad, atributos, outbox).
     'NucleoUniversalIntegrationTest',

@@ -1,0 +1,388 @@
+package com.controllocal.service.soporte;
+
+import com.controllocal.domain.comercial.Tarea;
+import com.controllocal.domain.inmueble.PrecioPropiedad;
+import com.controllocal.persistence.query.ExpedienteDeLaPropiedad;
+import com.controllocal.persistence.repositorio.CaptacionRepository;
+import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
+import com.controllocal.service.soporte.InterpretacionDelAsunto.Avance;
+import com.controllocal.service.soporte.InterpretacionDelAsunto.ComoEsta;
+import com.controllocal.service.soporte.InterpretacionDelAsunto.Hecho;
+import com.controllocal.service.soporte.InterpretacionDelAsunto.Interpretacion;
+import com.controllocal.service.soporte.InterpretacionDelAsunto.Renglon;
+import com.controllocal.service.soporte.InterpretacionDelAsunto.Ventana;
+import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * <b>Convierte los asuntos de la bandeja en algo leído</b> (D-E2-1 §10, E2.4).
+ *
+ * <h2>Qué hace y qué no</h2>
+ * Produce {@code comoEsta}, el expediente de cuatro renglones y la {@code
+ * lectura}. <b>No decide el orden</b> —eso es {@link PoliticaDeDespacho}— ni
+ * clasifica señales —eso es {@link PoliticaComercial}—: es un escalón más abajo
+ * que las dos, donde el hecho suelto se convierte en hecho interpretado.
+ *
+ * <h2>Coste</h2>
+ * <b>Tres consultas por página</b>, no tres por asunto:
+ * <pre>
+ *   1 · de que propiedad habla cada asunto   (una union, todos los tipos)
+ *   2 · los cuatro renglones de esas propiedades
+ *   3 · la serie de la renta, para la chispa
+ * </pre>
+ *
+ * <h2>La regla que gobierna la redacción</h2>
+ * <b>Ningún código técnico en el texto visible.</b> «Abierta el 22 jul ·
+ * OPO-0098» no le dice nada a nadie: quien opera identifica la operación por la
+ * dirección y la persona. Los códigos siguen vivos donde hacen falta —búsqueda,
+ * soporte, la ficha real— y no aquí.
+ */
+@Component
+public class InterpreteDeLaBandeja {
+
+    private static final DateTimeFormatter DIA_Y_MES =
+            DateTimeFormatter.ofPattern("d 'de' MMMM", new Locale("es"));
+
+    private final CaptacionRepository captaciones;
+    private final PrecioPropiedadRepository precios;
+
+    public InterpreteDeLaBandeja(CaptacionRepository captaciones,
+                                 PrecioPropiedadRepository precios) {
+        this.captaciones = captaciones;
+        this.precios = precios;
+    }
+
+    /**
+     * El contexto de una página de asuntos, cargado de una vez.
+     *
+     * <p>Se pide una sola vez por lectura de la bandeja y se consulta en memoria
+     * asunto por asunto. Cargarlo dentro del bucle serían tres consultas por
+     * fila, que es el N+1 que RC-003 quitó del listado y que vuelve cada vez que
+     * alguien añade una capa de interpretación.
+     */
+    public record Contexto(Map<String, Long> propiedadPorAsunto,
+                           Map<Long, ExpedienteDeLaPropiedad> expedientes,
+                           Map<Long, List<BigDecimal>> series) {
+
+        public static Contexto vacio() {
+            return new Contexto(Map.of(), Map.of(), Map.of());
+        }
+
+        Long propiedadDe(String entidadTipo, Long entidadId) {
+            return entidadId == null ? null : propiedadPorAsunto.get(clave(entidadTipo, entidadId));
+        }
+
+        static String clave(String entidadTipo, Long entidadId) {
+            return entidadTipo + "#" + entidadId;
+        }
+    }
+
+    /** Carga el contexto de una página. Tres consultas, y ninguna dentro del bucle. */
+    public Contexto contextoDe(long idOrganizacion, Collection<AsuntoADescribir> asuntos) {
+        if (asuntos.isEmpty()) {
+            return Contexto.vacio();
+        }
+        Map<String, Long> porAsunto = new HashMap<>();
+        for (Object[] fila : captaciones.propiedadPorAsunto(idOrganizacion)) {
+            porAsunto.put(Contexto.clave((String) fila[0], numero(fila[1])), numero(fila[2]));
+        }
+
+        List<Long> idsPropiedad = asuntos.stream()
+                .map(a -> porAsunto.get(Contexto.clave(a.entidadTipo(), a.entidadId())))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (idsPropiedad.isEmpty()) {
+            return new Contexto(porAsunto, Map.of(), Map.of());
+        }
+
+        // La consulta devuelve una fila por CAPTACION y una propiedad puede tener
+        // varias a lo largo del tiempo; se queda la primera, que el `order by`
+        // deja siendo la mas reciente. Quedarse con la ultima daria el encargo
+        // vencido de hace dos anios como si fuera el vigente.
+        Map<Long, ExpedienteDeLaPropiedad> expedientes = new LinkedHashMap<>();
+        for (ExpedienteDeLaPropiedad fila : captaciones.expedientesDe(idOrganizacion, idsPropiedad)) {
+            expedientes.putIfAbsent(fila.getIdPropiedad(), fila);
+        }
+
+        Map<Long, List<BigDecimal>> series = new HashMap<>();
+        for (Long idPropiedad : idsPropiedad) {
+            List<BigDecimal> serie = precios.findByIdPropiedadOrderByFechaAscIdAsc(idPropiedad)
+                    .stream().map(PrecioPropiedad::getMonto).toList();
+            if (serie.size() > 1) {
+                // Una linea plana se lee como lo que es: con un solo hito no hay
+                // serie que ensenar, y una chispa de un punto sugiere movimiento
+                // donde no lo hubo.
+                series.put(idPropiedad, serie);
+            }
+        }
+        return new Contexto(porAsunto, expedientes, series);
+    }
+
+    /** Lo mínimo que hace falta saber de un asunto para describirlo. */
+    public record AsuntoADescribir(String tipo, String entidadTipo, Long entidadId,
+                                   String descripcion, Integer diasSinAccion,
+                                   LocalDate fechaVencimiento, boolean dependeDeMi) {
+    }
+
+    // ==================================================================
+
+    /** La interpretación de un asunto, con el contexto ya cargado. */
+    public Interpretacion de(AsuntoADescribir asunto, Contexto contexto, LocalDate hoy) {
+        Long idPropiedad = contexto.propiedadDe(asunto.entidadTipo(), asunto.entidadId());
+        ExpedienteDeLaPropiedad datos = idPropiedad == null ? null
+                : contexto.expedientes().get(idPropiedad);
+
+        List<Renglon> expediente = expediente(datos, contexto.series().get(idPropiedad), hoy);
+        return new Interpretacion(comoEsta(asunto, hoy), expediente, lectura(datos, hoy));
+    }
+
+    // ==================================================================
+    // CÓMO ESTÁ
+    // ==================================================================
+
+    /**
+     * <b>Hasta tres hechos, en orden narrativo</b>: lo que ya está → lo que falta
+     * → qué queda parado por ello.
+     *
+     * <p>El estado de cada uno sale del <b>tipo del asunto</b>, no del tono: es
+     * lo que impide que un asunto en rojo pinte de rojo también sus buenas
+     * noticias.
+     */
+    private static ComoEsta comoEsta(AsuntoADescribir asunto, LocalDate hoy) {
+        List<Hecho> hechos = new ArrayList<>();
+        String tipo = asunto.tipo() == null ? "" : asunto.tipo();
+
+        // 1 · lo que ya esta
+        if (!asunto.dependeDeMi()) {
+            hechos.add(new Hecho(EstadoDelHecho.HECHO, "Tu parte esta hecha"));
+        }
+
+        // 2 · lo que falta, dicho como lo que hay que hacer
+        hechos.add(new Hecho(EstadoDelHecho.FALTA, loQueFalta(tipo, asunto)));
+
+        // 3 · el plazo, si lo hay
+        if (asunto.fechaVencimiento() != null) {
+            hechos.add(new Hecho(EstadoDelHecho.PLAZO,
+                    InterpretacionDelAsunto.enDias(hoy, asunto.fechaVencimiento())));
+        } else if (asunto.diasSinAccion() != null && asunto.diasSinAccion() > 0) {
+            hechos.add(new Hecho(EstadoDelHecho.DATO,
+                    "Sin movimiento desde hace " + asunto.diasSinAccion() + " dias"));
+        }
+
+        // 4 · que queda parado. Solo cuando de verdad frena algo: un FRENO
+        //     inventado convierte la marca roja en ruido.
+        String freno = loQueFrena(tipo, asunto);
+        if (freno != null) {
+            hechos.add(new Hecho(EstadoDelHecho.FRENO, freno));
+        }
+
+        return ComoEsta.de(avance(tipo, asunto), hechos);
+    }
+
+    private static String loQueFalta(String tipo, AsuntoADescribir asunto) {
+        return switch (tipo) {
+            case Tarea.RECONTACTO -> "Falta volver a contactar al propietario";
+            case Tarea.VISITA -> "Falta cerrar la visita con su resultado";
+            case Tarea.SUBIR_DOCUMENTOS -> "Faltan los documentos observados";
+            case Tarea.REPORTE_PROPIETARIO -> "Falta enviar el reporte al propietario";
+            case Tarea.REVISION_INMUEBLE -> "Falta revisar el estado del local";
+            case Tarea.SEGUIMIENTO -> asunto.dependeDeMi()
+                    ? "Falta firmar el contrato"
+                    : "Falta que el broker registre el cobro";
+            default -> "Falta atenderlo";
+        };
+    }
+
+    /**
+     * La consecuencia: qué queda parado por lo que falta.
+     *
+     * <p>Devuelve {@code null} cuando no frena nada, y eso es lo importante. Un
+     * asunto sin consecuencia real no lleva línea roja: la marca ya carga la
+     * alarma, y gastarla donde no hay nada parado hace que nadie la crea donde sí.
+     */
+    private static String loQueFrena(String tipo, AsuntoADescribir asunto) {
+        return switch (tipo) {
+            case Tarea.SUBIR_DOCUMENTOS -> "Hasta que lleguen, el broker no puede evaluar";
+            case Tarea.REVISION_INMUEBLE -> "El local no se puede volver a ofrecer";
+            case Tarea.SEGUIMIENTO -> asunto.dependeDeMi()
+                    ? "La comision no se genera hasta la firma" : null;
+            default -> null;
+        };
+    }
+
+    /**
+     * <b>Solo donde hay algo contable de verdad.</b>
+     *
+     * <p>Hoy ninguno de los seis disparadores trae un contador real —los
+     * documentos verificados y las observaciones resueltas viven en la solicitud
+     * y no en la tarea—, así que esto devuelve {@code null} y la barra no se
+     * pinta. <b>Es el comportamiento correcto</b>: una barra de dos segmentos
+     * inventada para rellenar promete una precisión que no existe.
+     */
+    private static Avance avance(String tipo, AsuntoADescribir asunto) {
+        return null;
+    }
+
+    // ==================================================================
+    // El expediente
+    // ==================================================================
+
+    /**
+     * Cuatro renglones fijos, los mismos para todo asunto, porque son las cuatro
+     * cosas con las que se sostiene una conversación comercial.
+     *
+     * <p>Cuando no hay expediente —una prospección no cuelga de ningún local— se
+     * devuelve <b>vacío</b> y no cuatro renglones con guiones: un expediente en
+     * blanco dice «no hay historial», y cuatro guiones dicen «lo hay y no lo
+     * cargué».
+     */
+    private static List<Renglon> expediente(ExpedienteDeLaPropiedad datos,
+                                            List<BigDecimal> serie, LocalDate hoy) {
+        if (datos == null) {
+            return List.of();
+        }
+        List<Renglon> renglones = new ArrayList<>(InterpretacionDelAsunto.RENGLONES_DEL_EXPEDIENTE);
+        renglones.add(encargo(datos, hoy));
+        renglones.add(renta(datos, serie, hoy));
+        renglones.add(actividad(datos));
+        renglones.add(propietario(datos));
+        return List.copyOf(renglones);
+    }
+
+    private static Renglon encargo(ExpedienteDeLaPropiedad datos, LocalDate hoy) {
+        LocalDate inicio = datos.getInicioVigencia() != null
+                ? datos.getInicioVigencia() : datos.getFechaCaptacion();
+        LocalDate fin = datos.getFinVigencia();
+        String valor = InterpretacionDelAsunto.frase(
+                inicio == null ? null : "Alta el " + inicio.format(DIA_Y_MES),
+                fin == null ? null : InterpretacionDelAsunto.enDias(hoy, fin));
+
+        if (inicio == null || fin == null) {
+            return Renglon.historial("Encargo", valor.isBlank() ? "Sin vigencia pactada" : valor);
+        }
+        int total = (int) ChronoUnit.DAYS.between(inicio, fin);
+        int consumido = (int) Math.max(0, Math.min(total, ChronoUnit.DAYS.between(inicio, hoy)));
+        // La barra lleva sus dos numeros y no el porcentaje: 168/180 se puede
+        // leer, y el 93 % solo se puede pintar.
+        String estado = total <= 0 ? null
+                : consumido >= total ? Renglon.MAL
+                : consumido * 100 / total >= 80 ? Renglon.OJO : null;
+        return new Renglon("Encargo", valor, estado, new Ventana(consumido, Math.max(total, 0)), null);
+    }
+
+    private static Renglon renta(ExpedienteDeLaPropiedad datos, List<BigDecimal> serie,
+                                 LocalDate hoy) {
+        BigDecimal monto = datos.getRenta();
+        LocalDate desde = datos.getRentaDesde();
+        String importe = monto == null ? null
+                : (datos.getMoneda() == null ? "" : datos.getMoneda() + " ")
+                        + monto.stripTrailingZeros().toPlainString();
+        Long parada = desde == null ? null : ChronoUnit.DAYS.between(desde, hoy);
+
+        String valor = InterpretacionDelAsunto.frase(importe,
+                parada == null ? null
+                        : parada == 0 ? "fijada hoy" : "sin cambios desde hace " + parada + " dias");
+        // 45 dias es el plazo de recontacto de la casa; una renta parada mas que
+        // eso es una renta que nadie esta negociando.
+        String estado = parada != null && parada > 45 ? Renglon.OJO : null;
+        return new Renglon("Renta", valor.isBlank() ? "Sin renta publicada" : valor,
+                estado, null, serie);
+    }
+
+    private static Renglon actividad(ExpedienteDeLaPropiedad datos) {
+        long realizadas = datos.getVisitasRealizadas() == null ? 0 : datos.getVisitasRealizadas();
+        long totales = datos.getVisitasTotales() == null ? 0 : datos.getVisitasTotales();
+        if (totales == 0) {
+            return Renglon.conSenal("Actividad", "Ninguna visita todavia", Renglon.OJO);
+        }
+        String valor = realizadas + (realizadas == 1 ? " visita realizada" : " visitas realizadas")
+                + (totales > realizadas ? " de " + totales + " agendadas" : "");
+        return Renglon.conSenal("Actividad", valor,
+                realizadas > 0 ? Renglon.BIEN : Renglon.OJO);
+    }
+
+    private static Renglon propietario(ExpedienteDeLaPropiedad datos) {
+        String nombre = datos.getPropietario();
+        String donde = InterpretacionDelAsunto.frase(datos.getDireccion(), datos.getDistrito());
+        return Renglon.historial("Propietario",
+                InterpretacionDelAsunto.frase(nombre, donde.isBlank() ? null : donde));
+    }
+
+    // ==================================================================
+    // La lectura
+    // ==================================================================
+
+    /**
+     * <b>Una frase que sintetiza los cuatro renglones sin recitarlos.</b>
+     *
+     * <p>Lo que hace que un panel se sienta inteligente no es adornar el dato: es
+     * <b>relacionarlo</b>. Que la exclusiva se agote MIENTRAS la renta lleva dos
+     * meses parada es una conclusión; repetir «Alta el 12 de mayo» es un eco.
+     *
+     * <p>Devuelve {@code null} cuando no hay nada que concluir. Una lectura de
+     * relleno —«El expediente presenta actividad normal»— es peor que ninguna:
+     * enseña a no leerla.
+     */
+    private static String lectura(ExpedienteDeLaPropiedad datos, LocalDate hoy) {
+        if (datos == null) {
+            return null;
+        }
+        List<String> partes = new ArrayList<>();
+
+        LocalDate inicio = datos.getInicioVigencia() != null
+                ? datos.getInicioVigencia() : datos.getFechaCaptacion();
+        LocalDate fin = datos.getFinVigencia();
+        if (inicio != null && fin != null) {
+            long total = ChronoUnit.DAYS.between(inicio, fin);
+            long restan = ChronoUnit.DAYS.between(hoy, fin);
+            if (total > 0 && restan <= total * 0.2) {
+                partes.add(restan < 0 ? "la exclusiva ya vencio" : "la exclusiva casi agotada");
+            }
+        }
+
+        long realizadas = datos.getVisitasRealizadas() == null ? 0 : datos.getVisitasRealizadas();
+        if (realizadas == 0) {
+            partes.add("nadie lo ha visto todavia");
+        } else if (realizadas >= 3) {
+            partes.add("ya se enseno " + realizadas + " veces sin cerrar");
+        }
+
+        LocalDate rentaDesde = datos.getRentaDesde();
+        if (rentaDesde != null && ChronoUnit.DAYS.between(rentaDesde, hoy) > 45) {
+            partes.add("y la renta sin moverse");
+        }
+
+        // UNA SOLA PARTE NO ES UNA SINTESIS: ES UN ECO.
+        //
+        // Sintetizar es relacionar; con un unico hecho lo unico que se puede
+        // hacer es repetirlo, y repetirlo es exactamente lo que la comprobacion
+        // de `recita` rechaza. Lo descubrio ese test sobre datos reales: la
+        // lectura salia "Sin ninguna visita todavia" mientras el renglon
+        // Actividad decia "Ninguna visita todavia" -- el mismo hecho, dos veces,
+        // dos centimetros mas arriba.
+        //
+        // Con menos de dos no se rellena: una lectura de relleno ensena a no
+        // leerla.
+        if (partes.size() < 2) {
+            return null;
+        }
+        String frase = String.join(", ", partes);
+        return Character.toUpperCase(frase.charAt(0)) + frase.substring(1) + ".";
+    }
+
+    private static Long numero(Object valor) {
+        return valor == null ? null : ((Number) valor).longValue();
+    }
+}

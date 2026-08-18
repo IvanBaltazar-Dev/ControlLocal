@@ -16,6 +16,7 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.TareaService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.InterpreteDeLaBandeja;
 import com.controllocal.service.soporte.LadoDeLaOperacion;
 import com.controllocal.service.soporte.NaturalezaDelAsunto;
 import com.controllocal.service.soporte.PoliticaComercial;
@@ -74,6 +75,40 @@ public class TareaServiceImpl implements TareaService {
             "VISITA", "CAPTACION", "REQUERIMIENTO");
 
     /**
+     * Anade a cada asunto su interpretacion: como esta, su expediente y la
+     * lectura que lo sintetiza (E2.4).
+     *
+     * <p>Va aparte del mapeo porque necesita el contexto de TODA la pagina, y
+     * ese contexto se carga una vez.
+     */
+    private List<FichaTarea> interpretadas(long org, List<FichaTarea> asuntos, LocalDate hoy) {
+        if (asuntos.isEmpty()) {
+            return asuntos;
+        }
+        List<InterpreteDeLaBandeja.AsuntoADescribir> aDescribir = asuntos.stream()
+                .map(TareaServiceImpl::aDescribir)
+                .toList();
+        InterpreteDeLaBandeja.Contexto contexto = interprete.contextoDe(org, aDescribir);
+
+        List<FichaTarea> conLectura = new java.util.ArrayList<>(asuntos.size());
+        for (int i = 0; i < asuntos.size(); i++) {
+            FichaTarea t = asuntos.get(i);
+            conLectura.add(new FichaTarea(t.id(), t.tipo(), t.entidadTipo(), t.entidadId(),
+                    t.entidadCodigo(), t.rutaResolver(), t.descripcion(), t.estado(),
+                    t.prioridad(), t.fechaProgramada(), t.diasSinAccion(), t.fechaVencimiento(),
+                    t.dependeDeMi(), t.lado(), t.paso(),
+                    interprete.de(aDescribir.get(i), contexto, hoy)));
+        }
+        return List.copyOf(conLectura);
+    }
+
+    private static InterpreteDeLaBandeja.AsuntoADescribir aDescribir(FichaTarea t) {
+        return new InterpreteDeLaBandeja.AsuntoADescribir(t.tipo(), t.entidadTipo(),
+                t.entidadId(), t.descripcion(), t.diasSinAccion(), t.fechaVencimiento(),
+                t.dependeDeMi());
+    }
+
+    /**
      * <b>El orden ya no se decide aqui.</b>
      *
      * <p>Aqui vivia `ALTA antes que MEDIA, y a igual prioridad lo mas rezagado
@@ -101,12 +136,14 @@ public class TareaServiceImpl implements TareaService {
     private final ContratoAlquilerRepository contratos;
     private final ReportePropietarioRepository reportes;
     private final DetalleAgenteRepository agentes;
+    private final InterpreteDeLaBandeja interprete;
 
     public TareaServiceImpl(TareaRepository tareas, ProspeccionRepository prospecciones,
                             SolicitudAlquilerRepository solicitudes, VisitaRepository visitas,
                             CaptacionRepository captaciones, ContratoAlquilerRepository contratos,
                             ReportePropietarioRepository reportes,
-                            DetalleAgenteRepository agentes) {
+                            DetalleAgenteRepository agentes,
+                            InterpreteDeLaBandeja interprete) {
         this.tareas = tareas;
         this.prospecciones = prospecciones;
         this.solicitudes = solicitudes;
@@ -115,6 +152,7 @@ public class TareaServiceImpl implements TareaService {
         this.contratos = contratos;
         this.reportes = reportes;
         this.agentes = agentes;
+        this.interprete = interprete;
     }
 
     @Override
@@ -167,6 +205,11 @@ public class TareaServiceImpl implements TareaService {
                 .filter(Tarea::estaAbierta)
                 .map(t -> ficha(t, derivadaPorClave.get(t.claveEntidad()), hoy))
                 .toList();
+
+        // La interpretacion se compone DESPUES y por lote: tres consultas para
+        // toda la pagina. Hacerlo dentro del `map` de arriba serian tres por
+        // fila, que es el N+1 que vuelve cada vez que se anade una capa.
+        abiertas = interpretadas(org, abiertas, hoy);
 
         // El orden lo decide la politica, y solo ella. Sin orden previo en esta
         // llamada el criterio 6 desempata por id, que es determinista: dos
@@ -409,7 +452,8 @@ public class TareaServiceImpl implements TareaService {
                 d != null ? d.fechaVencimiento() : null,
                 dependeDeMi,
                 ubicacion == null ? null : ubicacion.lado().name(),
-                ubicacion == null ? null : ubicacion.paso());
+                ubicacion == null ? null : ubicacion.paso(),
+                null);
     }
 
     /**

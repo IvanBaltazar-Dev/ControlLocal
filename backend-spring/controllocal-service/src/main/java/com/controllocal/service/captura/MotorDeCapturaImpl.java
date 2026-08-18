@@ -162,9 +162,9 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
             }
         }
         for (CatalogoAtributo atributo : gobierno.aplicablesA(actor.idOrganizacion(), codigoTipo)) {
-            delTipo.add(new Pregunta(atributo.getClave(), atributo.getRotulo(),
+            delTipo.add(conRestricciones(new Pregunta(atributo.getClave(), atributo.getRotulo(),
                     atributo.getTipoDato(), atributo.getUnidad(), null,
-                    atributo.esRequeridoPara(codigoTipo), null)
+                    atributo.esRequeridoPara(codigoTipo), null), atributo)
                     .en(Pregunta.FAMILIA_TIPO, delTipo.size()));
         }
 
@@ -417,9 +417,50 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         }
         CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
         String tipo = codigoDelTipoConocido(conocido);
-        return new Pregunta(definicion.getClave(), definicion.getRotulo(), definicion.getTipoDato(),
-                definicion.getUnidad(), null,
-                tipo != null && definicion.esRequeridoPara(tipo), null);
+        return conRestricciones(new Pregunta(definicion.getClave(), definicion.getRotulo(),
+                definicion.getTipoDato(), definicion.getUnidad(), null,
+                tipo != null && definicion.esRequeridoPara(tipo), null), definicion);
+    }
+
+    /**
+     * <b>Los limites del valor, publicados desde su unico dueno.</b>
+     *
+     * <p>{ Restricciones} existia en el contrato desde el principio y
+     * viajaba SIEMPRE en null, asi que cada cliente acababa escribiendo su
+     * propia copia: el formulario de locales llevaba "ambientes >= 1" a mano.
+     * Eso es una regla con dos duenos, que es la misma clase de problema que
+     * D-E4-3 cerro para los valores, aplicada a las reglas.
+     *
+     * <p>{ decimales} solo se declara cuando el catalogo lo sabe: un
+     * ENTERO no admite decimales y eso se deduce de su tipo. Para un DECIMAL
+     * NO se inventa una escala -- la de { valor_numero} es del
+     * almacenamiento, no del concepto -- y viaja en null, que es la forma
+     * honesta de decir que el catalogo no lo declara.
+     */
+    private static Pregunta conRestricciones(Pregunta pregunta, CatalogoAtributo definicion) {
+        Integer decimales = CatalogoAtributo.ENTERO.equals(definicion.getTipoDato()) ? 0 : null;
+        if (definicion.getValorMinimo() == null && decimales == null) {
+            return pregunta;
+        }
+        return new Pregunta(pregunta.clave(), pregunta.rotulo(), pregunta.familia(),
+                pregunta.control(), pregunta.tipoDato(), pregunta.unidad(), pregunta.opciones(),
+                pregunta.obligatoria(), pregunta.ayuda(), pregunta.orden(),
+                new MotorDeCaptura.Restricciones(sinEscalaDeAlmacen(definicion.getValorMinimo()),
+                        null, null, decimales));
+    }
+
+    /**
+     * El limite, sin la escala de la columna que lo guarda.
+     *
+     * <p>{ valor_minimo} es { NUMERIC(14,4)} porque es una columna
+     * compartida por todas las claves, asi que un minimo de 1 sale de la base
+     * como { 1.0000}. Publicarlo asi seria publicar la escala del
+     * ALMACENAMIENTO -- exactamente lo que el cliente no debe ver, y el mismo
+     * defecto que { ValorLogico} corrige para los valores (D-E4-3).
+     */
+    private static java.math.BigDecimal sinEscalaDeAlmacen(java.math.BigDecimal limite) {
+        return limite == null ? null
+                : new java.math.BigDecimal(limite.stripTrailingZeros().toPlainString());
     }
 
     // ==================================================================

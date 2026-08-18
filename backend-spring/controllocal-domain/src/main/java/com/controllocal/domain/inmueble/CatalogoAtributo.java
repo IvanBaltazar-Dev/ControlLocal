@@ -138,6 +138,18 @@ public class CatalogoAtributo {
     @Column(name = "campo_estructural", length = 40)
     private String campoEstructural;
 
+    /**
+     * El minimo admisible del valor numerico; NULL = sin minimo (V62).
+     *
+     * <p>Hereda los CHECK de rango que V4 tenia sobre las columnas espejo. Vive
+     * en el CATALOGO y no en el codigo por la misma razon que {@link #tipoDato}:
+     * la clave la puede anadir un tenant, y su rango es parte de lo que la
+     * define. Un minimo escrito en un servicio seria una regla sin dueno, y en
+     * un formulario, una segunda.
+     */
+    @Column(name = "valor_minimo", precision = 14, scale = 4)
+    private java.math.BigDecimal valorMinimo;
+
     @Column(name = "fecha_creacion", insertable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
 
@@ -189,6 +201,10 @@ public class CatalogoAtributo {
 
     public void setDestino(String destino) {
         this.destino = destino == null ? ATRIBUTO : destino;
+    }
+
+    public java.math.BigDecimal getValorMinimo() {
+        return valorMinimo;
     }
 
     public String getCampoEstructural() {

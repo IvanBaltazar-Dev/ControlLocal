@@ -7,6 +7,7 @@ import com.controllocal.service.LocalComercialService.DatosLocal;
 import com.controllocal.service.LocalComercialService.FichaLocal;
 import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
 import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.captura.GuionRegistroPropiedad;
 import com.controllocal.service.captura.MotorDeCaptura;
 import com.controllocal.service.captura.MotorDeCaptura.DefinicionCaptura;
@@ -519,6 +520,73 @@ class AutoridadDelDatoIntegrationTest {
                 """, Long.class),
                 "y el minimo se declara en el CATALOGO, no en el codigo: la clave la puede "
                         + "anadir un tenant y su rango es parte de lo que la define");
+    }
+
+    /**
+     * <b>El rango llega al cliente por CONTRATO, no reimplementado.</b>
+     *
+     * <p>`Restricciones` existia en el contrato desde el principio y viajaba
+     * SIEMPRE en null, asi que cada cliente acababa escribiendo su copia: el
+     * formulario de locales llevaba `ambientes >= 1` a mano. Una regla con dos
+     * duenos es la misma clase de problema que D-E4-3 cerro para los valores,
+     * aplicada a las reglas.
+     */
+    @Test
+    @DisplayName("la definicion publica el minimo que declara el catalogo")
+    void elContratoPublicaElRango() {
+        var definicion = motor.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD,
+                "DEPARTAMENTO", "VENTA", actor());
+
+        MotorDeCaptura.Pregunta ambientes = definicion.todas().stream()
+                .filter(p -> "ambientes".equals(p.clave()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("la definicion no publica `ambientes`"));
+
+        assertNotNull(ambientes.restricciones(),
+                "sin restricciones el cliente se inventa las suyas, que es lo que pasaba");
+        assertEquals(0, new java.math.BigDecimal("1").compareTo(ambientes.restricciones().minimo()),
+                "el minimo sale de catalogo_atributo.valor_minimo, donde V62 mudo el CHECK de V4");
+        assertEquals(0, ambientes.restricciones().decimales(),
+                "y que no admita decimales se deduce de su tipo, no de su nombre");
+    }
+
+    /**
+     * <b>El mismo rango, con un mensaje que se entiende.</b>
+     *
+     * <p>El trigger lo rechazaria igualmente, pero con un error de PostgreSQL a
+     * mitad de una transaccion. La base es la garantia; esto es el mensaje.
+     */
+    @Test
+    @DisplayName("un valor bajo el minimo se rechaza con el nombre del atributo delante")
+    void elMinimoSeExplicaAntesDeLlegarALaBase() {
+        Actor actor = actorAgente();
+        Long idPropietario = jdbc.queryForObject("""
+                select min(r.id_persona_rol) from persona_rol r
+                 where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
+                   and r.organizacion_id = ?
+                """, Long.class, actor.idOrganizacion());
+
+        var comando = new PropiedadUniversalService.ComandoRegistro(
+                null, null, null, "DEPARTAMENTO", null, null,
+                new PropiedadUniversalService.Ubicacion(
+                        "Av. Rango " + System.nanoTime() % 100000, "Miraflores",
+                        null, null, null, null, null, null, null),
+                List.of(new PropiedadUniversalService.Titular(idPropietario, null, Boolean.TRUE)),
+                List.of(new PropiedadUniversalService.ValorAtributo("metraje_total", "90"),
+                        new PropiedadUniversalService.ValorAtributo("dormitorios", "2"),
+                        new PropiedadUniversalService.ValorAtributo("ambientes", "0")),
+                List.of(new PropiedadUniversalService.OperacionSolicitada(
+                        "VENTA", new java.math.BigDecimal("150000"), "USD",
+                        null, null, null, null, null, null, null)),
+                null);
+
+        var error = assertThrows(ReglaNegocioException.class,
+                () -> propiedades.registrar(comando, actor));
+
+        assertTrue(error.getMessage().contains("ambientes"),
+                "el mensaje tiene que decir QUE atributo: " + error.getMessage());
+        assertTrue(error.getMessage().contains("1"),
+                "y cual era el minimo, para que se pueda corregir: " + error.getMessage());
     }
 
     // ------------------------------------------------------------------

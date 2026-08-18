@@ -8,6 +8,7 @@ import {
   Propietario,
   PropietariosService,
 } from '../../core/api/propietarios.service';
+import { CapturaService } from '../../core/api/captura.service';
 import { generarCodigoLocal, LocalForm } from './local-form';
 
 const PROPIETARIO: Propietario = {
@@ -54,9 +55,20 @@ interface AccesoLocalForm {
 describe('LocalForm', () => {
   let locales: jasmine.SpyObj<LocalesService>;
   let propietarios: jasmine.SpyObj<PropietariosService>;
+  let captura: jasmine.SpyObj<CapturaService>;
   let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
+    // Los minimos de los campos gobernados los declara el catalogo y llegan
+    // por contrato. Aqui se devuelve un mapa vacio a proposito: este test
+    // blinda el payload y las reglas propias del formulario, no la
+    // resolucion de restricciones, que se prueba contra PostgreSQL.
+    captura = jasmine.createSpyObj<CapturaService>('CapturaService', [
+      'definicion',
+      'restriccionesPorClave',
+    ]);
+    captura.restriccionesPorClave.and.resolveTo(new Map());
+
     locales = jasmine.createSpyObj<LocalesService>('LocalesService', [
       'obtener',
       'registrar',
@@ -264,6 +276,7 @@ describe('LocalForm', () => {
       providers: [
         { provide: LocalesService, useValue: locales },
         { provide: PropietariosService, useValue: propietarios },
+        { provide: CapturaService, useValue: captura },
         {
           provide: ActivatedRoute,
           useValue: {

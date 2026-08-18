@@ -274,10 +274,10 @@ El rango se declara en el **catálogo** y no en el código por la misma razón q
 el tipo de dato: la clave la puede añadir un tenant, y su rango es parte de lo
 que la define.
 
-> **Deuda declarada:** el mínimo lo impone hoy sólo el trigger, así que un valor
-> fuera de rango sale como error de PostgreSQL a mitad de transacción. Subirlo a
-> `AtributosGobernados` daría el mensaje que se entiende, igual que ya pasa con
-> el tipo. No es urgente: es exactamente el comportamiento que había antes.
+> **Cerrada el 2026-08-18.** `AtributosGobernados.enRango` comprueba el mínimo
+> antes de llegar a la base y responde con el nombre del atributo delante y el
+> límite que declaró el catálogo. La base sigue siendo la garantía; esto es el
+> mensaje — mismo reparto que ya tenía el tipo de dato.
 
 ---
 
@@ -422,37 +422,66 @@ Vive en el backend a propósito: ahí está la autoridad, así que ahí es donde
 puede romper, y así corre dentro del gate de cierre. Comprobado inyectando una
 violación real: falla nombrando fichero, línea y motivo.
 
-### La deuda que sí queda declarada
+### La deuda del mínimo duplicado — **cerrada el 2026-08-18**
 
-Cuatro mínimos viven **dos veces**: en `catalogo_atributo.valor_minimo` (que V62
-creó) y en el formulario del SPA.
+Cuatro mínimos vivían **dos veces**: en `catalogo_atributo.valor_minimo` (que
+creó V62) y en el formulario del SPA. El diagnóstico que lo destrabó fue este:
 
-| Regla | Catálogo | `local-form` |
-|---|---|---|
-| `ambientes` | `valor_minimo = 1` | `enteroOpcional(1)` + `min="1"` |
-| `antiguedad_anios` | `0` | `enteroOpcional(0)` + `min="0"` |
-| `estacionamientos` | `0` | `enteroOpcional(0)` + `min="0"` |
-| `cuota_mantenimiento` / `frente` | `0` | `Validators.min(0)` + `min="0"` |
+> `Pregunta` **ya tenía** un campo `Restricciones(minimo, maximo,
+> longitudMaxima, decimales)` — y **nadie lo construía nunca**. El slot del
+> contrato existía, su javadoc decía literalmente «para que el cliente no se los
+> invente», y viajaba siempre en `null`. Por eso cada cliente acababa
+> escribiendo su copia: no había otra.
 
-**No es conocimiento de almacenamiento**, así que no bloquea el cierre del paso
-11 — pero sí es una mini-autoridad paralela: un rango no es ni la clave ni el
-tipo, es una **regla**, y la regla ya tiene dueño. `step="1"` frente a
-`step="0.01"` sí es legítimo: eso es el tipo de dato funcional, que el SPA puede
-conocer.
+La cadena quedó completa, y cada eslabón en su sitio:
 
-Cerrarlo bien es hacer que la aplicabilidad, el rango, la obligatoriedad y la
-unidad **viajen desde el catálogo** como contrato, y eso es la normalización del
-alta de propiedades — no esta tanda. Se anota aquí para que el día que se haga,
-se haga completo y no campo a campo.
+| Dónde | Qué hace |
+|---|---|
+| `catalogo_atributo.valor_minimo` | **declara** la regla (V62) |
+| `tg_atributo_gobernado` | la **garantiza**, sin poder esquivarse |
+| `AtributosGobernados.enRango` | la **explica**, con el nombre del atributo y el límite |
+| `MotorDeCaptura.conRestricciones` | la **publica** en el contrato |
+| `local-form` (Angular) | la **obedece**, sin llevar copia |
 
-> Mismo motivo por el que el 400 de «`frente` no aplica a una OFICINA» **no** se
-> replica con un `if (tipo === "OFICINA")` en Angular: es mejor producto que
-> aceptar el dato en silencio, pero la regla la publica el catálogo, no la
-> reimplementa el formulario.
+Comprobado a ojo, que es el estándar: cambiando `valor_minimo` de `ambientes` a
+`3` en el catálogo, el `min` del input del formulario pasa a `3` sin tocar una
+línea de Angular. Restaurado a `1` después.
+
+Dos decisiones dentro del cierre:
+
+- **Si la petición falla, no se inventa un mínimo.** El campo se queda sin
+  validación de rango en el cliente y el backend rechaza igual con su mensaje.
+  Un mínimo adivinado bloquea un dato correcto, y eso el usuario no puede
+  resolverlo.
+- **`step="1"` frente a `step="0.01"` se queda escrito.** Que un número no
+  admita decimales es el **tipo de dato funcional**, y eso el cliente sí puede
+  conocerlo. El contrato lo publica igualmente en `decimales`, derivado del
+  tipo — y para un DECIMAL viaja en `null`, porque el catálogo no declara
+  escala y la de `valor_numero` es del almacenamiento, no del concepto.
+
+> El límite se publica **sin la escala de su columna**: `valor_minimo` es
+> `NUMERIC(14,4)`, así que un mínimo de 1 sale de la base como `1.0000` y el
+> contrato lo emite como `1`. Es el mismo defecto que `ValorLogico` corrige para
+> los valores, y se detectó mirando el JSON real.
+
+### Lo que sigue declarado
+
+`metraje` conserva su `min="0.01"` escrito en el formulario, copia de
+`ck_propiedad_metraje`. **No entra en esta deuda**: es un campo estructural, y
+los rangos de lo estructural no los publica nadie todavía. Se anota aquí para
+que no se confunda con lo que sí se cerró.
 
 ---
 
 ## 8. Y aquí se para
+
+> La aplicabilidad sigue siendo el siguiente eslabón del mismo patrón: el 400 de
+> «`frente` no aplica a una OFICINA» **no** se replica con un
+> `if (tipo === "OFICINA")` en Angular. Es mejor producto que aceptar el dato en
+> silencio, pero la regla la publica el catálogo. El contrato ya la lleva
+> —`definicion.delTipo` dice qué se pregunta para cada tipo—; lo que falta es que
+> el formulario la consuma, y eso es la normalización del alta, no esta tanda.
+
 
 Esta decisión queda **cerrada**. Lo que habilita —ampliar a casa, departamento,
 terreno u oficina sin añadir una columna por cada tipo— es real, pero **no se

@@ -118,9 +118,9 @@ public class AtributosGobernados {
 
         return switch (definicion.getTipoDato()) {
             case CatalogoAtributo.ENTERO -> AtributoPropiedad.deNumero(
-                    idOrganizacion, idPropiedad, clave, entero(clave, limpio));
+                    idOrganizacion, idPropiedad, clave, enRango(definicion, entero(clave, limpio)));
             case CatalogoAtributo.DECIMAL -> AtributoPropiedad.deNumero(
-                    idOrganizacion, idPropiedad, clave, decimal(clave, limpio));
+                    idOrganizacion, idPropiedad, clave, enRango(definicion, decimal(clave, limpio)));
             case CatalogoAtributo.BOOLEANO -> AtributoPropiedad.deBooleano(
                     idOrganizacion, idPropiedad, clave, booleano(clave, limpio));
             default -> AtributoPropiedad.deTexto(idOrganizacion, idPropiedad, clave, limpio);
@@ -142,8 +142,8 @@ public class AtributosGobernados {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         String limpio = exigirValor(clave, valor);
         switch (definicion.getTipoDato()) {
-            case CatalogoAtributo.ENTERO -> entero(clave, limpio);
-            case CatalogoAtributo.DECIMAL -> decimal(clave, limpio);
+            case CatalogoAtributo.ENTERO -> enRango(definicion, entero(clave, limpio));
+            case CatalogoAtributo.DECIMAL -> enRango(definicion, decimal(clave, limpio));
             case CatalogoAtributo.BOOLEANO -> booleano(clave, limpio);
             default -> { }
         }
@@ -184,8 +184,10 @@ public class AtributosGobernados {
                             + "no se guarda vacio.");
         }
         switch (definicion.getTipoDato()) {
-            case CatalogoAtributo.ENTERO -> existente.cambiarANumero(entero(clave, limpio));
-            case CatalogoAtributo.DECIMAL -> existente.cambiarANumero(decimal(clave, limpio));
+            case CatalogoAtributo.ENTERO ->
+                    existente.cambiarANumero(enRango(definicion, entero(clave, limpio)));
+            case CatalogoAtributo.DECIMAL ->
+                    existente.cambiarANumero(enRango(definicion, decimal(clave, limpio)));
             case CatalogoAtributo.BOOLEANO -> existente.cambiarABooleano(booleano(clave, limpio));
             default -> existente.cambiarATexto(limpio);
         }
@@ -329,6 +331,31 @@ public class AtributosGobernados {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * El rango que declara el catalogo, comprobado <b>aqui</b> y no solo en el
+     * trigger.
+     *
+     * <p>{@code tg_atributo_gobernado} lo rechazaria igualmente, pero con un
+     * mensaje de PostgreSQL a mitad de una transaccion, y eso no se le puede
+     * ensenar a nadie. Es exactamente el mismo motivo por el que el TIPO se
+     * valida arriba teniendo el trigger detras: la base es la garantia, este es
+     * el mensaje.
+     *
+     * <p>El minimo sale de {@code catalogo_atributo.valor_minimo}, no de una
+     * constante: escribir aqui "ambientes >= 1" seria devolver la regla al
+     * codigo el mismo dia que se le dio dueno (D-E4-3).
+     */
+    private static BigDecimal enRango(CatalogoAtributo definicion, BigDecimal valor) {
+        BigDecimal minimo = definicion.getValorMinimo();
+        if (minimo != null && valor.compareTo(minimo) < 0) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + definicion.getClave() + "\" no puede ser menor que "
+                            + minimo.stripTrailingZeros().toPlainString() + " y llego "
+                            + valor.stripTrailingZeros().toPlainString() + ".");
+        }
+        return valor;
+    }
 
     private static BigDecimal entero(String clave, String valor) {
         BigDecimal numero = decimal(clave, valor);

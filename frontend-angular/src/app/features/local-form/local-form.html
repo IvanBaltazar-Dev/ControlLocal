@@ -310,14 +310,14 @@
             </label>
             <label class="campo">
               <span>Antigüedad (años)</span>
-              <input type="number" min="0" step="1" formControlName="antiguedadAnios" />
+              <input type="number" [min]="minimoDe('antiguedadAnios')" step="1" formControlName="antiguedadAnios" />
               @if (invalido('antiguedadAnios')) {
                 <small class="mensaje-error">Debe ser un entero no negativo.</small>
               }
             </label>
             <label class="campo">
               <span>Número de ambientes</span>
-              <input type="number" min="1" step="1" formControlName="ambientes" />
+              <input type="number" [min]="minimoDe('ambientes')" step="1" formControlName="ambientes" />
               @if (invalido('ambientes')) {
                 <small class="mensaje-error">Debe ser un entero mayor que cero.</small>
               }
@@ -340,7 +340,7 @@
           <div class="grid tres">
             <label class="campo">
               <span>Frente (m)</span>
-              <input type="number" min="0" step="0.01" formControlName="frente" />
+              <input type="number" [min]="minimoDe('frente')" step="0.01" formControlName="frente" />
             </label>
             <label class="campo">
               <span>Zonificación</span>
@@ -348,7 +348,7 @@
             </label>
             <label class="campo">
               <span>Estacionamientos</span>
-              <input type="number" min="0" step="1" formControlName="numeroEstacionamientos" />
+              <input type="number" [min]="minimoDe('numeroEstacionamientos')" step="1" formControlName="numeroEstacionamientos" />
               @if (invalido('numeroEstacionamientos')) {
                 <small class="mensaje-error">Debe ser un entero no negativo.</small>
               }
@@ -359,7 +359,7 @@
             </label>
             <label class="campo">
               <span>Mantenimiento por mes</span>
-              <input type="number" min="0" step="0.01" formControlName="cuotaMantenimiento" />
+              <input type="number" [min]="minimoDe('cuotaMantenimiento')" step="0.01" formControlName="cuotaMantenimiento" />
               <small>Se expresa en la moneda seleccionada para la renta.</small>
             </label>
             <label class="campo">

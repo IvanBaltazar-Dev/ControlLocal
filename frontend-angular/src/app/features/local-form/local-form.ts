@@ -18,6 +18,7 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
+import { CapturaService, RestriccionesCampo } from '../../core/api/captura.service';
 import {
   Local,
   LocalesService,
@@ -39,6 +40,38 @@ import {
 
 const PROPIETARIOS_POR_PAGINA = 50;
 
+/**
+ * La operacion de este formulario. `/locales` es el alta heredada: un local
+ * comercial EN ALQUILER, igual que declara `LocalComercialServiceImpl`.
+ */
+const OPERACION_DEL_ALTA = 'ALQUILER';
+
+/**
+ * Campo del formulario -> clave del catalogo, para los que el catalogo gobierna.
+ *
+ * <p>Nombrar la clave NO es saber donde vive: es la unica forma de pedir un
+ * dato. Lo que este mapa evita es lo contrario — que el formulario decida el
+ * RANGO de cada campo, que es una regla y ya tiene dueno (D-E4-3).
+ *
+ * <p>`numeroEstacionamientos` se llama `estacionamientos` en el catalogo: el
+ * nombre del campo del cable y el de la clave no tienen por que coincidir, y
+ * por eso esto es un mapa y no una lista.
+ */
+const CLAVES_DEL_CATALOGO: ReadonlyArray<readonly [string, string]> = [
+  ['ambientes', 'ambientes'],
+  ['antiguedadAnios', 'antiguedad_anios'],
+  ['frente', 'frente'],
+  ['numeroEstacionamientos', 'estacionamientos'],
+  ['cuotaMantenimiento', 'cuota_mantenimiento'],
+];
+
+/** Los que se piden como enteros; el resto admite decimales. */
+const ENTEROS_DEL_CATALOGO: ReadonlySet<string> = new Set([
+  'ambientes',
+  'antiguedadAnios',
+  'numeroEstacionamientos',
+]);
+
 /** Mismo criterio que el alta completa: DNI 8, RUC 11. */
 const LARGO_DOCUMENTO: Readonly<Record<string, number>> = { D: 8, R: 11 };
 
@@ -52,6 +85,7 @@ const LARGO_DOCUMENTO: Readonly<Record<string, number>> = { D: 8, R: 11 };
 export class LocalForm implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly locales = inject(LocalesService);
+  private readonly captura = inject(CapturaService);
   private readonly propietariosApi = inject(PropietariosService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -117,14 +151,24 @@ export class LocalForm implements OnInit {
     monedaReferencial: this.fb.nonNullable.control('', Validators.required),
     estado: this.fb.nonNullable.control('D', Validators.required),
     tipoInmueble: this.fb.nonNullable.control('L', Validators.required),
-    antiguedadAnios: this.fb.control<number | null>(null, [enteroOpcional(0)]),
-    ambientes: this.fb.control<number | null>(null, [enteroOpcional(1)]),
+    // Los gobernados nacen SIN minimo: se lo pone el catalogo (D-E4-3).
+    //
+    // Aqui vivian `enteroOpcional(0)`, `enteroOpcional(1)` y `Validators.min(0)`,
+    // una copia a mano de reglas que el catalogo ya declara. Desde que las
+    // declara el catalogo, esta copia era una segunda autoridad sobre la misma
+    // regla; ahora el limite llega por contrato y lo aplica
+    // `aplicarRestricciones()`.
+    //
+    // `entero()` si se queda: que un numero no admita decimales es el TIPO DE
+    // DATO funcional, y eso el cliente si puede conocerlo.
+    antiguedadAnios: this.fb.control<number | null>(null, [entero()]),
+    ambientes: this.fb.control<number | null>(null, [entero()]),
     descripcion: this.fb.nonNullable.control('', Validators.maxLength(2000)),
-    frente: this.fb.control<number | null>(null, Validators.min(0)),
+    frente: this.fb.control<number | null>(null),
     zonificacion: this.fb.nonNullable.control('', Validators.maxLength(80)),
-    numeroEstacionamientos: this.fb.control<number | null>(null, [enteroOpcional(0)]),
+    numeroEstacionamientos: this.fb.control<number | null>(null, [entero()]),
     cargaElectricaKw: this.fb.control<number | null>(null, Validators.min(0)),
-    cuotaMantenimiento: this.fb.control<number | null>(null, Validators.min(0)),
+    cuotaMantenimiento: this.fb.control<number | null>(null),
     aptoLicencia: this.fb.nonNullable.control(''),
   });
 
@@ -162,7 +206,61 @@ export class LocalForm implements OnInit {
         this.duplicadosRevisados.set(false);
         this.actualizarPasos();
       });
+
+    // El minimo de cada campo lo declara el catalogo, y el catalogo se consulta
+    // por tipo de propiedad: se vuelve a pedir cuando el tipo cambia.
+    this.formulario.controls.tipoInmueble.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((tipo) => void this.aplicarRestricciones(tipo));
+    void this.aplicarRestricciones(this.formulario.controls.tipoInmueble.value);
+
     void this.cargar();
+  }
+
+  /** Lo que el catalogo declaro, por clave. Vacio hasta que responde. */
+  protected readonly restricciones = signal<ReadonlyMap<string, RestriccionesCampo>>(new Map());
+
+  /** El `min` del input, para que la plantilla tampoco lo lleve escrito. */
+  protected minimoDe(campo: string): number | null {
+    const clave = CLAVES_DEL_CATALOGO.find(([formulario]) => formulario === campo)?.[1];
+    return clave ? (this.restricciones().get(clave)?.minimo ?? null) : null;
+  }
+
+  /**
+   * Los minimos, tomados del catalogo en vez de escritos aqui.
+   *
+   * El formulario llevaba `ambientes >= 1` y `>= 0` en otros cuatro: una copia
+   * a mano de reglas que hoy declara el catalogo y el motor de captura publica
+   * en `restricciones`. Mantener la copia dejaba la regla con dos duenos, y
+   * divergiendo desde el primer tenant que cambiara la suya.
+   *
+   * Si la peticion falla NO se inventa un minimo. El campo se queda sin
+   * validacion de rango en el cliente y el backend rechaza igual, con su
+   * mensaje. Es preferible a validar con un numero adivinado: un minimo
+   * equivocado bloquea un dato correcto, y eso el usuario no puede resolverlo.
+   */
+  private async aplicarRestricciones(tipoInmueble: string): Promise<void> {
+    let declaradas: ReadonlyMap<string, RestriccionesCampo>;
+    try {
+      declaradas = await this.captura.restriccionesPorClave(tipoInmueble, OPERACION_DEL_ALTA);
+    } catch {
+      return;
+    }
+
+    for (const [campo, clave] of CLAVES_DEL_CATALOGO) {
+      const control = this.formulario.get(campo);
+      const minimo = declaradas.get(clave)?.minimo;
+      if (!control) {
+        continue;
+      }
+      const validadores = ENTEROS_DEL_CATALOGO.has(campo) ? [entero()] : [];
+      if (minimo !== null && minimo !== undefined) {
+        validadores.push(Validators.min(minimo));
+      }
+      control.setValidators(validadores);
+      control.updateValueAndValidity({ emitEvent: false });
+    }
+    this.restricciones.set(declaradas);
   }
 
   protected seleccionarPropietario(id: number): void {
@@ -571,12 +669,14 @@ function textoOpcional(valor: string): string | null {
   return limpio || null;
 }
 
-function enteroOpcional(minimo: number) {
+/**
+ * Que el valor no lleve decimales. NO comprueba rango: el rango lo declara el
+ * catalogo y llega por contrato (ver `aplicarRestricciones`).
+ */
+function entero() {
   return (control: AbstractControl<number | null>): ValidationErrors | null => {
     const valor = control.value;
-    return valor === null || (Number.isInteger(valor) && valor >= minimo)
-      ? null
-      : { entero: true };
+    return valor === null || Number.isInteger(valor) ? null : { entero: true };
   };
 }
 

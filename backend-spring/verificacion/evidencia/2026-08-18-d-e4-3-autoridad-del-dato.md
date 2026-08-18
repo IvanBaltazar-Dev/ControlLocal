@@ -185,3 +185,65 @@ V62) y en los validadores de `local-form`. No es conocimiento de almacenamiento
 la aplicabilidad, el rango, la obligatoriedad y la unidad viajen desde el
 catálogo como contrato: eso es la normalización del alta de propiedades, no esta
 tanda.
+
+---
+
+## 8. La deuda del mínimo duplicado, cerrada el mismo día
+
+El diagnóstico que la destrabó: `Pregunta` **ya tenía** un campo
+`Restricciones(minimo, maximo, longitudMaxima, decimales)` —con un javadoc que
+decía literalmente «para que el cliente no se los invente»— y **nadie lo
+construía nunca**. Viajaba siempre en `null`, así que cada cliente acababa
+escribiendo su copia porque no había otra.
+
+La cadena, completa:
+
+| Dónde | Qué hace |
+|---|---|
+| `catalogo_atributo.valor_minimo` | **declara** la regla (V62) |
+| `tg_atributo_gobernado` | la **garantiza**, sin poder esquivarse |
+| `AtributosGobernados.enRango` | la **explica**, con el nombre del atributo y el límite |
+| `MotorDeCaptura.conRestricciones` | la **publica** en el contrato |
+| `local-form` (Angular) | la **obedece**, sin llevar copia |
+
+### El contrato, contra la API viva
+
+```
+GET /captura/definicion?tipoPropiedad=L&operacion=ALQUILER
+
+  "clave":"ambientes" ... "restricciones":{"minimo":1,"decimales":0}
+  frente / cuota_mantenimiento .... "restricciones":{"minimo":0}
+```
+
+`minimo: 1` y no `1.0000`: `valor_minimo` es `NUMERIC(14,4)` y publicar el crudo
+sería publicar la escala del almacenamiento — el mismo defecto que
+`ValorLogico` corrige para los valores. Y `decimales` sólo viaja cuando el
+catálogo lo sabe: `0` para un ENTERO, ausente para un DECIMAL, porque la escala
+de `valor_numero` es del almacén y no del concepto.
+
+### Comprobado a ojo, que es el estándar
+
+```
+catálogo: ambientes.valor_minimo = 1   ->  input min="1"
+catálogo: ambientes.valor_minimo = 3   ->  input min="3"   (sin tocar Angular)
+catálogo: restaurado a 1               ->  input min="1"
+```
+
+`metraje` conserva su `min="0.01"` escrito: es estructural, y los rangos de lo
+estructural no los publica nadie todavía. Queda declarado, sin confundirse con
+lo cerrado.
+
+### Verificación
+
+```
+backend  837 pruebas · 0 fallos · 0 SKIPPED
+Angular  565 / 565
+```
+
+Dos fallos durante el cierre, los dos útiles:
+
+- **el gate del paso 11 cazó mi propio cambio**: escribí el nombre de una tabla
+  en un comentario de `local-form.ts`. Un comentario hoy es código mañana, así
+  que se reescribió el comentario en vez de exceptuar los comentarios;
+- el fixture del test nuevo olvidaba `dormitorios`, obligatorio para un
+  departamento: la obligatoriedad se comprueba antes que el rango.

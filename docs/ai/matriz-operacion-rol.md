@@ -297,6 +297,8 @@ viaja al evento de dominio y es lo que responde *«quién decidió esto»*.
 | GET | `/dashboard` | TODOS | Alcance y `ambito` por rol. La bandeja embebida sale de `/tareas`, que es solo del AGENTE: para **BROKER y ADMIN viaja vacía, no es un 403**. | E4 |
 | GET | `/indicadores/resumen` | TODOS | Alcance **solo por agente responsable**: la captación no amplía el de nadie aquí. Distinto del seguimiento — **no unificar** (D-E4-4). | E4 |
 | GET | `/indicadores/avance` | TODOS | RF-017, acumulado (no acepta periodo). Mismo alcance por agente responsable. | E4 |
+| GET | `/indicadores/metas` | BROKER, TENANT_ADMIN | Las metas del mes de **los agentes que el actor alcanza** (BROKER los que supervisa, ADMIN los de su organización), incluidas **las no fijadas, con valor nulo** — ver a quién le falta es lo que deja al equipo sin semáforo por cobertura incompleta. El AGENTE no entra: ve su meta dentro de `/indicadores/resumen`, no la lista del equipo. | E2.6 |
+| PUT | `/indicadores/metas` | BROKER, TENANT_ADMIN | Fija o corrige metas del mes; idempotente por (agente, KPI, mes). **Un agente no fija la suya** y **no existe meta de equipo**: la del equipo es la suma de las de sus agentes (D-E2-2 §5). Fijar la de un agente fuera del alcance es regla de negocio, no 403. | E2.6 |
 | GET | `/seguimiento-comercial` | TODOS | Alcance por la **unión** de agente propio y agente de la captación; esa segunda rama existe **solo para el BROKER** (al AGENTE no le suma nada). Las filas **sin fecha encabezan** la lista. | E4 |
 
 ---

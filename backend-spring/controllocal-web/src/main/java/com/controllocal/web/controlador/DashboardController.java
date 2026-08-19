@@ -3,6 +3,7 @@ package com.controllocal.web.controlador;
 import com.controllocal.service.FocoDelBrokerService;
 import com.controllocal.service.HallazgoService;
 import com.controllocal.service.IndicadorService;
+import com.controllocal.service.RendimientoComercialService;
 import com.controllocal.service.TareaService;
 import com.controllocal.service.soporte.AccesosDelInicio;
 import com.controllocal.web.dto.AccesoResponse;
@@ -10,6 +11,7 @@ import com.controllocal.web.dto.AsuntoDelBrokerResponse;
 import com.controllocal.web.dto.DashboardResponse;
 import com.controllocal.web.dto.HallazgoResponse;
 import com.controllocal.web.dto.IndicadoresResponse;
+import com.controllocal.web.dto.RendimientoResponse;
 import com.controllocal.web.dto.TareaResponse;
 import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.seguridad.SesionActual;
@@ -47,22 +49,30 @@ public class DashboardController {
     private final TareaService tareas;
     private final HallazgoService hallazgos;
     private final FocoDelBrokerService focoDelBroker;
+    private final RendimientoComercialService rendimiento;
 
     public DashboardController(IndicadorService indicadores, TareaService tareas,
                                HallazgoService hallazgos,
-                               FocoDelBrokerService focoDelBroker) {
+                               FocoDelBrokerService focoDelBroker,
+                               RendimientoComercialService rendimiento) {
         this.indicadores = indicadores;
         this.tareas = tareas;
         this.hallazgos = hallazgos;
         this.focoDelBroker = focoDelBroker;
+        this.rendimiento = rendimiento;
     }
 
     @GetMapping
     public DashboardResponse cargar(@RequestParam(required = false) String periodo,
+                                    @RequestParam(required = false) String mes,
                                     @RequestParam(defaultValue = "5") int tamano) {
         var actor = SesionActual.actor();
+        // El pie del Inicio no calcula nada por su cuenta: lee los mismos cuatro
+        // KPI que Indicadores, del mismo productor. Por construccion no puede
+        // contradecirlo, que es lo que D-E2-1 seccion 6.2 exige.
         IndicadoresResponse resumen = IndicadoresResponse.desde(
-                indicadores.resumen(periodo, actor));
+                indicadores.resumen(periodo, actor),
+                RendimientoResponse.desde(rendimiento.del(mes, actor)));
         int tamanoValido = Math.max(1, Math.min(100, tamano));
 
         if (!actor.esAgente()) {

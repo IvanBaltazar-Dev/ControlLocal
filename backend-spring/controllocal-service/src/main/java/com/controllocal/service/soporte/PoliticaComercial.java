@@ -148,10 +148,101 @@ public final class PoliticaComercial {
                     + "de un agente.",
             10, Unidad.CARACTERES, Alcance.GLOBAL, 1);
 
+    // ------------------------------------------------------------------
+    // El ritmo contra la meta (E2.6)
+    // ------------------------------------------------------------------
+    //
+    // Los cinco umbrales de abajo vivian SOLO en la maqueta
+    // (docs/ai/prototipos/*.html, bloque POLITICA), duplicados ademas entre sus
+    // dos archivos. Es la misma forma del incidente que E1 vino a cerrar, y ya
+    // habia divergido: el prototipo decia 10 dias de reporte al propietario
+    // donde aqui dicen 15. Suben aqui, que es donde se decide que significa un
+    // numero, y el prototipo deja de ser fuente ejecutable.
+
+    /**
+     * Proyeccion sobre meta a partir de la cual se va <b>en ritmo</b>.
+     *
+     * <p>Es 100 % y no 95 % a proposito: la pregunta que responde el semaforo no
+     * es «¿voy bien?» sino «¿con este ritmo llego?». Si la proyeccion no llega a
+     * la meta, no se va en ritmo aunque falte poco.
+     */
+    public static final Regla RITMO_LLEGA = new Regla(
+            "ritmo.proyeccion-en-ritmo",
+            "Proyeccion al cierre, en porcentaje de la meta, a partir de la cual el ritmo "
+                    + "es suficiente.",
+            100, Unidad.PORCENTAJE, Alcance.GLOBAL, 1);
+
+    /**
+     * Por debajo de esta proyeccion la desviacion deja de ser recuperable sola.
+     * Entre este valor y {@link #RITMO_LLEGA} el estado es de atencion.
+     */
+    public static final Regla RITMO_CERCA = new Regla(
+            "ritmo.proyeccion-atencion",
+            "Proyeccion al cierre, en porcentaje de la meta, por debajo de la cual la brecha "
+                    + "ya necesita intervencion.",
+            85, Unidad.PORCENTAJE, Alcance.GLOBAL, 1);
+
+    /**
+     * Mientras el periodo lleve menos recorrido que esto, el peor estado posible
+     * es «atencion».
+     *
+     * <p>El dia 2 de un mes de 31, el que lleva cero proyecta cero y saldria rojo
+     * todos los meses. Un rojo que aparece siempre al principio ensena a
+     * ignorarlo.
+     */
+    public static final Regla RITMO_ARRANQUE = new Regla(
+            "ritmo.periodo-minimo-para-proyectar",
+            "Porcentaje del periodo que tiene que haber transcurrido antes de que el ritmo "
+                    + "pueda declararse fuera de ritmo.",
+            15, Unidad.PORCENTAJE, Alcance.GLOBAL, 1);
+
+    /**
+     * Meta por debajo de la cual no se reparte por dias.
+     *
+     * <p>No todos los dias se firma un contrato. Con meta 2 en 31 dias, prorratear
+     * dice «hoy deberias llevar 1,2», que es una cadencia que el negocio no
+     * tiene. Se mira solo si ya se cumplio y cuanto periodo queda.
+     */
+    public static final Regla RITMO_VOLUMEN_MINIMO = new Regla(
+            "ritmo.volumen-minimo-para-cadencia",
+            "Meta minima del periodo para que tenga sentido repartirla por dias.",
+            3, Unidad.PUNTOS, Alcance.GLOBAL, 1);
+
+    /**
+     * Muestra minima para que un porcentaje concluya algo.
+     *
+     * <p>1 visita y 1 solicitud son 100 %, y no significan nada. Por debajo de
+     * aqui el porcentaje se muestra con su N y sin estado, que es la regla 9 de
+     * D-E2-2.
+     */
+    public static final Regla MUESTRA_MINIMA = new Regla(
+            "muestra.minima-para-concluir",
+            "Numero de observaciones por debajo del cual un porcentaje se muestra pero no "
+                    + "concluye.",
+            5, Unidad.PUNTOS, Alcance.GLOBAL, 1);
+
+    /**
+     * Observaciones minimas para publicar un rango de renta propio.
+     *
+     * <p>Medido el 2026-08-19: la mejor celda zona x metraje de la cartera tiene
+     * <b>cuatro</b> observaciones y catorce de las diecisiete tienen una. Con eso
+     * el minimo y el maximo son dos puntos sueltos, no un rango. Diez propiedades
+     * distintas es lo que separa «esto es nuestra operacion» de «esto son dos
+     * casos». Por debajo el contraste no se dibuja y se dice que no hay
+     * referencia suficiente; nunca se rellena con el sector.
+     */
+    public static final Regla RANGO_MUESTRA_MINIMA = new Regla(
+            "contraste.propiedades-minimas-para-rango",
+            "Propiedades distintas que tiene que haber en una zona y banda de metraje para "
+                    + "publicar un rango de renta propio.",
+            10, Unidad.PUNTOS, Alcance.GLOBAL, 1);
+
     /** Catalogo completo. Su unico consumidor hoy es el test que vigila la politica. */
     public static final List<Regla> REGLAS = List.of(
             RECONTACTO, VISITA_PROXIMA, REPORTE_PROPIETARIO, COINCIDENCIA_PROPONIBLE,
-            ENCARGO, COMISION_MAXIMA, MOTIVO_REASIGNACION);
+            ENCARGO, COMISION_MAXIMA, MOTIVO_REASIGNACION,
+            RITMO_LLEGA, RITMO_CERCA, RITMO_ARRANQUE, RITMO_VOLUMEN_MINIMO,
+            MUESTRA_MINIMA, RANGO_MUESTRA_MINIMA);
 
     private PoliticaComercial() {
     }
@@ -192,6 +283,35 @@ public final class PoliticaComercial {
     /** Tope de comision como importe comparable, para las validaciones economicas. */
     public static BigDecimal comisionMaxima() {
         return BigDecimal.valueOf(COMISION_MAXIMA.valor());
+    }
+
+    /**
+     * Si una meta da para repartirse por dias. Por debajo, prorratear inventa una
+     * cadencia diaria que el negocio no tiene.
+     */
+    public static boolean tieneCadencia(int metaPeriodo) {
+        return metaPeriodo >= RITMO_VOLUMEN_MINIMO.valor();
+    }
+
+    /**
+     * Si el periodo lleva tan poco recorrido que proyectar todavia no dice nada.
+     * Mientras sea cierto, el peor estado posible es «atencion».
+     */
+    public static boolean enArranque(PeriodoCalendario periodo) {
+        return periodo.diasTranscurridos() * 100 < RITMO_ARRANQUE.valor() * periodo.diasTotales();
+    }
+
+    /** Si una muestra da para que un porcentaje concluya algo. */
+    public static boolean muestraConcluye(int observaciones) {
+        return observaciones >= MUESTRA_MINIMA.valor();
+    }
+
+    /**
+     * Si una zona y banda de metraje tiene bastantes propiedades distintas para
+     * publicar un rango de renta propio. Por debajo se degrada; no se rellena.
+     */
+    public static boolean rangoPublicable(int propiedadesDistintas) {
+        return propiedadesDistintas >= RANGO_MUESTRA_MINIMA.valor();
     }
 
     /**

@@ -79,6 +79,126 @@ export interface IndicadorSenal {
   prioridad: number;
 }
 
+/** El estado de un KPI contra su meta. Lo decide el dominio; aquí solo se pinta. */
+export type EstadoRitmo = "EN_RITMO" | "ATENCION" | "FUERA_DE_RITMO" | "SIN_BASE";
+
+/**
+ * Por qué un KPI no concluye. Sin esto, un `SIN_BASE` obliga a adivinar si
+ * falta la meta, falta la de un compañero o falta el mes.
+ */
+export type MotivoSinBase =
+  | "NINGUNO"
+  | "SIN_META"
+  | "COBERTURA_INCOMPLETA"
+  | "PERIODO_SIN_RECORRIDO";
+
+/**
+ * El mes de calendario contra el que se mide la meta.
+ *
+ * **No es el `periodo` de siempre.** Aquel es una ventana móvil (7d/15d/1m/3m/1y)
+ * y sigue gobernando series y agregados; este es un mes con inicio, fin y días
+ * transcurridos, porque el ritmo lo necesita: `metaEsperadaAHoy` sobre una
+ * ventana móvil sería siempre la meta entera.
+ *
+ * Los cinco campos vienen del backend. **La pantalla no cuenta días.**
+ */
+export interface PeriodoCalendario {
+  /** `AAAA-MM`. */
+  codigo: string;
+  desde: string;
+  hasta: string;
+  /** Incluye hoy: el 19 de agosto de 2026 son 19 de 31. */
+  diasTranscurridos: number;
+  diasTotales: number;
+  enCurso: boolean;
+}
+
+/**
+ * Un KPI canónico con su lectura completa.
+ *
+ * **Los nulos son información.** `metaPeriodo` en `null` no es meta cero: es que
+ * nadie fijó meta. Pintar un 0 diría "tu objetivo era cero y lo cumpliste", que
+ * es lo contrario. Misma regla que `conversionPropia` desde E2.0.
+ *
+ * El `rotulo` viene del backend y **no se reescribe aquí**: es el mismo texto que
+ * usa el pie del Inicio, y el día que cambie tiene que cambiar en un solo sitio.
+ */
+export interface KpiCanonico {
+  /** `C` · `P` · `S` · `F`. Estable; el rótulo puede cambiar sin migrar nada. */
+  codigo: string;
+  rotulo: string;
+  /** Qué fila cuenta exactamente. Hace el número auditable. */
+  hecho: string;
+  actual: number;
+  /**
+   * **Ausente, no cero, cuando nadie fijó meta.** El backend omite los campos
+   * nulos, así que aquí llegan como `undefined`: los seis van marcados
+   * opcionales para que TypeScript obligue a distinguir «no hay meta» de «la
+   * meta es 0», que es toda la diferencia.
+   */
+  metaPeriodo?: number | null;
+  metaEsperadaAHoy?: number | null;
+  porcentajeMeta?: number | null;
+  faltante?: number | null;
+  proyeccionCierre?: number | null;
+  porcentajeProyectado?: number | null;
+  estadoRitmo: EstadoRitmo;
+  motivoSinBase: MotivoSinBase;
+  /** La meta es tan pequeña que repartirla por días inventaría una cadencia. */
+  sinCadencia: boolean;
+  variacionComparable?: number | null;
+}
+
+/**
+ * «Puede cerrarse este mes»: determinista, no pronóstico.
+ *
+ * Solicitudes aprobadas, sin contrato y con la oferta vigente. Una oportunidad
+ * prometedora no entra. **El importe conserva su moneda**: si hay dos,
+ * `variasMonedas` lo dice y `importe` trae solo la principal — sumar soles con
+ * dólares necesita un tipo de cambio que nadie declaró.
+ */
+export interface CierrePosible {
+  operaciones: number;
+  importe: number;
+  moneda?: string | null;
+  variasMonedas: boolean;
+  /** La palanca del broker: lo único de esa franja sobre lo que actúa. */
+  esperanDecision: number;
+}
+
+/**
+ * Cómo se reparte el resultado del equipo, que no es lo mismo que el total.
+ *
+ * `null` para un agente: su pulso sería su propio ritmo contado otra vez.
+ * `sinBase` son los agentes a los que nadie fijó meta — no cuentan como fuera de
+ * ritmo, porque no se le reprocha a nadie una brecha contra un objetivo que no
+ * existe.
+ */
+export interface PulsoEquipo {
+  enRitmo: number;
+  atencion: number;
+  fueraDeRitmo: number;
+  sinBase: number;
+  agentes: number;
+}
+
+/**
+ * El bloque de rendimiento (E2.6).
+ *
+ * `generadoEn` **tiene un solo productor en todo el sistema, y es éste**. El
+ * Inicio lo lee de aquí para decir "hace 2 min" en vez de mirar su propio reloj,
+ * igual que hace con `ambito`.
+ */
+export interface Rendimiento {
+  periodo: PeriodoCalendario;
+  /** ISO-8601 con zona. El instante en que el backend calculó todo esto. */
+  generadoEn: string;
+  /** Los cuatro, en el orden del embudo. Ni uno más. */
+  kpis: KpiCanonico[];
+  puedeCerrarse: CierrePosible;
+  pulso?: PulsoEquipo | null;
+}
+
 /**
  * Espejo de `IndicadoresResponse`. **Nada es nulo**: los escalares viajan en 0
  * y las listas vacías viajan igual, así que la pantalla no necesita defensa
@@ -127,6 +247,12 @@ export interface IndicadoresResumen {
    * donde hay 2 pendientes y 9 días de atraso. Lo suma el dominio.
    */
   pendientesDeAtencion: number;
+  /**
+   * Los cuatro KPI canónicos con su meta y su ritmo, medidos contra un **mes de
+   * calendario** y no contra la ventana móvil de arriba (E2.6). Aquí vive
+   * también `generadoEn`, y es su único productor.
+   */
+  rendimiento: Rendimiento;
 }
 
 /** Una fila del avance comercial (RF-017): una captación ACTIVA del alcance. */

@@ -574,6 +574,94 @@
   </cl-panel-lateral>
 }
 
+
+<!--
+  EL PIE · anticipo de Indicadores, no una métrica nueva (D-E2-1 §6.2)
+
+  Los cuatro nombres van COMPLETOS y salen del backend: son los mismos que usa
+  la pantalla de Indicadores, letra por letra. Abreviarlos aquí desharía la
+  distinción que D-E2-2 §1.1 vino a fijar — 31 registros creados no son 31
+  propietarios contactados.
+
+  Cuatro KPI, ni uno más, y una sola cifra de dinero. El detalle vive en
+  Indicadores, a un clic: el enlace es la franja entera.
+-->
+@if (rendimiento(); as r) {
+  <a class="pie-indicadores" routerLink="/indicadores">
+    @if (cierreDelMes(); as cierre) {
+      <div class="en-juego">
+        <p class="rotulo">Puede cerrarse este mes</p>
+        @if (cierre.importe) {
+          <p class="cifra">{{ cierre.importe }}</p>
+        }
+        <p class="detalle">{{ cierre.detalle }}</p>
+        @if (cierre.variasMonedas) {
+          <p class="detalle aviso">
+            Hay operaciones en más de una moneda; se muestra la de mayor importe.
+          </p>
+        }
+        @if (!esAgente() && cierre.esperanDecision > 0) {
+          <p class="palanca">
+            {{ cierre.esperanDecision }}
+            {{ cierre.esperanDecision === 1 ? 'espera' : 'esperan' }} tu decisión
+          </p>
+        }
+      </div>
+    }
+
+    <div class="kpis-pie">
+      @for (kpi of kpisDelPie(); track kpi.codigo) {
+        <div class="kpi-pie" [attr.data-ritmo]="kpi.estadoRitmo">
+          <p class="nombre">{{ kpi.rotulo }}</p>
+          <p class="cifra">{{ cifraDe(kpi) }}</p>
+          <!--
+            La barra lleva DOS marcas: lo recorrido y el ritmo esperado a hoy.
+            Sin la segunda, un 87 % no dice si vas por delante o por detrás.
+          -->
+          <div
+            class="barra"
+            role="img"
+            [attr.aria-label]="kpi.rotulo + ': ' + cifraDe(kpi) + '. ' + lecturaDe(kpi)"
+          >
+            <span class="recorrido" [style.width.%]="avanceDe(kpi)"></span>
+            @if (marcaEsperadaDe(kpi); as esperado) {
+              <span class="marca-esperada" [style.left.%]="esperado"></span>
+            }
+          </div>
+          <p class="lectura">{{ lecturaDe(kpi) }}</p>
+        </div>
+      }
+    </div>
+
+    <div class="cierre-pie">
+      <!--
+        El pulso va UNA vez y sin nombres (D-E2-2 §6.1 e instrucción 13): esto
+        es una distribución, no un ranking. Y solo lo ve quien supervisa: para
+        un agente sería su propio ritmo contado otra vez.
+      -->
+      @if (r.pulso; as pulso) {
+        <p class="pulso">
+          <span class="rotulo">Pulso del equipo</span>
+          <span class="dato en-ritmo">{{ pulso.enRitmo }} en ritmo</span>
+          <span class="dato atencion">{{ pulso.atencion }} requieren atención</span>
+          <span class="dato fuera">{{ pulso.fueraDeRitmo }} fuera de ritmo</span>
+          @if (pulso.sinBase > 0) {
+            <span class="dato sin-base">{{ pulso.sinBase }} sin meta fijada</span>
+          }
+        </p>
+      }
+      <p class="periodo-pie">
+        <span>{{ r.periodo.diasTranscurridos }} de {{ r.periodo.diasTotales }} días del mes</span>
+        @if (calculadoHace(); as hace) {
+          <span class="separador">·</span>
+          <span class="frescura">calculado {{ hace }}</span>
+        }
+      </p>
+      <span class="ver-mas">Ver indicadores →</span>
+    </div>
+  </a>
+}
+
 <cl-confirmacion
   [abierto]="porCancelar() !== null"
   titulo="Cancelar esta tarea"

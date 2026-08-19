@@ -59,6 +59,92 @@ const RESUMEN: IndicadoresResumen = {
     },
   ],
   pendientesDeAtencion: 1,
+  /**
+   * El bloque de E2.6. Los cuatro KPI van con el rótulo del backend —**la
+   * pantalla no los escribe**— y con casos distintos a propósito: uno en ritmo,
+   * uno en atención, uno fuera y uno sin meta, que es la combinación que rompe
+   * si alguien vuelve a suponer que todos traen meta.
+   */
+  rendimiento: {
+    periodo: {
+      codigo: '2026-08',
+      desde: '2026-08-01',
+      hasta: '2026-08-31',
+      diasTranscurridos: 19,
+      diasTotales: 31,
+      enCurso: true,
+    },
+    generadoEn: '2026-08-19T12:00:00Z',
+    kpis: [
+      {
+        codigo: 'C',
+        rotulo: 'Propietarios contactados',
+        hecho: 'prospeccion con fecha de contacto dentro del mes',
+        actual: 19,
+        metaPeriodo: 24,
+        metaEsperadaAHoy: 15,
+        porcentajeMeta: 79,
+        faltante: 5,
+        proyeccionCierre: 31,
+        porcentajeProyectado: 129,
+        estadoRitmo: 'EN_RITMO',
+        motivoSinBase: 'NINGUNO',
+        sinCadencia: false,
+        variacionComparable: 4,
+      },
+      {
+        codigo: 'P',
+        rotulo: 'Propiedades captadas',
+        hecho: 'transicion de captacion a ACTIVA dentro del mes',
+        actual: 9,
+        metaPeriodo: 15,
+        metaEsperadaAHoy: 9,
+        porcentajeMeta: 60,
+        faltante: 6,
+        proyeccionCierre: 14,
+        porcentajeProyectado: 98,
+        estadoRitmo: 'ATENCION',
+        motivoSinBase: 'NINGUNO',
+        sinCadencia: false,
+        variacionComparable: -1,
+      },
+      {
+        codigo: 'S',
+        rotulo: 'Solicitudes ingresadas',
+        hecho: 'solicitud registrada dentro del mes',
+        actual: 2,
+        metaPeriodo: 8,
+        metaEsperadaAHoy: 5,
+        porcentajeMeta: 25,
+        faltante: 6,
+        proyeccionCierre: 3,
+        porcentajeProyectado: 41,
+        estadoRitmo: 'FUERA_DE_RITMO',
+        motivoSinBase: 'NINGUNO',
+        sinCadencia: false,
+        variacionComparable: 0,
+      },
+      {
+        // Sin meta: los seis derivados NO viajan. El backend omite los nulos,
+        // así que llegan como `undefined` y no como `null`.
+        codigo: 'F',
+        rotulo: 'Contratos firmados',
+        hecho: 'contrato con fecha de cierre dentro del mes',
+        actual: 4,
+        estadoRitmo: 'SIN_BASE',
+        motivoSinBase: 'SIN_META',
+        sinCadencia: false,
+      },
+    ],
+    puedeCerrarse: {
+      operaciones: 2,
+      importe: 12000,
+      moneda: 'PEN',
+      variasMonedas: false,
+      esperanDecision: 1,
+    },
+    pulso: null,
+  },
 };
 
 function sesion(rol: RolSesion): Sesion {

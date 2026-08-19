@@ -18,9 +18,12 @@ import {
 } from '../../core/api/dashboard.service';
 import {
   esPeriodo,
+  EstadoRitmo,
   IndicadorConteo,
   IndicadoresResumen,
   IndicadorSenal,
+  KpiCanonico,
+  MotivoSinBase,
   PERIODO_POR_DEFECTO,
   PERIODOS_INDICADORES,
 } from '../../core/api/indicadores.service';
@@ -227,6 +230,165 @@ export class Dashboard implements OnInit {
         return '–';
     }
   }
+
+  // ==================================================================
+  // El pie: anticipo de Indicadores (D-E2-1 §6.2)
+  // ==================================================================
+  //
+  // NO CALCULA NADA de negocio. Los cuatro KPI, sus metas, el ritmo y la cifra
+  // en juego llegan resueltos desde el dominio; aquí solo se eligen palabras y
+  // anchos. Es la misma regla que E1 fijó para los umbrales, y la razón por la
+  // que el pie no puede contradecir a la pantalla de Indicadores: los dos leen
+  // el mismo objeto.
+
+  /** El bloque de rendimiento, o `null` mientras no haya carga. */
+  protected readonly rendimiento = computed(() => this.indicadores()?.rendimiento ?? null);
+
+  /** Los cuatro KPI canónicos, en el orden del embudo. */
+  protected readonly kpisDelPie = computed(() => this.rendimiento()?.kpis ?? []);
+
+  /**
+   * Qué porción de la barra lleva recorrida un KPI.
+   *
+   * Se acota a 100 para poder dibujarla: pasarse de la meta es una buena
+   * noticia, no una barra que se sale de la caja. El número real sigue al lado,
+   * sin acotar.
+   */
+  protected avanceDe(kpi: KpiCanonico): number {
+    if (kpi.porcentajeMeta == null) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, kpi.porcentajeMeta));
+  }
+
+  /**
+   * Dónde cae la marca del ritmo esperado a hoy.
+   *
+   * Sin ella un 87 % no dice si vas por delante o por detrás — es la marca que
+   * pide D-E2-2 §3. Con meta sin cadencia diaria no se dibuja: repartir una meta
+   * de 2 contratos por días inventaría una cadencia que el negocio no tiene, y
+   * el backend ya lo declara con `sinCadencia`.
+   */
+  protected marcaEsperadaDe(kpi: KpiCanonico): number | null {
+    if (kpi.metaEsperadaAHoy == null || kpi.metaPeriodo == null || kpi.metaPeriodo <= 0) {
+      return null;
+    }
+    return Math.max(0, Math.min(100, Math.round((kpi.metaEsperadaAHoy / kpi.metaPeriodo) * 100)));
+  }
+
+  /** El par `actual de meta`, o solo el actual cuando nadie fijó meta. */
+  protected cifraDe(kpi: KpiCanonico): string {
+    return kpi.metaPeriodo == null
+      ? String(kpi.actual)
+      : kpi.actual + ' de ' + kpi.metaPeriodo;
+  }
+
+  /**
+   * La línea de debajo de cada KPI: **primero a cuánto estás de la meta**, y
+   * después el ritmo (criterio de aceptación de D-E2-1).
+   *
+   * Respeta la instrucción 4 de D-E2-2: al broker no se le dice «hoy deberías ir
+   * por 21», que le atribuiría una producción personal que él no hace.
+   */
+  protected lecturaDe(kpi: KpiCanonico): string {
+    if (kpi.estadoRitmo === 'SIN_BASE') {
+      return this.porQueSinBase(kpi.motivoSinBase);
+    }
+    const falta =
+      kpi.faltante == null || kpi.faltante === 0
+        ? 'Meta cumplida'
+        : 'A ' + kpi.faltante + ' de la meta';
+    if (!this.esAgente()) {
+      return falta + ' · ' + this.vozDelRitmoEquipo(kpi.estadoRitmo);
+    }
+    if (kpi.metaEsperadaAHoy == null) {
+      return falta;
+    }
+    return falta + ' · hoy deberías ir por ' + kpi.metaEsperadaAHoy;
+  }
+
+  /**
+   * Por qué no concluye. «Sin base» a secas obliga a adivinar si falta la meta,
+   * la de un compañero o el mes entero.
+   */
+  private porQueSinBase(motivo: MotivoSinBase): string {
+    switch (motivo) {
+      case 'SIN_META':
+        return 'Sin meta fijada para este mes';
+      case 'COBERTURA_INCOMPLETA':
+        return 'Falta la meta de algún agente del equipo';
+      case 'PERIODO_SIN_RECORRIDO':
+        return 'El mes todavía no ha empezado';
+      default:
+        return 'Sin base para concluir';
+    }
+  }
+
+  /** El mismo estado, dicho del equipo y no de una persona. */
+  private vozDelRitmoEquipo(estado: EstadoRitmo): string {
+    switch (estado) {
+      case 'EN_RITMO':
+        return 'el equipo va en ritmo';
+      case 'ATENCION':
+        return 'el equipo va justo';
+      case 'FUERA_DE_RITMO':
+        return 'el equipo va por detrás';
+      default:
+        return 'sin base para concluir';
+    }
+  }
+
+  /**
+   * La cifra en juego, dicha entera.
+   *
+   * Cero operaciones **no se esconde**: «Ninguna operación puede cerrarse este
+   * mes» es información, y además es la verdad hoy. Ocultarlo dejaría el hueco a
+   * que alguien lo leyera como un fallo de carga.
+   */
+  protected readonly cierreDelMes = computed(() => {
+    const cierre = this.rendimiento()?.puedeCerrarse;
+    if (!cierre) {
+      return null;
+    }
+    if (cierre.operaciones === 0) {
+      return {
+        importe: null,
+        detalle: 'Ninguna operación puede cerrarse este mes',
+        variasMonedas: false,
+        esperanDecision: cierre.esperanDecision,
+      };
+    }
+    const unidad = cierre.operaciones === 1 ? 'operación' : 'operaciones';
+    return {
+      importe: ((cierre.moneda ?? '') + ' ' + cierre.importe.toLocaleString('es-PE')).trim(),
+      detalle: cierre.operaciones + ' ' + unidad + ' · renta mensual',
+      variasMonedas: cierre.variasMonedas,
+      esperanDecision: cierre.esperanDecision,
+    };
+  });
+
+  /**
+   * «hace 2 min», contra el instante que declara el backend.
+   *
+   * `generadoEn` tiene un solo productor y esta pantalla lo **lee**. Mirar el
+   * reloj del navegador diría «hace 0 min» incluso sobre una respuesta de hace
+   * un cuarto de hora servida desde una caché.
+   */
+  protected readonly calculadoHace = computed(() => {
+    const generado = this.rendimiento()?.generadoEn;
+    if (!generado) {
+      return null;
+    }
+    const minutos = Math.max(0, Math.round((Date.now() - Date.parse(generado)) / 60000));
+    if (minutos < 1) {
+      return 'hace un momento';
+    }
+    if (minutos < 60) {
+      return 'hace ' + minutos + ' min';
+    }
+    const horas = Math.round(minutos / 60);
+    return horas < 24 ? 'hace ' + horas + ' h' : 'hace más de un día';
+  });
 
   protected readonly bandeja = signal<Tarea[]>([]);
 

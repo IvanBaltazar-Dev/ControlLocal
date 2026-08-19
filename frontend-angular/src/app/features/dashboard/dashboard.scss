@@ -536,3 +536,248 @@
   margin-right: 0.25rem;
   color: var(--cl-azul, #2563eb);
 }
+
+/* ====================================================================
+   EL PIE · anticipo de Indicadores (D-E2-1 §6.2)
+   --------------------------------------------------------------------
+   Claro, como todo BROX. El color aparece solo en marcas pequeñas —la
+   barra de cada KPI y los puntos del pulso—; el texto va en tinta.
+
+   Y lo gráfico es información, no adorno: la barra dice lo recorrido y
+   la marca fina dice el ritmo esperado a hoy. Sin la segunda, un 87 %
+   no distingue ir por delante de ir por detrás.
+   ==================================================================== */
+
+.pie-indicadores {
+  display: grid;
+  grid-template-columns: minmax(13rem, 18rem) 1fr auto;
+  gap: 1.5rem 2rem;
+  align-items: start;
+  margin-top: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--cl-borde);
+  border-radius: var(--cl-radio);
+  background: var(--cl-superficie);
+  color: var(--cl-tinta);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  /* El enlace es la franja entera, así que tiene que notarse que lo es. */
+  &:hover,
+  &:focus-visible {
+    border-color: var(--cl-primario);
+    box-shadow: var(--cl-sombra);
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .rotulo {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--cl-tinta-suave);
+  }
+
+  /* --- La cifra en juego: una sola cifra de dinero en todo el pie --- */
+  .en-juego {
+    .cifra {
+      margin-top: 0.35rem;
+      font-size: 1.6rem;
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--cl-tinta);
+    }
+
+    .detalle {
+      margin-top: 0.2rem;
+      font-size: 0.82rem;
+      color: var(--cl-tinta-suave);
+    }
+
+    /* Cuando hay dos monedas se dice, en vez de sumarlas. */
+    .aviso {
+      color: var(--cl-acento);
+    }
+
+    /* Lo único de esta franja sobre lo que el broker actúa (D-E2-2 §8). */
+    .palanca {
+      margin-top: 0.45rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--cl-primario);
+    }
+  }
+
+  /* --- Los cuatro KPI --- */
+  .kpis-pie {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+
+  .kpi-pie {
+    min-width: 0;
+
+    /* El nombre va completo y no se recorta: abreviarlo deshace la
+       distinción que D-E2-2 §1.1 fijó. Si no cabe, parte en dos líneas. */
+    .nombre {
+      font-size: 0.72rem;
+      font-weight: 600;
+      line-height: 1.25;
+      color: var(--cl-tinta-suave);
+    }
+
+    .cifra {
+      margin-top: 0.3rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--cl-tinta);
+    }
+
+    .lectura {
+      margin-top: 0.3rem;
+      font-size: 0.74rem;
+      line-height: 1.3;
+      color: var(--cl-tinta-suave);
+    }
+  }
+
+  .barra {
+    position: relative;
+    height: 5px;
+    margin-top: 0.45rem;
+    border-radius: 999px;
+    background: var(--cl-fondo);
+    overflow: visible;
+
+    .recorrido {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--cl-tinta-suave);
+    }
+
+    /* El ritmo esperado a hoy. Fina y discreta, pero es la que hace que
+       el semáforo se entienda (D-E2-2 §3). */
+    .marca-esperada {
+      position: absolute;
+      top: -3px;
+      width: 2px;
+      height: 11px;
+      border-radius: 1px;
+      background: var(--cl-tinta-suave);
+    }
+  }
+
+  /* El tono lo pone el ESTADO que decide el dominio; la pantalla solo lo
+     traduce a color. Nunca al revés. */
+  .kpi-pie[data-ritmo='EN_RITMO'] .recorrido {
+    background: var(--cl-exito);
+  }
+
+  .kpi-pie[data-ritmo='ATENCION'] .recorrido {
+    background: var(--cl-acento);
+  }
+
+  .kpi-pie[data-ritmo='FUERA_DE_RITMO'] .recorrido {
+    background: var(--cl-error);
+  }
+
+  /* Sin base no se pinta ningún color: un gris honesto vale más que un
+     verde inventado. */
+  .kpi-pie[data-ritmo='SIN_BASE'] {
+    .recorrido {
+      background: var(--cl-borde);
+    }
+
+    .cifra {
+      color: var(--cl-tinta-suave);
+    }
+  }
+
+  /* --- El cierre de la franja --- */
+  .cierre-pie {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .pulso {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    font-size: 0.74rem;
+    color: var(--cl-tinta-suave);
+
+    .rotulo {
+      display: block;
+      width: 100%;
+    }
+
+    .dato::before {
+      content: '●';
+      margin-right: 0.25rem;
+    }
+
+    .en-ritmo::before {
+      color: var(--cl-exito);
+    }
+
+    .atencion::before {
+      color: var(--cl-acento);
+    }
+
+    .fuera::before {
+      color: var(--cl-error);
+    }
+
+    .sin-base::before {
+      color: var(--cl-borde);
+    }
+  }
+
+  .periodo-pie {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.3rem;
+    font-size: 0.74rem;
+    color: var(--cl-tinta-suave);
+  }
+
+  .ver-mas {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--cl-primario);
+  }
+}
+
+/* En móvil el pie se apila y los KPI van en 2 × 2 (D-E2-1 §15): en 402 px
+   cuatro columnas dejan los nombres completos ilegibles, y el nombre
+   completo no es negociable. */
+@media (max-width: 900px) {
+  .pie-indicadores {
+    grid-template-columns: 1fr;
+
+    .kpis-pie {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cierre-pie {
+      align-items: flex-start;
+      text-align: left;
+      white-space: normal;
+    }
+
+    .pulso {
+      justify-content: flex-start;
+    }
+  }
+}

@@ -122,6 +122,92 @@ const INDICADORES: IndicadoresResumen = {
   // 3 solicitudes + 2 recontactos + 2 captaciones + 1 aprobada. Los 9 días de
   // atraso NO entran: no son cosas.
   pendientesDeAtencion: 8,
+  /**
+   * El bloque de E2.6. Los cuatro KPI van con el rótulo del backend —**la
+   * pantalla no los escribe**— y con casos distintos a propósito: uno en ritmo,
+   * uno en atención, uno fuera y uno sin meta, que es la combinación que rompe
+   * si alguien vuelve a suponer que todos traen meta.
+   */
+  rendimiento: {
+    periodo: {
+      codigo: '2026-08',
+      desde: '2026-08-01',
+      hasta: '2026-08-31',
+      diasTranscurridos: 19,
+      diasTotales: 31,
+      enCurso: true,
+    },
+    generadoEn: '2026-08-19T12:00:00Z',
+    kpis: [
+      {
+        codigo: 'C',
+        rotulo: 'Propietarios contactados',
+        hecho: 'prospeccion con fecha de contacto dentro del mes',
+        actual: 19,
+        metaPeriodo: 24,
+        metaEsperadaAHoy: 15,
+        porcentajeMeta: 79,
+        faltante: 5,
+        proyeccionCierre: 31,
+        porcentajeProyectado: 129,
+        estadoRitmo: 'EN_RITMO',
+        motivoSinBase: 'NINGUNO',
+        sinCadencia: false,
+        variacionComparable: 4,
+      },
+      {
+        codigo: 'P',
+        rotulo: 'Propiedades captadas',
+        hecho: 'transicion de captacion a ACTIVA dentro del mes',
+        actual: 9,
+        metaPeriodo: 15,
+        metaEsperadaAHoy: 9,
+        porcentajeMeta: 60,
+        faltante: 6,
+        proyeccionCierre: 14,
+        porcentajeProyectado: 98,
+        estadoRitmo: 'ATENCION',
+        motivoSinBase: 'NINGUNO',
+        sinCadencia: false,
+        variacionComparable: -1,
+      },
+      {
+        codigo: 'S',
+        rotulo: 'Solicitudes ingresadas',
+        hecho: 'solicitud registrada dentro del mes',
+        actual: 2,
+        metaPeriodo: 8,
+        metaEsperadaAHoy: 5,
+        porcentajeMeta: 25,
+        faltante: 6,
+        proyeccionCierre: 3,
+        porcentajeProyectado: 41,
+        estadoRitmo: 'FUERA_DE_RITMO',
+        motivoSinBase: 'NINGUNO',
+        sinCadencia: false,
+        variacionComparable: 0,
+      },
+      {
+        // Sin meta: los seis derivados NO viajan. El backend omite los nulos,
+        // así que llegan como `undefined` y no como `null`.
+        codigo: 'F',
+        rotulo: 'Contratos firmados',
+        hecho: 'contrato con fecha de cierre dentro del mes',
+        actual: 4,
+        estadoRitmo: 'SIN_BASE',
+        motivoSinBase: 'SIN_META',
+        sinCadencia: false,
+      },
+    ],
+    puedeCerrarse: {
+      operaciones: 2,
+      importe: 12000,
+      moneda: 'PEN',
+      variasMonedas: false,
+      esperanDecision: 1,
+    },
+    pulso: null,
+  },
 };
 
 const TAREA: Tarea = {
@@ -647,4 +733,205 @@ describe('Dashboard', () => {
     expect(agente['indicadores']()).toBeNull();
     expect(agente['error']()).toBeTruthy();
   });
+
+  // ==================================================================
+  // EL PIE · anticipo de Indicadores (D-E2-1 §6.2, E2.6)
+  // ==================================================================
+
+  function pie(): HTMLElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector('.pie-indicadores');
+  }
+
+  /**
+   * Los cuatro nombres van **completos y del backend**. Abreviarlos aquí
+   * desharía la distinción que D-E2-2 §1.1 vino a fijar: 31 registros creados no
+   * son 31 propietarios contactados.
+   */
+  it('el pie lleva los cuatro nombres canonicos, letra por letra y del cable', async () => {
+    await montar('AGENTE');
+    const nombres = [...(pie()?.querySelectorAll('.kpi-pie .nombre') ?? [])].map(
+      (n) => n.textContent?.trim(),
+    );
+
+    expect(nombres).toEqual([
+      'Propietarios contactados',
+      'Propiedades captadas',
+      'Solicitudes ingresadas',
+      'Contratos firmados',
+    ]);
+  });
+
+  /** Cuatro, ni uno más: el detalle vive en Indicadores, a un clic. */
+  it('el pie no anade un quinto indicador', async () => {
+    await montar('AGENTE');
+
+    expect(pie()?.querySelectorAll('.kpi-pie').length).toBe(4);
+  });
+
+  /**
+   * **Sin meta no hay cero.** El backend omite los campos nulos, así que llegan
+   * como `undefined`; pintar «19 de 0» diría «tu objetivo era cero y lo
+   * cumpliste», que es lo contrario de «nadie te fijó meta».
+   */
+  it('un KPI sin meta ensena solo lo conseguido y dice por que no concluye', async () => {
+    await montar('AGENTE');
+    const contratos = [...(pie()?.querySelectorAll('.kpi-pie') ?? [])].find((k) =>
+      k.textContent?.includes('Contratos firmados'),
+    );
+
+    expect(contratos?.querySelector('.cifra')?.textContent?.trim()).toBe('4');
+    expect(contratos?.textContent).not.toContain('de 0');
+    expect(contratos?.textContent).toContain('Sin meta fijada para este mes');
+    expect(contratos?.getAttribute('data-ritmo')).toBe('SIN_BASE');
+  });
+
+  /**
+   * El estado lo decide el dominio. La pantalla lo traduce a un atributo y el
+   * color sale de la hoja de estilos; nunca al revés.
+   */
+  it('el tono de cada KPI sale del estado que manda el dominio', async () => {
+    await montar('AGENTE');
+    const estados = [...(pie()?.querySelectorAll('.kpi-pie') ?? [])].map((k) =>
+      k.getAttribute('data-ritmo'),
+    );
+
+    expect(estados).toEqual(['EN_RITMO', 'ATENCION', 'FUERA_DE_RITMO', 'SIN_BASE']);
+  });
+
+  /** Primero a cuánto estás de la meta, y después el ritmo. */
+  it('cada KPI dice a cuanto estas de la meta antes que el ritmo', async () => {
+    await montar('AGENTE');
+    const primero = pie()?.querySelector('.kpi-pie .lectura')?.textContent?.trim();
+
+    expect(primero).toBe('A 5 de la meta · hoy deberías ir por 15');
+  });
+
+  /**
+   * La marca del ritmo esperado es lo que hace que el semáforo se entienda: sin
+   * ella, un 79 % no distingue ir por delante de ir por detrás (D-E2-2 §3).
+   */
+  it('la barra lleva la marca del ritmo esperado a hoy', async () => {
+    await montar('AGENTE');
+    const marca = pie()?.querySelector('.kpi-pie .marca-esperada') as HTMLElement | null;
+
+    // 15 de meta 24 = 63 % del ancho.
+    expect(marca?.style.left).toBe('63%');
+  });
+
+  /** Con meta pequeña no se prorratea, así que tampoco se dibuja la marca. */
+  it('sin cadencia diaria no se dibuja marca esperada', async () => {
+    await montar('AGENTE');
+    const sinMeta = [...(pie()?.querySelectorAll('.kpi-pie') ?? [])].find((k) =>
+      k.textContent?.includes('Contratos firmados'),
+    );
+
+    expect(sinMeta?.querySelector('.marca-esperada')).toBeNull();
+  });
+
+  /**
+   * **Instrucción 4 de D-E2-2**: al broker no se le atribuye una producción
+   * personal que él no hace. «Hoy deberías ir por 21» estaba prohibido.
+   */
+  it('al broker no se le dice cuanto deberia llevar el: se le habla del equipo', async () => {
+    await montar('BROKER');
+    const texto = pie()?.textContent ?? '';
+
+    expect(texto).not.toContain('hoy deberías ir por');
+    expect(texto).toContain('el equipo');
+  });
+
+  /** Su pulso sería su propio ritmo contado otra vez (instrucción 14). */
+  it('el agente no ve pulso de equipo', async () => {
+    await montar('AGENTE');
+
+    expect(pie()?.querySelector('.pulso')).toBeNull();
+  });
+
+  /** Un total en meta puede esconder a la mitad del equipo en cero. */
+  it('el broker ve el pulso, una sola vez y sin nombres', async () => {
+    api.cargar.and.resolveTo(
+      carga({
+        indicadores: {
+          ...INDICADORES,
+          rendimiento: {
+            ...INDICADORES.rendimiento,
+            pulso: { enRitmo: 6, atencion: 1, fueraDeRitmo: 1, sinBase: 0, agentes: 8 },
+          },
+        },
+      }),
+    );
+    await montar('BROKER');
+    const pulsos = pie()?.querySelectorAll('.pulso') ?? [];
+
+    expect(pulsos.length).toBe(1);
+    expect(pulsos[0].textContent).toContain('6 en ritmo');
+    expect(pulsos[0].textContent).toContain('1 fuera de ritmo');
+  });
+
+  /**
+   * Cero operaciones **no se esconde**: es información, y esconderla dejaría el
+   * hueco a que alguien lo leyera como un fallo de carga.
+   */
+  it('sin operaciones que cerrar lo dice, en vez de callarse', async () => {
+    api.cargar.and.resolveTo(
+      carga({
+        indicadores: {
+          ...INDICADORES,
+          rendimiento: {
+            ...INDICADORES.rendimiento,
+            puedeCerrarse: {
+              operaciones: 0,
+              importe: 0,
+              moneda: null,
+              variasMonedas: false,
+              esperanDecision: 0,
+            },
+          },
+        },
+      }),
+    );
+    await montar('AGENTE');
+
+    expect(pie()?.querySelector('.en-juego')?.textContent).toContain(
+      'Ninguna operación puede cerrarse este mes',
+    );
+  });
+
+  /** El importe conserva su moneda: no se convierte a dólares para redondear. */
+  it('la cifra en juego conserva su moneda', async () => {
+    await montar('AGENTE');
+
+    expect(pie()?.querySelector('.en-juego .cifra')?.textContent).toContain('PEN');
+  });
+
+  /**
+   * `generadoEn` tiene un solo productor y esta pantalla lo **lee**. Mirar el
+   * reloj del navegador diría «hace 0 min» sobre una respuesta cacheada.
+   */
+  it('la frescura sale del instante que declara el backend', async () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-08-19T12:07:00Z'));
+    try {
+      await montar('AGENTE');
+
+      expect(pie()?.querySelector('.frescura')?.textContent).toContain('hace 7 min');
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  /** Los días del mes los cuenta el backend; la pantalla los repite. */
+  it('el pie ensena el corte del mes tal como llega', async () => {
+    await montar('AGENTE');
+
+    expect(pie()?.querySelector('.periodo-pie')?.textContent).toContain('19 de 31 días del mes');
+  });
+
+  /** El enlace es la franja entera, no un botón dentro de ella. */
+  it('la franja entera lleva a indicadores', async () => {
+    await montar('AGENTE');
+
+    expect(pie()?.getAttribute('href')).toBe('/indicadores');
+  });
+
 });

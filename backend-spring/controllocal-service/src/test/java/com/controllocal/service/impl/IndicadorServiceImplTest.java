@@ -160,8 +160,15 @@ class IndicadorServiceImplTest {
     @Test
     void elAmbitoDependeDelRol() {
         assertEquals("Reportes globales", service.resumen(null, admin).ambito());
-        assertEquals("Reportes de equipo", service.resumen(null, broker).ambito());
         assertEquals("Mi actividad", service.resumen(null, agente).ambito());
+
+        // El broker decia "Reportes de equipo", que se lee como el titulo de una
+        // seccion y no como un alcance. D-E2-1 seccion 6.1 lo fija en "Mi
+        // equipo", y la diferencia importa: es lo que evita que lea las cifras
+        // de su equipo como si fueran su produccion personal -- el malentendido
+        // que D-E2-2 seccion 4 cerro al prohibir pedirsela.
+        assertEquals("Mi equipo", service.resumen(null, broker).ambito(),
+                "el ambito dice de quien habla el Inicio, no como se titula un informe");
     }
 
     // ---------- escalares ----------

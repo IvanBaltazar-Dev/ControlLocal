@@ -426,4 +426,29 @@ public interface SolicitudAlquilerRepository extends JpaRepository<SolicitudAlqu
     List<CandidatoTarea> porEvaluarDelBroker(@Param("idOrganizacion") long idOrganizacion,
                                              @Param("sinScope") boolean sinScope,
                                              @Param("roles") List<Long> roles);
+
+    /**
+     * <b>Cuantos documentos esperan la conformidad del broker, por solicitud</b>
+     * (D-E2-5, cierre de E2.5).
+     *
+     * <p>Una consulta con {@code group by} para TODA la pagina, no una por
+     * solicitud. Devuelve las dos cifras -- pendientes y total -- porque el
+     * Inicio no dice "faltan 3": dice "2 de 5 conformados", y eso contesta
+     * «cuanto me falta» sin abrir nada.
+     *
+     * <p>Es el primer contador REAL del `avance` de E2.4, que hasta ahora viajaba
+     * en null por no tener ningun requisito contable de verdad.
+     */
+    @Query("""
+            select s.id as idSolicitud,
+                   count(d) as total,
+                   sum(case when d.resultadoRevision = 'P' then 1 else 0 end) as pendientes
+              from DocumentoSolicitud d
+              join d.solicitud s
+             where s.organizacionId = :idOrganizacion
+               and s.id in :idsSolicitud
+             group by s.id
+            """)
+    List<Object[]> documentosPorConformar(@Param("idOrganizacion") long idOrganizacion,
+                                          @Param("idsSolicitud") Collection<Long> idsSolicitud);
 }

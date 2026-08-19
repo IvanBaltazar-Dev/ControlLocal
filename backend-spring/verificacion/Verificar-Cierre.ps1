@@ -35,6 +35,9 @@ $integracion = @(
     # con la bandeja del agente.
     'FocoDelBrokerIntegrationTest',
     'HistoricoPrecioIntegrationTest',
+    # Cierre de E2.5: un broker con equipo puede entrar y su sesion resuelve a SU
+    # rol, para que mirar su pantalla no dependa de la suerte.
+    'IdentidadDelBrokerIntegrationTest',
     # D-E2-1 seccion 10 / E2.4: la capa de interpretacion del Inicio -- como esta,
     # el expediente de cuatro renglones y la lectura que los sintetiza.
     'InterpretacionDelInicioIntegrationTest',

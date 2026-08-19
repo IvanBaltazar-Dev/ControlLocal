@@ -10,7 +10,12 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
-import { AsuntoDelBroker, DashboardService, Hallazgo } from '../../core/api/dashboard.service';
+import {
+  AccesoRapido,
+  AsuntoDelBroker,
+  DashboardService,
+  Hallazgo,
+} from '../../core/api/dashboard.service';
 import {
   esPeriodo,
   IndicadorConteo,
@@ -248,6 +253,15 @@ export class Dashboard implements OnInit {
    * Llegan ya ordenadas por la misma politica del agente y ya interpretadas.
    */
   protected readonly focoDelBroker = signal<AsuntoDelBroker[]>([]);
+
+  /**
+   * De quien habla este Inicio, y que se empieza desde cero.
+   *
+   * Los decide el dominio (D-E2-1 seccion 6.1): el agente crea, el broker
+   * revisa, decide y reparte. Aqui no hay ningun `if (esBroker)` eligiendo
+   * rotulos ni rutas -- llegan resueltos.
+   */
+  protected readonly accesos = signal<AccesoRapido[]>([]);
   protected readonly totalBandeja = signal(0);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -316,6 +330,7 @@ export class Dashboard implements OnInit {
       this.totalBandeja.set(carga.bandeja.totalRecords ?? 0);
       this.hallazgos.set(carga.hallazgos ?? []);
       this.focoDelBroker.set(carga.focoDelBroker ?? []);
+      this.accesos.set(carga.accesos ?? []);
     } catch (fallo) {
       this.indicadores.set(null);
       this.error.set(

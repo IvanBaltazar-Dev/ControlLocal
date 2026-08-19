@@ -85,6 +85,20 @@ export interface AsuntoDelBroker {
   interpretacion: InterpretacionDelAsunto | null;
 }
 
+/**
+ * Un acceso rapido del Inicio (D-E2-1 seccion 6.1).
+ *
+ * Los cuatro NO son los mismos para los dos roles: el agente crea, el broker
+ * revisa, decide y reparte. Lo decide el dominio -- deducirlo aqui seria una
+ * interpretacion mas en el cliente.
+ *
+ * `destino` va en el href y NUNCA a la vista.
+ */
+export interface AccesoRapido {
+  etiqueta: string;
+  destino: string;
+}
+
 export interface DashboardCarga {
   indicadores: IndicadoresResumen;
   bandeja: PageResponse<Tarea>;
@@ -92,6 +106,8 @@ export interface DashboardCarga {
   hallazgos: Hallazgo[];
   /** Los asuntos del broker: lo que EL decide. Vacio para el agente (E2.5). */
   focoDelBroker: AsuntoDelBroker[];
+  /** Los cuatro que se empiezan desde cero, distintos por rol. */
+  accesos: AccesoRapido[];
 }
 
 @Injectable({ providedIn: 'root' })

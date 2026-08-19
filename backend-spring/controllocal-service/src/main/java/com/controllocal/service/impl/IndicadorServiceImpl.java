@@ -799,9 +799,21 @@ public class IndicadorServiceImpl implements IndicadorService {
         return (int) caps.stream().filter(c -> estado.equals(c.getEstado())).count();
     }
 
+    /**
+     * <b>De quien habla este Inicio</b> (D-E2-1 seccion 6.1).
+     *
+     * <p>El broker decia «Reportes de equipo», que se lee como el titulo de una
+     * seccion y no como un alcance. El diseno lo fija en «Mi equipo», y la
+     * diferencia importa: es lo que evita que el broker lea las cifras de su
+     * equipo como si fueran su produccion personal -- el malentendido que
+     * D-E2-2 seccion 4 cerro al prohibir pedirsela.
+     *
+     * <p>El TENANT_ADMIN conserva «Reportes globales»: el diseno solo nombra los
+     * dos alcances operativos, y el suyo no es ninguno de los dos.
+     */
     private static String ambito(Actor actor) {
         return actor.esTenantAdmin() ? "Reportes globales"
-                : actor.esAgente() ? "Mi actividad" : "Reportes de equipo";
+                : actor.esAgente() ? "Mi actividad" : "Mi equipo";
     }
 
     private static boolean enAlcance(Alcances.Alcance alcance, Long idAgente) {

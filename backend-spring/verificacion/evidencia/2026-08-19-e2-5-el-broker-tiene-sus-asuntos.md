@@ -135,8 +135,8 @@ el id del broker lleva su sufijo `-b`.
 ## 6. Verificación
 
 ```
-backend  897 pruebas · 0 fallos · 0 SKIPPED
-           674 servicio + 43 web/arquitectura + 180 app (38 de integracion)
+backend  903 pruebas · 0 fallos · 0 SKIPPED
+           674 servicio + 43 web/arquitectura + 186 app (40 de integracion)
 Angular  565 / 565
 ```
 
@@ -156,14 +156,133 @@ comprobación visual, y por qué no se sustituye con tests verdes.
 
 ---
 
-## 7. Un hueco del seed, anotado
+## 7. Un «hueco del seed» que no existía
 
-Los brokers con equipo (`detalle_broker` 22–27) **no tienen credenciales**, y los
-usuarios que sí las tienen (`rsalas`…) son `USUARIO_INTERNO` en `persona_rol` con
-rol de membresía BROKER. Para la comprobación visual hizo falta un broker real
-con equipo; `rsalas` resultó tener `idDominio = 23` en su token, que **sí** es un
-`detalle_broker` con cuatro agentes, así que la prueba salió sin tocar datos.
+> **Corregido el 2026-08-19.** Esta sección afirmaba que los brokers de
+> `detalle_broker` no tenían credenciales. **Era falso**, y el error era mío al
+> leer la tabla: busqué `credencial_usuario` por el `id_persona_rol` del broker y
+> no encontré ninguna fila, sin caer en que el modelo es Party-Role.
 
-Se anota porque el siguiente que quiera probar una pantalla de broker se va a
-encontrar con lo mismo, y porque el intento de «arreglarlo» insertando filas
-choca contra dos FK.
+La credencial cuelga del rol `USUARIO_INTERNO` de **la misma persona**, no del
+rol de negocio:
+
+```
+persona 2 ──┬── USUARIO_INTERNO #2   ← aquí vive la credencial (rsalas)
+            └── BROKER          #23  ← aquí vive el alcance (4 agentes)
+```
+
+Los cinco brokers entran y resuelven a su rol correcto —23, 24, 25, 26, 27—, así
+que `rsalas → idDominio 23` no era una casualidad: era la resolución haciendo su
+trabajo. **No había nada que arreglar en el seed ni en `migration-dev`.**
+
+Lo que sí faltaba era la **afirmación**, y ahora existe:
+`IdentidadDelBrokerIntegrationTest` comprueba que todo broker con equipo tiene
+identidad con la que entrar, que esa identidad resuelve a un único rol BROKER que
+es el suyo, y que hay al menos uno con el que mirar la pantalla. Sin eso,
+verificar cualquier superficie de broker dependía de dar con el usuario correcto
+por azar — y esta sección es la prueba de que eso pasa.
+
+---
+
+## 8. Cierre de E2.5 — lo descubierto no quedó como deuda
+
+Nada de lo que apareció durante E2.0–E2.5 se dejó anotado. Esta sección es el
+cierre, no una tanda nueva.
+
+### El cuarto disparador, y la duplicación que evitó
+
+`documentos por conformar` faltaba. Al construirlo apareció el problema de
+verdad: **la solicitud 1 estaba EN_REVISION —ya competía como «por evaluar»— y
+tenía 3 de 5 documentos pendientes.** Un cuarto disparador ingenuo la habría
+puesto **dos veces** en el foco, que es la duplicación que D-E2-1 §11 prohíbe.
+
+La decisión: **una solicitud produce un solo asunto, y sus documentos deciden
+cuál.** Conformar va antes de evaluar, así que mientras queden pendientes es
+`DOCUMENTOS_POR_CONFORMAR`, y cuando estén todos conformes pasa a
+`SOLICITUD_POR_EVALUAR`. Modela la secuencia real y respeta el hogar único.
+
+Y trae el **primer contador real del `avance`** de E2.4, que hasta ahora viajaba
+en `null` por no haber ningún requisito contable de verdad:
+
+```
+DOCUMENTOS_POR_CONFORMAR  SOL-260715103000   id=SOLICITUD_ALQUILER:1-b
+AVANCE: 2 de 5 documentos conformados
+   FALTA  Faltan documentos por conformar
+   DATO   Esperando desde hace 35 dias
+   FRENO  Sin conformidad no se puede evaluar la solicitud
+```
+
+Una consulta con `group by` para toda la página, no una por solicitud.
+
+### Las credenciales del broker: no era deuda, era un diagnóstico mío equivocado
+
+Afirmé que los brokers de `detalle_broker` «no tienen credenciales». **Es falso.**
+El seed sigue Party-Role y la credencial cuelga del rol `USUARIO_INTERNO` de la
+misma persona:
+
+```
+persona 2 ──┬── USUARIO_INTERNO #2   ← la credencial (rsalas)
+            └── BROKER          #23  ← el alcance (4 agentes)
+```
+
+Los cinco brokers entran y resuelven a su rol: 23, 24, 25, 26, 27. No hacía falta
+tocar el seed ni `migration-dev`.
+
+Lo que sí faltaba era la **afirmación**: `IdentidadDelBrokerIntegrationTest`
+comprueba que todo broker con equipo tiene identidad con la que entrar, que
+resuelve a un único rol BROKER que es el suyo, y que existe al menos uno con el
+que mirar la pantalla. Sin eso, cada comprobación visual de una superficie de
+broker dependía de dar con el usuario correcto por azar.
+
+### La auditoría de cierre
+
+| Buscado | Resultado |
+|---|---|
+| `TODO` / `FIXME` / `placeholder` / `provisional` | **0** (los aciertos eran «todo/toda» en prosa) |
+| colecciones vacías fijas en ramas de controlador | **2 encontradas, 2 corregidas** |
+| mocks o datos cocinados en el Inicio | 0 |
+| prioridad u orden reimplementados fuera de las políticas | 0 |
+| interpretación en Angular | 0 (sólo estado → símbolo, que es la traducción permitida) |
+| N+1 | **1 encontrado, 1 corregido** |
+| disparadores declarados sin productor | **1 encontrado** (`documentos por conformar`), construido |
+| asuntos que existen y nadie puede resolver | 0 |
+| asuntos resolubles que no llegan a su actor | **1** (documentos), cerrado |
+
+**Los dos `List.of()` fijos.** Uno era el que dejó al broker sin hallazgo. El
+otro, su espejo en la rama del agente. Ninguno fallaba, ninguno lo veía un test
+de servicio, y los dos mentían: ahora contesta el servicio, que es lo que hace
+imposible esa clase de rama muerta.
+
+**El N+1** estaba en el hallazgo de concentración: los nombres del equipo se
+pedían de uno en uno dentro del bucle. Cuatro consultas donde va una — pequeño,
+pero la auditoría existe justo para que un N+1 pequeño no se quede porque es
+pequeño.
+
+### El contrato, recorrido criterio por criterio
+
+Al comparar contra la tanda 4 de `estado-backend-para-el-inicio.md` apareció un
+**PENDIENTE real que me había saltado**: `ambito` y los cuatro accesos rápidos
+por rol.
+
+Al implementarlo apareció otra cosa: **`ambito` ya existía** en
+`IndicadoresResponse`. Publicar el mío habría creado un segundo productor del
+mismo hecho —la doble verdad que D-E4-3 cerró para los datos de la propiedad—,
+así que se alineó el que había con el diseño (el broker decía «Reportes de
+equipo», que se lee como el título de un informe y no como un alcance; ahora dice
+«Mi equipo») y no se añadió ninguno.
+
+### Los dos roles, a ojo
+
+```
+              rsalas (broker)                    vmora (agente)
+ambito        Mi equipo                          Mi actividad
+bandeja       0                                  19
+foco broker   124                                0
+hallazgos     1  (concentracion)                 22 (cartera)
+accesos       Revisar captaciones                Nueva prospeccion
+              Evaluar solicitudes                Nueva captacion
+              Seguimiento del equipo             Programar visita
+              Reasignar cartera                  Reporte al propietario
+```
+
+Cada rol ve lo que él tiene que decidir, y nada de lo que otro tiene que hacer.

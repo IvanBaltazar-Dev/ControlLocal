@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -168,12 +169,104 @@ class FocoDelBrokerIntegrationTest {
                 "la misma politica de despacho del agente, con su criterio de estabilidad");
     }
 
+    // ==================================================================
+    // Los CUATRO disparadores, revisados juntos
+    // ==================================================================
+
+    /**
+     * <b>Los cuatro tienen la misma semántica, no cuatro parecidas.</b>
+     *
+     * <p>El cuarto se añadió después, y el riesgo de un añadido tardío es
+     * exactamente ese: que traiga su propio vocabulario. Aquí se comprueban los
+     * cuatro con las mismas afirmaciones.
+     */
+    @Test
+    @DisplayName("los cuatro disparadores comparten vocabulario, orden e interpretacion")
+    void losCuatroDisparadoresSonHomogeneos() {
+        List<AsuntoDelBroker> asuntos = focoDelBroker.de(broker());
+        Set<String> tipos = asuntos.stream().map(AsuntoDelBroker::tipo).collect(Collectors.toSet());
+
+        assertFalse(asuntos.isEmpty(), "el escenario exige asuntos del broker");
+        for (AsuntoDelBroker asunto : asuntos) {
+            assertTrue(asunto.id().endsWith(FocoDelBrokerService.SUFIJO_BROKER),
+                    "todos llevan la identidad del rol: " + asunto.id());
+            assertNotNull(asunto.lado(), "todos declaran su lado (E2.2): " + asunto.tipo());
+            assertNotNull(asunto.paso(), "todos declaran su paso (E2.2): " + asunto.tipo());
+            assertNotNull(asunto.destino(), "sin destino no se puede resolver: " + asunto.tipo());
+            assertNotNull(asunto.interpretacion(), asunto.tipo());
+            assertTrue(asunto.interpretacion().comoEsta().hechos().stream()
+                            .anyMatch(h -> h.estado() == EstadoDelHecho.FALTA),
+                    "todo asunto del broker declara QUE falta: " + asunto.tipo());
+        }
+        assertTrue(tipos.size() >= 2,
+                "el escenario deberia ejercitar mas de un disparador; salieron " + tipos);
+    }
+
+    /**
+     * <b>Una solicitud produce UN asunto, no dos.</b>
+     *
+     * <p>La solicitud 1 está EN_REVISION —así que compite como «por evaluar»— y
+     * tiene documentos pendientes de conformidad. Un cuarto disparador ingenuo la
+     * habría puesto dos veces en el foco: la duplicación que D-E2-1 §11 prohíbe.
+     */
+    @Test
+    @DisplayName("una solicitud nunca produce dos asuntos a la vez")
+    void unaSolicitudNoSeDuplica() {
+        List<Long> solicitudes = focoDelBroker.de(broker()).stream()
+                .filter(a -> "SOLICITUD_ALQUILER".equals(a.entidadTipo()))
+                .map(AsuntoDelBroker::entidadId)
+                .toList();
+
+        assertEquals(solicitudes.size(), Set.copyOf(solicitudes).size(),
+                "conformar va ANTES de evaluar, y son la misma solicitud: " + solicitudes);
+    }
+
+    /**
+     * <b>El primer contador real del `avance` de E2.4.</b>
+     *
+     * <p>Hasta ahora viajaba en {@code null} por no haber ningún requisito
+     * contable de verdad. Los documentos conformados lo son: «2 de 5» contesta
+     * «cuánto me falta» sin abrir nada.
+     */
+    @Test
+    @DisplayName("documentos por conformar lleva su avance contado, no estimado")
+    void losDocumentosLlevanAvanceReal() {
+        AsuntoDelBroker conDocumentos = focoDelBroker.de(broker()).stream()
+                .filter(a -> FocoDelBrokerService.DOCUMENTOS_POR_CONFORMAR.equals(a.tipo()))
+                .findFirst()
+                .orElse(null);
+        if (conDocumentos == null) {
+            return; // sin documentos pendientes no hay nada que comprobar
+        }
+        var avance = conDocumentos.interpretacion().comoEsta().avance();
+        assertNotNull(avance, "un asunto de documentos SIN avance seria una barra que falta");
+        assertTrue(avance.total() > 0, "contar sobre cero no es contar");
+        assertTrue(avance.hechos() >= 0 && avance.hechos() <= avance.total(),
+                "conformados nunca puede pasar del total: "
+                        + avance.hechos() + "/" + avance.total());
+    }
+
     // ------------------------------------------------------------------
 
+    /**
+     * Un broker <b>con equipo</b>.
+     *
+     * <p>No vale el primero de la tabla: `detalle_broker` tiene brokers sin
+     * agentes supervisados —el del administrador, por ejemplo— y para uno de
+     * esos el foco esta vacio con toda razon. Los disparadores solo se pueden
+     * ejercer sobre un broker que de verdad supervise a alguien.
+     */
     private Actor broker() {
         return actorCon("""
                 select r.id_persona_rol, r.organizacion_id, r.id_persona
-                  from detalle_broker b join persona_rol r on r.id_persona_rol = b.id_persona_rol
+                  from detalle_broker b
+                  join persona_rol r on r.id_persona_rol = b.id_persona_rol
+                 where exists (select 1 from supervision_agente s
+                                where s.id_rol_broker = b.id_persona_rol
+                                  and s.fecha_fin is null)
+                 order by (select count(*) from supervision_agente s2
+                            where s2.id_rol_broker = b.id_persona_rol
+                              and s2.fecha_fin is null) desc
                  limit 1
                 """, Actor.BROKER);
     }

@@ -163,6 +163,9 @@ function carga(parcial: Partial<DashboardCarga> = {}): DashboardCarga {
     // Y sin asuntos de broker: estos tests son del AGENTE, y su bandeja no es
     // la del broker (D-E2-5). Quien pruebe el foco del broker lo pasa por `parcial`.
     focoDelBroker: [],
+    // Los cuatro accesos los decide el dominio; quien pruebe la barra los pasa
+    // por `parcial`.
+    accesos: [],
     ...parcial,
   };
 }

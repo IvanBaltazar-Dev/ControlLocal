@@ -174,10 +174,18 @@ public class HallazgoServiceImpl implements HallazgoService {
                 alcance.idOrganizacion(), equipo)) {
             carteraPorAgente.put(fila.getIdAgente(), fila.getTotal());
         }
+        // Los nombres del equipo, en UNA consulta.
+        //
+        // Estaban pidiendose de uno en uno dentro del bucle: un N+1 pequeno -- el
+        // equipo son cuatro -- pero N+1 al fin, y la auditoria de cierre esta
+        // justo para que un N+1 pequeno no se quede porque es pequeno.
+        Map<Long, String> nombres = new java.util.HashMap<>();
+        agentes.findAllById(equipo).forEach(a -> nombres.put(a.getId(), nombreDe(a)));
+
         List<HallazgoDeConcentracion.Aporte> aportes = new ArrayList<>();
         for (Long idAgente : equipo) {
             aportes.add(new HallazgoDeConcentracion.Aporte(idAgente,
-                    nombreDelAgente(idAgente),
+                    nombres.getOrDefault(idAgente, "un agente del equipo"),
                     carteraPorAgente.getOrDefault(idAgente, 0L)));
         }
 
@@ -196,11 +204,12 @@ public class HallazgoServiceImpl implements HallazgoService {
                 null, null, null));
     }
 
-    private String nombreDelAgente(long idRolAgente) {
-        return agentes.findById(idRolAgente)
-                .map(a -> a.getRol() == null || a.getRol().getPersona() == null ? null
-                        : a.getRol().getPersona().getNombresORazonSocial())
-                .orElse("un agente del equipo");
+    private static String nombreDe(com.controllocal.domain.persona.DetalleAgente agente) {
+        if (agente.getRol() == null || agente.getRol().getPersona() == null) {
+            return "un agente del equipo";
+        }
+        String nombre = agente.getRol().getPersona().getNombresORazonSocial();
+        return nombre == null || nombre.isBlank() ? "un agente del equipo" : nombre;
     }
 
     private static Hallazgo hallazgo(long idCliente, Captacion captacion, Evaluacion evaluacion) {

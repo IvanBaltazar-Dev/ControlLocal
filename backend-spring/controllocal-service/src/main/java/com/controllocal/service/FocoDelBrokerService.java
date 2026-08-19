@@ -31,6 +31,20 @@ public interface FocoDelBrokerService {
     String COMISION_SIN_COBRAR = "COMISION_SIN_COBRAR";
 
     /**
+     * Revisar y conformar documentos es BROKER, y va <b>antes</b> de evaluar.
+     *
+     * <p>Una solicitud produce <b>un solo asunto</b>, y son sus documentos los
+     * que deciden cuál: mientras queden pendientes de conformidad es esto, y
+     * cuando estén todos conformes pasa a {@link #SOLICITUD_POR_EVALUAR}.
+     *
+     * <p>No son dos asuntos. La solicitud 1 estaba en EN_REVISION —así que ya
+     * aparecía como «por evaluar»— y tenía 3 de 5 documentos pendientes: un
+     * cuarto disparador ingenuo la habría puesto dos veces en el foco, que es
+     * exactamente lo que la regla del hogar único prohíbe (D-E2-1 §11).
+     */
+    String DOCUMENTOS_POR_CONFORMAR = "DOCUMENTOS_POR_CONFORMAR";
+
+    /**
      * <b>Lo que separa la identidad del broker de la del agente.</b>
      *
      * <p>Av. Arequipa puede estar en las dos colas, y son dos asuntos distintos:

@@ -148,10 +148,21 @@ la media, y por eso es un hallazgo.
 
 ## 7. Cómo se cierra
 
-- [ ] `foco[]` del broker con los cuatro disparadores, por la misma política
-- [ ] cada asunto con su interpretación de E2.4
-- [ ] el hallazgo de concentración, con su evidencia
-- [ ] **gate**: el foco del broker y el del agente no comparten ids
-- [ ] **gate**: `GET /tareas` sigue siendo del agente y sin ADMIN
-- [ ] la matriz operación-rol recoge cada endpoint nuevo — si no, el build falla
-- [ ] prueba visual: el broker entra y ve **sus** cinco asuntos, no los de nadie
+Cerrada el 2026-08-19. Ningún punto quedó como nota.
+
+- [x] `foco[]` del broker con los **cuatro** disparadores, por la misma política
+- [x] cada asunto con su interpretación de E2.4
+- [x] el hallazgo de concentración, con su evidencia
+- [x] **gate**: el foco del broker y el del agente no comparten ids
+- [x] **gate**: `GET /tareas` sigue siendo del agente y sin ADMIN — responde 403
+- [x] la matriz operación-rol: **no aplica**, no se añadió ningún endpoint (todo
+      viaja por `/dashboard`, que ya está en la matriz) y su test sigue verde
+- [x] prueba visual: el broker entra y ve **sus** asuntos, no los de nadie
+
+### Añadido al cerrar, porque el contrato lo pedía y faltaba
+
+- [x] **`documentos por conformar`**, el cuarto disparador, de punta a punta
+- [x] **`ambito` y los cuatro accesos rápidos por rol** (D-E2-1 §6.1), que la
+      tanda 4 de `estado-backend-para-el-inicio.md` exige y se me había pasado
+- [x] un E2E que garantiza que **un broker con equipo puede entrar**, para que
+      mirar su pantalla no dependa de dar con el usuario correcto por azar

@@ -21,11 +21,21 @@ import java.util.List;
  * que SOLO EL puede tomar. Cada rol ve lo que el tiene que decidir, nunca lo que
  * otro tiene que hacer.
  *
+ * <p>`accesos` los decide el DOMINIO, no la pantalla (D-E2-1 §6.1):
+ * el agente crea, el broker revisa, decide y reparte. Deducirlos en Angular
+ * seria una interpretacion mas en el cliente, y KAIROS necesitaria escribir la
+ * suya para ofrecer lo mismo por WhatsApp.
+ *
+ * <p>`ambito` NO viaja aqui: ya lo publica `indicadores`, y dos campos con el
+ * mismo hecho es exactamente la doble verdad que D-E4-3 cerro para los datos
+ * de la propiedad. Se corrigio alli, en su unico dueno.
+ *
  * <p>La campana (alertas) NO viaja aqui: es chrome global y tiene su propio
  * recurso.
  */
 public record DashboardResponse(IndicadoresResponse indicadores,
                                 PageResponse<TareaResponse> bandeja,
                                 List<HallazgoResponse> hallazgos,
-                                List<AsuntoDelBrokerResponse> focoDelBroker) {
+                                List<AsuntoDelBrokerResponse> focoDelBroker,
+                                List<AccesoResponse> accesos) {
 }

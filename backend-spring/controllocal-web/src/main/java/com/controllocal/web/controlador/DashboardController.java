@@ -4,6 +4,8 @@ import com.controllocal.service.FocoDelBrokerService;
 import com.controllocal.service.HallazgoService;
 import com.controllocal.service.IndicadorService;
 import com.controllocal.service.TareaService;
+import com.controllocal.service.soporte.AccesosDelInicio;
+import com.controllocal.web.dto.AccesoResponse;
 import com.controllocal.web.dto.AsuntoDelBrokerResponse;
 import com.controllocal.web.dto.DashboardResponse;
 import com.controllocal.web.dto.HallazgoResponse;
@@ -78,7 +80,8 @@ public class DashboardController {
                     .map(HallazgoResponse::desde)
                     .toList();
             return new DashboardResponse(resumen,
-                    new PageResponse<>(List.of(), 0, 1, tamanoValido), descubiertos, suyos);
+                    new PageResponse<>(List.of(), 0, 1, tamanoValido), descubiertos, suyos,
+                    AccesoResponse.desde(actor));
         }
         List<TareaResponse> fuente = tareas.bandejaDe(actor).stream()
                 .map(TareaResponse::desde)
@@ -92,8 +95,16 @@ public class DashboardController {
                 .map(HallazgoResponse::desde)
                 .toList();
 
+        // El foco del broker lo decide el SERVICIO, tambien para un agente -- que
+        // recibe vacio porque aprobar captaciones no es suyo.
+        //
+        // Aqui habia un `List.of()` fijo, el mismo patron que dejo al broker sin
+        // hallazgo en la rama de al lado: una coleccion vaciada a mano en una
+        // rama de rol no falla, no la ve ningun test de servicio, y miente. Que
+        // conteste el servicio hace imposible esa clase de rama muerta.
         return new DashboardResponse(resumen, new PageResponse<>(
                 fuente.subList(0, hasta), fuente.size(), 1, tamanoValido), descubiertos,
-                List.of());
+                focoDelBroker.de(actor).stream().map(AsuntoDelBrokerResponse::desde).toList(),
+                AccesoResponse.desde(actor));
     }
 }

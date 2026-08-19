@@ -9,6 +9,7 @@ import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.EstadoDelHecho;
 import com.controllocal.service.soporte.InterpretacionDelAsunto;
+import com.controllocal.service.soporte.InterpretacionDelAsunto.Avance;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.ComoEsta;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.Hecho;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.Interpretacion;
@@ -21,6 +22,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * <b>Los asuntos del broker: lo que él tiene que decidir</b> (D-E2-5, E2.5).
@@ -95,12 +97,33 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
                     "El local no se puede ofrecer hasta que la apruebes",
                     "captaciones/pendientes"));
         }
-        for (CandidatoTarea c : solicitudes.porEvaluarDelBroker(
-                alcance.idOrganizacion(), alcance.global(), alcance.paramRoles())) {
-            asuntos.add(asunto(SOLICITUD_POR_EVALUAR, "SOLICITUD_ALQUILER", c, hoy,
-                    "Falta tu evaluacion de la solicitud",
-                    "El interesado espera respuesta y el contrato no puede firmarse",
-                    "solicitudes/revisar"));
+        // Las solicitudes producen UN asunto cada una, y sus documentos deciden
+        // cual: conformar va antes de evaluar. Dos asuntos para la misma
+        // solicitud serian la duplicacion que D-E2-1 seccion 11 prohibe -- y no
+        // es hipotetico: la solicitud 1 estaba EN_REVISION con 3 de 5 documentos
+        // pendientes.
+        List<CandidatoTarea> porEvaluar = solicitudes.porEvaluarDelBroker(
+                alcance.idOrganizacion(), alcance.global(), alcance.paramRoles());
+        Map<Long, int[]> documentos = documentosDe(alcance.idOrganizacion(), porEvaluar);
+
+        for (CandidatoTarea c : porEvaluar) {
+            int[] cuenta = documentos.get(c.getEntidadId());
+            boolean faltaConformar = cuenta != null && cuenta[1] > 0;
+
+            if (faltaConformar) {
+                int total = cuenta[0];
+                int conformados = total - cuenta[1];
+                asuntos.add(asunto(DOCUMENTOS_POR_CONFORMAR, "SOLICITUD_ALQUILER", c, hoy,
+                        "Faltan documentos por conformar",
+                        "Sin conformidad no se puede evaluar la solicitud",
+                        "solicitud-detail/" + nz(c.getEntidadCodigo(), c.getEntidadId()),
+                        new Avance(conformados, total, "documentos conformados")));
+            } else {
+                asuntos.add(asunto(SOLICITUD_POR_EVALUAR, "SOLICITUD_ALQUILER", c, hoy,
+                        "Falta tu evaluacion de la solicitud",
+                        "El interesado espera respuesta y el contrato no puede firmarse",
+                        "solicitudes/revisar"));
+            }
         }
         for (CandidatoTarea c : captaciones.comisionesSinCobrarDelBroker(
                 alcance.idOrganizacion(), alcance.global(), alcance.paramRoles())) {
@@ -126,6 +149,36 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
     // ------------------------------------------------------------------
 
     /**
+     * Cuantos documentos hay y cuantos esperan conformidad, por solicitud.
+     *
+     * <p>UNA consulta para toda la pagina. Pedirlo dentro del bucle serian
+     * tantas como solicitudes, que es el N+1 que vuelve cada vez que se anade un
+     * disparador.
+     *
+     * @return por id de solicitud, {@code [total, pendientes]}
+     */
+    private Map<Long, int[]> documentosDe(long idOrganizacion, List<CandidatoTarea> solicitudesDelBroker) {
+        List<Long> ids = solicitudesDelBroker.stream()
+                .map(CandidatoTarea::getEntidadId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, int[]> porSolicitud = new java.util.HashMap<>();
+        for (Object[] fila : solicitudes.documentosPorConformar(idOrganizacion, ids)) {
+            porSolicitud.put(((Number) fila[0]).longValue(), new int[]{
+                    ((Number) fila[1]).intValue(), ((Number) fila[2]).intValue()});
+        }
+        return porSolicitud;
+    }
+
+    private static String nz(String codigo, Long id) {
+        return codigo == null || codigo.isBlank() ? String.valueOf(id) : codigo;
+    }
+
+    /**
      * Compone un asunto con su interpretación.
      *
      * <p>El {@code freno} es {@code null} cuando de verdad no frena nada — la
@@ -135,6 +188,12 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
     private static AsuntoDelBroker asunto(String tipo, String entidadTipo, CandidatoTarea c,
                                           LocalDate hoy, String falta, String freno,
                                           String destino) {
+        return asunto(tipo, entidadTipo, c, hoy, falta, freno, destino, null);
+    }
+
+    private static AsuntoDelBroker asunto(String tipo, String entidadTipo, CandidatoTarea c,
+                                          LocalDate hoy, String falta, String freno,
+                                          String destino, Avance avance) {
         int dias = c.getFechaPlazo() == null ? 0
                 : (int) Math.max(0, ChronoUnit.DAYS.between(c.getFechaPlazo(), hoy));
 
@@ -154,7 +213,7 @@ public class FocoDelBrokerServiceImpl implements FocoDelBrokerService {
                 destino, dias,
                 ubicacion == null ? null : ubicacion.lado().name(),
                 ubicacion == null ? null : ubicacion.paso(),
-                new Interpretacion(ComoEsta.de(null, hechos), List.of(),
+                new Interpretacion(ComoEsta.de(avance, hechos), List.of(),
                         // Sin expediente todavia no hay cuatro renglones que
                         // relacionar, y una sintesis de uno solo seria un eco
                         // (E2.4). Se respeta el null.

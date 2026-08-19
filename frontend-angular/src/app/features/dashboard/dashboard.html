@@ -244,6 +244,26 @@
             }
           </ul>
         }
+
+      <!--
+        ACCESOS RAPIDOS -- lo que se empieza desde cero (D-E2-1 seccion 6.1).
+
+        Van DEBAJO y no arriba, y el orden importa: primero se resuelve lo que ya
+        existe (el foco), despues lo que sigue en la cola, y solo entonces lo que
+        se crea de nuevo. Empezar algo nuevo con cinco cosas sin atender es
+        exactamente lo que el Inicio viene a evitar.
+
+        Los cuatro NO son los mismos para los dos roles y aqui no se decide
+        cuales: llegan resueltos del dominio. Ni un `if (esBroker)` eligiendo
+        rotulos ni rutas.
+      -->
+      @if (accesos().length > 0) {
+        <nav class="accesos-rapidos" aria-label="Empezar algo nuevo">
+          @for (acceso of accesos(); track acceso.destino) {
+            <a class="cl-btn" [routerLink]="['/' + acceso.destino]">{{ acceso.etiqueta }}</a>
+          }
+        </nav>
+      }
       </section>
 
       <!--

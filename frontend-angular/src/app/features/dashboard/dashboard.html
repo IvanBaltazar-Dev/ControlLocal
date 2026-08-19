@@ -192,6 +192,39 @@
               </ul>
             </section>
           }
+        } @else if (focoDelBroker().length > 0) {
+          <!--
+            LO QUE TIENES QUE DECIDIR — los asuntos del BROKER (D-E2-5).
+
+            No es la bandeja del agente: son captaciones que aprobar, solicitudes
+            que evaluar y comisiones que cobrar. Operaciones que la matriz
+            reserva solo para el, y que hasta ahora no aparecian en ninguna parte
+            del Inicio.
+
+            Llegan ordenadas por la misma politica y ya interpretadas.
+          -->
+          <ul class="tareas">
+            @for (asunto of focoDelBroker(); track asunto.id) {
+              <li>
+                <div class="cuerpo">
+                  <p class="titulo">{{ asunto.entidadCodigo || asunto.tipo }}</p>
+                  @if (asunto.interpretacion?.comoEsta?.hechos?.length) {
+                    <ul class="como-esta">
+                      @for (hecho of asunto.interpretacion!.comoEsta.hechos; track $index) {
+                        <li [class]="'hecho-' + hecho.estado.toLowerCase()">
+                          <span class="marca" aria-hidden="true">{{ marcaDelHecho(hecho.estado) }}</span>
+                          <span class="texto">{{ hecho.texto }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+                <div class="acciones-tarea">
+                  <a class="cl-btn primario" [routerLink]="['/' + asunto.destino]">Decidir</a>
+                </div>
+              </li>
+            }
+          </ul>
         } @else if (focos().length === 0) {
           <p class="cl-vacio">
             Nada pendiente por ahora: no hay solicitudes ni captaciones esperando tu revisión, ni

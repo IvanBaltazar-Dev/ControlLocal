@@ -31,6 +31,9 @@ $raiz = Join-Path $PSScriptRoot '..'
 # es la que comprueba que ademas se EJECUTO.
 $integracion = @(
     'BusquedaLocalesIntegrationTest',
+    # D-E2-5 / E2.5: el broker tiene sus propios asuntos, y no comparte ni un id
+    # con la bandeja del agente.
+    'FocoDelBrokerIntegrationTest',
     'HistoricoPrecioIntegrationTest',
     # D-E2-1 seccion 10 / E2.4: la capa de interpretacion del Inicio -- como esta,
     # el expediente de cuatro renglones y la lectura que los sintetiza.

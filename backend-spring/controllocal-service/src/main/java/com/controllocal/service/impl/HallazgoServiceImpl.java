@@ -8,7 +8,10 @@ import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.HallazgoService;
+import com.controllocal.persistence.query.ConteoPorAgente;
+import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.CoincidenciaCartera;
+import com.controllocal.service.soporte.HallazgoDeConcentracion;
 import com.controllocal.service.soporte.CoincidenciaCartera.Evaluacion;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.PoliticaComercial;
@@ -55,24 +58,39 @@ public class HallazgoServiceImpl implements HallazgoService {
     private final RequerimientoClienteRepository requerimientos;
     private final OportunidadComercialRepository oportunidades;
     private final LectorPorAutoridad lector;
+    private final Alcances alcances;
+    private final com.controllocal.persistence.repositorio.DetalleAgenteRepository agentes;
 
     public HallazgoServiceImpl(CaptacionRepository captaciones,
                                RequerimientoClienteRepository requerimientos,
                                OportunidadComercialRepository oportunidades,
-                               LectorPorAutoridad lector) {
+                               LectorPorAutoridad lector,
+                               Alcances alcances,
+                               com.controllocal.persistence.repositorio.DetalleAgenteRepository agentes) {
         this.captaciones = captaciones;
         this.requerimientos = requerimientos;
         this.oportunidades = oportunidades;
         this.lector = lector;
+        this.alcances = alcances;
+        this.agentes = agentes;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Hallazgo> de(Actor actor) {
+        if (actor.esBroker()) {
+            // MISMO CAMPO, PRODUCTOR DISTINTO (D-E2-1 seccion 7.1).
+            //
+            // El agente descubre coincidencias de cartera; el broker descubre
+            // concentracion. No son dos superficies: es la misma, con lo que cada
+            // rol necesita encontrar. Se compartian, y el resultado era que el
+            // broker se quedaba SIN hallazgo -- justo el rol al que mas le sirve
+            // que BROX encuentre algo que la media esconde.
+            return concentracionDelEquipo(actor);
+        }
         if (!actor.esAgente()) {
-            // Los hallazgos de cartera son del agente: cruzan SUS captaciones con
-            // SUS clientes. El broker tiene su propia superficie (E2.5) y no es
-            // esta; devolver aqui los de todo el equipo seria inventarle una.
+            // El TENANT_ADMIN no descubre nada: audita. Un hallazgo es una
+            // invitacion a actuar, y desde D-F4-5 no decide operaciones.
             return List.of();
         }
         long org = actor.idOrganizacion();
@@ -137,6 +155,53 @@ public class HallazgoServiceImpl implements HallazgoService {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * <b>Donde esta el cuello del equipo</b> (D-E2-2 seccion 9.1).
+     *
+     * <p>Se mide sobre la cartera activa por agente, que es el dato que el
+     * broker ya supervisa. Si no hay concentracion no hay hallazgo: el bloque no
+     * existe y no se rellena con "el equipo esta equilibrado".
+     */
+    private List<Hallazgo> concentracionDelEquipo(Actor actor) {
+        Alcances.Alcance alcance = alcances.de(actor);
+        List<Long> equipo = alcance.rolesAgente();
+        if (equipo.size() < 3) {
+            return List.of();
+        }
+        Map<Long, Long> carteraPorAgente = new java.util.HashMap<>();
+        for (ConteoPorAgente fila : captaciones.contarEnCarteraPorAgentes(
+                alcance.idOrganizacion(), equipo)) {
+            carteraPorAgente.put(fila.getIdAgente(), fila.getTotal());
+        }
+        List<HallazgoDeConcentracion.Aporte> aportes = new ArrayList<>();
+        for (Long idAgente : equipo) {
+            aportes.add(new HallazgoDeConcentracion.Aporte(idAgente,
+                    nombreDelAgente(idAgente),
+                    carteraPorAgente.getOrDefault(idAgente, 0L)));
+        }
+
+        HallazgoDeConcentracion.Concentracion concentracion =
+                HallazgoDeConcentracion.de(aportes, "cartera activa");
+        if (concentracion == null) {
+            return List.of();
+        }
+        return List.of(new Hallazgo(
+                CONCENTRACION_DEL_EQUIPO + ":" + concentracion.idRezagado(),
+                CONCENTRACION_DEL_EQUIPO,
+                concentracion.titulo(),
+                concentracion.cuerpo(),
+                0, List.of(), List.of(),
+                "agentes",
+                null, null, null));
+    }
+
+    private String nombreDelAgente(long idRolAgente) {
+        return agentes.findById(idRolAgente)
+                .map(a -> a.getRol() == null || a.getRol().getPersona() == null ? null
+                        : a.getRol().getPersona().getNombresORazonSocial())
+                .orElse("un agente del equipo");
+    }
 
     private static Hallazgo hallazgo(long idCliente, Captacion captacion, Evaluacion evaluacion) {
         String codigo = captacion.getCodigoCaptacion() == null ? "" : captacion.getCodigoCaptacion();

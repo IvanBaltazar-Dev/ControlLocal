@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiClient } from './api.client';
 import { PageResponse } from './api.types';
+import { InterpretacionDelAsunto } from './tareas.service';
 import { IndicadoresResumen } from './indicadores.service';
 import { Tarea } from './tareas.service';
 
@@ -59,11 +60,38 @@ export interface Hallazgo {
  * corre en el mismo request — no hay forma de mostrar los KPI antes. A cambio,
  * la pantalla ofrece **recargar** en vez de dejar la mitad en blanco.
  */
+/**
+ * Un asunto del BROKER: algo que el tiene que decidir (D-E2-5).
+ *
+ * NO es la bandeja del agente filtrada. `GET /tareas` sigue siendo del agente y
+ * sin acceso de broker ni de admin: la bandeja no es un tablero de control. Lo
+ * que cambia es que deja de ser la unica bandeja del sistema.
+ *
+ * El `id` lleva el sufijo del rol a proposito: el mismo encargo puede estar en
+ * las dos colas y son dos asuntos distintos -- uno dice «recontacta», el otro
+ * dice «aprueba» (D-E2-1 seccion 7.1).
+ */
+export interface AsuntoDelBroker {
+  id: string;
+  tipo: string;
+  entidadTipo: string;
+  entidadId: number | null;
+  entidadCodigo: string | null;
+  /** Ruta real del SPA donde se decide. */
+  destino: string;
+  diasEsperando: number;
+  lado: string | null;
+  paso: string | null;
+  interpretacion: InterpretacionDelAsunto | null;
+}
+
 export interface DashboardCarga {
   indicadores: IndicadoresResumen;
   bandeja: PageResponse<Tarea>;
   /** Lo que BROX encontro. Coleccion aparte, no una bandeja filtrada (E2.3). */
   hallazgos: Hallazgo[];
+  /** Los asuntos del broker: lo que EL decide. Vacio para el agente (E2.5). */
+  focoDelBroker: AsuntoDelBroker[];
 }
 
 @Injectable({ providedIn: 'root' })

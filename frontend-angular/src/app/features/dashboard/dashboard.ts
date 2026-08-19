@@ -10,7 +10,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
-import { DashboardService, Hallazgo } from '../../core/api/dashboard.service';
+import { AsuntoDelBroker, DashboardService, Hallazgo } from '../../core/api/dashboard.service';
 import {
   esPeriodo,
   IndicadorConteo,
@@ -237,6 +237,17 @@ export class Dashboard implements OnInit {
    * recomienda nada.
    */
   protected readonly hallazgos = signal<Hallazgo[]>([]);
+
+  /**
+   * Los asuntos del BROKER: lo que el tiene que decidir (D-E2-5).
+   *
+   * No es la bandeja del agente vista por otro rol -- esa sigue cerrada. Son
+   * captaciones que aprobar, solicitudes que evaluar y comisiones que cobrar:
+   * operaciones que la matriz operacion-rol reserva SOLO para el.
+   *
+   * Llegan ya ordenadas por la misma politica del agente y ya interpretadas.
+   */
+  protected readonly focoDelBroker = signal<AsuntoDelBroker[]>([]);
   protected readonly totalBandeja = signal(0);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -304,6 +315,7 @@ export class Dashboard implements OnInit {
       this.bandeja.set(carga.bandeja.items ?? []);
       this.totalBandeja.set(carga.bandeja.totalRecords ?? 0);
       this.hallazgos.set(carga.hallazgos ?? []);
+      this.focoDelBroker.set(carga.focoDelBroker ?? []);
     } catch (fallo) {
       this.indicadores.set(null);
       this.error.set(

@@ -15,10 +15,17 @@ import java.util.List;
  * coincidencia de cartera competia por los cinco puestos del foco -- y los
  * ganaba, porque la politica de despacho la trata como ocasion, que lo es.
  *
+ * <p><b>`bandeja` y `focoDelBroker` no son la misma coleccion vista por dos
+ * roles</b> (D-E2-5). La bandeja son las cosas que un AGENTE tiene que hacer y
+ * sigue sin acceso de broker ni de admin; el foco del broker son las decisiones
+ * que SOLO EL puede tomar. Cada rol ve lo que el tiene que decidir, nunca lo que
+ * otro tiene que hacer.
+ *
  * <p>La campana (alertas) NO viaja aqui: es chrome global y tiene su propio
  * recurso.
  */
 public record DashboardResponse(IndicadoresResponse indicadores,
                                 PageResponse<TareaResponse> bandeja,
-                                List<HallazgoResponse> hallazgos) {
+                                List<HallazgoResponse> hallazgos,
+                                List<AsuntoDelBrokerResponse> focoDelBroker) {
 }

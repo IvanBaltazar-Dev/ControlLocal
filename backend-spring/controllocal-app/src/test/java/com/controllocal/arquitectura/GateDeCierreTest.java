@@ -78,6 +78,7 @@ class GateDeCierreTest {
                         "AutoridadDelDatoIntegrationTest",
                         "BusquedaLocalesIntegrationTest",
                         // E0.2 — el historico economico contra PostgreSQL real.
+                        "FocoDelBrokerIntegrationTest",
                         "HistoricoPrecioIntegrationTest",
                         "InterpretacionDelInicioIntegrationTest",
                         "InvariantesComisionIntegrationTest",

@@ -35,6 +35,15 @@ public interface HallazgoService {
     String COINCIDENCIA_DE_CARTERA = "COINCIDENCIA_DE_CARTERA";
 
     /**
+     * El del broker, y es de otra naturaleza (D-E2-1 seccion 7.1).
+     *
+     * <p>El agente descubre que dos locales vuelven a encajar; el broker
+     * descubre donde esta el cuello del equipo. <b>Vale precisamente porque la
+     * media lo esconde</b>: un 38 de equipo parece razonable hasta que se abre.
+     */
+    String CONCENTRACION_DEL_EQUIPO = "CONCENTRACION_DEL_EQUIPO";
+
+    /**
      * Un descubrimiento, con su evidencia y su destino.
      *
      * @param id         identidad <b>estable</b>: la misma coincidencia tiene el

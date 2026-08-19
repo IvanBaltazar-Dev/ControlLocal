@@ -392,4 +392,38 @@ public interface SolicitudAlquilerRepository extends JpaRepository<SolicitudAlqu
                                               @Param("sinScope") boolean sinScope,
                                               @Param("porCaptacion") boolean porCaptacion,
                                               @Param("roles") Collection<Long> roles);
+
+    /**
+     * <b>Solicitudes esperando la firma del broker</b> (D-E2-5, E2.5).
+     *
+     * <p>Las REGISTRADAS y las EN_REVISION de su alcance: las que no avanzan
+     * hasta que el broker evalua. Firmar una evaluacion es «la mas sensible de
+     * las 18» segun la matriz operacion-rol, y hoy no aparece en ninguna parte
+     * del Inicio.
+     *
+     * <p><b>No incluye OBSERVADA</b>, y esa exclusion es la decision: una
+     * solicitud observada espera al AGENTE, que tiene que subsanar. Es la misma
+     * solicitud y el dueno cambia con el estado, asi que meterlas juntas pondria
+     * en el foco del broker algo que no puede resolver -- justo lo que E2.2
+     * quito con `dependeDeMi`.
+     *
+     * <p>Devuelve {@code CandidatoTarea}, la misma forma que los disparadores
+     * del agente, para que el foco del broker pase por la MISMA politica de
+     * despacho y la MISMA capa de interpretacion. Una forma propia habria
+     * significado un segundo motor.
+     */
+    @Query("""
+            select s.id as entidadId,
+                   s.codigoSolicitud as entidadCodigo,
+                   s.fechaRegistro as fechaPlazo,
+                   s.estado as marca
+              from SolicitudAlquiler s
+             where s.organizacionId = :idOrganizacion
+               and s.estado in ('G', 'E')
+               and (:sinScope = true or s.agente.id in :roles)
+             order by s.fechaRegistro asc, s.id asc
+            """)
+    List<CandidatoTarea> porEvaluarDelBroker(@Param("idOrganizacion") long idOrganizacion,
+                                             @Param("sinScope") boolean sinScope,
+                                             @Param("roles") List<Long> roles);
 }

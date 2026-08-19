@@ -160,6 +160,9 @@ function carga(parcial: Partial<DashboardCarga> = {}): DashboardCarga {
     // un hallazgo NO es una tarea (E2.3). Quien pruebe la superficie de
     // hallazgos la pasa por `parcial`.
     hallazgos: [],
+    // Y sin asuntos de broker: estos tests son del AGENTE, y su bandeja no es
+    // la del broker (D-E2-5). Quien pruebe el foco del broker lo pasa por `parcial`.
+    focoDelBroker: [],
     ...parcial,
   };
 }

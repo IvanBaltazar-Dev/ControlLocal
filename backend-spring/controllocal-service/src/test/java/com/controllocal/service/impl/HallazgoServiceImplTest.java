@@ -11,6 +11,8 @@ import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.HallazgoService.Hallazgo;
+import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
+import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresDePropiedad;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,9 +54,12 @@ class HallazgoServiceImplTest {
     private final OportunidadComercialRepository oportunidades =
             mock(OportunidadComercialRepository.class);
     private final LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
+    private final Alcances alcances = mock(Alcances.class);
+    private final DetalleAgenteRepository agentesRepo = mock(DetalleAgenteRepository.class);
 
     private final HallazgoServiceImpl service =
-            new HallazgoServiceImpl(captaciones, requerimientos, oportunidades, lector);
+            new HallazgoServiceImpl(captaciones, requerimientos, oportunidades, lector,
+                    alcances, agentesRepo);
 
     private final Actor agente = new Actor(ORG, 3L, ROL_AGENTE, "AGENTE");
     private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");
@@ -156,11 +161,24 @@ class HallazgoServiceImplTest {
                 "y el pero se declara: un hallazgo que solo presume se decide peor");
     }
 
+    /**
+     * <b>La superficie es la misma; el productor, no</b> (D-E2-1 seccion 7.1).
+     *
+     * <p>El broker no recibe coincidencias de cartera -- cruzan las captaciones y
+     * los clientes de UN agente-- sino concentracion del equipo. Con un equipo
+     * de dos no hay concentracion que descubrir, asi que aqui no sale nada: lo
+     * que se comprueba es que NO se cuela un hallazgo de cartera.
+     */
     @Test
-    @DisplayName("los hallazgos de cartera son del agente; el broker tiene su propia superficie")
+    @DisplayName("el broker no recibe coincidencias de cartera: las suyas son de otra naturaleza")
     void elBrokerNoRecibeHallazgosDeCartera() {
-        assertTrue(service.de(broker).isEmpty());
-        verifyNoInteractions(captaciones);
+        when(alcances.de(broker)).thenReturn(
+                new Alcances.Alcance(ORG, false, List.of(41L, 42L)));
+
+        assertTrue(service.de(broker).isEmpty(),
+                "con dos agentes no hay equipo del que hablar, y una coincidencia de cartera "
+                        + "nunca es del broker");
+        verifyNoInteractions(requerimientos);
     }
 
     @Test

@@ -484,4 +484,60 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
              where k.organizacion_id = :idOrganizacion
             """)
     List<Object[]> propiedadPorAsunto(@Param("idOrganizacion") long idOrganizacion);
+
+    /**
+     * <b>Captaciones esperando la decision del broker</b> (D-E2-5, E2.5).
+     *
+     * <p>Las pendientes (P) y las observadas (O) de su alcance: aprobar u
+     * observar una captacion es suyo y de nadie mas, y hasta que lo haga el
+     * local no se puede ofrecer.
+     *
+     * <p>{@code fechaPlazo} es la fecha de captacion, que es desde cuando lleva
+     * esperando: la politica de despacho la pesa como antiguedad accionable.
+     */
+    @Query("""
+            select c.id as entidadId,
+                   c.codigoCaptacion as entidadCodigo,
+                   c.fechaCaptacion as fechaPlazo,
+                   c.estado as marca
+              from Captacion c
+             where c.organizacionId = :idOrganizacion
+               and c.estado in ('P', 'O')
+               and (:sinScope = true or c.agente.id in :roles)
+             order by c.fechaCaptacion asc, c.id asc
+            """)
+    List<CandidatoTarea> porRevisarDelBroker(@Param("idOrganizacion") long idOrganizacion,
+                                             @Param("sinScope") boolean sinScope,
+                                             @Param("roles") List<Long> roles);
+
+    /**
+     * <b>Comisiones asignadas que nadie ha cobrado</b> (D-E2-5, E2.5).
+     *
+     * <p>Registrar el cobro es BROKER en la matriz operacion-rol. En E2.2 este
+     * mismo hecho aparecia en la bandeja del AGENTE con {@code dependeDeMi =
+     * false}, porque el agente no puede cobrarlo: un asunto sin dueno, que al
+     * agente no le servia y al broker no le llegaba. Aqui encuentra el suyo.
+     *
+     * <p>Se apoya en la captacion para el alcance -- el broker supervisa por
+     * captacion -- y no en el agente de la solicitud, que es otro camino y otro
+     * conjunto.
+     */
+    @Query("""
+            select k.id as entidadId,
+                   cast(k.id as string) as entidadCodigo,
+                   k.fechaCierre as fechaPlazo,
+                   k.estadoContrato as marca
+              from ContratoAlquiler k
+              join k.oportunidad o
+              join o.captacion c
+             where k.organizacionId = :idOrganizacion
+               and (:sinScope = true or c.agente.id in :roles)
+               and exists (select 1 from ComisionLiquidacion cl
+                            where cl.contrato = k and cl.estado = 'P')
+             order by k.fechaCierre asc, k.id asc
+            """)
+    List<CandidatoTarea> comisionesSinCobrarDelBroker(
+            @Param("idOrganizacion") long idOrganizacion,
+            @Param("sinScope") boolean sinScope,
+            @Param("roles") List<Long> roles);
 }

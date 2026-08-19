@@ -1,8 +1,10 @@
 package com.controllocal.web.controlador;
 
+import com.controllocal.service.FocoDelBrokerService;
 import com.controllocal.service.HallazgoService;
 import com.controllocal.service.IndicadorService;
 import com.controllocal.service.TareaService;
+import com.controllocal.web.dto.AsuntoDelBrokerResponse;
 import com.controllocal.web.dto.DashboardResponse;
 import com.controllocal.web.dto.HallazgoResponse;
 import com.controllocal.web.dto.IndicadoresResponse;
@@ -42,12 +44,15 @@ public class DashboardController {
     private final IndicadorService indicadores;
     private final TareaService tareas;
     private final HallazgoService hallazgos;
+    private final FocoDelBrokerService focoDelBroker;
 
     public DashboardController(IndicadorService indicadores, TareaService tareas,
-                               HallazgoService hallazgos) {
+                               HallazgoService hallazgos,
+                               FocoDelBrokerService focoDelBroker) {
         this.indicadores = indicadores;
         this.tareas = tareas;
         this.hallazgos = hallazgos;
+        this.focoDelBroker = focoDelBroker;
     }
 
     @GetMapping
@@ -59,8 +64,21 @@ public class DashboardController {
         int tamanoValido = Math.max(1, Math.min(100, tamano));
 
         if (!actor.esAgente()) {
+            // El broker no recibe bandeja -- esa es del agente y no se comparte --
+            // sino SUS asuntos: lo que solo el puede decidir (D-E2-5).
+            List<AsuntoDelBrokerResponse> suyos = focoDelBroker.de(actor).stream()
+                    .map(AsuntoDelBrokerResponse::desde)
+                    .toList();
+            // El broker TAMBIEN tiene hallazgos, y son de otra naturaleza: no
+            // coincidencias de cartera sino concentracion del equipo (D-E2-1
+            // seccion 7.1). Devolver aqui una lista vacia era dejarlo sin
+            // hallazgo -- justo el rol al que mas le sirve que BROX encuentre
+            // algo que la media esconde.
+            List<HallazgoResponse> descubiertos = hallazgos.de(actor).stream()
+                    .map(HallazgoResponse::desde)
+                    .toList();
             return new DashboardResponse(resumen,
-                    new PageResponse<>(List.of(), 0, 1, tamanoValido), List.of());
+                    new PageResponse<>(List.of(), 0, 1, tamanoValido), descubiertos, suyos);
         }
         List<TareaResponse> fuente = tareas.bandejaDe(actor).stream()
                 .map(TareaResponse::desde)
@@ -75,6 +93,7 @@ public class DashboardController {
                 .toList();
 
         return new DashboardResponse(resumen, new PageResponse<>(
-                fuente.subList(0, hasta), fuente.size(), 1, tamanoValido), descubiertos);
+                fuente.subList(0, hasta), fuente.size(), 1, tamanoValido), descubiertos,
+                List.of());
     }
 }

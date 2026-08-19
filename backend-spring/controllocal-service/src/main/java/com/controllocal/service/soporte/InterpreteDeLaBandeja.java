@@ -3,7 +3,9 @@ package com.controllocal.service.soporte;
 import com.controllocal.domain.comercial.Tarea;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.persistence.query.ExpedienteDeLaPropiedad;
+import com.controllocal.persistence.query.RangoDeRenta;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
+import com.controllocal.persistence.repositorio.ContrasteRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.Avance;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.ComoEsta;
@@ -57,10 +59,14 @@ public class InterpreteDeLaBandeja {
     private final CaptacionRepository captaciones;
     private final PrecioPropiedadRepository precios;
 
+    private final ContrasteRepository contrastes;
+
     public InterpreteDeLaBandeja(CaptacionRepository captaciones,
-                                 PrecioPropiedadRepository precios) {
+                                 PrecioPropiedadRepository precios,
+                                 ContrasteRepository contrastes) {
         this.captaciones = captaciones;
         this.precios = precios;
+        this.contrastes = contrastes;
     }
 
     /**
@@ -73,10 +79,11 @@ public class InterpreteDeLaBandeja {
      */
     public record Contexto(Map<String, Long> propiedadPorAsunto,
                            Map<Long, ExpedienteDeLaPropiedad> expedientes,
-                           Map<Long, List<BigDecimal>> series) {
+                           Map<Long, List<BigDecimal>> series,
+                           Map<Long, Contraste> contrastes) {
 
         public static Contexto vacio() {
-            return new Contexto(Map.of(), Map.of(), Map.of());
+            return new Contexto(Map.of(), Map.of(), Map.of(), Map.of());
         }
 
         Long propiedadDe(String entidadTipo, Long entidadId) {
@@ -104,7 +111,7 @@ public class InterpreteDeLaBandeja {
                 .distinct()
                 .toList();
         if (idsPropiedad.isEmpty()) {
-            return new Contexto(porAsunto, Map.of(), Map.of());
+            return new Contexto(porAsunto, Map.of(), Map.of(), Map.of());
         }
 
         // La consulta devuelve una fila por CAPTACION y una propiedad puede tener
@@ -127,7 +134,46 @@ public class InterpreteDeLaBandeja {
                 series.put(idPropiedad, serie);
             }
         }
-        return new Contexto(porAsunto, expedientes, series);
+        return new Contexto(porAsunto, expedientes, series, contrastesDe(idOrganizacion, expedientes));
+    }
+
+    /**
+     * El contraste de renta de cada propiedad de la pagina (E2.6).
+     *
+     * <p>Una consulta por propiedad, y no una por renglon: la pagina son cinco
+     * asuntos y varios pueden apuntar al mismo inmueble.
+     *
+     * <p><b>Casi siempre devolvera la degradacion, y esta bien.</b> El rango
+     * necesita diez propiedades distintas en la misma zona y tramo con renta
+     * PUBLICADA, y el 2026-08-19 no habia ni un hito de renta publicada en toda
+     * la base. Lo que viaja entonces es "sin referencia interna suficiente" con
+     * su N -- nunca una cifra del sector, que es el salto que el producto existe
+     * para no dar.
+     */
+    private Map<Long, Contraste> contrastesDe(long idOrganizacion,
+                                              Map<Long, ExpedienteDeLaPropiedad> expedientes) {
+        Map<Long, Contraste> porPropiedad = new HashMap<>();
+        for (Map.Entry<Long, ExpedienteDeLaPropiedad> entrada : expedientes.entrySet()) {
+            ExpedienteDeLaPropiedad datos = entrada.getValue();
+            BandaDeMetraje banda = BandaDeMetraje.de(datos.getMetraje());
+            String zona = datos.getDistrito();
+
+            if (zona == null || zona.isBlank() || banda == null || datos.getMoneda() == null) {
+                porPropiedad.put(entrada.getKey(), Contraste.sinGrupoComparable());
+                continue;
+            }
+            RangoDeRenta rango = contrastes.rangoDeRenta(idOrganizacion, zona,
+                    banda.desdeODesdeCero(), banda.hastaOInfinito(), datos.getMoneda());
+            int observaciones = rango == null ? 0 : rango.getObservaciones();
+
+            porPropiedad.put(entrada.getKey(),
+                    PoliticaComercial.rangoPublicable(observaciones)
+                            ? Contraste.enRango(rango.getMinimo(), rango.getMaximo(),
+                                    datos.getRenta(), datos.getMoneda(), zona, banda.rotulo(),
+                                    observaciones)
+                            : Contraste.sinReferenciaSuficiente(zona, banda.rotulo(), observaciones));
+        }
+        return porPropiedad;
     }
 
     /** Lo mínimo que hace falta saber de un asunto para describirlo. */
@@ -144,7 +190,8 @@ public class InterpreteDeLaBandeja {
         ExpedienteDeLaPropiedad datos = idPropiedad == null ? null
                 : contexto.expedientes().get(idPropiedad);
 
-        List<Renglon> expediente = expediente(datos, contexto.series().get(idPropiedad), hoy);
+        List<Renglon> expediente = expediente(datos, contexto.series().get(idPropiedad),
+                contexto.contrastes().get(idPropiedad), hoy);
         return new Interpretacion(comoEsta(asunto, hoy), expediente, lectura(datos, hoy));
     }
 
@@ -249,13 +296,14 @@ public class InterpreteDeLaBandeja {
      * cargué».
      */
     private static List<Renglon> expediente(ExpedienteDeLaPropiedad datos,
-                                            List<BigDecimal> serie, LocalDate hoy) {
+                                            List<BigDecimal> serie, Contraste contraste,
+                                            LocalDate hoy) {
         if (datos == null) {
             return List.of();
         }
         List<Renglon> renglones = new ArrayList<>(InterpretacionDelAsunto.RENGLONES_DEL_EXPEDIENTE);
         renglones.add(encargo(datos, hoy));
-        renglones.add(renta(datos, serie, hoy));
+        renglones.add(renta(datos, serie, contraste, hoy));
         renglones.add(actividad(datos));
         renglones.add(propietario(datos));
         return List.copyOf(renglones);
@@ -279,11 +327,12 @@ public class InterpreteDeLaBandeja {
         String estado = total <= 0 ? null
                 : consumido >= total ? Renglon.MAL
                 : consumido * 100 / total >= 80 ? Renglon.OJO : null;
-        return new Renglon("Encargo", valor, estado, new Ventana(consumido, Math.max(total, 0)), null);
+        return new Renglon("Encargo", valor, estado, new Ventana(consumido, Math.max(total, 0)),
+                null, null);
     }
 
     private static Renglon renta(ExpedienteDeLaPropiedad datos, List<BigDecimal> serie,
-                                 LocalDate hoy) {
+                                 Contraste contraste, LocalDate hoy) {
         BigDecimal monto = datos.getRenta();
         LocalDate desde = datos.getRentaDesde();
         String importe = monto == null ? null
@@ -294,11 +343,13 @@ public class InterpreteDeLaBandeja {
         String valor = InterpretacionDelAsunto.frase(importe,
                 parada == null ? null
                         : parada == 0 ? "fijada hoy" : "sin cambios desde hace " + parada + " dias");
-        // 45 dias es el plazo de recontacto de la casa; una renta parada mas que
-        // eso es una renta que nadie esta negociando.
-        String estado = parada != null && parada > 45 ? Renglon.OJO : null;
+        // Una renta parada mas de lo que la casa admite es una renta que nadie
+        // esta negociando. El umbral vive en la politica: estaba aqui como un
+        // 45 suelto, con un comentario que lo llamaba "plazo de recontacto"
+        // -que son 7 dias-, y la maqueta llevaba su propia copia con 60.
+        String estado = parada != null && PoliticaComercial.rentaParada(parada) ? Renglon.OJO : null;
         return new Renglon("Renta", valor.isBlank() ? "Sin renta publicada" : valor,
-                estado, null, serie);
+                estado, null, serie, contraste);
     }
 
     private static Renglon actividad(ExpedienteDeLaPropiedad datos) {

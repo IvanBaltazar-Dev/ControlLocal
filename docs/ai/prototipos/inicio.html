@@ -1211,23 +1211,51 @@
   function dinero(n) { return "US$ " + n.toLocaleString("en-US"); }
   function pc(a, b) { return b ? Math.round(a / b * 100) : 0; }
 
-  /* ------------------------------------------------------------------
-     1 · POLITICA — los umbrales, en un solo sitio (E1)
+  /* ==================================================================
+     1 · ESPEJO DE LA POLITICA — NO ES LA FUENTE. ES UNA COPIA VIGILADA.
+     ==================================================================
+
+     ESTE BLOQUE NO DECIDE NADA. La politica comercial de BROX vive en
+     backend-spring/.../service/soporte/PoliticaComercial.java y en ningun
+     otro sitio. Aqui hay numeros porque una maqueta necesita pintar algo,
+     no porque aqui se decida cuanto valen.
+
+     POR QUE LLEVA ESTA ADVERTENCIA. Hasta el 2026-08-19 este bloque se
+     llamaba POLITICA y decia "los umbrales, en un solo sitio (E1)", que
+     era literalmente falso: estaba duplicado tambien en los dos HTML y
+     YA HABIA DIVERGIDO del backend. Decia 10 dias de reporte al
+     propietario donde la politica dice 15, y 60 dias de renta sin
+     ajustar donde el codigo aplicaba 45. Quien buscara "10 dias" lo
+     encontraba aqui, sin ninguna senal de que no gobernaba nada. Es
+     exactamente la ambigüedad que E1 se cerro para eliminar.
+
+     COMO SE MANTIENE HONESTO. PoliticaUnicaTest lee este bloque y compara
+     cada valor con su Regla del backend: si divergen, rompe el build. La
+     maqueta puede seguir pintando; lo que no puede es contradecir.
+
+     Los cinco umbrales del ritmo bajaron a PoliticaComercial en E2.6.
      ------------------------------------------------------------------ */
 
-  var POLITICA = {
-    recontactoDias: 7,          /* plazo para volver a contactar */
-    reporteAlPropietarioDias: 10,
+  var POLITICA_ESPEJO = {
+    recontactoDias: 7,          /* = PoliticaComercial.RECONTACTO */
+    reporteAlPropietarioDias: 15, /* = REPORTE_PROPIETARIO (decia 10) */
+    rentaSinAjustarDias: 45,    /* = RENTA_SIN_AJUSTAR (decia 60) */
+    /* Ritmo — todos con dueno en PoliticaComercial desde E2.6 */
+    llega: 1.0,                 /* = RITMO_LLEGA (100 %) */
+    cerca: 0.85,                /* = RITMO_CERCA (85 %) */
+    arranquePc: 0.15,           /* = RITMO_ARRANQUE (15 %) */
+    volumenMinimo: 3,           /* = RITMO_VOLUMEN_MINIMO */
+    muestraMinima: 5,           /* = MUESTRA_MINIMA */
+    rangoMuestraMinima: 10,     /* = RANGO_MUESTRA_MINIMA */
+    /* Sin dueno en el backend todavia: solo decoran la maqueta y no se
+       aplican a ningun dato real. Si alguno pasa a decidir algo, sube. */
     plazoCobroComisionDias: 15,
-    tiempoPublicadoUmbralDias: 90,
-    rentaSinAjustarDias: 60,
-    /* Ritmo */
-    llega: 1.0,                 /* proyeccion/meta a partir de la cual es EN_RITMO */
-    cerca: 0.85,                /* por debajo de esto, FUERA_DE_RITMO */
-    arranquePc: 0.15,           /* mientras el periodo lleve menos, el tope es ATENCION */
-    volumenMinimo: 3,           /* por debajo no hay cadencia diaria que medir */
-    muestraMinima: 5            /* por debajo no hay conversion que concluir */
+    tiempoPublicadoUmbralDias: 90
   };
+
+  /* Alias para no reescribir 71 referencias de las dos pantallas. El nombre
+     largo es el que se lee al buscar; este es el que se usa. */
+  var POLITICA = POLITICA_ESPEJO;
 
   var RITMO = { EN_RITMO: "EN_RITMO", ATENCION: "ATENCION", FUERA_DE_RITMO: "FUERA_DE_RITMO", SIN_BASE: "SIN_BASE" };
   var VOZ_RITMO = {

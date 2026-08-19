@@ -237,12 +237,57 @@ public final class PoliticaComercial {
                     + "publicar un rango de renta propio.",
             10, Unidad.PUNTOS, Alcance.GLOBAL, 1);
 
+    /**
+     * Dias que puede llevar una renta sin moverse antes de que valga la pena
+     * senalarlo.
+     *
+     * <p>Estaba escrito a mano en {@code InterpreteDeLaBandeja} —un {@code > 45}
+     * con un comentario que lo llamaba "el plazo de recontacto de la casa", que
+     * son 7 dias y no 45—, y la maqueta llevaba su propia copia con 60. Tres
+     * numeros para una regla. Sube aqui con el valor que estaba en produccion:
+     * cambiarlo es una decision comercial, no un efecto colateral de
+     * centralizarlo.
+     */
+    public static final Regla RENTA_SIN_AJUSTAR = new Regla(
+            "renta.dias-sin-ajustar",
+            "Dias que una renta puede permanecer sin cambios antes de senalarla como parada.",
+            45, Unidad.DIAS, Alcance.GLOBAL, 1);
+
+    /**
+     * Los tres cortes que separan propiedades comparables por tamano.
+     *
+     * <p>Estan aqui y no dentro de {@link BandaDeMetraje} porque tambien deciden
+     * que significa un numero: dicen contra QUIEN se compara una renta. Un corte
+     * mal puesto no da un error, da un rango dentro del cual cualquier renta cae
+     * bien, y un rango que nunca senala nada no es informacion.
+     *
+     * <p>Salen de la practica de la casa —el local de calle pequeno, el
+     * estandar, el grande y la superficie mayor—, no de un estudio de mercado
+     * que BROX no tiene.
+     */
+    public static final Regla BANDA_METRAJE_PEQUENO = new Regla(
+            "contraste.banda-metraje-pequeno",
+            "Metros cuadrados hasta los que una propiedad se compara como local pequeno.",
+            50, Unidad.PUNTOS, Alcance.GLOBAL, 1);
+
+    public static final Regla BANDA_METRAJE_ESTANDAR = new Regla(
+            "contraste.banda-metraje-estandar",
+            "Metros cuadrados hasta los que una propiedad se compara como local estandar.",
+            100, Unidad.PUNTOS, Alcance.GLOBAL, 1);
+
+    public static final Regla BANDA_METRAJE_GRANDE = new Regla(
+            "contraste.banda-metraje-grande",
+            "Metros cuadrados hasta los que una propiedad se compara como local grande; "
+                    + "por encima es superficie mayor.",
+            200, Unidad.PUNTOS, Alcance.GLOBAL, 1);
+
     /** Catalogo completo. Su unico consumidor hoy es el test que vigila la politica. */
     public static final List<Regla> REGLAS = List.of(
             RECONTACTO, VISITA_PROXIMA, REPORTE_PROPIETARIO, COINCIDENCIA_PROPONIBLE,
             ENCARGO, COMISION_MAXIMA, MOTIVO_REASIGNACION,
             RITMO_LLEGA, RITMO_CERCA, RITMO_ARRANQUE, RITMO_VOLUMEN_MINIMO,
-            MUESTRA_MINIMA, RANGO_MUESTRA_MINIMA);
+            MUESTRA_MINIMA, RANGO_MUESTRA_MINIMA, RENTA_SIN_AJUSTAR,
+            BANDA_METRAJE_PEQUENO, BANDA_METRAJE_ESTANDAR, BANDA_METRAJE_GRANDE);
 
     private PoliticaComercial() {
     }
@@ -312,6 +357,11 @@ public final class PoliticaComercial {
      */
     public static boolean rangoPublicable(int propiedadesDistintas) {
         return propiedadesDistintas >= RANGO_MUESTRA_MINIMA.valor();
+    }
+
+    /** Si una renta lleva parada lo bastante como para decirlo. */
+    public static boolean rentaParada(long diasSinCambios) {
+        return diasSinCambios > RENTA_SIN_AJUSTAR.valor();
     }
 
     /**

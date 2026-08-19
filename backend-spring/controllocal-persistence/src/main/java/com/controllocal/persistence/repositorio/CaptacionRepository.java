@@ -426,7 +426,8 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
                      where o2.captacion = c) as visitasTotales,
                    per.nombresORazonSocial as propietario,
                    p.direccion as direccion,
-                   p.distrito as distrito
+                   p.distrito as distrito,
+                   p.metraje as metraje
               from Captacion c
               join c.propiedad p
               join p.rolPropietario rp

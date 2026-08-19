@@ -1,5 +1,6 @@
 package com.controllocal.arquitectura;
 
+import com.controllocal.service.soporte.PoliticaComercial;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -11,9 +12,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -141,7 +146,94 @@ class PoliticaUnicaTest {
         assertTrue(Files.isRegularFile(espejo), "No esta " + espejo);
     }
 
+    /**
+     * <b>La maqueta no puede contradecir a la politica.</b>
+     *
+     * <p>{@code docs/ai/prototipos/nucleo-brox.js} lleva su propio bloque de
+     * umbrales, y tiene que llevarlo: una maqueta necesita pintar numeros. El
+     * problema nunca fue que existiera, sino que <b>nadie comprobaba que
+     * coincidiera</b>. Hasta el 2026-08-19 se llamaba {@code POLITICA} y decia
+     * "los umbrales, en un solo sitio (E1)" mientras divergia en dos valores:
+     * 10 dias de reporte al propietario donde la politica dice 15, y 60 de renta
+     * sin ajustar donde el codigo aplicaba 45. Quien buscara "10 dias" lo
+     * encontraba alli sin ninguna senal de que no gobernaba nada.
+     *
+     * <p>Esta prueba lee el espejo y compara valor por valor. La maqueta puede
+     * seguir pintando; lo que ya no puede es decir otra cosa.
+     */
+    @Test
+    @DisplayName("el espejo de la maqueta no puede divergir de la politica")
+    void laMaquetaNoContradiceALaPolitica() {
+        Path nucleo = raiz().resolve("docs/ai/prototipos/nucleo-brox.js");
+        assertTrue(Files.isRegularFile(nucleo),
+                "No esta " + nucleo + ": sin el, este gate no vigila nada.");
+        String texto = leer(nucleo);
+
+        assertFalse(texto.contains("var POLITICA = {"),
+                "El bloque de la maqueta volvio a llamarse POLITICA a secas. Tiene que "
+                        + "llamarse POLITICA_ESPEJO y llevar la advertencia: la fuente es "
+                        + POLITICA + ", no un prototipo.");
+        assertTrue(texto.contains("NO ES LA FUENTE"),
+                "El espejo perdio su advertencia. Sin ella, quien busque un umbral lo "
+                        + "encontrara alli creyendo que gobierna.");
+
+        Map<String, Integer> esperado = Map.of(
+                "recontactoDias", PoliticaComercial.RECONTACTO.valor(),
+                "reporteAlPropietarioDias", PoliticaComercial.REPORTE_PROPIETARIO.valor(),
+                "rentaSinAjustarDias", PoliticaComercial.RENTA_SIN_AJUSTAR.valor(),
+                "volumenMinimo", PoliticaComercial.RITMO_VOLUMEN_MINIMO.valor(),
+                "muestraMinima", PoliticaComercial.MUESTRA_MINIMA.valor(),
+                "rangoMuestraMinima", PoliticaComercial.RANGO_MUESTRA_MINIMA.valor());
+
+        List<String> divergen = new ArrayList<>();
+        esperado.forEach((clave, valorDeLaPolitica) -> {
+            Integer enLaMaqueta = enteroDe(texto, clave);
+            if (enLaMaqueta == null) {
+                divergen.add(clave + ": la maqueta ya no lo declara");
+            } else if (!enLaMaqueta.equals(valorDeLaPolitica)) {
+                divergen.add(clave + ": la maqueta dice " + enLaMaqueta
+                        + " y la politica " + valorDeLaPolitica);
+            }
+        });
+
+        // Los tres del ritmo viajan como fraccion en JS y como porcentaje aqui.
+        comprobarFraccion(texto, "llega", PoliticaComercial.RITMO_LLEGA.valor(), divergen);
+        comprobarFraccion(texto, "cerca", PoliticaComercial.RITMO_CERCA.valor(), divergen);
+        comprobarFraccion(texto, "arranquePc", PoliticaComercial.RITMO_ARRANQUE.valor(), divergen);
+
+        assertEquals(List.of(), divergen,
+                "La maqueta y la politica dicen cosas distintas. Corrige nucleo-brox.js y "
+                        + "vuelve a correr construir.mjs; la fuente es " + POLITICA + ".");
+    }
+
+    private static void comprobarFraccion(String texto, String clave, int porcentaje,
+                                          List<String> divergen) {
+        Matcher m = Pattern.compile(clave + "[ ]*:[ ]*([0-9.]+)").matcher(texto);
+        if (!m.find()) {
+            divergen.add(clave + ": la maqueta ya no lo declara");
+            return;
+        }
+        int enLaMaqueta = (int) Math.round(Double.parseDouble(m.group(1)) * 100);
+        if (enLaMaqueta != porcentaje) {
+            divergen.add(clave + ": la maqueta dice " + enLaMaqueta + " % y la politica "
+                    + porcentaje + " %");
+        }
+    }
+
+    private static Integer enteroDe(String texto, String clave) {
+        Matcher m = Pattern.compile(clave + "[ ]*:[ ]*([0-9]+)").matcher(texto);
+        return m.find() ? Integer.parseInt(m.group(1)) : null;
+    }
+
     // ------------------------------------------------------------- utilidades
+
+    private static String leer(Path archivo) {
+        try {
+            return Files.readString(archivo, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("No se pudo leer " + archivo, e);
+        }
+    }
 
     private static void revisar(Path arbol, String extension, List<Prohibido> prohibidos,
                                 List<String> hallazgos) {

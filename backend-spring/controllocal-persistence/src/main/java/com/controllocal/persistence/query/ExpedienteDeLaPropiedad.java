@@ -50,4 +50,12 @@ public interface ExpedienteDeLaPropiedad {
     String getDireccion();
 
     String getDistrito();
+
+    /**
+     * Cuanto mide. Lo necesita el contraste de renta para elegir el tramo con el
+     * que se compara: un local de 40 m2 y uno de 300 no compiten por el mismo
+     * inquilino, asi que meterlos en el mismo rango produce un intervalo dentro
+     * del cual cualquier renta "cae bien".
+     */
+    java.math.BigDecimal getMetraje();
 }

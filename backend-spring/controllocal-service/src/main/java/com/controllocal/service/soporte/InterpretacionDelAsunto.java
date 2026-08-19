@@ -112,20 +112,31 @@ public final class InterpretacionDelAsunto {
      * @param estado {@code null} = historial, sin color. Solo uno o dos por
      *               expediente llevan señal: teñir los cuatro es no teñir ninguno
      * @param serie  la chispa de la renta; sale de {@code historico_precio} (E0)
+     * @param contraste donde cae el dato respecto de <b>nuestra</b> operacion
+     *                  (E2.6). Solo uno o dos renglones lo llevan: contrastar
+     *                  los cuatro es no contrastar ninguno. Y puede venir
+     *                  degradado -- "sin referencia interna suficiente"-- que es
+     *                  el caso normal mientras la cartera no tenga muestra;
+     *                  NUNCA se rellena con una cifra del sector
      */
     public record Renglon(String rotulo, String valor, String estado,
-                          Ventana ventana, List<BigDecimal> serie) {
+                          Ventana ventana, List<BigDecimal> serie, Contraste contraste) {
 
         public static final String BIEN = "BIEN";
         public static final String OJO = "OJO";
         public static final String MAL = "MAL";
 
         public static Renglon historial(String rotulo, String valor) {
-            return new Renglon(rotulo, valor, null, null, null);
+            return new Renglon(rotulo, valor, null, null, null, null);
         }
 
         public static Renglon conSenal(String rotulo, String valor, String estado) {
-            return new Renglon(rotulo, valor, estado, null, null);
+            return new Renglon(rotulo, valor, estado, null, null, null);
+        }
+
+        /** El mismo renglon, situado contra la operacion de la casa. */
+        public Renglon con(Contraste contraste) {
+            return new Renglon(rotulo, valor, estado, ventana, serie, contraste);
         }
     }
 

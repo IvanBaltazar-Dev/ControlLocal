@@ -1,8 +1,8 @@
 package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
+import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.Actor;
-import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
 import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
@@ -12,11 +12,12 @@ import com.controllocal.service.PropiedadUniversalService.ResultadoRegistro;
 import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
+import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.captura.GuionRegistroPropiedad;
 import com.controllocal.service.captura.MotorDeCaptura;
-import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.Procedencia;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -92,11 +93,7 @@ class PropiedadUniversalIntegrationTest {
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
-        propiedades.add("spring.datasource.url", () -> System.getenv("TEST_DB_URL"));
-        propiedades.add("spring.datasource.username", () -> System.getenv().getOrDefault(
-                "TEST_DB_USER", "controllocal"));
-        propiedades.add("spring.datasource.password", () -> System.getenv().getOrDefault(
-                "TEST_DB_PASSWORD", "controllocal"));
+        BaseDeDatosDePruebas.registrar(propiedades);
     }
 
     @Autowired JdbcTemplate jdbc;

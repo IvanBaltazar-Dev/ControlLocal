@@ -2,6 +2,7 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.arquitectura.CatalogoProductoresTest;
+import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -50,11 +51,7 @@ class VocabularioPersistidoIntegrationTest {
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
-        propiedades.add("spring.datasource.url", () -> System.getenv("TEST_DB_URL"));
-        propiedades.add("spring.datasource.username", () -> System.getenv().getOrDefault(
-                "TEST_DB_USER", "controllocal"));
-        propiedades.add("spring.datasource.password", () -> System.getenv().getOrDefault(
-                "TEST_DB_PASSWORD", "controllocal"));
+        BaseDeDatosDePruebas.registrar(propiedades);
     }
 
     @Autowired JdbcTemplate jdbc;

@@ -3,6 +3,7 @@ package com.controllocal.integracion;
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
+import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -43,11 +44,7 @@ class HistoricoPrecioIntegrationTest {
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
-        propiedades.add("spring.datasource.url", () -> System.getenv("TEST_DB_URL"));
-        propiedades.add("spring.datasource.username", () -> System.getenv().getOrDefault(
-                "TEST_DB_USER", "controllocal"));
-        propiedades.add("spring.datasource.password", () -> System.getenv().getOrDefault(
-                "TEST_DB_PASSWORD", "controllocal"));
+        BaseDeDatosDePruebas.registrar(propiedades);
     }
 
     @Autowired

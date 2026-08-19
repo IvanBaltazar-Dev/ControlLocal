@@ -2,6 +2,7 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.domain.seguridad.ConcesionRecuperacion;
+import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.RecuperacionEmergenciaService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.PasswordHasher;
@@ -78,11 +79,7 @@ class SimulacroRecuperacionIntegrationTest {
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
-        propiedades.add("spring.datasource.url", () -> System.getenv("TEST_DB_URL"));
-        propiedades.add("spring.datasource.username", () -> System.getenv().getOrDefault(
-                "TEST_DB_USER", "controllocal"));
-        propiedades.add("spring.datasource.password", () -> System.getenv().getOrDefault(
-                "TEST_DB_PASSWORD", "controllocal"));
+        BaseDeDatosDePruebas.registrar(propiedades);
         propiedades.add("controllocal.recuperacion.custodio-a.id", () -> ID_A);
         propiedades.add("controllocal.recuperacion.custodio-a.hash",
                 () -> PasswordHasher.hash(SECRETO_A.toCharArray()));

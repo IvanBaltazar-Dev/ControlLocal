@@ -1,13 +1,15 @@
 package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
-import com.controllocal.domain.comun.EstadosDominio;
 import com.controllocal.domain.comun.EstadosDominio.Codigo;
+import com.controllocal.domain.comun.EstadosDominio;
+import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.persistence.repositorio.AlertaRepository;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ComisionLiquidacionRepository;
 import com.controllocal.persistence.repositorio.ComisionMovimientoRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
+import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
@@ -15,7 +17,6 @@ import com.controllocal.persistence.repositorio.PublicacionRepository;
 import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.TareaRepository;
-import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -62,11 +63,7 @@ class RepositorioEstadosIntegrationTest {
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
-        propiedades.add("spring.datasource.url", () -> System.getenv("TEST_DB_URL"));
-        propiedades.add("spring.datasource.username", () -> System.getenv().getOrDefault(
-                "TEST_DB_USER", "controllocal"));
-        propiedades.add("spring.datasource.password", () -> System.getenv().getOrDefault(
-                "TEST_DB_PASSWORD", "controllocal"));
+        BaseDeDatosDePruebas.registrar(propiedades);
     }
 
     @Autowired JdbcTemplate jdbc;

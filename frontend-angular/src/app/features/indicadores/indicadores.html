@@ -78,6 +78,123 @@
     </div>
   </section>
 
+
+  <!--
+    RENDIMIENTO · los cuatro KPI canónicos contra su meta (D-E2-2 §3)
+
+    Cada círculo responde cinco cosas: actual, meta, avance, faltante y estado.
+    Y lleva DOS marcas sobre el arco — la meta y el ritmo esperado a hoy —,
+    porque sin la segunda un 79 % no dice si vas por delante o por detrás.
+
+    Miden contra un MES DE CALENDARIO, no contra el periodo de arriba. Son dos
+    preguntas distintas y por eso se rotula cuál es cuál: la ventana móvil sirve
+    para las series; la meta necesita un mes con días transcurridos.
+  -->
+  @if (rendimiento(); as r) {
+    <section class="rendimiento">
+      <header class="titulo-rendimiento">
+        <div>
+          <h2>Rendimiento del mes</h2>
+          <p class="cl-menudo">
+            {{ mesLargo(r.periodo.desde) }} · día
+            {{ r.periodo.diasTranscurridos }} de {{ r.periodo.diasTotales }}
+            @if (calculadoHace(); as hace) {
+              <span> · calculado {{ hace }}</span>
+            }
+          </p>
+        </div>
+        @if (cierreDelMes(); as cierre) {
+          <div class="en-juego-indicadores">
+            <p class="cl-menudo rotulo">Puede cerrarse este mes</p>
+            @if (cierre.importe) {
+              <p class="cifra">{{ cierre.importe }}</p>
+            }
+            <p class="cl-menudo">{{ cierre.detalle }}</p>
+            @if (!esAgente() && cierre.esperanDecision > 0) {
+              <p class="cl-menudo palanca">
+                {{ cierre.esperanDecision }}
+                {{ cierre.esperanDecision === 1 ? 'espera' : 'esperan' }} tu decisión
+              </p>
+            }
+          </div>
+        }
+      </header>
+
+      <div class="circulos">
+        @for (kpi of kpisCanonicos(); track kpi.codigo) {
+          <article class="circulo-kpi" [attr.data-ritmo]="kpi.estadoRitmo">
+            <p class="nombre">{{ kpi.rotulo }}</p>
+
+            <div
+              class="anillo"
+              role="img"
+              [attr.aria-label]="kpi.rotulo + ': ' + cifraDe(kpi) + '. ' + lecturaDe(kpi)"
+            >
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <!-- El tramo pendiente: lo que falta también es información. -->
+                <circle class="pista" cx="60" cy="60" r="52" />
+                <!-- Lo recorrido. -->
+                <circle
+                  class="arco"
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  [attr.stroke-dasharray]="perimetro"
+                  [attr.stroke-dashoffset]="restoDelArco(kpi)"
+                />
+                <!-- La marca del ritmo esperado a hoy: fina, discreta, y la que
+                     hace que el semáforo se entienda. -->
+                @if (marcaEsperadaDe(kpi); as esperado) {
+                  <line
+                    class="marca-esperada"
+                    x1="60"
+                    y1="4"
+                    x2="60"
+                    y2="16"
+                    [attr.transform]="'rotate(' + esperado * 3.6 + ' 60 60)'"
+                  />
+                }
+              </svg>
+              <div class="centro">
+                <p class="cifra">{{ cifraDe(kpi) }}</p>
+                @if (kpi.porcentajeMeta != null) {
+                  <p class="porcentaje">{{ kpi.porcentajeMeta }} %</p>
+                }
+              </div>
+            </div>
+
+            <p class="lectura">{{ lecturaDe(kpi) }}</p>
+            <p class="cl-menudo estado">{{ vozDelRitmo(kpi.estadoRitmo) }}</p>
+            @if (variacionDe(kpi); as variacion) {
+              <p class="cl-menudo variacion">{{ variacion }}</p>
+            }
+            <!-- Qué fila cuenta exactamente. Hace el número auditable, que es lo
+                 que separa un indicador de una cifra que hay que creerse. -->
+            <p class="cl-menudo hecho">{{ kpi.hecho }}</p>
+          </article>
+        }
+      </div>
+
+      <!--
+        El pulso va inmediatamente debajo de los cuatro KPI (D-E2-2 §6.1): un
+        total en meta puede esconder un equipo roto. Una sola vez y sin nombres
+        — esto es una distribución, no un ranking.
+      -->
+      @if (r.pulso; as pulso) {
+        <p class="pulso-equipo">
+          <span class="rotulo">Pulso del equipo</span>
+          <span class="dato en-ritmo">{{ pulso.enRitmo }} en ritmo</span>
+          <span class="dato atencion">{{ pulso.atencion }} requieren atención</span>
+          <span class="dato fuera">{{ pulso.fueraDeRitmo }} fuera de ritmo</span>
+          @if (pulso.sinBase > 0) {
+            <span class="dato sin-base">{{ pulso.sinBase }} sin meta fijada</span>
+          }
+          <span class="cl-menudo total">sobre {{ pulso.agentes }} agentes</span>
+        </p>
+      }
+    </section>
+  }
+
   <section class="kpis">
     @for (kpi of kpis(); track kpi.etiqueta) {
       <cl-kpi [etiqueta]="kpi.etiqueta" [valor]="kpi.valor" [tono]="kpi.tono" [pie]="kpi.pie" />

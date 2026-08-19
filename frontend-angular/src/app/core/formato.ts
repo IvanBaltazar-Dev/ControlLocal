@@ -40,6 +40,8 @@ const SOLO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
  * (UTC-5) se muestra el día anterior. Ese desfase de un día es justo el tipo
  * de error que nadie ve hasta que un usuario reporta una fecha corrida.
  */
+const MES_LARGO = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
 export function comoFecha(valor: string | null | undefined): Date | null {
   if (!valor) {
     return null;
@@ -56,6 +58,18 @@ export function comoFecha(valor: string | null | undefined): Date | null {
 export function fechaCorta(valor: string | null | undefined): string {
   const fecha = comoFecha(valor);
   return fecha ? FECHA_CORTA.format(fecha) : SIN_DATO;
+}
+
+/**
+ * `2026-08-01` -> `agosto de 2026`. Para rotular un mes de calendario.
+ *
+ * Usa este helper y **no el `DatePipe`**: el `LOCALE_ID` de la aplicación sigue
+ * siendo `en-US`, así que el pipe escribiría «August 2026» en una pantalla
+ * entera en español.
+ */
+export function mesLargo(valor: string | null | undefined): string {
+  const fecha = comoFecha(valor);
+  return fecha ? MES_LARGO.format(fecha) : SIN_DATO;
 }
 
 /** Con hora, para sellos de tiempo (publicaciones, auditoría). */

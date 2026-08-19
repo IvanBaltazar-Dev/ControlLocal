@@ -277,4 +277,157 @@ describe('Indicadores', () => {
     expect(pantalla['datos']()).toBeNull();
     expect(pantalla['error']()).toBeTruthy();
   });
+
+  // ==================================================================
+  // RENDIMIENTO · los cuatro círculos (E2.6)
+  // ==================================================================
+
+  function rendimiento(): HTMLElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector('.rendimiento');
+  }
+
+  /**
+   * Los mismos cuatro nombres que el pie del Inicio, **letra por letra**. Los
+   * dos leen el rótulo del cable, así que no pueden divergir: si esta prueba y
+   * la del pie dejaran de coincidir, sería porque alguien escribió el texto a
+   * mano en una de las dos.
+   */
+  it('los cuatro KPI canonicos salen del cable, en el orden del embudo', async () => {
+    await montar('AGENTE');
+    const nombres = [...(rendimiento()?.querySelectorAll('.circulo-kpi .nombre') ?? [])].map(
+      (n) => n.textContent?.trim(),
+    );
+
+    expect(nombres).toEqual([
+      'Propietarios contactados',
+      'Propiedades captadas',
+      'Solicitudes ingresadas',
+      'Contratos firmados',
+    ]);
+  });
+
+  /** El estado lo decide el dominio; la pantalla lo traduce a un atributo. */
+  it('el tono del arco sale del estado que manda el dominio', async () => {
+    await montar('AGENTE');
+    const estados = [...(rendimiento()?.querySelectorAll('.circulo-kpi') ?? [])].map((c) =>
+      c.getAttribute('data-ritmo'),
+    );
+
+    expect(estados).toEqual(['EN_RITMO', 'ATENCION', 'FUERA_DE_RITMO', 'SIN_BASE']);
+  });
+
+  /**
+   * El círculo responde cinco cosas: actual, meta, avance, faltante y estado
+   * (D-E2-2 §3). Si falta una, deja de servir para decidir.
+   */
+  it('cada circulo responde las cinco preguntas de D-E2-2', async () => {
+    await montar('AGENTE');
+    const primero = rendimiento()?.querySelector('.circulo-kpi');
+
+    expect(primero?.querySelector('.centro .cifra')?.textContent).toContain('19 de 24');
+    expect(primero?.querySelector('.centro .porcentaje')?.textContent).toContain('79 %');
+    expect(primero?.querySelector('.lectura')?.textContent).toContain('A 5 de la meta');
+    expect(primero?.querySelector('.estado')?.textContent?.trim()).toBe('En ritmo');
+  });
+
+  /** Sin ella, un 79 % no dice si vas por delante o por detrás. */
+  it('el arco lleva la marca del ritmo esperado a hoy', async () => {
+    await montar('AGENTE');
+    const marca = rendimiento()?.querySelector('.circulo-kpi .marca-esperada');
+
+    // 15 de meta 24 = 63 % del arco = 226,8 grados.
+    expect(marca?.getAttribute('transform')).toContain('rotate(226.8');
+  });
+
+  /** Sin meta no se pinta un cero, ni un porcentaje que no existe. */
+  it('un KPI sin meta no inventa porcentaje ni marca', async () => {
+    await montar('AGENTE');
+    const sinMeta = [...(rendimiento()?.querySelectorAll('.circulo-kpi') ?? [])].find((c) =>
+      c.textContent?.includes('Contratos firmados'),
+    );
+
+    expect(sinMeta?.querySelector('.centro .cifra')?.textContent?.trim()).toBe('4');
+    expect(sinMeta?.querySelector('.centro .porcentaje')).toBeNull();
+    expect(sinMeta?.querySelector('.marca-esperada')).toBeNull();
+    expect(sinMeta?.querySelector('.estado')?.textContent?.trim()).toBe('Sin base suficiente');
+  });
+
+  /**
+   * Qué fila cuenta exactamente. Es lo que separa un indicador auditable de una
+   * cifra que hay que creerse.
+   */
+  it('cada KPI dice que hecho cuenta', async () => {
+    await montar('AGENTE');
+    const hechos = [...(rendimiento()?.querySelectorAll('.circulo-kpi .hecho') ?? [])].map((h) =>
+      h.textContent?.trim(),
+    );
+
+    expect(hechos.length).toBe(4);
+    expect(hechos[1]).toContain('transicion de captacion a ACTIVA');
+  });
+
+  /** El mes lo cuenta el backend; la pantalla lo repite, y en español. */
+  it('la cabecera ensena el mes de calendario y su corte', async () => {
+    await montar('AGENTE');
+    const texto = rendimiento()?.querySelector('.cl-menudo')?.textContent ?? '';
+
+    expect(texto).toContain('agosto de 2026');
+    expect(texto).toContain('día 19 de 31');
+  });
+
+  /** Instrucción 4 de D-E2-2: al broker no se le atribuye producción personal. */
+  it('al broker se le habla del equipo, no de lo que deberia llevar el', async () => {
+    await montar('BROKER');
+    const texto = rendimiento()?.textContent ?? '';
+
+    expect(texto).not.toContain('hoy deberías ir por');
+    expect(texto).toContain('el equipo');
+  });
+
+  /** Cero operaciones se dice, no se calla. */
+  it('sin operaciones que cerrar lo dice', async () => {
+    api.resumen.and.resolveTo({
+      ...RESUMEN,
+      rendimiento: {
+        ...RESUMEN.rendimiento,
+        puedeCerrarse: {
+          operaciones: 0,
+          importe: 0,
+          moneda: null,
+          variasMonedas: false,
+          esperanDecision: 0,
+        },
+      },
+    });
+    await montar('AGENTE');
+
+    expect(rendimiento()?.querySelector('.en-juego-indicadores')?.textContent).toContain(
+      'Ninguna operación puede cerrarse este mes',
+    );
+  });
+
+  /** Su pulso sería su propio ritmo contado otra vez (instrucción 14). */
+  it('el agente no ve pulso de equipo', async () => {
+    await montar('AGENTE');
+
+    expect(rendimiento()?.querySelector('.pulso-equipo')).toBeNull();
+  });
+
+  /** Va una vez, debajo de los cuatro, y sin nombres: es distribución, no ranking. */
+  it('el broker ve el pulso una sola vez y sin nombres', async () => {
+    api.resumen.and.resolveTo({
+      ...RESUMEN,
+      rendimiento: {
+        ...RESUMEN.rendimiento,
+        pulso: { enRitmo: 6, atencion: 1, fueraDeRitmo: 1, sinBase: 0, agentes: 8 },
+      },
+    });
+    await montar('BROKER');
+    const pulsos = rendimiento()?.querySelectorAll('.pulso-equipo') ?? [];
+
+    expect(pulsos.length).toBe(1);
+    expect(pulsos[0].textContent).toContain('6 en ritmo');
+    expect(pulsos[0].textContent).toContain('sobre 8 agentes');
+  });
+
 });

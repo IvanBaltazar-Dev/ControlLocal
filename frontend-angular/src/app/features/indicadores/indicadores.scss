@@ -187,3 +187,245 @@
   padding-top: 0.6rem;
   border-top: 1px solid color-mix(in srgb, var(--cl-borde) 70%, transparent);
 }
+
+/* ====================================================================
+   RENDIMIENTO · los cuatro KPI canónicos contra su meta (D-E2-2 §3)
+   --------------------------------------------------------------------
+   Cada círculo responde cinco cosas: actual, meta, avance, faltante y
+   estado. Y lleva la marca del ritmo esperado a hoy, que es la que hace
+   que el semáforo se entienda: sin ella un 79 % no dice si vas por
+   delante o por detrás.
+
+   Claro, como todo BROX. El color aparece solo en el arco y en los
+   puntos del pulso; el texto va en tinta.
+   ==================================================================== */
+
+.rendimiento {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--cl-borde);
+  border-radius: var(--cl-radio);
+  background: var(--cl-superficie);
+}
+
+.titulo-rendimiento {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  p {
+    margin: 0.15rem 0 0;
+  }
+}
+
+/* Una sola cifra de dinero en toda la sección, igual que en el pie. */
+.en-juego-indicadores {
+  text-align: right;
+
+  .rotulo {
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .cifra {
+    margin: 0.2rem 0 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--cl-tinta);
+  }
+
+  /* Lo único de esta franja sobre lo que el broker actúa (D-E2-2 §8). */
+  .palanca {
+    margin-top: 0.25rem;
+    font-weight: 600;
+    color: var(--cl-primario);
+  }
+}
+
+.circulos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.circulo-kpi {
+  text-align: center;
+
+  p {
+    margin: 0;
+  }
+
+  /* El nombre va completo: abreviarlo desharía la distinción de D-E2-2 §1.1. */
+  .nombre {
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--cl-tinta);
+    min-height: 2.1em;
+  }
+
+  .lectura {
+    margin-top: 0.6rem;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--cl-tinta-suave);
+  }
+
+  .estado {
+    margin-top: 0.15rem;
+    font-weight: 600;
+  }
+
+  .variacion,
+  .hecho {
+    margin-top: 0.15rem;
+  }
+
+  /* Qué fila cuenta exactamente. Discreto, pero presente: es lo que separa
+     un indicador de una cifra que hay que creerse. */
+  .hecho {
+    font-style: italic;
+    opacity: 0.75;
+  }
+}
+
+.anillo {
+  position: relative;
+  width: 120px;
+  margin: 0.5rem auto 0;
+
+  svg {
+    width: 100%;
+    height: auto;
+    /* El arco arranca arriba y avanza en el sentido del reloj, que es como se
+       lee el paso del tiempo. */
+    transform: rotate(-90deg);
+  }
+
+  .pista {
+    fill: none;
+    stroke: var(--cl-fondo);
+    stroke-width: 10;
+  }
+
+  .arco {
+    fill: none;
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.4s ease;
+  }
+
+  .marca-esperada {
+    stroke: var(--cl-tinta-suave);
+    stroke-width: 2.5;
+  }
+
+  .centro {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    .cifra {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--cl-tinta);
+    }
+
+    .porcentaje {
+      font-size: 0.78rem;
+      color: var(--cl-tinta-suave);
+    }
+  }
+}
+
+/* El tono lo pone el ESTADO que decide el dominio; aquí solo se traduce. */
+.circulo-kpi[data-ritmo='EN_RITMO'] .arco {
+  stroke: var(--cl-exito);
+}
+
+.circulo-kpi[data-ritmo='ATENCION'] .arco {
+  stroke: var(--cl-acento);
+}
+
+.circulo-kpi[data-ritmo='FUERA_DE_RITMO'] .arco {
+  stroke: var(--cl-error);
+}
+
+/* Sin base no se pinta color: un gris honesto vale más que un verde
+   inventado, y el arco queda vacío porque no hay avance que mostrar. */
+.circulo-kpi[data-ritmo='SIN_BASE'] {
+  .arco {
+    stroke: var(--cl-borde);
+  }
+
+  .centro .cifra {
+    color: var(--cl-tinta-suave);
+  }
+}
+
+/* Inmediatamente debajo de los cuatro, y una sola vez (D-E2-2 §6.1). */
+.pulso-equipo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--cl-borde);
+  font-size: 0.82rem;
+  color: var(--cl-tinta-suave);
+
+  .rotulo {
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cl-tinta);
+  }
+
+  .dato::before {
+    content: '●';
+    margin-right: 0.3rem;
+  }
+
+  .en-ritmo::before {
+    color: var(--cl-exito);
+  }
+
+  .atencion::before {
+    color: var(--cl-acento);
+  }
+
+  .fuera::before {
+    color: var(--cl-error);
+  }
+
+  .sin-base::before {
+    color: var(--cl-borde);
+  }
+
+  .total {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .circulos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .en-juego-indicadores {
+    text-align: left;
+  }
+}

@@ -13,11 +13,23 @@ import {
   esPeriodo,
   IndicadoresResumen,
   IndicadoresService,
+  KpiCanonico as KpiCanonicoCable,
   PERIODO_POR_DEFECTO,
   PERIODOS_INDICADORES,
 } from '../../core/api/indicadores.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RolSesion } from '../../core/auth/sesion.model';
+import { mesLargo } from '../../core/formato';
+import {
+  avanceDe,
+  cierreLegible,
+  cifraDe,
+  frescuraDe,
+  lecturaDe,
+  marcaEsperadaDe,
+  variacionDe,
+  vozDelRitmo,
+} from '../../core/rendimiento';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { GraficoSerie, SerieGrafico } from '../../shared/grafico-serie/grafico-serie';
 import { TarjetaKpi, TonoKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
@@ -94,6 +106,49 @@ export class Indicadores implements OnInit {
   private readonly rol = computed<RolSesion | undefined>(() => this.auth.sesion()?.rol);
   protected readonly esAdmin = computed(() => this.rol() === 'TENANT_ADMIN');
   protected readonly esAgente = computed(() => this.rol() === 'AGENTE');
+
+  // ==================================================================
+  // RENDIMIENTO · los cuatro KPI canónicos (E2.6)
+  // ==================================================================
+  //
+  // Las frases salen de `core/rendimiento.ts`, el MISMO módulo que usa el pie
+  // del Inicio. Es lo que hace imposible que las dos pantallas se contradigan,
+  // que es lo que D-E2-1 §6.2 exige: si aquí cambia una definición, allí cambia
+  // sola porque no hay dos definiciones.
+
+  /** El bloque de rendimiento, o `null` mientras no haya carga. */
+  protected readonly rendimiento = computed(() => this.datos()?.rendimiento ?? null);
+
+  /** Los cuatro, en el orden del embudo. */
+  protected readonly kpisCanonicos = computed(() => this.rendimiento()?.kpis ?? []);
+
+  protected readonly cifraDe = cifraDe;
+  protected readonly marcaEsperadaDe = marcaEsperadaDe;
+  protected readonly vozDelRitmo = vozDelRitmo;
+  protected readonly variacionDe = variacionDe;
+  protected readonly mesLargo = mesLargo;
+
+  protected readonly cierreDelMes = computed(() => cierreLegible(this.rendimiento()));
+  protected readonly calculadoHace = computed(() => frescuraDe(this.rendimiento()));
+
+  /** La voz cambia por rol; los números no. */
+  protected lecturaDe(kpi: KpiCanonicoCable): string {
+    return lecturaDe(kpi, this.esAgente());
+  }
+
+  /**
+   * El perímetro del arco, para dibujarlo con `stroke-dasharray`.
+   *
+   * `2πr` con r=52. Es geometría, no negocio: el porcentaje que representa lo
+   * decide el dominio y aquí solo se convierte en longitud de trazo.
+   */
+  protected readonly perimetro = 2 * Math.PI * 52;
+
+  /** Cuánto del arco queda SIN pintar. Es lo que consume `stroke-dashoffset`. */
+  protected restoDelArco(kpi: KpiCanonicoCable): number {
+    return this.perimetro * (1 - avanceDe(kpi) / 100);
+  }
+
 
   ngOnInit(): void {
     const pedido = this.route.snapshot.queryParamMap.get('periodo');

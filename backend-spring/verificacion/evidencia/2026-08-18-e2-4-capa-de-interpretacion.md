@@ -111,9 +111,33 @@ febrero» es un eco.
 ## 5. Verificación
 
 ```
-backend  880 pruebas · 0 fallos · 0 SKIPPED
+backend  883 pruebas · 0 fallos · 0 SKIPPED
+           667 servicio + 43 web/arquitectura + 173 app (37 de integracion, ejecutadas)
 Angular  565 / 565
 ```
+
+### Los dos gates que sostienen la capa
+
+**1 · El vocabulario de estados es cerrado.** Cinco, en un `enum`, y un test que
+falla si aparece un sexto. Sin esto, «pendiente-ish» o «en revision» entrarian
+por conveniencia y la marca dejaria de significar algo. `EstadoDelHecho` +
+`elVocabularioNoCrece`.
+
+**2 · Un hecho aislado no se disfraza de interpretacion.**
+
+> Un hecho aislado puede mostrarse; no debe disfrazarse de interpretacion. La
+> interpretacion empieza cuando el sistema relaciona hechos y aporta
+> significado.
+
+`InterpretacionDelAsunto.sintetizar` exige **dos hechos**; con uno devuelve
+`null` y la lectura no se pinta. `unHechoAisladoNoEsUnaSintesis`,
+`dosHechosSonUnaSintesis` y `elMinimoParaSintetizarEstaDeclarado`.
+
+La regla vive en `InterpretacionDelAsunto` y no en el interprete de la bandeja
+**a proposito**: el Radar del broker (E2.5) la necesita igual. Sin ella acabaria
+diciendo «Estado: pendiente. Vence: 12 dias» y llamandolo inteligencia — y el
+Inicio existe para ANADIR interpretacion sobre los hechos, no para
+reformatearlos.
 
 | Comprobación | Dónde |
 |---|---|
@@ -153,3 +177,33 @@ contextos; el `application.properties` de test capa el pool en 2.
 
 `GateDeCierreTest` también hizo su trabajo: exigió inventariar el test nuevo y
 comprobar que `Verificar-Cierre.ps1` sigue exigiendo que **todos** se ejecuten.
+
+---
+
+## 7. Una decisión que conviene no perder
+
+**`asunto → propiedad` se resuelve en lote, no desde cada intérprete.**
+
+Es una `union` de cinco ramas —captación, inmueble, visita, solicitud, contrato—
+que devuelve `(entidad_tipo, entidad_id, id_propiedad)` de una vez.
+
+Importa ahora que el dominio dejó de ser sólo `LocalComercial`: la interpretación
+alcanza venta y alquiler, y los siete tipos de propiedad, **sin que cada variante
+nueva se convierta en otra consulta o en otro `if`**. Un intérprete que
+resolviera su propia propiedad tendría que aprender cada camino, y el sexto tipo
+llegaría con su sexta consulta dentro de un bucle.
+
+---
+
+## 8. El entorno se cayó a mitad de la verificación
+
+Docker Desktop se detuvo entre dos ejecuciones. La suite devolvió **99 errores de
+contexto** que no eran del código: `Connection to localhost:5433 refused`.
+
+Se levantó el daemon, se rearmó la pila y la suite volvió verde sin tocar una
+línea. Queda anotado porque el síntoma —cien tests rojos de golpe— invita a
+buscar la causa en el último cambio, y no estaba ahí.
+
+Al volver, el contenedor `api` no arrancaba: `mvn clean test` había borrado el
+jar y Docker creó un **directorio** con su nombre al no encontrarlo. Es una
+trampa ya conocida; se resuelve borrando el directorio y reempaquetando.

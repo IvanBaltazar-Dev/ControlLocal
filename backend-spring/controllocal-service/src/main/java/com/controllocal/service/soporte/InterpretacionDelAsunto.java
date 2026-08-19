@@ -10,6 +10,21 @@ import java.util.Locale;
 /**
  * <b>La capa que convierte hechos en lectura</b> (D-E2-1 §10, E2.4).
  *
+ * <h2>La regla que gobierna toda esta capa</h2>
+ * <blockquote>
+ * <b>Un hecho aislado puede mostrarse; no debe disfrazarse de interpretación.
+ * La interpretación empieza cuando el sistema relaciona hechos y aporta
+ * significado.</b>
+ * </blockquote>
+ *
+ * <p>Se descubrió con un test y se escribe aquí porque vale para todo lo que
+ * venga: sin ella, el Radar acabaría diciendo «Estado: pendiente. Vence: 12
+ * días» y llamándolo inteligencia. El Inicio existe para <b>añadir</b> una capa
+ * de interpretación sobre los hechos, no para reformatearlos.
+ *
+ * <p>{@link #sintetizar} es esa regla hecha código, y {@link #recita} es la que
+ * impide el otro disfraz: repetir un dato que el usuario ya tiene delante.
+ *
  * <h2>Qué produce</h2>
  * <pre>
  *   comoEsta     hasta tres hechos, cada uno con su propio estado
@@ -37,6 +52,14 @@ public final class InterpretacionDelAsunto {
 
     /** Tres viñetas, sin párrafos (D-E2-1 §10). */
     public static final int MAXIMO_HECHOS = 3;
+
+    /**
+     * <b>Cuántos hechos hacen falta para que algo sea una síntesis.</b>
+     *
+     * <p>Dos. Con uno solo no hay nada que relacionar, y relacionar es lo que
+     * distingue interpretar de reformatear.
+     */
+    public static final int MINIMO_PARA_SINTETIZAR = 2;
 
     /** Los cuatro renglones son fijos y siempre los mismos. */
     public static final int RENGLONES_DEL_EXPEDIENTE = 4;
@@ -113,6 +136,42 @@ public final class InterpretacionDelAsunto {
     // ==================================================================
     // Redacción
     // ==================================================================
+
+    /**
+     * <b>Compone una síntesis, o devuelve {@code null} si no hay ninguna.</b>
+     *
+     * <p>Aplica la regla de arriba literalmente: <b>hacen falta al menos DOS
+     * hechos que relacionar</b>. Con uno solo lo único que se puede hacer es
+     * repetirlo, y un hecho repetido con otro tipo de letra no es interpretación
+     * — es el mismo hecho disfrazado.
+     *
+     * <p>Lo descubrió {@code laLecturaNoRecita} contra datos reales: la lectura
+     * salía «Sin ninguna visita todavía» mientras el renglón Actividad decía
+     * «Ninguna visita todavía». El mismo hecho, dos veces, dos centímetros más
+     * arriba. La corrección no fue reescribir la frase sino la regla que la
+     * producía.
+     *
+     * <p>Vive aquí y no en el intérprete de la bandeja porque el Radar del broker
+     * la necesita igual: es la frontera entre informar e interpretar, y esa
+     * frontera es la misma en todas las superficies del Inicio.
+     *
+     * @return la frase con mayúscula inicial y punto, o {@code null} cuando no
+     *         hay dos hechos que relacionar. <b>El {@code null} se respeta</b>:
+     *         una síntesis de relleno enseña a no leerlas.
+     */
+    public static String sintetizar(List<String> hechos) {
+        List<String> vivos = new ArrayList<>();
+        for (String hecho : hechos) {
+            if (hecho != null && !hecho.isBlank()) {
+                vivos.add(hecho.trim());
+            }
+        }
+        if (vivos.size() < MINIMO_PARA_SINTETIZAR) {
+            return null;
+        }
+        String frase = String.join(", ", vivos);
+        return Character.toUpperCase(frase.charAt(0)) + frase.substring(1) + ".";
+    }
 
     /**
      * <b>¿Esta frase recita el expediente en vez de leerlo?</b>

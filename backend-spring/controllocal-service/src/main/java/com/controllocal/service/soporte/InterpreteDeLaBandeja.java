@@ -364,22 +364,10 @@ public class InterpreteDeLaBandeja {
             partes.add("y la renta sin moverse");
         }
 
-        // UNA SOLA PARTE NO ES UNA SINTESIS: ES UN ECO.
-        //
-        // Sintetizar es relacionar; con un unico hecho lo unico que se puede
-        // hacer es repetirlo, y repetirlo es exactamente lo que la comprobacion
-        // de `recita` rechaza. Lo descubrio ese test sobre datos reales: la
-        // lectura salia "Sin ninguna visita todavia" mientras el renglon
-        // Actividad decia "Ninguna visita todavia" -- el mismo hecho, dos veces,
-        // dos centimetros mas arriba.
-        //
-        // Con menos de dos no se rellena: una lectura de relleno ensena a no
-        // leerla.
-        if (partes.size() < 2) {
-            return null;
-        }
-        String frase = String.join(", ", partes);
-        return Character.toUpperCase(frase.charAt(0)) + frase.substring(1) + ".";
+        // La regla vive en `InterpretacionDelAsunto`, no aqui: el Radar del
+        // broker la necesita igual, y una frontera escrita dos veces deja de ser
+        // una frontera.
+        return InterpretacionDelAsunto.sintetizar(partes);
     }
 
     private static Long numero(Object valor) {

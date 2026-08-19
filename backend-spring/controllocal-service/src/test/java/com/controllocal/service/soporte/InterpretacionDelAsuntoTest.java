@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -106,6 +107,49 @@ class InterpretacionDelAsuntoTest {
                 "un sexto estado no se cuela sin decidirlo (D-E2-1 seccion 10.1)");
         assertEquals(List.of("HECHO", "FALTA", "PLAZO", "FRENO", "DATO"),
                 java.util.Arrays.stream(EstadoDelHecho.values()).map(Enum::name).toList());
+    }
+
+    // ==================================================================
+    // GATE · un hecho aislado no se disfraza de interpretacion
+    // ==================================================================
+
+    /**
+     * <b>La regla que gobierna toda la capa, hecha test.</b>
+     *
+     * <blockquote>Un hecho aislado puede mostrarse; no debe disfrazarse de
+     * interpretacion. La interpretacion empieza cuando el sistema relaciona
+     * hechos y aporta significado.</blockquote>
+     *
+     * <p>Sin esto, el Radar acabaria diciendo «Estado: pendiente. Vence: 12
+     * dias» y llamandolo inteligencia. El Inicio existe para ANADIR una capa de
+     * interpretacion sobre los hechos, no para reformatearlos.
+     */
+    @Test
+    @DisplayName("un hecho aislado NO se presenta como sintesis")
+    void unHechoAisladoNoEsUnaSintesis() {
+        assertNull(InterpretacionDelAsunto.sintetizar(List.of("la exclusiva casi agotada")),
+                "con un solo hecho lo unico que se puede hacer es repetirlo, y un hecho "
+                        + "repetido con otro tipo de letra no es interpretacion");
+        assertNull(InterpretacionDelAsunto.sintetizar(List.of()));
+        assertNull(InterpretacionDelAsunto.sintetizar(List.of("  ", "")),
+                "ni dos huecos hacen una sintesis");
+    }
+
+    @Test
+    @DisplayName("con dos hechos SI hay algo que relacionar")
+    void dosHechosSonUnaSintesis() {
+        String frase = InterpretacionDelAsunto.sintetizar(
+                List.of("la exclusiva casi agotada", "nadie lo ha visto todavia"));
+
+        assertEquals("La exclusiva casi agotada, nadie lo ha visto todavia.", frase,
+                "relacionar dos hechos SI es interpretar: eso es una conclusion");
+    }
+
+    @Test
+    @DisplayName("el minimo para sintetizar es dos, y esta declarado")
+    void elMinimoParaSintetizarEstaDeclarado() {
+        assertEquals(2, InterpretacionDelAsunto.MINIMO_PARA_SINTETIZAR,
+                "bajarlo a uno reabriria la puerta a llamar inteligencia a un dato reformateado");
     }
 
     // ==================================================================

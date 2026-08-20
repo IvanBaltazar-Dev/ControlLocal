@@ -812,9 +812,27 @@ las palabras «sector», «mercado nacional», «industria» y «benchmark».
 Como el color, **el contraste va donde importa** — uno o dos por expediente—, no
 en los cuatro renglones.
 
-Y dejan de ser cuatro fechas sueltas. Son **cuatro renglones fijos**, los mismos
-para todo asunto, porque son las cuatro cosas con las que se sostiene una
-conversación comercial:
+Y dejan de ser cuatro fechas sueltas. Son **cuatro renglones**, siempre cuatro,
+porque son las cuatro cosas con las que se sostiene una conversación comercial.
+
+> **Corregido el 2026-08-20.** Este párrafo decía «cuatro renglones fijos, **los
+> mismos** para todo asunto», y el barrido de cierre de E2 encontró lo que eso
+> escondía: un asunto de tipo **prospección llegaba con cero renglones**, porque
+> los cuatro se construían desde el inmueble y una prospección es **anterior a la
+> captación** —no hay encargo firmado, ni renta publicada, ni visitas—.
+>
+> La regla correcta no es permitir el hueco, es esta:
+>
+> **Todo asunto lleva un expediente de cuatro renglones. Los cuatro no tienen que
+> representar las mismas entidades: se eligen según la etapa y el tipo de asunto.
+> Nunca se inventa un inmueble, un encargo ni un dato que todavía no existe.**
+>
+> Así el Radar nunca queda en blanco al abrir un asunto, y
+> Encargo/Renta/Actividad/Propietario deja de ser una plantilla absurda para las
+> etapas anteriores a la captación.
+
+**Familia 1 · asuntos con inmueble y encargo** (captación, visita, solicitud,
+contrato):
 
 | Renglón | Qué contesta |
 |---|---|
@@ -822,6 +840,35 @@ conversación comercial:
 | **Renta** / Presupuesto / Comisión | el dinero, y desde cuándo no se mueve |
 | **Actividad** | visitas, propuestas, contactos: qué se ha intentado |
 | **Propietario** / Cliente / Agente | quién está al otro lado y cuándo se le habló |
+
+**Familia 2 · prospección, antes de la captación:**
+
+| Renglón | Qué contesta | De dónde sale |
+|---|---|---|
+| **Prospección** | desde cuándo existe y en qué punto está | `fecha_registro` + estado |
+| **Contacto** | cuándo se le habló, o que todavía no | `fecha_contacto` |
+| **Avance** | hasta dónde llegó y qué se tiene previsto | `fecha_reunion`, `fecha_propuesta`, `fecha_recontacto` |
+| **Propietario** | con quién se está tratando, y sobre qué inmueble | propietario de la propiedad perseguida |
+
+**«Avance» y no «Propuesta».** Propuesta sería demasiado específica: una
+prospección recién contactada, o con reunión registrada, tendría un renglón
+permanentemente vacío aunque sí exista actividad. «Avance» expresa el último
+hecho real sin inventar una fase:
+
+> Reunión registrada el 16 ago · Propuesta entregada el 18 ago ·
+> Recontacto previsto para el 21 ago · Sin reunión ni propuesta registrada
+
+**Y el renglón no decide el próximo paso comercial.** Eso pertenece a la
+`lectura`, a `CÓMO ESTÁ` y a la recomendación. El expediente es **evidencia
+condensada**, no otra capa de interpretación: es la separación que E2.4 dejó y
+que esta segunda familia no rompe.
+
+**Cuatro comprobaciones lo sostienen** (`InterpretacionDelInicioIntegrationTest`):
+todo asunto resoluble trae exactamente cuatro; una prospección trae los suyos y
+no los de un encargo; una prospección **no entra en el mapa de asunto → inmueble**
+—resolverla por ahí funcionaría y produciría los renglones de una captación
+inexistente—; y una fecha ausente se dice con palabras («Sin contacto
+registrado»), nunca con un guion ni con un dato inventado.
 
 No repiten `CÓMO ESTÁ`, que habla del **estado**; esto es el **historial**. Y no
 pretenden ser el expediente: `Ver expediente completo →` sigue llevando a la

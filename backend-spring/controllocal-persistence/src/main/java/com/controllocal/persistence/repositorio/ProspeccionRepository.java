@@ -2,6 +2,7 @@ package com.controllocal.persistence.repositorio;
 
 import com.controllocal.domain.comercial.Prospeccion;
 import com.controllocal.persistence.query.CandidatoTarea;
+import com.controllocal.persistence.query.ExpedienteDeLaProspeccion;
 import com.controllocal.persistence.query.IndicadorProspeccion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -205,4 +206,40 @@ public interface ProspeccionRepository extends JpaRepository<Prospeccion, Long> 
     List<Prospeccion> listarSeguimiento(@Param("idOrganizacion") long idOrganizacion,
                                         @Param("sinScope") boolean sinScope,
                                         @Param("rolesAgente") Collection<Long> rolesAgente);
+
+    /**
+     * El expediente de un lote de prospecciones, para la capa de resolucion del
+     * Inicio (D-E2-1 §10.3).
+     *
+     * <p><b>Por lote y no por asunto.</b> Una pagina del Radar son cinco
+     * asuntos; pedirlo dentro del bucle serian cinco consultas, que es el N+1
+     * que RC-003 quito del listado y que vuelve cada vez que alguien anade una
+     * capa de interpretacion.
+     *
+     * <p>El propietario y la direccion se leen a traves de la propiedad que la
+     * prospeccion persigue. Los {@code left join} no son defensivos por gusto:
+     * una prospeccion puede estar apuntando a un inmueble cuyo propietario
+     * todavia no tiene ficha completa, y perder la fila entera por eso dejaria
+     * el expediente vacio justo en el caso que mas falta hace resolver.
+     */
+    @Query(value = """
+            select p.id_prospeccion  as idProspeccion,
+                   p.estado          as estado,
+                   p.fecha_registro::date as fechaRegistro,
+                   p.fecha_contacto  as fechaContacto,
+                   p.fecha_reunion   as fechaReunion,
+                   p.fecha_propuesta as fechaPropuesta,
+                   p.fecha_recontacto as fechaRecontacto,
+                   per.nombres_o_razon_social as propietario,
+                   pr.direccion      as direccion,
+                   pr.distrito       as distrito
+              from prospeccion p
+              left join propiedad pr   on pr.id_propiedad   = p.id_propiedad
+              left join persona_rol rp on rp.id_persona_rol = pr.id_rol_propietario
+              left join persona per    on per.id_persona    = rp.id_persona
+             where p.organizacion_id = :idOrganizacion
+               and p.id_prospeccion in (:ids)
+            """, nativeQuery = true)
+    List<ExpedienteDeLaProspeccion> expedientesDe(@Param("idOrganizacion") long idOrganizacion,
+                                                  @Param("ids") Collection<Long> ids);
 }

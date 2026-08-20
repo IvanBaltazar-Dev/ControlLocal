@@ -2,6 +2,7 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
+import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.TareaService.FichaTarea;
 import com.controllocal.service.TareaService;
@@ -9,6 +10,7 @@ import com.controllocal.service.soporte.EstadoDelHecho;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.Hecho;
 import com.controllocal.service.soporte.InterpretacionDelAsunto.Renglon;
 import com.controllocal.service.soporte.InterpretacionDelAsunto;
+import com.controllocal.service.soporte.InterpreteDeLaBandeja;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -18,10 +20,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,6 +53,8 @@ class InterpretacionDelInicioIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired TareaService tareas;
+    @Autowired InterpreteDeLaBandeja interprete;
+    @Autowired CaptacionRepository captaciones;
 
     /**
      * Las palabras que D-E2-1 §10.3.2 rechaza.
@@ -191,21 +199,148 @@ class InterpretacionDelInicioIntegrationTest {
                         + "lo hace comprobable y lo que hace que el dato pese. " + colados);
     }
 
+    /**
+     * <b>Todo asunto resoluble lleva CUATRO renglones.</b>
+     *
+     * <p>Esta prueba decía «cuatro o ninguno», y ese «o ninguno» tapaba un
+     * hueco real: el barrido de cierre de E2 encontró que un asunto de tipo
+     * {@code PROSPECCION} llegaba con <b>cero</b>, porque los cuatro renglones se
+     * construían siempre desde el inmueble y una prospección todavía no tiene
+     * captación.
+     *
+     * <p>La corrección no fue permitir el hueco en el documento, sino corregir
+     * qué significa «cuatro»: cuatro <b>evidencias pertinentes al asunto</b>, no
+     * cuatro entidades inmobiliarias obligatorias. Una prospección lleva
+     * Prospección · Contacto · Avance · Propietario; un asunto con encargo lleva
+     * Encargo · Renta · Actividad · Propietario.
+     */
     @Test
-    @DisplayName("el expediente son cuatro renglones, o ninguno; nunca cuatro guiones")
-    void elExpedienteEsCuatroONinguno() {
+    @DisplayName("todo asunto lleva cuatro renglones; nunca cero y nunca cuatro guiones")
+    void todoAsuntoLlevaCuatroRenglones() {
+        List<String> sinExpediente = new ArrayList<>();
         for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
             List<Renglon> expediente = asunto.interpretacion().expediente();
-            assertTrue(expediente.isEmpty()
-                            || expediente.size() == InterpretacionDelAsunto.RENGLONES_DEL_EXPEDIENTE,
-                    "un expediente en blanco dice «no hay historial»; cuatro guiones dicen «lo hay "
-                            + "y no lo cargue»: " + asunto.tipo() + " -> " + expediente.size());
+            if (expediente.size() != InterpretacionDelAsunto.RENGLONES_DEL_EXPEDIENTE) {
+                sinExpediente.add(asunto.entidadTipo() + "#" + asunto.entidadId()
+                        + " -> " + expediente.size() + " renglones");
+                continue;
+            }
             for (Renglon renglon : expediente) {
                 assertNotNull(renglon.valor());
                 assertFalse(renglon.valor().isBlank(),
                         "un renglon vacio es peor que no estar: " + renglon.rotulo());
             }
         }
+        assertEquals(List.of(), sinExpediente,
+                "Un asunto sin expediente deja el Radar en blanco justo al abrirlo. Los cuatro "
+                        + "renglones se eligen segun la etapa -nunca se inventa un inmueble ni un "
+                        + "encargo que no existe-, pero son cuatro.");
+    }
+
+    /**
+     * Los cuatro de una prospección hablan de la prospección.
+     *
+     * <p>Es el caso que la prueba anterior daba por bueno con cero. Aquí se exige
+     * el contenido, no solo el número: si alguien resolviera una prospección por
+     * el camino del inmueble, saldrían «Encargo» y «Renta» de una captación que
+     * no existe.
+     */
+    @Test
+    @DisplayName("una prospeccion lleva sus propios cuatro renglones, no los de un encargo")
+    void laProspeccionLlevaSuPropioExpediente() {
+        List<Renglon> expediente = expedienteDelPrimero("PROSPECCION");
+        assertEquals(4, expediente.size(),
+                "Una prospeccion tambien tiene historia: cuando aparecio, cuando se le hablo, "
+                        + "hasta donde llego y con quien se esta tratando.");
+
+        assertEquals(List.of("Prospección", "Contacto", "Avance", "Propietario"),
+                expediente.stream().map(Renglon::rotulo).toList());
+
+        String texto = expediente.stream().map(Renglon::valor).collect(Collectors.joining(" · "));
+        assertFalse(texto.contains("Encargo") || texto.contains("vence en"),
+                "Antes de la captacion no hay encargo del que hablar: " + texto);
+    }
+
+    /** Y los de un asunto con encargo siguen siendo los del inmueble. */
+    @Test
+    @DisplayName("un asunto con encargo conserva los cuatro renglones del inmueble")
+    void elAsuntoConEncargoConservaLosSuyos() {
+        List<Renglon> expediente = expedienteDelPrimero("VISITA");
+
+        assertEquals(List.of("Encargo", "Renta", "Actividad", "Propietario"),
+                expediente.stream().map(Renglon::rotulo).toList());
+    }
+
+    /**
+     * <b>Una prospección no se resuelve por inmueble.</b>
+     *
+     * <p>No basta con que el resultado salga bien: el camino importa, porque
+     * resolverla por {@code id_propiedad} funcionaría hoy —la columna es NOT
+     * NULL— y produciría los renglones de un encargo inexistente. La consulta que
+     * mapea asunto → propiedad no puede nombrar a la prospección.
+     */
+    @Test
+    @DisplayName("la prospeccion no entra en el mapa de asunto a inmueble")
+    void laProspeccionNoSeResuelvePorInmueble() {
+        List<String> tipos = captaciones.propiedadPorAsunto(organizacionDelAgente()).stream()
+                .map(fila -> (String) fila[0])
+                .distinct()
+                .toList();
+
+        assertFalse(tipos.contains("PROSPECCION"),
+                "Resolver una prospeccion como inmueble le pondria Encargo y Renta de una "
+                        + "captacion que todavia no existe. Tipos mapeados: " + tipos);
+    }
+
+    /**
+     * <b>Una fecha ausente se dice; no se rellena.</b>
+     *
+     * <p>42 de las 63 prospecciones de la base no tenían contacto el 2026-08-19.
+     * Eso no es un fallo de carga: es el estado normal de una prospección recién
+     * abierta, y el renglón tiene que decirlo con palabras en vez de enseñar un
+     * guión, una fecha inventada o el día de hoy.
+     */
+    @Test
+    @DisplayName("una fecha que falta se declara ausente, nunca se rellena")
+    void unaFechaAusenteSeDeclara() {
+        long idSinContacto = jdbc.queryForObject("""
+                select p.id_prospeccion from prospeccion p
+                 where p.fecha_contacto is null and p.organizacion_id = ?
+                 limit 1
+                """, Long.class, organizacionDelAgente());
+
+        List<Renglon> expediente = interprete.de(
+                new InterpreteDeLaBandeja.AsuntoADescribir("RECONTACTO", "PROSPECCION",
+                        idSinContacto, "sin contacto", null, null, true),
+                interprete.contextoDe(organizacionDelAgente(), List.of(
+                        new InterpreteDeLaBandeja.AsuntoADescribir("RECONTACTO", "PROSPECCION",
+                                idSinContacto, "sin contacto", null, null, true))),
+                LocalDate.now()).expediente();
+
+        Renglon contacto = expediente.stream()
+                .filter(r -> "Contacto".equals(r.rotulo()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("falta el renglon de contacto"));
+
+        assertEquals("Sin contacto registrado", contacto.valor(),
+                "La ausencia se nombra. Un guion obliga a preguntar si falta el dato o el hecho.");
+    }
+
+    // ------------------------------------------------------------------
+
+    private List<Renglon> expedienteDelPrimero(String entidadTipo) {
+        return tareas.bandejaDe(actorAgente()).stream()
+                .filter(a -> entidadTipo.equals(a.entidadTipo()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "La bandeja no trae ningun asunto de tipo " + entidadTipo
+                                + ", asi que esta prueba no esta comprobando nada."))
+                .interpretacion()
+                .expediente();
+    }
+
+    private long organizacionDelAgente() {
+        return actorAgente().idOrganizacion();
     }
 
     // ------------------------------------------------------------------

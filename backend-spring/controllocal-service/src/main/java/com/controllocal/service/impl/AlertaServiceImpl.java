@@ -2,6 +2,7 @@ package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Alerta;
 import com.controllocal.domain.comercial.Prospeccion;
+import com.controllocal.domain.comercial.Tarea;
 import com.controllocal.persistence.repositorio.AlertaRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
@@ -130,14 +131,14 @@ public class AlertaServiceImpl implements AlertaService {
             if (idAgente == null) {
                 continue;
             }
-            if (alertas.existeActivaDe(actor.idOrganizacion(), "PROSPECCION", p.getId(),
+            if (alertas.existeActivaDe(actor.idOrganizacion(), Tarea.ENTIDAD_PROSPECCION, p.getId(),
                     Alerta.SIN_RESPUESTA)) {
                 continue;
             }
             String codigo = p.getCodigoProspeccion() != null && !p.getCodigoProspeccion().isBlank()
                     ? p.getCodigoProspeccion()
                     : "#" + p.getId();
-            emitir(new DatosAlerta(Alerta.SIN_RESPUESTA, Alerta.MEDIA, "PROSPECCION", p.getId(),
+            emitir(new DatosAlerta(Alerta.SIN_RESPUESTA, Alerta.MEDIA, Tarea.ENTIDAD_PROSPECCION, p.getId(),
                     idAgente, "Recontacta o evalua descartar la prospeccion " + codigo + "."), actor);
             creadas++;
         }
@@ -179,7 +180,7 @@ public class AlertaServiceImpl implements AlertaService {
             case "VISITA" -> "visitas?focus=" + id;
             case "CLIENTE_INTERESADO" -> "cliente-detail/" + id;
             case "PROPIETARIO" -> "owner-detail/" + id;
-            case "PROSPECCION" -> "prospeccion-detail/" + id;
+            case Tarea.ENTIDAD_PROSPECCION -> "prospeccion-detail/" + id;
             case "CONTRATO_ALQUILER" -> "comisiones";
             default -> null;
         };

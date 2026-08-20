@@ -73,6 +73,21 @@ public class Tarea extends EntidadDeOrganizacion {
      */
     public static final String ENTIDAD_INMUEBLE = "INMUEBLE";
 
+    /**
+     * Prospección: el seguimiento al propietario <b>antes</b> de que haya
+     * captación.
+     *
+     * <p>Sube a constante por la misma razón que {@link #ENTIDAD_INMUEBLE}: la
+     * cadena estaba escrita a mano en cuatro sitios —{@code AlertaServiceImpl}
+     * dos veces, {@code TareaServiceImpl} otras dos— y el compilador no ve la
+     * diferencia entre dos literales que se separan.
+     *
+     * <p>Importa además para el Inicio: es el tipo de asunto cuyo expediente
+     * <b>no</b> se resuelve por inmueble, porque todavía no hay encargo del que
+     * hablar (D-E2-1 §10.3).
+     */
+    public static final String ENTIDAD_PROSPECCION = "PROSPECCION";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_tarea")

@@ -71,7 +71,7 @@ public class TareaServiceImpl implements TareaService {
      * trampa 2).
      */
     private static final Set<String> ENTIDADES_AUTO = Set.of(
-            "PROSPECCION", "SOLICITUD_ALQUILER", "CONTRATO_ALQUILER",
+            Tarea.ENTIDAD_PROSPECCION, "SOLICITUD_ALQUILER", "CONTRATO_ALQUILER",
             "VISITA", "CAPTACION", "REQUERIMIENTO");
 
     /**
@@ -310,7 +310,7 @@ public class TareaServiceImpl implements TareaService {
         for (CandidatoTarea c : prospecciones.paraRecontactar(
                 org, idAgente, PoliticaComercial.limiteDeRecontacto(hoy))) {
             String codigo = nz(c.getEntidadCodigo());
-            out.add(new Derivada(Tarea.RECONTACTO, "PROSPECCION", c.getEntidadId(), codigo,
+            out.add(new Derivada(Tarea.RECONTACTO, Tarea.ENTIDAD_PROSPECCION, c.getEntidadId(), codigo,
                     Tarea.ALTA, "Recontacta o evalua descartar la prospeccion " + codigo + ".",
                     c.getFechaPlazo(), c.getFechaPlazo()));
         }
@@ -465,7 +465,7 @@ public class TareaServiceImpl implements TareaService {
     private static String ruta(String entidadTipo, Long id, String codigo) {
         boolean conCodigo = codigo != null && !codigo.isBlank();
         return switch (entidadTipo) {
-            case "PROSPECCION" -> "prospeccion-detail/" + id;
+            case Tarea.ENTIDAD_PROSPECCION -> "prospeccion-detail/" + id;
             case "SOLICITUD_ALQUILER" -> "solicitud-detail/" + (conCodigo ? codigo : id);
             case "CAPTACION" -> conCodigo ? "captacion-detail/" + codigo : "captaciones";
             case "CONTRATO_ALQUILER" -> "comisiones";

@@ -115,6 +115,46 @@ class GateDeCierreTest {
         }
     }
 
+    /**
+     * <b>Los dos inventarios no pueden separarse.</b>
+     *
+     * <p>Se separaron, y el barrido de cierre de E2 lo encontró el 2026-08-19:
+     * este test inventariaba <b>catorce</b> pruebas de integración y
+     * {@code Verificar-Cierre.ps1} comprobaba que se hubieran ejecutado
+     * <b>trece</b>. La que faltaba era
+     * {@code AutoridadDelDatoIntegrationTest} — precisamente la que el 18 de
+     * agosto escribió 162 propiedades en la base de desarrollo. La corrida de
+     * cierre nunca probó que se hubiera ejecutado.
+     *
+     * <p>Es el mismo defecto que el gate entero existe para evitar, un nivel más
+     * arriba: un verde que no significa lo que parece. Y no se arregla añadiendo
+     * la línea que faltaba —dos listas mantenidas a mano vuelven a divergir—,
+     * sino comprobando que la del script contenga todas las de la carpeta.
+     */
+    @Test
+    void elScriptDeCierreComprobaraTodasLasPruebasDeIntegracion() throws IOException {
+        Path raiz = Path.of("src", "test", "java", "com", "controllocal", "integracion");
+        List<String> enLaCarpeta;
+        try (Stream<Path> ficheros = Files.list(raiz)) {
+            enLaCarpeta = ficheros
+                    .filter(f -> f.getFileName().toString().endsWith(".java"))
+                    .filter(f -> contiene(f, "@EnabledIfEnvironmentVariable"))
+                    .map(f -> f.getFileName().toString().replace(".java", ""))
+                    .sorted()
+                    .toList();
+        }
+
+        String script = leer(Path.of("..", "verificacion", "Verificar-Cierre.ps1"));
+        List<String> sinVigilar = enLaCarpeta.stream()
+                .filter(nombre -> !script.contains("'" + nombre + "'"))
+                .toList();
+
+        assertEquals(List.of(), sinVigilar,
+                "Verificar-Cierre.ps1 no comprueba que estas pruebas se hayan ejecutado, asi "
+                        + "que una corrida de cierre podria darlas por buenas sin haberlas "
+                        + "corrido. Anadelas a su lista $integracion.");
+    }
+
     /** El script de cierre tiene que seguir existiendo y exigiendo la variable. */
     @Test
     void elScriptDeCierreExigeLaBaseDeIntegracion() {

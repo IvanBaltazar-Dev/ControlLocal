@@ -30,6 +30,13 @@ $raiz = Join-Path $PSScriptRoot '..'
 # build si aparece una prueba de integracion nueva y no se declara, y esta lista
 # es la que comprueba que ademas se EJECUTO.
 $integracion = @(
+    # D-E4-3: una sola autoridad persistente por clave publicada. FALTABA en
+    # esta lista hasta el 2026-08-19 -GateDeCierreTest si la inventariaba, pero
+    # el script no comprobaba que se hubiera ejecutado-, y era justo la prueba
+    # que el 18 de agosto escribio 162 propiedades en controllocal_dev. Ahora
+    # GateDeCierreTest compara las dos listas, asi que no pueden volver a
+    # separarse.
+    'AutoridadDelDatoIntegrationTest',
     'BusquedaLocalesIntegrationTest',
     # D-E2-5 / E2.5: el broker tiene sus propios asuntos, y no comparte ni un id
     # con la bandeja del agente.

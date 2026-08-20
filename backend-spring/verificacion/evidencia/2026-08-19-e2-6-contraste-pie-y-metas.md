@@ -291,8 +291,39 @@ español, porque el `LOCALE_ID` de la aplicación sigue siendo `en-US`.
 |---|---|
 | `AislamientoDePruebasTest` | una prueba de integración que pueda escribir en la base de desarrollo |
 | `PoliticaUnicaTest` (ampliado) | la maqueta divergiendo de la política, y los cuatro nombres canónicos escritos fuera del dominio |
+| `GateDeCierreTest` (ampliado) | una prueba de integración que el script de cierre no compruebe |
 | `MatrizOperacionRolTest` | los dos endpoints nuevos sin su fila |
-| `GateDeCierreTest` | una corrida de cierre que se salte las pruebas de integración |
+
+### 9 bis. El barrido encontró un agujero en el propio gate de cierre
+
+Al repasar E2.0–E2.6 salió esto, y merece quedar escrito porque es el mismo
+defecto que el gate existe para evitar, un nivel más arriba:
+
+`GateDeCierreTest` inventariaba **catorce** pruebas de integración y
+`Verificar-Cierre.ps1` comprobaba que se hubieran ejecutado **trece**. La que
+faltaba era `AutoridadDelDatoIntegrationTest` — **precisamente la que el 18 de
+agosto escribió 162 propiedades en la base de desarrollo**. La corrida de cierre
+nunca probó que se hubiera ejecutado: un verde que no significaba lo que parecía.
+
+No se arregla añadiendo la línea que faltaba, porque dos listas mantenidas a mano
+vuelven a divergir. `GateDeCierreTest` compara ahora las dos, y se comprobó que
+rompe el build al quitar la línea:
+
+```
+Verificar-Cierre.ps1 no comprueba que estas pruebas se hayan ejecutado, asi que
+una corrida de cierre podria darlas por buenas sin haberlas corrido.
+  expected: <[]> but was: <[AutoridadDelDatoIntegrationTest]>
+```
+
+### 9 ter. Y una deuda anotada, no escondida
+
+En el Radar, un asunto de tipo `PROSPECCION` viaja **sin expediente** (0
+renglones) mientras que los de `VISITA` traen los cuatro. No es una regresión:
+los cuatro renglones se construyen desde el inmueble y una prospección todavía no
+tiene uno, así que devolver vacío es más honesto que inventarlos. Pero D-E2-1
+§10.3 dice que los cuatro son «los mismos para todo asunto», así que hay una
+tensión real entre el diseño y lo que se puede construir. Queda anotada para
+decidirla, no resuelta a escondidas.
 
 ---
 

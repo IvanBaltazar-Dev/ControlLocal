@@ -87,7 +87,7 @@ function recorta(k) {
 
 ok("los cuatro nombres canónicos, letra por letra",
   JSON.stringify(N.kpisDe(AMBITOS[0], "1m").map(function (k) { return k.rotulo; })) ===
-  JSON.stringify(["Propietarios contactados", "Locales captados", "Solicitudes ingresadas", "Contratos firmados"]));
+  JSON.stringify(["Propietarios contactados", "Propiedades captadas", "Solicitudes ingresadas", "Contratos firmados"]));
 
 /* Las tres correcciones pedidas explícitamente. */
 grupo("1.1 · KPI · el fixture corregido");

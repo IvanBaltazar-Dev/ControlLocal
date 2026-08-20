@@ -3,7 +3,7 @@
 **Esta es la portada del avance.** Si quieres saber dónde estamos, qué cerramos y
 qué sigue, se responde aquí y en ninguna otra parte.
 
-**Actualizado:** 2026-08-17
+**Actualizado:** 2026-08-19
 
 ---
 
@@ -13,8 +13,8 @@ qué sigue, se responde aquí y en ninguna otra parte.
 |---|---|---|
 | **E0** · Histórico económico | ✅ **CERRADA** | `U` inicial + backfill, hito `P` de renta publicada, decisión del hito `O` |
 | **E1** · Instrumentación y políticas | ✅ **CERRADA** | política única, `senales[]` clasificadas, Angular sin umbrales |
-| **E2** · Dashboard inmobiliario | 🟡 **EN CURSO** | aquí empieza el cambio visual: el tablero pasa a centro de decisión |
-| **E3** · Negociación | ⬜ | — |
+| **E2** · Dashboard inmobiliario | ✅ **CERRADA** | el tablero es centro de decisión: foco, radar, interpretación, metas y ritmo |
+| **E3** · Negociación | 🟡 **SIGUIENTE** | bloqueada por las tres cuestiones abiertas de E0 |
 | **E4** · Moat Health | ⬜ | — |
 | **E5** · Matcher v2 | ⬜ | — |
 | **E6** · KAIROS | ⬜ | — |
@@ -61,9 +61,9 @@ calcula ningún umbral. Suites `e4-dashboard` **125/125** y `personas` **126/126
 
 ---
 
-## Qué sigue: E2 · Dashboard inmobiliario
+## Qué cerró E2 · Dashboard inmobiliario — 2026-08-19
 
-El tablero actual informa. E2 lo convierte en **centro de decisión**: qué
+El tablero informaba. E2 lo convirtió en **centro de decisión**: qué
 necesita de ti, qué inmueble está frenado y dónde.
 
 **Regla de la etapa:** cada subtanda termina con algo que se puede abrir en
@@ -88,7 +88,7 @@ para ser partes de una misma pantalla**:
 | **E2.3** | El hallazgo sale de la cola: mismo motor, otra salida | ✅ |
 | **E2.4** | Capa de interpretación: `ComoEsta`, lectura y expediente de 4 renglones | ✅ |
 | **E2.5** | El Radar del broker: sus propios asuntos + hallazgo de concentración | ✅ |
-| **E2.6** | Contraste, pie y metas | ⬜ **siguiente** |
+| **E2.6** | Contraste, pie y metas | ✅ |
 
 > **El orden cambió el 2026-08-11** tras inventariar el backend
 > (`estado-backend-para-el-inicio.md`): el motor de coincidencias **ya existe**,
@@ -137,7 +137,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ **arranca aquí** |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
-| **7** | **Inteligencia** | Foco, Radar, metas, ritmo (= E2.2–E2.6) + KAIROS ejecutor | ⬜ |
+| **7** | **Inteligencia** | Foco, Radar, metas, ritmo (= E2.2–E2.6) + KAIROS ejecutor | 🟡 **la mitad de E2**: falta KAIROS ejecutor |
 | **8** | **Migración del resto de pantallas** | las 57 al sistema normalizado | ⬜ |
 | **9** | **Certificación 1.0** | venta/alquiler, tipos, roles, móvil, multi-tenant, seguridad, rendimiento, E2E | ⬜ |
 

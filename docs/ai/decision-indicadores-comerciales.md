@@ -2,8 +2,9 @@
 
 **Qué responde:** qué se mide en la pantalla de indicadores, con qué definiciones
 y qué cambia entre agente y broker.
-**Estado:** decidido el 2026-08-11. **Pendiente de implementación** — este
-documento congela las definiciones antes de tocar código.
+**Estado:** decidido el 2026-08-11, **implementado en E2.6 el 2026-08-19**. Las
+siete cuestiones que quedaban abiertas en §13 se cerraron ese día; la que sigue
+abierta está marcada como tal.
 **Relacionado:** `decision-inicio-foco-y-resolucion.md` (D-E2-1) para el Inicio;
 `inventario-umbrales-de-dominio.md` para dónde viven las reglas.
 
@@ -11,12 +12,37 @@ documento congela las definiciones antes de tocar código.
 
 ## 1. Los cuatro KPI canónicos
 
-| KPI | Agente | Broker |
-|---|---|---|
-| **Prospección efectiva** | sus prospectos que llegaron a contacto comercial real | suma del equipo |
-| **Captaciones activadas** | sus captaciones que entraron realmente a cartera | suma del equipo |
-| **Solicitudes generadas** | solicitudes originadas por su gestión | suma del equipo |
-| **Contratos firmados** | contratos atribuidos a su gestión | suma del equipo |
+> **Los nombres cambiaron el 2026-08-19, y esta tabla es la que se corrigió.**
+> Este documento decía «Prospección efectiva / Captaciones activadas /
+> Solicitudes generadas» y D-E2-1 §6.2 decía otra cosa, con una comprobación que
+> exigía los cuatro nombres «letra por letra». El gate no se podía escribir:
+> pedía dos verdades. Gana el **hecho de negocio** sobre el término abstracto —el
+> tablero se lee en segundos o no es un centro de decisión— y «Locales» pasa a
+> **«Propiedades»**, porque BROX dejó de ser un sistema de alquiler de locales el
+> 2026-08-17.
+
+| KPI | Código | Qué evento cuenta | Agente | Broker |
+|---|---|---|---|---|
+| **Propietarios contactados** | `C` | `prospeccion.fecha_contacto` dentro del mes | los suyos | suma del equipo |
+| **Propiedades captadas** | `P` | la transición de la captación **a ACTIVA** | las suyas | suma del equipo |
+| **Solicitudes ingresadas** | `S` | `solicitud_alquiler.fecha_registro` | las suyas | suma del equipo |
+| **Contratos firmados** | `F` | `contrato_alquiler.fecha_cierre` | los suyos | suma del equipo |
+
+**El código es estable; el rótulo no.** `C`/`P`/`S`/`F` es lo que persiste y lo
+que viaja; el nombre visible puede cambiar el día que el negocio lo diga sin
+migrar una fila.
+
+**Y cada nombre cuenta un evento concreto, no algo parecido.** Dos de los cuatro
+se midieron mal en la primera aproximación y la diferencia no era menor:
+
+- *Propietarios contactados* sale de la **fecha de contacto**, no de la escalera
+  de estados: `D` (descartado) se sale de la escalera y **sí** hubo contacto —los
+  tres descartados de la base tienen su fecha—, así que contar por estado los
+  perdería y premiaría dejar la prospección a medias.
+- *Propiedades captadas* sale de la **transición a ACTIVA**, no del estado actual
+  ni de `fecha_captacion`. Medido el 2026-08-19: por estado salen **5** y por
+  evento salen **9**, porque cuatro ya cerraron en contrato. Y `fecha_captacion`
+  es cuando se registró, no cuando el broker aprobó.
 
 **Las definiciones son idénticas para los dos roles; lo único que cambia es el
 alcance.** Es lo que permite que un broker abra un agente y entienda de dónde
@@ -300,14 +326,71 @@ lista es señal de que falta decidirla aquí, no de que haya que inventarla all�
 
 ---
 
-## 13. Lo que falta decidir antes de implementar
+## 13. Lo que faltaba decidir — cerrado el 2026-08-19 (E2.6)
 
-- [ ] Definición exacta de «contacto comercial real» que convierte un prospecto en *prospección efectiva*
-- [ ] Definición de «entró realmente a cartera» para *captaciones activadas* (¿estado activo, o encargo firmado?)
-- [ ] Regla de atribución de una solicitud y de un contrato a un agente cuando intervienen dos
-- [ ] Umbrales de 🟠 y 🔴 sobre la desviación de ritmo, y N mínimo para salir de ⚪
-- [ ] Fórmula de prorrateo de meta por alta, licencia o cambio de equipo a mitad de periodo
-- [ ] Dónde se fijan las metas y quién puede cambiarlas
-- [ ] **«En juego este mes»**: qué suma exactamente. La maqueta del Inicio lo lee
-      como *renta mensual de las operaciones que pueden cerrarse en el periodo*,
-      pero no es todavía una métrica de este documento
+Las siete cuestiones se resolvieron con la medición delante
+(`diagnostico-e2-6-contraste-medias-y-metas.md`), no en abstracto.
+
+- [x] **«Contacto comercial real»** → `prospeccion.fecha_contacto`, no el estado.
+      La escalera de estados pierde los descartados, y los tres descartados de la
+      base **sí** habían sido contactados.
+- [x] **«Entró realmente a cartera»** → la **transición a ACTIVA**, no el estado
+      actual ni `fecha_captacion`. Por estado salen 5 y por evento 9: la
+      diferencia son las que ya cerraron en contrato.
+- [x] **Atribución** → el agente responsable de cada hecho:
+      `prospeccion.id_rol_agente`, `captacion.id_rol_agente`,
+      `solicitud.id_rol_agente` y `contrato.id_rol_agente_cierre`. No hay reparto
+      entre dos: el hecho tiene un dueño, y si intervienen dos, la reasignación ya
+      dejó su rastro.
+- [x] **Umbrales del ritmo** → `PoliticaComercial`: llega 100 %, atención 85 %,
+      arranque 15 % del periodo, volumen mínimo 3, muestra mínima 5. Bajaron de la
+      maqueta, donde estaban duplicados y ya divergían.
+- [x] **Prorrateo de meta a mitad de periodo** → **no se implementa, y no es un
+      olvido**. La meta es mensual y se fija por agente: quien entra a mitad de mes
+      recibe la meta que su broker decida para ese mes, que es más honesto que un
+      prorrateo automático sobre un alta cuya fecha exacta el sistema no siempre
+      conoce. Si el negocio pide el automatismo, se decide aquí.
+- [x] **Dónde se fijan las metas** → tabla `meta_comercial` (V65), mensual y por
+      agente. Las fija el **broker sobre sus agentes** o el administrador sobre los
+      de su organización, por `PUT /indicadores/metas`. **Un agente no fija la
+      suya**, y **no existe meta de equipo**: la del equipo es la suma, así que no
+      puede contradecir a sus sumandos. Si falta la de alguno, el ritmo del equipo
+      se declara `COBERTURA_INCOMPLETA` en vez de compararse contra una meta
+      parcial, que daría siempre una brecha a favor.
+- [x] **«Puede cerrarse este mes»** → §14.
+
+---
+
+## 14. «Puede cerrarse este mes»: determinista, no pronóstico
+
+**Tres condiciones, las tres comprobables**, y ninguna es una expectativa:
+
+1. La solicitud está **aprobada** (`estado = A`). Es la fase formal de cierre:
+   el broker ya evaluó y lo que falta es firmar. En revisión u observada tiene un
+   bloqueante sin resolver; registrada ni siquiera entró a revisión. Y una
+   oportunidad prometedora o una visita que fue bien **no entran de ninguna
+   manera**.
+2. **No tiene contrato todavía.** Con contrato ya no puede cerrarse: se cerró, y
+   contarla otra vez sumaría dos veces el mismo dinero.
+3. **La oferta sigue vigente.** Una oferta cuya vigencia pasó no se firma, por
+   muy aprobada que esté.
+
+**El importe sale de `monto_propuesto` y conserva su moneda.** No se convierte:
+un tipo de cambio que nadie declaró es un número inventado dentro de una cifra
+que se presenta como hecho. Con dos monedas se dice, y se muestra la de mayor
+importe.
+
+Medido el 2026-08-19 con esta definición: **cero operaciones**. La única
+solicitud viva estaba en revisión y además con la oferta vencida el día 15. La
+maqueta enseñaba «3 operaciones · US$ 9,300»; eran constantes.
+
+E2 **no introduce probabilidad aprendida ni índices disfrazados**. Cuando exista
+un pronóstico, será otra métrica con otro nombre, y dirá que lo es.
+
+---
+
+## 15. Lo que sigue abierto
+
+- [ ] **Configuración de la política por organización.** `Regla.alcance()` ya lo
+      prevé y ninguna regla lo usa: con una sola corredora real sería complejidad
+      sin usuario. Se implementa cuando haya una segunda que pida otro umbral.

@@ -173,9 +173,16 @@ US$ 9,300      ╱‾╲╱       22 de 24      13 de 15      6 de 8        4 de
 nombre, misma meta, mismo semáforo de ritmo— en miniatura. Por construcción no
 puede contradecir a Indicadores: si allí cambia la definición, aquí cambia sola.
 
-> **El nombre va completo, siempre.** *Propietarios contactados*, *Locales
-> captados*, *Solicitudes ingresadas*, *Contratos firmados* — **los mismos que
-> use la pantalla de Indicadores, letra por letra**. Cuando allí cambiaron
+> **El nombre va completo, siempre.** *Propietarios contactados*, **Propiedades
+> captadas**, *Solicitudes ingresadas*, *Contratos firmados* — **los mismos que
+> use la pantalla de Indicadores, letra por letra**. «Locales» pasó a
+> «Propiedades» el 2026-08-19: BROX dejó de ser un sistema de alquiler de locales
+> el día 17, y llamar «local» a una casa o a un terreno sería arrastrar el nombre
+> viejo a un dominio que ya no lo es. La contradicción con D-E2-2 —que decía
+> *Prospección efectiva / Captaciones activadas / Solicitudes generadas*— se
+> resolvió el mismo día a favor del hecho de negocio, y ahora los cuatro nombres
+> viven en **un solo sitio**: `KpiCanonico`, en el dominio. La pantalla los lee;
+> no los escribe. Cuando allí cambiaron
 > (2026-08-11), aquí cambiaron el mismo día: un pie que contradice a Indicadores
 > es peor que no tener pie. Abreviarlos deshace la distinción que D-E2-2 §1.1 vino
 > a fijar: **31 registros creados no son 31 prospectos trabajados**. Hay una
@@ -231,10 +238,15 @@ Tres reglas que evitan que se convierta en un tablero:
   cabecera; se movió aquí.
 - **No repite ninguna cifra del foco.** Hay una comprobación que lo verifica.
 
-> **Pendiente de definir en D-E2-2**: qué suma exactamente «puede cerrarse este
-> mes». La lectura de la maqueta es *renta mensual de las operaciones que pueden
-> firmarse en el periodo*, pero esa métrica todavía no está en el documento de
-> indicadores.
+> **Definido en D-E2-2 §14 el 2026-08-19.** Suma las solicitudes **aprobadas, sin
+> contrato y con la oferta vigente**: es determinista y las tres condiciones se
+> pueden ir a comprobar. Una oportunidad prometedora no entra. El importe sale de
+> `monto_propuesto` y **conserva su moneda**.
+>
+> Con los datos del 2026-08-19 la cifra real es **cero operaciones** —la única
+> solicitud viva estaba en revisión y con la oferta vencida—, y el Inicio lo dice
+> así: *«Ninguna operación puede cerrarse este mes»*. Los «US$ 9,300 · 3
+> operaciones» de la maqueta eran constantes.
 
 ---
 

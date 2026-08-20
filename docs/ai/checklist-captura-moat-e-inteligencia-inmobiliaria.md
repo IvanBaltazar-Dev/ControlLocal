@@ -63,7 +63,7 @@ comprobar la semántica nueva: los dos hitos, en orden y sin pisarse.
 el mapeo estado → tono duplicado en diez pantallas, y la configuración de la
 política por organización, que sigue declarada y sin implementar a propósito.
 
-## E2 · Dashboard inmobiliario 🟡 EN CURSO
+## E2 · Dashboard inmobiliario ✅ CERRADA (2026-08-19)
 
 Requisito propio de la etapa, además del gate/pruebas/evidencia:
 **cada subtanda termina con algo abrible en `localhost:4200/dashboard`.**
@@ -79,19 +79,49 @@ Requisito propio de la etapa, además del gate/pruebas/evidencia:
       (Inicio: 5 asuntos + Radar de dos modos, política de despacho, regla contra
       duplicados) y `decision-indicadores-comerciales.md` (4 KPI canónicos, ritmo
       contra meta, agente vs broker). Maqueta verificada con 85 comprobaciones
-- [ ] **E2.2** La pelota — de las abiertas, cuáles dependen de ti y de quién
-      dependen las demás (propietario, interesado, broker, documentación).
-      **Es el primer filtro del despacho** (D-E2-1 §3): solo `DEPENDE_DE_MI`
-      compite por uno de los cinco sitios del Inicio
-- [ ] **E2.3** Inmuebles que necesitan atención — embudo por inmueble y **dónde se
-      frena**, sobre `/indicadores/avance` (RF-017), que ya existe
-- [ ] **E2.4** Encargos por vencer y propietarios sin novedades, separados del
-      diagnóstico comercial del inmueble
-- [ ] **E2.5** Hallazgos — coincidencias con utilidad real, no otra bandeja de alertas
-- [ ] **Gate** — por definir al cerrar la etapa
-- [ ] **Pruebas** — Angular verde + `e4-dashboard` verde · *al día: **550/550** y
-      **129/129** tras E2.1*
-- [ ] **Evidencia** — capturas del tablero por subtanda
+- [x] **E2.2** La pelota — `DEPENDE_DE_MI` + `lado`/`paso` y una sola política de
+      despacho de seis criterios
+- [x] **E2.3** El hallazgo sale de la cola: mismo motor, otra salida
+- [x] **E2.4** Capa de interpretación: `ComoEsta`, lectura y expediente de cuatro
+      renglones
+- [x] **E2.5** El Radar del broker: sus propios asuntos y el hallazgo de
+      concentración
+- [x] **E2.6** Contraste, pie y metas — ver abajo
+- [x] **Gate** — cinco, y cuatro son nuevos de E2.6:
+      `AislamientoDePruebasTest` (una prueba de integración no puede escribir en
+      la base de desarrollo), `PoliticaUnicaTest` ampliado (la maqueta no puede
+      divergir de la política, y los cuatro nombres canónicos salen del dominio),
+      más `MatrizOperacionRolTest` y `GateDeCierreTest`, que ya estaban
+- [x] **Pruebas** — reactor **956** · Angular **591** · prototipo **334**
+- [x] **Evidencia** — `evidencia/2026-08-19-e2-6-contraste-pie-y-metas.md`
+
+### E2.6 · Contraste, pie y metas — cerrada 2026-08-19
+
+**Se midió el bloque entero antes de escribir la primera consulta**
+(`diagnostico-e2-6-contraste-medias-y-metas.md`), y la medición cambió el
+alcance en lugar de confirmarlo:
+
+| | |
+|---|---|
+| **Los cuatro nombres canónicos** | D-E2-1 y D-E2-2 decían cosas distintas y había una comprobación que exigía los cuatro «letra por letra»: el gate pedía dos verdades. Gana el hecho de negocio, y «Locales» pasa a **«Propiedades»** |
+| **El periodo** | de ventana móvil a **mes de calendario**. `metaEsperadaAHoy` sobre una ventana móvil es tautológica: los días transcurridos serían siempre los totales |
+| **Las metas** | pasan a existir (V65). La del equipo **es la suma** de las de sus agentes; si falta la de alguno, el ritmo se declara sin base en vez de compararse contra una meta parcial |
+| **El ritmo** | baja de la maqueta al dominio, con sus cinco umbrales |
+| **«Puede cerrarse este mes»** | determinista: aprobadas, sin contrato y con oferta vigente. Hoy son **cero**, y eso es lo que dice |
+| **El contraste** | se implementa **la degradación**, no un rango falso: la mejor celda de la cartera tenía cuatro observaciones y el mínimo son diez |
+| **`generadoEn`** | un solo productor, dentro de `rendimiento`. El Inicio lo lee, igual que lee `ambito` |
+
+**Y dos trabajos previos que la medición descubrió, y que no eran de E2.6:**
+
+1. **Una prueba de integración podía escribir en `controllocal_dev`**, y lo hizo:
+   162 propiedades, 120 captaciones y 184 hitos de precio. La cabecera del Inicio
+   decía «125 cosas necesitan tu atención». V64 lo retiró identificándolo por la
+   dirección —literal del código de prueba, y ninguna propiedad legítima la
+   usa—, y `BaseDeDatosDePruebas` cierra la causa: falla antes de arrancar.
+2. **El hito `P` nunca se había ejercitado.** Cero filas con cinco publicaciones
+   vivas. Sin backfill inventado —nadie puede demostrar qué renta vio el mercado
+   en el pasado— pero sí verificado hacia adelante: publicar produce exactamente
+   un `P`, republicar el mismo importe no duplica, y cambiarlo añade el segundo.
 
 ## Ruta a BROX 1.0 · bloques 2 y 3 ✅ CERRADOS (2026-08-18)
 

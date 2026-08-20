@@ -1,5 +1,6 @@
 package com.controllocal.arquitectura;
 
+import com.controllocal.service.soporte.KpiCanonico;
 import com.controllocal.service.soporte.PoliticaComercial;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -223,6 +224,45 @@ class PoliticaUnicaTest {
     private static Integer enteroDe(String texto, String clave) {
         Matcher m = Pattern.compile(clave + "[ ]*:[ ]*([0-9]+)").matcher(texto);
         return m.find() ? Integer.parseInt(m.group(1)) : null;
+    }
+
+    /**
+     * <b>Los cuatro nombres canonicos, en un solo sitio.</b>
+     *
+     * <p>Es el gate que no se podia escribir hasta el 2026-08-19, porque los dos
+     * documentos que gobiernan decian cosas distintas: D-E2-2 §1 hablaba de
+     * «Prospeccion efectiva / Captaciones activadas / Solicitudes generadas» y
+     * D-E2-1 §6.2 de «Propietarios contactados / Locales captados / Solicitudes
+     * ingresadas», con una comprobacion que exigia los cuatro «letra por letra».
+     * Pedia dos verdades.
+     *
+     * <p>Resuelto a favor del hecho de negocio, la autoridad es
+     * {@code KpiCanonico}. La maqueta los repite y esta prueba comprueba que los
+     * repita bien: un pie que contradice a Indicadores es peor que no tener pie.
+     *
+     * <p>Angular no entra aqui porque no puede divergir: <b>lee el rotulo del
+     * cable</b> en vez de escribirlo.
+     */
+    @Test
+    @DisplayName("los cuatro nombres canonicos salen del dominio, y la maqueta los repite")
+    void losCuatroNombresTienenUnSoloDueno() {
+        assertEquals(List.of("Propietarios contactados", "Propiedades captadas",
+                        "Solicitudes ingresadas", "Contratos firmados"),
+                KpiCanonico.rotulos(),
+                "Cambiaron los cuatro nombres canonicos. Si es a proposito, actualiza tambien "
+                        + "D-E2-1 §6.2, D-E2-2 §1 y docs/ai/prototipos/nucleo-brox.js -- los "
+                        + "cuatro tienen que decir lo mismo, letra por letra.");
+
+        String nucleo = leer(raiz().resolve("docs/ai/prototipos/nucleo-brox.js"));
+        for (String rotulo : KpiCanonico.rotulos()) {
+            assertTrue(nucleo.contains('"' + rotulo + '"'),
+                    "La maqueta no usa el nombre canonico \"" + rotulo + "\". Corrige "
+                            + "nucleo-brox.js y vuelve a correr construir.mjs.");
+        }
+
+        assertFalse(nucleo.contains("Locales captados"),
+                "La maqueta conserva el nombre viejo. BROX dejo de ser un sistema de alquiler "
+                        + "de locales el 2026-08-17.");
     }
 
     // ------------------------------------------------------------- utilidades

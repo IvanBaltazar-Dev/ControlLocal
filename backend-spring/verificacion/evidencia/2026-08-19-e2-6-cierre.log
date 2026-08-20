@@ -1,0 +1,1670 @@
+﻿== 1. Requisitos de la corrida de cierre ==
+  OK   TEST_DB_URL = jdbc:postgresql://localhost:5433/controllocal_repositorios
+  OK   JAVA_HOME   = C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot
+
+== 2. Reactor completo contra PostgreSQL real ==
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] ControlLocal Spring (backend v2)                                   [pom]
+[INFO] ControlLocal v2 - dominio                                          [jar]
+[INFO] ControlLocal v2 - persistencia                                     [jar]
+[INFO] ControlLocal v2 - servicios                                        [jar]
+[INFO] ControlLocal v2 - web                                              [jar]
+[INFO] ControlLocal v2 - aplicacion                                       [jar]
+[INFO] 
+[INFO] ----------------< com.controllocal:controllocal-spring >----------------
+[INFO] Building ControlLocal Spring (backend v2) 2.0.0-SNAPSHOT           [1/6]
+[INFO]   from D:\init\ControlLocal\backend-spring\pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.4.1:clean (default-clean) @ controllocal-spring ---
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ controllocal-spring ---
+[INFO] Installing D:\init\ControlLocal\backend-spring\verificacion\..\pom.xml to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-spring\2.0.0-SNAPSHOT\controllocal-spring-2.0.0-SNAPSHOT.pom
+[INFO] 
+[INFO] ----------------< com.controllocal:controllocal-domain >----------------
+[INFO] Building ControlLocal v2 - dominio 2.0.0-SNAPSHOT                  [2/6]
+[INFO]   from D:\init\ControlLocal\backend-spring\controllocal-domain\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.4.1:clean (default-clean) @ controllocal-domain ---
+[INFO] Deleting D:\init\ControlLocal\backend-spring\controllocal-domain\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ controllocal-domain ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-domain\src\main\resources
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-domain\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ controllocal-domain ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 63 source files with javac [debug parameters release 21] to target\classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ controllocal-domain ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-domain\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ controllocal-domain ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.4:test (default-test) @ controllocal-domain ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] --- jar:3.4.2:jar (default-jar) @ controllocal-domain ---
+[INFO] Building jar: D:\init\ControlLocal\backend-spring\controllocal-domain\target\controllocal-domain-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ controllocal-domain ---
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-domain\pom.xml to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-domain\2.0.0-SNAPSHOT\controllocal-domain-2.0.0-SNAPSHOT.pom
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-domain\target\controllocal-domain-2.0.0-SNAPSHOT.jar to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-domain\2.0.0-SNAPSHOT\controllocal-domain-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] -------------< com.controllocal:controllocal-persistence >--------------
+[INFO] Building ControlLocal v2 - persistencia 2.0.0-SNAPSHOT             [3/6]
+[INFO]   from D:\init\ControlLocal\backend-spring\controllocal-persistence\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.4.1:clean (default-clean) @ controllocal-persistence ---
+[INFO] Deleting D:\init\ControlLocal\backend-spring\controllocal-persistence\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ controllocal-persistence ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-persistence\src\main\resources
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-persistence\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ controllocal-persistence ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 92 source files with javac [debug parameters release 21] to target\classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ controllocal-persistence ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-persistence\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ controllocal-persistence ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.4:test (default-test) @ controllocal-persistence ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] --- jar:3.4.2:jar (default-jar) @ controllocal-persistence ---
+[INFO] Building jar: D:\init\ControlLocal\backend-spring\controllocal-persistence\target\controllocal-persistence-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ controllocal-persistence ---
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-persistence\pom.xml to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-persistence\2.0.0-SNAPSHOT\controllocal-persistence-2.0.0-SNAPSHOT.pom
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-persistence\target\controllocal-persistence-2.0.0-SNAPSHOT.jar to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-persistence\2.0.0-SNAPSHOT\controllocal-persistence-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] ---------------< com.controllocal:controllocal-service >----------------
+[INFO] Building ControlLocal v2 - servicios 2.0.0-SNAPSHOT                [4/6]
+[INFO]   from D:\init\ControlLocal\backend-spring\controllocal-service\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.4.1:clean (default-clean) @ controllocal-service ---
+[INFO] Deleting D:\init\ControlLocal\backend-spring\controllocal-service\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ controllocal-service ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-service\src\main\resources
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-service\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ controllocal-service ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 142 source files with javac [debug parameters release 21] to target\classes
+[INFO] /D:/init/ControlLocal/backend-spring/controllocal-service/src/main/java/com/controllocal/service/soporte/InterpreteDeLaBandeja.java: D:\init\ControlLocal\backend-spring\controllocal-service\src\main\java\com\controllocal\service\soporte\InterpreteDeLaBandeja.java uses or overrides a deprecated API.
+[INFO] /D:/init/ControlLocal/backend-spring/controllocal-service/src/main/java/com/controllocal/service/soporte/InterpreteDeLaBandeja.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ controllocal-service ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-service\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ controllocal-service ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 49 source files with javac [debug parameters release 21] to target\test-classes
+[INFO] /D:/init/ControlLocal/backend-spring/controllocal-service/src/test/java/com/controllocal/service/impl/ProspeccionResultadoPropuestaTest.java: D:\init\ControlLocal\backend-spring\controllocal-service\src\test\java\com\controllocal\service\impl\ProspeccionResultadoPropuestaTest.java uses or overrides a deprecated API.
+[INFO] /D:/init/ControlLocal/backend-spring/controllocal-service/src/test/java/com/controllocal/service/impl/ProspeccionResultadoPropuestaTest.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- surefire:3.5.4:test (default-test) @ controllocal-service ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.controllocal.service.impl.AgenteServiceImplTest
+powershell : Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future 
+releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: 
+https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+En línea: 1 Carácter: 504
++ ... ositorios"; powershell -File "D:\init\ControlLocal\backend-spring\ver ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Mockito is curr...ockito.html#0.3:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+WARNING: A Java agent has been loaded dynamically (C:\Users\Ivan Piero 
+Baltazar\.m2\repository\net\bytebuddy\byte-buddy-agent\1.17.8\byte-buddy-agent-1.17.8.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has 
+been appended
+[INFO] Tests run: 18, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.168 s -- in com.controllocal.service.impl.AgenteServiceImplTest
+[INFO] Running com.controllocal.service.impl.AlertaServiceImplTest
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.437 s -- in com.controllocal.service.impl.AlertaServiceImplTest
+[INFO] Running com.controllocal.service.impl.AsignacionServiceImplTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.160 s -- in com.controllocal.service.impl.AsignacionServiceImplTest
+[INFO] Running com.controllocal.service.impl.AutenticacionServiceImplTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.165 s -- in com.controllocal.service.impl.AutenticacionServiceImplTest
+[INFO] Running com.controllocal.service.impl.BrokerServiceImplTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.071 s -- in com.controllocal.service.impl.BrokerServiceImplTest
+[INFO] Running com.controllocal.service.impl.CaptacionServiceImplTest
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.320 s -- in com.controllocal.service.impl.CaptacionServiceImplTest
+[INFO] Running com.controllocal.service.impl.CicloComisionTest
+[INFO] Running cascada del contrato anulado
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.133 s -- in cascada del contrato anulado
+[INFO] Running reparto agente/empresa
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in reparto agente/empresa
+[INFO] Running invariantes del dinero
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.033 s -- in invariantes del dinero
+[INFO] Running operacion repetida: nunca un 200 silencioso
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.024 s -- in operacion repetida: nunca un 200 silencioso
+[INFO] Running anulacion: decision expresa, nunca derivada
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.029 s -- in anulacion: decision expresa, nunca derivada
+[INFO] Running el estado sale del saldo, no de la letra almacenada
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.023 s -- in el estado sale del saldo, no de la letra almacenada
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.288 s -- in com.controllocal.service.impl.CicloComisionTest
+[INFO] Running com.controllocal.service.impl.ClienteServiceImplTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.203 s -- in com.controllocal.service.impl.ClienteServiceImplTest
+[INFO] Running com.controllocal.service.impl.ComisionCicloEconomicoTest
+[INFO] Running DEFECTOS: comportamiento actual que no cuadra con el modelo documentado
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.037 s -- in DEFECTOS: comportamiento actual que no cuadra con el modelo documentado
+[INFO] Running operacion repetida: que se rechaza, que es idempotente y que se duplica
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.056 s -- in operacion repetida: que se rechaza, que es idempotente y que se duplica
+[INFO] Running anulacion tras cobro parcial: el dinero cobrado sobrevive, el KPI no lo ve
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.016 s -- in anulacion tras cobro parcial: el dinero cobrado sobrevive, el KPI no lo ve
+[INFO] Running anulacion antes de cobrar: A es el desenlace expreso de una comision sin caja
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.047 s -- in anulacion antes de cobrar: A es el desenlace expreso de una comision sin caja
+[INFO] Running cobro total: el gate del broker deja el movimiento que lo respalda
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.036 s -- in cobro total: el gate del broker deja el movimiento que lo respalda
+[INFO] Running cobro parcial: el estado R lo produce el saldo, no una eleccion del broker
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.067 s -- in cobro parcial: el estado R lo produce el saldo, no una eleccion del broker
+[INFO] Running sin cobros: la liquidacion nace PENDIENTE y todo el bruto esta por cobrar
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.012 s -- in sin cobros: la liquidacion nace PENDIENTE y todo el bruto esta por cobrar
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.303 s -- in com.controllocal.service.impl.ComisionCicloEconomicoTest
+[INFO] Running com.controllocal.service.impl.ComisionServiceImplTest
+[INFO] Tests run: 19, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.212 s -- in com.controllocal.service.impl.ComisionServiceImplTest
+[INFO] Running com.controllocal.service.impl.ContratoServiceImplTest
+[INFO] Tests run: 32, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.188 s -- in com.controllocal.service.impl.ContratoServiceImplTest
+[INFO] Running com.controllocal.service.impl.DocumentoSolicitudServiceImplTest
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.281 s -- in com.controllocal.service.impl.DocumentoSolicitudServiceImplTest
+[INFO] Running com.controllocal.service.impl.EvaluacionServiceImplTest
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.126 s -- in com.controllocal.service.impl.EvaluacionServiceImplTest
+[INFO] Running com.controllocal.service.impl.FichaComercialServiceImplTest
+[INFO] Tests run: 13, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.373 s -- in com.controllocal.service.impl.FichaComercialServiceImplTest
+[INFO] Running com.controllocal.service.impl.HallazgoServiceImplTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.136 s -- in com.controllocal.service.impl.HallazgoServiceImplTest
+[INFO] Running com.controllocal.service.impl.IndicadorServiceImplTest
+[INFO] Tests run: 37, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.380 s -- in com.controllocal.service.impl.IndicadorServiceImplTest
+[INFO] Running com.controllocal.service.impl.InteraccionServiceImplTest
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.079 s -- in com.controllocal.service.impl.InteraccionServiceImplTest
+[INFO] Running com.controllocal.service.impl.LocalComercialServiceImplTest
+[INFO] Tests run: 22, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.406 s -- in com.controllocal.service.impl.LocalComercialServiceImplTest
+[INFO] Running com.controllocal.service.impl.OportunidadServiceImplTest
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.069 s -- in com.controllocal.service.impl.OportunidadServiceImplTest
+[INFO] Running com.controllocal.service.impl.PerfilServiceImplTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.036 s -- in com.controllocal.service.impl.PerfilServiceImplTest
+[INFO] Running com.controllocal.service.impl.PropietarioServiceImplTest
+[INFO] Tests run: 23, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.107 s -- in com.controllocal.service.impl.PropietarioServiceImplTest
+[INFO] Running com.controllocal.service.impl.ProspeccionResultadoPropuestaTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in com.controllocal.service.impl.ProspeccionResultadoPropuestaTest
+[INFO] Running com.controllocal.service.impl.ProspeccionServiceImplTest
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.090 s -- in com.controllocal.service.impl.ProspeccionServiceImplTest
+[INFO] Running com.controllocal.service.impl.PublicacionServiceImplTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in com.controllocal.service.impl.PublicacionServiceImplTest
+[INFO] Running com.controllocal.service.impl.ReportePropietarioServiceImplTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.088 s -- in com.controllocal.service.impl.ReportePropietarioServiceImplTest
+[INFO] Running com.controllocal.service.impl.SeguimientoComercialServiceImplTest
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.108 s -- in com.controllocal.service.impl.SeguimientoComercialServiceImplTest
+[INFO] Running com.controllocal.service.impl.SolicitudServiceImplTest
+[INFO] Tests run: 37, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.200 s -- in com.controllocal.service.impl.SolicitudServiceImplTest
+[INFO] Running com.controllocal.service.impl.TareaServiceImplTest
+[INFO] Tests run: 21, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.233 s -- in com.controllocal.service.impl.TareaServiceImplTest
+[INFO] Running com.controllocal.service.impl.VisitaServiceImplTest
+[INFO] Tests run: 23, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.080 s -- in com.controllocal.service.impl.VisitaServiceImplTest
+[INFO] Running com.controllocal.service.soporte.AutorizacionesTest
+[INFO] Running constancia para la ficha
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.016 s -- in constancia para la ficha
+[INFO] Running revocacion
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s -- in revocacion
+[INFO] Running versionado del aviso
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s -- in versionado del aviso
+[INFO] Running rechazo sin persistencia
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.011 s -- in rechazo sin persistencia
+[INFO] Running alta autorizada
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.006 s -- in alta autorizada
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.256 s -- in com.controllocal.service.soporte.AutorizacionesTest
+[INFO] Running com.controllocal.service.soporte.BloqueoAccesosTest
+[INFO] Running ventana y progresividad
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.010 s -- in ventana y progresividad
+[INFO] Running no se revela si la cuenta existe
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.009 s -- in no se revela si la cuenta existe
+[INFO] Running cuenta e IP son dimensiones independientes
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.011 s -- in cuenta e IP son dimensiones independientes
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.094 s -- in com.controllocal.service.soporte.BloqueoAccesosTest
+[INFO] Running com.controllocal.service.soporte.CalculadoraComisionTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.030 s -- in com.controllocal.service.soporte.CalculadoraComisionTest
+[INFO] Running com.controllocal.service.soporte.CicloContratoTest
+[INFO] Running transiciones invalidas: la maquina las rechaza
+[INFO] Tests run: 21, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.397 s -- in transiciones invalidas: la maquina las rechaza
+[INFO] Running transiciones validas del ciclo aprobado
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.026 s -- in transiciones validas del ciclo aprobado
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.440 s -- in com.controllocal.service.soporte.CicloContratoTest
+[INFO] Running com.controllocal.service.soporte.CifradoSecretosTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.124 s -- in com.controllocal.service.soporte.CifradoSecretosTest
+[INFO] Running com.controllocal.service.soporte.CodigosRespaldoTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 12.14 s -- in com.controllocal.service.soporte.CodigosRespaldoTest
+[INFO] Running com.controllocal.service.soporte.CoincidenciaCarteraTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s -- in com.controllocal.service.soporte.CoincidenciaCarteraTest
+[INFO] Running com.controllocal.service.soporte.ContrasteTest
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.040 s -- in com.controllocal.service.soporte.ContrasteTest
+[INFO] Running com.controllocal.service.soporte.EventosSeguridadTest
+[INFO] Running higiene del detalle
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in higiene del detalle
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.072 s -- in com.controllocal.service.soporte.EventosSeguridadTest
+[INFO] Running com.controllocal.service.soporte.HallazgoDeConcentracionTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.016 s -- in com.controllocal.service.soporte.HallazgoDeConcentracionTest
+[INFO] Running com.controllocal.service.soporte.InterpretacionDelAsuntoTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in com.controllocal.service.soporte.InterpretacionDelAsuntoTest
+[INFO] Running com.controllocal.service.soporte.PasswordHasherTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.745 s -- in com.controllocal.service.soporte.PasswordHasherTest
+[INFO] Running com.controllocal.service.soporte.PeriodoCalendarioTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.017 s -- in com.controllocal.service.soporte.PeriodoCalendarioTest
+[INFO] Running com.controllocal.service.soporte.PoliticaComercialTest
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.076 s -- in com.controllocal.service.soporte.PoliticaComercialTest
+[INFO] Running com.controllocal.service.soporte.PoliticaContrasenasTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.052 s -- in com.controllocal.service.soporte.PoliticaContrasenasTest
+[INFO] Running com.controllocal.service.soporte.PoliticaDeDespachoTest
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.034 s -- in com.controllocal.service.soporte.PoliticaDeDespachoTest
+[INFO] Running com.controllocal.service.soporte.RitmoTest
+[INFO] Tests run: 18, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.022 s -- in com.controllocal.service.soporte.RitmoTest
+[INFO] Running com.controllocal.service.soporte.TotpTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.043 s -- in com.controllocal.service.soporte.TotpTest
+[INFO] Running com.controllocal.service.soporte.TransicionesTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.010 s -- in com.controllocal.service.soporte.TransicionesTest
+[INFO] Running com.controllocal.service.soporte.UsuariosInternosTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.490 s -- in com.controllocal.service.soporte.UsuariosInternosTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 715, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] --- jar:3.4.2:jar (default-jar) @ controllocal-service ---
+[INFO] Building jar: D:\init\ControlLocal\backend-spring\controllocal-service\target\controllocal-service-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ controllocal-service ---
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-service\pom.xml to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-service\2.0.0-SNAPSHOT\controllocal-service-2.0.0-SNAPSHOT.pom
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-service\target\controllocal-service-2.0.0-SNAPSHOT.jar to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-service\2.0.0-SNAPSHOT\controllocal-service-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] -----------------< com.controllocal:controllocal-web >------------------
+[INFO] Building ControlLocal v2 - web 2.0.0-SNAPSHOT                      [5/6]
+[INFO]   from D:\init\ControlLocal\backend-spring\controllocal-web\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.4.1:clean (default-clean) @ controllocal-web ---
+[INFO] Deleting D:\init\ControlLocal\backend-spring\controllocal-web\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ controllocal-web ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-web\src\main\resources
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-web\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ controllocal-web ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 175 source files with javac [debug parameters release 21] to target\classes
+[INFO] /D:/init/ControlLocal/backend-spring/controllocal-web/src/main/java/com/controllocal/web/almacen/ConfiguracionS3.java: D:\init\ControlLocal\backend-spring\controllocal-web\src\main\java\com\controllocal\web\almacen\ConfiguracionS3.java uses or overrides a deprecated API.
+[INFO] /D:/init/ControlLocal/backend-spring/controllocal-web/src/main/java/com/controllocal/web/almacen/ConfiguracionS3.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ controllocal-web ---
+[INFO] skip non existing resourceDirectory D:\init\ControlLocal\backend-spring\controllocal-web\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ controllocal-web ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 5 source files with javac [debug parameters release 21] to target\test-classes
+[INFO] 
+[INFO] --- surefire:3.5.4:test (default-test) @ controllocal-web ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.controllocal.web.almacen.AlmacenDiscoTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.304 s -- in com.controllocal.web.almacen.AlmacenDiscoTest
+[INFO] Running com.controllocal.web.almacen.AlmacenS3Test
+Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of 
+the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: 
+https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (C:\Users\Ivan Piero 
+Baltazar\.m2\repository\net\bytebuddy\byte-buddy-agent\1.17.8\byte-buddy-agent-1.17.8.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has 
+been appended
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.278 s -- in com.controllocal.web.almacen.AlmacenS3Test
+[INFO] Running com.controllocal.web.seguridad.FiltroAutenticacionJwtTest
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.969 s -- in com.controllocal.web.seguridad.FiltroAutenticacionJwtTest
+[INFO] Running com.controllocal.web.seguridad.IpDelClienteTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.024 s -- in com.controllocal.web.seguridad.IpDelClienteTest
+[INFO] Running com.controllocal.web.seguridad.TokenServiceTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.030 s -- in com.controllocal.web.seguridad.TokenServiceTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 43, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] --- jar:3.4.2:jar (default-jar) @ controllocal-web ---
+[INFO] Building jar: D:\init\ControlLocal\backend-spring\controllocal-web\target\controllocal-web-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ controllocal-web ---
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-web\pom.xml to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-web\2.0.0-SNAPSHOT\controllocal-web-2.0.0-SNAPSHOT.pom
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-web\target\controllocal-web-2.0.0-SNAPSHOT.jar to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-web\2.0.0-SNAPSHOT\controllocal-web-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] -----------------< com.controllocal:controllocal-app >------------------
+[INFO] Building ControlLocal v2 - aplicacion 2.0.0-SNAPSHOT               [6/6]
+[INFO]   from D:\init\ControlLocal\backend-spring\controllocal-app\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.4.1:clean (default-clean) @ controllocal-app ---
+[INFO] Deleting D:\init\ControlLocal\backend-spring\controllocal-app\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ controllocal-app ---
+[INFO] Copying 4 resources from src\main\resources to target\classes
+[INFO] Copying 68 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ controllocal-app ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 7 source files with javac [debug parameters release 21] to target\classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ controllocal-app ---
+[INFO] Copying 1 resource from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ controllocal-app ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 33 source files with javac [debug parameters release 21] to target\test-classes
+[INFO] 
+[INFO] --- surefire:3.5.4:test (default-test) @ controllocal-app ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.controllocal.app.almacen.MigracionAlmacenTest
+Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of 
+the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: 
+https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (C:\Users\Ivan Piero 
+Baltazar\.m2\repository\net\bytebuddy\byte-buddy-agent\1.17.8\byte-buddy-agent-1.17.8.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has 
+been appended
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.040 s -- in com.controllocal.app.almacen.MigracionAlmacenTest
+[INFO] Running com.controllocal.app.arranque.ArranqueProduccionTest
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+2026-08-19T23:47:11.229-05:00 ERROR 14076 --- [controllocal-api-v2] [           main] o.s.boot.SpringApplication               : Application run failed
+
+java.lang.IllegalStateException: El perfil 'prod' esta activo pero faltan 6 variable(s) de entorno obligatoria(s):
+  - DB_URL  -> URL JDBC de PostgreSQL (jdbc:postgresql://host:5432/base)
+  - DB_USER  -> usuario de la base de datos
+  - DB_PASSWORD  -> contrasena de la base de datos (no la del compose de desarrollo)
+  - API_TOKEN_SECRET  -> secreto de firma del JWT, >= 32 caracteres (openssl rand -base64 48)
+  - CORS_ORIGENES  -> origen exacto del SPA, sin comodines ni localhost
+  - ALMACEN_PROVEEDOR  -> donde viven los binarios: DISCO (y entonces tambien ALMACEN_DIR) o S3 (y entonces ALMACEN_S3_BUCKET)
+
+El arranque se detiene a proposito (D-S0-20). En 'dev' estas variables tienen valores por defecto; en 'prod' no, para que un despliegue mal configurado no levante en silencio.
+	at com.controllocal.app.arranque.ComprobacionVariablesObligatorias.onApplicationEvent(ComprobacionVariablesObligatorias.java:106) ~[classes/:na]
+	at com.controllocal.app.arranque.ComprobacionVariablesObligatorias.onApplicationEvent(ComprobacionVariablesObligatorias.java:31) ~[classes/:na]
+	at org.springframework.context.event.SimpleApplicationEventMulticaster.doInvokeListener(SimpleApplicationEventMulticaster.java:185) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.event.SimpleApplicationEventMulticaster.invokeListener(SimpleApplicationEventMulticaster.java:178) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.event.SimpleApplicationEventMulticaster.multicastEvent(SimpleApplicationEventMulticaster.java:156) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.event.SimpleApplicationEventMulticaster.multicastEvent(SimpleApplicationEventMulticaster.java:138) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.boot.context.event.EventPublishingRunListener.multicastInitialEvent(EventPublishingRunListener.java:136) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.context.event.EventPublishingRunListener.environmentPrepared(EventPublishingRunListener.java:81) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplicationRunListeners.lambda$environmentPrepared$2(SpringApplicationRunListeners.java:64) ~[spring-boot-3.5.7.jar:3.5.7]
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75) ~[na:na]
+	at org.springframework.boot.SpringApplicationRunListeners.doWithListeners(SpringApplicationRunListeners.java:118) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplicationRunListeners.doWithListeners(SpringApplicationRunListeners.java:112) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplicationRunListeners.environmentPrepared(SpringApplicationRunListeners.java:63) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.prepareEnvironment(SpringApplication.java:353) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:313) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.builder.SpringApplicationBuilder.run(SpringApplicationBuilder.java:149) ~[spring-boot-3.5.7.jar:3.5.7]
+	at com.controllocal.app.arranque.ArranqueProduccionTest.lambda$produccionSinConfiguracionNoArranca$0(ArranqueProduccionTest.java:42) ~[test-classes/:na]
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:53) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:39) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.api.Assertions.assertThrows(Assertions.java:3153) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at com.controllocal.app.arranque.ArranqueProduccionTest.produccionSinConfiguracionNoArranca(ArranqueProduccionTest.java:41) ~[test-classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596) ~[na:na]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596) ~[na:na]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.apache.maven.surefire.junitplatform.LauncherAdapter.executeWithoutCancellationToken(LauncherAdapter.java:60) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.LauncherAdapter.execute(LauncherAdapter.java:52) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:203) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:168) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:136) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385) ~[surefire-booter-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162) ~[surefire-booter-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507) ~[surefire-booter-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495) ~[surefire-booter-3.5.4.jar:3.5.4]
+
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:47:11.479-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.a.maven.surefire.booter.ForkedBooter   : Starting ForkedBooter v3.5.4 using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:47:11.481-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.a.maven.surefire.booter.ForkedBooter   : The following 1 profile is active: "prod"
+2026-08-19T23:47:13.521-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:47:13.773-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 228 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:47:15.774-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-1 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:47:15.778-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-19T23:47:18.277-05:00  WARN 14076 --- [controllocal-api-v2] [           main] s.c.a.AnnotationConfigApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'entityManagerFactory' defined in class path resource [org/springframework/boot/autoconfigure/orm/jpa/HibernateJpaConfiguration.class]: Failed to initialize dependency 'flywayInitializer' of LoadTimeWeaverAware bean 'entityManagerFactory': Error creating bean with name 'flywayInitializer' defined in class path resource [org/springframework/boot/autoconfigure/flyway/FlywayAutoConfiguration$FlywayConfiguration.class]: Unable to obtain connection from database: El intento de conexi�n fall�.
+------------------------------------------------------------------------
+SQL State  : 08001
+Error Code : 0
+Message    : El intento de conexi�n fall�.
+
+2026-08-19T23:47:18.298-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-08-19T23:47:18.304-05:00 ERROR 14076 --- [controllocal-api-v2] [           main] o.s.boot.SpringApplication               : Application run failed
+
+org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'entityManagerFactory' defined in class path resource [org/springframework/boot/autoconfigure/orm/jpa/HibernateJpaConfiguration.class]: Failed to initialize dependency 'flywayInitializer' of LoadTimeWeaverAware bean 'entityManagerFactory': Error creating bean with name 'flywayInitializer' defined in class path resource [org/springframework/boot/autoconfigure/flyway/FlywayAutoConfiguration$FlywayConfiguration.class]: Unable to obtain connection from database: El intento de conexi�n fall�.
+------------------------------------------------------------------------
+SQL State  : 08001
+Error Code : 0
+Message    : El intento de conexi�n fall�.
+
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:328) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:973) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.builder.SpringApplicationBuilder.run(SpringApplicationBuilder.java:149) ~[spring-boot-3.5.7.jar:3.5.7]
+	at com.controllocal.app.arranque.ArranqueProduccionTest.lambda$conVariablesPresentesLaGuardaTempranaNoBloquea$1(ArranqueProduccionTest.java:78) ~[test-classes/:na]
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:53) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:35) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.api.Assertions.assertThrows(Assertions.java:3128) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at com.controllocal.app.arranque.ArranqueProduccionTest.conVariablesPresentesLaGuardaTempranaNoBloquea(ArranqueProduccionTest.java:68) ~[test-classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596) ~[na:na]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596) ~[na:na]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.apache.maven.surefire.junitplatform.LauncherAdapter.executeWithoutCancellationToken(LauncherAdapter.java:60) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.LauncherAdapter.execute(LauncherAdapter.java:52) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:203) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:168) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:136) ~[surefire-junit-platform-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385) ~[surefire-booter-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162) ~[surefire-booter-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507) ~[surefire-booter-3.5.4.jar:3.5.4]
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495) ~[surefire-booter-3.5.4.jar:3.5.4]
+Caused by: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'flywayInitializer' defined in class path resource [org/springframework/boot/autoconfigure/flyway/FlywayAutoConfiguration$FlywayConfiguration.class]: Unable to obtain connection from database: El intento de conexi�n fall�.
+------------------------------------------------------------------------
+SQL State  : 08001
+Error Code : 0
+Message    : El intento de conexi�n fall�.
+
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1826) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:202) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:315) ~[spring-beans-6.2.12.jar:6.2.12]
+	... 87 common frames omitted
+Caused by: org.flywaydb.core.internal.exception.FlywaySqlException: Unable to obtain connection from database: El intento de conexi�n fall�.
+------------------------------------------------------------------------
+SQL State  : 08001
+Error Code : 0
+Message    : El intento de conexi�n fall�.
+
+	at org.flywaydb.core.internal.jdbc.JdbcUtils.openConnection(JdbcUtils.java:71) ~[flyway-core-11.7.2.jar:na]
+	at org.flywaydb.core.internal.jdbc.JdbcConnectionFactory.<init>(JdbcConnectionFactory.java:76) ~[flyway-core-11.7.2.jar:na]
+	at org.flywaydb.core.FlywayExecutor.execute(FlywayExecutor.java:136) ~[flyway-core-11.7.2.jar:na]
+	at org.flywaydb.core.Flyway.migrate(Flyway.java:188) ~[flyway-core-11.7.2.jar:na]
+	at org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer.afterPropertiesSet(FlywayMigrationInitializer.java:66) ~[spring-boot-autoconfigure-3.5.7.jar:3.5.7]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.12.jar:6.2.12]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.12.jar:6.2.12]
+	... 94 common frames omitted
+Caused by: org.postgresql.util.PSQLException: El intento de conexi�n fall�.
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:385) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:57) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgConnection.<init>(PgConnection.java:279) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.Driver.makeConnection(Driver.java:448) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.Driver.connect(Driver.java:298) ~[postgresql-42.7.8.jar:42.7.8]
+	at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:144) ~[HikariCP-6.3.3.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:370) ~[HikariCP-6.3.3.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:207) ~[HikariCP-6.3.3.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:488) ~[HikariCP-6.3.3.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.checkFailFast(HikariPool.java:576) ~[HikariCP-6.3.3.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.<init>(HikariPool.java:97) ~[HikariCP-6.3.3.jar:na]
+	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:111) ~[HikariCP-6.3.3.jar:na]
+	at org.flywaydb.core.internal.jdbc.JdbcUtils.openConnection(JdbcUtils.java:59) ~[flyway-core-11.7.2.jar:na]
+	... 100 common frames omitted
+Caused by: java.net.UnknownHostException: no-existe-a-proposito
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:567) ~[na:na]
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327) ~[na:na]
+	at java.base/java.net.Socket.connect(Socket.java:751) ~[na:na]
+	at org.postgresql.core.PGStream.createSocket(PGStream.java:261) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.PGStream.<init>(PGStream.java:122) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.ConnectionFactoryImpl.tryConnect(ConnectionFactoryImpl.java:146) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:289) ~[postgresql-42.7.8.jar:42.7.8]
+	... 112 common frames omitted
+
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 9.137 s -- in com.controllocal.app.arranque.ArranqueProduccionTest
+[INFO] Running com.controllocal.app.arranque.ValidadorConfiguracionSeguridadTest
+[INFO] Running credenciales conocidas (H-03) y gobierno
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.017 s -- in credenciales conocidas (H-03) y gobierno
+[INFO] Running almacen persistente (2026-08-04)
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.037 s -- in almacen persistente (2026-08-04)
+[INFO] Running almacen S3 (Bloque 8)
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.046 s -- in almacen S3 (Bloque 8)
+[INFO] Running valores de desarrollo que se cuelan en prod
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in valores de desarrollo que se cuelan en prod
+[INFO] Running superficie expuesta
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in superficie expuesta
+[INFO] Running recuperacion de emergencia (V38)
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.010 s -- in recuperacion de emergencia (V38)
+[INFO] Running secreto de firma (H-01)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.008 s -- in secreto de firma (H-01)
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.220 s -- in com.controllocal.app.arranque.ValidadorConfiguracionSeguridadTest
+[INFO] Running com.controllocal.arquitectura.AislamientoDePruebasTest
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.072 s -- in com.controllocal.arquitectura.AislamientoDePruebasTest
+[INFO] Running com.controllocal.arquitectura.ArquitecturaAuditoriaTest
+2026-08-19T23:47:18.650-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.tngtech.archunit.core.PluginLoader   : Detected Java version 21.0.11
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.242 s -- in com.controllocal.arquitectura.ArquitecturaAuditoriaTest
+[INFO] Running com.controllocal.arquitectura.ArquitecturaCapasTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.270 s -- in com.controllocal.arquitectura.ArquitecturaCapasTest
+[INFO] Running com.controllocal.arquitectura.ArquitecturaTenancyTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.071 s -- in com.controllocal.arquitectura.ArquitecturaTenancyTest
+[INFO] Running com.controllocal.arquitectura.CatalogoEstadosTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.091 s -- in com.controllocal.arquitectura.CatalogoEstadosTest
+[INFO] Running com.controllocal.arquitectura.CatalogoProductoresTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.050 s -- in com.controllocal.arquitectura.CatalogoProductoresTest
+[INFO] Running com.controllocal.arquitectura.EstadosSinProductorTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.061 s -- in com.controllocal.arquitectura.EstadosSinProductorTest
+[INFO] Running com.controllocal.arquitectura.FronteraDeAutoridadEnElSpaTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.421 s -- in com.controllocal.arquitectura.FronteraDeAutoridadEnElSpaTest
+[INFO] Running com.controllocal.arquitectura.FronteraKairosTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.610 s -- in com.controllocal.arquitectura.FronteraKairosTest
+[INFO] Running com.controllocal.arquitectura.GateDeCierreTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.041 s -- in com.controllocal.arquitectura.GateDeCierreTest
+[INFO] Running com.controllocal.arquitectura.HallazgoFueraDelFocoTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.016 s -- in com.controllocal.arquitectura.HallazgoFueraDelFocoTest
+[INFO] Running com.controllocal.arquitectura.KpiComisionQueryTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.025 s -- in com.controllocal.arquitectura.KpiComisionQueryTest
+[INFO] Running com.controllocal.arquitectura.MatrizOperacionRolTest
+2026-08-19T23:47:42.362-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.tngtech.archunit.core.PluginLoader   : Detected Java version 21.0.11
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.931 s -- in com.controllocal.arquitectura.MatrizOperacionRolTest
+[INFO] Running com.controllocal.arquitectura.PoliticaDeOrdenUnicaTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.196 s -- in com.controllocal.arquitectura.PoliticaDeOrdenUnicaTest
+[INFO] Running com.controllocal.arquitectura.PoliticaUnicaTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.272 s -- in com.controllocal.arquitectura.PoliticaUnicaTest
+[INFO] Running com.controllocal.integracion.AutoridadDelDatoIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:47:47.585-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.AutoridadDelDatoIntegrationTest    : Starting AutoridadDelDatoIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:47:47.586-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.AutoridadDelDatoIntegrationTest    : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:47:50.015-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:47:50.242-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 217 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:47:51.076-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-2 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:47:51.076-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Starting...
+2026-08-19T23:47:51.777-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Start completed.
+2026-08-19T23:47:52.016-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:47:53.332-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:01.134s)
+2026-08-19T23:47:53.542-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:47:53.555-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:47:53.978-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:47:54.228-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.33.Final
+2026-08-19T23:47:54.405-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:47:55.220-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:47:55.647-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-2)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:03.120-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:03.536-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:05.588-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-08-19T23:48:28.440-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.AutoridadDelDatoIntegrationTest    : Started AutoridadDelDatoIntegrationTest in 41.072 seconds (process running for 82.776)
+2026-08-19T23:48:28.454-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 13, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 43.97 s -- in com.controllocal.integracion.AutoridadDelDatoIntegrationTest
+[INFO] Running com.controllocal.integracion.BusquedaLocalesIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:31.023-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.BusquedaLocalesIntegrationTest     : Starting BusquedaLocalesIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:31.023-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.BusquedaLocalesIntegrationTest     : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:31.259-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:31.303-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 43 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:31.495-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-3 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:31.495-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Starting...
+2026-08-19T23:48:31.520-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Start completed.
+2026-08-19T23:48:31.539-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:31.607-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.050s)
+2026-08-19T23:48:31.654-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:31.656-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:31.703-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:31.707-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:31.727-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:31.744-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-3)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:32.319-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:32.373-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:34.522-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.BusquedaLocalesIntegrationTest     : Started BusquedaLocalesIntegrationTest in 3.526 seconds (process running for 88.858)
+2026-08-19T23:48:34.524-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.356 s -- in com.controllocal.integracion.BusquedaLocalesIntegrationTest
+[INFO] Running com.controllocal.integracion.FocoDelBrokerIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:35.391-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.FocoDelBrokerIntegrationTest       : Starting FocoDelBrokerIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:35.391-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.FocoDelBrokerIntegrationTest       : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:35.673-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:35.721-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 46 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:35.883-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-4 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:35.883-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Starting...
+2026-08-19T23:48:35.908-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Start completed.
+2026-08-19T23:48:35.934-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:36.006-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.040s)
+2026-08-19T23:48:36.074-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:36.076-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:36.127-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:36.133-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:36.171-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:36.185-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-4)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:36.667-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:36.722-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:37.985-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.FocoDelBrokerIntegrationTest       : Started FocoDelBrokerIntegrationTest in 2.619 seconds (process running for 92.32)
+2026-08-19T23:48:37.986-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.141 s -- in com.controllocal.integracion.FocoDelBrokerIntegrationTest
+[INFO] Running com.controllocal.integracion.HistoricoPrecioIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:38.522-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.HistoricoPrecioIntegrationTest     : Starting HistoricoPrecioIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:38.523-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.HistoricoPrecioIntegrationTest     : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:38.788-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:38.832-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 42 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:38.981-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-5 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:38.981-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-5 - Starting...
+2026-08-19T23:48:39.001-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-5 - Start completed.
+2026-08-19T23:48:39.018-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:39.069-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.032s)
+2026-08-19T23:48:39.108-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:39.109-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:39.134-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:39.136-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:39.148-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:39.158-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-5)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:39.482-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:39.543-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:40.661-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.HistoricoPrecioIntegrationTest     : Started HistoricoPrecioIntegrationTest in 2.165 seconds (process running for 94.997)
+2026-08-19T23:48:40.663-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.227 s -- in com.controllocal.integracion.HistoricoPrecioIntegrationTest
+[INFO] Running com.controllocal.integracion.IdentidadDelBrokerIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:40.740-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.IdentidadDelBrokerIntegrationTest  : Starting IdentidadDelBrokerIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:40.740-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.IdentidadDelBrokerIntegrationTest  : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:40.996-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:41.032-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 34 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:41.151-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-6 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:41.151-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Starting...
+2026-08-19T23:48:41.176-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Start completed.
+2026-08-19T23:48:41.199-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:41.253-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.035s)
+2026-08-19T23:48:41.300-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:41.301-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:41.328-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:41.332-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:41.344-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:41.356-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-6)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:41.928-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:42.085-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:43.456-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.IdentidadDelBrokerIntegrationTest  : Started IdentidadDelBrokerIntegrationTest in 2.733 seconds (process running for 97.791)
+2026-08-19T23:48:43.457-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.787 s -- in com.controllocal.integracion.IdentidadDelBrokerIntegrationTest
+[INFO] Running com.controllocal.integracion.InterpretacionDelInicioIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:43.537-05:00  INFO 14076 --- [controllocal-api-v2] [           main] i.InterpretacionDelInicioIntegrationTest : Starting InterpretacionDelInicioIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:43.538-05:00  INFO 14076 --- [controllocal-api-v2] [           main] i.InterpretacionDelInicioIntegrationTest : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:43.829-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:43.885-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 53 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:44.054-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-7 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:44.054-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-7 - Starting...
+2026-08-19T23:48:44.082-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-7 - Start completed.
+2026-08-19T23:48:44.110-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:44.181-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.046s)
+2026-08-19T23:48:44.299-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:44.317-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:44.411-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:44.413-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:44.423-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:44.433-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-7)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:45.114-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:45.195-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:46.485-05:00  INFO 14076 --- [controllocal-api-v2] [           main] i.InterpretacionDelInicioIntegrationTest : Started InterpretacionDelInicioIntegrationTest in 2.971 seconds (process running for 100.821)
+2026-08-19T23:48:46.486-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.346 s -- in com.controllocal.integracion.InterpretacionDelInicioIntegrationTest
+[INFO] Running com.controllocal.integracion.InvariantesComisionIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:46.884-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.InvariantesComisionIntegrationTest : Starting InvariantesComisionIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:46.884-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.InvariantesComisionIntegrationTest : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:47.129-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:47.170-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 39 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:47.301-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-8 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:47.301-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-8 - Starting...
+2026-08-19T23:48:47.331-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-8 - Start completed.
+2026-08-19T23:48:47.358-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:47.420-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.036s)
+2026-08-19T23:48:47.465-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:47.467-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:47.488-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:47.492-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:47.502-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:47.512-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-8)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:47.836-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:47.893-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:49.203-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.InvariantesComisionIntegrationTest : Started InvariantesComisionIntegrationTest in 2.34 seconds (process running for 103.539)
+2026-08-19T23:48:49.204-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.457 s -- in com.controllocal.integracion.InvariantesComisionIntegrationTest
+[INFO] Running com.controllocal.integracion.NucleoUniversalIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:49.346-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.NucleoUniversalIntegrationTest     : Starting NucleoUniversalIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:49.347-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.NucleoUniversalIntegrationTest     : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:49.750-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:49.787-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 35 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:49.905-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-9 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:49.906-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-9 - Starting...
+2026-08-19T23:48:49.931-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-9 - Start completed.
+2026-08-19T23:48:49.950-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:50.006-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.036s)
+2026-08-19T23:48:50.045-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:50.046-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:50.064-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:50.066-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:50.076-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:50.087-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-9)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:50.336-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:50.387-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:51.390-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.NucleoUniversalIntegrationTest     : Started NucleoUniversalIntegrationTest in 2.068 seconds (process running for 105.726)
+2026-08-19T23:48:51.391-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+2026-08-19T23:48:51.469-05:00  WARN 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 23503
+2026-08-19T23:48:51.469-05:00 ERROR 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: El atributo "color_de_la_puerta" no esta en el catalogo
+  Where: PL/pgSQL function exigir_atributo_gobernado() line 15 at RAISE
+2026-08-19T23:48:51.571-05:00  WARN 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 23514
+2026-08-19T23:48:51.572-05:00 ERROR 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: El atributo "dormitorios" no aplica a una propiedad de tipo L
+  Where: PL/pgSQL function exigir_atributo_gobernado() line 25 at RAISE
+2026-08-19T23:48:51.749-05:00  WARN 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 22P02
+2026-08-19T23:48:51.749-05:00 ERROR 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: invalid input syntax for type json
+  Detail: Token "esto" is invalid.
+  Where: JSON data, line 1: esto...
+2026-08-19T23:48:51.921-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:51.924-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-9 - Shutdown initiated...
+2026-08-19T23:48:51.926-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-9 - Shutdown completed.
+[INFO] Tests run: 15, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.612 s -- in com.controllocal.integracion.NucleoUniversalIntegrationTest
+[INFO] Running com.controllocal.integracion.OcupacionInmuebleIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:51.964-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.OcupacionInmuebleIntegrationTest   : Starting OcupacionInmuebleIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:51.964-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.OcupacionInmuebleIntegrationTest   : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:52.181-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:52.215-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 32 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:52.339-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-10 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:52.339-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-10 - Starting...
+2026-08-19T23:48:52.366-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-10 - Start completed.
+2026-08-19T23:48:52.393-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:52.457-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.042s)
+2026-08-19T23:48:52.509-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:52.511-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:52.539-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:52.542-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:52.554-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:52.566-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-10)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:52.896-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:52.959-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:55.147-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.OcupacionInmuebleIntegrationTest   : Started OcupacionInmuebleIntegrationTest in 3.21 seconds (process running for 109.482)
+2026-08-19T23:48:55.148-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.496 s -- in com.controllocal.integracion.OcupacionInmuebleIntegrationTest
+[INFO] Running com.controllocal.integracion.PadronDeGobiernoIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:55.459-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.PadronDeGobiernoIntegrationTest    : Starting PadronDeGobiernoIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:55.459-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.PadronDeGobiernoIntegrationTest    : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:55.729-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:55.767-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 36 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:55.878-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-11 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:55.878-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-11 - Starting...
+2026-08-19T23:48:55.900-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-11 - Start completed.
+2026-08-19T23:48:55.921-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:55.990-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.047s)
+2026-08-19T23:48:56.037-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:56.038-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:56.063-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:56.066-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:56.083-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:56.095-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-11)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:56.371-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:56.428-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:48:57.482-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.PadronDeGobiernoIntegrationTest    : Started PadronDeGobiernoIntegrationTest in 2.049 seconds (process running for 111.818)
+2026-08-19T23:48:57.485-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.179 s -- in com.controllocal.integracion.PadronDeGobiernoIntegrationTest
+[INFO] Running com.controllocal.integracion.PropiedadUniversalIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:48:57.630-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.PropiedadUniversalIntegrationTest  : Starting PropiedadUniversalIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:48:57.630-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.PropiedadUniversalIntegrationTest  : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:48:57.863-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:48:57.898-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 33 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:48:58.031-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-12 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:48:58.032-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-12 - Starting...
+2026-08-19T23:48:58.056-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-12 - Start completed.
+2026-08-19T23:48:58.080-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:48:58.154-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.047s)
+2026-08-19T23:48:58.213-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:48:58.215-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:48:58.249-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:48:58.252-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:48:58.263-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:48:58.277-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-12)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:48:58.855-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:48:59.011-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:49:00.186-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.PropiedadUniversalIntegrationTest  : Started PropiedadUniversalIntegrationTest in 2.573 seconds (process running for 114.521)
+2026-08-19T23:49:00.187-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+2026-08-19T23:49:02.087-05:00  WARN 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 23514
+2026-08-19T23:49:02.087-05:00 ERROR 14076 --- [controllocal-api-v2] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: new row for relation "condicion_economica_captacion" violates check constraint "ck_condicion_tipo_base"
+  Detail: Failing row contains (206, 266, A, 2000.00, PEN, Z, R, 0.0000, PEN, N, Comision no pactada al registrar la propiedad; se define antes d..., 2026-08-19 23:49:02.06965-05, null).
+2026-08-19T23:49:03.242-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:49:03.242-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-12 - Shutdown initiated...
+2026-08-19T23:49:03.243-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-12 - Shutdown completed.
+[INFO] Tests run: 24, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.635 s -- in com.controllocal.integracion.PropiedadUniversalIntegrationTest
+[INFO] Running com.controllocal.integracion.RepositorioEstadosIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:49:03.275-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.RepositorioEstadosIntegrationTest  : Starting RepositorioEstadosIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:49:03.275-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.RepositorioEstadosIntegrationTest  : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:49:03.480-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:49:03.508-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 26 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:49:03.608-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-13 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:49:03.608-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-13 - Starting...
+2026-08-19T23:49:03.628-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-13 - Start completed.
+2026-08-19T23:49:03.646-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:49:03.696-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.032s)
+2026-08-19T23:49:03.739-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:49:03.740-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:49:03.761-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:49:03.763-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:49:03.776-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:49:03.786-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-13)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:49:04.150-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:49:04.227-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:49:05.533-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.c.i.RepositorioEstadosIntegrationTest  : Started RepositorioEstadosIntegrationTest in 2.28 seconds (process running for 119.868)
+2026-08-19T23:49:05.534-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.326 s -- in com.controllocal.integracion.RepositorioEstadosIntegrationTest
+[INFO] Running com.controllocal.integracion.SimulacroRecuperacionIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:49:06.598-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.i.SimulacroRecuperacionIntegrationTest : Starting SimulacroRecuperacionIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:49:06.599-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.i.SimulacroRecuperacionIntegrationTest : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:49:06.842-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:49:06.884-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 40 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:49:07.051-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-14 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:49:07.051-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-14 - Starting...
+2026-08-19T23:49:07.075-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-14 - Start completed.
+2026-08-19T23:49:07.107-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:49:07.180-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.039s)
+2026-08-19T23:49:07.237-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:49:07.238-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:49:07.270-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:49:07.273-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:49:07.285-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:49:07.299-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-14)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:49:07.575-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:49:07.647-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:49:08.736-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.i.SimulacroRecuperacionIntegrationTest : Started SimulacroRecuperacionIntegrationTest in 2.16 seconds (process running for 123.071)
+2026-08-19T23:49:08.736-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.143 s -- in com.controllocal.integracion.SimulacroRecuperacionIntegrationTest
+[INFO] Running com.controllocal.integracion.VocabularioPersistidoIntegrationTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2026-08-19T23:49:09.735-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.i.VocabularioPersistidoIntegrationTest : Starting VocabularioPersistidoIntegrationTest using Java 21.0.11 with PID 14076 (started by Ivan Piero Baltazar in D:\init\ControlLocal\backend-spring\controllocal-app)
+2026-08-19T23:49:09.735-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.i.VocabularioPersistidoIntegrationTest : No active profile set, falling back to 1 default profile: "dev"
+2026-08-19T23:49:09.949-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-19T23:49:09.978-05:00  INFO 14076 --- [controllocal-api-v2] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 26 ms. Found 56 JPA repository interfaces.
+2026-08-19T23:49:10.086-05:00  WARN 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariConfig           : HikariPool-15 - keepaliveTime is greater than or equal to maxLifetime, disabling it.
+2026-08-19T23:49:10.086-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-15 - Starting...
+2026-08-19T23:49:10.107-05:00  INFO 14076 --- [controllocal-api-v2] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-15 - Start completed.
+2026-08-19T23:49:10.125-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/controllocal_repositorios (PostgreSQL 17.11)
+2026-08-19T23:49:10.181-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 65 migrations (execution time 00:00.037s)
+2026-08-19T23:49:10.215-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 65
+2026-08-19T23:49:10.216-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-08-19T23:49:10.235-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-19T23:49:10.237-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-19T23:49:10.245-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-19T23:49:10.253-05:00  INFO 14076 --- [controllocal-api-v2] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-15)']
+	Database driver: undefined/unknown
+	Database version: 17.11
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-19T23:49:10.569-05:00  INFO 14076 --- [controllocal-api-v2] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-19T23:49:10.641-05:00  INFO 14076 --- [controllocal-api-v2] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-19T23:49:12.295-05:00  INFO 14076 --- [controllocal-api-v2] [           main] c.i.VocabularioPersistidoIntegrationTest : Started VocabularioPersistidoIntegrationTest in 2.575 seconds (process running for 126.631)
+2026-08-19T23:49:12.297-05:00  WARN 14076 --- [controllocal-api-v2] [           main] c.c.a.a.ComprobacionArranqueSeguridad    : =====================================================================
+API_TOKEN_SECRET no esta configurado (o es demasiado corto, o es el
+literal de desarrollo): se esta firmando con el SECRETO FIJO DE
+DESARROLLO, publicado en el repositorio y compartido con GlassFish.
+Vale para dev; en produccion el arranque se detendria.
+=====================================================================
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.622 s -- in com.controllocal.integracion.VocabularioPersistidoIntegrationTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 197, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] --- jar:3.4.2:jar (default-jar) @ controllocal-app ---
+[INFO] Building jar: D:\init\ControlLocal\backend-spring\controllocal-app\target\controllocal-app-2.0.0-SNAPSHOT.jar
+[INFO] 
+[INFO] --- spring-boot:3.5.7:repackage (repackage) @ controllocal-app ---
+[INFO] Replacing main artifact D:\init\ControlLocal\backend-spring\controllocal-app\target\controllocal-app-2.0.0-SNAPSHOT.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+[INFO] The original artifact has been renamed to D:\init\ControlLocal\backend-spring\controllocal-app\target\controllocal-app-2.0.0-SNAPSHOT.jar.original
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ controllocal-app ---
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-app\pom.xml to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-app\2.0.0-SNAPSHOT\controllocal-app-2.0.0-SNAPSHOT.pom
+[INFO] Installing D:\init\ControlLocal\backend-spring\controllocal-app\target\controllocal-app-2.0.0-SNAPSHOT.jar to C:\Users\Ivan Piero Baltazar\.m2\repository\com\controllocal\controllocal-app\2.0.0-SNAPSHOT\controllocal-app-2.0.0-SNAPSHOT.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for ControlLocal Spring (backend v2) 2.0.0-SNAPSHOT:
+[INFO] 
+[INFO] ControlLocal Spring (backend v2) ................... SUCCESS [  0.355 s]
+[INFO] ControlLocal v2 - dominio .......................... SUCCESS [  5.086 s]
+[INFO] ControlLocal v2 - persistencia ..................... SUCCESS [  2.196 s]
+[INFO] ControlLocal v2 - servicios ........................ SUCCESS [ 36.942 s]
+[INFO] ControlLocal v2 - web .............................. SUCCESS [ 10.172 s]
+[INFO] ControlLocal v2 - aplicacion ....................... SUCCESS [02:12 min]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  03:08 min
+[INFO] Finished at: 2026-08-19T23:49:14-05:00
+[INFO] ------------------------------------------------------------------------
+
+== 3. Los tests de integracion se EJECUTARON, no se saltaron ==
+  OK   BusquedaLocalesIntegrationTest ejecutado
+  OK   FocoDelBrokerIntegrationTest ejecutado
+  OK   HistoricoPrecioIntegrationTest ejecutado
+  OK   IdentidadDelBrokerIntegrationTest ejecutado
+  OK   InterpretacionDelInicioIntegrationTest ejecutado
+  OK   InvariantesComisionIntegrationTest ejecutado
+  OK   NucleoUniversalIntegrationTest ejecutado
+  OK   OcupacionInmuebleIntegrationTest ejecutado
+  OK   PadronDeGobiernoIntegrationTest ejecutado
+  OK   PropiedadUniversalIntegrationTest ejecutado
+  OK   RepositorioEstadosIntegrationTest ejecutado
+  OK   SimulacroRecuperacionIntegrationTest ejecutado
+  OK   VocabularioPersistidoIntegrationTest ejecutado
+
+== 4. Suites E2E del cierre ==
+
+-- suite comision-movimientos --
+
+== Entorno E2E aislado 20260820044914-2573 ==
+Base: controllocal_e2e_20260820044914_2573
+ Network controllocal-e2e-20260820044914-2573_default Creating 
+ Network controllocal-e2e-20260820044914-2573_default Creating 
+ Network controllocal-e2e-20260820044914-2573_default Created 
+ Network controllocal-e2e-20260820044914-2573_default Created 
+ Container controllocal-postgres-e2e-20260820044914-2573 Creating 
+ Container controllocal-postgres-e2e-20260820044914-2573 Created 
+ Container controllocal-api-e2e-20260820044914-2573 Creating 
+ Container controllocal-api-e2e-20260820044914-2573 Created 
+ Container controllocal-postgres-e2e-20260820044914-2573 Starting 
+ Container controllocal-postgres-e2e-20260820044914-2573 Started 
+ Container controllocal-postgres-e2e-20260820044914-2573 Waiting 
+ Container controllocal-postgres-e2e-20260820044914-2573 Healthy 
+ Container controllocal-api-e2e-20260820044914-2573 Starting 
+ Container controllocal-api-e2e-20260820044914-2573 Started 
+ Container controllocal-postgres-e2e-20260820044914-2573 Waiting 
+ Container controllocal-api-e2e-20260820044914-2573 Waiting 
+ Container controllocal-api-e2e-20260820044914-2573 Healthy 
+ Container controllocal-postgres-e2e-20260820044914-2573 Healthy 
+
+== Suite comision-movimientos / corrida 20260820044914-2573 ==
+
+== 1. Contexto efimero y actores ==
+  OK   la base lleva identificador exclusivo de corrida
+  OK   login del agente
+  OK   login del broker supervisor
+
+== 2. Montaje: contrato cerrado con comision bruta de 1000 PEN ==
+  OK   la comision nace PENDIENTE con la bruta completa
+  OK   nace sin caja: nada cobrado y todo el bruto por cobrar
+  OK   nace sin reparto: el broker no ha decidido todavia
+
+== 3. El gate es del BROKER, sin agente y sin admin ==
+  OK   el agente no registra movimientos (403)
+  OK   sin sesion no se registra nada (401)
+  OK   un contrato inexistente responde 404
+
+== 4. Validaciones del cuerpo ==
+  OK   un tipo de movimiento desconocido se rechaza
+  OK   un movimiento de importe cero se rechaza
+  OK   un movimiento de importe negativo se rechaza
+  OK   la moneda del movimiento no puede diferir de la liquidacion
+  OK   un movimiento con fecha futura se rechaza
+  OK   no se paga al agente antes de que el broker reparta
+  OK   ninguna validacion dejo rastro en comision_movimiento
+
+== 5. Reparto y primer cobro parcial ==
+  OK   el broker reparte 400 al agente y 600 quedan para la empresa
+  OK   repartir no mueve caja ni cambia el estado
+  OK   un cobro parcial deriva el estado a PARCIAL
+  OK   el saldo baja exactamente lo cobrado
+
+== 6. Idempotencia: la clave distingue el reintento del segundo abono ==
+  OK   el segundo abono con clave nueva suma
+  OK   reenviar la MISMA clave devuelve el resultado original, no cobra otra vez
+  OK   y no deja una segunda fila
+  OK   la misma clave con otro comando es 409, no un exito silencioso
+  OK   el conflicto no altero la caja
+  OK   el KPI de cobrado refleja 600, no 900: el reintento no genero dinero
+
+== 6b. Carrera real: dos peticiones simultaneas con la misma clave ==
+  OK   dos peticiones simultaneas con la misma clave dejan UNA sola fila
+  OK   y la caja solo subio 100, no 200
+
+== 6c. Dos abonos legitimos identicos con claves distintas ==
+  OK   dos comandos distintos con el mismo contenido SI suman los dos
+  OK   y dejan dos filas, una por clave
+  OK   un movimiento sin cabecera sigue admitiendose (contrato legado)
+
+== 7. Topes economicos sobre el saldo real ==
+  OK   no se cobra mas que el saldo pendiente
+  OK   una reversion no puede devolver mas de lo cobrado
+  OK   una reversion valida devuelve saldo al pendiente
+  OK   cobrado mas saldo sigue siendo la bruta
+
+== 8. Pago al agente: pata independiente del cobro ==
+  OK   el pago al agente agota su parte sin tocar el cobro
+  OK   pagar al agente no altera lo cobrado por la corredora
+  OK   no se paga al agente mas que su parte asignada
+
+== 9. El ajuste NO es un comando monetario ==
+  OK   el ajuste se rechaza con 400 y un motivo explicito
+  OK   y no deja ninguna fila de tipo A
+  OK   el rechazo no toco ningun saldo
+
+== 10. El estado COBRADA lo produce el saldo, no una eleccion ==
+  OK   agotar el saldo deriva el estado a COBRADA
+  OK   lo cobrado iguala la bruta y no queda saldo
+  OK   una comision cobrada no admite mas cobros
+  OK   revertir una comision cobrada se rechaza (con el mensaje de la maquina)
+  OK   ese rechazo revierte tambien el movimiento: no queda fila R de mas
+
+== 11. Evidencia persistida y auditoria ==
+  OK   los nueve movimientos quedan en orden, con importe y rol del actor
+  OK   ni el reintento, ni la carrera, ni el 409, ni el ajuste dejaron fila de mas
+  OK   todos heredan el tenant de la liquidacion
+  OK   solo se auditan los cambios REALES de estado: P>R y R>C
+
+== 12. El KPI mira el universo filtrado, no la pagina ==
+  OK   el KPI de generado sigue siendo la bruta
+  OK   el KPI de cobrado sale de los movimientos: cobros menos reversiones
+  OK   el KPI de pagado al agente sale de los movimientos P
+  OK   tabla y resumen parten del mismo conjunto de candidatos
+
+== 13. Una comision anulada no admite ningun movimiento ==
+  OK   una comision anulada rechaza el movimiento C
+  OK   una comision anulada rechaza el movimiento P
+  OK   una comision anulada rechaza el movimiento A
+  OK   una comision anulada rechaza el movimiento R
+  OK   la anulacion no borro la evidencia economica previa
+
+== 14. Comision bruta CERO: respuesta controlada, nunca 500 ==
+  OK   una captacion sin comision genera una liquidacion de bruto 0
+  OK   cobrar una comision de bruto 0 responde 200, no 500
+  OK   y no escribe ningun movimiento de importe cero
+  OK   los saldos quedan a cero y cuadran
+  OK   la transaccion no dejo filas parciales: cero movimientos para esa liquidacion
+  OK   el historial si registra la transicion P>C
+
+== Resultado: 65 OK, 0 fallas ==
+ Container controllocal-api-e2e-20260820044914-2573 Stopping 
+ Container controllocal-api-e2e-20260820044914-2573 Stopped 
+ Container controllocal-api-e2e-20260820044914-2573 Removing 
+ Container controllocal-api-e2e-20260820044914-2573 Removed 
+ Container controllocal-postgres-e2e-20260820044914-2573 Stopping 
+ Container controllocal-postgres-e2e-20260820044914-2573 Stopped 
+ Container controllocal-postgres-e2e-20260820044914-2573 Removing 
+ Container controllocal-postgres-e2e-20260820044914-2573 Removed 
+ Network controllocal-e2e-20260820044914-2573_default Removing 
+ Network controllocal-e2e-20260820044914-2573_default Removed 
+Base controllocal_e2e_20260820044914_2573 y su entorno eliminados en 2.0 s.
+Entorno 20260820044914-2573 eliminado: sin contenedores, volumenes ni red residuales.
+
+-- suite disponibilidad-contrato --
+
+== Entorno E2E aislado 20260820045022-6821 ==
+Base: controllocal_e2e_20260820045022_6821
+ Network controllocal-e2e-20260820045022-6821_default Creating 
+ Network controllocal-e2e-20260820045022-6821_default Creating 
+ Network controllocal-e2e-20260820045022-6821_default Created 
+ Network controllocal-e2e-20260820045022-6821_default Created 
+ Container controllocal-postgres-e2e-20260820045022-6821 Creating 
+ Container controllocal-postgres-e2e-20260820045022-6821 Created 
+ Container controllocal-api-e2e-20260820045022-6821 Creating 
+ Container controllocal-api-e2e-20260820045022-6821 Created 
+ Container controllocal-postgres-e2e-20260820045022-6821 Starting 
+ Container controllocal-postgres-e2e-20260820045022-6821 Started 
+ Container controllocal-postgres-e2e-20260820045022-6821 Waiting 
+ Container controllocal-postgres-e2e-20260820045022-6821 Healthy 
+ Container controllocal-api-e2e-20260820045022-6821 Starting 
+ Container controllocal-api-e2e-20260820045022-6821 Started 
+ Container controllocal-postgres-e2e-20260820045022-6821 Waiting 
+ Container controllocal-api-e2e-20260820045022-6821 Waiting 
+ Container controllocal-api-e2e-20260820045022-6821 Healthy 
+ Container controllocal-postgres-e2e-20260820045022-6821 Healthy 
+
+== Suite disponibilidad-contrato / corrida 20260820045022-6821 ==
+
+== 1. Actores ==
+  OK   login del agente
+  OK   login del broker supervisor
+  OK   login del broker de otro equipo
+
+== 2. Contrato P: existir no saca el local del mercado ==
+  OK   el local nace DISPONIBLE
+  OK   el contrato nace EN PROCESO
+  OK   un contrato P no cambia la disponibilidad
+
+== 3. Anular desde P: no hay nada que liberar ==
+  OK   el contrato queda ANULADO
+  OK   la disponibilidad original queda intacta
+  OK   revisar un contrato que nunca ocupo el local se rechaza con 400
+
+== 4. Firmar y activar: el local queda ALQUILADO y sigue asi ==
+  OK   firmar ejecuta el cierre comercial: el local queda ALQUILADO
+  OK   activar D->V no vuelve a tocar la disponibilidad
+
+== 5. Finalizar: sigue ALQUILADO y aparece la revision ==
+  OK   finalizar NO devuelve el local al mercado
+  OK   y crea la tarea de revision atada a ESE contrato
+
+== 6. La revision es del BROKER y valida su cuerpo ==
+  OK   el agente no revisa (403)
+  OK   un broker de otro equipo no revisa: fuera de su alcance por captacion (403)
+  OK   el motivo es obligatorio
+  OK   RESERVAR no es un resultado posible de la revision
+
+== 7. VOLVER_AL_MERCADO: A -> D ==
+  OK   la revision devuelve el local al mercado
+  OK   la respuesta declara el trayecto A->D
+  OK   y cierra la tarea de revision de ESE contrato
+  OK   el historial guarda la transicion con actor, rol y motivo
+
+== 8. La historia comercial NO revive ==
+  OK   la captacion sigue CERRADA
+  OK   las publicaciones siguen dadas de baja
+  OK   la oportunidad sigue finalizada exitosa
+  OK   la solicitud sigue cerrada
+  OK   la liquidacion de comision no se toco
+
+== 9. Idempotencia y conflicto de la revision ==
+  OK   repetir la MISMA revision es idempotente, no un 500
+  OK   y no crea una segunda fila
+  OK   una revision contradictoria es 409, no una violacion UNIQUE
+  OK   y la disponibilidad no cambio
+
+== 10. Rescindir + RETIRAR_DEL_MERCADO: A -> T ==
+  OK   rescindir tampoco libera el local
+  OK   la revision retira el local del mercado
+  OK   la respuesta declara el trayecto A->T
+
+== 11. Renovacion: nunca una ventana falsa de disponibilidad ==
+  OK   el contrato anterior queda RENOVADO
+  OK   el sucesor nace vivo
+  OK   el local permanece ALQUILADO durante toda la renovacion
+  OK   nunca hay dos contratos vivos sobre la misma propiedad
+  OK   revisar el contrato RENOVADO se rechaza
+  OK   con un sucesor vivo no se puede liberar el local
+  OK   y el local sigue ALQUILADO
+  OK   no quedo ninguna revision registrada para ese contrato
+
+== Resultado: 41 OK, 0 fallas ==
+ Container controllocal-api-e2e-20260820045022-6821 Stopping 
+ Container controllocal-api-e2e-20260820045022-6821 Stopped 
+ Container controllocal-api-e2e-20260820045022-6821 Removing 
+ Container controllocal-api-e2e-20260820045022-6821 Removed 
+ Container controllocal-postgres-e2e-20260820045022-6821 Stopping 
+ Container controllocal-postgres-e2e-20260820045022-6821 Stopped 
+ Container controllocal-postgres-e2e-20260820045022-6821 Removing 
+ Container controllocal-postgres-e2e-20260820045022-6821 Removed 
+ Network controllocal-e2e-20260820045022-6821_default Removing 
+ Network controllocal-e2e-20260820045022-6821_default Removed 
+Base controllocal_e2e_20260820045022_6821 y su entorno eliminados en 2.1 s.
+Entorno 20260820045022-6821 eliminado: sin contenedores, volumenes ni red residuales.
+
+-- suite f4-solicitud --
+
+== Entorno E2E aislado 20260820045135-8039 ==
+Base: controllocal_e2e_20260820045135_8039
+ Network controllocal-e2e-20260820045135-8039_default Creating 
+ Network controllocal-e2e-20260820045135-8039_default Creating 
+ Network controllocal-e2e-20260820045135-8039_default Created 
+ Network controllocal-e2e-20260820045135-8039_default Created 
+ Container controllocal-postgres-e2e-20260820045135-8039 Creating 
+ Container controllocal-postgres-e2e-20260820045135-8039 Created 
+ Container controllocal-api-e2e-20260820045135-8039 Creating 
+ Container controllocal-api-e2e-20260820045135-8039 Created 
+ Container controllocal-postgres-e2e-20260820045135-8039 Starting 
+ Container controllocal-postgres-e2e-20260820045135-8039 Started 
+ Container controllocal-postgres-e2e-20260820045135-8039 Waiting 
+ Container controllocal-postgres-e2e-20260820045135-8039 Healthy 
+ Container controllocal-api-e2e-20260820045135-8039 Starting 
+ Container controllocal-api-e2e-20260820045135-8039 Started 
+ Container controllocal-api-e2e-20260820045135-8039 Waiting 
+ Container controllocal-postgres-e2e-20260820045135-8039 Waiting 
+ Container controllocal-api-e2e-20260820045135-8039 Healthy 
+ Container controllocal-postgres-e2e-20260820045135-8039 Healthy 

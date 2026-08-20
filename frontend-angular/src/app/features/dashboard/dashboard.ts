@@ -42,13 +42,13 @@ import {
 } from '../../core/api/tareas.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RolSesion } from '../../core/auth/sesion.model';
+import { TonoKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 import { fechaCorta, SIN_DATO } from '../../core/formato';
 import { NavegacionLegado } from '../../core/navegacion-legado';
 import { BarraFiltros } from '../../shared/barra-filtros/barra-filtros';
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { PanelLateral } from '../../shared/panel-lateral/panel-lateral';
-import { TarjetaKpi, TonoKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
 /** Una tarjeta de la fila superior: número grande y, si lleva ruta, atajo. */
 interface Kpi {
@@ -198,7 +198,6 @@ const SENAL_AUSENTE: Omit<IndicadorSenal, 'concepto'> = {
     NgTemplateOutlet,
     PanelLateral,
     RouterLink,
-    TarjetaKpi,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
@@ -603,190 +602,7 @@ export class Dashboard implements OnInit {
     return TONO_POR_NIVEL[this.senal(concepto).nivelAtencion];
   }
 
-  protected readonly kpis = computed<Kpi[]>(() => {
-    const i = this.indicadores();
-    if (!i) {
-      return [];
-    }
-    if (this.esAdmin()) {
-      return [
-        { etiqueta: 'Brokers activos', valor: i.brokersActivos, tono: 'azul', ruta: '/brokers' },
-        {
-          etiqueta: 'Agentes activos',
-          valor: i.agentesActivos,
-          tono: 'azul',
-          ruta: '/asignaciones',
-        },
-        {
-          etiqueta: 'Captaciones activas',
-          valor: i.captacionesActivas,
-          tono: 'verde',
-          ruta: '/captaciones',
-        },
-        {
-          etiqueta: 'Operaciones abiertas',
-          valor: i.oportunidadesActivas,
-          tono: 'info',
-          ruta: '/oportunidades',
-        },
-      ];
-    }
-    if (this.esBroker()) {
-      return [
-        {
-          etiqueta: 'Captaciones por revisar',
-          valor: i.captacionesPorRevisar,
-          tono: this.tono('CAPTACION_POR_REVISAR'),
-          ruta: '/captaciones/pendientes',
-        },
-        {
-          etiqueta: 'Solicitudes por revisar',
-          valor: i.solicitudesPorEvaluar,
-          tono: this.tono('SOLICITUD_POR_EVALUAR'),
-          ruta: '/solicitudes/revisar',
-        },
-        {
-          etiqueta: 'Operaciones abiertas',
-          valor: i.oportunidadesActivas,
-          tono: 'info',
-          ruta: '/oportunidades',
-        },
-        {
-          etiqueta: 'Cierres del equipo',
-          valor: i.cierres,
-          tono: 'verde',
-          pie: this.etiquetaPeriodo().toLowerCase(),
-          ruta: '/propiedades-alquiladas',
-        },
-        {
-          etiqueta: 'Propiedades del equipo',
-          valor: i.propiedadesEquipo,
-          tono: 'azul',
-          pie: 'inmuebles captados',
-          ruta: '/propiedades-equipo',
-        },
-      ];
-    }
-    return [
-      {
-        etiqueta: 'Mis captaciones',
-        valor: i.captacionesTotales,
-        tono: 'azul',
-        pie: `${i.captacionesActivas} activas · ${i.captacionesObservadas} observadas`,
-        ruta: '/captaciones',
-      },
-      {
-        etiqueta: 'Operaciones abiertas',
-        valor: i.oportunidadesActivas,
-        tono: 'info',
-        ruta: '/oportunidades',
-      },
-      {
-        etiqueta: 'Visitas',
-        valor: i.visitas,
-        tono: 'azul',
-        pie: this.etiquetaPeriodo().toLowerCase(),
-        ruta: '/visitas',
-      },
-      {
-        etiqueta: 'Interacciones',
-        valor: i.interacciones,
-        tono: 'azul',
-        pie: this.etiquetaPeriodo().toLowerCase(),
-        ruta: '/interacciones',
-      },
-    ];
-  });
 
-  protected readonly senales = computed<Senal[]>(() => {
-    const i = this.indicadores();
-    if (!i) {
-      return [];
-    }
-    const op = i.operativo;
-    if (this.esAdmin()) {
-      return [
-        {
-          etiqueta: 'Prospectos sin contactar a tiempo',
-          valor: String(op.recontactosVencidos),
-          tono: this.tono('RECONTACTO_VENCIDO'),
-          pie: 'se enfrían si nadie los llama',
-        },
-        {
-          etiqueta: 'Aprobadas sin contrato',
-          valor: String(op.solicitudesSinCierre),
-          tono: this.tono('SOLICITUD_APROBADA_SIN_CIERRE'),
-          pie: 'ya aprobadas, falta firmar',
-        },
-        {
-          etiqueta: 'Prospectos captados',
-          valor: `${op.conversionProspeccionCaptacion}%`,
-          tono: 'info',
-          pie: 'de los trabajados en el periodo',
-        },
-        {
-          etiqueta: 'Equipo en operación',
-          valor: String(i.agentesActivos),
-          tono: 'azul',
-          pie: `${i.brokersActivos} brokers`,
-        },
-      ];
-    }
-    if (this.esBroker()) {
-      return [
-        {
-          etiqueta: 'Prospectos sin contactar a tiempo',
-          valor: String(op.recontactosVencidos),
-          tono: this.tono('RECONTACTO_VENCIDO'),
-          pie: 'de tu equipo',
-        },
-        {
-          etiqueta: 'Aprobadas sin contrato',
-          valor: String(op.solicitudesSinCierre),
-          tono: this.tono('SOLICITUD_APROBADA_SIN_CIERRE'),
-          pie: 'falta firmar',
-        },
-        {
-          etiqueta: 'Visitas pendientes',
-          valor: String(op.visitasPendientes),
-          tono: this.tono('VISITA_PENDIENTE'),
-          pie: 'por hacer o sin resultado',
-        },
-        {
-          etiqueta: 'Prospectos captados',
-          valor: `${op.conversionProspeccionCaptacion}%`,
-          tono: 'info',
-          pie: 'de los trabajados en el periodo',
-        },
-      ];
-    }
-    return [
-      {
-        etiqueta: 'Prospectos sin contactar a tiempo',
-        valor: String(op.recontactosVencidos),
-        tono: this.tono('RECONTACTO_VENCIDO'),
-        pie: 'empieza por aquí',
-      },
-      {
-        etiqueta: 'Atraso promedio',
-        valor: String(op.diasPromedioSinSeguimiento),
-        tono: this.tono('DEMORA_DE_SEGUIMIENTO'),
-        pie: 'días desde que debiste llamarlos',
-      },
-      {
-        etiqueta: 'Visitas pendientes',
-        valor: String(op.visitasPendientes),
-        tono: this.tono('VISITA_PENDIENTE'),
-        pie: 'por hacer o sin resultado',
-      },
-      {
-        etiqueta: 'Aprobadas sin contrato',
-        valor: String(op.solicitudesSinCierre),
-        tono: this.tono('SOLICITUD_APROBADA_SIN_CIERRE'),
-        pie: 'falta firmar',
-      },
-    ];
-  });
 
   /**
    * Centro de control de quien supervisa. Sustituye a la bandeja —que no
@@ -914,76 +730,9 @@ export class Dashboard implements OnInit {
     };
   }
 
-  // --- Captaciones: barra apilada -----------------------------------------
 
-  /**
-   * Los cubos de salud son **del periodo**; las etapas, acumuladas. Cuando el
-   * periodo no tuvo ninguna captación se muestran las etapas —que es lo que
-   * hacía el Blazor— pero **diciéndolo en el subtítulo**, porque son dos
-   * lecturas distintas y no un mismo dato con otro nombre.
-   */
-  protected readonly usandoEtapas = computed(() => {
-    const i = this.indicadores();
-    if (!i) return false;
-    return i.captacionesSalud.reduce((total, c) => total + c.valor, 0) === 0;
-  });
 
-  protected readonly cubos = computed<IndicadorConteo[]>(() => {
-    const i = this.indicadores();
-    if (!i) return [];
-    return this.usandoEtapas() ? i.etapas : i.captacionesSalud;
-  });
 
-  protected readonly totalCubos = computed(() =>
-    this.cubos().reduce((total, c) => total + c.valor, 0),
-  );
-
-  protected readonly tramos = computed<Tramo[]>(() => {
-    const total = this.totalCubos();
-    const etapas = this.usandoEtapas();
-    return this.cubos().map((cubo, indice) => ({
-      ...cubo,
-      porcentaje: total > 0 ? Math.round((cubo.valor * 100) / total) : 0,
-      color: etapas
-        ? (RAMPA_ETAPAS[indice] ?? COLOR_RESTO)
-        : (COLOR_SALUD[cubo.nombre] ?? COLOR_RESTO),
-    }));
-  });
-
-  protected readonly tituloCubos = computed(() =>
-    this.usandoEtapas() ? 'Captaciones por etapa' : 'Salud de captaciones',
-  );
-
-  protected readonly subtituloCubos = computed(() =>
-    this.usandoEtapas()
-      ? `Sin captaciones nuevas en ${this.etiquetaPeriodo().toLowerCase()}; se muestra el acumulado por etapa del proceso`
-      : `Estado de las captaciones nacidas en ${this.etiquetaPeriodo().toLowerCase()}`,
-  );
-
-  // --- Desempeño y conversión ---------------------------------------------
-
-  /** Top 3 por carga sobre lo que ya llegó (≤ 8 filas): sin llamada extra. */
-  protected readonly desempeno = computed(() =>
-    [...(this.indicadores()?.desempeno ?? [])]
-      .sort((a, b) => b.captaciones - a.captaciones || b.cierres - a.cierres)
-      .slice(0, 3),
-  );
-
-  /**
-   * Conversión propia por cohorte: de las captaciones del periodo, cuántas ya
-   * cerraron. `null` cuando no hubo ninguna, y entonces la pantalla lo dice en
-   * vez de pintar un número.
-   *
-   * Aquí había un respaldo heredado del Blazor: si la cohorte era 0, se tomaba
-   * **la conversión del primero de la tabla de desempeño**. Un agente sin
-   * cierres veía como propia la cifra del que más cerró. No era un umbral mal
-   * puesto —era un número de otra persona— y el descongelado del contrato dice
-   * justamente que una rareza de la v1 no se replica por inercia.
-   */
-  protected readonly conversion = computed(() => this.indicadores()?.conversionPropia ?? null);
-
-  /** Ancho de la barra del medidor. Sin muestra no hay barra que llenar. */
-  protected readonly conversionAncho = computed(() => this.conversion() ?? 0);
 
   protected iniciales(nombre: string): string {
     return nombre

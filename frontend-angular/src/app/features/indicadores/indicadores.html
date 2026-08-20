@@ -36,49 +36,6 @@
 />
 
 @if (!cargando() && datos(); as i) {
-  <!-- Un ratio contra su límite: figura + medidor, no un gráfico de una barra. -->
-  <section class="cl-tarjeta hero">
-    <div>
-      <!-- Sin captaciones en el periodo no hay tasa: no es 0 %, es que no hubo qué medir. -->
-      @if (conversion() === null) {
-        <p class="figura">—</p>
-        <p class="cl-menudo">
-          sin captaciones abiertas en {{ etiquetaPeriodo().toLowerCase() }}, así que todavía no hay
-          conversión que medir
-        </p>
-      } @else {
-        <p class="figura">{{ conversion() }}<span>%</span></p>
-        <p class="cl-menudo">
-          de las captaciones de {{ etiquetaPeriodo().toLowerCase() }} ya terminaron en contrato
-        </p>
-      }
-    </div>
-    <div class="medida">
-      <div
-        class="medidor"
-        role="img"
-        [attr.aria-label]="
-          conversion() === null
-            ? 'Sin captaciones en el periodo'
-            : conversion() + ' por ciento de conversión'
-        "
-      >
-        <i [style.width.%]="conversionAncho()"></i>
-      </div>
-      <p class="cl-menudo">
-        <b>{{ i.cierresCohorte }}</b> de <b>{{ i.captacionesTotales }}</b> captaciones del periodo
-        ya cerraron.
-        @if (i.cierres !== i.cierresCohorte) {
-          <span>
-            Se registraron <b>{{ i.cierres }}</b> cierres en total, incluidos los de captaciones
-            anteriores.
-          </span>
-        }
-      </p>
-    </div>
-  </section>
-
-
   <!--
     RENDIMIENTO · los cuatro KPI canónicos contra su meta (D-E2-2 §3)
 
@@ -192,14 +149,237 @@
           <span class="cl-menudo total">sobre {{ pulso.agentes }} agentes</span>
         </p>
       }
+
+      <!--
+        GESTIÓN DE METAS · dentro de Indicadores, no en un módulo aparte.
+
+        La meta pertenece a la pantalla donde se mide el rendimiento: sacarla a
+        un «Metas» propio obligaría a saltar de sitio para entender por qué el
+        semáforo dice lo que dice.
+
+        Y no hay lápiz editable directo para el agente: PROPONE, con motivo. Si
+        pudiera fijarla, el indicador sería manipulable — voy al 60 %, bajo la
+        meta y vuelvo a verde.
+      -->
+      @if (errorMetas(); as fallo) {
+        <p class="cl-aviso">{{ fallo }}</p>
+      }
+
+      @if (esAgente()) {
+        <div class="mis-objetivos">
+          <h3>Tus objetivos del mes</h3>
+          <ul>
+            @for (meta of misObjetivos(); track meta.kpi) {
+              <li>
+                <div class="objetivo">
+                  <span class="nombre">{{ meta.rotulo }}</span>
+                  <span class="valor">
+                    @if (meta.valor == null) {
+                      <em>sin meta fijada</em>
+                    } @else {
+                      Meta del mes: <b>{{ meta.valor }}</b>
+                    }
+                  </span>
+                  @if (meta.propuesta) {
+                    <span class="cl-badge">
+                      Pediste {{ meta.propuesta.valorPropuesto }} · esperando a tu broker
+                    </span>
+                  } @else if (ajustando() !== meta.kpi) {
+                    <button type="button" class="cl-btn" (click)="abrirAjuste(meta)">
+                      Solicitar ajuste
+                    </button>
+                  }
+                </div>
+
+                @if (ajustando() === meta.kpi) {
+                  <form class="ajuste" (submit)="$event.preventDefault(); enviarAjuste(meta.kpi)">
+                    <label>
+                      <span>Cuántos ves alcanzables</span>
+                      <input
+                        type="number"
+                        min="0"
+                        [value]="valorAjuste()"
+                        (input)="valorAjuste.set($any($event.target).valueAsNumber)"
+                      />
+                    </label>
+                    <label class="motivo">
+                      <span>Por qué</span>
+                      <!-- Obligatorio: es lo único que quedará para entenderlo
+                           dentro de unos meses, y lo que el broker lee para
+                           decidir. -->
+                      <input
+                        type="text"
+                        placeholder="Ej.: dos semanas de licencia a mitad de mes"
+                        [value]="motivoAjuste()"
+                        (input)="motivoAjuste.set($any($event.target).value)"
+                      />
+                    </label>
+                    <div class="acciones">
+                      <button type="submit" class="cl-btn primario" [disabled]="guardandoMetas()">
+                        Enviar al broker
+                      </button>
+                      <button type="button" class="cl-btn" (click)="cerrarAjuste()">Cancelar</button>
+                    </div>
+                  </form>
+                }
+
+                <!-- Cómo se llegó a esta meta. Sin esto, un número sin procedencia. -->
+                @if (historialLegible(meta).length > 1) {
+                  <ul class="historial">
+                    @for (paso of historialLegible(meta); track $index) {
+                      <li>{{ paso }}</li>
+                    }
+                  </ul>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      } @else {
+        <div class="metas-equipo">
+          <h3>
+            Objetivos del equipo
+            <span class="cl-menudo">
+              {{ cobertura().completos }} de {{ cobertura().total }} agentes con las cuatro
+              fijadas
+            </span>
+          </h3>
+
+          <!--
+            Lo que espera decisión va PRIMERO: es lo único de esta sección sobre
+            lo que el broker tiene algo pendiente que hacer.
+          -->
+          @if (propuestas().length) {
+            <ul class="propuestas">
+              @for (propuesta of propuestas(); track propuesta.idRevision) {
+                <li>
+                  <p class="peticion">
+                    <b>{{ propuesta.agente }}</b> pide {{ propuesta.rotulo }}
+                    @if (propuesta.valorVigente != null) {
+                      de {{ propuesta.valorVigente }} a
+                    } @else {
+                      en
+                    }
+                    <b>{{ propuesta.valorPropuesto }}</b>
+                  </p>
+                  <p class="cl-menudo motivo">«{{ propuesta.motivo }}»</p>
+
+                  @if (resolviendo() === propuesta.idRevision) {
+                    <form
+                      class="decision"
+                      (submit)="$event.preventDefault()"
+                    >
+                      <label>
+                        <span>Por qué</span>
+                        <!-- Se exige también al rechazar: un «no» sin explicar
+                             deja al agente sin nada que aprender. -->
+                        <input
+                          type="text"
+                          placeholder="Ej.: licencia acreditada, se ajusta el mes"
+                          [value]="motivoDecision()"
+                          (input)="motivoDecision.set($any($event.target).value)"
+                        />
+                      </label>
+                      <div class="acciones">
+                        <button
+                          type="button"
+                          class="cl-btn primario"
+                          [disabled]="guardandoMetas()"
+                          (click)="decidir(propuesta.idRevision, true)"
+                        >
+                          Aceptar
+                        </button>
+                        <button
+                          type="button"
+                          class="cl-btn"
+                          [disabled]="guardandoMetas()"
+                          (click)="decidir(propuesta.idRevision, false)"
+                        >
+                          Rechazar
+                        </button>
+                        <button type="button" class="cl-btn" (click)="cerrarDecision()">
+                          Volver
+                        </button>
+                      </div>
+                    </form>
+                  } @else {
+                    <button type="button" class="cl-btn" (click)="abrirDecision(propuesta)">
+                      Resolver
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          }
+
+          <table class="tabla-metas">
+            <thead>
+              <tr>
+                <th scope="col">Agente</th>
+                @for (kpi of kpisCanonicos(); track kpi.codigo) {
+                  <th scope="col">{{ kpi.rotulo }}</th>
+                }
+                <th scope="col"><span class="cl-oculto">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (fila of equipo(); track fila.id) {
+                <tr [class.incompleta]="fijandoA() !== fila.id">
+                  <th scope="row">{{ fila.nombre }}</th>
+                  @for (meta of fila.metas; track meta.kpi) {
+                    <td>
+                      @if (fijandoA() === fila.id) {
+                        <input
+                          type="number"
+                          min="0"
+                          [attr.aria-label]="meta.rotulo + ' de ' + fila.nombre"
+                          [value]="valorFijado(meta.kpi)"
+                          (input)="cambiarValorFijado(meta.kpi, $any($event.target).value)"
+                        />
+                      } @else if (meta.valor == null) {
+                        <!-- Sin meta no es cero. Y verlo es lo que permite
+                             arreglar la cobertura incompleta. -->
+                        <em class="sin-meta">sin fijar</em>
+                      } @else {
+                        {{ meta.valor }}
+                      }
+                    </td>
+                  }
+                  <td class="acciones">
+                    @if (fijandoA() === fila.id) {
+                      <!-- El motivo va una vez por agente: fijarle las cuatro
+                           metas a alguien es una sola decisión. -->
+                      <input
+                        type="text"
+                        class="motivo"
+                        placeholder="Por qué"
+                        [value]="motivoFijado()"
+                        (input)="motivoFijado.set($any($event.target).value)"
+                      />
+                      <button
+                        type="button"
+                        class="cl-btn primario"
+                        [disabled]="guardandoMetas()"
+                        (click)="guardarMetas(fila.id)"
+                      >
+                        Guardar
+                      </button>
+                      <button type="button" class="cl-btn" (click)="cerrarFijar()">Cancelar</button>
+                    } @else {
+                      <button type="button" class="cl-btn" (click)="abrirFijar(fila)">
+                        {{ fila.metas[0].valor == null ? 'Fijar metas' : 'Revisar metas' }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     </section>
   }
 
-  <section class="kpis">
-    @for (kpi of kpis(); track kpi.etiqueta) {
-      <cl-kpi [etiqueta]="kpi.etiqueta" [valor]="kpi.valor" [tono]="kpi.tono" [pie]="kpi.pie" />
-    }
-  </section>
 
   <div class="rejilla">
     <section class="cl-tarjeta">
@@ -293,8 +473,12 @@
   </div>
 
   <!--
-    Dos gráficos y no uno: conteos y porcentaje son magnitudes distintas, y
-    compartir marco obligaría a dos escalas.
+    EVOLUCIÓN · una sola serie por vez.
+
+    Aquí había DOS tarjetas —«Evolución» y «Conversión por periodo»— sobre los
+    mismos tramos del mismo periodo. Cuatro líneas simultáneas son ruido
+    (D-E2-2 §10): se conserva la de conteos, que es la que responde «cómo vengo
+    trabajando», y el porcentaje vive donde se interpreta, en el embudo.
   -->
   <section class="cl-tarjeta">
     <header>
@@ -311,25 +495,6 @@
     />
   </section>
 
-  <section class="cl-tarjeta">
-    <header>
-      <div>
-        <h2>Conversión por periodo</h2>
-        <p>De las captaciones de cada tramo, cuántas ya cerraron</p>
-      </div>
-    </header>
-    <cl-grafico-serie
-      [etiquetas]="etiquetasSerie()"
-      [series]="serieConversion()"
-      tipo="linea"
-      sufijo="%"
-      descripcion="Conversión por periodo, en porcentaje"
-    />
-    <p class="cl-menudo nota">
-      Se calcula sobre la <b>cohorte</b> —las captaciones de cada tramo que ya cerraron—, no sobre
-      la fecha del contrato. Por eso nunca pasa de 100 %.
-    </p>
-  </section>
 
   <div class="rejilla">
     <section class="cl-tarjeta">
@@ -368,52 +533,5 @@
         </div>
       }
     </section>
-
-    @if (operativo(); as op) {
-      <section class="cl-tarjeta">
-        <header>
-          <div>
-            <h2>Cómo va el seguimiento</h2>
-            <p>Lo que hoy está pendiente o se pasó de fecha en tu alcance</p>
-          </div>
-        </header>
-        <div class="cl-pares">
-          <!--
-            Los mismos conceptos que el tablero, con los mismos nombres: es el
-            mismo número y verlo llamado de dos formas hace dudar de si mide lo
-            mismo.
-          -->
-          <div>
-            <span>Prospectos sin contactar a tiempo</span>
-            <strong>{{ op.recontactosVencidos }}</strong>
-          </div>
-          <div>
-            <span>Prospectos contactados a tiempo</span>
-            <strong>{{ op.recontactosAlDia }}</strong>
-          </div>
-          <div>
-            <span>Atraso promedio (días)</span>
-            <strong>{{ op.diasPromedioSinSeguimiento }}</strong>
-          </div>
-          <div>
-            <span>Visitas pendientes</span>
-            <strong>{{ op.visitasPendientes }}</strong>
-          </div>
-          <div>
-            <span>Aprobadas sin contrato</span>
-            <strong>{{ op.solicitudesSinCierre }}</strong>
-          </div>
-          <div>
-            <span>Prospectos captados</span>
-            <strong>{{ op.conversionProspeccionCaptacion }}%</strong>
-          </div>
-        </div>
-        <p class="cl-menudo nota">
-          Las visitas y las solicitudes son del <b>alcance completo</b>, no del periodo. Los
-          prospectos sí: si en el periodo elegido no trabajaste ninguno, estas cifras salen en
-          cero en vez de arrastrar el historial entero.
-        </p>
-      </section>
-    }
   </div>
 }

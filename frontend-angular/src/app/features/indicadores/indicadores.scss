@@ -429,3 +429,188 @@
     text-align: left;
   }
 }
+
+/* ====================================================================
+   GESTIÓN DE METAS · dentro de Indicadores, no en un módulo aparte
+   --------------------------------------------------------------------
+   La meta pertenece a la pantalla donde se mide el rendimiento: sacarla
+   a un «Metas» propio obligaría a saltar de sitio para entender por qué
+   el semáforo dice lo que dice.
+
+   Al agente NO se le da un lápiz editable: propone, con motivo. Si
+   pudiera fijarla, el indicador sería manipulable.
+   ==================================================================== */
+
+.mis-objetivos,
+.metas-equipo {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--cl-borde);
+
+  h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  input[type='number'] {
+    width: 5rem;
+  }
+
+  input[type='text'] {
+    width: 100%;
+    min-width: 12rem;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.78rem;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+/* --- El agente --- */
+.mis-objetivos > ul > li {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--cl-borde);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.objetivo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+
+  .nombre {
+    flex: 1 1 12rem;
+    font-weight: 600;
+    font-size: 0.86rem;
+  }
+
+  .valor {
+    font-size: 0.82rem;
+    color: var(--cl-tinta-suave);
+  }
+}
+
+.ajuste,
+.decision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+  padding: 0.75rem;
+  border-radius: var(--cl-radio);
+  background: var(--cl-fondo);
+
+  .motivo {
+    flex: 1 1 18rem;
+  }
+
+  .acciones {
+    display: flex;
+    gap: 0.5rem;
+  }
+}
+
+/* Cómo se llegó a la meta. Sin esto, un número sin procedencia. */
+.historial {
+  margin-top: 0.5rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--cl-borde);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--cl-tinta-suave);
+
+  li + li {
+    margin-top: 0.15rem;
+  }
+}
+
+/* --- El broker --- */
+
+/* Lo que espera decisión va primero: es lo único con algo pendiente. */
+.propuestas {
+  margin-bottom: 1rem;
+
+  li {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--cl-acento);
+    border-radius: var(--cl-radio);
+    background: var(--cl-superficie);
+  }
+
+  .peticion {
+    margin: 0;
+    font-size: 0.86rem;
+  }
+
+  .motivo {
+    margin: 0.2rem 0 0.5rem;
+    font-style: italic;
+  }
+}
+
+.tabla-metas {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+
+  th,
+  td {
+    padding: 0.45rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--cl-borde);
+    vertical-align: middle;
+  }
+
+  thead th {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--cl-tinta-suave);
+  }
+
+  tbody th {
+    font-weight: 600;
+  }
+
+  /* «sin fijar» no es cero, y verlo es lo que permite arreglarlo: una sola
+     meta que falte deja al equipo entero sin semáforo. */
+  .sin-meta {
+    color: var(--cl-acento);
+    font-style: normal;
+  }
+
+  td.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+  }
+}
+
+.cl-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

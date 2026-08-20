@@ -10,16 +10,20 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
 import {
+  AsignacionDeMeta,
   esPeriodo,
   IndicadoresResumen,
   IndicadoresService,
+  MetaDeAgente,
   KpiCanonico as KpiCanonicoCable,
   PERIODO_POR_DEFECTO,
+  PropuestaDeMeta,
   PERIODOS_INDICADORES,
 } from '../../core/api/indicadores.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RolSesion } from '../../core/auth/sesion.model';
-import { mesLargo } from '../../core/formato';
+import { TonoKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { fechaCorta, mesLargo } from '../../core/formato';
 import {
   avanceDe,
   cierreLegible,
@@ -32,7 +36,6 @@ import {
 } from '../../core/rendimiento';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { GraficoSerie, SerieGrafico } from '../../shared/grafico-serie/grafico-serie';
-import { TarjetaKpi, TonoKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 
 /**
  * Par categórico de las dos series de conteo. **Validado**, no elegido a ojo:
@@ -85,7 +88,7 @@ interface Kpi {
  */
 @Component({
   selector: 'app-indicadores',
-  imports: [EstadoListado, GraficoSerie, TarjetaKpi],
+  imports: [EstadoListado, GraficoSerie],
   templateUrl: './indicadores.html',
   styleUrl: './indicadores.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -156,11 +159,248 @@ export class Indicadores implements OnInit {
     void this.cargar();
   }
 
+
+  // ==================================================================
+  // GESTIÓN DE METAS · dentro de Indicadores, no en un módulo aparte
+  // ==================================================================
+  //
+  // La meta pertenece a la pantalla donde se mide el rendimiento. Sacarla a un
+  // módulo «Metas» obligaría a saltar de sitio para entender por qué el semáforo
+  // dice lo que dice, y crearía una segunda superficie que compite con ésta.
+  //
+  // QUIÉN PUEDE QUÉ, y por qué:
+  //   AGENTE  ve las suyas y PROPONE, con motivo. Si pudiera fijarlas, el
+  //           indicador sería manipulable: voy al 60 %, bajo la meta, verde.
+  //   BROKER  fija y decide. Es quien dirige comercialmente.
+  //   ADMIN   lee. Administrar usuarios no es dirigir producción.
+  //
+  // La pantalla NO decide nada de eso: ofrece la acción que el rol permite y el
+  // backend la vuelve a comprobar. Un 403 no debería llegar nunca, y si llega es
+  // que la pantalla ofreció algo que no debía.
+
+  protected readonly metas = signal<MetaDeAgente[]>([]);
+  protected readonly propuestas = signal<PropuestaDeMeta[]>([]);
+  protected readonly guardandoMetas = signal(false);
+  protected readonly errorMetas = signal<string | null>(null);
+
+  /** Qué KPI está editando el agente ahora mismo. `null` = ninguno. */
+  protected readonly ajustando = signal<string | null>(null);
+  protected readonly valorAjuste = signal<number | null>(null);
+  protected readonly motivoAjuste = signal('');
+
+  /** Qué agente está editando el broker. `null` = ninguno. */
+  protected readonly fijandoA = signal<number | null>(null);
+  protected readonly valoresFijados = signal<Record<string, number | null>>({});
+  protected readonly motivoFijado = signal('');
+
+  /** Qué propuesta está resolviendo el broker. */
+  protected readonly resolviendo = signal<number | null>(null);
+  protected readonly motivoDecision = signal('');
+
+  /** Las metas del propio agente, en el orden canónico de los KPI. */
+  protected readonly misObjetivos = computed(() => this.metas());
+
+  /** Las del equipo, agrupadas por agente para poder fijarlas de una vez. */
+  protected readonly equipo = computed(() => {
+    const porAgente = new Map<number, { id: number; nombre: string; metas: MetaDeAgente[] }>();
+    for (const meta of this.metas()) {
+      const fila = porAgente.get(meta.idRolAgente) ?? {
+        id: meta.idRolAgente,
+        nombre: meta.agente,
+        metas: [],
+      };
+      fila.metas.push(meta);
+      porAgente.set(meta.idRolAgente, fila);
+    }
+    return [...porAgente.values()];
+  });
+
+  /**
+   * Cuántos agentes tienen las cuatro metas fijadas.
+   *
+   * Es la cobertura: si falta una sola, el equipo entero se queda sin semáforo,
+   * y el broker necesita ver **de quién** falta para poder arreglarlo.
+   */
+  protected readonly cobertura = computed(() => {
+    const filas = this.equipo();
+    const completos = filas.filter((f) => f.metas.every((m) => m.valor != null)).length;
+    return { completos, total: filas.length };
+  });
+
+  /** El mes que se está gestionando: el mismo que mide el rendimiento. */
+  private mesVigente(): string {
+    return this.rendimiento()?.periodo.codigo ?? '';
+  }
+
+  private async recargarMetas(): Promise<void> {
+    this.errorMetas.set(null);
+    try {
+      this.metas.set(await this.api.metas(this.mesVigente()));
+      if (!this.esAgente()) {
+        this.propuestas.set(await this.api.propuestasDeMeta());
+      }
+    } catch (fallo) {
+      this.errorMetas.set(
+        fallo instanceof ApiError ? fallo.message : 'No se pudo completar la operacion.',
+      );
+    }
+  }
+
+  // --- El agente propone ---------------------------------------------
+
+  protected abrirAjuste(meta: MetaDeAgente): void {
+    this.ajustando.set(meta.kpi);
+    this.valorAjuste.set(meta.propuesta?.valorPropuesto ?? meta.valor ?? null);
+    this.motivoAjuste.set('');
+    this.errorMetas.set(null);
+  }
+
+  protected cerrarAjuste(): void {
+    this.ajustando.set(null);
+    this.motivoAjuste.set('');
+  }
+
+  protected async enviarAjuste(kpi: string): Promise<void> {
+    const valor = this.valorAjuste();
+    if (valor == null || valor < 0) {
+      this.errorMetas.set('Indica cuántos crees que son alcanzables este mes.');
+      return;
+    }
+    this.guardandoMetas.set(true);
+    this.errorMetas.set(null);
+    try {
+      this.metas.set(
+        await this.api.proponerMeta(this.mesVigente(), kpi, valor, this.motivoAjuste()),
+      );
+      this.cerrarAjuste();
+    } catch (fallo) {
+      this.errorMetas.set(
+        fallo instanceof ApiError ? fallo.message : 'No se pudo completar la operacion.',
+      );
+    } finally {
+      this.guardandoMetas.set(false);
+    }
+  }
+
+  // --- El broker fija -------------------------------------------------
+
+  protected abrirFijar(fila: { id: number; metas: MetaDeAgente[] }): void {
+    const valores: Record<string, number | null> = {};
+    for (const meta of fila.metas) {
+      valores[meta.kpi] = meta.valor ?? null;
+    }
+    this.valoresFijados.set(valores);
+    this.motivoFijado.set('');
+    this.fijandoA.set(fila.id);
+    this.errorMetas.set(null);
+  }
+
+  protected cerrarFijar(): void {
+    this.fijandoA.set(null);
+    this.motivoFijado.set('');
+  }
+
+  protected valorFijado(kpi: string): number | null {
+    return this.valoresFijados()[kpi] ?? null;
+  }
+
+  protected cambiarValorFijado(kpi: string, valor: string): void {
+    const numero = valor === '' ? null : Number(valor);
+    this.valoresFijados.set({ ...this.valoresFijados(), [kpi]: numero });
+  }
+
+  protected async guardarMetas(idRolAgente: number): Promise<void> {
+    const valores = this.valoresFijados();
+    // Solo viaja lo que tiene valor: lo que no viene NO se borra, y un campo en
+    // blanco significa «no la fijo todavía», no «ponla a cero».
+    const asignaciones: AsignacionDeMeta[] = Object.entries(valores)
+      .filter(([, valor]) => valor != null && valor >= 0)
+      .map(([kpi, valor]) => ({
+        idRolAgente,
+        kpi,
+        valor: valor as number,
+        motivo: this.motivoFijado(),
+      }));
+
+    if (asignaciones.length === 0) {
+      this.errorMetas.set('No hay ninguna meta que fijar.');
+      return;
+    }
+    this.guardandoMetas.set(true);
+    this.errorMetas.set(null);
+    try {
+      this.metas.set(await this.api.fijarMetas(this.mesVigente(), asignaciones));
+      this.cerrarFijar();
+      await this.cargar();
+    } catch (fallo) {
+      this.errorMetas.set(
+        fallo instanceof ApiError ? fallo.message : 'No se pudo completar la operacion.',
+      );
+    } finally {
+      this.guardandoMetas.set(false);
+    }
+  }
+
+  // --- El broker decide -----------------------------------------------
+
+  protected abrirDecision(propuesta: PropuestaDeMeta): void {
+    this.resolviendo.set(propuesta.idRevision);
+    this.motivoDecision.set('');
+    this.errorMetas.set(null);
+  }
+
+  protected cerrarDecision(): void {
+    this.resolviendo.set(null);
+    this.motivoDecision.set('');
+  }
+
+  protected async decidir(idRevision: number, acepta: boolean): Promise<void> {
+    this.guardandoMetas.set(true);
+    this.errorMetas.set(null);
+    try {
+      this.metas.set(
+        await this.api.decidirPropuesta(idRevision, acepta, this.motivoDecision()),
+      );
+      this.propuestas.set(await this.api.propuestasDeMeta());
+      this.cerrarDecision();
+      await this.cargar();
+    } catch (fallo) {
+      this.errorMetas.set(
+        fallo instanceof ApiError ? fallo.message : 'No se pudo completar la operacion.',
+      );
+    } finally {
+      this.guardandoMetas.set(false);
+    }
+  }
+
+  // --- Lectura del historial ------------------------------------------
+
+  /**
+   * El historial dicho de corrido: «Meta inicial 8 · revisada a 6 el 18 de
+   * agosto — agente incorporado tarde».
+   *
+   * Se redacta aquí y no en el backend porque es presentación pura; los hechos
+   * —de cuánto a cuánto, quién y por qué— llegan enteros.
+   */
+  protected historialLegible(meta: MetaDeAgente): string[] {
+    return meta.historial
+      .filter((r) => r.estado !== 'E')
+      .map((r) => {
+        const salto =
+          r.valorAnterior == null
+            ? `Meta inicial ${r.valorPropuesto}`
+            : `${r.valorAnterior} → ${r.valorPropuesto}`;
+        const quien = r.estado === 'R' ? `${r.autor} lo pidió y no se aprobó` : r.autor;
+        return `${salto} · ${fechaCorta(r.fecha)} · ${quien} — ${r.motivo}`;
+      });
+  }
+
   protected async cargar(): Promise<void> {
     this.cargando.set(true);
     this.error.set(null);
     try {
       this.datos.set(await this.api.resumen(this.periodo()));
+      await this.recargarMetas();
     } catch (fallo) {
       this.datos.set(null);
       this.error.set(
@@ -309,5 +549,4 @@ export class Indicadores implements OnInit {
     this.esAdmin() ? 'Desempeño por broker' : this.esAgente() ? 'Mi desempeño' : 'Desempeño por agente',
   );
 
-  protected readonly operativo = computed(() => this.datos()?.operativo ?? null);
 }

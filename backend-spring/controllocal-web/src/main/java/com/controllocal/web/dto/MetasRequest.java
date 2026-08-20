@@ -5,22 +5,28 @@ import com.controllocal.service.MetaComercialService;
 import java.util.List;
 
 /**
- * Fijar las metas de un mes.
+ * Fijar o revisar metas. Solo el broker.
  *
  * <p><b>Lo que no viene no se borra.</b> Se actualiza lo enviado y se deja lo
- * demas como estaba: un formulario a medio enviar no puede costarle al equipo
- * los objetivos que ya tenia. Para retirar una meta hay que decirlo, no callarla.
+ * demás como estaba: un formulario a medio enviar no puede costarle al equipo
+ * los objetivos que ya tenía.
+ *
+ * <p><b>El motivo es obligatorio en cada asignación</b>, no uno global para
+ * todas: bajar la meta de Luis por incorporación tardía y subir la de Andrea por
+ * cambio de cartera son dos decisiones distintas, y compartir una sola
+ * explicación las volvería ilegibles dentro de seis meses.
  */
 public record MetasRequest(String mes, List<Asignacion> metas) {
 
-    /** A quien, que KPI y cuanto. El KPI es el codigo unitario: C, P, S o F. */
-    public record Asignacion(long idRolAgente, String kpi, int valor) {
+    /** A quién, qué KPI (código unitario C/P/S/F), cuánto y por qué. */
+    public record Asignacion(long idRolAgente, String kpi, int valor, String motivo) {
     }
 
     public List<MetaComercialService.Asignacion> aDatos() {
         return metas == null ? List.of()
                 : metas.stream()
-                .map(a -> new MetaComercialService.Asignacion(a.idRolAgente(), a.kpi(), a.valor()))
+                .map(a -> new MetaComercialService.Asignacion(a.idRolAgente(), a.kpi(), a.valor(),
+                        a.motivo()))
                 .toList();
     }
 }

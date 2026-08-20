@@ -79,22 +79,6 @@
     </p>
   </section>
 
-  <!--
-    Fila de KPI: números de cabecera, no un gráfico de barras. Cada uno es
-    además un atajo a la pantalla donde se trabajan, que es la convención de
-    listados del sistema.
-  -->
-  <section class="kpis">
-    @for (kpi of kpis(); track kpi.etiqueta) {
-      @if (kpi.ruta) {
-        <a [routerLink]="kpi.ruta" class="kpi-enlace">
-          <cl-kpi [etiqueta]="kpi.etiqueta" [valor]="kpi.valor" [tono]="kpi.tono" [pie]="kpi.pie" />
-        </a>
-      } @else {
-        <cl-kpi [etiqueta]="kpi.etiqueta" [valor]="kpi.valor" [tono]="kpi.tono" [pie]="kpi.pie" />
-      }
-    }
-  </section>
 
   <div class="cl-columnas anchas">
     <div>
@@ -266,173 +250,12 @@
       }
       </section>
 
-      <!--
-        Parte-de-un-todo con cuatro/cinco clases y nombres largos: barra
-        apilada horizontal con leyenda, no una dona. Cada tramo lleva su
-        nombre y su valor, así que el color nunca es la única señal.
-      -->
-      <section class="cl-tarjeta">
-        <header>
-          <div>
-            <h2>{{ tituloCubos() }}</h2>
-            <p>{{ subtituloCubos() }}</p>
-          </div>
-          <span class="cl-badge">
-            {{ totalCubos() }} {{ totalCubos() === 1 ? 'captación' : 'captaciones' }}
-          </span>
-        </header>
-
-        @if (totalCubos() === 0) {
-          <p class="cl-vacio">Todavía no hay captaciones registradas en tu alcance.</p>
-        } @else {
-          <div
-            class="barra"
-            role="img"
-            [attr.aria-label]="'Distribución de ' + totalCubos() + ' captaciones por estado'"
-          >
-            @for (tramo of tramos(); track tramo.nombre) {
-              @if (tramo.valor > 0) {
-                <span
-                  class="tramo"
-                  [style.flex-grow]="tramo.valor"
-                  [style.background]="tramo.color"
-                  [title]="tramo.nombre + ': ' + tramo.valor"
-                ></span>
-              }
-            }
-          </div>
-
-          <ul class="leyenda">
-            @for (tramo of tramos(); track tramo.nombre) {
-              <li>
-                <span class="punto" [style.background]="tramo.color" aria-hidden="true"></span>
-                <span class="nombre">{{ tramo.nombre }}</span>
-                <b>{{ tramo.valor }}</b>
-                <span class="cl-menudo pct">{{ tramo.porcentaje }}%</span>
-              </li>
-            }
-          </ul>
-        }
-      </section>
     </div>
 
     <div>
-      <!--
-        Cuatro lecturas del seguimiento. El tono de cada una sale del
-        `nivelAtencion` que ya trae el backend: aquí no se decide qué urge.
-      -->
-      <section class="cl-tarjeta">
-        <header>
-          <div>
-            <h2>{{ esAgente() ? 'Cómo va tu seguimiento' : 'Lo que necesita atención' }}</h2>
-            <p>Por dónde conviene empezar</p>
-          </div>
-        </header>
-        <div class="senales">
-          @for (senal of senales(); track senal.etiqueta) {
-            <cl-kpi
-              [etiqueta]="senal.etiqueta"
-              [valor]="senal.valor"
-              [tono]="senal.tono"
-              [pie]="senal.pie"
-            />
-          }
-        </div>
-      </section>
 
       @if (esAgente()) {
-        <!-- Un ratio contra un límite: medidor, no un gráfico de una barra. -->
-        <section class="cl-tarjeta">
-          <header>
-            <div>
-              <h2>Mi rendimiento</h2>
-              <p>De las captaciones que abriste en el periodo, cuántas ya cerraron</p>
-            </div>
-          </header>
-          <!--
-            Sin captaciones en el periodo no hay tasa: no es 0 %, es que no hubo
-            nada que medir. Antes se pintaba la conversión del agente que más
-            cerró, como si fuera propia.
-          -->
-          @if (conversion() === null) {
-            <p class="medidor-valor sin-dato">—</p>
-            <div class="medidor" role="img" aria-label="Sin captaciones en el periodo">
-              <i [style.width.%]="0"></i>
-            </div>
-            <p class="cl-menudo">
-              No abriste captaciones en {{ etiquetaPeriodo().toLowerCase() }}, así que todavía no
-              hay conversión que medir.
-            </p>
-          } @else {
-            <p class="medidor-valor">{{ conversion() }}<span>%</span></p>
-            <div
-              class="medidor"
-              role="img"
-              [attr.aria-label]="conversion() + ' por ciento de conversión'"
-            >
-              <i [style.width.%]="conversionAncho()"></i>
-            </div>
-          }
-          <div class="cl-pares apiladas">
-            <div>
-              <span>Captaciones</span>
-              <strong>{{ i.captacionesTotales }}</strong>
-            </div>
-            <div>
-              <span>Cierres</span>
-              <strong>{{ i.cierres }}</strong>
-            </div>
-          </div>
-          @if (conversion() !== null) {
-            <p class="cl-menudo">
-              @if (i.cierres === 0) {
-                Aún sin alquileres firmados en {{ etiquetaPeriodo().toLowerCase() }}. Cada visita y
-                cada solicitud acercan el primero.
-              } @else {
-                {{ i.cierres }} de {{ i.captacionesTotales }} captaciones del periodo terminaron en
-                contrato.
-              }
-            </p>
-          }
-        </section>
       } @else {
-        <section class="cl-tarjeta">
-          <header>
-            <div>
-              <h2>Carga del equipo</h2>
-              <p>Top 3 {{ esAdmin() ? 'brokers' : 'agentes' }} por captaciones del periodo</p>
-            </div>
-          </header>
-          @if (desempeno().length === 0) {
-            <p class="cl-vacio">Sin actividad registrada en {{ etiquetaPeriodo().toLowerCase() }}.</p>
-          } @else {
-            <div class="cl-tabla-marco">
-              <table class="cl-tabla">
-                <thead>
-                  <tr>
-                    <th>{{ esAdmin() ? 'Broker' : 'Agente' }}</th>
-                    <th class="num">Captac.</th>
-                    <th class="num">Cierres</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (fila of desempeno(); track fila.nombre) {
-                    <tr>
-                      <td>
-                        <span class="avatar">{{ iniciales(fila.nombre) }}</span>
-                        {{ fila.nombre }}
-                      </td>
-                      <td class="num">
-                        <b>{{ fila.captaciones }}</b>
-                      </td>
-                      <td class="num">{{ fila.cierres }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
-        </section>
       }
     </div>
   </div>

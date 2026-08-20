@@ -327,6 +327,69 @@ export type PeriodoIndicadores = (typeof PERIODOS_INDICADORES)[number]['valor'];
 export const PERIODO_POR_DEFECTO: PeriodoIndicadores = '6m';
 
 /** ¿Es uno de los periodos del cable? Filtra lo que llega por la URL. */
+
+/**
+ * Un paso del historial de una meta.
+ *
+ * Existe porque un «actualizado el 18/08» no basta: hace falta saber **de cuánto
+ * a cuánto, quién y por qué**. Sin esto, dentro de tres meses la pantalla diría
+ * que la meta siempre fue 6.
+ */
+export interface RevisionDeMeta {
+  id: number;
+  /** `B` la fijó el broker · `P` la propuso el agente. */
+  origen: 'B' | 'P';
+  /** `A` aplicada · `E` en espera · `R` rechazada. */
+  estado: 'A' | 'E' | 'R';
+  /** Ausente la primera vez que se fijó: no había de dónde venir. */
+  valorAnterior?: number | null;
+  valorPropuesto: number;
+  motivo: string;
+  autor: string;
+  fecha: string;
+  decisor?: string | null;
+  motivoDecision?: string | null;
+}
+
+/** Un ajuste pedido por el agente que el broker todavía no ha resuelto. */
+export interface PropuestaDeMeta {
+  idRevision: number;
+  idRolAgente: number;
+  agente: string;
+  kpi: string;
+  rotulo: string;
+  /** Ausente si propone sobre una meta que aún no le habían fijado. */
+  valorVigente?: number | null;
+  valorPropuesto: number;
+  motivo: string;
+  fecha: string;
+}
+
+/**
+ * La meta de un agente para un KPI y mes.
+ *
+ * `valor` **ausente no es cero**: cero significa que este mes no se le pide ese
+ * resultado —una decisión—; ausente significa que nadie ha decidido. La pantalla
+ * necesita distinguirlos para poder enseñar a quién le falta.
+ */
+export interface MetaDeAgente {
+  idRolAgente: number;
+  agente: string;
+  kpi: string;
+  rotulo: string;
+  valor?: number | null;
+  propuesta?: PropuestaDeMeta | null;
+  historial: RevisionDeMeta[];
+}
+
+/** Lo que el broker envía al fijar. El motivo es por asignación, no global. */
+export interface AsignacionDeMeta {
+  idRolAgente: number;
+  kpi: string;
+  valor: number;
+  motivo: string;
+}
+
 export function esPeriodo(valor: string | null | undefined): valor is PeriodoIndicadores {
   return PERIODOS_INDICADORES.some((p) => p.valor === valor);
 }
@@ -350,5 +413,54 @@ export class IndicadoresService {
 
   avance(): Promise<AvanceComercial> {
     return this.api.get<AvanceComercial>('indicadores/avance');
+  }
+
+  // ==================================================================
+  // Metas · quien las ve, quien las propone y quien decide
+  // ==================================================================
+  //
+  // Los tres roles llaman al MISMO `metas()`: el alcance lo resuelve el
+  // backend. El agente recibe las suyas; el broker, las de su equipo; el
+  // administrador, las de su organizacion en lectura.
+
+  /** Las metas del mes que el actor alcanza, con propuesta viva e historial. */
+  metas(mes?: string): Promise<MetaDeAgente[]> {
+    return this.api.get<MetaDeAgente[]>('indicadores/metas', { mes });
+  }
+
+  /**
+   * Fija o revisa metas. **Solo el broker**: al agente el backend le responde
+   * 403, y a la pantalla le toca no ofrecer la accion.
+   */
+  fijarMetas(mes: string, metas: AsignacionDeMeta[]): Promise<MetaDeAgente[]> {
+    return this.api.put<MetaDeAgente[]>('indicadores/metas', { mes, metas });
+  }
+
+  /**
+   * El agente pide un ajuste de **su** meta. No la cambia: queda en espera.
+   *
+   * Es la mitad de la politica que impide manipular el indicador -bajar la meta
+   * porque se va perdiendo- sin volverlo inmutable, que tampoco sirve cuando hay
+   * licencias, altas a mitad de mes o cambios de cartera.
+   */
+  proponerMeta(mes: string, kpi: string, valor: number, motivo: string):
+      Promise<MetaDeAgente[]> {
+    return this.api.post<MetaDeAgente[]>('indicadores/metas/propuestas',
+        { mes, kpi, valor, motivo });
+  }
+
+  /** Lo que espera una decision del broker sobre su equipo. */
+  propuestasDeMeta(): Promise<PropuestaDeMeta[]> {
+    return this.api.get<PropuestaDeMeta[]>('indicadores/metas/propuestas');
+  }
+
+  /**
+   * El broker acepta o rechaza. El motivo se exige en los dos casos: un «no» sin
+   * explicacion deja al agente sin nada que aprender.
+   */
+  decidirPropuesta(idRevision: number, acepta: boolean, motivo: string):
+      Promise<MetaDeAgente[]> {
+    return this.api.post<MetaDeAgente[]>(
+        `indicadores/metas/propuestas/${idRevision}/decision`, { acepta, motivo });
   }
 }

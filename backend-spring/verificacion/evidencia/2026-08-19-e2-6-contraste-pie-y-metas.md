@@ -315,15 +315,61 @@ una corrida de cierre podria darlas por buenas sin haberlas corrido.
   expected: <[]> but was: <[AutoridadDelDatoIntegrationTest]>
 ```
 
-### 9 ter. Y una deuda anotada, no escondida
+### 9 ter. La prospección también lleva expediente (2026-08-20)
 
-En el Radar, un asunto de tipo `PROSPECCION` viaja **sin expediente** (0
-renglones) mientras que los de `VISITA` traen los cuatro. No es una regresión:
-los cuatro renglones se construyen desde el inmueble y una prospección todavía no
-tiene uno, así que devolver vacío es más honesto que inventarlos. Pero D-E2-1
-§10.3 dice que los cuatro son «los mismos para todo asunto», así que hay una
-tensión real entre el diseño y lo que se puede construir. Queda anotada para
-decidirla, no resuelta a escondidas.
+El barrido encontró que un asunto de tipo `PROSPECCION` llegaba con **cero
+renglones** mientras los de `VISITA` traían cuatro. No era una regresión: se
+construían desde el inmueble, y una prospección es **anterior a la captación**.
+
+**La corrección fue conceptual, no una excepción.** D-E2-1 §10.3 decía «cuatro
+renglones fijos, **los mismos** para todo asunto», y ahora dice:
+
+> Todo asunto lleva un expediente de cuatro renglones. Los cuatro no tienen que
+> representar las mismas entidades: se eligen según la etapa y el tipo de asunto.
+> Nunca se inventa un inmueble, un encargo ni un dato que todavía no existe.
+
+Dos familias, un solo intérprete —despacha por `entidadTipo` y carga el contexto
+por lote, igual que el de propiedad—:
+
+| Con encargo | Prospección |
+|---|---|
+| Encargo · Renta · Actividad · Propietario | Prospección · Contacto · Avance · Propietario |
+
+**«Avance» y no «Propuesta»**: una prospección recién contactada tendría un
+renglón permanentemente vacío bajo el nombre más específico. Y el renglón **no
+decide el próximo paso**: eso es `lectura`, `CÓMO ESTÁ` y la recomendación.
+
+Cuatro gates, y se comprobó que tres rompen el build al reponer el
+comportamiento viejo:
+
+```
+Un asunto sin expediente deja el Radar en blanco justo al abrirlo.
+  expected: <[]> but was: <[PROSPECCION#2 -> 0 renglones]>
+```
+
+### 9 quater. Y el expediente pasa a pintarse
+
+Al ir a verificarlo salió algo más: **el expediente viajaba desde E2.4 y la
+pantalla no lo pintaba en ninguna parte**. El dato llegaba en el cable y se
+tiraba. Ahora se pinta, con su canto de color donde el dominio puso señal, la
+ventana del encargo con sus dos números y el contraste —degradado— debajo de la
+renta:
+
+```
+PROSPECCIÓN   Abierta el 28 de junio · Contactado
+CONTACTO      Último el 1 de julio · hace 50 días
+AVANCE        Sin reunión ni propuesta registrada · recontacto previsto para el 1 de julio
+PROPIETARIO   Elena Castillo Paredes · Jr. Camana 615 · Lima
+
+ENCARGO       Alta el 1 de agosto · vence en 165 dias
+RENTA         PEN 8500 · sin cambios desde hace 11 dias
+              Todavía sin renta publicada en Miraflores · 100 a 200 m2 con la que comparar
+ACTIVIDAD     0 visitas realizadas de 2 agendadas
+PROPIETARIO   Inmobiliaria Pacifico SAC · Av. Larco 812 · Miraflores
+```
+
+El Radar completo con sus dos modos sigue siendo trabajo del programa de
+normalización del SPA; esto es el expediente, que ya existía y no se veía.
 
 ---
 

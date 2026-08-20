@@ -4,7 +4,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 
 import { DashboardCarga, DashboardService } from '../../core/api/dashboard.service';
 import { IndicadoresResumen } from '../../core/api/indicadores.service';
-import { Tarea, TareasService } from '../../core/api/tareas.service';
+import { RenglonExpediente, Tarea, TareasService } from '../../core/api/tareas.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RolSesion, Sesion } from '../../core/auth/sesion.model';
 import { NavegacionLegado } from '../../core/navegacion-legado';
@@ -932,6 +932,228 @@ describe('Dashboard', () => {
     await montar('AGENTE');
 
     expect(pie()?.getAttribute('href')).toBe('/indicadores');
+  });
+
+
+  // ==================================================================
+  // EL EXPEDIENTE · cuatro renglones de evidencia (D-E2-1 §10.3)
+  // ==================================================================
+
+  /** Un asunto con encargo: los cuatro renglones del inmueble. */
+  const EXPEDIENTE_CON_ENCARGO: RenglonExpediente[] = [
+    {
+      rotulo: 'Encargo',
+      valor: 'Alta el 1 de agosto · vence en 165 dias',
+      estado: null,
+      ventana: { consumido: 15, total: 180 },
+      serie: null,
+    },
+    {
+      rotulo: 'Renta',
+      valor: 'PEN 8500 · sin cambios desde hace 11 dias',
+      estado: null,
+      ventana: null,
+      serie: [8500, 7900],
+      // El caso normal mientras la cartera no tenga muestra.
+      contraste: {
+        forma: 'NINGUNA',
+        motivo: 'SIN_REFERENCIA_INTERNA_SUFICIENTE',
+        zona: 'Miraflores',
+        banda: '100 a 200 m2',
+        observaciones: 3,
+      },
+    },
+    {
+      rotulo: 'Actividad',
+      valor: '0 visitas realizadas de 2 agendadas',
+      estado: 'OJO',
+      ventana: null,
+      serie: null,
+    },
+    {
+      rotulo: 'Propietario',
+      valor: 'Inmobiliaria Pacifico SAC · Av. Larco 812 · Miraflores',
+      estado: null,
+      ventana: null,
+      serie: null,
+    },
+  ];
+
+  /** Una prospección: los suyos, que hablan de la prospección. */
+  const EXPEDIENTE_DE_PROSPECCION: RenglonExpediente[] = [
+    {
+      rotulo: 'Prospección',
+      valor: 'Abierta el 28 de junio · Contactado',
+      estado: null,
+      ventana: null,
+      serie: null,
+    },
+    {
+      rotulo: 'Contacto',
+      valor: 'Sin contacto registrado',
+      estado: 'OJO',
+      ventana: null,
+      serie: null,
+    },
+    {
+      rotulo: 'Avance',
+      valor: 'Sin reunión ni propuesta registrada',
+      estado: null,
+      ventana: null,
+      serie: null,
+    },
+    {
+      rotulo: 'Propietario',
+      valor: 'Elena Castillo Paredes · Jr. Camana 615 · Lima',
+      estado: null,
+      ventana: null,
+      serie: null,
+    },
+  ];
+
+  function conExpediente(renglones: RenglonExpediente[]): Tarea {
+    return {
+      ...TAREA,
+      interpretacion: {
+        comoEsta: { avance: null, hechos: [] },
+        expediente: renglones,
+        lectura: null,
+      },
+    };
+  }
+
+  async function montarConExpediente(renglones: RenglonExpediente[]): Promise<void> {
+    api.cargar.and.resolveTo(
+      carga({
+        bandeja: { items: [conExpediente(renglones)], totalRecords: 1, page: 1, pageSize: 5 },
+      }),
+    );
+    await montar('AGENTE');
+  }
+
+  function expediente(): HTMLElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector('.expediente');
+  }
+
+  /**
+   * Viajaba desde E2.4 y la pantalla lo tiraba: el dato llegaba en el cable y no
+   * se pintaba en ninguna parte.
+   */
+  it('el expediente se pinta, con sus cuatro renglones', async () => {
+    await montarConExpediente(EXPEDIENTE_CON_ENCARGO);
+
+    expect(expediente()?.querySelectorAll('.renglon').length).toBe(4);
+  });
+
+  /**
+   * Los cuatro **no son siempre los mismos**: los rótulos vienen del backend, que
+   * los elige según la etapa. La pantalla no decide cuáles.
+   */
+  it('los rotulos salen del cable, no de la pantalla', async () => {
+    await montarConExpediente(EXPEDIENTE_CON_ENCARGO);
+    const conEncargo = [...(expediente()?.querySelectorAll('dt') ?? [])].map((d) =>
+      d.textContent?.trim(),
+    );
+
+    expect(conEncargo).toEqual(['Encargo', 'Renta', 'Actividad', 'Propietario']);
+  });
+
+  /** Una prospección es anterior a la captación: no se le inventa un encargo. */
+  it('una prospeccion pinta sus propios renglones, sin encargo ni renta', async () => {
+    await montarConExpediente(EXPEDIENTE_DE_PROSPECCION);
+    const rotulos = [...(expediente()?.querySelectorAll('dt') ?? [])].map((d) =>
+      d.textContent?.trim(),
+    );
+
+    expect(rotulos).toEqual(['Prospección', 'Contacto', 'Avance', 'Propietario']);
+    expect(expediente()?.textContent).not.toContain('Encargo');
+  });
+
+  /** Una fecha ausente se dice con palabras, nunca con un guion. */
+  it('la ausencia de contacto se dice, y lleva senal', async () => {
+    await montarConExpediente(EXPEDIENTE_DE_PROSPECCION);
+    const contacto = [...(expediente()?.querySelectorAll('.renglon') ?? [])].find((r) =>
+      r.querySelector('dt')?.textContent?.includes('Contacto'),
+    );
+
+    expect(contacto?.textContent).toContain('Sin contacto registrado');
+    expect(contacto?.classList.contains('senal-ojo')).toBeTrue();
+  });
+
+  /** El color lo pone el estado que decide el dominio, y solo donde lo hay. */
+  it('solo los renglones con estado llevan canto de color', async () => {
+    await montarConExpediente(EXPEDIENTE_CON_ENCARGO);
+    const conColor = [...(expediente()?.querySelectorAll('.renglon') ?? [])].filter((r) =>
+      /senal-/.test(r.className),
+    );
+
+    expect(conColor.length).toBe(1);
+    expect(conColor[0].textContent).toContain('Actividad');
+  });
+
+  /**
+   * El contraste degradado **se dice con su N**. «3 propiedades en Miraflores»
+   * informa; un silencio no dice si falta poco o falta todo.
+   */
+  it('sin muestra, el contraste dice cuantas propiedades hay y donde', async () => {
+    await montarConExpediente(EXPEDIENTE_CON_ENCARGO);
+    const contraste = expediente()?.querySelector('.contraste');
+
+    expect(contraste?.textContent).toContain('3 propiedades');
+    expect(contraste?.textContent).toContain('Miraflores · 100 a 200 m2');
+    expect(contraste?.textContent).toContain('pocas para un rango propio');
+  });
+
+  /** Y nunca, en ningún caso, una cifra que no salga de la casa. */
+  it('el contraste no invoca al sector', async () => {
+    await montarConExpediente(EXPEDIENTE_CON_ENCARGO);
+    const texto = (expediente()?.textContent ?? '').toLowerCase();
+
+    for (const prohibida of ['sector', 'mercado nacional', 'industria', 'benchmark']) {
+      expect(texto).not.toContain(prohibida);
+    }
+  });
+
+  /** Sin ninguna observación el texto es otro: falta el hecho, no el volumen. */
+  it('sin ninguna observacion lo dice de otra manera', async () => {
+    const sinNada = EXPEDIENTE_CON_ENCARGO.map((r) =>
+      r.rotulo === 'Renta'
+        ? {
+            ...r,
+            contraste: {
+              forma: 'NINGUNA' as const,
+              motivo: 'SIN_OBSERVACIONES' as const,
+              zona: 'Miraflores',
+              banda: '100 a 200 m2',
+              observaciones: 0,
+            },
+          }
+        : r,
+    );
+    await montarConExpediente(sinNada);
+
+    expect(expediente()?.querySelector('.contraste')?.textContent).toContain(
+      'Todavía sin renta publicada en Miraflores · 100 a 200 m2',
+    );
+  });
+
+  /** Sin zona ni metraje no hay grupo, y entonces no se dice nada en absoluto. */
+  it('sin grupo comparable no se pinta contraste', async () => {
+    const sinGrupo = EXPEDIENTE_CON_ENCARGO.map((r) =>
+      r.rotulo === 'Renta'
+        ? {
+            ...r,
+            contraste: {
+              forma: 'NINGUNA' as const,
+              motivo: 'SIN_GRUPO_COMPARABLE' as const,
+              observaciones: 0,
+            },
+          }
+        : r,
+    );
+    await montarConExpediente(sinGrupo);
+
+    expect(expediente()?.querySelector('.contraste')).toBeNull();
   });
 
 });

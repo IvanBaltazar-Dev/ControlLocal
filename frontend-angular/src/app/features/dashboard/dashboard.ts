@@ -34,7 +34,12 @@ import {
   lecturaDe,
   marcaEsperadaDe,
 } from '../../core/rendimiento';
-import { EstadoDelHecho, Tarea, TareasService } from '../../core/api/tareas.service';
+import {
+  ContrasteDelRenglon,
+  EstadoDelHecho,
+  Tarea,
+  TareasService,
+} from '../../core/api/tareas.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RolSesion } from '../../core/auth/sesion.model';
 import { fechaCorta, SIN_DATO } from '../../core/formato';
@@ -265,6 +270,31 @@ export class Dashboard implements OnInit {
   protected readonly cierreDelMes = computed(() => cierreLegible(this.rendimiento()));
 
   protected readonly calculadoHace = computed(() => frescuraDe(this.rendimiento()));
+
+
+  /**
+   * El contraste degradado, dicho con palabras.
+   *
+   * Es el camino que se recorre casi siempre hoy: el rango de renta necesita
+   * bastantes propiedades comparables con renta **publicada**, y la cartera
+   * todavía no las tiene. Decirlo con su N es el producto — «3 propiedades en
+   * Miraflores, pocas para un rango» informa; un silencio no dice si falta poco
+   * o falta todo.
+   *
+   * **Nunca aparece aquí una cifra del sector.** Todo lo que se compara sale de
+   * la base de la organización, y por eso se puede ir a comprobar.
+   */
+  protected textoDelContraste(contraste: ContrasteDelRenglon): string {
+    const donde = [contraste.zona, contraste.banda].filter(Boolean).join(' · ');
+    if (contraste.motivo === 'SIN_OBSERVACIONES') {
+      return donde
+        ? `Todavía sin renta publicada en ${donde} con la que comparar`
+        : 'Todavía sin renta publicada con la que comparar';
+    }
+    const cuantas =
+      contraste.observaciones === 1 ? '1 propiedad' : `${contraste.observaciones} propiedades`;
+    return `${cuantas} en ${donde}: pocas para un rango propio`;
+  }
 
   protected readonly bandeja = signal<Tarea[]>([]);
 

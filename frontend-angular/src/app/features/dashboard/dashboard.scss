@@ -781,3 +781,124 @@
     }
   }
 }
+
+/* ====================================================================
+   EL EXPEDIENTE · cuatro renglones de evidencia (D-E2-1 §10.3)
+   --------------------------------------------------------------------
+   Viajaba desde E2.4 y no se pintaba: el dato llegaba y la pantalla lo
+   tiraba. Es el historial, no el estado — `CÓMO ESTÁ` ya dice cómo va.
+
+   Solo uno o dos renglones llevan color: teñir los cuatro es no teñir
+   ninguno.
+   ==================================================================== */
+
+.expediente {
+  margin: 0.6rem 0 0;
+  display: grid;
+  gap: 0.3rem;
+
+  .renglon {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding-left: 0.5rem;
+    border-left: 2px solid transparent;
+  }
+
+  dt {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--cl-tinta-suave);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--cl-tinta);
+    min-width: 0;
+  }
+
+  /* El canto de color, no un fondo: BROX es claro y el color va en marcas
+     pequeñas (D-E2-1 §7.0.c). */
+  .senal-bien {
+    border-left-color: var(--cl-exito);
+  }
+
+  .senal-ojo {
+    border-left-color: var(--cl-acento);
+  }
+
+  .senal-mal {
+    border-left-color: var(--cl-error);
+  }
+
+  /* La ventana del encargo: lo consumido sobre lo pactado. */
+  .ventana {
+    display: block;
+    height: 4px;
+    margin-top: 0.3rem;
+    max-width: 12rem;
+    border-radius: 999px;
+    background: var(--cl-fondo);
+
+    .consumido {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--cl-tinta-suave);
+    }
+  }
+
+  .senal-mal .ventana .consumido {
+    background: var(--cl-error);
+  }
+
+  .senal-ojo .ventana .consumido {
+    background: var(--cl-acento);
+  }
+
+  /* El contraste: dónde cae el dato respecto de NUESTRA operación. Casi
+     siempre llega degradado, y eso también se lee. */
+  .contraste {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.72rem;
+    color: var(--cl-tinta-suave);
+  }
+
+  .contraste.sin-referencia {
+    font-style: italic;
+    opacity: 0.85;
+  }
+
+  .escala {
+    position: relative;
+    display: inline-block;
+    width: 5rem;
+    height: 3px;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+    border-radius: 999px;
+    background: var(--cl-borde);
+
+    .aguja {
+      position: absolute;
+      top: -3px;
+      width: 2px;
+      height: 9px;
+      border-radius: 1px;
+      background: var(--cl-primario);
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .expediente .renglon {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}

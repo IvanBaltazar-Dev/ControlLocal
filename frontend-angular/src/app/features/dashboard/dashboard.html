@@ -483,6 +483,70 @@
       }
     </p>
 
+    <!--
+      EL EXPEDIENTE · cuatro renglones de evidencia (D-E2-1 §10.3)
+
+      Viajaba desde E2.4 y no se pintaba en ninguna parte: el dato existía en el
+      cable y la pantalla lo tiraba. Aquí se pinta.
+
+      Son SIEMPRE cuatro, pero no siempre los mismos: un asunto con encargo trae
+      Encargo · Renta · Actividad · Propietario, y una prospección —que es
+      anterior a la captación— trae Prospección · Contacto · Avance ·
+      Propietario. Los rótulos vienen del backend; la pantalla no elige cuáles.
+
+      No repite `CÓMO ESTÁ`, que habla del ESTADO. Esto es el HISTORIAL.
+    -->
+    @if (tarea.interpretacion?.expediente?.length) {
+      <dl class="expediente">
+        @for (renglon of tarea.interpretacion.expediente; track renglon.rotulo) {
+          <div
+            class="renglon"
+            [class]="renglon.estado ? 'renglon senal-' + renglon.estado.toLowerCase() : 'renglon'"
+          >
+            <dt>{{ renglon.rotulo }}</dt>
+            <dd>
+              <span class="valor">{{ renglon.valor }}</span>
+
+              <!-- La ventana lleva sus DOS números y no el porcentaje: 168/180 se
+                   puede leer, y el 93 % solo se puede pintar. -->
+              @if (renglon.ventana; as v) {
+                <span class="ventana" role="img"
+                      [attr.aria-label]="v.consumido + ' de ' + v.total">
+                  <span class="consumido"
+                        [style.width.%]="v.total ? (v.consumido * 100) / v.total : 0"></span>
+                </span>
+              }
+
+              <!--
+                EL CONTRASTE (E2.6): dónde cae el dato respecto de NUESTRA
+                operación. Nunca del sector.
+
+                Casi siempre llegará degradado, y está bien: el rango necesita
+                diez propiedades comparables con renta publicada. Cuando no las
+                hay se dice, con su N — «3 propiedades» informa y un silencio no.
+              -->
+              @if (renglon.contraste; as c) {
+                @if (c.forma === 'POSICION_EN_RANGO' && c.posicionPorcentaje !== null) {
+                  <span class="contraste">
+                    <span class="escala" role="img"
+                          [attr.aria-label]="'en el ' + c.posicionPorcentaje + ' % del rango'">
+                      <span class="aguja" [style.left.%]="c.posicionPorcentaje"></span>
+                    </span>
+                    en el {{ c.posicionPorcentaje }} % del rango de {{ c.zona }} ·
+                    {{ c.minimo }}–{{ c.maximo }} · {{ c.observaciones }} propiedades
+                  </span>
+                } @else if (c.motivo !== 'SIN_GRUPO_COMPARABLE') {
+                  <span class="contraste sin-referencia">
+                    {{ textoDelContraste(c) }}
+                  </span>
+                }
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+    }
+
     <!-- La lectura de BROX: sintetiza el expediente. Ausente = nada que concluir. -->
     @if (tarea.interpretacion?.lectura) {
       <p class="lectura"><span aria-hidden="true">◇</span> {{ tarea.interpretacion.lectura }}</p>

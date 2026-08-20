@@ -86,7 +86,40 @@ export interface VentanaDelRenglon {
   total: number;
 }
 
-/** Un renglón del expediente comercial. `estado` ausente = historial, sin color. */
+/**
+ * Dónde cae un dato respecto de **nuestra** operación (E2.6). Nunca del sector.
+ *
+ * `forma: NINGUNA` es el caso **normal** mientras la cartera no tenga muestra, y
+ * `observaciones` viaja igual: «3 propiedades» informa y «sin datos» no dice si
+ * falta poco o todo. El rango solo nace con bastantes propiedades comparables.
+ */
+export interface ContrasteDelRenglon {
+  forma: 'POSICION_EN_RANGO' | 'DESVIACION_CONTRA_MEDIA' | 'NINGUNA';
+  motivo:
+    | 'NINGUNO'
+    | 'SIN_REFERENCIA_INTERNA_SUFICIENTE'
+    | 'SIN_OBSERVACIONES'
+    | 'SIN_GRUPO_COMPARABLE';
+  minimo?: number | null;
+  maximo?: number | null;
+  valor?: number | null;
+  /** Dónde cae dentro del rango. Ausente si el rango no tiene ancho. */
+  posicionPorcentaje?: number | null;
+  moneda?: string | null;
+  zona?: string | null;
+  banda?: string | null;
+  /** Cuántas propiedades distintas lo sostienen. Sin esto no se puede juzgar. */
+  observaciones: number;
+}
+
+/**
+ * Un renglón del expediente comercial. `estado` ausente = historial, sin color.
+ *
+ * Los cuatro renglones **no son siempre los mismos**: un asunto con encargo trae
+ * Encargo · Renta · Actividad · Propietario, y una prospección —anterior a la
+ * captación— trae Prospección · Contacto · Avance · Propietario. El rótulo viene
+ * del backend; la pantalla no elige cuáles.
+ */
 export interface RenglonExpediente {
   rotulo: string;
   valor: string;
@@ -94,6 +127,7 @@ export interface RenglonExpediente {
   ventana: VentanaDelRenglon | null;
   /** La chispa de la renta; sale del histórico económico (E0). */
   serie: number[] | null;
+  contraste?: ContrasteDelRenglon | null;
 }
 
 /**
@@ -105,7 +139,7 @@ export interface RenglonExpediente {
  */
 export interface InterpretacionDelAsunto {
   comoEsta: ComoEsta;
-  /** Cuatro renglones, o ninguno. Nunca cuatro guiones. */
+  /** Siempre cuatro, elegidos según la etapa del asunto. Nunca cuatro guiones. */
   expediente: RenglonExpediente[];
   lectura: string | null;
 }

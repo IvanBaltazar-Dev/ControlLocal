@@ -1,17 +1,109 @@
-/* Tokens globales de ControlLocal (paleta petróleo + dorado sobrio). */
+/* ====================================================================
+   FUNDACIÓN VISUAL DE BROX
+   --------------------------------------------------------------------
+   Portada desde `docs/ai/prototipos/inicio.html`, que es el diseño
+   decidido — no una referencia de la que inspirarse. Los valores están
+   copiados, no reinterpretados: si algo tiene que cambiar, cambia en el
+   prototipo y baja aquí.
+
+   Antes de esto el SPA tenía once tokens `--cl-*` sobre una paleta
+   petróleo y Segoe UI, y el prototipo cuarenta sobre otra paleta y
+   Geist. No eran dos afinaciones del mismo sistema: eran dos sistemas.
+
+   Los `--cl-*` siguen existiendo como ALIAS, apuntando a los tokens
+   nuevos. Es lo que permite que las 57 pantallas se muevan a la vez sin
+   tocarlas una por una, y lo que hace que la migración sea reversible:
+   quitar un alias es un renombrado, no un rediseño.
+   ==================================================================== */
+
+/* Geist Sans, extraída del prototipo. Allí viaja en base64 porque un
+   artefacto publicado tiene que ser autocontenido; aquí es un archivo,
+   que es lo que corresponde a una aplicación real. */
+@font-face {
+  font-family: 'Geist Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('/fuentes/geist-sans.woff2') format('woff2');
+}
+
 :root {
-  --cl-fondo: #f4f6f8;
-  --cl-superficie: #ffffff;
-  --cl-borde: #e3e8ee;
-  --cl-tinta: #16262f;
-  --cl-tinta-suave: #5b6b76;
-  --cl-primario: #0e3a4c;
-  --cl-primario-claro: #155a75;
-  --cl-acento: #d9a441;
-  --cl-exito: #1e8e5a;
-  --cl-error: #c0392b;
-  --cl-radio: 12px;
-  --cl-sombra: 0 10px 30px rgba(14, 58, 76, 0.1);
+  color-scheme: light;
+
+  --canvas: #f6f6f3;
+  --surface: #ffffff;
+  --hueco: #fafaf8;
+  --ink: #14191e;
+  --ink-2: #4e5a65;
+  --ink-3: #6c7681;
+  --hairline: #e6e7e2;
+  --plata: #c7cbc4;
+
+  --oro: #e0a11b;
+  --oro-voz: #a9760d;
+  --oro-tenue: #fdf6e7;
+
+  /* El azul BROX es la voz del sistema. Vive en el Radar y en nada más. */
+  --accion: #2563eb;
+  --accion-fuerte: #1d4ed8;
+  --accion-p: #eff6ff;
+  --accion-b: #bfdbfe;
+  --radar-fondo: #f3f7fe;
+  --radar-linea: #dee8f9;
+
+  /* Los dos lados del negocio. Ni rojo, ni ámbar, ni verde: son
+     temperaturas, no estados. */
+  --lado-oferta: 200, 146, 32;
+  --lado-demanda: 56, 122, 214;
+
+  --riesgo: #d14343;
+  --atencion: #c67c10;
+  --positivo: #199a5c;
+
+  /* Un color por proceso: el canto de la tarjeta dice de qué habla sin
+     que haya que leer el rótulo. */
+  --p-prospeccion: #8a4fd3;
+  --p-captacion: #6d5bd0;
+  --p-publicacion: #c0447c;
+  --p-cliente: #4f5fc4;
+  --p-oportunidad: #1b7f9e;
+  --p-visita: #178c7d;
+  --p-solicitud: #b07215;
+  --p-comision: #8a6a2f;
+
+  --r: 10px;
+  --r-chico: 6px;
+  --t1: 130ms;
+  --t2: 180ms;
+  --t3: 240ms;
+  --curva: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Curva de resorte con `linear()`: un rebote contenido, sin librería y
+     sin coste. Es lo que separa un desplazamiento mecánico de uno que
+     parece que pesa algo. */
+  --muelle: linear(
+    0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%,
+    0.937 38.1%, 0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%,
+    1.006 78.2%, 1
+  );
+  --ui:
+    'Geist Sans', 'Geist', 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+
+  /* --- Alias heredados -------------------------------------------------
+     Las 57 pantallas siguen nombrando los tokens viejos. Apuntan a los
+     nuevos para que el cambio de sistema no exija tocarlas una por una, y
+     para que ninguna se quede con la paleta anterior por descuido. */
+  --cl-fondo: var(--canvas);
+  --cl-superficie: var(--surface);
+  --cl-borde: var(--hairline);
+  --cl-tinta: var(--ink);
+  --cl-tinta-suave: var(--ink-2);
+  --cl-primario: var(--accion);
+  --cl-primario-claro: var(--accion-fuerte);
+  --cl-acento: var(--oro);
+  --cl-exito: var(--positivo);
+  --cl-error: var(--riesgo);
+  --cl-radio: var(--r);
+  --cl-sombra: 0 10px 30px rgba(20, 25, 30, 0.08);
 }
 
 * {
@@ -25,14 +117,318 @@ body {
 
 body {
   margin: 0;
-  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
-  background: var(--cl-fondo);
-  color: var(--cl-tinta);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: 14px;
+  line-height: 21px;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Las cifras alineadas en columna: un tablero con números que bailan se
+     lee peor aunque diga lo mismo. */
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 button {
   font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accion);
+  outline-offset: 3px;
+  border-radius: 5px;
+}
+
+/* ====================================================================
+   ARMAZÓN · el lateral marino y el lienzo
+   ==================================================================== */
+
+.app {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* El único fondo oscuro de BROX, y es deliberado: el lateral es chrome, no
+   contenido. Donde vive la información, el fondo es claro. */
+.lateral {
+  flex: none;
+  width: 218px;
+  background: #0a0e12;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 0 16px;
+}
+
+.marca {
+  padding: 0 22px 24px;
+
+  .n {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    line-height: 21px;
+  }
+
+  .b {
+    display: block;
+    margin-top: 4px;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--oro);
+    line-height: 13px;
+  }
+}
+
+.lateral nav {
+  flex: 1;
+  padding: 0 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  overflow-y: auto;
+}
+
+.rot-nav {
+  padding: 0 9px 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 450;
+  color: rgba(255, 255, 255, 0.6);
+  transition:
+    color var(--t1) ease,
+    background var(--t1) ease;
+
+  svg {
+    flex: none;
+    color: var(--pc, rgba(255, 255, 255, 0.55));
+    opacity: 0.85;
+  }
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.045);
+
+    svg {
+      opacity: 1;
+    }
+  }
+
+  &.activo {
+    color: #fff;
+    font-weight: 550;
+    background: rgba(201, 150, 63, 0.1);
+
+    svg {
+      opacity: 1;
+      color: var(--oro);
+    }
+
+    /* El canto dorado marca dónde estás sin necesidad de un fondo. */
+    &::before {
+      content: '';
+      position: absolute;
+      left: -13px;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      background: var(--oro);
+      border-radius: 0 3px 3px 0;
+    }
+  }
+}
+
+.usuario {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 6px 0;
+  margin: 0 13px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+
+  span {
+    min-width: 0;
+  }
+
+  .q {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* «Broker supervisor» no cabía a 11 px y partía en dos líneas. */
+  .r {
+    display: block;
+    font-size: 10.5px;
+    line-height: 14px;
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.42);
+  }
+}
+
+.avatar {
+  flex: none;
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--oro);
+  color: var(--oro);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lienzo {
+  flex: 1;
+  padding: 16px 30px 12px;
+  max-width: 1720px;
+  width: 100%;
+}
+
+/* ====================================================================
+   CABECERA DEL DÍA · la capacidad, no la deuda
+   ==================================================================== */
+
+.cab-dia {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.estado-dia {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex: none;
+}
+
+.pastilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+
+  &::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+}
+
+.fecha {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.saludo {
+  margin: 0 0 3px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.titular {
+  margin: 0;
+  font-size: 25px;
+  line-height: 33px;
+  font-weight: 600;
+  letter-spacing: -0.024em;
+  text-wrap: balance;
+
+  /* La cifra acentuada es la PROPUESTA, no la acumulación. */
+  .prop {
+    color: var(--oro);
+  }
+
+  .segunda {
+    display: block;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+}
+
+.kicker {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ====================================================================
+   LA REJILLA · el foco a la izquierda, el Radar en su carril
+   ==================================================================== */
+
+.rejilla {
+  display: grid;
+  grid-template-columns: minmax(0, 66fr) minmax(340px, 34fr);
+  gap: 22px;
+  align-items: start;
+  margin-top: 12px;
+}
+
+.izq {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cab-zona {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+/* En móvil el Radar baja debajo del foco: en una columna no hay carril
+   (D-E2-1 §15). */
+@media (max-width: 1080px) {
+  .rejilla {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lienzo {
+    padding: 14px 16px 12px;
+  }
 }
 
 /*

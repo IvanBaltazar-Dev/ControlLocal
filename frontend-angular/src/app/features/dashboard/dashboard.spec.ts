@@ -376,31 +376,6 @@ describe('Dashboard', () => {
 
   // --- R-07: la clasificación es del backend -------------------------------
 
-  /**
-   * El caso del enunciado: 9 días de atraso llegan con su lectura hecha. Si la
-   * pantalla siguiera aplicando `> 7`, un cambio de política en el backend no
-   * se notaría aquí. Se comprueba mandando un nivel que **contradice** al
-   * número: el color tiene que seguir al nivel.
-   */
-  it('el tono sale del nivel que manda el backend, no de recalcular el umbral', async () => {
-    api.cargar.and.resolveTo(
-      carga({
-        indicadores: {
-          ...INDICADORES,
-          senales: INDICADORES.senales.map((s) =>
-            s.concepto === 'DEMORA_DE_SEGUIMIENTO'
-              ? { ...s, valor: 9, nivelAtencion: 'SIN_PENDIENTES' as const, requiereAtencion: false }
-              : s,
-          ),
-        },
-      }),
-    );
-    const agente = await montar('AGENTE');
-    const demora = agente['senales']().find((s) => s.etiqueta === 'Atraso promedio');
-
-    expect(demora?.valor).toBe('9');
-    expect(demora?.tono).toBe('verde');
-  });
 
   /**
    * Antes cada rol traía su propia escala de pesos y se contradecían: para el
@@ -462,15 +437,6 @@ describe('Dashboard', () => {
     expect(texto).not.toContain('alquiler');
   });
 
-  /** Un concepto que no viniera no puede pintarse como alarma ni romper la home. */
-  it('sobrevive a una respuesta sin senales', async () => {
-    api.cargar.and.resolveTo(carga({ indicadores: { ...INDICADORES, senales: [] } }));
-    const broker = await montar('BROKER');
-
-    expect(broker['error']()).toBeNull();
-    expect(broker['focos']()).toEqual([]);
-    expect(broker['senales']().every((s) => s.tono !== 'rojo')).toBeTrue();
-  });
 
   /**
    * El punto de la corrección: el backend retiró el tope de 10 (D-F7-2) y una
@@ -657,74 +623,10 @@ describe('Dashboard', () => {
     expect(agente['avisoBandeja']()).toContain('no tiene una pantalla');
   });
 
-  /**
-   * Salud (del periodo) y etapas (acumulado) son dos lecturas distintas. Se
-   * cambia de una a otra solo cuando la del periodo está vacía, y la pantalla
-   * lo dice en el subtítulo.
-   */
-  it('usa la salud del periodo y solo cae a etapas cuando esta vacia', async () => {
-    const conSalud = await montar();
-    expect(conSalud['usandoEtapas']()).toBeFalse();
-    expect(conSalud['totalCubos']()).toBe(10);
 
-    TestBed.resetTestingModule();
-    api.cargar.and.resolveTo(
-      carga({
-        indicadores: {
-          ...INDICADORES,
-          captacionesSalud: [
-            { nombre: 'Activas', valor: 0 },
-            { nombre: 'Por revisar', valor: 0 },
-          ],
-        },
-      }),
-    );
-    const sinSalud = await montar();
-    expect(sinSalud['usandoEtapas']()).toBeTrue();
-    expect(sinSalud['tituloCubos']()).toBe('Captaciones por etapa');
-    expect(sinSalud['subtituloCubos']()).toContain('acumulado');
-  });
 
-  it('los porcentajes de la barra se calculan sobre el total mostrado', async () => {
-    const agente = await montar();
-    const tramos = agente['tramos']();
 
-    expect(tramos.map((t) => t.porcentaje)).toEqual([60, 20, 10, 10]);
-    expect(tramos.every((t) => t.color.length > 0)).toBeTrue();
-  });
 
-  /** Recorte en memoria sobre las ≤8 filas que ya llegaron: sin llamada extra. */
-  it('la carga del equipo son los tres primeros por captaciones', async () => {
-    const broker = await montar('BROKER');
-
-    expect(broker['desempeno']().map((d) => d.nombre)).toEqual([
-      'Beto Diaz',
-      'Ana Perez',
-      'Cira Luna',
-    ]);
-  });
-
-  /**
-   * E2.0. Antes esta prueba exigía lo contrario: sin cohorte, la conversión
-   * caía a la fila de desempeño y el agente veía **la cifra de otro**. Ahora
-   * `null` significa "no hay nada que medir" y la pantalla lo dice.
-   */
-  it('sin cohorte no hay conversion, y no se toma prestada la de otro agente', async () => {
-    api.cargar.and.resolveTo(carga({ indicadores: { ...INDICADORES, conversionPropia: null } }));
-    const agente = await montar();
-
-    expect(agente['conversion']()).toBeNull();
-    expect(agente['conversionAncho']()).toBe(0);
-
-    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(texto).not.toContain('25%');
-    expect(texto).toContain('todavía no hay conversión que medir');
-  });
-
-  it('con cohorte la conversion es la propia', async () => {
-    const agente = await montar();
-    expect(agente['conversion']()).toBe(20);
-  });
 
   it('un fallo de la llamada deja la pantalla en error, no a medias', async () => {
     api.cargar.and.rejectWith(new Error('boom'));

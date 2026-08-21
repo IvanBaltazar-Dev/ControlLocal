@@ -1,11 +1,16 @@
 package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
+import com.controllocal.domain.captura.BorradorCaptura;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.Actor;
+import com.controllocal.service.Pagina;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
 import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
+import com.controllocal.service.PropiedadUniversalService.EpisodiosDeOperacion;
+import com.controllocal.service.PropiedadUniversalService.HitoDeLaHistoria;
 import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
 import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
 import com.controllocal.service.PropiedadUniversalService.ResultadoRegistro;
@@ -13,6 +18,9 @@ import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.PublicacionService;
+import com.controllocal.service.PublicacionService.DatosPublicacion;
+import com.controllocal.service.PublicacionService.FichaPublicacion;
 import com.controllocal.service.captura.GuionRegistroPropiedad;
 import com.controllocal.service.captura.MotorDeCaptura;
 import com.controllocal.service.excepcion.NoEncontradoException;
@@ -33,6 +41,7 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -99,6 +108,7 @@ class PropiedadUniversalIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired PropiedadUniversalService propiedades;
     @Autowired MotorDeCaptura captura;
+    @Autowired PublicacionService publicaciones;
 
     private Actor agenteA;
     private Actor agenteB;
@@ -142,7 +152,10 @@ class PropiedadUniversalIntegrationTest {
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
 
-        assertEquals("L", ficha.tipoPropiedad());
+        assertEquals("LOCAL", ficha.tipoPropiedad(),
+                "la ficha publica el NOMBRE del tipo, no el codigo de almacenamiento");
+        assertEquals("Local comercial", ficha.tipoRotulo(),
+                "y su rotulo, para que el cliente no traduzca (D-A-1)");
         assertEquals(1, ficha.titulares().size());
         assertEquals(0, new BigDecimal("100").compareTo(ficha.titulares().get(0).cuota()),
                 "un titular unico es el 100 % sin tener que declararlo");
@@ -163,7 +176,7 @@ class PropiedadUniversalIntegrationTest {
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
 
-        assertEquals("D", ficha.tipoPropiedad());
+        assertEquals("DEPARTAMENTO", ficha.tipoPropiedad());
         assertEquals("VENTA", ficha.encargos().get(0).operacion());
         assertEquals(0, new BigDecimal("180000").compareTo(ficha.encargos().get(0).importe()));
 
@@ -184,7 +197,7 @@ class PropiedadUniversalIntegrationTest {
                         new ValorAtributo("dormitorios", "4"))), agenteA);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
-        assertEquals("C", ficha.tipoPropiedad());
+        assertEquals("CASA", ficha.tipoPropiedad());
         assertEquals("V", ficha.uso(), "una casa es vivienda: el uso se deduce del tipo, no es comercial");
     }
 
@@ -279,6 +292,559 @@ class PropiedadUniversalIntegrationTest {
         assertEquals(1, alquiler.historico().size());
         assertEquals(0, new BigDecimal("180000").compareTo(venta.historico().get(0).monto()));
         assertEquals(0, new BigDecimal("2900").compareTo(alquiler.historico().get(0).monto()));
+    }
+
+    /**
+     * <b>La prueba que rompe un {@code groupBy(operacion)}.</b>
+     *
+     * <p>Venta + alquiler no la detecta: con un encargo de cada, agrupar por
+     * operacion y listar por id dan el mismo resultado. Lo que la detecta es la
+     * historia -- tres alquileres sucesivos sobre la misma propiedad --, que el
+     * modelo permite: {@code uq_captacion_viva_por_operacion} (V50) prohibe dos
+     * <b>vivos</b> de la misma operacion, no que hayan existido varios.
+     *
+     * <p>Agrupados por operacion serian un bloque con tres precios dentro y una
+     * sola linea temporal sin significado. Son tres bloques, y cada historico
+     * es el de su encargo.
+     */
+    @Test
+    @DisplayName("tres alquileres sucesivos son TRES encargos con TRES historicos, no uno agrupado")
+    void variosEncargosHistoricosDeLaMismaOperacion() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+
+        // El encargo vivo pasa a cerrado y entran dos anteriores, ya cerrados:
+        // es la historia que una propiedad de verdad acumula.
+        long vigente = alta.idsEncargos().get(0);
+        long anterior2025 = encargoCerrado(alta.idPropiedad(), "2025-01-15",
+                new BigDecimal("2400"), "PEN");
+        long anterior2024 = encargoCerrado(alta.idPropiedad(), "2024-02-10",
+                new BigDecimal("2200"), "PEN");
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertEquals(3, ficha.encargos().size(),
+                "tres encargos de ALQUILER son tres bloques; agrupar por operacion dejaria uno");
+        assertEquals(Set.of(vigente, anterior2025, anterior2024),
+                ficha.encargos().stream().map(EncargoFicha::idEncargo)
+                        .collect(java.util.stream.Collectors.toSet()),
+                "la identidad del bloque es el idEncargo");
+
+        // Cada serie es la suya. Con el filtro por OPERACION en vez de por
+        // encargo, los tres verian los tres hitos.
+        for (EncargoFicha encargo : ficha.encargos()) {
+            assertEquals(1, encargo.historico().size(),
+                    "el historico del encargo " + encargo.idEncargo()
+                            + " se contamino con el de otro alquiler");
+        }
+        assertEquals(0, new BigDecimal("2600").compareTo(porId(ficha, vigente).historico().get(0).monto()));
+        assertEquals(0, new BigDecimal("2400").compareTo(porId(ficha, anterior2025).historico().get(0).monto()));
+        assertEquals(0, new BigDecimal("2200").compareTo(porId(ficha, anterior2024).historico().get(0).monto()));
+
+        // Y el que sigue en juego se distingue del que ya no, sin esconder ninguno.
+        assertTrue(porId(ficha, vigente).vivo());
+        assertFalse(porId(ficha, anterior2025).vivo());
+        assertEquals(vigente, ficha.encargos().get(0).idEncargo(), "los vivos van primero");
+    }
+
+    /**
+     * Un encargo cerrado <b>no desaparece de la ficha</b>: es el unico sitio
+     * donde vive su historico economico, y esconderlo borraria una serie entera
+     * sin decir que existe. El listado si se queda con los vivos -- su pregunta
+     * es "que hay en cartera", no "que ha pasado con esta propiedad".
+     */
+    @Test
+    @DisplayName("el encargo cerrado sigue en la ficha, y fuera del listado")
+    void elEncargoCerradoNoSeEsconde() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        // Cerrar exige fecha y motivo: lo impone ck_captacion_cierre, y es
+        // correcto -- un encargo cerrado sin decir cuando ni por que no es un
+        // cierre, es un estado perdido.
+        jdbc.update("""
+                update captacion set estado = 'C', fecha_cierre = current_date, motivo_cierre = 'A'
+                 where id_captacion = ?
+                """, alta.idsEncargos().get(0));
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+        assertEquals(1, ficha.encargos().size(), "la ficha conserva el encargo cerrado");
+        assertFalse(ficha.encargos().get(0).vivo());
+        assertEquals(1, ficha.encargos().get(0).historico().size(),
+                "y con el, su historico economico");
+
+        Pagina<PropiedadUniversalService.FilaPropiedad> cartera = propiedades.listar(
+                new PropiedadUniversalService.FiltrosPropiedad(null, null, null, null, null, 1, 20),
+                agenteA);
+        PropiedadUniversalService.FilaPropiedad fila = cartera.items().stream()
+                .filter(f -> f.id().equals(alta.idPropiedad()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(fila.encargos().isEmpty(), "el listado solo ensena lo vivo");
+    }
+
+    /**
+     * <b>El read model llega listo para leerse.</b> Cada codigo viaja con su
+     * rotulo: sin ellos, la unica forma de escribir «Local comercial», «Activa»
+     * o «renta mensual» es una tabla de traduccion en cada interfaz, y con dos
+     * interfaces serian dos que se separan (D-A-1 §6).
+     */
+    @Test
+    @DisplayName("la ficha publica los rotulos: el cliente no traduce ningun codigo")
+    void laFichaLlegaListaParaLeerse() {
+        ResultadoRegistro alta = propiedades.registrar(comando("DEPARTAMENTO", "VENTA",
+                new BigDecimal("320000"), "USD",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "118"),
+                        new ValorAtributo("dormitorios", "3"))), agenteA);
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertEquals("DEPARTAMENTO", ficha.tipoPropiedad());
+        assertEquals("Departamento", ficha.tipoRotulo());
+        assertEquals("Vivienda", ficha.usoRotulo(), "un departamento es vivienda, no comercial");
+        assertNotNull(ficha.estadoRegistroRotulo());
+        assertNotNull(ficha.disponibilidadRotulo());
+
+        EncargoFicha venta = encargo(ficha, "VENTA");
+        assertEquals("Venta", venta.operacionRotulo());
+        assertEquals("Pendiente de revision", venta.estadoRotulo(),
+                "el encargo nace pendiente: el agente registra, el broker decide");
+        // El nombre del importe lo decide la operacion, no la pantalla: "renta"
+        // en una ficha de venta es un error de bulto.
+        assertEquals("precio de venta", venta.importeRotulo());
+        assertNotNull(venta.agenteNombre(), "la ficha dice quien lleva el encargo");
+        assertNotNull(venta.exclusividad(), "se escribia y no se devolvia");
+    }
+
+    /**
+     * El metraje aparece <b>una sola vez</b>, entre los atributos y con su clave
+     * logica. Si la ficha ganara ademas un campo suelto, la pantalla tendria que
+     * excluirlo de la lista para no ensenarlo dos veces -- y esa exclusion es el
+     * primer eslabon de una coleccion de excepciones por clave.
+     */
+    @Test
+    @DisplayName("el metraje no se publica dos veces")
+    void elMetrajeApareceUnaSolaVez() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2900"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "85.5"))), agenteA);
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertEquals(1, ficha.atributos().stream()
+                        .filter(a -> "metraje_total".equals(a.clave())).count(),
+                "el metraje viaja una vez, con su clave logica (D-E4-3)");
+        assertEquals(0, java.util.Arrays.stream(FichaPropiedadUniversal.class.getRecordComponents())
+                        .filter(componente -> "metraje".equals(componente.getName())).count(),
+                "y sin un campo `metraje` suelto que obligue a excluirlo de la lista");
+    }
+
+    /**
+     * Lo que falta llega <b>con su nombre</b>. Con la clave desnuda, decir "no
+     * se puede publicar sin el metraje" obligaria al cliente a traducir
+     * `metraje_total`, que es la matriz del catalogo reescrita en la interfaz.
+     */
+    @Test
+    @DisplayName("lo que falta se dice con la palabra del catalogo, no con la clave")
+    void loQueFaltaLlegaConSuRotulo() {
+        ResultadoRegistro alta = propiedades.registrar(comando("TERRENO", "VENTA",
+                new BigDecimal("95000"), "USD",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "300"),
+                        new ValorAtributo("zonificacion", "CZ"))), agenteA);
+
+        // El alta no deja registrar sin lo obligatorio, asi que la unica forma
+        // de observar una ficha incompleta es borrar el valor despues -- que es
+        // lo que pasa de verdad cuando el catalogo declara obligatoria una
+        // clave que las propiedades antiguas no tenian.
+        jdbc.update("delete from atributo_propiedad where id_propiedad = ? and clave = 'zonificacion'",
+                alta.idPropiedad());
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertFalse(ficha.atributosQueFaltan().isEmpty(),
+                "sin zonificacion, un terreno esta incompleto");
+        ficha.atributosQueFaltan().forEach(falta -> {
+            assertNotNull(falta.clave());
+            assertNotNull(falta.rotulo(), "la clave " + falta.clave() + " llego sin rotulo");
+            assertFalse(falta.rotulo().equals(falta.clave()),
+                    "el rotulo es la palabra del catalogo, no la clave repetida: " + falta.clave());
+        });
+    }
+
+    // ==================================================================
+    // La actividad, y de que encargo viene cada cosa
+    // ==================================================================
+
+    /**
+     * <b>Ninguna actividad pierde el encargo del que proviene.</b>
+     *
+     * <p>Es la regla que impide que el tercer bloque de la ficha vuelva a
+     * mezclar lo que los dos primeros separaron: una visita de quien quiere
+     * comprar y otra de quien quiere alquilar la misma propiedad se leen igual
+     * en una lista plana.
+     */
+    @Test
+    @DisplayName("la actividad viaja con su procedencia: cada hecho dice de que encargo nace")
+    void laActividadConservaSuProcedencia() {
+        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "DEPARTAMENTO", null,
+                "Disponible para venta o alquiler",
+                new Ubicacion("Av. Larco 4321", "Miraflores", null, null, null, null, null, null, null),
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "118"),
+                        new ValorAtributo("dormitorios", "3")),
+                List.of(new OperacionSolicitada("VENTA", new BigDecimal("320000"), "USD",
+                                null, null, null, null, null, null, null),
+                        new OperacionSolicitada("ALQUILER", new BigDecimal("4800"), "USD",
+                                null, null, null, null, null, null, null)),
+                null);
+        ResultadoRegistro alta = propiedades.registrar(comando, agenteA);
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertNotNull(ficha.actividad(), "la actividad forma parte de la ficha, no de otro viaje");
+        // Recien registrada no hay actividad todavia, y eso se dice con listas
+        // vacias -- nunca con null, que obligaria al cliente a distinguir "no
+        // hay" de "no vino".
+        assertNotNull(ficha.actividad().oportunidades());
+        assertNotNull(ficha.actividad().visitas());
+        assertNotNull(ficha.actividad().interacciones());
+        assertNotNull(ficha.actividad().expedientes());
+        assertNotNull(ficha.actividad().contratos());
+
+        Set<Long> encargos = Set.copyOf(alta.idsEncargos());
+        java.util.stream.Stream.of(ficha.actividad().oportunidades(), ficha.actividad().visitas(),
+                        ficha.actividad().interacciones(), ficha.actividad().expedientes(),
+                        ficha.actividad().contratos())
+                .flatMap(List::stream)
+                .forEach(hecho -> {
+                    assertNotNull(hecho.idEncargo(),
+                            "un hecho sin encargo es un hecho sin procedencia: " + hecho.titulo());
+                    assertTrue(encargos.contains(hecho.idEncargo()),
+                            "el hecho apunta a un encargo que no es de esta propiedad");
+                    assertNotNull(hecho.operacion(),
+                            "y dice en palabras de que operacion viene");
+                });
+    }
+
+    // ==================================================================
+    // La memoria del inmueble: idPropiedad como continuidad historica
+    // ==================================================================
+
+    /**
+     * <b>Los dos niveles, y por que hacen falta los dos.</b>
+     *
+     * <pre>
+     *   idEncargo    la identidad tecnica de UN episodio comercial
+     *   idPropiedad  la continuidad historica del inmueble
+     * </pre>
+     *
+     * <p>Los bloques de encargo contestan «que dice este encargo». La historia
+     * contesta «que ha pasado con este inmueble», que es la pregunta que un CRM
+     * de operaciones vivas no sabe responder.
+     */
+    @Test
+    @DisplayName("la historia cuenta cuantas veces estuvo en alquiler, sin fusionar los historicos")
+    void laHistoriaCuentaLosEpisodiosSinFusionarlos() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        long vigente = alta.idsEncargos().get(0);
+        long anterior2025 = encargoCerrado(alta.idPropiedad(), "2025-01-15",
+                new BigDecimal("2400"), "PEN");
+        long anterior2024 = encargoCerrado(alta.idPropiedad(), "2024-02-10",
+                new BigDecimal("2200"), "PEN");
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+        EpisodiosDeOperacion alquiler = episodios(ficha, "ALQUILER");
+
+        // «¿Cuantas veces estuvo en alquiler?»
+        assertEquals(3, alquiler.veces());
+        assertTrue(alquiler.vivoAhora(), "hoy sigue en alquiler");
+        assertTrue(alquiler.hasta() == null, "con un encargo vivo, la historia no se cierra");
+
+        // «¿A cuanto se pide ahora?» -- y con el encargo del que sale, para poder
+        // volver de la cifra al episodio.
+        assertEquals(0, new BigDecimal("2600").compareTo(alquiler.ultimoPedido().monto()));
+        assertEquals(vigente, alquiler.ultimoPedido().idEncargo());
+
+        // La linea atraviesa los tres encargos, del mas reciente al mas antiguo,
+        // y cada movimiento conserva SU procedencia. Agregada para leerse, no
+        // fusionada.
+        assertEquals(3, ficha.historia().linea().size());
+        assertEquals(List.of(vigente, anterior2025, anterior2024),
+                ficha.historia().linea().stream().map(HitoDeLaHistoria::idEncargo).toList());
+        ficha.historia().linea().forEach(hito -> {
+            assertNotNull(hito.idEncargo(), "un movimiento sin encargo no se puede auditar");
+            assertNotNull(hito.codigoEncargo());
+            assertEquals("ALQUILER", hito.operacion());
+        });
+
+        // Y los bloques de encargo siguen intactos: los dos niveles conviven.
+        assertEquals(3, ficha.encargos().size());
+        ficha.encargos().forEach(encargo ->
+                assertEquals(1, encargo.historico().size(),
+                        "agregar para la historia no puede contaminar la serie de un encargo"));
+    }
+
+    /**
+     * <b>Lo pedido y lo cerrado son dos numeros distintos.</b>
+     *
+     * <p>Y cuando no hay cierre, la respuesta correcta es {@code null}. Caer al
+     * precio pedido convierte «lo que pediamos» en «lo que vale» sin que nadie
+     * lo note -- y esa es justo la cifra que despues se cita en una negociacion.
+     */
+    @Test
+    @DisplayName("el ultimo cierre no se confunde con el ultimo precio pedido")
+    void elCierreNoSeConfundeConLoPedido() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        long anterior = encargoCerrado(alta.idPropiedad(), "2025-01-15",
+                new BigDecimal("2400"), "PEN");
+
+        // Sin ningun hito de cierre todavia.
+        EpisodiosDeOperacion sinCierre = episodios(
+                propiedades.consultar(alta.idPropiedad(), agenteA), "ALQUILER");
+        assertNotNull(sinCierre.ultimoPedido());
+        assertTrue(sinCierre.ultimoCierre() == null,
+                "sin cierre se declara faltante; NO se rellena con el precio pedido");
+
+        // El alquiler de 2025 se cerro de verdad, y por debajo de lo pedido.
+        jdbc.update("""
+                insert into precio_propiedad (organizacion_id, id_propiedad, id_captacion,
+                                              operacion, hito, moneda, monto, fecha)
+                values (?, ?, ?, 'A', 'C', 'PEN', 2250, cast('2025-03-01' as date))
+                """, agenteA.idOrganizacion(), alta.idPropiedad(), anterior);
+
+        EpisodiosDeOperacion conCierre = episodios(
+                propiedades.consultar(alta.idPropiedad(), agenteA), "ALQUILER");
+
+        // «¿A cuanto se alquilo la ultima vez?» -- 2 250, no 2 600.
+        assertEquals(0, new BigDecimal("2250").compareTo(conCierre.ultimoCierre().monto()));
+        assertEquals(anterior, conCierre.ultimoCierre().idEncargo(),
+                "y se puede volver al episodio que lo produjo");
+        // Lo pedido no se movio: son dos preguntas distintas.
+        assertEquals(0, new BigDecimal("2600").compareTo(conCierre.ultimoPedido().monto()));
+    }
+
+    /**
+     * Venta y alquiler llevan <b>historias separadas</b>. Es la misma regla del
+     * bloque de encargo, un nivel mas arriba: agregarlas juntas produciria «el
+     * ultimo precio» de un inmueble que se vende Y se alquila, que no significa
+     * nada.
+     */
+    @Test
+    @DisplayName("la historia separa venta de alquiler, tambien al agregar")
+    void laHistoriaSeparaLasDosOperaciones() {
+        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "DEPARTAMENTO", null,
+                null,
+                new Ubicacion("Av. Larco 9876", "Miraflores", null, null, null, null, null, null, null),
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "118"),
+                        new ValorAtributo("dormitorios", "3")),
+                List.of(new OperacionSolicitada("VENTA", new BigDecimal("320000"), "USD",
+                                null, null, null, null, null, null, null),
+                        new OperacionSolicitada("ALQUILER", new BigDecimal("4800"), "USD",
+                                null, null, null, null, null, null, null)),
+                null);
+        ResultadoRegistro alta = propiedades.registrar(comando, agenteA);
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertEquals(2, ficha.historia().porOperacion().size());
+        assertEquals(0, new BigDecimal("320000")
+                .compareTo(episodios(ficha, "VENTA").ultimoPedido().monto()));
+        assertEquals(0, new BigDecimal("4800")
+                .compareTo(episodios(ficha, "ALQUILER").ultimoPedido().monto()));
+        // Venta primero: es el orden del dominio, no el alfabetico.
+        assertEquals("VENTA", ficha.historia().porOperacion().get(0).operacion());
+        assertEquals("Venta", ficha.historia().porOperacion().get(0).operacionRotulo());
+    }
+
+    @Test
+    @DisplayName("una propiedad sin historia lo dice con listas vacias, no con null")
+    void sinHistoriaNoHayNull() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        jdbc.update("delete from precio_propiedad where id_propiedad = ?", alta.idPropiedad());
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertNotNull(ficha.historia());
+        assertTrue(ficha.historia().linea().isEmpty());
+        // El episodio sigue contando aunque no tenga movimientos: existio.
+        assertEquals(1, episodios(ficha, "ALQUILER").veces());
+        assertNull(episodios(ficha, "ALQUILER").ultimoPedido());
+    }
+
+    // ==================================================================
+    // La publicacion pertenece al ENCARGO (V70)
+    // ==================================================================
+
+    /**
+     * <b>El caso que decide el diseño.</b> PROP-0022: venta y alquiler a la vez.
+     *
+     * <p>Cada encargo tiene su propia gestion de publicacion. El anuncio de la
+     * venta no aparece en el alquiler ni lo modifica, y viceversa. Colgada de la
+     * propiedad --como estaba hasta V70-- la consulta devolvia los dos juntos sin
+     * poder decir cual publicaba que, porque la publicacion no llevaba operacion.
+     */
+    @Test
+    @DisplayName("venta y alquiler: cada encargo publica lo suyo, y no se ven entre si")
+    void cadaEncargoPublicaLoSuyo() {
+        ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "OFICINA", null, null,
+                new Ubicacion("Av. La Marina 2450", "San Miguel", null, null, null, null, null, null, null),
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "160")),
+                List.of(new OperacionSolicitada("VENTA", new BigDecimal("320000"), "USD",
+                                null, null, null, null, null, null, null),
+                        new OperacionSolicitada("ALQUILER", new BigDecimal("4800"), "USD",
+                                null, null, null, null, null, null, null)),
+                null);
+        ResultadoRegistro alta = propiedades.registrar(comando, agenteA);
+
+        FichaPropiedadUniversal antes = propiedades.consultar(alta.idPropiedad(), agenteA);
+        long deVenta = encargo(antes, "VENTA").idEncargo();
+        long deAlquiler = encargo(antes, "ALQUILER").idEncargo();
+
+        publicaciones.crearEnEncargo(deVenta, anuncio("URBANIA", new BigDecimal("320000"), "USD"), agenteA);
+        publicaciones.crearEnEncargo(deAlquiler, anuncio("FACEBOOK", new BigDecimal("4800"), "USD"), agenteA);
+
+        List<FichaPublicacion> anunciosVenta = publicaciones.listarDeEncargo(deVenta, agenteA);
+        List<FichaPublicacion> anunciosAlquiler = publicaciones.listarDeEncargo(deAlquiler, agenteA);
+
+        assertEquals(1, anunciosVenta.size(), "el anuncio del alquiler se colo en la venta");
+        assertEquals(1, anunciosAlquiler.size(), "el anuncio de la venta se colo en el alquiler");
+        assertEquals("URBANIA", anunciosVenta.get(0).canal());
+        assertEquals("FACEBOOK", anunciosAlquiler.get(0).canal());
+
+        // Y el importe se llama como toca en cada uno. Un anuncio de venta
+        // rotulado "renta mensual" es el error que V70 vino a quitar.
+        assertEquals("precio de venta", anunciosVenta.get(0).importeRotulo());
+        assertEquals("renta mensual", anunciosAlquiler.get(0).importeRotulo());
+
+        // El hito de precio PUBLICADO nace atado a SU encargo y con SU operacion.
+        // Antes de V70 se escribia suponiendo ALQUILER y sin encargo, asi que no
+        // aparecia en ninguna ficha.
+        FichaPropiedadUniversal despues = propiedades.consultar(alta.idPropiedad(), agenteA);
+        EncargoFicha venta = porId(despues, deVenta);
+        EncargoFicha alquiler = porId(despues, deAlquiler);
+        assertTrue(venta.historico().stream().anyMatch(h -> "P".equals(h.hito())),
+                "publicar la venta no dejo su hito en el historico de la venta");
+        assertTrue(alquiler.historico().stream().anyMatch(h -> "P".equals(h.hito())),
+                "publicar el alquiler no dejo su hito en el historico del alquiler");
+        // Ninguno ve la cifra del otro.
+        assertTrue(venta.historico().stream().noneMatch(
+                        h -> new BigDecimal("4800").compareTo(h.monto()) == 0),
+                "el historico de la venta se contamino con la renta publicada");
+
+        // Y la ficha los cuelga de su bloque, no de la propiedad.
+        assertEquals(1, venta.publicaciones().size());
+        assertEquals(1, alquiler.publicaciones().size());
+        assertEquals("URBANIA", venta.publicaciones().get(0).canal());
+    }
+
+    /**
+     * La misma regla un nivel mas abajo: con <b>varios encargos de la misma
+     * operacion</b>, cada uno conserva sus anuncios. Agrupar por operacion los
+     * fundiria, igual que fundiria sus historicos economicos.
+     */
+    @Test
+    @DisplayName("dos alquileres sucesivos conservan cada uno SUS anuncios")
+    void losAnunciosNoSeAgrupanPorOperacion() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        long vigente = alta.idsEncargos().get(0);
+        long anterior = encargoCerrado(alta.idPropiedad(), "2025-01-15",
+                new BigDecimal("2400"), "PEN");
+
+        publicaciones.crearEnEncargo(vigente, anuncio("URBANIA", new BigDecimal("2600"), "PEN"), agenteA);
+        // El anterior esta cerrado: se le inserta el anuncio como historia, que
+        // es como llego a existir en su dia.
+        jdbc.update("""
+                insert into publicacion (organizacion_id, id_propiedad, id_captacion, canal,
+                                         version_anuncio, titulo_anuncio, importe_publicado,
+                                         moneda, codigo_origen, fecha_publicacion, estado)
+                values (?, ?, ?, 'ADONDEVIVIR', 1, 'Anuncio 2025', 2400, 'PEN', 'HIST',
+                        cast('2025-01-15' as timestamptz), 'C')
+                """, agenteA.idOrganizacion(), alta.idPropiedad(), anterior);
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertEquals(1, porId(ficha, vigente).publicaciones().size());
+        assertEquals(1, porId(ficha, anterior).publicaciones().size());
+        assertEquals("URBANIA", porId(ficha, vigente).publicaciones().get(0).canal());
+        assertEquals("ADONDEVIVIR", porId(ficha, anterior).publicaciones().get(0).canal());
+    }
+
+    /**
+     * <b>No se publica lo que ya no se ofrece.</b> La regla vive en el servicio,
+     * no en el boton: el backend la impone aunque la pantalla ofrezca la accion.
+     */
+    @Test
+    @DisplayName("un encargo cerrado no se puede publicar")
+    void elEncargoCerradoNoSePublica() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        long cerrado = encargoCerrado(alta.idPropiedad(), "2025-01-15",
+                new BigDecimal("2400"), "PEN");
+
+        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
+                () -> publicaciones.crearEnEncargo(cerrado,
+                        anuncio("URBANIA", new BigDecimal("2400"), "PEN"), agenteA));
+
+        assertTrue(error.getMessage().contains("no esta vigente"), error.getMessage());
+    }
+
+    /** La ficha dice si se puede gestionar la publicacion, y si no, por que. */
+    @Test
+    @DisplayName("la capacidad de publicar la decide el Core, no la pantalla")
+    void laCapacidadDePublicarLaDecideElCore() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        long cerrado = encargoCerrado(alta.idPropiedad(), "2025-01-15",
+                new BigDecimal("2400"), "PEN");
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
+
+        assertTrue(porId(ficha, alta.idsEncargos().get(0)).publicacionGestionable().permitida());
+        assertFalse(porId(ficha, cerrado).publicacionGestionable().permitida());
+        assertNotNull(porId(ficha, cerrado).publicacionGestionable().motivo(),
+                "cuando no se puede, la ficha dice por que");
+    }
+
+    /** Un encargo de otro tenant es 404, no una lista vacia. */
+    @Test
+    @DisplayName("los anuncios de un encargo ajeno no se leen")
+    void losAnunciosDeOtroTenantNoSeLeen() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+        long encargo = alta.idsEncargos().get(0);
+
+        assertThrows(NoEncontradoException.class,
+                () -> publicaciones.listarDeEncargo(encargo, agenteB));
+    }
+
+    private static DatosPublicacion anuncio(String canal, BigDecimal importe, String moneda) {
+        return new DatosPublicacion(canal, null, importe, moneda, null, null, "P");
     }
 
     @Test
@@ -625,10 +1191,12 @@ class PropiedadUniversalIntegrationTest {
         //    no habria pedido para un terreno.
         MotorDeCaptura.EstadoCaptura parcial = captura.avanzar(null, vacio.idBorrador(), Map.of(
                 GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO",
-                GuionRegistroPropiedad.OPERACION, "VENTA",
+                GuionRegistroPropiedad.OPERACIONES, "VENTA",
                 GuionRegistroPropiedad.DISTRITO, "Miraflores",
-                GuionRegistroPropiedad.IMPORTE, "180000",
-                GuionRegistroPropiedad.MONEDA, "USD"), CONVERSANDO, agenteA);
+                GuionRegistroPropiedad.para(GuionRegistroPropiedad.IMPORTE,
+                        OperacionInmobiliaria.VENTA), "180000",
+                GuionRegistroPropiedad.para(GuionRegistroPropiedad.MONEDA,
+                        OperacionInmobiliaria.VENTA), "USD"), CONVERSANDO, agenteA);
 
         assertTrue(parcial.faltante().contains(GuionRegistroPropiedad.TITULARES));
         assertTrue(parcial.faltante().contains(GuionRegistroPropiedad.DIRECCION));
@@ -641,7 +1209,7 @@ class PropiedadUniversalIntegrationTest {
         //    otra sesion, por otro canal, lo recupera entero.
         MotorDeCaptura.EstadoCaptura recuperado = captura.consultar(vacio.idBorrador(), agenteA);
         assertEquals("DEPARTAMENTO", recuperado.conocido().get(GuionRegistroPropiedad.TIPO_PROPIEDAD));
-        assertEquals("VENTA", recuperado.conocido().get(GuionRegistroPropiedad.OPERACION));
+        assertEquals("VENTA", recuperado.conocido().get(GuionRegistroPropiedad.OPERACIONES));
         assertEquals(parcial.faltante(), recuperado.faltante());
 
         // 4. Se completa lo que falta, ahora desde la pantalla.
@@ -661,7 +1229,7 @@ class PropiedadUniversalIntegrationTest {
         assertNotNull(ejecucion.idPropiedad());
 
         FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
-        assertEquals("D", ficha.tipoPropiedad());
+        assertEquals("DEPARTAMENTO", ficha.tipoPropiedad());
         assertEquals(2, ficha.titulares().size());
         assertEquals("VENTA", ficha.encargos().get(0).operacion());
         assertEquals(0, new BigDecimal("180000").compareTo(ficha.encargos().get(0).importe()));
@@ -701,7 +1269,481 @@ class PropiedadUniversalIntegrationTest {
         assertThrows(ReglaNegocioException.class, () -> captura.avanzar(null, borrador.idBorrador(),
                 Map.of("dormitorios", "unos cuantos"), PANTALLA, agenteA));
         assertThrows(ReglaNegocioException.class, () -> captura.avanzar(null, borrador.idBorrador(),
-                Map.of(GuionRegistroPropiedad.OPERACION, "AMBAS"), PANTALLA, agenteA));
+                Map.of(GuionRegistroPropiedad.OPERACIONES, "AMBAS"), PANTALLA, agenteA));
+    }
+
+    // ==================================================================
+    // Captura universal: un motor, siete tipos, dos operaciones
+    //
+    // Lo de arriba prueba el CASO DE USO. Esto prueba el camino por el que
+    // entran de verdad la pantalla y KAIROS, que es donde estaba el
+    // estrangulamiento: el borrador solo sabia llevar una operacion, asi que
+    // "venta y alquiler" no tenia forma de llegar al caso de uso que si lo
+    // admitia desde el primer dia.
+    // ==================================================================
+
+    @Test
+    @DisplayName("oficina en venta Y alquiler por el motor: una propiedad, dos encargos")
+    void ventaYAlquilerPorElMotor() {
+        MotorDeCaptura.EstadoCaptura abierto = captura.avanzar(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, null, Map.of(), PANTALLA, agenteA);
+
+        Map<String, String> todo = new LinkedHashMap<>();
+        todo.put(GuionRegistroPropiedad.TIPO_PROPIEDAD, "OFICINA");
+        todo.put(GuionRegistroPropiedad.OPERACIONES, "VENTA,ALQUILER");
+        todo.put(importeDe(OperacionInmobiliaria.VENTA), "540000");
+        todo.put(monedaDe(OperacionInmobiliaria.VENTA), "USD");
+        todo.put(importeDe(OperacionInmobiliaria.ALQUILER), "6800");
+        todo.put(monedaDe(OperacionInmobiliaria.ALQUILER), "USD");
+        todo.put(GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna));
+        todo.put(GuionRegistroPropiedad.DIRECCION, "Av. Rivera Navarrete 501");
+        todo.put(GuionRegistroPropiedad.DISTRITO, "San Isidro");
+        todo.put("metraje_total", "210");
+
+        MotorDeCaptura.EstadoCaptura completo =
+                captura.avanzar(null, abierto.idBorrador(), todo, PANTALLA, agenteA);
+        assertTrue(completo.faltante().isEmpty(),
+                "con las dos condiciones economicas puestas no falta nada: " + completo.faltante());
+        assertTrue(completo.listoParaEjecutar());
+
+        MotorDeCaptura.Ejecucion ejecucion =
+                captura.ejecutar(abierto.idBorrador(), UUID.randomUUID().toString(), PANTALLA, agenteA);
+
+        assertEquals(2, ejecucion.idsEncargos().size(), "dos operaciones, dos encargos");
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(ejecucion.idPropiedad(), agenteA);
+        assertEquals("OFICINA", ficha.tipoPropiedad());
+        assertEquals(2, ficha.encargos().size(), "y UNA sola propiedad, no dos");
+
+        EncargoFicha venta = encargoDe(ficha, "VENTA");
+        EncargoFicha alquiler = encargoDe(ficha, "ALQUILER");
+        assertEquals(0, new BigDecimal("540000").compareTo(venta.importe()),
+                "el precio de venta no se mezcla con la renta");
+        assertEquals(0, new BigDecimal("6800").compareTo(alquiler.importe()));
+        assertEquals(1, venta.historico().size(), "cada encargo estrena SU serie economica");
+        assertEquals(1, alquiler.historico().size());
+        assertEquals(0, new BigDecimal("540000").compareTo(venta.historico().get(0).monto()));
+        assertEquals(0, new BigDecimal("6800").compareTo(alquiler.historico().get(0).monto()));
+    }
+
+    @Test
+    @DisplayName("la definicion de dos operaciones trae dos bloques economicos y una sola ficha fisica")
+    void definicionConDosOperaciones() {
+        MotorDeCaptura.DefinicionCaptura dos = captura.definicion(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, "OFICINA", "VENTA,ALQUILER", agenteA);
+
+        assertEquals(List.of("VENTA", "ALQUILER"), dos.operaciones());
+        assertEquals(2, dos.deLaOperacion().size());
+        assertEquals("VENTA", dos.deLaOperacion().get(0).operacion());
+        assertEquals("ALQUILER", dos.deLaOperacion().get(1).operacion());
+        assertTrue(dos.deLaOperacion().get(0).rotulo().toLowerCase(java.util.Locale.ROOT)
+                        .contains("venta"),
+                "el bloque se titula solo: " + dos.deLaOperacion().get(0).rotulo());
+
+        // El importe se llama distinto en cada bloque. 540 000 y 6 800 no se
+        // distinguen por magnitud, se distinguen por como se llaman.
+        MotorDeCaptura.Pregunta precio = preguntaDe(dos.deLaOperacion().get(0), "importe");
+        MotorDeCaptura.Pregunta renta = preguntaDe(dos.deLaOperacion().get(1), "importe");
+        assertEquals(importeDe(OperacionInmobiliaria.VENTA), precio.clave());
+        assertEquals(importeDe(OperacionInmobiliaria.ALQUILER), renta.clave());
+        assertTrue(precio.rotulo().toLowerCase(java.util.Locale.ROOT).contains("precio"),
+                "rotulo del importe de venta: " + precio.rotulo());
+        assertTrue(renta.rotulo().toLowerCase(java.util.Locale.ROOT).contains("renta"),
+                "rotulo del importe de alquiler: " + renta.rotulo());
+
+        // La ficha fisica se pregunta UNA vez: la propiedad no se duplica
+        // porque se encargue dos veces.
+        MotorDeCaptura.DefinicionCaptura una = captura.definicion(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, "OFICINA", "VENTA", agenteA);
+        assertEquals(una.comunes().size(), dos.comunes().size());
+        assertEquals(una.delTipo().size(), dos.delTipo().size());
+    }
+
+    /**
+     * <b>El gate del encargo universal:</b> lo que se pregunta sale del
+     * catalogo, no de una lista escrita en ningun cliente. Si esto pasa, una
+     * pantalla que pinte {@code definicion()} tal cual no puede pedirle
+     * dormitorios a un terreno aunque quiera.
+     */
+    @Test
+    @DisplayName("el catalogo decide que se pregunta: dormitorios a la vivienda, zonificacion al terreno")
+    void elCatalogoDecideQueSePregunta() {
+        Map<String, MotorDeCaptura.Pregunta> departamento = porClave("DEPARTAMENTO");
+        Map<String, MotorDeCaptura.Pregunta> terreno = porClave("TERRENO");
+        Map<String, MotorDeCaptura.Pregunta> local = porClave("LOCAL");
+        Map<String, MotorDeCaptura.Pregunta> casa = porClave("CASA");
+
+        assertTrue(departamento.containsKey("dormitorios"), "un departamento pide dormitorios");
+        assertTrue(departamento.get("dormitorios").obligatoria());
+
+        assertFalse(terreno.containsKey("dormitorios"), "un terreno no tiene dormitorios");
+        assertTrue(terreno.containsKey("zonificacion"), "y si tiene zonificacion");
+        assertTrue(terreno.get("zonificacion").obligatoria());
+
+        assertFalse(departamento.containsKey("rubro_permitido"),
+                "a una vivienda no se le pregunta el rubro comercial");
+        assertFalse(casa.containsKey("rubro_permitido"));
+        assertFalse(terreno.containsKey("rubro_permitido"));
+
+        assertTrue(local.containsKey("rubro_permitido"), "un local si puede llevar rubro");
+        assertTrue(local.containsKey("carga_electrica_kw"));
+        assertFalse(local.get("rubro_permitido").obligatoria(),
+                "puede llevarlo; no esta obligado a llevarlo");
+
+        // Y lo estructural que depende del tipo fisico tampoco se pregunta de mas.
+        assertFalse(terreno.containsKey("piso"), "un terreno no esta en un piso");
+        assertTrue(departamento.containsKey("piso"));
+        assertFalse(terreno.containsKey(GuionRegistroPropiedad.EDIFICIO),
+                "ni en un edificio o galeria");
+    }
+
+    /**
+     * <b>Dos preguntas con el mismo rotulo son dos duenos del mismo dato.</b>
+     *
+     * <p>Esto no es cosmetica. Hasta V67 el motor publicaba {@code pisoUnidad}
+     * —del guion— y {@code piso} —del catalogo—: dos claves, un concepto, dos
+     * sitios donde guardarlo. D-E4-3 no lo vio porque revisaba cada clave contra
+     * su columna, y cada una declaraba una sola autoridad; el defecto era que
+     * las claves eran dos.
+     *
+     * <p>Estuvo invisible mientras la pantalla de alta dibujaba una lista
+     * escrita a mano. El alta universal pinta lo que el motor publica, asi que
+     * enseno dos campos «Piso» seguidos. Este test lo convierte en un fallo del
+     * build en vez de en un hallazgo a ojo.
+     */
+    @Test
+    @DisplayName("el motor no publica dos preguntas con el mismo rotulo para un mismo tipo")
+    void ningunDatoSePreguntaDosVeces() {
+        for (String tipo : List.of("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO",
+                "ALMACEN", "OTRO")) {
+            MotorDeCaptura.DefinicionCaptura definicion = captura.definicion(
+                    MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA,ALQUILER", agenteA);
+
+            // La ficha FISICA se pregunta una vez: es una sola propiedad.
+            sinRotulosRepetidos(tipo + " (ficha fisica)",
+                    java.util.stream.Stream.concat(definicion.comunes().stream(),
+                            definicion.delTipo().stream()).toList());
+
+            // Y cada condicion economica por separado. Que «Moneda» aparezca en
+            // los dos bloques NO es una repeticion: son dos encargos, y cada uno
+            // tiene la suya. Comprobarlo sobre la lista entera diria justo lo
+            // contrario de lo que el modelo universal afirma.
+            for (MotorDeCaptura.BloqueOperacion bloque : definicion.deLaOperacion()) {
+                sinRotulosRepetidos(tipo + " / " + bloque.operacion(), bloque.preguntas());
+            }
+        }
+    }
+
+    private static void sinRotulosRepetidos(String donde, List<MotorDeCaptura.Pregunta> preguntas) {
+        Map<String, List<String>> porRotulo = new LinkedHashMap<>();
+        preguntas.forEach(pregunta -> porRotulo
+                .computeIfAbsent(pregunta.rotulo().toLowerCase(java.util.Locale.ROOT),
+                        clave -> new java.util.ArrayList<>())
+                .add(pregunta.clave()));
+
+        porRotulo.forEach((rotulo, claves) -> assertEquals(1, claves.size(),
+                donde + " pregunta \"" + rotulo + "\" " + claves.size() + " veces, con las claves "
+                        + claves + ". Dos claves para el mismo concepto son dos autoridades, y la "
+                        + "segunda pisa a la primera."));
+    }
+
+    @Test
+    @DisplayName("el piso se pregunta una vez y aterriza en su unica autoridad")
+    void elPisoTieneUnSoloDueno() {
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
+                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "DEPARTAMENTO",
+                        GuionRegistroPropiedad.OPERACIONES, "ALQUILER",
+                        importeDe(OperacionInmobiliaria.ALQUILER), "2400",
+                        monedaDe(OperacionInmobiliaria.ALQUILER), "USD",
+                        GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna),
+                        GuionRegistroPropiedad.DIRECCION, "Av. Larco 1200",
+                        GuionRegistroPropiedad.DISTRITO, "Miraflores",
+                        "metraje_total", "96",
+                        "dormitorios", "3",
+                        "piso", "7"), PANTALLA, agenteA);
+
+        MotorDeCaptura.Ejecucion alta =
+                captura.ejecutar(borrador.idBorrador(), null, PANTALLA, agenteA);
+
+        assertEquals("7", jdbc.queryForObject("select piso from propiedad where id_propiedad = ?",
+                String.class, alta.idPropiedad()),
+                "V67 declaro `propiedad.piso` como autoridad unica del concepto PISO");
+        assertEquals(0L, (long) jdbc.queryForObject("""
+                select count(*) from atributo_propiedad
+                 where id_propiedad = ? and clave = 'piso'
+                """, Long.class, alta.idPropiedad()),
+                "y por tanto no queda una segunda copia en la tabla de atributos");
+
+        // Y el contrato logico no se movio: el cliente sigue leyendo `piso`.
+        assertTrue(propiedades.consultar(alta.idPropiedad(), agenteA).atributos().stream()
+                        .anyMatch(atributo -> "piso".equals(atributo.clave())
+                                && "7".equals(atributo.valor())),
+                "la ficha devuelve `piso` aunque su fila ya no exista: si el escritor enruta "
+                        + "por autoridad, el lector tambien");
+    }
+
+    @Test
+    @DisplayName("un importe que no dice de que encargo es se rechaza, y el error ensena como")
+    void elImporteDiceDeQueEncargoEs() {
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
+                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "CASA",
+                        GuionRegistroPropiedad.OPERACIONES, "ALQUILER"), PANTALLA, agenteA);
+
+        ReglaNegocioException suelto = assertThrows(ReglaNegocioException.class,
+                () -> captura.avanzar(null, borrador.idBorrador(),
+                        Map.of(GuionRegistroPropiedad.IMPORTE, "2900"), PANTALLA, agenteA));
+        assertTrue(suelto.getMessage().contains("importe:ALQUILER"),
+                "el mensaje tiene que decir como se escribe: " + suelto.getMessage());
+
+        // Y un importe de una operacion que no se declaro tampoco cuela: seria
+        // un precio de venta guardado en una propiedad que solo se alquila.
+        ReglaNegocioException ajeno = assertThrows(ReglaNegocioException.class,
+                () -> captura.avanzar(null, borrador.idBorrador(),
+                        Map.of(importeDe(OperacionInmobiliaria.VENTA), "180000"), PANTALLA, agenteA));
+        assertTrue(ajeno.getMessage().contains("VENTA"), ajeno.getMessage());
+    }
+
+    @Test
+    @DisplayName("abandonar la captura no deja ninguna propiedad a medias")
+    void abandonarNoDejaPropiedad() {
+        long propiedadesAntes = cuantasPropiedades(agenteA);
+
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
+                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "CASA",
+                        GuionRegistroPropiedad.OPERACIONES, "ALQUILER",
+                        importeDe(OperacionInmobiliaria.ALQUILER), "3500",
+                        monedaDe(OperacionInmobiliaria.ALQUILER), "PEN"), PANTALLA, agenteA);
+
+        MotorDeCaptura.EstadoCaptura descartado =
+                captura.descartar(borrador.idBorrador(), agenteA);
+
+        assertEquals(BorradorCaptura.DESCARTADO, descartado.estado(),
+                "descartado, no borrado: que alguien lo empezara tambien es un hecho");
+        assertNull(descartado.idEntidad());
+        assertEquals(propiedadesAntes, cuantasPropiedades(agenteA),
+                "nada se escribe hasta confirmar");
+        assertThrows(ReglaNegocioException.class,
+                () -> captura.ejecutar(borrador.idBorrador(), null, PANTALLA, agenteA));
+    }
+
+    @Test
+    @DisplayName("confirmar dos veces la misma captura devuelve la misma propiedad, no una segunda")
+    void confirmarDosVecesNoDuplica() {
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
+                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "TERRENO",
+                        GuionRegistroPropiedad.OPERACIONES, "VENTA",
+                        importeDe(OperacionInmobiliaria.VENTA), "95000",
+                        monedaDe(OperacionInmobiliaria.VENTA), "USD",
+                        GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna),
+                        GuionRegistroPropiedad.DIRECCION, "Fundo Los Cipreses s/n",
+                        GuionRegistroPropiedad.DISTRITO, "Pachacamac",
+                        "metraje_total", "1200",
+                        "zonificacion", "RDM"), PANTALLA, agenteA);
+
+        String clave = UUID.randomUUID().toString();
+        MotorDeCaptura.Ejecucion primera =
+                captura.ejecutar(borrador.idBorrador(), clave, PANTALLA, agenteA);
+        MotorDeCaptura.Ejecucion segunda =
+                captura.ejecutar(borrador.idBorrador(), clave, PANTALLA, agenteA);
+
+        assertEquals(primera.idPropiedad(), segunda.idPropiedad());
+        assertEquals(primera.codigoPropiedad(), segunda.codigoPropiedad());
+        assertEquals(primera.idsEncargos(), segunda.idsEncargos());
+        assertTrue(segunda.reintento(), "el segundo intento se declara reintento");
+        assertEquals(1L, (long) jdbc.queryForObject(
+                "select count(*) from propiedad where id_propiedad = ?", Long.class,
+                primera.idPropiedad()));
+    }
+
+    /**
+     * El codigo lo pone BROX, no el cliente. El formulario heredado lo generaba
+     * en Angular ({@code generarCodigoLocal}), y un codigo generado en el
+     * cliente no puede garantizar unicidad: dos pestanas abiertas producen el
+     * mismo.
+     */
+    @Test
+    @DisplayName("el codigo de la propiedad lo pone BROX cuando el alta no lo trae")
+    void elCodigoLoPoneBrox() {
+        MotorDeCaptura.EstadoCaptura borrador = captura.avanzar(
+                MotorDeCaptura.REGISTRAR_PROPIEDAD, null,
+                Map.of(GuionRegistroPropiedad.TIPO_PROPIEDAD, "ALMACEN",
+                        GuionRegistroPropiedad.OPERACIONES, "ALQUILER",
+                        importeDe(OperacionInmobiliaria.ALQUILER), "4200",
+                        monedaDe(OperacionInmobiliaria.ALQUILER), "PEN",
+                        GuionRegistroPropiedad.TITULARES, String.valueOf(propietarioAna),
+                        GuionRegistroPropiedad.DIRECCION, "Av. Argentina 2100",
+                        GuionRegistroPropiedad.DISTRITO, "Callao",
+                        "metraje_total", "800"), PANTALLA, agenteA);
+
+        MotorDeCaptura.Ejecucion alta =
+                captura.ejecutar(borrador.idBorrador(), null, PANTALLA, agenteA);
+
+        assertNotNull(alta.codigoPropiedad());
+        assertFalse(alta.codigoPropiedad().isBlank());
+    }
+
+    // ==================================================================
+    // El listado universal
+    // ==================================================================
+
+    /**
+     * <b>«Venta y alquiler» se filtra con dos EXISTS, no con una igualdad.</b>
+     *
+     * <p>Es la comprobacion que decide si el listado entendio el modelo. Con un
+     * valor {@code AMBAS} almacenado, esto seria un {@code where operacion =
+     * 'AMBAS'} y funcionaria... hasta que alguien cerrara uno de los dos
+     * encargos y la fila siguiera diciendo que la propiedad esta en las dos
+     * cosas. Preguntando por los encargos vivos, la respuesta se corrige sola.
+     */
+    @Test
+    @DisplayName("el listado filtra por operacion mirando los encargos vivos")
+    void elListadoFiltraPorOperacion() {
+        long soloVenta = propiedades.registrar(comando("DEPARTAMENTO", "VENTA",
+                new BigDecimal("180000"), "USD", List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"),
+                        new ValorAtributo("dormitorios", "3"))), agenteA).idPropiedad();
+
+        long soloAlquiler = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2900"), "PEN", List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "85"))), agenteA).idPropiedad();
+
+        long lasDos = propiedades.registrar(new ComandoRegistro(null, PANTALLA, null, "OFICINA",
+                null, null,
+                new Ubicacion("Av. Canaval 350", "San Isidro", null, null, null, null, null, null, null),
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "210")),
+                List.of(new OperacionSolicitada("VENTA", new BigDecimal("540000"), "USD",
+                                null, null, null, null, null, null, null),
+                        new OperacionSolicitada("ALQUILER", new BigDecimal("6800"), "USD",
+                                null, null, null, null, null, null, null)),
+                null), agenteA).idPropiedad();
+
+        assertEquals(Set.of(soloVenta, lasDos), idsDe(filtro(null, null, "VENTA")),
+                "en venta estan la que solo se vende y la que se vende Y se alquila");
+        assertEquals(Set.of(soloAlquiler, lasDos), idsDe(filtro(null, null, "ALQUILER")));
+        assertEquals(Set.of(lasDos), idsDe(filtro(null, null, "VENTA,ALQUILER")),
+                "«venta y alquiler» son las que tienen LAS DOS, no las que tienen alguna");
+
+        // Y el tipo filtra por su lado, sin mezclarse con la operacion.
+        assertEquals(Set.of(soloVenta), idsDe(filtro("DEPARTAMENTO", null, null)));
+        assertEquals(Set.of(), idsDe(filtro("TERRENO", null, null)));
+    }
+
+    @Test
+    @DisplayName("cada fila del listado lleva SUS encargos, con su importe cada uno")
+    void elListadoLlevaLosEncargosDeCadaFila() {
+        long lasDos = propiedades.registrar(new ComandoRegistro(null, PANTALLA, null, "LOCAL",
+                null, null,
+                new Ubicacion("Av. La Marina 2450", "San Miguel", null, null, null, null, null, null, null),
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "160")),
+                List.of(new OperacionSolicitada("VENTA", new BigDecimal("320000"), "USD",
+                                null, null, null, null, null, null, null),
+                        new OperacionSolicitada("ALQUILER", new BigDecimal("4800"), "USD",
+                                null, null, null, null, null, null, null)),
+                null), agenteA).idPropiedad();
+
+        PropiedadUniversalService.FilaPropiedad fila = filtro(null, null, null).items().stream()
+                .filter(f -> f.id() == lasDos)
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(2, fila.encargos().size(), "una fila, dos encargos: no dos filas");
+        // El listado publica el NOMBRE del valor y su ROTULO, nunca el codigo
+        // de una letra: traducir "L" a «Local comercial» seria la matriz
+        // «tipo -> texto» viviendo en el cliente, y con dos clientes habria dos.
+        assertEquals("LOCAL", fila.tipoPropiedad());
+        assertEquals("Local comercial", fila.tipoRotulo());
+        assertEquals(1, fila.titulares());
+        assertEquals(0, new BigDecimal("320000").compareTo(
+                fila.encargos().stream().filter(e -> "VENTA".equals(e.operacion()))
+                        .findFirst().orElseThrow().importe()));
+        assertEquals(0, new BigDecimal("4800").compareTo(
+                fila.encargos().stream().filter(e -> "ALQUILER".equals(e.operacion()))
+                        .findFirst().orElseThrow().importe()));
+    }
+
+    @Test
+    @DisplayName("el listado es del tenant: la cartera del vecino no se ve ni contando")
+    void elListadoNoCruzaTenants() {
+        propiedades.registrar(comando("CASA", "ALQUILER", new BigDecimal("3500"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "150"),
+                        new ValorAtributo("dormitorios", "4"))), agenteA);
+
+        assertEquals(1L, filtro(null, null, null).total(), "el tenant A ve la suya");
+        assertEquals(0L, propiedades.listar(new PropiedadUniversalService.FiltrosPropiedad(
+                null, null, null, null, null, 1, 50), agenteB).total(),
+                "y el tenant B no ve ninguna, ni en el total: el conteo tambien lleva alcance");
+    }
+
+    @Test
+    @DisplayName("el filtro solo ofrece distritos que existen en la cartera")
+    void losDistritosDelFiltroSalenDeLaCartera() {
+        propiedades.registrar(comando("CASA", "ALQUILER", new BigDecimal("3500"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "150"),
+                        new ValorAtributo("dormitorios", "4"))), agenteA);
+
+        List<String> distritos = propiedades.opcionesDeFiltro(agenteA).distritos();
+        assertTrue(distritos.contains("Miraflores"), "el de la propiedad recien creada: " + distritos);
+        assertEquals(distritos.stream().distinct().toList(), distritos, "sin repetidos");
+    }
+
+    private Pagina<PropiedadUniversalService.FilaPropiedad> filtro(String tipo, String distrito,
+                                                                   String operaciones) {
+        return propiedades.listar(new PropiedadUniversalService.FiltrosPropiedad(
+                null, tipo, distrito, null, operaciones, 1, 50), agenteA);
+    }
+
+    private static Set<Long> idsDe(Pagina<PropiedadUniversalService.FilaPropiedad> pagina) {
+        return pagina.items().stream()
+                .map(PropiedadUniversalService.FilaPropiedad::id)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    // ------------------------------------------------------------------
+
+    private static String importeDe(OperacionInmobiliaria operacion) {
+        return GuionRegistroPropiedad.para(GuionRegistroPropiedad.IMPORTE, operacion);
+    }
+
+    private static String monedaDe(OperacionInmobiliaria operacion) {
+        return GuionRegistroPropiedad.para(GuionRegistroPropiedad.MONEDA, operacion);
+    }
+
+    private static EncargoFicha encargoDe(FichaPropiedadUniversal ficha, String operacion) {
+        return ficha.encargos().stream()
+                .filter(encargo -> operacion.equals(encargo.operacion()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no hay encargo de " + operacion));
+    }
+
+    private static MotorDeCaptura.Pregunta preguntaDe(MotorDeCaptura.BloqueOperacion bloque,
+                                                      String base) {
+        return bloque.preguntas().stream()
+                .filter(pregunta -> pregunta.clave().startsWith(base + GuionRegistroPropiedad.DE))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "el bloque de " + bloque.operacion() + " no pregunta " + base));
+    }
+
+    /** Todo lo que el motor publica para un tipo, por clave. La operacion no altera esto. */
+    private Map<String, MotorDeCaptura.Pregunta> porClave(String tipo) {
+        Map<String, MotorDeCaptura.Pregunta> preguntas = new LinkedHashMap<>();
+        captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "ALQUILER", agenteA)
+                .todas().forEach(pregunta -> preguntas.put(pregunta.clave(), pregunta));
+        return preguntas;
+    }
+
+    private long cuantasPropiedades(Actor actor) {
+        Long total = jdbc.queryForObject("select count(*) from propiedad where organizacion_id = ?",
+                Long.class, actor.idOrganizacion());
+        return total == null ? 0 : total;
     }
 
     // ==================================================================
@@ -735,6 +1777,57 @@ class PropiedadUniversalIntegrationTest {
                 .filter(e -> operacion.equals(e.operacion()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("no hay encargo de " + operacion));
+    }
+
+    /** Los episodios de una operacion en la historia del inmueble. */
+    private static EpisodiosDeOperacion episodios(FichaPropiedadUniversal ficha, String operacion) {
+        return ficha.historia().porOperacion().stream()
+                .filter(e -> operacion.equals(e.operacion()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("la historia no tiene " + operacion));
+    }
+
+    /**
+     * El encargo por su id, que es como se identifica un bloque de la ficha.
+     * Buscarlo por operacion no serviria aqui: es justo lo que estas pruebas
+     * niegan que se pueda hacer cuando hay historia.
+     */
+    private static EncargoFicha porId(FichaPropiedadUniversal ficha, long idEncargo) {
+        return ficha.encargos().stream()
+                .filter(e -> e.idEncargo() == idEncargo)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no hay encargo " + idEncargo));
+    }
+
+    /**
+     * Un encargo de alquiler ya CERRADO, con su hito. Se inserta directo porque
+     * el caso de uso no sabe abrir encargos historicos --y no deberia: lo que
+     * se prueba no es como se llega a esa situacion, sino que la ficha la lee
+     * bien cuando existe--.
+     *
+     * <p>Sin condicion economica a proposito: un encargo antiguo puede no
+     * tenerla, y la ficha tiene que sobrevivir a eso.
+     */
+    private long encargoCerrado(long idPropiedad, String fecha, java.math.BigDecimal monto,
+                                String moneda) {
+        Long idEncargo = jdbc.queryForObject("""
+                insert into captacion (organizacion_id, codigo_captacion, fecha_captacion,
+                                       fecha_inicio_encargo, fecha_fin_encargo, estado,
+                                       motivo_operacion, fecha_cierre, motivo_cierre,
+                                       id_propiedad, id_rol_agente)
+                values (?, ?, cast(? as date), cast(? as date),
+                        cast(? as date) + interval '11 months', 'C',
+                        'A', cast(? as date), 'A', ?, ?)
+                returning id_captacion
+                """, Long.class, agenteA.idOrganizacion(),
+                "HIST-" + UUID.randomUUID().toString().substring(0, 8),
+                fecha, fecha, fecha, fecha, idPropiedad, agenteA.idRolOperativo());
+        jdbc.update("""
+                insert into precio_propiedad (organizacion_id, id_propiedad, id_captacion,
+                                              operacion, hito, moneda, monto, fecha)
+                values (?, ?, ?, 'A', 'U', ?, ?, cast(? as date))
+                """, agenteA.idOrganizacion(), idPropiedad, idEncargo, moneda, monto, fecha);
+        return idEncargo;
     }
 
     private static String atributo(FichaPropiedadUniversal ficha, String clave) {
@@ -784,6 +1877,9 @@ class PropiedadUniversalIntegrationTest {
         jdbc.update("delete from evento_dominio where organizacion_id = ?", idOrganizacion);
         jdbc.update("delete from comando_idempotente where organizacion_id = ?", idOrganizacion);
         jdbc.update("delete from borrador_captura where organizacion_id = ?", idOrganizacion);
+        // Antes que captacion y que propiedad: desde V70 la publicacion
+        // referencia las dos, y el borrado en orden equivocado choca contra el FK.
+        jdbc.update("delete from publicacion where organizacion_id = ?", idOrganizacion);
         jdbc.update("delete from precio_propiedad where organizacion_id = ?", idOrganizacion);
         jdbc.update("delete from atributo_propiedad where organizacion_id = ?", idOrganizacion);
         jdbc.update("delete from titularidad_propiedad where organizacion_id = ?", idOrganizacion);

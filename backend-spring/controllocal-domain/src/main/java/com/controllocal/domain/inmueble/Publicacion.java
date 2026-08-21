@@ -17,10 +17,25 @@ import java.time.OffsetDateTime;
 import java.util.Set;
 
 /**
- * Version concreta del anuncio de una propiedad en un canal (MEJ-04: el
- * esquema rico se conserva). La publicacion mas reciente por
- * fecha_publicacion es la "principal": su estado es el estadoPublicacion
- * del cable congelado (B si no hay ninguna).
+ * <b>El anuncio de un ENCARGO en un canal</b> (V70).
+ *
+ * <h2>Por que cuelga del encargo y no de la propiedad</h2>
+ * Un anuncio no anuncia «una propiedad»: anuncia que esta propiedad se ofrece
+ * en ESTA operacion a ESTE precio. Con venta y alquiler simultaneos, una
+ * publicacion atada solo a {@code id_propiedad} no puede decir cual de las dos
+ * publica -- y el hito de precio publicado que genera tampoco.
+ *
+ * <p>{@code idEncargo} es nullable porque hay anuncios anteriores a V70 cuya
+ * propiedad tiene varios encargos candidatos: elegir uno seria inventar de
+ * cual era. Se exige al CREAR; lo que ya existia no se falsea hacia atras.
+ *
+ * <p>{@code idPropiedad} se conserva y no es redundante: el listado heredado y
+ * el estado de publicacion del local siguen preguntando por inmueble, y una
+ * publicacion sin encargo resuelto todavia sabe de que propiedad es.
+ *
+ * <p>La publicacion mas reciente por {@code fecha_publicacion} es la
+ * "principal": su estado es el {@code estadoPublicacion} del cable heredado
+ * (B si no hay ninguna).
  */
 @Entity
 @Table(name = "publicacion")
@@ -47,6 +62,14 @@ public class Publicacion extends EntidadDeOrganizacion {
     @Column(name = "id_propiedad", nullable = false)
     private Long idPropiedad;
 
+    /**
+     * El encargo que se anuncia. Es lo que dice si este anuncio publica la
+     * venta o el alquiler -- y, cuando hay varios encargos de la misma
+     * operacion a lo largo del tiempo, <b>cual</b> de ellos.
+     */
+    @Column(name = "id_captacion")
+    private Long idEncargo;
+
     @Column(name = "canal", nullable = false, length = 30)
     private String canal;
 
@@ -59,8 +82,15 @@ public class Publicacion extends EntidadDeOrganizacion {
     @Column(name = "titulo_anuncio", nullable = false, length = 200)
     private String tituloAnuncio;
 
-    @Column(name = "renta_publicada", nullable = false, precision = 12, scale = 2)
-    private BigDecimal rentaPublicada;
+    /**
+     * Lo que el mercado VE. Se llamaba {@code rentaPublicada} y en una
+     * publicacion de venta eso era sencillamente falso: el nombre viajaba por
+     * el cable hasta la pantalla. Como se llama para una persona --«precio de
+     * venta» o «renta mensual»-- lo dice la operacion del encargo,
+     * {@code OperacionInmobiliaria.nombreDelImporte()}.
+     */
+    @Column(name = "importe_publicado", nullable = false, precision = 12, scale = 2)
+    private BigDecimal importePublicado;
 
     @Column(name = "moneda", nullable = false, length = 3)
     private String moneda;
@@ -135,12 +165,20 @@ public class Publicacion extends EntidadDeOrganizacion {
         this.tituloAnuncio = tituloAnuncio;
     }
 
-    public BigDecimal getRentaPublicada() {
-        return rentaPublicada;
+    public BigDecimal getImportePublicado() {
+        return importePublicado;
     }
 
-    public void setRentaPublicada(BigDecimal rentaPublicada) {
-        this.rentaPublicada = rentaPublicada;
+    public void setImportePublicado(BigDecimal importePublicado) {
+        this.importePublicado = importePublicado;
+    }
+
+    public Long getIdEncargo() {
+        return idEncargo;
+    }
+
+    public void setIdEncargo(Long idEncargo) {
+        this.idEncargo = idEncargo;
     }
 
     public String getMoneda() {

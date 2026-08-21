@@ -134,7 +134,11 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **1b** | **Fundaciones del SPA** | Cortes 2+3 fusionados: sidebar, shell responsive, tokens, componentes | ⬜ **en paralelo, siguiente** |
 | **2** | **Núcleo universal implementado** | PostGIS, titularidad múltiple, atributos gobernados, histórico por encargo, outbox | ✅ **CERRADO** 2026-08-18 |
 | **3** | **Motor de registro** | `+ Registrar` y la máquina de preguntas en backend | ✅ **CERRADO** 2026-08-18 |
-| **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ **arranca aquí** |
+| **3b** | **El alta universal, visible** | `/propiedades/nueva` sirve a los siete tipos y a las dos operaciones; el listado deja de ser una tabla de locales | ✅ **CERRADO** 2026-08-20 |
+| **3c** | **La ficha universal** | `/propiedades/:id` deja de leer el modelo heredado: la cosa física, un bloque **por encargo** con su histórico, la actividad con su procedencia y la **historia del inmueble** | ✅ **CERRADO** 2026-08-20 |
+| **3d** | **La publicación por encargo** | `Propiedad → Encargo → Publicación`: API canónica, editor fuera del detalle heredado, y `features/local-detail/` borrado | ✅ **CERRADO** 2026-08-20 |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **MEDIDO, sin empezar** — ver `auditoria-profundidad-inmobiliaria.md` |
+| **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
 | **7** | **Inteligencia** | Foco, Radar, metas, ritmo (= E2.2–E2.6) + KAIROS ejecutor | 🟡 **la mitad de E2**: falta KAIROS ejecutor |
@@ -271,6 +275,146 @@ un barrido de tenancy que no conocía el catálogo híbrido de BROX. Los dos
 primeros rompían caminos de uso diario y **el reactor no podía verlos**: los
 tests de servicio simulan el repositorio, así que un campo sin rellenar nunca
 llega a PostgreSQL. Es el argumento entero de por qué el cierre incluye E2E.
+
+### Lo que cerró el bloque 3b — 2026-08-20
+
+**Evidencia:** `backend-spring/verificacion/evidencia/2026-08-20-alta-y-listado-universales.md`.
+
+La capacidad existía desde el bloque 3 y **el producto seguía comportándose como
+un sistema de alquiler de locales**: `/propiedades/nueva` cargaba el formulario
+de local comercial con la operación fijada en `ALQUILER`.
+
+| | |
+|---|---|
+| 3b.1 | `decision-frontera-brox-core-web-kairos.md` (**D-A-1**): los cuatro nombres congelados y las dos reglas finales, con tres gates que las protegen |
+| 3b.2 | El borrador admite **dos operaciones**: `operaciones = "VENTA,ALQUILER"` y claves económicas calificadas (`importe:VENTA`). `deLaOperacion` pasa a ser una lista de **bloques** |
+| 3b.3 | `GET /captura/apertura`: qué hay que decidir antes de que exista un plan, para que ninguna interfaz escriba «primero el tipo, luego la operación» |
+| 3b.4 | `PropiedadForm`: **una** pantalla para los siete tipos, que no sabe qué se pregunta a cada uno — lo pide |
+| 3b.5 | `GET /propiedades` + `Propiedades`: una fila por propiedad con **sus encargos dentro**; «Venta + alquiler» se compone al pintar y se filtra con dos EXISTS |
+| 3b.6 | **V67** una sola autoridad para el piso · **V68** los rótulos del catálogo se leen |
+
+**Los tres defectos que encontró, y ninguno era del alta:** `Idempotency-Key` y
+`X-Elevacion` no pasaban CORS —así que **ningún comando idempotente del SPA
+había funcionado nunca en un navegador**, y el spec no podía verlo porque
+`HttpTestingController` no cruza CORS—; el piso se preguntaba dos veces porque
+tenía dos claves para un concepto; y un código de prueba chocaba consigo mismo
+tras suficientes corridas.
+
+```
+860 pruebas backend · 0 fallos · 0 SKIPPED    644 pruebas Angular · 0 fallos
+```
+
+### Lo que cerró el bloque 3c — 2026-08-20
+
+**Evidencia:**
+`backend-spring/verificacion/evidencia/2026-08-20-ficha-universal-corte-a-matriz-contrato.md`.
+
+`/propiedades/:id` ya **no toca `GET /locales/{id}`**. La ficha separa tres
+conceptos que no se vuelven a mezclar —la cosa física, un bloque **por
+encargo** con su precio y su histórico, y la actividad— y añade un cuarto
+nivel de lectura: **la historia del inmueble**.
+
+**Se midió el contrato antes de tocar Angular**, y el resultado no fue el
+esperado: nueve huecos. La ficha publicaba `tipoPropiedad = "L"` —el código de
+almacenamiento, mientras el listado publicaba `LOCAL` y «Local comercial»—, el
+encargo no decía su agente ni cómo se llama su importe, `exclusividad` se
+calculaba y se perdía en el DTO, la actividad no existía, y **la ficha escondía
+los encargos cerrados**, borrando de la vista series económicas enteras.
+
+Los nueve se cerraron **en BROX Core**, y ocho consistían en publicar algo que
+el dominio ya sabía decir y se quedaba dentro (`nombreDelImporte()`,
+`rotuloDelTipo()`, `descripcion()` de los enums).
+
+**Los dos niveles de lectura**, que es la decisión de fondo:
+
+```
+idEncargo    la identidad técnica de UN episodio comercial
+idPropiedad  la continuidad histórica del inmueble
+```
+
+El bloque de encargo audita y negocia; la historia contesta «¿a cuánto se
+alquiló la última vez?», «¿cuántas veces estuvo en venta?». **No fusiona
+históricos: los agrega para leerlos**, y cada cifra sigue apuntando a su
+`idEncargo`.
+
+La prueba que sostiene el diseño **no es venta + alquiler** —con un encargo de
+cada, un `groupBy(operacion)` incorrecto pasa— sino **tres alquileres
+sucesivos**: tres bloques, tres históricos, y ninguno ve la cifra de otro. El
+histórico se filtra por encargo, no por operación.
+
+```
+231 pruebas backend · 0 fallos · 0 SKIPPED    660 pruebas Angular · 0 fallos
+```
+
+`features/locales/` **borrado** tras demostrar cero consumidores.
+
+### Lo que cerró el bloque 3d — 2026-08-20
+
+La deuda que 3c dejó abierta, cerrada en el mismo día y por su raíz: **una
+publicación anuncia un ENCARGO** — esta propiedad, en esta operación, a este
+precio— y no una propiedad.
+
+**V70** le da a `publicacion` su `id_captacion` y renombra `renta_publicada` a
+`importe_publicado` (en una publicación de venta, «renta» era sencillamente
+falso, y el nombre viajaba hasta la pantalla). El API canónico es
+`/encargos/{idEncargo}/publicaciones`; **los cuatro endpoints heredados se
+retiraron**, porque su último consumidor —`oportunidad-form`— pasó a preguntar
+por su encargo, que además es lo que de verdad quería.
+
+**El hallazgo que lo justificó** estaba escrito por alguien en el propio
+código, junto a un `setOperacion(ALQUILER)` fijo: *«la publicación de una venta
+llegará con el encargo de venta y su propio importe, y entonces esta línea
+dejará de ser una constante»*. Era ahora. Y tenía una consecuencia que nadie
+veía: los hitos `P` nacían **sin encargo**, así que existían en la base y **no
+aparecían en ninguna ficha**, que filtra por encargo.
+
+`features/local-detail/` **borrado**: su única pieza propia, el editor de
+publicaciones, vive ahora en `shared/publicaciones/` y cuelga del encargo.
+
+```
+723 + 43 + 241 pruebas backend · 0 fallos · 0 SKIPPED    653 Angular · 0 fallos
+```
+
+Con un gate nuevo, `FichaUniversalNoVuelveAlModeloViejoTest`, que rompe el
+build si la ficha vuelve a `/locales/{id}`, importa `local-detail`, deja de
+pintar `tipoRotulo` o agrupa encargos y anuncios por operación en vez de por
+`idEncargo`.
+
+### Lo que midió el bloque 3e, y por qué no se empezó — 2026-08-20
+
+**`docs/ai/auditoria-profundidad-inmobiliaria.md`** (diez auditorías en
+paralelo, de sólo lectura).
+
+El veredicto es que **hoy BROX no describe bien ninguno de los siete tipos**:
+el catálogo entero son 19 claves y sólo cuatro filas están marcadas requeridas.
+Un departamento puede quedar descrito por «90 m², 3 dormitorios».
+
+> **Y no se arregla añadiendo filas.** La medición encontró dos bloqueos
+> estructurales:
+>
+> 1. **El catálogo no sabe declarar un vocabulario.** `tipo_dato='LISTA'`
+>    existe pero no hay dónde guardar sus opciones —ni columna ni tabla—, y el
+>    motor pasa `opciones=null` para todo atributo de catálogo. Comprobable:
+>    `servicios_disponibles`, la única LISTA sembrada, viaja hoy como texto
+>    libre. Sin esto, la tipología de departamento (flat, dúplex, penthouse) y
+>    otras ~14 listas **no tienen dónde vivir**, y escribirlas en Angular es lo
+>    que el gate de D-A-1 rompe.
+> 2. **El ENCARGO no es sujeto de ningún atributo.** `catalogo_atributo` sólo
+>    se mapea contra `tipo_propiedad` y `atributo_propiedad` cuelga de
+>    `id_propiedad`: por construcción, todo atributo gobernado es un hecho de
+>    la PROPIEDAD. Por eso «el propietario acepta mascotas en este alquiler» y
+>    «se ofrece amoblado» no tienen dónde escribirse — y por eso `amoblado`
+>    guarda hoy como hecho físico permanente algo que se negocia en cada
+>    alquiler.
+
+Hay un tercer hallazgo que **no es de catálogo y corrompe datos hoy**: el único
+editor del SPA (`local-form`, montado en `propiedades/:id/editar` para los siete
+tipos) rechaza cinco de ellos, **inventa `rubro_permitido`** y **aplasta `uso` a
+`'C'`** al guardar. `PUT /propiedades/{id}` existe, está en la matriz, y el SPA
+no lo llama desde ninguna parte.
+
+El plan propone diez cortes, y el primero es técnico a propósito: el catálogo
+tiene que aprender a hablar antes de que se le pueda añadir una sola clave.
 
 ---
 

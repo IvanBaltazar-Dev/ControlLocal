@@ -676,6 +676,24 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
             @Param("idPropietario") long idPropietario);
 
     /**
+     * Los contratos de UNOS ENCARGOS concretos: actividad de la ficha
+     * universal.
+     *
+     * <p>Es el unico de los cinco procesos que <b>no</b> se podia alcanzar
+     * desde el cliente: {@code GET /contratos} filtra por texto, distrito y
+     * agente, y no por captacion ni por propiedad. Resolverlo desde el SPA
+     * habria significado barrer la lista de cierres y cribarla a mano.
+     */
+    @Query(FICHA + """
+             where c.organizacionId = :idOrganizacion
+               and op.captacion.id in :idsEncargos
+             order by c.fechaCierre desc, c.id desc
+            """)
+    List<ContratoAlquiler> listarFichaPorEncargos(
+            @Param("idOrganizacion") long idOrganizacion,
+            @Param("idsEncargos") Collection<Long> idsEncargos);
+
+    /**
      * Base de contratos de los indicadores E4. <b>No lleva filtro de rol a
      * proposito</b>: el contrato no tiene agente propio y la v1 decide el
      * alcance comparando las dos ramas heredadas (solicitud y oportunidad),

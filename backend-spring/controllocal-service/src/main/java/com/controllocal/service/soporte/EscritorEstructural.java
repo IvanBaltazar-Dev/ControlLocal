@@ -55,6 +55,7 @@ public final class EscritorEstructural {
         }
         switch (concepto) {
             case CatalogoAtributo.CAMPO_METRAJE -> propiedad.setMetraje(decimal(valor, clave));
+            case CatalogoAtributo.CAMPO_PISO -> propiedad.setPiso(texto(valor));
             default -> throw new IllegalStateException(
                     "Concepto estructural sin escritor: \"" + concepto + "\". Anadirlo al catalogo "
                             + "sin anadirlo aqui deja el valor sin guardar en ninguna parte, que es "
@@ -64,7 +65,8 @@ public final class EscritorEstructural {
 
     /** ¿Hay escritor para este concepto? Lo usa el gate antes de que sea tarde. */
     public static boolean sabeEscribir(String concepto) {
-        return CatalogoAtributo.CAMPO_METRAJE.equals(concepto);
+        return CatalogoAtributo.CAMPO_METRAJE.equals(concepto)
+                || CatalogoAtributo.CAMPO_PISO.equals(concepto);
     }
 
     /**
@@ -111,8 +113,15 @@ public final class EscritorEstructural {
     public static ValorLogico leerValor(Propiedad propiedad, String concepto) {
         return switch (concepto == null ? "" : concepto) {
             case CatalogoAtributo.CAMPO_METRAJE -> ValorLogico.deNumero(propiedad.getMetraje());
+            case CatalogoAtributo.CAMPO_PISO -> ValorLogico.deTexto(propiedad.getPiso());
             default -> null;
         };
+    }
+
+    /** El piso es texto: hay "3", "PB", "Mezanine" y "Sotano 2". */
+    private static String texto(String valor) {
+        String limpio = valor == null ? "" : valor.trim();
+        return limpio.isEmpty() ? null : limpio;
     }
 
     private static BigDecimal decimal(String valor, String clave) {

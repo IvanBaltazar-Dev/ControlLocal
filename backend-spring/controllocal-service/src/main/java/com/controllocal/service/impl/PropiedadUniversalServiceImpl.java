@@ -5,6 +5,8 @@ import com.controllocal.domain.auditoria.EventoDominio;
 import com.controllocal.domain.captura.BorradorCaptura;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
+import com.controllocal.domain.comun.EstadosDominio;
+import com.controllocal.domain.comun.EstadosDominio.EstadoCaptacion;
 import com.controllocal.domain.inmueble.AtributoPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Distrito;
@@ -22,12 +24,17 @@ import com.controllocal.persistence.repositorio.DistritoRepository;
 import com.controllocal.persistence.repositorio.EventoDominioRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
+import com.controllocal.persistence.query.PropiedadListado;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.TitularidadPropiedadRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.Pagina;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.PublicacionService;
+import com.controllocal.service.soporte.ActividadDeLaPropiedad;
+import com.controllocal.service.soporte.AnunciosDeLosEncargos;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.ComandosIdempotentes;
 import com.controllocal.service.soporte.CondicionesEconomicas;
@@ -37,6 +44,8 @@ import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.Transiciones;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +59,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -112,6 +122,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final ComandosIdempotentes comandos;
     private final Documentos documentos;
     private final Transiciones transiciones;
+    private final ActividadDeLaPropiedad actividad;
+    private final AnunciosDeLosEncargos publicaciones;
 
     public PropiedadUniversalServiceImpl(PropiedadRepository propiedades, PersonaRolRepository roles,
                                          DetalleAgenteRepository agentes, DistritoRepository distritos,
@@ -123,7 +135,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          BorradorCapturaRepository borradores,
                                          AtributosGobernados gobierno,
                                          ComandosIdempotentes comandos, Documentos documentos,
-                                         Transiciones transiciones) {
+                                         Transiciones transiciones,
+                                         ActividadDeLaPropiedad actividad,
+                                         AnunciosDeLosEncargos publicaciones) {
         this.propiedades = propiedades;
         this.roles = roles;
         this.agentes = agentes;
@@ -138,6 +152,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.comandos = comandos;
         this.documentos = documentos;
         this.transiciones = transiciones;
+        this.actividad = actividad;
+        this.publicaciones = publicaciones;
     }
 
     // ==================================================================
@@ -256,6 +272,109 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                         atributo.getTipoDato(), atributo.getUnidad(),
                         atributo.esRequeridoPara(tipo), atributo.getOrden()))
                 .toList();
+    }
+
+    // ==================================================================
+    // El listado
+    // ==================================================================
+
+    /**
+     * <b>La cartera, sin decidir cual de los dos precios es "el precio".</b>
+     *
+     * <p>Son dos consultas y no una: la primera resuelve <b>que propiedades</b>
+     * entran —con todos los filtros en SQL, antes del LIMIT— y la segunda les
+     * cuelga sus encargos vivos de una vez, para los ids de la pagina.
+     *
+     * <p>Traerlo todo junto obligaria a una de dos cosas, y las dos son falsas:
+     * multiplicar la fila —la misma propiedad dos veces, una por encargo— o
+     * quedarse con un encargo y llamarlo el precio de la propiedad. La segunda
+     * es exactamente lo que hacia el listado heredado con
+     * {@code precio_referencial}, y es lo que el modelo universal vino a
+     * quitar.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Pagina<FilaPropiedad> listar(FiltrosPropiedad filtros, Actor actor) {
+        List<OperacionInmobiliaria> exigidas = operacionesDelFiltro(filtros.operaciones());
+        int pagina = Math.max(1, filtros.pagina());
+        int tamano = Math.max(1, Math.min(100, filtros.tamano()));
+
+        Page<PropiedadListado> encontradas = propiedades.buscarUniversal(
+                actor.idOrganizacion(), enBlancoANulo(filtros.texto()),
+                enBlancoANulo(filtros.estado()),
+                filtros.tipoPropiedad() == null || filtros.tipoPropiedad().isBlank()
+                        ? null : tipoValidado(filtros.tipoPropiedad()),
+                enBlancoANulo(filtros.distrito()),
+                exigidas.contains(OperacionInmobiliaria.VENTA),
+                exigidas.contains(OperacionInmobiliaria.ALQUILER),
+                PageRequest.of(pagina - 1, tamano));
+
+        List<Long> ids = encontradas.getContent().stream().map(PropiedadListado::getId).toList();
+        Map<Long, List<EncargoEnLista>> porPropiedad = encargosDeLaPagina(actor, ids);
+
+        List<FilaPropiedad> filas = encontradas.getContent().stream()
+                .map(fila -> new FilaPropiedad(fila.getId(), fila.getCodigo(),
+                        AtributosGobernados.nombreDelTipo(fila.getTipoPropiedad()),
+                        AtributosGobernados.rotuloDelTipo(fila.getTipoPropiedad()),
+                        fila.getUso(), fila.getDireccion(),
+                        fila.getDistrito(), fila.getMetraje(), fila.getEstado(),
+                        fila.getIdPropietario(), fila.getPropietarioNombre(),
+                        fila.getTitulares() == null ? 0 : fila.getTitulares(),
+                        porPropiedad.getOrDefault(fila.getId(), List.of()),
+                        Fechas.local(fila.getFechaRegistro())))
+                .toList();
+        return new Pagina<>(filas, encontradas.getTotalElements());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OpcionesDeFiltro opcionesDeFiltro(Actor actor) {
+        return new OpcionesDeFiltro(propiedades.distritosConCartera(actor.idOrganizacion()));
+    }
+
+    /** Los encargos vivos de toda la pagina, en una consulta. */
+    private Map<Long, List<EncargoEnLista>> encargosDeLaPagina(Actor actor, List<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<EncargoEnLista>> porPropiedad = new LinkedHashMap<>();
+        for (Captacion encargo : captaciones.encargosVivosDe(actor.idOrganizacion(), ids)) {
+            CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
+            porPropiedad.computeIfAbsent(encargo.getPropiedad().getId(), id -> new ArrayList<>())
+                    .add(new EncargoEnLista(encargo.operacion().name(), encargo.estadoActual(),
+                            condicion == null ? null : condicion.getImporteReferencia(),
+                            condicion == null ? null : condicion.getMonedaReferencia()));
+        }
+        // Venta primero, siempre. El orden lo da el dominio -- es el de
+        // OperacionInmobiliaria -- y no el alfabetico de los codigos, que
+        // pondria la A de alquiler delante y haria leer «Alquiler + venta»
+        // donde el negocio dice «Venta + alquiler».
+        porPropiedad.values().forEach(encargos -> encargos.sort(
+                java.util.Comparator.comparing(
+                        encargo -> OperacionInmobiliaria.desde(encargo.operacion()).ordinal())));
+        return porPropiedad;
+    }
+
+    /**
+     * Que operaciones exige el filtro. Vacio = no filtra por operacion.
+     *
+     * <p>Con las dos declaradas el significado es <b>«tiene las dos vivas»</b>,
+     * no «tiene alguna»: es lo que hace util el filtro «Venta y alquiler» del
+     * listado, que sirve para encontrar justo esas propiedades.
+     */
+    private static List<OperacionInmobiliaria> operacionesDelFiltro(String declaradas) {
+        if (declaradas == null || declaradas.isBlank()) {
+            return List.of();
+        }
+        try {
+            return OperacionInmobiliaria.desdeLista(declaradas);
+        } catch (IllegalArgumentException e) {
+            throw new ReglaNegocioException(e.getMessage());
+        }
+    }
+
+    private static String enBlancoANulo(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.trim();
     }
 
     @Override
@@ -588,43 +707,242 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         }
         valores.sort(java.util.Comparator.comparing(AtributoFicha::clave));
 
-        // La serie se lee UNA vez y se reparte por operacion. Consultarla dentro
+        // La serie se lee UNA vez y se reparte por encargo. Consultarla dentro
         // del bucle serian dos consultas identicas por propiedad — el N+1 que
         // RC-003 vino a quitar, en pequeno.
         List<PrecioPropiedad> serie = precios.findByIdPropiedadOrderByFechaAscIdAsc(idPropiedad);
-        List<EncargoFicha> encargos = captaciones.encargosVivosDe(idOrganizacion, idPropiedad).stream()
-                .map(encargo -> fichaDeEncargo(encargo, serie))
+
+        // TODOS los encargos, no solo los vivos. La ficha responde "que ha
+        // pasado con esta propiedad", y un encargo cerrado es el UNICO sitio
+        // donde vive su historico economico: filtrarlo borraria de la vista una
+        // serie entera sin decir que existe. El listado si se queda con los
+        // vivos, porque su pregunta es "que hay en cartera".
+        List<Captacion> todos = ordenados(captaciones.encargosDe(idOrganizacion, idPropiedad));
+
+        // Los anuncios de TODOS los encargos en una consulta, no una por bloque.
+        // Mismo patron con el que el listado cuelga los encargos de una pagina.
+        Map<Long, List<PublicacionService.FichaPublicacion>> anuncios =
+                publicaciones.deEncargos(idOrganizacion, todos);
+
+        List<EncargoFicha> encargos = todos.stream()
+                .map(encargo -> fichaDeEncargo(encargo, serie,
+                        anuncios.getOrDefault(encargo.getId(), List.of())))
                 .toList();
 
-        return new FichaPropiedadUniversal(idPropiedad, propiedad.getCodigo(), tipo,
-                propiedad.getUso(), propiedad.getDescripcion(), propiedad.getEstadoRegistro(),
-                propiedad.getDisponibilidadComercial(), ubicacionDe(propiedad), titulares, valores,
-                encargos, gobierno.obligatoriasQueFaltan(idOrganizacion, propiedad),
+        // Con la clave desnuda, decir "no se puede publicar sin el metraje"
+        // obligaria al cliente a traducir `metraje_total`. El rotulo esta al
+        // lado, en el mismo catalogo que declaro la obligatoriedad.
+        List<AtributoQueFalta> faltan = gobierno.obligatoriasQueFaltan(idOrganizacion, propiedad)
+                .stream()
+                .map(clave -> new AtributoQueFalta(clave, definiciones.containsKey(clave)
+                        ? definiciones.get(clave).getRotulo() : clave))
+                .toList();
+
+        return new FichaPropiedadUniversal(idPropiedad, propiedad.getCodigo(),
+                AtributosGobernados.nombreDelTipo(tipo), AtributosGobernados.rotuloDelTipo(tipo),
+                propiedad.getUso(), AtributosGobernados.rotuloDelUso(propiedad.getUso()),
+                propiedad.getDescripcion(),
+                propiedad.getEstadoRegistro(), rotuloDe(propiedad.estadoRegistroTipado()),
+                propiedad.getDisponibilidadComercial(),
+                rotuloDe(propiedad.disponibilidadComercialTipada()),
+                ubicacionDe(propiedad), titulares, valores, encargos, faltan,
+                // La misma materia prima, leida como continuidad del inmueble en
+                // vez de como episodios sueltos. Sin consultas de mas.
+                historiaDe(todos, serie),
+                actividad.de(idOrganizacion, todos),
                 Fechas.local(propiedad.getFechaRegistro()));
     }
 
     /**
-     * El historico de un encargo es SOLO el suyo. Filtrar por operacion no es
-     * cosmetico: una propiedad en venta y en alquiler tiene dos series, y
-     * mezclarlas produce una linea temporal que no significa nada.
+     * Vivos primero —venta antes que alquiler, que es el orden en que lo lee el
+     * negocio— y detras los cerrados, del mas reciente al mas antiguo.
+     *
+     * <p>Es orden de PRESENTACION y por eso se decide aqui y no en el
+     * {@code order by}: lo que la consulta no puede saber es que "vivo" pesa
+     * mas que "reciente".
+     *
+     * <p>Lo que este metodo <b>no</b> hace es agrupar. Dos encargos de alquiler
+     * de anos distintos siguen siendo dos elementos de la lista, cada uno con
+     * su id: fundirlos por operacion mezclaria dos series economicas que no
+     * tienen nada que ver.
      */
-    private EncargoFicha fichaDeEncargo(Captacion encargo, List<PrecioPropiedad> serie) {
-        CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
-        String operacion = encargo.getMotivoOperacion();
-        List<HitoFicha> historico = serie.stream()
-                .filter(precio -> operacion.equals(precio.getOperacion()))
-                .map(precio -> new HitoFicha(precio.getHito(), precio.getMonto(), precio.getMoneda(),
-                        precio.getFecha()))
+    private static List<Captacion> ordenados(List<Captacion> encargos) {
+        return encargos.stream()
+                .sorted(java.util.Comparator
+                        .comparingInt((Captacion e) -> Captacion.esVivo(e.estadoActual()) ? 0 : 1)
+                        .thenComparingInt(e -> e.operacion().ordinal())
+                        .thenComparing(Captacion::getId, java.util.Comparator.reverseOrder()))
                 .toList();
+    }
+
+    /**
+     * <b>La memoria del inmueble, proyectada sobre sus encargos.</b>
+     *
+     * <p>Se calcula aqui, con lo que {@code ficha()} ya leyo: los encargos y la
+     * serie de precios completa. <b>Ni una consulta mas</b> — es una lectura
+     * distinta de los mismos hechos, no hechos distintos.
+     *
+     * <p>Y no fusiona nada. Cada cifra de la historia arrastra el
+     * {@code idEncargo} que la produjo, de modo que de «la ultima renta fueron
+     * 2 400» siempre se puede volver al episodio que lo dice. Es la diferencia
+     * entre agregar para leer y mezclar.
+     */
+    private static HistoriaComercial historiaDe(List<Captacion> encargos,
+                                                List<PrecioPropiedad> serie) {
+        Map<Long, Captacion> porId = new LinkedHashMap<>();
+        encargos.forEach(encargo -> porId.put(encargo.getId(), encargo));
+
+        // La linea: todos los movimientos del inmueble, atravesando encargos, del
+        // mas reciente al mas antiguo. Un hito huerfano -- de un encargo que ya
+        // no esta -- se descarta: sin episodio no se puede decir de que operacion
+        // era, y afirmarlo seria inventarlo.
+        List<HitoDeLaHistoria> linea = serie.stream()
+                .filter(precio -> porId.containsKey(precio.getIdCaptacion()))
+                .map(precio -> {
+                    Captacion encargo = porId.get(precio.getIdCaptacion());
+                    OperacionInmobiliaria operacion = encargo.operacion();
+                    return new HitoDeLaHistoria(precio.getFecha(), precio.getHito(),
+                            PrecioPropiedad.rotuloDelHito(precio.getHito()), precio.getMonto(),
+                            precio.getMoneda(), encargo.getId(), encargo.getCodigoCaptacion(),
+                            operacion.name(), enFrase(operacion.name()));
+                })
+                .sorted(java.util.Comparator
+                        .comparing(HitoDeLaHistoria::fecha,
+                                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+                        .thenComparing(HitoDeLaHistoria::idEncargo,
+                                java.util.Comparator.reverseOrder()))
+                .toList();
+
+        // Y el recuento por operacion: cuantas veces, desde cuando, y los dos
+        // ultimos importes que NO son el mismo dato.
+        List<EpisodiosDeOperacion> porOperacion = new ArrayList<>();
+        for (OperacionInmobiliaria operacion : OperacionInmobiliaria.values()) {
+            List<Captacion> episodios = encargos.stream()
+                    .filter(encargo -> encargo.operacion() == operacion)
+                    .sorted(java.util.Comparator.comparing(Captacion::getFechaCaptacion,
+                            java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                    .toList();
+            if (episodios.isEmpty()) {
+                continue;
+            }
+            Captacion primero = episodios.get(0);
+            Captacion ultimo = episodios.get(episodios.size() - 1);
+            boolean vivoAhora = episodios.stream()
+                    .anyMatch(encargo -> Captacion.esVivo(encargo.estadoActual()));
+
+            List<HitoDeLaHistoria> suyos = linea.stream()
+                    .filter(hito -> operacion.name().equals(hito.operacion()))
+                    .toList();
+
+            porOperacion.add(new EpisodiosDeOperacion(operacion.name(), enFrase(operacion.name()),
+                    episodios.size(), primero.getFechaCaptacion(),
+                    // Sin fin mientras haya uno vivo: escribir la fecha del
+                    // ultimo cerrado diria que la propiedad ya no esta en esa
+                    // operacion, y si lo esta.
+                    vivoAhora ? null : ultimo.getFechaFinVigencia(),
+                    vivoAhora,
+                    importeDe(suyos, PEDIDOS), importeDe(suyos, CIERRES)));
+        }
+        return new HistoriaComercial(List.copyOf(porOperacion), linea);
+    }
+
+    /**
+     * Lo que se PIDIO: el importe autorizado, o el publicado.
+     *
+     * <p>{@code O} ofertado no entra: una oferta es lo que ofrecio un
+     * interesado, no lo que pedia el propietario.
+     */
+    private static final Set<String> PEDIDOS =
+            Set.of(PrecioPropiedad.HITO_AUTORIZADO, PrecioPropiedad.HITO_PUBLICADO);
+
+    /**
+     * Lo que se CERRO de verdad. Solo {@code C}: {@code A} aceptado es un
+     * acuerdo que todavia puede caerse antes de la firma.
+     */
+    private static final Set<String> CIERRES = Set.of("C");
+
+    /**
+     * El ultimo importe de una clase de hito, o {@code null}.
+     *
+     * <p><b>Devolver {@code null} es la respuesta correcta</b> cuando no hay
+     * ninguno. La tentacion es caer al precio pedido cuando no hubo cierre, y
+     * ese respaldo convierte «lo que pediamos» en «lo que vale» sin que nadie lo
+     * note — que es exactamente el dato que despues se cita en una negociacion.
+     */
+    private static ImporteFechado importeDe(List<HitoDeLaHistoria> hitos, Set<String> clases) {
+        // `hitos` ya viene del mas reciente al mas antiguo.
+        return hitos.stream()
+                .filter(hito -> clases.contains(hito.hito()))
+                .findFirst()
+                .map(hito -> new ImporteFechado(hito.monto(), hito.moneda(), hito.fecha(),
+                        hito.idEncargo(), hito.codigoEncargo()))
+                .orElse(null);
+    }
+
+    /**
+     * El historico de un encargo es SOLO el suyo. Filtrar no es cosmetico: una
+     * propiedad en venta y en alquiler tiene dos series, y mezclarlas produce
+     * una linea temporal que no significa nada.
+     *
+     * <p><b>Se filtra por encargo y no por operacion</b>, que es la diferencia
+     * que aparece en cuanto hay historia: tres alquileres sucesivos comparten
+     * la operacion, asi que filtrar por ella le daria al encargo de 2026 los
+     * precios de 2024. El hito se escribe atado a su encargo
+     * ({@code precio_propiedad.id_captacion}) justo para esto.
+     */
+    private EncargoFicha fichaDeEncargo(Captacion encargo, List<PrecioPropiedad> serie,
+                                        List<PublicacionService.FichaPublicacion> anuncios) {
+        CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
+        List<HitoFicha> historico = serie.stream()
+                .filter(precio -> Objects.equals(precio.getIdCaptacion(), encargo.getId()))
+                .map(precio -> new HitoFicha(precio.getHito(),
+                        PrecioPropiedad.rotuloDelHito(precio.getHito()),
+                        precio.getMonto(), precio.getMoneda(), precio.getFecha()))
+                .toList();
+        OperacionInmobiliaria operacion = encargo.operacion();
         return new EncargoFicha(encargo.getId(), encargo.getCodigoCaptacion(),
-                encargo.operacion().name(), encargo.estadoActual(),
+                operacion.name(), enFrase(operacion.name()),
+                encargo.estadoActual(), rotuloDe(EstadoCaptacion.desde(encargo.estadoActual())),
+                Captacion.esVivo(encargo.estadoActual()),
                 condicion == null ? null : condicion.getImporteReferencia(),
                 condicion == null ? null : condicion.getMonedaReferencia(),
+                // "precio de venta" o "renta mensual". Viaja porque el nombre
+                // del importe lo decide la OPERACION: con el ternario escrito en
+                // el cliente habria uno por interfaz, y una ficha de venta
+                // rotulada "renta" es un error de bulto (D-A-1 §5).
+                operacion.nombreDelImporte(),
                 // Se escribia y no se devolvia: un formulario en modo edicion la
                 // pintaba desmarcada y la borraba al guardar. Lo destapo el
                 // trazado campo -> DTO -> dominio -> persistencia -> LECTURA.
                 encargo.getExclusividad(),
-                encargo.getFechaInicioVigencia(), encargo.getFechaFinVigencia(), historico);
+                encargo.getAgente() == null ? null : encargo.getAgente().getId(),
+                encargo.getAgente() == null ? null : nombreDe(encargo.getAgente().getRol()),
+                encargo.getFechaInicioVigencia(), encargo.getFechaFinVigencia(), historico,
+                anuncios, gestionDePublicacion(encargo));
+    }
+
+    /**
+     * Si este encargo admite gestion de publicacion.
+     *
+     * <p>La regla es del negocio: <b>no se publica lo que ya no se ofrece</b>.
+     * Se publica como capacidad para que la pantalla no la reimplemente con un
+     * {@code estado === 'A'}; el backend la vuelve a imponer al escribir.
+     */
+    private static GestionDePublicacion gestionDePublicacion(Captacion encargo) {
+        if (Captacion.esVivo(encargo.estadoActual())) {
+            return new GestionDePublicacion(true, null);
+        }
+        return new GestionDePublicacion(false,
+                "El encargo " + encargo.getCodigoCaptacion() + " ya no esta vigente.");
+    }
+
+    /** `VENTA` -> `Venta`. El valor viaja en mayusculas; la persona lo lee en frase. */
+    private static String enFrase(String valor) {
+        return valor.charAt(0) + valor.substring(1).toLowerCase(Locale.ROOT);
+    }
+
+    private static String rotuloDe(EstadosDominio.Codigo estado) {
+        return estado == null ? null : estado.descripcion();
     }
 
     private static Ubicacion ubicacionDe(Propiedad propiedad) {

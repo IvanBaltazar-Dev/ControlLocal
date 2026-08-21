@@ -1,0 +1,541 @@
+// La ficha universal de una propiedad. Un expediente inmobiliario: superficie
+// clara, tinta oscura, tres zonas grandes y ninguna microtarjeta. Todo el color
+// sale de los tokens de `styles.scss`.
+
+:host {
+  display: block;
+}
+
+// ------------------------------------------------------------------
+// Cabecera
+// ------------------------------------------------------------------
+
+.cabecera {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.miga {
+  align-items: center;
+  color: var(--ink-3);
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 7px;
+  letter-spacing: 0.06em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.miga a {
+  color: var(--ink-3);
+  text-decoration: none;
+}
+
+.miga a:hover {
+  color: var(--accion);
+}
+
+.cabecera h1 {
+  color: var(--ink);
+  font-size: 25px;
+  margin: 5px 0 4px;
+}
+
+.direccion {
+  color: var(--ink);
+  font-size: 15px;
+  margin: 0;
+}
+
+.donde {
+  color: var(--ink-3);
+  font-size: 13px;
+  margin: 3px 0 0;
+}
+
+.acciones {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.primario {
+  background: var(--accion);
+  border: 1px solid var(--accion);
+  border-radius: var(--r-chico);
+  color: var(--surface);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 16px;
+  transition: background var(--t1) var(--curva);
+  white-space: nowrap;
+}
+
+.primario:hover {
+  background: var(--accion-fuerte);
+}
+
+/* Disponibilidad de la PROPIEDAD. D disponible · R reservado · A alquilado ·
+   T retirado. El resto queda neutro y se lee por su palabra. */
+.estado {
+  background: var(--hueco);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 12px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
+.estado[data-estado='D'] {
+  background: var(--positivo-p);
+  color: var(--positivo-voz);
+}
+
+.estado[data-estado='R'],
+.estado[data-estado='A'] {
+  background: var(--atencion-p);
+  color: var(--atencion-voz);
+}
+
+/* Lo que falta para poder publicar. Es un hecho, no una alarma: se dice en
+   ámbar y con la palabra del catálogo, sin iconografía de error. */
+.aviso {
+  background: var(--atencion-p);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+  color: var(--atencion-voz);
+  font-size: 13.5px;
+  margin: 0 0 16px;
+  padding: 11px 14px;
+}
+
+// ------------------------------------------------------------------
+// Las tres zonas
+// ------------------------------------------------------------------
+
+.bloque {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  margin-bottom: 16px;
+  padding: 20px 22px;
+}
+
+.bloque h2 {
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink);
+  font-size: 17px;
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+}
+
+.bloque h3 {
+  align-items: baseline;
+  color: var(--ink);
+  display: flex;
+  font-size: 13.5px;
+  gap: 9px;
+  margin: 24px 0 10px;
+}
+
+.bloque h3:first-of-type {
+  margin-top: 22px;
+}
+
+.cuenta {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+/* Explícito y no un gap de flex: sin él, el texto plano queda «Venta1 vez». */
+.separador {
+  color: var(--plata);
+  font-weight: 400;
+}
+
+.datos {
+  display: grid;
+  gap: 14px 26px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0;
+}
+
+.datos dt {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.datos dd {
+  color: var(--ink);
+  font-size: 13.5px;
+  margin: 3px 0 0;
+}
+
+.descripcion {
+  border-left: 2px solid var(--hairline);
+  color: var(--ink-2);
+  font-size: 13.5px;
+  margin: 18px 0 0;
+  max-width: 72ch;
+  padding-left: 12px;
+}
+
+// ------------------------------------------------------------------
+// Titulares
+// ------------------------------------------------------------------
+
+.titulares {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.titulares li {
+  align-items: center;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 9px 13px;
+}
+
+.titulares a {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.titulares a:hover {
+  color: var(--accion);
+}
+
+/* Con quién se habla. Es la marca pequeña: color vivo, poco de él. */
+.marca {
+  background: var(--accion-p);
+  border-radius: 999px;
+  color: var(--accion-fuerte);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+}
+
+.parte {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+// ------------------------------------------------------------------
+// Gestión comercial
+// ------------------------------------------------------------------
+
+/* Dos bloques grandes e independientes. Con espacio suficiente entre ellos
+   para que no se lean como una tabla de dos filas de la misma cosa. */
+.encargos {
+  display: grid;
+  gap: 14px;
+}
+
+.historia {
+  margin-top: 16px;
+}
+
+.historia summary {
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.historia summary:hover {
+  color: var(--ink);
+}
+
+.historia .encargos {
+  margin-top: 10px;
+}
+
+// ------------------------------------------------------------------
+// Actividad
+// ------------------------------------------------------------------
+
+.acotar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.acotar button {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 13px;
+  transition:
+    background var(--t1) var(--curva),
+    border-color var(--t1) var(--curva);
+}
+
+.acotar button:hover {
+  background: var(--hueco);
+}
+
+.acotar button.activo {
+  background: var(--accion-p);
+  border-color: var(--accion-b);
+  color: var(--accion-fuerte);
+  font-weight: 600;
+}
+
+.hechos {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hechos li {
+  align-items: baseline;
+  border-bottom: 1px solid var(--hairline);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 96px 1fr auto auto;
+  padding: 10px 4px;
+}
+
+.hechos li:last-child {
+  border-bottom: 0;
+}
+
+.hechos li.abrible {
+  cursor: pointer;
+  transition: background var(--t1) var(--curva);
+}
+
+.hechos li.abrible:hover {
+  background: var(--hueco);
+}
+
+.hechos .fecha {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hechos .que {
+  display: grid;
+  gap: 2px;
+}
+
+.hechos .que strong {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.hechos .que small {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+/* De qué encargo viene el hecho. Es el dato que evita que la visita de quien
+   viene a comprar y la de quien viene a alquilar se lean igual. */
+.procedencia {
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.procedencia[data-operacion='VENTA'] {
+  border-color: var(--oro);
+  color: var(--oro-voz);
+}
+
+.procedencia[data-operacion='ALQUILER'] {
+  border-color: var(--accion-b);
+  color: var(--p-oportunidad);
+}
+
+.estado-hecho {
+  color: var(--ink-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.vacio {
+  color: var(--ink-3);
+  font-size: 13.5px;
+  margin: 10px 0 0;
+}
+
+// ------------------------------------------------------------------
+
+@media (max-width: 720px) {
+  .cabecera {
+    flex-direction: column;
+  }
+
+  .acciones {
+    align-self: stretch;
+  }
+
+  .hechos li {
+    grid-template-columns: 90px 1fr;
+  }
+
+  .hechos .procedencia,
+  .hechos .estado-hecho {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+// ------------------------------------------------------------------
+// Historia del inmueble
+//
+// El otro nivel de lectura. Deliberadamente sobrio: son hechos con su cifra y
+// su fecha, no un panel de indicadores dentro de la ficha.
+// ------------------------------------------------------------------
+
+.episodios {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.episodio {
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--plata);
+  border-radius: var(--r-chico);
+  padding: 14px 16px;
+}
+
+.episodio[data-operacion='VENTA'] {
+  border-left-color: var(--oro);
+}
+
+.episodio[data-operacion='ALQUILER'] {
+  border-left-color: var(--p-oportunidad);
+}
+
+.episodio h3 {
+  margin: 0;
+}
+
+.periodo {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  margin: 4px 0 12px;
+}
+
+.episodio .datos {
+  gap: 12px 20px;
+}
+
+/* No hubo cierre. Se dice, en vez de repetir el precio pedido: son dos
+   preguntas distintas y confundirlas cambia una negociación. */
+.sin-cierre {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.linea {
+  margin-top: 16px;
+}
+
+.linea summary {
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.linea summary:hover {
+  color: var(--ink);
+}
+
+.linea ol {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.linea li {
+  align-items: baseline;
+  border-bottom: 1px solid var(--hairline);
+  display: grid;
+  font-size: 13px;
+  gap: 12px;
+  grid-template-columns: 96px 1fr auto auto;
+  padding: 8px 2px;
+}
+
+.linea li:last-child {
+  border-bottom: 0;
+}
+
+.linea .fecha {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.linea .que-paso {
+  color: var(--ink-2);
+}
+
+.linea .monto {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* De qué encargo sale la cifra. Sin esto, la línea sería una fusión. */
+.linea .de {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.linea .de[data-operacion='VENTA'] {
+  color: var(--oro-voz);
+}
+
+@media (max-width: 720px) {
+  .linea li {
+    grid-template-columns: 90px 1fr;
+  }
+
+  .linea .monto,
+  .linea .de {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

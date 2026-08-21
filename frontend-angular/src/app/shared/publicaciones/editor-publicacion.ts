@@ -18,32 +18,43 @@ import {
 import { ApiError } from '../../core/api/api.types';
 import { CANAL_PUBLICACION, opcionesDe } from '../../core/api/codigos';
 import {
-  LocalesService,
+  EncargosService,
   Publicacion,
   PublicacionRequest,
-} from '../../core/api/locales.service';
+} from '../../core/api/encargos.service';
 
 const CANAL_POR_DEFECTO = 'URBANIA';
 
 /**
- * Alta y edición de una publicación del local. Porta `PublicacionEditor.razor`.
+ * **Alta y edición de un anuncio DE UN ENCARGO.**
  *
- * Guarda él mismo, como el Blazor: así el estado "guardando" y el error del
- * API viven junto al formulario que los produce, y la pantalla solo se entera
- * del resultado (`guardado`).
+ * Vivía dentro de `features/local-detail/` y publicaba «un local». Desde V70
+ * publica un **encargo**: es lo único que puede decir si el importe del anuncio
+ * es un precio de venta o una renta mensual, y con venta y alquiler simultáneos
+ * es lo único que dice cuál de los dos se está publicando.
+ *
+ * Vive en `shared/` porque no es de ninguna pantalla: lo abre la ficha universal
+ * desde dentro del bloque de su encargo, y podrá abrirlo cualquier otra.
+ *
+ * Guarda él mismo: el estado "guardando" y el error del API viven junto al
+ * formulario que los produce, y quien lo abre solo se entera del resultado
+ * (`guardado`).
  *
  * Dos detalles del contrato que condicionan el formulario:
- * - **`rentaPublicada` es obligatoria.** La columna es NOT NULL y el service
- *   la escribe tal cual, así que un vacío no daría un 400 del contrato sino un
+ * - **el importe es obligatorio.** La columna es NOT NULL y el servicio lo
+ *   escribe tal cual, así que un vacío no daría un 400 del contrato sino un
  *   error de la BD. No se rellena con `0`: publicar por 0 es un dato falso que
- *   además contaminaría los indicadores comerciales. El formulario la exige y
+ *   además contaminaría los indicadores comerciales. El formulario lo exige y
  *   `guardar()` vuelve a comprobar que el valor es finito antes de armar el
  *   cuerpo, de modo que al servicio nunca llega `null`, `undefined` ni `NaN`.
  * - En la **edición**, el backend ignora el estado: pausar, publicar o cerrar
  *   son la operación aparte `POST …/estado`. Por eso aquí no hay ese campo.
+ *
+ * **Cómo se llama el importe no lo decide esta pantalla.** El rótulo llega en
+ * `importeRotulo` desde el encargo; aquí sólo se pinta (D-A-1 §5).
  */
 @Component({
-  selector: 'app-editor-publicacion',
+  selector: 'cl-editor-publicacion',
   imports: [ReactiveFormsModule],
   templateUrl: './editor-publicacion.html',
   styleUrl: './editor-publicacion.scss',
@@ -51,10 +62,16 @@ const CANAL_POR_DEFECTO = 'URBANIA';
 })
 export class EditorPublicacion {
   private readonly fb = inject(FormBuilder);
-  private readonly locales = inject(LocalesService);
+  private readonly encargos = inject(EncargosService);
 
   readonly abierto = input(false);
-  readonly idLocal = input.required<number>();
+  /** El encargo que se anuncia. Es la identidad: nunca la operación. */
+  readonly idEncargo = input.required<number>();
+  /**
+   * Cómo se llama el importe en ESTE encargo — «precio de venta» o «renta
+   * mensual»—, tal como lo publica el backend.
+   */
+  readonly importeRotulo = input<string>("importe publicado");
   /** `null` = alta. */
   readonly publicacion = input<Publicacion | null>(null);
 
@@ -69,7 +86,7 @@ export class EditorPublicacion {
     canal: this.fb.nonNullable.control(CANAL_POR_DEFECTO, Validators.required),
     tituloAnuncio: this.fb.nonNullable.control('', Validators.maxLength(200)),
     urlPublicacion: this.fb.nonNullable.control('', Validators.maxLength(500)),
-    rentaPublicada: this.fb.control<number | null>(null, [
+    importePublicado: this.fb.control<number | null>(null, [
       Validators.required,
       Validators.min(0),
       montoFinito,
@@ -90,7 +107,7 @@ export class EditorPublicacion {
         canal: actual?.canal || CANAL_POR_DEFECTO,
         tituloAnuncio: actual?.tituloAnuncio ?? '',
         urlPublicacion: actual?.urlPublicacion ?? '',
-        rentaPublicada: actual?.rentaPublicada ?? null,
+        importePublicado: actual?.importePublicado ?? null,
         moneda: actual?.moneda ?? '',
       });
     });
@@ -125,10 +142,10 @@ export class EditorPublicacion {
     // que garantiza —y hace evidente— que al servicio no llega un monto
     // ausente o no finito. La alternativa sería coaccionarlo, y coaccionar un
     // monto es inventar un dato.
-    const renta = this.formulario.controls.rentaPublicada.value;
-    if (renta === null || !Number.isFinite(renta)) {
-      this.formulario.controls.rentaPublicada.markAsTouched();
-      this.error.set('Indica la renta publicada.');
+    const importe = this.formulario.controls.importePublicado.value;
+    if (importe === null || !Number.isFinite(importe)) {
+      this.formulario.controls.importePublicado.markAsTouched();
+      this.error.set(`Indica el ${this.importeRotulo()}.`);
       return;
     }
 
@@ -136,11 +153,11 @@ export class EditorPublicacion {
     this.error.set(null);
     try {
       const existente = this.publicacion();
-      const datos = this.datosParaGuardar(existente, renta);
+      const datos = this.datosParaGuardar(existente, importe);
       if (existente && existente.id > 0) {
-        await this.locales.actualizarPublicacion(this.idLocal(), existente.id, datos);
+        await this.encargos.actualizarPublicacion(this.idEncargo(), existente.id, datos);
       } else {
-        await this.locales.crearPublicacion(this.idLocal(), datos);
+        await this.encargos.crearPublicacion(this.idEncargo(), datos);
       }
       this.guardado.emit();
     } catch (error) {
@@ -152,19 +169,19 @@ export class EditorPublicacion {
     }
   }
 
-  /** `renta` llega ya validada como número finito: aquí no se coacciona nada. */
+  /** El importe llega ya validado como número finito: aquí no se coacciona nada. */
   private datosParaGuardar(
     existente: Publicacion | null,
-    renta: number,
+    importe: number,
   ): PublicacionRequest {
     const valor = this.formulario.getRawValue();
     return {
       canal: valor.canal,
       urlPublicacion: textoOpcional(valor.urlPublicacion),
-      rentaPublicada: renta,
+      importePublicado: importe,
       moneda: valor.moneda,
       tituloAnuncio: textoOpcional(valor.tituloAnuncio),
-      // En blanco el backend lo genera (`canal-idLocal`); al editar se conserva.
+      // En blanco el backend lo genera; al editar se conserva.
       codigoOrigen: existente?.codigoOrigen ?? null,
       estado: existente?.estado ?? 'P',
     };

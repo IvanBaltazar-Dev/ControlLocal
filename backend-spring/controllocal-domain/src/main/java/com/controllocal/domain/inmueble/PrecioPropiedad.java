@@ -31,6 +31,27 @@ public class PrecioPropiedad extends EntidadDeOrganizacion {
     public static final String HITO_PUBLICADO = "P";
     public static final Set<String> HITOS = Set.of("E", "R", "U", "P", "O", "A", "C");
 
+    /**
+     * <b>Como se llama un hito cuando lo lee una persona.</b>
+     *
+     * <p>Vive junto al vocabulario que rotula, y no en el cliente, por la misma
+     * razon que {@code rotuloDelTipo}: un {@code switch} que convierta
+     * {@code "U"} en «Autorizado» es la tabla del dominio reescrita en la
+     * interfaz, y con dos interfaces habria dos (D-A-1 §6).
+     */
+    public static String rotuloDelHito(String hito) {
+        return switch (hito == null ? "" : hito) {
+            case "E" -> "Esperado";
+            case "R" -> "Recomendado";
+            case "U" -> "Autorizado";
+            case "P" -> "Publicado";
+            case "O" -> "Ofertado";
+            case "A" -> "Aceptado";
+            case "C" -> "Cerrado";
+            default -> hito;
+        };
+    }
+
     public static final String MONEDA_PEN = "PEN";
     public static final Set<String> MONEDAS = Set.of("PEN", "USD");
 

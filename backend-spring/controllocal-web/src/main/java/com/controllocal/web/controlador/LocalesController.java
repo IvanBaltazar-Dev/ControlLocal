@@ -3,11 +3,9 @@ package com.controllocal.web.controlador;
 import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.PrecioLocalService;
-import com.controllocal.service.PublicacionService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.web.almacen.AlmacenDocumentos;
 import com.controllocal.web.almacen.AlmacenException;
-import com.controllocal.web.dto.EstadoPublicacionRequest;
 import com.controllocal.web.dto.FotoLocalRequest;
 import com.controllocal.web.dto.FotoLocalResponse;
 import com.controllocal.web.dto.LocalRequest;
@@ -15,8 +13,6 @@ import com.controllocal.web.dto.LocalResponse;
 import com.controllocal.web.dto.PrecioRequest;
 import com.controllocal.web.dto.PrecioResponse;
 import com.controllocal.web.dto.PosibleDuplicadoLocalResponse;
-import com.controllocal.web.dto.PublicacionRequest;
-import com.controllocal.web.dto.PublicacionResponse;
 import com.controllocal.web.dto.ResumenLocalesResponse;
 import com.controllocal.web.http.AccesoDenegadoException;
 import com.controllocal.web.http.ErrorAlmacenException;
@@ -52,14 +48,12 @@ public class LocalesController {
     private static final long TAMANO_MAXIMO_FOTO = 5L * 1024 * 1024; // 5 MB
 
     private final LocalComercialService locales;
-    private final PublicacionService publicaciones;
     private final PrecioLocalService precios;
     private final AlmacenDocumentos almacen;
 
-    public LocalesController(LocalComercialService locales, PublicacionService publicaciones,
+    public LocalesController(LocalComercialService locales,
                              PrecioLocalService precios, AlmacenDocumentos almacen) {
         this.locales = locales;
-        this.publicaciones = publicaciones;
         this.precios = precios;
         this.almacen = almacen;
     }
@@ -200,50 +194,18 @@ public class LocalesController {
     }
 
     // =========================================================
-    // Publicaciones del local (publicar / actualizar / pausar / cerrar)
+    // Las publicaciones se fueron a /encargos/{idEncargo}/publicaciones (V70).
+    //
+    // No es un cambio de URL: es la relacion real. Un anuncio publica un
+    // ENCARGO -- esta propiedad, en esta operacion, a este precio--, y colgado
+    // del local devolvia las series de venta y alquiler juntas sin poder decir
+    // cual publicaba que.
+    //
+    // Se retiran en vez de dejarse como compatibilidad porque no les quedo
+    // ningun consumidor: `oportunidad-form` era el ultimo y pregunta ya por su
+    // encargo, que ademas es lo que de verdad queria (el anuncio del que salio
+    // la oportunidad es el de SU encargo, no cualquiera de la propiedad).
     // =========================================================
-
-    @GetMapping("{id}/publicaciones")
-    public List<PublicacionResponse> listarPublicaciones(@PathVariable long id) {
-        return publicaciones.listarPorInmueble(id).stream()
-                .map(PublicacionResponse::desde)
-                .toList();
-    }
-
-    @PostMapping("{id}/publicaciones")
-    @PreAuthorize("hasRole('AGENTE')")
-    public ResponseEntity<PublicacionResponse> crearPublicacion(@PathVariable long id,
-                                                                @RequestBody(required = false) PublicacionRequest dto) {
-        if (dto == null) {
-            throw new ReglaNegocioException("Los datos de la publicacion son obligatorios.");
-        }
-        PublicacionResponse creada = PublicacionResponse.desde(
-                publicaciones.crear(id, dto.aDatos(), SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
-    }
-
-    @PutMapping("{id}/publicaciones/{idPublicacion}")
-    @PreAuthorize("hasRole('AGENTE')")
-    public PublicacionResponse actualizarPublicacion(@PathVariable long id,
-                                                     @PathVariable long idPublicacion,
-                                                     @RequestBody(required = false) PublicacionRequest dto) {
-        if (dto == null) {
-            throw new ReglaNegocioException("Los datos de la publicacion son obligatorios.");
-        }
-        return PublicacionResponse.desde(publicaciones.actualizar(idPublicacion, dto.aDatos()));
-    }
-
-    @PostMapping("{id}/publicaciones/{idPublicacion}/estado")
-    @PreAuthorize("hasRole('AGENTE')")
-    public PublicacionResponse cambiarEstadoPublicacion(@PathVariable long id,
-                                                        @PathVariable long idPublicacion,
-                                                        @RequestBody(required = false) EstadoPublicacionRequest dto) {
-        if (dto == null || dto.estado() == null || dto.estado().isBlank()) {
-            throw new ReglaNegocioException("El estado de la publicacion es obligatorio.");
-        }
-        return PublicacionResponse.desde(publicaciones.cambiarEstado(idPublicacion, dto.estado()));
-    }
-
     // =========================================================
     // Galeria de fotos: la imagen llega en base64, el binario va al almacen
     // y se sirve por GET /documentos/contenido?clave= (URL tipo capability).

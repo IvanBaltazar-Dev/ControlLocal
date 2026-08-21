@@ -180,6 +180,35 @@ public interface VisitaRepository extends JpaRepository<Visita, Long> {
                                    @Param("ids") Collection<Long> ids);
 
     /**
+     * Las visitas de UNOS ENCARGOS concretos: actividad de la ficha universal.
+     *
+     * <p>La visita es la que mas lejos esta de la propiedad --cuelga de la
+     * oportunidad, que cuelga del encargo-- y por eso la que peor se resolvia
+     * desde el cliente: {@code GET /visitas} solo filtra por
+     * {@code idOportunidad}, o sea <b>una llamada por oportunidad</b>. Aqui es
+     * una, y ademas devuelve de que encargo viene cada una.
+     *
+     * <p>Que una visita sea de alguien que quiere comprar o de alguien que
+     * quiere alquilar la misma propiedad es justo lo que una lista plana
+     * pierde.
+     */
+    @Query("""
+            select v from Visita v
+              join fetch v.oportunidad o
+              join fetch o.cliente cli
+              join fetch cli.rol cliRol
+              join fetch cliRol.persona
+              join fetch v.agente ag
+              join fetch ag.rol agRol
+              join fetch agRol.persona
+            where v.organizacionId = :idOrganizacion
+              and o.captacion.id in :idsEncargos
+            order by v.fechaVisita desc, v.id desc
+            """)
+    List<Visita> listarFichaPorEncargos(@Param("idOrganizacion") long idOrganizacion,
+                                        @Param("idsEncargos") Collection<Long> idsEncargos);
+
+    /**
      * Distritos presentes en el alcance, para que el selector sea data-driven
      * sin descargar la agenda. No se acota por {@code distrito}: es justo el
      * filtro cuyas opciones devuelve.

@@ -3,17 +3,17 @@ import { Component, signal } from '@angular/core';
 import { FormControl, FormGroup } from '@angular/forms';
 
 import {
-  LocalesService,
+  EncargosService,
   Publicacion,
   PublicacionRequest,
-} from '../../core/api/locales.service';
+} from '../../core/api/encargos.service';
 import { EditorPublicacion, montoFinito } from './editor-publicacion';
 
 const EXISTENTE: Publicacion = {
   id: 3,
   canal: 'URBANIA',
   tituloAnuncio: 'Local en Larco',
-  rentaPublicada: 9000,
+  importePublicado: 9000,
   moneda: 'PEN',
   estado: 'P',
   codigoOrigen: 'URBANIA-77',
@@ -28,9 +28,9 @@ interface AccesoEditor {
 @Component({
   imports: [EditorPublicacion],
   template: `
-    <app-editor-publicacion
+    <cl-editor-publicacion
       [abierto]="true"
-      [idLocal]="77"
+      [idEncargo]="77"
       [publicacion]="publicacion()"
     />
   `,
@@ -40,50 +40,50 @@ class Anfitrion {
 }
 
 describe('EditorPublicacion', () => {
-  let locales: jasmine.SpyObj<LocalesService>;
+  let encargos: jasmine.SpyObj<EncargosService>;
 
   beforeEach(() => {
-    locales = jasmine.createSpyObj<LocalesService>('LocalesService', [
+    encargos = jasmine.createSpyObj<EncargosService>('EncargosService', [
       'crearPublicacion',
       'actualizarPublicacion',
     ]);
-    locales.crearPublicacion.and.resolveTo(EXISTENTE);
-    locales.actualizarPublicacion.and.resolveTo(EXISTENTE);
+    encargos.crearPublicacion.and.resolveTo(EXISTENTE);
+    encargos.actualizarPublicacion.and.resolveTo(EXISTENTE);
   });
 
   it('no publica sin renta: es obligatoria, no se rellena con 0', async () => {
     const editor = await montar(null);
-    editor.formulario.patchValue({ canal: 'URBANIA', rentaPublicada: null });
+    editor.formulario.patchValue({ canal: 'URBANIA', importePublicado: null });
 
     await editor.guardar();
 
-    expect(locales.crearPublicacion).not.toHaveBeenCalled();
-    expect(editor.formulario.controls['rentaPublicada'].invalid).toBeTrue();
+    expect(encargos.crearPublicacion).not.toHaveBeenCalled();
+    expect(editor.formulario.controls['importePublicado'].invalid).toBeTrue();
   });
 
   it('rechaza una renta negativa', async () => {
     const editor = await montar(null);
-    editor.formulario.patchValue({ rentaPublicada: -1 });
+    editor.formulario.patchValue({ importePublicado: -1 });
 
     await editor.guardar();
 
-    expect(locales.crearPublicacion).not.toHaveBeenCalled();
+    expect(encargos.crearPublicacion).not.toHaveBeenCalled();
   });
 
   it('rechaza NaN, que required y min dejan pasar', async () => {
     const editor = await montar(null);
-    editor.formulario.patchValue({ rentaPublicada: Number.NaN });
+    editor.formulario.patchValue({ importePublicado: Number.NaN });
 
     await editor.guardar();
 
-    expect(locales.crearPublicacion).not.toHaveBeenCalled();
+    expect(encargos.crearPublicacion).not.toHaveBeenCalled();
   });
 
   it('envía la renta tal cual, sin coaccionarla', async () => {
     const editor = await montar(null);
     editor.formulario.patchValue({
       canal: 'ADONDEVIVIR',
-      rentaPublicada: 3500.5,
+      importePublicado: 3500.5,
       moneda: 'USD',
       tituloAnuncio: '  Local esquina  ',
       urlPublicacion: '  https://ejemplo.test/aviso  ',
@@ -91,15 +91,15 @@ describe('EditorPublicacion', () => {
 
     await editor.guardar();
 
-    const [idLocal, datos] = locales.crearPublicacion.calls.mostRecent().args as [
+    const [idEncargo, datos] = encargos.crearPublicacion.calls.mostRecent().args as [
       number,
       PublicacionRequest,
     ];
-    expect(idLocal).toBe(77);
+    expect(idEncargo).toBe(77);
     expect(datos).toEqual({
       canal: 'ADONDEVIVIR',
       urlPublicacion: 'https://ejemplo.test/aviso',
-      rentaPublicada: 3500.5,
+      importePublicado: 3500.5,
       moneda: 'USD',
       tituloAnuncio: 'Local esquina',
       // En blanco el backend lo genera; el estado por defecto del alta es P.
@@ -110,44 +110,44 @@ describe('EditorPublicacion', () => {
 
   it('el cero sí es una renta válida cuando el usuario la escribe', async () => {
     const editor = await montar(null);
-    editor.formulario.patchValue({ rentaPublicada: 0, moneda: 'PEN' });
+    editor.formulario.patchValue({ importePublicado: 0, moneda: 'PEN' });
 
     await editor.guardar();
 
-    const [, datos] = locales.crearPublicacion.calls.mostRecent().args as [
+    const [, datos] = encargos.crearPublicacion.calls.mostRecent().args as [
       number,
       PublicacionRequest,
     ];
-    expect(datos.rentaPublicada).toBe(0);
+    expect(datos.importePublicado).toBe(0);
   });
 
   it('no asume PEN al crear: la moneda debe seleccionarse', async () => {
     const editor = await montar(null);
-    editor.formulario.patchValue({ rentaPublicada: 3500, moneda: '' });
+    editor.formulario.patchValue({ importePublicado: 3500, moneda: '' });
 
     await editor.guardar();
 
-    expect(locales.crearPublicacion).not.toHaveBeenCalled();
+    expect(encargos.crearPublicacion).not.toHaveBeenCalled();
     expect(editor.formulario.controls['moneda'].invalid).toBeTrue();
   });
 
   it('al editar conserva código de origen y estado, y actualiza el recurso exacto', async () => {
     const editor = await montar(EXISTENTE);
-    editor.formulario.patchValue({ rentaPublicada: 9500 });
+    editor.formulario.patchValue({ importePublicado: 9500 });
 
     await editor.guardar();
 
-    const [idLocal, idPublicacion, datos] =
-      locales.actualizarPublicacion.calls.mostRecent().args as [
+    const [idEncargo, idPublicacion, datos] =
+      encargos.actualizarPublicacion.calls.mostRecent().args as [
         number,
         number,
         PublicacionRequest,
       ];
-    expect([idLocal, idPublicacion]).toEqual([77, 3]);
-    expect(datos.rentaPublicada).toBe(9500);
+    expect([idEncargo, idPublicacion]).toEqual([77, 3]);
+    expect(datos.importePublicado).toBe(9500);
     expect(datos.codigoOrigen).toBe('URBANIA-77');
     expect(datos.estado).toBe('P');
-    expect(locales.crearPublicacion).not.toHaveBeenCalled();
+    expect(encargos.crearPublicacion).not.toHaveBeenCalled();
   });
 
   it('precarga la publicación que se edita', async () => {
@@ -157,7 +157,7 @@ describe('EditorPublicacion', () => {
       jasmine.objectContaining({
         canal: 'URBANIA',
         tituloAnuncio: 'Local en Larco',
-        rentaPublicada: 9000,
+        importePublicado: 9000,
         moneda: 'PEN',
       }),
     );
@@ -183,7 +183,7 @@ describe('EditorPublicacion', () => {
   async function montar(publicacion: Publicacion | null): Promise<AccesoEditor> {
     TestBed.configureTestingModule({
       imports: [Anfitrion],
-      providers: [{ provide: LocalesService, useValue: locales }],
+      providers: [{ provide: EncargosService, useValue: encargos }],
     });
 
     const fixture: ComponentFixture<Anfitrion> = TestBed.createComponent(Anfitrion);

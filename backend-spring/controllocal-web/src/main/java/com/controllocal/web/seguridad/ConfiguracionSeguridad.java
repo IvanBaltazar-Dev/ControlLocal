@@ -128,7 +128,23 @@ public class ConfiguracionSeguridad {
         config.setAllowedOrigins(origenes);
         // PATCH lo exigen las operaciones de agenda de /visitas (F3).
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // La lista es EXPLICITA a proposito -- nada de "*" -- y por eso una
+        // cabecera nueva hay que anadirla aqui. `Idempotency-Key` faltaba, y el
+        // efecto era invisible desde las pruebas: `HttpTestingController` no
+        // cruza CORS, asi que el spec de contratos afirmaba que la cabecera
+        // viajaba mientras el navegador tumbaba la peticion entera con
+        // ERR_FAILED. Lo descubrio el alta universal al confirmar.
+        //
+        // `CabecerasDelSpaPermitidasTest` lo vigila: si el SPA empieza a mandar
+        // otra, el build lo dice antes que un usuario.
+        //
+        // `X-Elevacion` (D-S0-34) estaba en la misma situacion y es peor: la
+        // revocacion del factor ajeno es una recuperacion de gobierno, y desde
+        // el navegador nunca llego a ejecutarse. Permitirla NO relaja nada --el
+        // token de elevacion lo sigue validando el servidor--: lo que hacia
+        // omitirla era impedir que un flujo autorizado funcionara.
+        config.setAllowedHeaders(List.of(
+                "Authorization", "Content-Type", "Idempotency-Key", "X-Elevacion"));
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

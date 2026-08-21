@@ -1,0 +1,201 @@
+// Listado universal de propiedades. Todo el color sale de los tokens.
+
+:host {
+  display: block;
+}
+
+.cabecera {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.cabecera h1 {
+  color: var(--ink);
+  font-size: 25px;
+  margin: 3px 0 5px;
+}
+
+.entradilla {
+  color: var(--ink-2);
+  margin: 0;
+  max-width: 62ch;
+}
+
+.miga {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.primario {
+  align-self: center;
+  background: var(--accion);
+  border: 1px solid var(--accion);
+  border-radius: var(--r-chico);
+  color: var(--surface);
+  font-weight: 600;
+  padding: 10px 14px;
+  text-decoration: none;
+  transition: background var(--t1) var(--curva);
+  white-space: nowrap;
+}
+
+.primario:hover {
+  background: var(--accion-fuerte);
+}
+
+// ------------------------------------------------------------------
+// Tabla
+// ------------------------------------------------------------------
+
+.tabla-envoltorio {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  margin-top: 14px;
+  // La tabla es ancha: se desplaza DENTRO de su caja, nunca la página.
+  overflow-x: auto;
+}
+
+.tabla {
+  border-collapse: collapse;
+  min-width: 960px;
+  width: 100%;
+}
+
+.tabla th {
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 11px 14px;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tabla td {
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-2);
+  font-size: 13.5px;
+  padding: 12px 14px;
+  vertical-align: top;
+}
+
+.tabla tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.clicable {
+  cursor: pointer;
+  transition: background var(--t1) var(--curva);
+}
+
+.clicable:hover {
+  background: var(--hueco);
+}
+
+.codigo {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tabla strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.numero {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sin-dato {
+  color: var(--plata);
+}
+
+// ------------------------------------------------------------------
+// Operación e importes
+// ------------------------------------------------------------------
+
+.operacion {
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/** Dos encargos vivos. Se distingue porque es el caso que cambia la lectura. */
+.operacion.doble {
+  background: var(--accion-p);
+  border-color: var(--accion-b);
+  color: var(--accion-fuerte);
+}
+
+.importes {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.importes li {
+  font-variant-numeric: tabular-nums;
+}
+
+.copropiedad {
+  color: var(--ink-3);
+  display: block;
+  font-size: 11.5px;
+}
+
+// ------------------------------------------------------------------
+// Estado
+// ------------------------------------------------------------------
+
+.estado {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.estado[data-estado='D'] {
+  background: var(--positivo-p);
+  color: var(--positivo-voz);
+}
+
+.estado[data-estado='N'] {
+  background: var(--atencion-p);
+  color: var(--atencion-voz);
+}
+
+.estado[data-estado='I'] {
+  background: var(--hueco);
+  color: var(--ink-3);
+}
+
+@media (max-width: 720px) {
+  .cabecera {
+    flex-direction: column;
+  }
+
+  .primario {
+    align-self: stretch;
+    text-align: center;
+  }
+}

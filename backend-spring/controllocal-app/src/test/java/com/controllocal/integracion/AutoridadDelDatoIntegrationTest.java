@@ -363,7 +363,7 @@ class AutoridadDelDatoIntegrationTest {
         long id = registrarDepartamentoDePrueba();
         var ficha = propiedades.consultar(id, actorAgente());
 
-        assertTrue(ficha.atributosQueFaltan().stream().noneMatch("metraje_total"::equals),
+        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "metraje_total".equals(a.clave())),
                 "una propiedad con metraje en su campo canonico no puede reportarlo como faltante: "
                         + "faltantes = " + ficha.atributosQueFaltan());
     }
@@ -418,7 +418,7 @@ class AutoridadDelDatoIntegrationTest {
     @DisplayName("/locales: los seis gobernados sobreviven a una edicion que no los toca")
     void localesIdaYVuelta() {
         Actor actor = actorAgente();
-        String codigo = "AUT-" + System.nanoTime() % 1000000;
+        String codigo = codigoIrrepetible();
 
         FichaLocal alta = locales.registrar(datosDePrueba(codigo, actor, new BigDecimal("7000")), actor);
         assertEquals(4, alta.ambientes(),
@@ -471,7 +471,7 @@ class AutoridadDelDatoIntegrationTest {
     @DisplayName("/locales: vaciar un gobernado retira su fila, no la deja con el valor viejo")
     void vaciarUnGobernadoLoRetira() {
         Actor actor = actorAgente();
-        String codigo = "AUT-" + System.nanoTime() % 1000000;
+        String codigo = codigoIrrepetible();
         FichaLocal alta = locales.registrar(datosDePrueba(codigo, actor, new BigDecimal("7000")), actor);
 
         DatosLocal sinZonificacion = new DatosLocal(codigo, "Av. Ida y Vuelta " + codigo,
@@ -609,5 +609,23 @@ class AutoridadDelDatoIntegrationTest {
                 null, 4, 12, "Zona A", null, null, null,
                 new BigDecimal("6.5"), "CZ", Boolean.TRUE, null, 2,
                 new BigDecimal("350"));
+    }
+
+    /**
+     * <b>Un codigo que no puede chocar con el de otra corrida.</b>
+     *
+     * <p>Era {@code "AUT-" + System.nanoTime() % 1000000}, y esta suite
+     * <b>comete</b>: las propiedades de cada ejecucion se quedan en la base de
+     * pruebas. Con seis digitos el espacio es de un millon, asi que la colision
+     * no era improbable sino cuestion de cuantas veces se corriera -- y en
+     * Windows la resolucion de {@code nanoTime} agrupa los valores bajos, que
+     * lo empeora.
+     *
+     * <p>Fallaba con {@code uq_propiedad_codigo} y un mensaje de PostgreSQL, no
+     * con el fallo que el test vigila: es la peor clase de rojo, porque manda a
+     * mirar al sitio equivocado.
+     */
+    private static String codigoIrrepetible() {
+        return "AUT-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }

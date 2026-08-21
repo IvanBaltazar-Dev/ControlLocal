@@ -47,7 +47,7 @@ const ETIQUETAS: Readonly<Record<string, string>> = {
  * Rutas del cable que YA tienen pantalla en el SPA. El resto de las `ruta` que
  * devuelve la ficha apuntan a pantallas sin migrar, y por convención de la casa
  * no se ofrece un enlace que no lleva a ninguna parte (misma decisión que
- * `LocalDetail` con "Crear captación").
+ * la ficha de propiedad con "Crear captación").
  */
 const RUTAS_MIGRADAS: Readonly<Record<string, (id: string) => string[]>> = {
   'local-detail': (id) => ['/propiedades', id],

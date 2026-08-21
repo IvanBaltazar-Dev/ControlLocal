@@ -66,13 +66,19 @@ export const routes: Routes = [
         loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
       },
       {
+        // El alta universal: los siete tipos, venta y alquiler, una sola
+        // pantalla. No sabe qué se pregunta a cada tipo — se lo pregunta al
+        // motor de captura (D-A-1, D-E4-2).
         path: 'propiedades/nueva',
         canActivate: [rolGuard],
         data: { roles: ['AGENTE'] },
         loadComponent: () =>
-          import('./features/local-form/local-form').then((m) => m.LocalForm),
+          import('./features/propiedad-form/propiedad-form').then((m) => m.PropiedadForm),
       },
       {
+        // La EDICIÓN sigue en el formulario heredado a propósito: el motor de
+        // captura es de ALTA (D-E4-2 §6). Editar tiene otra forma y otros
+        // permisos, y migrarlo va con la ficha universal, no con el alta.
         path: 'propiedades/:id/editar',
         canActivate: [rolGuard],
         data: { roles: ['AGENTE'] },
@@ -472,17 +478,26 @@ export const routes: Routes = [
           import('./features/captacion-detail/captacion-detail').then((m) => m.CaptacionDetail),
       },
       {
-        // Después de `locales/nuevo`: el router resuelve por orden y `:id`
-        // capturaría también el literal "nuevo".
+        // La ficha universal. Después de `propiedades/nueva`: el router
+        // resuelve por orden y `:id` capturaría también ese literal.
+        //
+        // Sustituye a `local-detail`, que leía `GET /locales/{id}` -- un
+        // propietario, un precio, ninguna operación-- y por eso no podía
+        // enseñar una propiedad en venta Y en alquiler sin elegir uno de los
+        // dos precios y llamarlo "el precio".
         path: 'propiedades/:id',
         canActivate: [rolGuard],
         loadComponent: () =>
-          import('./features/local-detail/local-detail').then((m) => m.LocalDetail),
+          import('./features/propiedad-detail/propiedad-detail').then((m) => m.PropiedadDetail),
       },
       {
+        // El listado universal: una fila por propiedad, con sus encargos
+        // dentro. Sustituye a `locales`, que era una tabla de local comercial
+        // en alquiler — una columna «Renta» y ninguna que dijera qué se hace
+        // con la propiedad, porque sólo se podía hacer una cosa.
         path: 'propiedades',
         canActivate: [rolGuard],
-        loadComponent: () => import('./features/locales/locales').then((m) => m.Locales),
+        loadComponent: () => import('./features/propiedades/propiedades').then((m) => m.Propiedades),
       },
 
       // ----------------------------------------------------------------

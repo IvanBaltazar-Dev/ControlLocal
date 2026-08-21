@@ -193,6 +193,37 @@ public interface InteraccionComercialRepository extends JpaRepository<Interaccio
     List<InteraccionComercial> buscarFichaPorIds(@Param("idOrganizacion") long idOrganizacion,
                                                  @Param("ids") Collection<Long> ids);
 
+    /**
+     * La bitacora de UNOS ENCARGOS concretos: actividad de la ficha universal.
+     *
+     * <p>Son <b>dos ramas</b>, y las dos cuentan: la conversacion con el
+     * propietario cuelga del encargo (contexto {@code CAPTACION}) y la
+     * conversacion con el interesado cuelga de la oportunidad (contexto
+     * {@code OPORTUNIDAD}), que a su vez cuelga del encargo. Quedarse solo con
+     * la primera dejaria la ficha contando la mitad de la historia.
+     *
+     * <p>La oportunidad se une con {@code left join} porque una interaccion de
+     * captacion no la tiene, y con un join interno esas filas desaparecerian
+     * -- que es exactamente la rama del propietario.
+     */
+    @Query("""
+            select i from InteraccionComercial i
+              join fetch i.agente ag
+              join fetch ag.rol agRol
+              join fetch agRol.persona
+              left join fetch i.cliente cli
+              left join fetch cli.rol cliRol
+              left join fetch cliRol.persona
+              left join fetch i.oportunidad opo
+              left join opo.captacion opoCap
+            where i.organizacionId = :idOrganizacion
+              and (i.captacion.id in :idsEncargos or opoCap.id in :idsEncargos)
+            order by i.fechaHora desc, i.id desc
+            """)
+    List<InteraccionComercial> listarFichaPorEncargos(
+            @Param("idOrganizacion") long idOrganizacion,
+            @Param("idsEncargos") Collection<Long> idsEncargos);
+
     @Query("""
             select i from InteraccionComercial i
               join fetch i.agente ag

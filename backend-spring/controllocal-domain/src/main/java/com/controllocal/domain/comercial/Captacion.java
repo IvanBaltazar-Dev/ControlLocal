@@ -172,6 +172,24 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
         return PENDIENTE_REVISION.equals(estadoActual()) || OBSERVADA.equals(estadoActual());
     }
 
+    /**
+     * <b>Un encargo VIVO es el que sigue en juego: {@code P}, {@code O} o
+     * {@code A}.</b>
+     *
+     * <p>La definicion estaba escrita tres veces --en el {@code where} de
+     * {@code encargosVivosDe}, en el indice {@code uq_captacion_viva_por_operacion}
+     * (V50) y en la cabeza de quien leyera cualquiera de los dos-- y ahora que
+     * la ficha necesita distinguir los vivos de los cerrados <b>sin</b>
+     * filtrarlos, hace falta poder preguntarlo.
+     *
+     * <p>Lo que "vivo" NO significa: unico. Una propiedad puede acumular varios
+     * encargos de la misma operacion a lo largo del tiempo; lo que V50 prohibe
+     * es que haya dos vivos a la vez.
+     */
+    public static boolean esVivo(String estado) {
+        return PENDIENTE_REVISION.equals(estado) || OBSERVADA.equals(estado) || ACTIVA.equals(estado);
+    }
+
     private void touch() {
         this.fechaActualizacion = OffsetDateTime.now();
     }

@@ -5,13 +5,15 @@
       class="cuadro"
       role="dialog"
       aria-modal="true"
-      [attr.aria-label]="esEdicion() ? 'Editar publicación' : 'Publicar local'"
+      [attr.aria-label]="esEdicion() ? 'Editar anuncio' : 'Publicar encargo'"
       (click)="$event.stopPropagation()"
     >
-      <h2>{{ esEdicion() ? 'Editar publicación' : 'Publicar local' }}</h2>
+      <h2>{{ esEdicion() ? 'Editar anuncio' : 'Publicar' }}</h2>
       <p class="descripcion">
-        Difunde el local en un canal. Se conservan canal, URL y renta para poder
-        atribuir una oportunidad a su anuncio de origen.
+        <!-- Qué se publica es el ENCARGO, no «la propiedad»: con venta y alquiler
+             a la vez, «publicar la propiedad» no dice cuál de los dos. -->
+        Difunde este encargo en un canal. Se conservan canal, URL e importe para
+        poder atribuir una oportunidad a su anuncio de origen.
       </p>
 
       <form [formGroup]="formulario" (ngSubmit)="guardar()">
@@ -39,17 +41,19 @@
         </div>
 
         <label>
-          <span>Renta publicada por mes <em aria-hidden="true">*</em></span>
+          <!-- El rótulo del importe lo publica el backend según la operación del
+               encargo: «precio de venta» o «renta mensual». Aquí no se decide. -->
+          <span>Importe publicado ({{ importeRotulo() }}) <em aria-hidden="true">*</em></span>
           <input
             type="number"
             min="0"
             step="0.01"
-            formControlName="rentaPublicada"
-            [attr.aria-invalid]="invalido('rentaPublicada')"
+            formControlName="importePublicado"
+            [attr.aria-invalid]="invalido('importePublicado')"
           />
-          @if (invalido('rentaPublicada')) {
+          @if (invalido('importePublicado')) {
             <small class="fallo">
-              Indica la renta publicada del anuncio; debe ser un importe de 0 o más.
+              Indica el {{ importeRotulo() }} del anuncio; debe ser un importe de 0 o más.
             </small>
           }
         </label>

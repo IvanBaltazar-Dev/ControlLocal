@@ -4,6 +4,7 @@ import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.persistence.query.ConteoPorEstado;
 import com.controllocal.persistence.query.ConteoPorPropietario;
 import com.controllocal.persistence.query.LocalListado;
+import com.controllocal.persistence.query.PropiedadListado;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -145,6 +146,100 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                               @Param("texto") String texto,
                               @Param("estado") String estado,
                               Pageable pageable);
+
+    // ==================================================================
+    // Listado UNIVERSAL (D-E4-1)
+    //
+    // El de arriba es el heredado: una fila por local, con `precio_referencial`
+    // dentro y sin saber que operacion es. Este es el del modelo universal, y
+    // la diferencia que importa es que NO trae ni operacion ni precio: los trae
+    // el encargo, y una propiedad puede tener dos.
+    // ==================================================================
+
+    String PROYECCION_UNIVERSAL = """
+            select p.id as id,
+                   p.codigo as codigo,
+                   p.tipoInmueble as tipoPropiedad,
+                   p.uso as uso,
+                   p.direccion as direccion,
+                   p.distrito as distrito,
+                   p.metraje as metraje,
+                   """ + ESTADO_LEGADO + """
+                    as estado,
+                   rp.id as idPropietario,
+                   per.nombresORazonSocial as propietarioNombre,
+                   (select count(t) from TitularidadPropiedad t
+                     where t.idPropiedad = p.id and t.vigenteHasta is null) as titulares,
+                   p.fechaRegistro as fechaRegistro
+            """ + ASOCIACIONES_LISTADO;
+
+    /**
+     * <b>Filtro por operacion, como EXISTE y no como columna.</b>
+     *
+     * <p>Es la traduccion literal de la regla del modelo: «venta» es <i>tiene un
+     * encargo de venta vivo</i>, y «venta y alquiler» es <i>tiene los dos</i>.
+     * No hay ningun valor {@code AMBAS} que consultar, porque no existe: la
+     * combinacion es una <b>propiedad emergente de los encargos</b>, y por eso
+     * se pregunta con dos EXISTS y no con una igualdad.
+     *
+     * <p>Vivo es {@code estado in (P, O, A)}, la misma definicion que impone
+     * {@code uq_captacion_viva_por_operacion} (V50). Un encargo cerrado no hace
+     * que la propiedad siga «en venta».
+     */
+    String FILTRO_OPERACION = """
+              and (:conVenta = false or exists (
+                     select 1 from Captacion cv
+                      where cv.propiedad.id = p.id
+                        and cv.organizacionId = p.organizacionId
+                        and cv.motivoOperacion = 'V' and cv.estado in ('P', 'O', 'A')))
+              and (:conAlquiler = false or exists (
+                     select 1 from Captacion ca
+                      where ca.propiedad.id = p.id
+                        and ca.organizacionId = p.organizacionId
+                        and ca.motivoOperacion = 'A' and ca.estado in ('P', 'O', 'A')))
+            """;
+
+    String FILTRO_TIPO = """
+              and (:tipo is null or p.tipoInmueble = :tipo)
+            """;
+
+    String FILTRO_DISTRITO = """
+              and (:distrito is null or lower(p.distrito) = lower(cast(:distrito as string)))
+            """;
+
+    String DESDE_UNIVERSAL = ASOCIACIONES_LISTADO + """
+            where p.organizacionId = :idOrganizacion
+            """ + FILTRO_ESTADO_LEGADO + FILTRO_TEXTO_LISTADO + FILTRO_TIPO + FILTRO_DISTRITO
+            + FILTRO_OPERACION;
+
+    /**
+     * La pagina del listado universal. <b>Todos los filtros se resuelven en la
+     * base</b>, antes del LIMIT: filtrar en memoria daria paginas de tamano
+     * variable y contadores que no cuadran con la lista.
+     */
+    @Query(value = PROYECCION_UNIVERSAL + """
+            where p.organizacionId = :idOrganizacion
+            """ + FILTRO_ESTADO_LEGADO + FILTRO_TEXTO_LISTADO + FILTRO_TIPO + FILTRO_DISTRITO
+            + FILTRO_OPERACION + """
+              order by p.id desc
+            """,
+            countQuery = "select count(p) " + DESDE_UNIVERSAL)
+    Page<PropiedadListado> buscarUniversal(@Param("idOrganizacion") long idOrganizacion,
+                                           @Param("texto") String texto,
+                                           @Param("estado") String estado,
+                                           @Param("tipo") String tipo,
+                                           @Param("distrito") String distrito,
+                                           @Param("conVenta") boolean conVenta,
+                                           @Param("conAlquiler") boolean conAlquiler,
+                                           Pageable pageable);
+
+    /** Los distritos con cartera, para que el filtro ofrezca solo lo que existe. */
+    @Query("""
+            select distinct p.distrito from Propiedad p
+             where p.organizacionId = :idOrganizacion and p.distrito is not null
+             order by p.distrito
+            """)
+    List<String> distritosConCartera(@Param("idOrganizacion") long idOrganizacion);
 
     /**
      * La MISMA proyeccion, cargada solo para los ids de la pagina ya resuelta.

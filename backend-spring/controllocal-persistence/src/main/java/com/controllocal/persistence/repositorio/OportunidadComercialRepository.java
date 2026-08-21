@@ -303,6 +303,25 @@ public interface OportunidadComercialRepository extends JpaRepository<Oportunida
             @Param("idOrganizacion") long idOrganizacion,
             @Param("idPropietario") long idPropietario);
 
+    /**
+     * Las oportunidades de UNOS ENCARGOS concretos, para la actividad de la
+     * ficha universal.
+     *
+     * <p>Se pide por encargo y no por propiedad para que la <b>procedencia</b>
+     * salga de la propia consulta: quien la llama ya sabe de que encargo es
+     * cada fila, sin tener que recorrer despues oportunidad -> captacion para
+     * averiguarlo. Es lo que permite que el cliente reciba el {@code idEncargo}
+     * puesto por el productor en vez de deducirlo (D-A-1).
+     */
+    @Query(FICHA + """
+             where o.organizacionId = :idOrganizacion
+               and cap.id in :idsEncargos
+             order by o.fechaRegistro desc, o.id desc
+            """)
+    List<OportunidadComercial> listarFichaPorEncargos(
+            @Param("idOrganizacion") long idOrganizacion,
+            @Param("idsEncargos") Collection<Long> idsEncargos);
+
     /** Base de oportunidades de los indicadores E4: alcance SOLO por agente. */
     @Query("""
             select o.id as id, o.agente.id as idAgente, o.estado as estado,

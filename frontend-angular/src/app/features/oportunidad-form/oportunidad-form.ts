@@ -6,7 +6,7 @@ import { ApiError } from '../../core/api/api.types';
 import { Captacion, CaptacionesService } from '../../core/api/captaciones.service';
 import { Cliente, ClientesService } from '../../core/api/clientes.service';
 import { describir, ESTADO_PUBLICACION, CANAL_PUBLICACION } from '../../core/api/codigos';
-import { LocalesService, Publicacion } from '../../core/api/locales.service';
+import { EncargosService, Publicacion } from '../../core/api/encargos.service';
 import { OportunidadesService } from '../../core/api/oportunidades.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { fechaCorta, SIN_DATO, texto as textoDe } from '../../core/formato';
@@ -50,7 +50,7 @@ export class OportunidadForm implements OnInit {
   private readonly api = inject(OportunidadesService);
   private readonly clientesApi = inject(ClientesService);
   private readonly captacionesApi = inject(CaptacionesService);
-  private readonly localesApi = inject(LocalesService);
+  private readonly encargosApi = inject(EncargosService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -265,17 +265,25 @@ export class OportunidadForm implements OnInit {
   }
 
   /**
-   * Publicaciones del local de la captación, para atribuir la oportunidad al
-   * anuncio por el que llegó el cliente. Es **opcional y no bloqueante**: si la
-   * lectura falla, el alta sigue siendo posible sin atribución.
+   * Los anuncios **de la captación**, para atribuir la oportunidad al anuncio
+   * por el que llegó el cliente.
+   *
+   * Preguntaba por el LOCAL, y eso era más ancho de lo que hace falta: con una
+   * propiedad en venta y en alquiler devolvía también los anuncios de la otra
+   * operación, y una oportunidad de alquiler podía quedar atribuida al anuncio
+   * de la venta. Una captación **es** un encargo, así que preguntar por él es
+   * a la vez más correcto y más estrecho.
+   *
+   * Es **opcional y no bloqueante**: si la lectura falla, el alta sigue siendo
+   * posible sin atribución.
    */
   private async cargarPublicaciones(captacion: Captacion | null): Promise<void> {
-    if (!captacion?.idLocal) {
+    if (!captacion?.id) {
       this.publicaciones.set([]);
       return;
     }
     try {
-      this.publicaciones.set(await this.localesApi.publicaciones(captacion.idLocal));
+      this.publicaciones.set(await this.encargosApi.publicaciones(captacion.id));
     } catch {
       this.publicaciones.set([]);
     }

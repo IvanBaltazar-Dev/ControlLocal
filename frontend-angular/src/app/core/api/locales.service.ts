@@ -121,20 +121,6 @@ export interface PrecioLocal {
   operacion?: 'VENTA' | 'ALQUILER';
 }
 
-/** Contrato CONGELADO: espejo de `PublicacionResponse`. Estado B/P/S/C. */
-export interface Publicacion {
-  id: number;
-  canal?: string;
-  tituloAnuncio?: string;
-  rentaPublicada?: number;
-  moneda?: string;
-  estado?: string;
-  fechaPublicacion?: string;
-  fechaBaja?: string;
-  urlPublicacion?: string;
-  codigoOrigen?: string;
-}
-
 /**
  * Contrato CONGELADO: espejo de `FotoLocalResponse`.
  *
@@ -148,26 +134,6 @@ export interface FotoLocal {
   nombre?: string;
   /** `S3` o el almacén en disco. */
   proveedor?: string;
-}
-
-/**
- * Cuerpo congelado de POST/PUT de publicaciones.
- *
- * `rentaPublicada` es un número **obligatorio**, no opcional: la columna es
- * NOT NULL y el service la escribe tal cual, así que un `null` no se rechaza
- * con un 400 del contrato — revienta contra la restricción de la BD. El tipo
- * lo impide en compilación y el formulario lo exige al usuario; **no se
- * rellena con `0`**, porque publicar un anuncio "por 0" es un dato falso que
- * además ensucia los indicadores comerciales.
- */
-export interface PublicacionRequest {
-  canal: string;
-  urlPublicacion: string | null;
-  rentaPublicada: number;
-  moneda: string;
-  tituloAnuncio: string | null;
-  codigoOrigen: string | null;
-  estado: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -260,41 +226,11 @@ export class LocalesService {
     return this.api.get<PrecioLocal[]>(`locales/${idLocal}/precios`);
   }
 
-  /** Publicaciones del local, de la más reciente a la más antigua. */
-  publicaciones$(idLocal: number): Observable<Publicacion[]> {
-    return this.api.get$<Publicacion[]>(`locales/${idLocal}/publicaciones`);
-  }
-
-  publicaciones(idLocal: number): Promise<Publicacion[]> {
-    return this.api.get<Publicacion[]>(`locales/${idLocal}/publicaciones`);
-  }
-
-  crearPublicacion(idLocal: number, datos: PublicacionRequest): Promise<Publicacion> {
-    return this.api.post<Publicacion>(`locales/${idLocal}/publicaciones`, datos);
-  }
-
-  actualizarPublicacion(
-    idLocal: number,
-    idPublicacion: number,
-    datos: PublicacionRequest,
-  ): Promise<Publicacion> {
-    return this.api.put<Publicacion>(
-      `locales/${idLocal}/publicaciones/${idPublicacion}`,
-      datos,
-    );
-  }
-
-  /** Pausar (`S`), publicar (`P`) o cerrar (`C`). Es POST, no PATCH. */
-  cambiarEstadoPublicacion(
-    idLocal: number,
-    idPublicacion: number,
-    estado: string,
-  ): Promise<Publicacion> {
-    return this.api.post<Publicacion>(
-      `locales/${idLocal}/publicaciones/${idPublicacion}/estado`,
-      { estado },
-    );
-  }
+  // Las publicaciones se fueron a `EncargosService` (V70). No es un cambio de
+  // URL: un anuncio publica un ENCARGO —esta propiedad, en esta operación, a
+  // este precio—, y colgado del local devolvía las series de venta y alquiler
+  // juntas sin poder decir cuál publicaba qué. Los endpoints heredados ya no
+  // existen en el backend.
 
   /** Galería del local. El tope de 6 lo impone el backend. */
   fotos$(idLocal: number): Observable<FotoLocal[]> {

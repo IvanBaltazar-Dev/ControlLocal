@@ -1,0 +1,362 @@
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="false"
+  mensajeCarga="Cargando la propiedad…"
+  (reintentar)="cargar()"
+/>
+
+@if (ficha(); as p) {
+  <!-- ================================================================
+       Cabecera: qué es y dónde está.
+
+       Sin precio, y no es un olvido: el precio no es de la propiedad. Vive
+       en el encargo, que es donde el negocio lo pone (D-E4-1).
+       ================================================================ -->
+  <header class="cabecera">
+    <div>
+      <p class="miga">
+        <a routerLink="/propiedades">Propiedades</a>
+        <span aria-hidden="true">›</span>
+        {{ p.codigo }}
+      </p>
+      <h1>{{ p.tipoRotulo }}</h1>
+      <p class="direccion">{{ valor(p.ubicacion?.direccion) }}</p>
+      <p class="donde">{{ ubicacion() }}</p>
+    </div>
+    <div class="acciones">
+      <!-- En la cabecera va sólo lo que es inequívocamente de la PROPIEDAD.
+           Una propiedad inactiva es un hecho del registro y merece verse de
+           lejos; la disponibilidad comercial no cabe aquí porque su
+           vocabulario es de una sola operación («Alquilado») y con venta y
+           alquiler a la vez no dice cuál. Baja al bloque de datos, rotulada. -->
+      @if (p.estadoRegistro !== "A" && p.estadoRegistroRotulo) {
+        <span class="estado" data-estado="I">{{ p.estadoRegistroRotulo }}</span>
+      }
+      @if (puedeEditar()) {
+        <button type="button" class="primario" (click)="editar()">Editar</button>
+      }
+    </div>
+  </header>
+
+  @if (p.atributosQueFaltan.length > 0) {
+    <!-- El rótulo lo trae el catálogo. Con la clave desnuda esto diría
+         «falta metraje_total», que no es una frase para nadie. -->
+    <p class="aviso">
+      Falta
+      @for (falta of p.atributosQueFaltan; track falta.clave) {
+        <strong>{{ falta.rotulo }}</strong>{{ $last ? '' : ', ' }}
+      }
+      para poder publicarla.
+    </p>
+  }
+
+  <!-- ================================================================
+       1. La cosa física
+       ================================================================ -->
+  <section class="bloque">
+    <h2>La propiedad</h2>
+
+    <dl class="datos">
+      <div>
+        <dt>Código</dt>
+        <dd>{{ p.codigo }}</dd>
+      </div>
+      <div>
+        <dt>Tipo</dt>
+        <dd>{{ p.tipoRotulo }}</dd>
+      </div>
+      @if (p.usoRotulo) {
+        <div>
+          <dt>Uso</dt>
+          <dd>{{ p.usoRotulo }}</dd>
+        </div>
+      }
+      <div>
+        <dt>Distrito</dt>
+        <dd>{{ valor(p.ubicacion?.distrito) }}</dd>
+      </div>
+      @if (p.estadoRegistroRotulo) {
+        <div>
+          <dt>Registro</dt>
+          <dd>{{ p.estadoRegistroRotulo }}</dd>
+        </div>
+      }
+      @if (p.disponibilidadRotulo) {
+        <div>
+          <!-- Rotulada por lo que es. Cuál de los encargos está vivo lo dice
+               Gestión comercial, encargo por encargo. -->
+          <dt>Disponibilidad comercial</dt>
+          <dd>{{ p.disponibilidadRotulo }}</dd>
+        </div>
+      }
+      <div>
+        <dt>Registrada</dt>
+        <dd>{{ fecha(p.fechaRegistro) }}</dd>
+      </div>
+    </dl>
+
+    @if (p.descripcion) {
+      <p class="descripcion">{{ p.descripcion }}</p>
+    }
+
+    <!-- Las características se pintan TODAS igual, por su rótulo del
+         catálogo. Esta pantalla no sabe cuáles aplican a cada tipo y no
+         tiene por qué saberlo: ahí está el modelo universal, en que añadir
+         una sea una fila y no un despliegue (D-A-1 §4).
+
+         El metraje está aquí, entre ellas, con su clave `metraje_total`. No
+         se repite arriba: la ficha lo publica una sola vez. -->
+    <h3>Características</h3>
+    @if (p.atributos.length > 0) {
+      <dl class="datos caracteristicas">
+        @for (atributo of p.atributos; track atributo.clave) {
+          <div>
+            <dt>{{ atributo.rotulo }}</dt>
+            <dd>{{ caracteristica(atributo) }}</dd>
+          </div>
+        }
+      </dl>
+    } @else {
+      <p class="vacio">Todavía no se ha registrado ninguna característica.</p>
+    }
+
+    <h3>
+      @if (p.titulares.length > 1) {
+        Titularidad
+        <span class="separador" aria-hidden="true">&nbsp;·&nbsp;</span>
+        <span class="cuenta">{{ p.titulares.length }} titulares</span>
+      } @else {
+        Titularidad
+      }
+    </h3>
+    @if (p.titulares.length > 0) {
+      <ul class="titulares">
+        @for (titular of p.titulares; track titular.idPropietario) {
+          <li>
+            <a [routerLink]="['/propietarios', titular.idPropietario]">{{ titular.nombre }}</a>
+            <span class="parte">
+              {{ cuota(titular.cuota) }}
+              @if (titular.representante) {
+                <span class="separador" aria-hidden="true">&nbsp;·&nbsp;</span>
+                <span class="marca">Representante</span>
+              }
+            </span>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="vacio">Sin titular registrado.</p>
+    }
+  </section>
+
+  <!-- ================================================================
+       2. La gestión comercial: un bloque POR ENCARGO.
+
+       `track encargo.idEncargo`, nunca la operación. Tres alquileres
+       sucesivos son tres bloques con tres históricos; agrupados por
+       operación serían uno con tres precios dentro y una línea temporal
+       que no significa nada.
+       ================================================================ -->
+  <section class="bloque">
+    <h2>Gestión comercial</h2>
+
+    @if (p.encargos.length === 0) {
+      <p class="vacio">
+        Esta propiedad no tiene ningún encargo. No está ni en venta ni en alquiler.
+      </p>
+    } @else if (vivos().length === 0) {
+      <!-- Los tuvo, y ninguno sigue vivo. Callarlo dejaba el bloque con el
+           título y nada debajo, que se lee como un fallo de carga. -->
+      <p class="vacio">
+        Ningún encargo vigente: hoy no está ni en venta ni en alquiler. Lo que hubo
+        antes sigue abajo, con su histórico.
+      </p>
+    }
+
+    <div class="encargos">
+      @for (encargo of vivos(); track encargo.idEncargo) {
+        <cl-bloque-encargo
+          [encargo]="encargo"
+          [puedeEditar]="puedeEditar()"
+          (cambio)="cargar()"
+        />
+      }
+    </div>
+
+    @if (cerrados().length > 0) {
+      <!-- Los cerrados no se esconden: son el único sitio donde vive su
+           histórico, y quitarlos borraría una serie entera sin decirlo.
+           Van plegados porque no son lo que se viene a consultar. -->
+      <details class="historia">
+        <summary>
+          {{ cerrados().length }}
+          {{ cerrados().length === 1 ? 'encargo anterior' : 'encargos anteriores' }}
+        </summary>
+        <div class="encargos">
+          @for (encargo of cerrados(); track encargo.idEncargo) {
+            <cl-bloque-encargo
+          [encargo]="encargo"
+          [puedeEditar]="puedeEditar()"
+          (cambio)="cargar()"
+        />
+          }
+        </div>
+      </details>
+    }
+  </section>
+
+  <!-- ================================================================
+       La memoria COMERCIAL del inmueble.
+
+       Es el OTRO nivel de lectura: los bloques de arriba identifican
+       episodios (idEncargo); esto responde por la continuidad del inmueble
+       (idPropiedad). No fusiona históricos —cada cifra dice de qué encargo
+       sale—: los agrega para poder leerlos.
+
+       Se llama «Historia comercial» y no «del inmueble» porque eso es lo que
+       es: encargos, pedidos y cierres. «Historia de la propiedad» queda
+       reservado para hechos FÍSICOS y registrales —cambios de titularidad,
+       independización, remodelaciones—, que son otra cosa y todavía no se
+       modelan. Mezclarlas volvería a juntar cosa física y gestión comercial.
+       ================================================================ -->
+  @if (historia().length > 0) {
+    <section class="bloque">
+      <h2>Historia comercial</h2>
+
+      <div class="episodios">
+        @for (episodio of historia(); track episodio.operacion) {
+          <article class="episodio" [attr.data-operacion]="episodio.operacion">
+            <h3>
+              {{ episodio.operacionRotulo }}
+              <span class="separador" aria-hidden="true">&nbsp;·&nbsp;</span>
+              <span class="cuenta">{{ veces(episodio.veces) }}</span>
+            </h3>
+            <p class="periodo">
+              Desde {{ fecha(episodio.desde) }}
+              @if (episodio.vivoAhora) {
+                · sigue vigente
+              } @else if (episodio.hasta) {
+                hasta {{ fecha(episodio.hasta) }}
+              }
+            </p>
+            <dl class="datos">
+              <div>
+                <dt>Último pedido</dt>
+                <dd>{{ cifraFechada(episodio.ultimoPedido) }}</dd>
+              </div>
+              <div>
+                <!-- Lo cerrado y lo pedido NO son el mismo número. Sin cierre
+                     se dice que no lo hubo, en vez de repetir el precio pedido
+                     y convertir «lo que pedíamos» en «lo que vale». -->
+                <dt>Último cierre</dt>
+                <dd>
+                  @if (episodio.ultimoCierre) {
+                    {{ cifraFechada(episodio.ultimoCierre) }}
+                  } @else {
+                    <span class="sin-cierre">Sin cierre registrado</span>
+                  }
+                </dd>
+              </div>
+            </dl>
+          </article>
+        }
+      </div>
+
+      @if (linea().length > 0) {
+        <details class="linea">
+          <summary>Todos los movimientos ({{ linea().length }})</summary>
+          <ol role="list">
+            @for (hito of linea(); track $index) {
+              <li>
+                <span class="fecha">{{ fecha(hito.fecha) }}</span>
+                <span class="que-paso">{{ hito.hitoRotulo }}</span>
+                <span class="monto">{{ cifra(hito.monto, hito.moneda) }}</span>
+                <!-- De qué episodio sale la cifra. Es lo que separa agregar
+                     para leer de fusionar. -->
+                <span class="de" [attr.data-operacion]="hito.operacion">
+                  {{ hito.operacionRotulo }} · {{ hito.codigoEncargo }}
+                </span>
+              </li>
+            }
+          </ol>
+        </details>
+      }
+    </section>
+  }
+
+  <!-- ================================================================
+       3. La actividad.
+
+       Cada hecho dice de qué encargo nace, y esa procedencia la pone el
+       backend. El filtro es por ENCARGO y no por operación: con varios
+       encargos de alquiler, «Alquiler» volvería a juntarlos.
+       ================================================================ -->
+  <section class="bloque">
+    <h2>Actividad</h2>
+
+    @if (p.encargos.length > 1) {
+      <div class="acotar" role="group" aria-label="Acotar la actividad por encargo">
+        <button
+          type="button"
+          [class.activo]="encargoElegido() === null"
+          (click)="elegirEncargo(null)"
+        >
+          Todas
+        </button>
+        @for (encargo of p.encargos; track encargo.idEncargo) {
+          <button
+            type="button"
+            [class.activo]="encargoElegido() === encargo.idEncargo"
+            (click)="elegirEncargo(encargo.idEncargo)"
+          >
+            {{ encargo.operacionRotulo }} · {{ encargo.codigo }}
+          </button>
+        }
+      </div>
+    }
+
+    @if (hayActividad()) {
+      @for (carril of carriles(); track carril.clave) {
+        @if (carril.hechos.length > 0) {
+          <h3>
+            {{ carril.rotulo }}
+            <span class="separador" aria-hidden="true">&nbsp;·&nbsp;</span>
+            <span class="cuenta">{{ carril.hechos.length }}</span>
+          </h3>
+          <ul class="hechos" [attr.data-proceso]="carril.clave">
+            @for (hecho of carril.hechos; track hecho.id) {
+              <li [class.abrible]="!!hecho.ruta" (click)="abrir(hecho)">
+                <span class="fecha">{{ fecha(hecho.fecha) }}</span>
+                <span class="que">
+                  <strong>{{ hecho.titulo }}</strong>
+                  @if (hecho.detalle || hecho.monto != null) {
+                    <small>{{ hecho.detalle }} {{ montoDelHecho(hecho) }}</small>
+                  }
+                </span>
+                <!-- La procedencia. Sin ella, la visita de quien viene a
+                     comprar y la de quien viene a alquilar se leen igual. -->
+                @if (hecho.operacion) {
+                  <span class="procedencia" [attr.data-operacion]="hecho.operacion">
+                    {{ hecho.operacionRotulo }}
+                  </span>
+                }
+                @if (hecho.estadoRotulo) {
+                  <span class="estado-hecho">{{ hecho.estadoRotulo }}</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      }
+    } @else {
+      <p class="vacio">
+        @if (encargoElegido() !== null) {
+          Este encargo todavía no tiene actividad registrada.
+        } @else {
+          Todavía no hay oportunidades, visitas ni contactos sobre esta propiedad.
+        }
+      </p>
+    }
+  </section>
+}

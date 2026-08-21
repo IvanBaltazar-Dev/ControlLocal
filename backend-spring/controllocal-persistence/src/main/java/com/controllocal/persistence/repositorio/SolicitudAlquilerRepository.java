@@ -364,6 +364,16 @@ public interface SolicitudAlquilerRepository extends JpaRepository<SolicitudAlqu
             @Param("idOrganizacion") long idOrganizacion,
             @Param("idPropietario") long idPropietario);
 
+    /** Los expedientes de UNOS ENCARGOS concretos: actividad de la ficha universal. */
+    @Query(FICHA + """
+             where s.organizacionId = :idOrganizacion
+               and cap.id in :idsEncargos
+             order by s.fechaRegistro desc, s.id desc
+            """)
+    List<SolicitudAlquiler> listarFichaPorEncargos(
+            @Param("idOrganizacion") long idOrganizacion,
+            @Param("idsEncargos") Collection<Long> idsEncargos);
+
     /** Base de solicitudes de los indicadores E4: alcance SOLO por agente. */
     @Query("""
             select s.id as id, s.agente.id as idAgente, s.estado as estado,

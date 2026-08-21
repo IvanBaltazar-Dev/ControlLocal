@@ -119,6 +119,70 @@ public enum OperacionInmobiliaria {
     }
 
     /**
+     * <b>Las operaciones que se van a encargar sobre una propiedad</b>, a partir
+     * de una lista separada por comas: {@code "VENTA"},
+     * {@code "VENTA,ALQUILER"}.
+     *
+     * <p><b>Esto no reintroduce AMBAS por la puerta de atras.</b> Lo que
+     * devuelve no es una operacion combinada: es <b>cuantos encargos</b> se
+     * abren y de que tipo es cada uno. La diferencia no es de matiz — con
+     * {@code AMBAS} habria una fila con dos precios dentro; con esta lista hay
+     * dos encargos independientes, cada uno con su importe, su vigencia y su
+     * historico, y {@code uq_captacion_viva_por_operacion} (V50) sigue
+     * impidiendo dos vivos de la misma.
+     *
+     * <p>Existe porque un alta declara de una vez lo que quiere hacer con la
+     * propiedad, y la interfaz que la recoge —una pantalla o una conversacion—
+     * necesita poder decirlo en un solo dato. Que el usuario elija «venta y
+     * alquiler» es una intencion de interfaz; lo que llega aqui ya son dos
+     * operaciones nombradas.
+     *
+     * <p>El orden se conserva: es el orden en que se preguntara por cada
+     * condicion economica, y repetir una operacion se rechaza en vez de
+     * ignorarse, porque quien lo escribio esperaba dos encargos y solo tendria
+     * uno.
+     *
+     * @throws IllegalArgumentException si esta vacia, si algun elemento no es
+     *         una operacion, o si alguna se repite
+     */
+    public static java.util.List<OperacionInmobiliaria> desdeLista(String valores) {
+        if (valores == null || valores.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Falta la operacion: declara VENTA, ALQUILER, o las dos separadas por coma "
+                            + "(VENTA,ALQUILER) si la propiedad se ofrece para ambas cosas.");
+        }
+        java.util.List<OperacionInmobiliaria> operaciones = new java.util.ArrayList<>();
+        for (String elemento : valores.split(",")) {
+            if (elemento.isBlank()) {
+                continue;
+            }
+            OperacionInmobiliaria operacion = desde(elemento);
+            if (operaciones.contains(operacion)) {
+                throw new IllegalArgumentException(
+                        "\"" + operacion.name() + "\" esta declarada dos veces. Una propiedad no "
+                                + "puede tener dos encargos vivos de la misma operacion: si lo que "
+                                + "hace falta son dos precios, es un cambio de precio y va al "
+                                + "historico.");
+            }
+            operaciones.add(operacion);
+        }
+        if (operaciones.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Falta la operacion: declara VENTA, ALQUILER, o las dos separadas por coma.");
+        }
+        return java.util.List.copyOf(operaciones);
+    }
+
+    /**
+     * Como se rotula la condicion economica de esta operacion. La ficha de una
+     * propiedad con dos encargos ensena dos bloques, y llamarlos igual dejaria
+     * al lector sin saber cual es el precio y cual la renta.
+     */
+    public String rotuloDeLaCondicion() {
+        return this == VENTA ? "Condición de venta" : "Condición de alquiler";
+    }
+
+    /**
      * La operacion de un codigo ya persistido. Se separa de {@link #desde} para
      * que un dato ilegible en la BD no se confunda con una entrada mal escrita
      * por un usuario: aqui un valor raro es corrupcion, no un error de tecleo.

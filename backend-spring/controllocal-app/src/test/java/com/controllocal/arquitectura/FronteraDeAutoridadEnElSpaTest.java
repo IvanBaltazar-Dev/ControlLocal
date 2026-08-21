@@ -152,7 +152,134 @@ class FronteraDeAutoridadEnElSpaTest {
         }
     }
 
+    // ==================================================================
+    // BROX Web no decide QUE se pregunta para cada tipo de propiedad (D-A-1)
+    // ==================================================================
+
+    /**
+     * Los siete tipos, en el vocabulario de la OFERTA. Es el del catalogo
+     * ({@code catalogo_atributo}) y el que el motor de captura publica como
+     * {@code opciones} de {@code tipoPropiedad}.
+     *
+     * <p>No incluye el vocabulario de la DEMANDA —{@code LOCAL_COMERCIAL},
+     * {@code TERRENO_COMERCIAL}, {@code DEPOSITO_ALMACEN}— porque hoy son dos
+     * catalogos distintos y unificarlos es trabajo del lado demanda, no de este
+     * gate. Cuando se unifiquen, la lista de la demanda tendra que salir del
+     * Core igual que esta, y entonces estas comprobaciones la cubriran sola.
+     */
+    private static final List<String> TIPOS_DE_PROPIEDAD = List.of(
+            "LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN");
+
+    /**
+     * {@code if (tipo === 'CASA') { mostrarDormitorios(); }} — la linea con la
+     * que se pierde el modelo universal.
+     *
+     * <p>Parece un atajo de maquetacion y es el catalogo reescrito en Angular.
+     * A partir de ella hay <b>dos</b> catalogos, y anadir un atributo deja de
+     * ser una fila para pasar a ser un despliegue de dos piezas que ademas
+     * pueden discrepar.
+     *
+     * <p>Lo que este gate NO prohibe: nombrar {@code dormitorios}, pintar un
+     * control distinto para un {@code SELECTOR} que para un {@code INTERRUPTOR},
+     * o agrupar los campos en las familias que el Core declara. Eso es
+     * representar la pregunta, que es exactamente lo que le toca a BROX Web.
+     */
+    @Test
+    @DisplayName("el SPA no ramifica por tipo de propiedad")
+    void elSpaNoDecideQueSePreguntaSegunElTipo() {
+        java.util.regex.Pattern comparacion = java.util.regex.Pattern.compile(
+                "(===|!==|==|!=|\\bcase)\\s*['\"](" + String.join("|", TIPOS_DE_PROPIEDAD)
+                        + ")['\"]");
+        List<String> hallazgos = new ArrayList<>();
+
+        for (Path fuente : fuentesDelSpa()) {
+            if (esPrueba(fuente)) {
+                continue;
+            }
+            List<String> lineas = leer(fuente);
+            for (int i = 0; i < lineas.size(); i++) {
+                java.util.regex.Matcher encontrado = comparacion.matcher(lineas.get(i));
+                if (encontrado.find()) {
+                    hallazgos.add("  %s:%d  %s".formatted(relativa(fuente), i + 1,
+                            lineas.get(i).trim()));
+                }
+            }
+        }
+
+        if (!hallazgos.isEmpty()) {
+            fail("""
+                    El SPA ramifica por tipo de propiedad.
+
+                    %s
+
+                    Que un departamento pida dormitorios y un terreno pida zonificacion es
+                    una regla de negocio, y su dueno es el catalogo. BROX Web pregunta
+                    `GET /captura/definicion?tipoPropiedad=...&operacion=...` y pinta lo que
+                    recibe en sus tres familias -- comunes, del tipo y de la operacion.
+
+                    Con la regla escrita aqui habria dos catalogos: el real y el de Angular.
+                    Y KAIROS necesitaria un tercero (D-A-1 §6).
+                    """.formatted(String.join("\n", hallazgos)));
+        }
+    }
+
+    /**
+     * La otra forma de tener la matriz: no ramificar, sino <b>declarar la
+     * lista</b>. Un fichero que nombra tres o mas tipos de propiedad esta
+     * construyendo el catalogo de tipos o repartiendo campos entre ellos; las
+     * dos cosas son del Core.
+     *
+     * <p>Tres y no dos porque dos literales pueden ser una comparacion legitima
+     * entre dos casos concretos; tres ya es una tabla.
+     *
+     * <p>El selector de tipo del alta <b>no</b> necesita esta lista: sale de
+     * {@code opciones} de la pregunta {@code tipoPropiedad}, que es como el
+     * motor la publica desde el primer avance de la captura.
+     */
+    @Test
+    @DisplayName("el SPA no lleva su propia lista de tipos de propiedad")
+    void elSpaNoDeclaraElCatalogoDeTipos() {
+        List<String> hallazgos = new ArrayList<>();
+
+        for (Path fuente : fuentesDelSpa()) {
+            if (esPrueba(fuente)) {
+                continue;
+            }
+            String contenido = String.join("\n", leer(fuente));
+            List<String> nombrados = TIPOS_DE_PROPIEDAD.stream()
+                    .filter(tipo -> contenido.contains("'" + tipo + "'")
+                            || contenido.contains("\"" + tipo + "\""))
+                    .toList();
+            if (nombrados.size() >= 3) {
+                hallazgos.add("  %s  nombra %s".formatted(relativa(fuente), nombrados));
+            }
+        }
+
+        if (!hallazgos.isEmpty()) {
+            fail("""
+                    El SPA declara su propia lista de tipos de propiedad.
+
+                    %s
+
+                    La lista de los siete tipos es del catalogo, y viaja como `opciones` de
+                    la pregunta `tipoPropiedad`. Copiarla aqui significa que anadir un tipo
+                    -- que el modelo universal prometio que seria una fila -- vuelve a ser
+                    un cambio en dos repositorios (D-A-1 §4).
+                    """.formatted(String.join("\n", hallazgos)));
+        }
+    }
+
     // ------------------------------------------------------------------
+
+    /**
+     * Una prueba del SPA queda fuera de las dos comprobaciones de arriba: un
+     * spec <b>afirma</b> contra el contrato —y para eso necesita literales— en
+     * vez de implementarlo, y ademas no se despliega. Vigilarlo convertiria el
+     * gate en un estorbo sin proteger nada.
+     */
+    private static boolean esPrueba(Path fichero) {
+        return fichero.getFileName().toString().endsWith(".spec.ts");
+    }
 
     private static List<Path> fuentesDelSpa() {
         Path raiz = rutaDelRepo("frontend-angular/src");

@@ -34,7 +34,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
  * Tres cosas que conviene no volver a introducir al tocarla:
  * - **Los dos bloques fallan por separado.** Solo el cliente es fatal: si las
  *   oportunidades responden 500, las interacciones se siguen viendo con su
- *   aviso al lado. Es el patrón de `LocalDetail`, y aquí importa más porque son
+ *   aviso al lado. Es el patrón de la ficha de propiedad, y aquí importa más porque son
  *   dos lecturas independientes de recursos distintos.
  * - **El "agente visible" es un dato derivado, no del cliente.** El catálogo de
  *   clientes es compartido y el rol CLIENTE no guarda agente asignado: quién lo

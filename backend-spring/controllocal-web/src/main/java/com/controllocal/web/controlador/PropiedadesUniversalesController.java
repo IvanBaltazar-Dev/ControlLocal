@@ -4,7 +4,9 @@ import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.web.seguridad.ProcedenciaDeCabeceras;
 import jakarta.servlet.http.HttpServletRequest;
+import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.EdicionRequest;
+import com.controllocal.web.dto.PropiedadUniversalDtos.FilaPropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.PreguntaCatalogoResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.PropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroRequest;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -79,6 +82,55 @@ public class PropiedadesUniversalesController {
         // decirle 201 al cliente le haria contar dos altas donde hubo una.
         return ResponseEntity.status(creada.reintento() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(creada);
+    }
+
+    /**
+     * <b>La cartera por el modelo universal.</b> Va antes de {@code {id}} por el
+     * orden del router.
+     *
+     * <p>La diferencia con {@code GET /locales} no es cosmetica: alli cada fila
+     * lleva <b>un</b> precio y ninguna operacion —la proyeccion nacio cuando
+     * todo era alquiler—, y aqui cada fila lleva <b>sus encargos</b>, que pueden
+     * ser dos. «Venta + alquiler» lo compone el cliente al pintar; no existe
+     * como valor.
+     *
+     * <p>{@code operaciones} filtra por las que la propiedad tiene VIVAS, y con
+     * las dos declaradas significa «tiene las dos», no «tiene alguna»: es el
+     * filtro que sirve para encontrar exactamente esas.
+     */
+    @GetMapping
+    public PageResponse<FilaPropiedadResponse> listar(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(name = "page_size", required = false) Integer pageSize,
+            @RequestParam(required = false) Integer tamano,
+            @RequestParam(required = false) String texto,
+            @RequestParam(required = false) String tipoPropiedad,
+            @RequestParam(required = false) String distrito,
+            @RequestParam(required = false) String estado,
+            @RequestParam(required = false) String operaciones) {
+        int paginaSolicitada = ClientesController.paginaSolicitada(page, pagina);
+        int tamanoSolicitado = pageSize != null ? pageSize : tamano != null ? tamano : 20;
+        var resultado = propiedades.listar(
+                new PropiedadUniversalService.FiltrosPropiedad(texto, tipoPropiedad, distrito,
+                        estado, operaciones, paginaSolicitada, tamanoSolicitado),
+                SesionActual.actor());
+        return new PageResponse<>(
+                resultado.items().stream().map(FilaPropiedadResponse::desde).toList(),
+                resultado.total(), Math.max(1, paginaSolicitada),
+                Math.max(1, Math.min(100, tamanoSolicitado)));
+    }
+
+    /**
+     * Lo que el filtro puede ofrecer, sacado de la cartera real.
+     *
+     * <p>Los tipos y las operaciones NO estan aqui: son vocabulario del dominio
+     * y los publica el motor de captura ({@code GET /captura/apertura}), que es
+     * su unico dueno. Repetirlos aqui seria la segunda lista.
+     */
+    @GetMapping("filtros")
+    public PropiedadUniversalService.OpcionesDeFiltro filtros() {
+        return propiedades.opcionesDeFiltro(SesionActual.actor());
     }
 
     /** La propiedad leida por el modelo universal: titulares, atributos y encargos. */

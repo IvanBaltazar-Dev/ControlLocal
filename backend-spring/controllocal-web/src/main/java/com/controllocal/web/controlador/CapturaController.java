@@ -71,17 +71,35 @@ public class CapturaController {
      * descartan al cambiar de tipo —dejarlas ocultas guardaría el rubro de un
      * terreno— y las de la operación cambian hasta de rótulo.
      */
-    public record DefinicionResponse(String intencion, String tipoPropiedad, String operacion,
+    public record DefinicionResponse(String intencion, String tipoPropiedad,
+                                     List<String> operaciones,
                                      List<PreguntaResponse> comunes,
                                      List<PreguntaResponse> delTipo,
-                                     List<PreguntaResponse> deLaOperacion) {
+                                     List<BloqueOperacionResponse> deLaOperacion) {
 
         static DefinicionResponse desde(MotorDeCaptura.DefinicionCaptura definicion) {
             return new DefinicionResponse(definicion.intencion(), definicion.tipoPropiedad(),
-                    definicion.operacion(),
+                    definicion.operaciones(),
                     definicion.comunes().stream().map(PreguntaResponse::desde).toList(),
                     definicion.delTipo().stream().map(PreguntaResponse::desde).toList(),
-                    definicion.deLaOperacion().stream().map(PreguntaResponse::desde).toList());
+                    definicion.deLaOperacion().stream().map(BloqueOperacionResponse::desde).toList());
+        }
+    }
+
+    /**
+     * La condición económica de <b>un</b> encargo, con su título ya puesto.
+     *
+     * <p>Una propiedad que se ofrece para venta y para alquiler devuelve dos de
+     * estos: misma forma, distinto rótulo. La pantalla pinta una sección por
+     * bloque y no necesita saber cuántos hay ni partir ninguna clave — que es
+     * lo que ocurriría con una lista plana de {@code importe:VENTA}.
+     */
+    public record BloqueOperacionResponse(String operacion, String rotulo,
+                                          List<PreguntaResponse> preguntas) {
+
+        static BloqueOperacionResponse desde(MotorDeCaptura.BloqueOperacion bloque) {
+            return new BloqueOperacionResponse(bloque.operacion(), bloque.rotulo(),
+                    bloque.preguntas().stream().map(PreguntaResponse::desde).toList());
         }
     }
 
@@ -176,25 +194,48 @@ public class CapturaController {
     }
 
     /**
-     * <b>Qué campos aplican a un tipo + operación.</b> Va ANTES de {@code {id}}
-     * porque el router resolvería «definicion» como un id.
+     * <b>Qué campos aplican a un tipo + una o dos operaciones.</b> Va ANTES de
+     * {@code {id}} porque el router resolvería «definicion» como un id.
      *
      * <p>Es lo que necesita un formulario: la lista completa de una vez, en sus
      * tres familias. {@code POST /captura} sirve a un canal conversacional, que
      * pregunta de una en una; una pantalla las pinta todas.
+     *
+     * <p>{@code operaciones} admite una lista: {@code VENTA},
+     * {@code ALQUILER} o {@code VENTA,ALQUILER}. Con las dos, la ficha física
+     * viene una vez y la condición económica dos — una propiedad, dos encargos,
+     * que es la afirmación central del modelo universal.
      *
      * <p><b>Existe para que el cliente no tenga su propia matriz.</b> Sin este
      * endpoint, Angular necesitaría una tabla «tipo → campos» y KAIROS otra, y
      * las dos empezarían a divergir del catálogo —que es la real— desde el
      * primer atributo que alguien añada.
      */
+    /**
+     * <b>Qué hay que decidir antes de poder pedir la definición.</b> Va ANTES
+     * de {@code {id}} por el mismo motivo que «definicion»: el router
+     * resolvería «apertura» como un id.
+     *
+     * <p>Son el tipo y la operación, y vienen con sus opciones y sus rótulos.
+     * Existe para que ni la pantalla ni KAIROS escriban «primero el tipo y
+     * luego la operación»: lo dice el motor, y el cliente pinta lo que le
+     * llega, en el orden en que le llega.
+     */
+    @GetMapping("apertura")
+    public List<PreguntaResponse> apertura(
+            @RequestParam(defaultValue = "REGISTRAR_PROPIEDAD") String intencion) {
+        return motor.apertura(intencion, SesionActual.actor()).stream()
+                .map(PreguntaResponse::desde)
+                .toList();
+    }
+
     @GetMapping("definicion")
     public DefinicionResponse definicion(
             @RequestParam(defaultValue = "REGISTRAR_PROPIEDAD") String intencion,
             @RequestParam String tipoPropiedad,
-            @RequestParam String operacion) {
+            @RequestParam String operaciones) {
         return DefinicionResponse.desde(
-                motor.definicion(intencion, tipoPropiedad, operacion, SesionActual.actor()));
+                motor.definicion(intencion, tipoPropiedad, operaciones, SesionActual.actor()));
     }
 
     @GetMapping("{id}")

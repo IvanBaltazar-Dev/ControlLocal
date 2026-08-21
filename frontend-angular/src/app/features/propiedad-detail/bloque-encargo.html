@@ -1,0 +1,141 @@
+@let e = encargo();
+
+<article class="encargo" [class.cerrado]="!e.vivo" [attr.data-operacion]="e.operacion">
+  <header>
+    <div>
+      <h3>{{ e.operacionRotulo }}</h3>
+      <p class="codigo">{{ e.codigo }}</p>
+    </div>
+    <span class="estado" [attr.data-encargo]="e.estado">{{ e.estadoRotulo }}</span>
+  </header>
+
+  <p class="importe">
+    <span class="cifra">{{ importe() }}</span>
+    <!-- El separador es explicito y no un gap de flex: sin el, al copiar o
+         leer el texto plano queda «USD 185,000precio de venta». -->
+    <span class="separador" aria-hidden="true">&nbsp;·&nbsp;</span>
+    <!-- «precio de venta» o «renta mensual». Lo dice el read model: llamar
+         «renta» al precio de una venta es un error de bulto. La mayuscula
+         inicial la pone el CSS, que es donde vive el estilo de un rotulo. -->
+    <span class="que-es">{{ e.importeRotulo }}</span>
+  </p>
+
+  <dl class="datos">
+    <div>
+      <dt>Agente</dt>
+      <dd>{{ valor(e.agenteNombre) }}</dd>
+    </div>
+    <div>
+      <dt>Exclusividad</dt>
+      <dd>{{ exclusividad() }}</dd>
+    </div>
+    <div>
+      <dt>Vigencia</dt>
+      <dd>{{ vigencia() }}</dd>
+    </div>
+  </dl>
+
+  <!-- ================================================================
+       Publicación DE ESTE ENCARGO.
+
+       No hay un «Publicar propiedad» global: con venta y alquiler a la vez
+       no diría qué se publica. Y si se puede o no lo dice el Core, no un
+       `estado === 'A'` escrito aquí.
+       ================================================================ -->
+  <section class="anuncios">
+    <h4>
+      Publicación
+      @if (publicaciones().length > 0) {
+        <span class="cuenta">
+          {{ publicados() }} de {{ publicaciones().length }}
+          {{ publicaciones().length === 1 ? 'anuncio publicado' : 'anuncios publicados' }}
+        </span>
+      }
+    </h4>
+
+    @if (publicaciones().length > 0) {
+      <ul class="lista-anuncios">
+        @for (anuncio of publicaciones(); track anuncio.id) {
+          <li>
+            <span class="canal">{{ anuncio.canal }}</span>
+            <span class="monto">{{ anuncioMonto(anuncio) }}</span>
+            <span class="estado-anuncio" [attr.data-anuncio]="anuncio.estado">
+              {{ anuncio.estadoRotulo }}
+            </span>
+            @if (gestionable()) {
+              <span class="acciones-anuncio">
+                <button type="button" (click)="editarAnuncio(anuncio)">Editar</button>
+                @if (anuncio.estado !== 'P') {
+                  <button
+                    type="button"
+                    [disabled]="cambiandoEstado() !== null"
+                    (click)="cambiarEstado(anuncio, 'P')"
+                  >
+                    Publicar
+                  </button>
+                }
+                @if (anuncio.estado === 'P') {
+                  <button
+                    type="button"
+                    [disabled]="cambiandoEstado() !== null"
+                    (click)="cambiarEstado(anuncio, 'S')"
+                  >
+                    Pausar
+                  </button>
+                }
+                @if (anuncio.estado !== 'C') {
+                  <button
+                    type="button"
+                    [disabled]="cambiandoEstado() !== null"
+                    (click)="cambiarEstado(anuncio, 'C')"
+                  >
+                    Cerrar
+                  </button>
+                }
+              </span>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="vacio">Este encargo no está publicado en ningún canal.</p>
+    }
+
+    @if (gestionable()) {
+      <button type="button" class="gestionar" (click)="nuevoAnuncio()">
+        Gestionar publicación
+      </button>
+    } @else if (motivoNoPublicable()) {
+      <!-- El hecho lo da el Core; el tono es de la interfaz. -->
+      <p class="vacio">{{ motivoNoPublicable() }}</p>
+    }
+
+    @if (errorAccion()) {
+      <p class="fallo" role="alert">{{ errorAccion() }}</p>
+    }
+  </section>
+
+  <h4>Histórico económico</h4>
+  @if (e.historico.length > 0) {
+    <ol class="historico">
+      @for (hito of e.historico; track $index) {
+        <li>
+          <span class="fecha">{{ fecha(hito.fecha) }}</span>
+          <span class="que-paso">{{ hito.hitoRotulo }}</span>
+          <span class="monto">{{ hitoMonto(hito) }}</span>
+        </li>
+      }
+    </ol>
+  } @else {
+    <p class="vacio">Sin movimientos registrados en este encargo.</p>
+  }
+</article>
+
+<cl-editor-publicacion
+  [abierto]="editorAbierto()"
+  [idEncargo]="e.idEncargo"
+  [importeRotulo]="e.importeRotulo"
+  [publicacion]="enEdicion()"
+  (cerrar)="cerrarEditor()"
+  (guardado)="anuncioGuardado()"
+/>

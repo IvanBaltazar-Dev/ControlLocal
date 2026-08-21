@@ -2,8 +2,10 @@ package com.controllocal.service.captura;
 
 import com.controllocal.domain.captura.BorradorCaptura;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
+import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.persistence.repositorio.BorradorCapturaRepository;
+import com.controllocal.persistence.repositorio.DistritoRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
@@ -60,14 +62,17 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     private final PropiedadUniversalService propiedades;
     private final AtributosGobernados gobierno;
     private final Documentos documentos;
+    private final DistritoRepository distritos;
 
     public MotorDeCapturaImpl(BorradorCapturaRepository borradores,
                               PropiedadUniversalService propiedades,
-                              AtributosGobernados gobierno, Documentos documentos) {
+                              AtributosGobernados gobierno, Documentos documentos,
+                              DistritoRepository distritos) {
         this.borradores = borradores;
         this.propiedades = propiedades;
         this.gobierno = gobierno;
         this.documentos = documentos;
+        this.distritos = distritos;
     }
 
     // ==================================================================
@@ -130,7 +135,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
      */
     @Override
     @Transactional(readOnly = true)
-    public DefinicionCaptura definicion(String intencion, String tipoPropiedad, String operacion,
+    public DefinicionCaptura definicion(String intencion, String tipoPropiedad, String operaciones,
                                         Actor actor) {
         String intencionValidada = intencionValidada(intencion);
         String codigoTipo = AtributosGobernados.codigoDelTipo(tipoPropiedad)
@@ -139,12 +144,13 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                                 + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
         // La operación se exige aquí igual que en la escritura: sin ella no se
         // puede rotular el importe, y un importe sin nombre es el error que el
-        // modelo universal vino a impedir.
-        OperacionInmobiliaria op = OperacionDelEncargo.deTexto(operacion);
+        // modelo universal vino a impedir. Pueden ser dos: entonces la ficha
+        // física se pregunta una vez y la condición económica, dos.
+        List<OperacionInmobiliaria> declaradas = operacionesDeclaradas(operaciones);
 
         List<Pregunta> comunes = new ArrayList<>();
         for (String clave : GuionRegistroPropiedad.COMUNES) {
-            Pregunta pregunta = GuionRegistroPropiedad.pregunta(clave);
+            Pregunta pregunta = conCatalogoDelSistema(GuionRegistroPropiedad.pregunta(clave));
             if (pregunta != null) {
                 comunes.add(pregunta.en(Pregunta.FAMILIA_COMUN, comunes.size()));
             }
@@ -155,7 +161,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         // viajan juntas y se descartan juntas al cambiarlo.
         List<Pregunta> delTipo = new ArrayList<>();
         for (String clave : List.of(GuionRegistroPropiedad.INTERIOR,
-                GuionRegistroPropiedad.PISO_UNIDAD, GuionRegistroPropiedad.EDIFICIO)) {
+                GuionRegistroPropiedad.EDIFICIO)) {
             if (GuionRegistroPropiedad.aplicaAlTipo(clave, codigoTipo)) {
                 delTipo.add(GuionRegistroPropiedad.pregunta(clave)
                         .en(Pregunta.FAMILIA_TIPO, delTipo.size()));
@@ -168,32 +174,97 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                     .en(Pregunta.FAMILIA_TIPO, delTipo.size()));
         }
 
-        List<Pregunta> deLaOperacion = new ArrayList<>();
-        for (String clave : GuionRegistroPropiedad.DE_LA_OPERACION) {
-            Pregunta pregunta = GuionRegistroPropiedad.pregunta(clave);
-            if (pregunta == null) {
-                continue;
+        // Un bloque por encargo. Los dos tienen la misma forma y distinto
+        // nombre: es lo que permite que «venta y alquiler» no sea una rama sino
+        // una vuelta más de este bucle.
+        List<MotorDeCaptura.BloqueOperacion> deLaOperacion = new ArrayList<>();
+        for (OperacionInmobiliaria op : declaradas) {
+            List<Pregunta> economicas = new ArrayList<>();
+            for (String base : GuionRegistroPropiedad.DE_LA_OPERACION) {
+                Pregunta pregunta = GuionRegistroPropiedad.pregunta(
+                        GuionRegistroPropiedad.para(base, op));
+                if (pregunta != null) {
+                    economicas.add(pregunta.en(Pregunta.FAMILIA_OPERACION, economicas.size()));
+                }
             }
-            if (GuionRegistroPropiedad.IMPORTE.equals(clave)) {
-                // El mismo campo, dos nombres: 180 000 y 2 900 no se distinguen
-                // por magnitud, se distinguen por rótulo.
-                pregunta = new Pregunta(pregunta.clave(), mayuscula(op.nombreDelImporte()),
-                        pregunta.tipoDato(), pregunta.unidad(), pregunta.opciones(),
-                        pregunta.obligatoria(), pregunta.ayuda());
-            }
-            deLaOperacion.add(pregunta.en(Pregunta.FAMILIA_OPERACION, deLaOperacion.size()));
+            deLaOperacion.add(new MotorDeCaptura.BloqueOperacion(op.name(),
+                    op.rotuloDeLaCondicion(), List.copyOf(economicas)));
         }
 
-        return new DefinicionCaptura(intencionValidada, nombreDelTipo(codigoTipo), op.name(),
+        return new DefinicionCaptura(intencionValidada, nombreDelTipo(codigoTipo),
+                declaradas.stream().map(OperacionInmobiliaria::name).toList(),
                 List.copyOf(comunes), List.copyOf(delTipo), List.copyOf(deLaOperacion));
     }
 
-    private static String mayuscula(String texto) {
-        return texto.isEmpty() ? texto : Character.toUpperCase(texto.charAt(0)) + texto.substring(1);
+    /**
+     * <b>Las opciones que salen de una tabla del sistema</b>, no de una lista
+     * escrita en el guion.
+     *
+     * <p>Hoy solo el distrito. Estaba declarado como texto libre, y el
+     * resultado es que cada cliente llevaba su propia lista: el formulario de
+     * locales tiene 43 distritos de Lima escritos a mano
+     * ({@code catalogos-local.ts}), y KAIROS habria necesitado una segunda
+     * copia. Es el mismo defecto que D-E4-3 cerró para los rangos, aplicado al
+     * catálogo geográfico: una lista con dos dueños se separa.
+     *
+     * <p>Con la tabla vacía la pregunta se devuelve tal cual —texto libre— en
+     * vez de con una lista de cero elementos: un selector sin opciones bloquea
+     * el alta, y no poder registrar por un catálogo sin sembrar sería peor que
+     * admitir un nombre escrito a mano.
+     */
+    private Pregunta conCatalogoDelSistema(Pregunta pregunta) {
+        if (pregunta == null || !GuionRegistroPropiedad.DISTRITO.equals(pregunta.clave())) {
+            return pregunta;
+        }
+        List<String> nombres = distritos.findByActivoTrueOrderByNombre().stream()
+                .map(Distrito::getNombre)
+                .toList();
+        if (nombres.isEmpty()) {
+            return pregunta;
+        }
+        return new Pregunta(pregunta.clave(), pregunta.rotulo(), "LISTA", pregunta.unidad(),
+                nombres, pregunta.obligatoria(), pregunta.ayuda());
+    }
+
+    /**
+     * Las operaciones declaradas, o una regla de negocio que explica que falta.
+     *
+     * <p>Traduce la {@code IllegalArgumentException} del enum —que es la que
+     * sabe por qué COMPRA es una perspectiva y AMBAS una combinación— en la
+     * excepción que el cable convierte en 400 con su mensaje. El enum no debe
+     * conocer la capa de servicio, y el servicio no debe reescribir el motivo.
+     */
+    private static List<OperacionInmobiliaria> operacionesDeclaradas(String valores) {
+        try {
+            return OperacionInmobiliaria.desdeLista(valores);
+        } catch (IllegalArgumentException e) {
+            throw new ReglaNegocioException(e.getMessage());
+        }
     }
 
     private static String nombreDelTipo(String codigoTipo) {
         return AtributosGobernados.nombreDelTipo(codigoTipo);
+    }
+
+    /**
+     * Las dos que ordenan el resto, en su orden. Salen de la misma lista de
+     * obligatorias que usa {@link #loQueFalta}, cortada donde el plan empieza a
+     * depender de ellas: {@code obligatorias(sin operaciones)} devuelve
+     * exactamente {@code [tipoPropiedad, operaciones, ...]} y las demás no se
+     * pueden preguntar todavía.
+     */
+    @Override
+    public List<Pregunta> apertura(String intencion, Actor actor) {
+        intencionValidada(intencion);
+        List<Pregunta> preguntas = new ArrayList<>();
+        for (String clave : List.of(GuionRegistroPropiedad.TIPO_PROPIEDAD,
+                GuionRegistroPropiedad.OPERACIONES)) {
+            Pregunta pregunta = GuionRegistroPropiedad.pregunta(clave);
+            if (pregunta != null) {
+                preguntas.add(pregunta.en(Pregunta.FAMILIA_APERTURA, preguntas.size()));
+            }
+        }
+        return List.copyOf(preguntas);
     }
 
     @Override
@@ -313,6 +384,9 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     }
 
     private Object validar(Actor actor, Map<String, Object> conocido, String clave, String valor) {
+        if (GuionRegistroPropiedad.esDeLaOperacion(clave)) {
+            return validarDeLaOperacion(conocido, clave, valor);
+        }
         switch (clave) {
             case GuionRegistroPropiedad.TIPO_PROPIEDAD -> {
                 return AtributosGobernados.codigoDelTipo(valor)
@@ -321,26 +395,13 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                                 "Tipo de propiedad desconocido: \"" + valor + "\". Son siete: LOCAL, "
                                         + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
             }
-            case GuionRegistroPropiedad.OPERACION -> {
-                try {
-                    return OperacionInmobiliaria.desde(valor).name();
-                } catch (IllegalArgumentException e) {
-                    throw new ReglaNegocioException(e.getMessage());
-                }
-            }
-            case GuionRegistroPropiedad.IMPORTE -> {
-                try {
-                    return new BigDecimal(valor.replace(",", ""));
-                } catch (NumberFormatException e) {
-                    throw new ReglaNegocioException("El importe llego como \"" + valor + "\".");
-                }
-            }
-            case GuionRegistroPropiedad.MONEDA -> {
-                String moneda = valor.toUpperCase(java.util.Locale.ROOT);
-                if (!"PEN".equals(moneda) && !"USD".equals(moneda)) {
-                    throw new ReglaNegocioException("Moneda desconocida: \"" + valor + "\".");
-                }
-                return moneda;
+            case GuionRegistroPropiedad.OPERACIONES -> {
+                // Se normaliza a la forma canonica: "alquiler, venta" entra y
+                // "ALQUILER,VENTA" se guarda. El orden se respeta porque es el
+                // orden en que se preguntaran las dos condiciones economicas.
+                return operacionesDeclaradas(valor).stream()
+                        .map(OperacionInmobiliaria::name)
+                        .collect(java.util.stream.Collectors.joining(","));
             }
             case GuionRegistroPropiedad.TITULARES -> {
                 // Se valida la FORMA aqui; que las personas existan y que las
@@ -357,6 +418,77 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 // valor tiene que encajar con el tipo de dato declarado.
                 return validarAtributo(actor, conocido, clave, valor);
             }
+        }
+    }
+
+    /**
+     * <b>El importe, la moneda y la exclusividad son de un ENCARGO</b>, y por
+     * eso su clave tiene que decir de cuál.
+     *
+     * <p>Mientras el sistema solo supo alquilar, {@code importe} a secas no
+     * tenía ambigüedad. Con venta y alquiler vivos sobre la misma propiedad, un
+     * {@code importe} sin apellido tiene dos dueños y el segundo pisa al
+     * primero — un precio de venta guardado como renta, que es justo lo que no
+     * detecta ningún CHECK porque 180 000 es una renta perfectamente legal.
+     *
+     * <p>La comprobación contra lo declarado solo se hace <b>si ya se declaró
+     * algo</b>: alguien puede dictar el precio antes de decir qué operaciones
+     * quiere, y rechazarlo entonces sería mentir sobre un dato correcto. Es el
+     * mismo criterio que {@link #validarAtributo} aplica al tipo.
+     */
+    private Object validarDeLaOperacion(Map<String, Object> conocido, String clave, String valor) {
+        String base = GuionRegistroPropiedad.claveBase(clave);
+        OperacionInmobiliaria operacion = GuionRegistroPropiedad.operacionDe(clave);
+        if (operacion == null) {
+            throw new ReglaNegocioException(
+                    "\"" + clave + "\" no dice de que encargo es. Se escribe " + base
+                            + ":VENTA o " + base + ":ALQUILER, porque una propiedad puede tener "
+                            + "las dos operaciones vivas a la vez y entonces hay dos.");
+        }
+        List<OperacionInmobiliaria> declaradas = operacionesConocidas(conocido);
+        if (!declaradas.isEmpty() && !declaradas.contains(operacion)) {
+            throw new ReglaNegocioException(
+                    "Llego \"" + clave + "\", pero el alta declara "
+                            + declaradas.stream().map(OperacionInmobiliaria::name)
+                                    .collect(java.util.stream.Collectors.joining(" y "))
+                            + ". Anade " + operacion.name() + " a \"operaciones\" si la propiedad "
+                            + "tambien se ofrece para eso, o corrige la clave.");
+        }
+
+        if (GuionRegistroPropiedad.IMPORTE.equals(base)) {
+            try {
+                return new BigDecimal(valor.replace(",", ""));
+            } catch (NumberFormatException e) {
+                throw new ReglaNegocioException("El " + operacion.nombreDelImporte()
+                        + " llego como \"" + valor + "\".");
+            }
+        }
+        if (GuionRegistroPropiedad.MONEDA.equals(base)) {
+            String moneda = valor.toUpperCase(java.util.Locale.ROOT);
+            if (!"PEN".equals(moneda) && !"USD".equals(moneda)) {
+                throw new ReglaNegocioException("Moneda desconocida: \"" + valor + "\".");
+            }
+            return moneda;
+        }
+        return valor;
+    }
+
+    /**
+     * Las operaciones que el borrador ya declaro, o vacio si todavia ninguna.
+     *
+     * <p>Un valor ilegible se trata como "todavia ninguna" en vez de reventar:
+     * quien tiene que quejarse de {@code operaciones} es su propia validacion,
+     * no la de un campo que casualmente se anota despues.
+     */
+    private static List<OperacionInmobiliaria> operacionesConocidas(Map<String, Object> conocido) {
+        Object declarado = conocido.get(GuionRegistroPropiedad.OPERACIONES);
+        if (declarado == null || declarado.toString().isBlank()) {
+            return List.of();
+        }
+        try {
+            return OperacionInmobiliaria.desdeLista(declarado.toString());
+        } catch (IllegalArgumentException e) {
+            return List.of();
         }
     }
 
@@ -386,7 +518,11 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
      */
     private List<String> loQueFalta(Actor actor, Map<String, Object> conocido) {
         List<String> faltante = new ArrayList<>();
-        for (String clave : GuionRegistroPropiedad.OBLIGATORIAS) {
+        // La lista se despliega sobre las operaciones ya declaradas: con dos,
+        // faltan dos importes y dos monedas. Sin ninguna declarada llega hasta
+        // `operaciones` y para, porque no se puede pedir un importe sin saber
+        // de que es.
+        for (String clave : GuionRegistroPropiedad.obligatorias(operacionesConocidas(conocido))) {
             if (!conocido.containsKey(clave)) {
                 faltante.add(clave);
             }
@@ -413,7 +549,9 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     private Pregunta preguntaDe(Actor actor, Map<String, Object> conocido, String clave) {
         Pregunta estructural = GuionRegistroPropiedad.pregunta(clave);
         if (estructural != null) {
-            return estructural;
+            // Por el mismo catalogo que la definicion: un canal conversacional
+            // y una pantalla no pueden ofrecer distritos distintos.
+            return conCatalogoDelSistema(estructural);
         }
         CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
         String tipo = codigoDelTipoConocido(conocido);
@@ -497,13 +635,22 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                                          BorradorCaptura borrador, String claveIdempotencia,
                                          Procedencia procedencia) {
         String tipo = texto(conocido, GuionRegistroPropiedad.TIPO_PROPIEDAD);
-        String moneda = texto(conocido, GuionRegistroPropiedad.MONEDA);
 
-        OperacionSolicitada operacion = new OperacionSolicitada(
-                texto(conocido, GuionRegistroPropiedad.OPERACION),
-                numero(conocido, GuionRegistroPropiedad.IMPORTE), moneda,
-                null, null, null, null,
-                booleano(conocido, GuionRegistroPropiedad.EXCLUSIVIDAD), null, null);
+        // Una propiedad, tantos encargos como operaciones declaradas. Cada uno
+        // lee SU importe, SU moneda y SU exclusividad de la clave calificada:
+        // es lo que hace que los dos no se pisen y que cada serie economica
+        // nazca en su sitio.
+        List<OperacionSolicitada> operaciones = new ArrayList<>();
+        for (OperacionInmobiliaria operacion : operacionesConocidas(conocido)) {
+            operaciones.add(new OperacionSolicitada(operacion.name(),
+                    numero(conocido, GuionRegistroPropiedad.para(
+                            GuionRegistroPropiedad.IMPORTE, operacion)),
+                    texto(conocido, GuionRegistroPropiedad.para(
+                            GuionRegistroPropiedad.MONEDA, operacion)),
+                    null, null, null, null,
+                    booleano(conocido, GuionRegistroPropiedad.para(
+                            GuionRegistroPropiedad.EXCLUSIVIDAD, operacion)), null, null));
+        }
 
         Ubicacion ubicacion = new Ubicacion(
                 texto(conocido, GuionRegistroPropiedad.DIRECCION),
@@ -512,7 +659,10 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 numero(conocido, GuionRegistroPropiedad.LATITUD),
                 numero(conocido, GuionRegistroPropiedad.LONGITUD),
                 texto(conocido, GuionRegistroPropiedad.INTERIOR),
-                texto(conocido, GuionRegistroPropiedad.PISO_UNIDAD),
+                // El piso NO viaja por aqui desde V67: es la clave de catalogo
+                // `piso`, y el enrutador de autoridad la lleva a la misma
+                // columna. Rellenarlo tambien aqui seria el segundo dueno otra vez.
+                null,
                 texto(conocido, GuionRegistroPropiedad.REFERENCIA),
                 texto(conocido, GuionRegistroPropiedad.EDIFICIO));
 
@@ -531,7 +681,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 texto(conocido, GuionRegistroPropiedad.USO),
                 texto(conocido, GuionRegistroPropiedad.DESCRIPCION), ubicacion,
                 titularesDe(texto(conocido, GuionRegistroPropiedad.TITULARES)), atributos,
-                List.of(operacion), borrador.getId());
+                List.copyOf(operaciones), borrador.getId());
     }
 
     /**

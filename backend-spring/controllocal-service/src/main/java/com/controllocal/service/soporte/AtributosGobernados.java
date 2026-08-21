@@ -400,6 +400,51 @@ public class AtributosGobernados {
     }
 
     /** El codigo de un tipo escrito con palabras. Acepta las dos formas. */
+    /**
+     * <b>Como se llama un tipo cuando lo lee una persona.</b>
+     *
+     * <p>Va aparte de {@link #nombreDelTipo}: aquel es el nombre del VALOR
+     * —{@code LOCAL}, lo que viaja por el cable y lo que el cliente devuelve al
+     * responder— y esto es el ROTULO, que lleva acentos y minusculas porque se
+     * pinta en una tabla.
+     *
+     * <p>Existe para que el cliente no traduzca. Un {@code switch} en Angular
+     * que convierta {@code "L"} en «Local comercial» seria la matriz «tipo →
+     * texto» viviendo en la interfaz, y con dos interfaces habria dos (D-A-1).
+     */
+    public static String rotuloDelTipo(String tipoPropiedad) {
+        return switch (tipoPropiedad == null ? "" : tipoPropiedad) {
+            case "L" -> "Local comercial";
+            case "O" -> "Oficina";
+            case "D" -> "Departamento";
+            case "C" -> "Casa";
+            case "T" -> "Terreno";
+            case "A" -> "Almacén";
+            case "X" -> "Otro";
+            default -> tipoPropiedad;
+        };
+    }
+
+    /**
+     * <b>Como se llama el uso cuando lo lee una persona.</b>
+     *
+     * <p>Gemelo de {@link #rotuloDelTipo} y por el mismo motivo: el uso viaja
+     * como una letra --{@code "C"}, {@code "V"}-- y una ficha que quiera
+     * escribir «Comercial» tendria que traducirla. El catalogo de usos ademas
+     * crecio con el modelo universal --antes solo existia el comercial, porque
+     * solo se alquilaban locales--, asi que la tabla que el SPA heredo esta
+     * incompleta: convierte {@code C} y deja pasar {@code V}, {@code I} y
+     * {@code M} en crudo.
+     */
+    public static String rotuloDelUso(String uso) {
+        return switch (uso == null ? "" : uso) {
+            case "C" -> "Comercial";
+            case "V" -> "Vivienda";
+            case "I" -> "Industrial";
+            case "M" -> "Mixto";
+            default -> uso;
+        };
+    }
     public static Optional<String> codigoDelTipo(String tipoPropiedad) {
         if (tipoPropiedad == null || tipoPropiedad.isBlank()) {
             return Optional.empty();

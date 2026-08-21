@@ -56,14 +56,14 @@ const ETAPAS: readonly Etapa[] = [
  * Cosas que hay que entender antes de tocarla:
  * - **Los tres bloques fallan por separado.** Solo la oportunidad es fatal: si
  *   las visitas responden 500, las interacciones se siguen viendo. Patrón de
- *   `LocalDetail`.
+ *   la ficha de propiedad.
  * - **No hay botón de "cerrar exitosa" y es correcto.** El endpoint existe y
  *   responde **400 siempre**, con un mensaje que lo explica: el cierre
  *   favorable lo produce la cascada de `POST /contratos` (F4). Un botón ahí
  *   solo serviría para enseñar un error.
  * - **Tampoco hay "crear solicitud" todavía**: F4 no está migrada al SPA, y la
  *   casa no ofrece enlaces a pantallas que no existen (misma decisión que
- *   `LocalDetail` con "Crear captación"). El estado `S` ya dice que la
+ *   la ficha de propiedad con "Crear captación"). El estado `S` ya dice que la
  *   solicitud existe; el expediente se lee, por ahora, en el legado.
  * - **El cierre por no continuidad exige razón tipificada.** El backend guarda
  *   la *descripción* de la razón en `motivoCierre`, no su código: por eso la

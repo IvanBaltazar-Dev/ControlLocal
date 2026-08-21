@@ -54,6 +54,17 @@ public class CatalogoAtributo {
 
     /** Los conceptos estructurales del dominio. Crece con la clasificacion (D-E4-3). */
     public static final String CAMPO_METRAJE = "METRAJE";
+    /**
+     * En que piso esta la unidad. Estructural desde V67.
+     *
+     * <p>Lo tenia dos veces: el catalogo publicaba {@code piso} como atributo
+     * gobernado —lo creo V48 al llevarse las columnas de subtipo— y el guion de
+     * captura publicaba {@code pisoUnidad}, que escribia {@code propiedad.piso}.
+     * Dos claves, un concepto y dos sitios donde guardarlo. Nadie lo vio hasta
+     * que el alta universal las pinto juntas y pregunto <b>«Piso» dos veces</b>:
+     * la pantalla vieja solo dibujaba una de las dos.
+     */
+    public static final String CAMPO_PISO = "PISO";
 
     // ------------------------------------------------------------------
     // Las claves del sistema que D-E4-3 clasifico, con nombre.

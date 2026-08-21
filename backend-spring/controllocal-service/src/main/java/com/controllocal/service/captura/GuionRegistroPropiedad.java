@@ -1,5 +1,6 @@
 package com.controllocal.service.captura;
 
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.service.captura.MotorDeCaptura.Pregunta;
 
 import java.util.LinkedHashMap;
@@ -36,10 +37,27 @@ public final class GuionRegistroPropiedad {
 
     /** LOCAL, OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN, OTRO. */
     public static final String TIPO_PROPIEDAD = "tipoPropiedad";
-    /** VENTA o ALQUILER. Nunca se infiere. */
-    public static final String OPERACION = "operacion";
-    /** Precio de venta o renta mensual, segun la operacion. */
+    /**
+     * <b>Que se va a encargar sobre la propiedad</b>: {@code "VENTA"},
+     * {@code "ALQUILER"} o {@code "VENTA,ALQUILER"}. Nunca se infiere.
+     *
+     * <p>Esta en plural porque una propiedad puede ofrecerse para las dos cosas,
+     * y entonces se abren <b>dos encargos independientes</b> sobre una sola
+     * propiedad. Lo que no existe es una operacion combinada: la lista dice
+     * cuantos encargos hay, no inventa un tercer valor
+     * ({@link com.controllocal.domain.inmueble.OperacionInmobiliaria#desdeLista}).
+     */
+    public static final String OPERACIONES = "operaciones";
+    /**
+     * <b>Base</b> de la clave del importe: precio de venta o renta mensual.
+     *
+     * <p>Nunca se usa suelta. Cada encargo tiene el suyo, asi que la clave real
+     * viaja calificada por la operacion — {@code importe:VENTA},
+     * {@code importe:ALQUILER}—, que es lo que permite registrar los dos sin
+     * que el segundo pise al primero. Se construye con {@link #para}.
+     */
     public static final String IMPORTE = "importe";
+    /** Base de la clave de la moneda. Calificada por operacion, como el importe. */
     public static final String MONEDA = "moneda";
     /**
      * Los titulares, como {@code idRol} o {@code idRol:cuota} separados por
@@ -60,20 +78,117 @@ public final class GuionRegistroPropiedad {
     public static final String LONGITUD = "longitud";
     public static final String ZONA = "zonaUrbanizacion";
     public static final String INTERIOR = "interiorUnidad";
+    /**
+     * <b>Retirada como pregunta en V67.</b> Nombraba el mismo concepto que la
+     * clave de catalogo {@code piso} y escribia la misma columna, asi que el
+     * alta universal lo preguntaba dos veces. La autoridad quedo en {@code piso}
+     * (ESTRUCTURAL, concepto PISO); la constante se conserva porque
+     * {@code Ubicacion} sigue transportando el valor hacia el agregado.
+     */
     public static final String PISO_UNIDAD = "pisoUnidad";
     public static final String REFERENCIA = "referenciaInterna";
     public static final String EDIFICIO = "nombreEdificioGaleria";
     public static final String EXCLUSIVIDAD = "exclusividad";
 
-    /** Lo estructural obligatorio, en el orden en que se pregunta. */
-    public static final List<String> OBLIGATORIAS = List.of(
-            TIPO_PROPIEDAD, OPERACION, IMPORTE, MONEDA, TITULARES, DIRECCION, DISTRITO);
+    /**
+     * Lo estructural obligatorio que <b>no depende de cuantos encargos</b> haya,
+     * en el orden en que se pregunta.
+     *
+     * <p>El importe y la moneda no estan aqui: son de cada encargo y por tanto
+     * hay tantos como operaciones declaradas. La lista completa y ordenada la
+     * da {@link #obligatorias(List)}.
+     */
+    private static final List<String> OBLIGATORIAS_SIN_OPERACION = List.of(
+            TIPO_PROPIEDAD, OPERACIONES, TITULARES, DIRECCION, DISTRITO);
+
+    /** Lo obligatorio de <b>cada</b> encargo. Una copia por operacion declarada. */
+    private static final List<String> OBLIGATORIAS_DE_CADA_ENCARGO = List.of(IMPORTE, MONEDA);
+
+    /**
+     * <b>Lo estructural obligatorio, en el orden en que se pregunta</b>, ya
+     * desplegado sobre las operaciones que se han declarado.
+     *
+     * <p>El orden no es estetico y se conserva: primero el tipo, que decide que
+     * mas hay que preguntar; despues las operaciones, que deciden si el importe
+     * que viene detras es un precio de venta o una renta; despues <b>la
+     * condicion economica de cada encargo</b>; y al final lo que identifica —de
+     * quien es y donde esta—.
+     *
+     * <p>Con las operaciones todavia sin declarar, la lista llega hasta
+     * {@link #OPERACIONES} y para: no se puede preguntar un importe sin saber
+     * de que es.
+     */
+    public static List<String> obligatorias(List<OperacionInmobiliaria> operaciones) {
+        List<String> ordenadas = new java.util.ArrayList<>();
+        ordenadas.add(TIPO_PROPIEDAD);
+        ordenadas.add(OPERACIONES);
+        for (OperacionInmobiliaria operacion : operaciones == null ? List.<OperacionInmobiliaria>of() : operaciones) {
+            for (String base : OBLIGATORIAS_DE_CADA_ENCARGO) {
+                ordenadas.add(para(base, operacion));
+            }
+        }
+        ordenadas.add(TITULARES);
+        ordenadas.add(DIRECCION);
+        ordenadas.add(DISTRITO);
+        return List.copyOf(ordenadas);
+    }
 
     /** Todo lo estructural que el motor reconoce. Lo demas se busca en el catalogo. */
     public static final List<String> ESTRUCTURALES = List.of(
-            TIPO_PROPIEDAD, OPERACION, IMPORTE, MONEDA, TITULARES, DIRECCION, DISTRITO,
-            USO, CODIGO, DESCRIPCION, LATITUD, LONGITUD, ZONA, INTERIOR, PISO_UNIDAD,
+            TIPO_PROPIEDAD, OPERACIONES, IMPORTE, MONEDA, TITULARES, DIRECCION, DISTRITO,
+            USO, CODIGO, DESCRIPCION, LATITUD, LONGITUD, ZONA, INTERIOR,
             REFERENCIA, EDIFICIO, EXCLUSIVIDAD);
+
+    // ------------------------------------------------------------------
+    // Claves calificadas por operacion
+    //
+    // El importe, la moneda y la exclusividad son de un ENCARGO, no de la
+    // propiedad. Mientras solo hubo alquiler se podian llamar `importe` a
+    // secas; con venta y alquiler vivos a la vez, esa clave tendria dos duenos
+    // y el segundo pisaria al primero -- que es exactamente el error que el
+    // modelo universal existe para impedir (D-E4-1).
+    //
+    // Se califican con `:` porque ninguna clave del catalogo lo lleva, asi que
+    // no puede colisionar con `dormitorios` ni con nada que alguien anada.
+    // ------------------------------------------------------------------
+
+    /** Separa una clave economica de la operacion a la que pertenece. */
+    public static final String DE = ":";
+
+    /** {@code importe} + {@code VENTA} -> {@code importe:VENTA}. */
+    public static String para(String base, OperacionInmobiliaria operacion) {
+        return base + DE + operacion.name();
+    }
+
+    /** {@code importe:VENTA} -> {@code importe}. Una clave sin calificar se devuelve igual. */
+    public static String claveBase(String clave) {
+        int corte = clave.indexOf(DE);
+        return corte < 0 ? clave : clave.substring(0, corte);
+    }
+
+    /**
+     * La operacion de una clave calificada, o {@code null} si no lleva ninguna.
+     *
+     * <p>Devuelve {@code null} —y no una excepcion— para un sufijo ilegible: a
+     * quien tiene que quejarse es al motor, que sabe que operaciones se han
+     * declarado y puede decir cual esperaba.
+     */
+    public static OperacionInmobiliaria operacionDe(String clave) {
+        int corte = clave.indexOf(DE);
+        if (corte < 0) {
+            return null;
+        }
+        try {
+            return OperacionInmobiliaria.desde(clave.substring(corte + DE.length()));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** ¿Es la clave de un dato que pertenece a un encargo y no a la propiedad? */
+    public static boolean esDeLaOperacion(String clave) {
+        return DE_LA_OPERACION.contains(claveBase(clave));
+    }
 
     // ------------------------------------------------------------------
     // Las TRES familias de datos.
@@ -104,8 +219,7 @@ public final class GuionRegistroPropiedad {
      * anadir un tipo sea una fila y no un despliegue.
      */
     private static final Map<String, Set<String>> ESTRUCTURALES_POR_TIPO = Map.of(
-            INTERIOR, Set.of("L", "O", "D", "A"),
-            PISO_UNIDAD, Set.of("L", "O", "D"),
+            INTERIOR, Set.of("L", "O", "D"),
             EDIFICIO, Set.of("L", "O", "D"));
 
     /**
@@ -126,46 +240,79 @@ public final class GuionRegistroPropiedad {
     static {
         declarar(TIPO_PROPIEDAD, "Tipo de propiedad", "LISTA", null,
                 List.of("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO"),
-                "Decide que mas hay que preguntar: un terreno no tiene dormitorios.");
-        declarar(OPERACION, "Operacion", "LISTA", null, List.of("VENTA", "ALQUILER"),
-                "Si la propiedad se ofrece para las dos cosas, se registran dos encargos.");
-        declarar(IMPORTE, "Importe", "DECIMAL", "moneda", null,
-                "Precio de venta o renta mensual, segun la operacion declarada.");
+                "Decide qué más hay que preguntar: un terreno no tiene dormitorios.");
+        declarar(OPERACIONES, "Operación", "LISTA_MULTIPLE", null, List.of("VENTA", "ALQUILER"),
+                "Se puede elegir más de una: la propiedad se registra una vez y se abre un "
+                        + "encargo por cada operación, cada uno con su precio y su histórico.");
+        // Sin ayuda: el rotulo ya la lleva. Un campo que se titula «Precio de
+        // venta» y debajo dice «segun la operacion declarada» repite lo que
+        // acaba de decir, y en una conversacion KAIROS lo leeria en voz alta.
+        declarar(IMPORTE, "Importe", "DECIMAL", "moneda", null, null);
         declarar(MONEDA, "Moneda", "LISTA", null, List.of("PEN", "USD"), null);
-        declarar(TITULARES, "Titulares", "TEXTO", null, null,
-                "Ids de propietario separados por comas. Con cuotas: 12:60,13:40 (tienen que sumar 100).");
-        declarar(DIRECCION, "Direccion", "TEXTO", null, null, null);
+        // Tipo de dato propio y no TEXTO: el valor no es una frase, es «quien es
+        // el dueno y en que cuota». Declararlo aqui es lo que permite al cliente
+        // pintar el buscador de propietarios sin reconocer la clave `titulares`
+        // -- que seria conocer el negocio, no representar la pregunta (D-A-1).
+        declarar(TITULARES, "Titulares", "TITULARES", null, null,
+                "Busca a la persona antes de crearla. Con varios titulares, las cuotas tienen que sumar 100 %.");
+        declarar(DIRECCION, "Dirección", "TEXTO", null, null, null);
         declarar(DISTRITO, "Distrito", "TEXTO", null, null, null);
         declarar(USO, "Uso", "LISTA", null, List.of("COMERCIAL", "VIVIENDA", "INDUSTRIAL", "MIXTO"),
                 "Si no se declara, se deduce del tipo: una casa es vivienda.");
-        declarar(CODIGO, "Codigo interno", "TEXTO", null, null, "Si no se declara, se genera PROP-####.");
-        declarar(DESCRIPCION, "Descripcion", "TEXTO", null, null, null);
+        declarar(CODIGO, "Código interno", "TEXTO", null, null, "Si no se declara, lo genera BROX.");
+        declarar(DESCRIPCION, "Descripción", "TEXTO", null, null, null);
         declarar(LATITUD, "Latitud", "DECIMAL", "grados", null, null);
         declarar(LONGITUD, "Longitud", "DECIMAL", "grados", null, null);
-        declarar(ZONA, "Zona o urbanizacion", "TEXTO", null, null, null);
+        declarar(ZONA, "Zona o urbanización", "TEXTO", null, null, null);
         declarar(INTERIOR, "Interior o unidad", "TEXTO", null, null, null);
-        declarar(PISO_UNIDAD, "Piso", "TEXTO", null, null, null);
         declarar(REFERENCIA, "Referencia interna", "TEXTO", null, null, null);
-        declarar(EDIFICIO, "Edificio o galeria", "TEXTO", null, null, null);
+        declarar(EDIFICIO, "Edificio o galería", "TEXTO", null, null, null);
         declarar(EXCLUSIVIDAD, "Encargo en exclusiva", "BOOLEANO", null, null, null);
     }
 
     private GuionRegistroPropiedad() {
     }
 
-    /** La pregunta de una clave estructural, o {@code null} si no es de aqui. */
+    /**
+     * La pregunta de una clave estructural, o {@code null} si no es de aqui.
+     *
+     * <p>Admite la clave calificada de un encargo ({@code importe:VENTA}) y
+     * entonces devuelve la pregunta <b>ya rotulada para esa operacion</b>:
+     * «Precio de venta» o «Renta mensual», nunca un «Importe» generico. 180 000
+     * y 2 900 no se distinguen por magnitud —se distinguen por como se llaman—
+     * y quien responde tiene que poder verlo sin deducirlo.
+     */
     public static Pregunta pregunta(String clave) {
-        Pregunta declarada = PREGUNTAS.get(clave);
+        Pregunta declarada = PREGUNTAS.get(claveBase(clave));
         if (declarada == null) {
             return null;
         }
-        return new Pregunta(declarada.clave(), declarada.rotulo(), declarada.tipoDato(),
-                declarada.unidad(), declarada.opciones(), OBLIGATORIAS.contains(clave),
-                declarada.ayuda());
+        OperacionInmobiliaria operacion = operacionDe(clave);
+        String rotulo = declarada.rotulo();
+        if (operacion != null && IMPORTE.equals(claveBase(clave))) {
+            rotulo = mayuscula(operacion.nombreDelImporte());
+        }
+        return new Pregunta(clave, rotulo, declarada.tipoDato(), declarada.unidad(),
+                declarada.opciones(), esObligatoria(clave), declarada.ayuda());
+    }
+
+    /**
+     * ¿Sin este dato no se puede registrar? Para las claves de encargo la
+     * respuesta no depende de la operacion concreta —todo encargo necesita
+     * importe y moneda—, asi que se mira la base.
+     */
+    private static boolean esObligatoria(String clave) {
+        String base = claveBase(clave);
+        return OBLIGATORIAS_SIN_OPERACION.contains(clave)
+                || (operacionDe(clave) != null && OBLIGATORIAS_DE_CADA_ENCARGO.contains(base));
+    }
+
+    private static String mayuscula(String texto) {
+        return texto.isEmpty() ? texto : Character.toUpperCase(texto.charAt(0)) + texto.substring(1);
     }
 
     public static boolean esEstructural(String clave) {
-        return PREGUNTAS.containsKey(clave);
+        return PREGUNTAS.containsKey(claveBase(clave));
     }
 
     private static void declarar(String clave, String rotulo, String tipoDato, String unidad,

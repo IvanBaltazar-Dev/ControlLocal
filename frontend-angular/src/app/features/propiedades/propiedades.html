@@ -1,0 +1,141 @@
+<header class="cabecera">
+  <div>
+    <p class="miga">Oferta</p>
+    <h1>Propiedades</h1>
+    <p class="entradilla">
+      La cartera de la corredora: los siete tipos, en venta, en alquiler o en las dos cosas.
+    </p>
+  </div>
+  <a class="primario" routerLink="/propiedades/nueva">+ Registrar propiedad</a>
+</header>
+
+<cl-barra-filtros
+  marcador="Código, dirección, distrito o propietario"
+  [(busqueda)]="texto"
+  [resultados]="total()"
+  [hayFiltros]="hayFiltros()"
+  [debounceMs]="300"
+  (busquedaChange)="filtrar()"
+  (limpiar)="limpiar()"
+>
+  <cl-filtro-select
+    marcador="Todos los tipos"
+    [opciones]="opcionesTipo()"
+    [(valor)]="tipo"
+    (valorChange)="filtrar()"
+  />
+  <cl-filtro-select
+    marcador="Todas las operaciones"
+    [opciones]="opcionesOperacion()"
+    [(valor)]="operacion"
+    (valorChange)="filtrar()"
+  />
+  <cl-filtro-select
+    marcador="Todos los distritos"
+    [opciones]="distritos()"
+    [(valor)]="distrito"
+    (valorChange)="filtrar()"
+  />
+  <cl-filtro-select
+    marcador="Todos los estados"
+    [opciones]="estados"
+    [(valor)]="estado"
+    (valorChange)="filtrar()"
+  />
+</cl-barra-filtros>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="error()"
+  [vacio]="vacio()"
+  mensajeCarga="Cargando la cartera…"
+  [mensajeVacio]="
+    hayFiltros()
+      ? 'Ninguna propiedad coincide con esos filtros.'
+      : 'Todavía no hay propiedades registradas.'
+  "
+  (reintentar)="cargar()"
+/>
+
+@if (!cargando() && !error() && filas().length > 0) {
+  <div class="tabla-envoltorio">
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th scope="col">Código</th>
+          <th scope="col">Propiedad</th>
+          <th scope="col">Tipo</th>
+          <th scope="col">Operación</th>
+          <th scope="col">Distrito</th>
+          <th scope="col" class="numero">Área</th>
+          <th scope="col">Precio / renta</th>
+          <th scope="col">Propietario</th>
+          <th scope="col">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (fila of filas(); track fila.id) {
+          <tr (click)="abrir(fila)" class="clicable">
+            <td class="codigo">{{ fila.codigo }}</td>
+            <td>
+              <strong>{{ fila.direccion }}</strong>
+            </td>
+            <td>{{ fila.tipoRotulo }}</td>
+            <td>
+              <span class="operacion" [class.doble]="fila.encargos.length > 1">
+                {{ operacionesDe(fila) }}
+              </span>
+            </td>
+            <td>{{ fila.distrito }}</td>
+            <td class="numero">
+              @if (fila.metraje != null) {
+                {{ fila.metraje }} m²
+              } @else {
+                <span class="sin-dato">—</span>
+              }
+            </td>
+            <td>
+              @if (importesDe(fila).length > 0) {
+                <ul class="importes">
+                  @for (importe of importesDe(fila); track importe) {
+                    <li>{{ importe }}</li>
+                  }
+                </ul>
+              } @else {
+                <span class="sin-dato">Sin importe</span>
+              }
+            </td>
+            <td>
+              {{ fila.propietarioNombre }}
+              @if (fila.titulares > 1) {
+                <small class="copropiedad">y {{ fila.titulares - 1 }} más</small>
+              }
+            </td>
+            <td>
+              <span class="estado" [attr.data-estado]="fila.estado">
+                @switch (fila.estado) {
+                  @case ('D') {
+                    Disponible
+                  }
+                  @case ('N') {
+                    No disponible
+                  }
+                  @default {
+                    Inactiva
+                  }
+                }
+              </span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <cl-paginacion
+    [total]="total()"
+    [tamano]="porPagina"
+    [pagina]="pagina()"
+    (paginaChange)="irAPagina($event)"
+  />
+}

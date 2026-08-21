@@ -1,0 +1,434 @@
+<header class="cabecera">
+  <div>
+    <p class="miga">Propiedades / Nueva</p>
+    <h1>Nueva propiedad</h1>
+    <p class="entradilla">
+      Elige el tipo y cómo se va a gestionar. BROX pregunta lo que corresponda a esa
+      propiedad y nada más.
+    </p>
+  </div>
+  <button type="button" class="secundario" (click)="cancelar()">Volver</button>
+</header>
+
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  [vacio]="false"
+  mensajeCarga="Preparando el registro…"
+  (reintentar)="reintentar()"
+/>
+
+@if (!cargando() && !errorCarga()) {
+  <div class="distribucion">
+    <main>
+      <!-- 1 · Lo que decide todo lo demás -->
+      <section class="seccion">
+        <div class="seccion-titulo">
+          <span class="numero">1</span>
+          <div>
+            <h2>Tipo y operación</h2>
+            <p>
+              El tipo decide qué más hay que preguntar. La operación decide si el importe
+              es un precio de venta o una renta mensual.
+            </p>
+          </div>
+        </div>
+
+        <div class="campos">
+          @for (pregunta of apertura(); track pregunta.clave) {
+            <ng-container
+              [ngTemplateOutlet]="campo"
+              [ngTemplateOutletContext]="{ $implicit: pregunta }"
+            />
+          }
+        </div>
+
+        @if (operacionesElegidas().includes(',')) {
+          <p class="nota">
+            Se registrará <b>una sola propiedad</b> con dos encargos independientes: cada uno
+            con su precio, su vigencia y su histórico.
+          </p>
+        }
+      </section>
+
+      @if (cargandoDefinicion()) {
+        <section class="seccion esperando">
+          <p>Consultando qué hay que preguntar para esta propiedad…</p>
+        </section>
+      }
+
+      @if (planListo()) {
+        <!-- 2 · Quién es el dueño -->
+        @for (pregunta of preguntasDeTitularidad(); track pregunta.clave) {
+          <section class="seccion">
+            <div class="seccion-titulo">
+              <span class="numero">2</span>
+              <div>
+                <h2>Propietarios</h2>
+                <p>Busca entre los ya registrados antes de crear uno nuevo.</p>
+              </div>
+            </div>
+
+            @if (titulares().length > 0) {
+              <ul class="titulares">
+                @for (titular of titulares(); track titular.id) {
+                  <li>
+                    <div class="quien">
+                      <strong>{{ titular.nombre }}</strong>
+                      <small>{{ titular.documento }}</small>
+                    </div>
+                    <label class="cuota">
+                      <span>Cuota</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        [value]="titular.cuota ?? ''"
+                        (input)="cambiarCuota(titular.id, $event)"
+                        [attr.aria-label]="'Cuota de ' + titular.nombre"
+                      />
+                      <b>%</b>
+                    </label>
+                    <label class="representante">
+                      <input
+                        type="radio"
+                        name="representante"
+                        [checked]="titular.representante"
+                        (change)="marcarRepresentante(titular.id)"
+                      />
+                      <span>Representante</span>
+                    </label>
+                    <button type="button" class="quitar" (click)="quitarTitular(titular.id)">
+                      Quitar
+                    </button>
+                  </li>
+                }
+              </ul>
+
+              @if (titulares().length === 1) {
+                <p class="ayuda">
+                  Un titular único es el 100 % sin tener que declararlo.
+                </p>
+              }
+              @if (avisoDeCuotas()) {
+                <p class="aviso">{{ avisoDeCuotas() }}</p>
+              }
+            }
+
+            <label class="campo">
+              <span>{{ pregunta.rotulo }} @if (pregunta.obligatoria) {<b>*</b>}</span>
+              <input
+                type="search"
+                placeholder="Nombre, razón social o documento"
+                [value]="busquedaPropietario()"
+                (input)="buscarPropietario($event)"
+              />
+            </label>
+
+            @if (propietariosVisibles().length > 0) {
+              <ul class="candidatos">
+                @for (propietario of propietariosVisibles().slice(0, 6); track propietario.id) {
+                  <li>
+                    <button type="button" (click)="elegirTitular(propietario)">
+                      <strong>{{ propietario.nombre }}</strong>
+                      <small>{{ propietario.numeroDocumento }}</small>
+                    </button>
+                  </li>
+                }
+              </ul>
+            } @else if (busquedaPropietario()) {
+              <p class="ayuda">Ningún propietario registrado coincide con esa búsqueda.</p>
+            }
+
+            <div class="acciones-menores">
+              @if (hayMasPropietarios()) {
+                <button
+                  type="button"
+                  class="enlace"
+                  [disabled]="cargandoPropietarios()"
+                  (click)="cargarMasPropietarios()"
+                >
+                  Cargar más propietarios
+                </button>
+              }
+              <button type="button" class="enlace" (click)="abrirAltaDePropietario()">
+                + Registrar propietario
+              </button>
+            </div>
+
+            @if (altaPropietarioAbierta()) {
+              <form class="alta-propietario" #altaPropietario (ngSubmit)="registrarPropietario(altaPropietario)">
+                <label class="campo">
+                  <span>Nombre o razón social <b>*</b></span>
+                  <input name="nombre" required />
+                </label>
+                <label class="campo">
+                  <span>Tipo de persona</span>
+                  <select name="tipoPersona">
+                    <option value="N">Natural</option>
+                    <option value="J">Jurídica</option>
+                  </select>
+                </label>
+                <label class="campo">
+                  <span>Documento</span>
+                  <select name="tipoDocumento">
+                    <option value="D">DNI</option>
+                    <option value="R">RUC</option>
+                  </select>
+                </label>
+                <label class="campo">
+                  <span>Número <b>*</b></span>
+                  <input name="numeroDocumento" required />
+                </label>
+                <label class="campo">
+                  <span>Teléfono</span>
+                  <input name="telefono" />
+                </label>
+                <label class="campo">
+                  <span>Correo</span>
+                  <input name="correo" type="email" />
+                </label>
+                @if (errorPropietario()) {
+                  <p class="aviso">{{ errorPropietario() }}</p>
+                }
+                <div class="acciones-menores">
+                  <button type="submit" class="primario">Registrar y elegir</button>
+                  <button type="button" class="enlace" (click)="cerrarAltaDePropietario()">
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            }
+          </section>
+        }
+
+        <!-- 3 · Dónde está -->
+        <section class="seccion">
+          <div class="seccion-titulo">
+            <span class="numero">3</span>
+            <div>
+              <h2>Ubicación e identificación</h2>
+              <p>Lo que tiene cualquier propiedad, sea del tipo que sea.</p>
+            </div>
+          </div>
+          <div class="campos">
+            @for (pregunta of preguntasDeUbicacion(); track pregunta.clave) {
+              <ng-container
+                [ngTemplateOutlet]="campo"
+                [ngTemplateOutletContext]="{ $implicit: pregunta }"
+              />
+            }
+          </div>
+        </section>
+
+        <!-- 4 · Lo que depende del tipo físico -->
+        @if (preguntasDelTipo().length > 0) {
+          <section class="seccion">
+            <div class="seccion-titulo">
+              <span class="numero">4</span>
+              <div>
+                <h2>Características</h2>
+                <p>
+                  Lo que aplica a {{ definicion()!.tipoPropiedad | lowercase }}. Sale del catálogo
+                  de BROX, no de una lista escrita en esta pantalla.
+                </p>
+              </div>
+            </div>
+            <div class="campos">
+              @for (pregunta of preguntasDelTipo(); track pregunta.clave) {
+                <ng-container
+                  [ngTemplateOutlet]="campo"
+                  [ngTemplateOutletContext]="{ $implicit: pregunta }"
+                />
+              }
+            </div>
+          </section>
+        }
+
+        <!-- 5 · Un bloque por encargo -->
+        <section class="seccion">
+          <div class="seccion-titulo">
+            <span class="numero">5</span>
+            <div>
+              <h2>Condición comercial</h2>
+              <p>
+                @if (bloquesEconomicos().length > 1) {
+                  Dos operaciones, dos condiciones. No se mezclan.
+                } @else {
+                  Lo que se pide por la propiedad.
+                }
+              </p>
+            </div>
+          </div>
+
+          @for (bloque of bloquesEconomicos(); track bloque.operacion) {
+            <div class="bloque-economico">
+              <h3>{{ bloque.rotulo }}</h3>
+              <div class="campos">
+                @for (pregunta of bloque.preguntas; track pregunta.clave) {
+                  <ng-container
+                    [ngTemplateOutlet]="campo"
+                    [ngTemplateOutletContext]="{ $implicit: pregunta }"
+                  />
+                }
+              </div>
+            </div>
+          }
+        </section>
+      }
+    </main>
+
+    <!-- Resumen y confirmación -->
+    <aside>
+      <h2>Resumen</h2>
+
+      @if (!planListo()) {
+        <p class="ayuda">
+          Elige el tipo y la operación para ver qué hace falta.
+        </p>
+      } @else if (!revisando()) {
+        <p class="ayuda">
+          Nada se ha registrado todavía. Revisa antes de confirmar.
+        </p>
+      } @else {
+        @if (resumen().length > 0) {
+          <dl class="resumen">
+            @for (linea of resumen(); track linea.clave) {
+              <div>
+                <dt>{{ linea.rotulo }}</dt>
+                <dd>{{ linea.valor }}</dd>
+              </div>
+            }
+          </dl>
+        }
+
+        @if (faltante().length > 0) {
+          <div class="falta">
+            <h3>Falta por responder</h3>
+            <ul>
+              @for (clave of faltante(); track clave) {
+                <li>{{ clave }}</li>
+              }
+            </ul>
+          </div>
+        } @else {
+          <p class="listo">Ya hay todo lo necesario para registrarla.</p>
+        }
+      }
+
+      @if (errorGuardado()) {
+        <p class="aviso">{{ errorGuardado() }}</p>
+      }
+
+      <div class="acciones">
+        @if (!revisando()) {
+          <button
+            type="button"
+            class="primario"
+            [disabled]="!planListo() || guardando()"
+            (click)="revisar()"
+          >
+            {{ guardando() ? 'Comprobando…' : 'Revisar' }}
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="primario"
+            [disabled]="!listoParaConfirmar() || guardando()"
+            (click)="confirmar()"
+          >
+            {{ guardando() ? 'Registrando…' : 'Confirmar y registrar' }}
+          </button>
+          <button type="button" class="secundario" [disabled]="guardando()" (click)="volverAEditar()">
+            Seguir editando
+          </button>
+        }
+      </div>
+    </aside>
+  </div>
+}
+
+<!--
+  UN campo, sea cual sea. La plantilla mira `control` y nunca la clave: es lo que
+  impide que esta pantalla acabe con su propia matriz «tipo → campos», que es la
+  forma concreta en que se pierde el modelo universal (D-A-1 §6).
+-->
+<ng-template #campo let-pregunta>
+  @switch (pregunta.control) {
+    @case ('SELECTOR_MULTIPLE') {
+      <fieldset class="campo opciones">
+        <legend>{{ pregunta.rotulo }} @if (pregunta.obligatoria) {<b>*</b>}</legend>
+        @for (opcion of pregunta.opciones ?? []; track opcion) {
+          <label class="opcion">
+            <input
+              type="checkbox"
+              [checked]="estaMarcada(pregunta.clave, opcion)"
+              (change)="alternarOpcion(pregunta.clave, opcion, $event)"
+            />
+            <span>{{ opcion | lowercase }}</span>
+          </label>
+        }
+        @if (pregunta.ayuda) {
+          <small>{{ pregunta.ayuda }}</small>
+        }
+      </fieldset>
+    }
+    @case ('SELECTOR') {
+      <label class="campo">
+        <span>{{ pregunta.rotulo }} @if (pregunta.obligatoria) {<b>*</b>}</span>
+        <select [value]="valorDe(pregunta.clave)" (change)="responder(pregunta.clave, $event)">
+          <option value="">Elegir…</option>
+          @for (opcion of pregunta.opciones ?? []; track opcion) {
+            <option [value]="opcion">{{ opcion }}</option>
+          }
+        </select>
+        @if (pregunta.ayuda) {
+          <small>{{ pregunta.ayuda }}</small>
+        }
+      </label>
+    }
+    @case ('INTERRUPTOR') {
+      <label class="campo interruptor">
+        <input
+          type="checkbox"
+          [checked]="estaEncendido(pregunta.clave)"
+          (change)="responderInterruptor(pregunta.clave, $event)"
+        />
+        <span>{{ pregunta.rotulo }}</span>
+        @if (pregunta.ayuda) {
+          <small>{{ pregunta.ayuda }}</small>
+        }
+      </label>
+    }
+    @default {
+      <label class="campo">
+        <span>
+          {{ pregunta.rotulo }}
+          @if (pregunta.obligatoria) {<b>*</b>}
+          @if (pregunta.unidad && pregunta.unidad !== 'moneda') {
+            <em>({{ pregunta.unidad }})</em>
+          }
+        </span>
+        <input
+          [type]="
+            pregunta.control === 'MONEDA' ||
+            pregunta.control === 'ENTERO' ||
+            pregunta.control === 'DECIMAL'
+              ? 'number'
+              : 'text'
+          "
+          [value]="valorDe(pregunta.clave)"
+          [attr.min]="pregunta.restricciones?.minimo"
+          [attr.max]="pregunta.restricciones?.maximo"
+          [attr.maxlength]="pregunta.restricciones?.longitudMaxima"
+          [attr.step]="pregunta.restricciones?.decimales === 0 ? 1 : 'any'"
+          (input)="responder(pregunta.clave, $event)"
+        />
+        @if (pregunta.ayuda) {
+          <small>{{ pregunta.ayuda }}</small>
+        }
+      </label>
+    }
+  }
+</ng-template>

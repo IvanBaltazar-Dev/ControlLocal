@@ -241,6 +241,56 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
     List<Captacion> encargosVivosDe(@Param("idOrganizacion") long idOrganizacion,
                                     @Param("idPropiedad") long idPropiedad);
 
+    /**
+     * <b>Los encargos vivos de UNA PAGINA de propiedades, de una vez.</b>
+     *
+     * <p>Es la segunda mitad del listado universal: la primera resuelve que
+     * propiedades entran, y esta les cuelga sus encargos. Dos consultas por
+     * pagina en vez de una por fila -- y con dos operaciones vivas por
+     * propiedad, el N+1 seria del doble.
+     *
+     * <p>La lista de ids nunca pasa del tamano de pagina, asi que el {@code in}
+     * es un acceso por clave y no un barrido.
+     */
+    @Query("""
+            select c from Captacion c
+              left join fetch c.condicionEconomica
+            where c.organizacionId = :idOrganizacion
+              and c.propiedad.id in :idsPropiedades
+              and c.estado in ('P', 'O', 'A')
+            order by c.propiedad.id, c.motivoOperacion
+            """)
+    List<Captacion> encargosVivosDe(@Param("idOrganizacion") long idOrganizacion,
+                                    @Param("idsPropiedades") Collection<Long> idsPropiedades);
+
+    /**
+     * <b>TODOS los encargos de una propiedad, vivos y cerrados.</b>
+     *
+     * <p>Es la consulta de la FICHA, y se separa de {@link #encargosVivosDe} a
+     * proposito. Un listado ensena lo que esta vivo, porque su pregunta es «que
+     * hay en cartera». Una ficha tiene otra: «que ha pasado con esta
+     * propiedad», y ahi un encargo cerrado no es ruido -- <b>es el unico sitio
+     * donde vive su historico economico</b>.
+     *
+     * <p>Una propiedad con alquiler 2024 cerrado, alquiler 2025 cerrado y
+     * alquiler 2026 vigente tiene tres encargos y tres series de precios. Con
+     * el filtro de vivos, la ficha ensenaria uno y las otras dos series
+     * desaparecerian de la vista sin decir que existen. V50 prohibe dos
+     * <b>vivos</b> de la misma operacion; nunca prohibio que hubiera varios.
+     */
+    @Query("""
+            select c from Captacion c
+              left join fetch c.condicionEconomica
+              left join fetch c.agente ag
+              left join fetch ag.rol agRol
+              left join fetch agRol.persona
+            where c.organizacionId = :idOrganizacion
+              and c.propiedad.id = :idPropiedad
+            order by c.fechaCaptacion desc, c.id desc
+            """)
+    List<Captacion> encargosDe(@Param("idOrganizacion") long idOrganizacion,
+                               @Param("idPropiedad") long idPropiedad);
+
     /** El encargo vivo de UNA operacion concreta. Como mucho hay uno (V50). */
     @Query("""
             select c from Captacion c

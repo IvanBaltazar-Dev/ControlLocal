@@ -55,6 +55,8 @@ public interface MotorDeCaptura {
 
         /** A qué familia pertenece. Decide qué se conserva al cambiar la selección. */
         public static final String FAMILIA_COMUN = "COMUN";
+        /** Las que deciden el plan: hasta responderlas no hay nada más que preguntar. */
+        public static final String FAMILIA_APERTURA = "APERTURA";
         public static final String FAMILIA_TIPO = "TIPO";
         public static final String FAMILIA_OPERACION = "OPERACION";
 
@@ -83,6 +85,18 @@ public interface MotorDeCaptura {
          * nunca qué campo pertenece a qué tipo de propiedad.
          */
         public static String controlDe(String tipoDato, String unidad, List<String> opciones) {
+            // Va antes que SELECTOR porque tambien trae opciones. La diferencia
+            // es que admite mas de una, y de ahi salen los dos encargos de una
+            // propiedad que se ofrece para venta y para alquiler.
+            if ("LISTA_MULTIPLE".equals(tipoDato)) {
+                return "SELECTOR_MULTIPLE";
+            }
+            // Un control compuesto: busca personas ya registradas, admite
+            // varias y reparte cuotas. El cliente lo dibuja porque el contrato
+            // se lo pide, no porque reconozca la clave `titulares`.
+            if ("TITULARES".equals(tipoDato)) {
+                return "TITULARES";
+            }
             if (opciones != null && !opciones.isEmpty()) {
                 return "SELECTOR";
             }
@@ -151,20 +165,32 @@ public interface MotorDeCaptura {
      *       vivienda, rubro en un local, zonificación en un terreno. Al cambiar
      *       el tipo, <b>lo que ya no aplica se descarta</b>: dejarlo oculto con
      *       su valor guardaría el rubro de un terreno.</li>
-     *   <li>{@code deLaOperacion} — el importe, su moneda y la exclusividad. El
-     *       importe existe en las dos operaciones pero no significa lo mismo, y
-     *       por eso {@code rotulo} viene calculado: «Precio de venta» o «Renta
-     *       mensual», nunca un genérico que obligue a adivinar.</li>
+     *   <li>{@code deLaOperacion} — <b>un bloque por encargo</b>: el importe, su
+     *       moneda y la exclusividad. El importe existe en las dos operaciones
+     *       pero no significa lo mismo, y por eso {@code rotulo} viene
+     *       calculado: «Precio de venta» o «Renta mensual», nunca un genérico
+     *       que obligue a adivinar.</li>
      * </ul>
+     *
+     * <p><b>Por qué {@code deLaOperacion} es una lista de bloques y no una
+     * lista plana de preguntas.</b> Una propiedad que se ofrece para venta y
+     * para alquiler tiene dos condiciones económicas independientes, y en una
+     * lista plana el cliente tendría que partir la clave {@code importe:VENTA}
+     * por el {@code :} para saber a cuál pertenece cada campo. Eso es conocer
+     * la estructura interna de la clave — exactamente lo que las tres familias
+     * existen para evitar. Con bloques, el cliente pinta una sección por bloque
+     * con el rótulo que el bloque trae, y no necesita saber ni cuántos hay.
      */
-    record DefinicionCaptura(String intencion, String tipoPropiedad, String operacion,
+    record DefinicionCaptura(String intencion, String tipoPropiedad, List<String> operaciones,
                              List<Pregunta> comunes, List<Pregunta> delTipo,
-                             List<Pregunta> deLaOperacion) {
+                             List<BloqueOperacion> deLaOperacion) {
 
         /** Todas, en el orden en que se presentan. */
         public List<Pregunta> todas() {
-            return java.util.stream.Stream.of(comunes, deLaOperacion, delTipo)
-                    .flatMap(List::stream)
+            return java.util.stream.Stream.concat(
+                            java.util.stream.Stream.concat(comunes.stream(),
+                                    deLaOperacion.stream().flatMap(bloque -> bloque.preguntas().stream())),
+                            delTipo.stream())
                     .toList();
         }
 
@@ -173,6 +199,23 @@ public interface MotorDeCaptura {
             return todas().stream().map(Pregunta::clave)
                     .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
         }
+    }
+
+    /**
+     * <b>La condición económica de UN encargo</b>, con su nombre puesto.
+     *
+     * <p>Es lo que hace que «venta y alquiler» no necesite ninguna rama nueva:
+     * una propiedad con dos operaciones declaradas devuelve dos bloques
+     * idénticos en forma y distintos en rótulo, y la pantalla los pinta como
+     * dos secciones sin saber que son dos.
+     *
+     * @param operacion VENTA o ALQUILER — el vocabulario del dominio, sin
+     *                  valores combinados
+     * @param rotulo    cómo se titula la sección: «Condición de venta»
+     * @param preguntas el importe, su moneda y la exclusividad, con las claves
+     *                  ya calificadas ({@code importe:VENTA})
+     */
+    record BloqueOperacion(String operacion, String rotulo, List<Pregunta> preguntas) {
     }
 
     record Ejecucion(Long idBorrador, Long idPropiedad, String codigoPropiedad,
@@ -209,9 +252,33 @@ public interface MotorDeCaptura {
      * pregunta cada vez. {@link #avanzar} sirve a un canal conversacional, que
      * pregunta de una en una; una pantalla las pinta todas y por eso pide esto.
      * Los dos leen del mismo catálogo, así que no pueden discrepar.
+     *
+     * @param operaciones una o varias separadas por coma: {@code "VENTA"},
+     *                    {@code "VENTA,ALQUILER"}. Con dos, la respuesta trae
+     *                    dos bloques económicos y una sola ficha física —que es
+     *                    justo lo que el modelo universal afirma: la propiedad
+     *                    se registra una vez y se encarga dos
      */
-    DefinicionCaptura definicion(String intencion, String tipoPropiedad, String operacion,
+    DefinicionCaptura definicion(String intencion, String tipoPropiedad, String operaciones,
                                  Actor actor);
+
+    /**
+     * <b>Lo que hay que decidir antes de que exista un plan de preguntas.</b>
+     *
+     * <p>Para registrar una propiedad son dos: el <b>tipo</b>, que decide qué
+     * más hay que preguntar —un terreno no tiene dormitorios—, y la
+     * <b>operación</b>, que decide si el importe que viene después es un precio
+     * de venta o una renta mensual. Sin las dos, {@link #definicion} no puede
+     * responder.
+     *
+     * <p>Existe para que el cliente no tenga que saberse cuáles son. Sin esto,
+     * una pantalla escribiría «primero el tipo, luego la operación» y KAIROS lo
+     * escribiría otra vez; el día que una intención nueva abriera con otra
+     * pregunta, habría que cambiar los dos. El cliente pinta lo que le llega,
+     * en el orden en que le llega, y lo único que necesita saber es que al
+     * final tiene con qué pedir la definición.
+     */
+    List<Pregunta> apertura(String intencion, Actor actor);
 
     /** Lo que el tenant tiene a medias. Un borrador es de la organizacion, no de quien tecleo. */
     List<EstadoCaptura> enCurso(Actor actor);

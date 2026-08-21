@@ -136,32 +136,229 @@ public interface PropiedadUniversalService {
     }
 
     /** Un hito de la serie economica de una operacion. */
-    record HitoFicha(String hito, BigDecimal monto, String moneda, LocalDate fecha) {
+    record HitoFicha(String hito, String hitoRotulo, BigDecimal monto, String moneda,
+                     LocalDate fecha) {
     }
 
     /**
-     * Una relacion comercial viva, con su historico propio. Dos encargos de la
+     * <b>Una relacion comercial con su historico propio.</b> Dos encargos de la
      * misma propiedad no comparten ni precio ni serie: es lo que hace real la
      * universalidad.
+     *
+     * <h2>La identidad es {@code idEncargo}, nunca la operacion</h2>
+     * Una propiedad puede tener <b>varios</b> encargos de ALQUILER a lo largo
+     * del tiempo -- 2024 cerrado, 2025 cerrado, 2026 vigente --. Lo que la base
+     * prohibe ({@code uq_captacion_viva_por_operacion}, V50) es que haya dos
+     * <b>vivos</b> de la misma operacion, no que hayan existido varios.
+     *
+     * <p>Por eso agrupar por {@code operacion} funde series economicas que no
+     * tienen nada que ver y produce una linea temporal que no significa nada.
+     * Cada encargo es un bloque, identificado por su id.
+     *
+     * <h2>Por que viajan los rotulos</h2>
+     * {@code operacionRotulo}, {@code estadoRotulo} e {@code importeRotulo} no
+     * son cortesia: son la diferencia entre que el nombre funcional del importe
+     * lo decida el dominio o lo decida un ternario en la interfaz. Un precio de
+     * venta rotulado «renta mensual» es un error de bulto, y con dos
+     * consumidores -- BROX Web y KAIROS -- serian dos ternarios que se separan
+     * (D-A-1 §5).
+     *
+     * @param vivo si el encargo sigue en juego ({@code P}, {@code O} o
+     *             {@code A}). Los cerrados tambien viajan: esconderlos borraria
+     *             su historico economico de la vista sin decir que existe
+     * @param importeRotulo «precio de venta» o «renta mensual», segun la
+     *                      operacion. Sale de
+     *                      {@link com.controllocal.domain.inmueble.OperacionInmobiliaria#nombreDelImporte()}
      */
-    record EncargoFicha(Long idEncargo, String codigo, String operacion, String estado,
-                        BigDecimal importe, String moneda, Boolean exclusividad,
-                        LocalDate inicio, LocalDate fin, List<HitoFicha> historico) {
+    /**
+     * <b>Si se puede gestionar la publicacion de este encargo, y si no, por que
+     * no.</b>
+     *
+     * <p>Viaja como capacidad y no como estado en crudo para que la pantalla no
+     * tenga que escribir {@code encargo.estado === 'A'} ni saber que un encargo
+     * cerrado no se publica: eso es una regla de negocio y su dueno es Core
+     * (D-A-1 §5). El backend rechaza igualmente la operacion invalida — esto
+     * solo evita ofrecer un boton que va a dar un 400.
+     *
+     * @param motivo el hecho, en palabras, cuando no se puede. El TONO es de la
+     *               interfaz; el hecho lo da el Core
+     */
+    record GestionDePublicacion(boolean permitida, String motivo) {
+    }
+
+    record EncargoFicha(Long idEncargo, String codigo, String operacion, String operacionRotulo,
+                        String estado, String estadoRotulo, boolean vivo,
+                        BigDecimal importe, String moneda, String importeRotulo,
+                        Boolean exclusividad, Long idAgente, String agenteNombre,
+                        LocalDate inicio, LocalDate fin, List<HitoFicha> historico,
+                        List<PublicacionService.FichaPublicacion> publicaciones,
+                        GestionDePublicacion publicacionGestionable) {
+    }
+
+    /** Una clave obligatoria que todavia no tiene valor, con su nombre legible. */
+    record AtributoQueFalta(String clave, String rotulo) {
+    }
+
+    // ------------------------------------------------------------------
+    // La historia comercial del INMUEBLE
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>Un importe con su fecha y el encargo del que sale.</b>
+     *
+     * <p>El {@code idEncargo} viaja incluso aqui, en un dato agregado, y ese es
+     * justo el punto: la historia se lee junta pero <b>cada cifra sigue siendo
+     * de su episodio</b>. Sin el, «la ultima renta fueron 2 400» seria una
+     * afirmacion sobre la propiedad que no se puede auditar contra nada.
+     */
+    record ImporteFechado(BigDecimal monto, String moneda, LocalDate fecha, Long idEncargo,
+                          String codigoEncargo) {
     }
 
     /**
-     * La propiedad leida por el modelo universal.
+     * <b>Que ha pasado con esta propiedad en UNA operacion, a lo largo del
+     * tiempo.</b>
      *
-     * <p>{@code atributosQueFaltan} son las claves obligatorias para su tipo
-     * que todavia no tiene. No es un error: es lo que permite a la ficha decir
-     * "no se puede publicar sin el metraje" y al motor de captura preguntar por
-     * ello.
+     * <p>Responde «¿cuantas veces estuvo en alquiler?» y «¿a cuanto se alquilo
+     * la ultima vez?» sin fusionar nada: {@code veces} cuenta episodios y los
+     * dos importes apuntan al suyo.
+     *
+     * <h2>Pedido y cierre son dos cosas, y no se sustituyen</h2>
+     * {@code ultimoPedido} es lo ultimo que se pidio ({@code U} autorizado o
+     * {@code P} publicado). {@code ultimoCierre} es lo ultimo que se cerro de
+     * verdad ({@code C}). <b>No son el mismo numero</b> y cuando no hay cierre
+     * el campo llega {@code null} — nunca relleno con el precio pedido, que es
+     * la forma exacta de convertir «lo que pediamos» en «lo que vale» sin que
+     * nadie lo note.
+     *
+     * @param veces  cuantos encargos de esta operacion ha tenido la propiedad,
+     *               vivos y cerrados
+     * @param desde  cuando empezo el primero
+     * @param hasta  cuando termino el ultimo, o {@code null} si sigue vivo
      */
-    record FichaPropiedadUniversal(Long id, String codigo, String tipoPropiedad, String uso,
-                                   String descripcion, String estadoRegistro,
-                                   String disponibilidadComercial, Ubicacion ubicacion,
+    record EpisodiosDeOperacion(String operacion, String operacionRotulo, int veces,
+                                LocalDate desde, LocalDate hasta, boolean vivoAhora,
+                                ImporteFechado ultimoPedido, ImporteFechado ultimoCierre) {
+    }
+
+    /** Un movimiento economico de la propiedad, con su procedencia intacta. */
+    record HitoDeLaHistoria(LocalDate fecha, String hito, String hitoRotulo, BigDecimal monto,
+                            String moneda, Long idEncargo, String codigoEncargo,
+                            String operacion, String operacionRotulo) {
+    }
+
+    /**
+     * <b>La memoria del inmueble</b>, que es un concepto distinto del encargo.
+     *
+     * <pre>
+     *   idEncargo    la identidad tecnica de UN episodio comercial
+     *   idPropiedad  la continuidad historica del inmueble
+     * </pre>
+     *
+     * <p>Los bloques de encargo sirven para auditar y negociar: este importe,
+     * este agente, esta serie. Esta proyeccion sirve para otra pregunta, que un
+     * CRM de operaciones vivas no sabe responder: <i>«¿a cuanto se alquilo la
+     * ultima vez?»</i>, <i>«¿cuantas veces estuvo en venta?»</i>, <i>«¿cual fue
+     * el ultimo precio de cierre?»</i>.
+     *
+     * <p><b>No fusiona historicos: los agrega para leerlos.</b> Cada elemento de
+     * {@code linea} y cada importe de {@code porOperacion} sigue apuntando a su
+     * {@code idEncargo}, asi que de cualquier cifra de la historia se puede
+     * volver al episodio que la produjo.
+     *
+     * @param linea todos los movimientos de la propiedad en orden cronologico
+     *              <b>descendente</b>, atravesando encargos. Es la lectura que
+     *              contesta «en cuanto se intento vender en 2023»
+     */
+    record HistoriaComercial(List<EpisodiosDeOperacion> porOperacion,
+                             List<HitoDeLaHistoria> linea) {
+    }
+
+    /**
+     * <b>Un hecho comercial, con la constancia de donde viene.</b>
+     *
+     * <p>{@code idEncargo} es el campo que impide que esta lista vuelva a
+     * mezclar lo que el modelo universal separo. Una visita de alguien que
+     * quiere <b>comprar</b> y otra de alguien que quiere <b>alquilar</b> la
+     * misma propiedad son dos hechos de dos relaciones comerciales distintas, y
+     * en una lista plana se leen igual.
+     *
+     * <p>La procedencia la pone el productor, no el consumidor: el SPA no puede
+     * deducir de que encargo cuelga una visita sin recorrer
+     * visita -> oportunidad -> captacion, que es topologia del modelo y no le
+     * corresponde conocer (D-E4-3).
+     *
+     * @param proceso  OPORTUNIDAD, VISITA, INTERACCION, EXPEDIENTE o CONTRATO
+     * @param titulo   el hecho en una linea, ya escrito
+     * @param detalle  lo que lo acompana: el cliente, el canal, el resultado
+     * @param ruta     donde se abre, en el vocabulario del SPA
+     */
+    /**
+     * @param monto  el importe del hecho, cuando lo tiene: lo que ofrece un
+     *               expediente, lo que cerro un contrato. Viaja como
+     *               <b>numero</b> y no dentro de {@code detalle} porque
+     *               agrupar millares y elegir separador es presentacion, y
+     *               concatenarlo aqui produce «PEN 5480.00» en pantalla
+     */
+    record HechoDeActividad(String proceso, Long id, String codigo, String titulo, String detalle,
+                            String estado, String estadoRotulo, LocalDate fecha,
+                            BigDecimal monto, String moneda,
+                            Long idEncargo, String operacion, String operacionRotulo,
+                            String ruta) {
+    }
+
+    /**
+     * <b>La actividad de una propiedad, repartida por proceso.</b>
+     *
+     * <p>Va dentro de la ficha y no en cinco endpoints sueltos porque la regla
+     * «la actividad de una propiedad es la de sus encargos» es de dominio.
+     * Resuelta desde el cliente serian tres llamadas por encargo, una mas por
+     * cada oportunidad para sus visitas, y un barrido de contratos filtrado a
+     * mano -- y la regla acabaria escrita en Angular.
+     *
+     * <p>Ninguna lista se recorta: son los hechos de <b>una</b> propiedad, no
+     * una bandeja. Un tope silencioso haria que la ficha pareciera completa
+     * cuando no lo esta.
+     */
+    record ActividadPropiedad(List<HechoDeActividad> oportunidades,
+                              List<HechoDeActividad> visitas,
+                              List<HechoDeActividad> interacciones,
+                              List<HechoDeActividad> expedientes,
+                              List<HechoDeActividad> contratos) {
+    }
+
+    /**
+     * <b>La propiedad leida por el modelo universal, lista para ser leida.</b>
+     *
+     * <p>Es un read model de detalle, y eso decide su forma: llega
+     * <b>preparado para pintarse</b>. Cada codigo viaja con su rotulo al lado,
+     * porque la alternativa es que cada consumidor -- BROX Web y KAIROS -- monte
+     * su propia tabla de traduccion, y dos tablas de traduccion del mismo
+     * vocabulario se separan siempre (D-A-1 §6).
+     *
+     * <p><b>El metraje aparece una sola vez</b>, entre {@code atributos}, con su
+     * clave logica {@code metraje_total}. Aqui no hay campo {@code metraje}
+     * suelto a proposito: su autoridad fisica es un campo canonico del agregado
+     * desde D-E4-3, pero el contrato logico no se movio, y publicarlo ademas por
+     * separado obligaria a la ficha a excluirlo de la lista para no ensenarlo
+     * dos veces.
+     *
+     * @param atributosQueFaltan las claves obligatorias para su tipo que
+     *                           todavia no tiene, <b>con su rotulo</b>. No es un
+     *                           error: es lo que permite decir «no se puede
+     *                           publicar sin el metraje» -- y decirlo con esa
+     *                           palabra, no con la clave
+     */
+    record FichaPropiedadUniversal(Long id, String codigo, String tipoPropiedad, String tipoRotulo,
+                                   String uso, String usoRotulo, String descripcion,
+                                   String estadoRegistro, String estadoRegistroRotulo,
+                                   String disponibilidadComercial, String disponibilidadRotulo,
+                                   Ubicacion ubicacion,
                                    List<TitularFicha> titulares, List<AtributoFicha> atributos,
-                                   List<EncargoFicha> encargos, List<String> atributosQueFaltan,
+                                   List<EncargoFicha> encargos,
+                                   List<AtributoQueFalta> atributosQueFaltan,
+                                   HistoriaComercial historia,
+                                   ActividadPropiedad actividad,
                                    LocalDateTime fechaRegistro) {
     }
 
@@ -169,6 +366,58 @@ public interface PropiedadUniversalService {
     record ResultadoRegistro(Long idPropiedad, String codigo, List<Long> idsEncargos,
                              boolean reintento) {
     }
+
+    // ------------------------------------------------------------------
+    // El listado
+    // ------------------------------------------------------------------
+
+    /**
+     * Un encargo <b>tal como se ve en una lista</b>: su operacion y lo que se
+     * pide por ella. Es el minimo para poder escribir «Departamento · Venta ·
+     * USD 180 000» sin abrir la ficha.
+     */
+    record EncargoEnLista(String operacion, String estado, BigDecimal importe, String moneda) {
+    }
+
+    /**
+     * Una fila del listado universal.
+     *
+     * <p>{@code encargos} es una <b>lista</b> y no un par operacion/precio, y
+     * ahi esta toda la diferencia con el listado heredado: una propiedad en
+     * venta y en alquiler trae dos, con su importe cada uno. «Venta + alquiler»
+     * es algo que el cliente <b>compone</b> al pintar; no es un valor que
+     * exista en ninguna parte.
+     */
+    record FilaPropiedad(Long id, String codigo, String tipoPropiedad, String tipoRotulo,
+                         String uso, String direccion, String distrito, BigDecimal metraje,
+                         String estado, Long idPropietario, String propietarioNombre,
+                         long titulares, List<EncargoEnLista> encargos,
+                         LocalDateTime fechaRegistro) {
+    }
+
+    /**
+     * Lo que acota el listado. Todo opcional; omitido, no filtra.
+     *
+     * @param operaciones las que la propiedad tiene <b>vivas</b>: {@code VENTA},
+     *                    {@code ALQUILER} o las dos, y con las dos significa
+     *                    «tiene los dos encargos», no «tiene uno cualquiera».
+     *                    Se resuelve con dos EXISTS porque no hay ninguna
+     *                    columna que consultar: la combinacion emerge de los
+     *                    encargos
+     */
+    record FiltrosPropiedad(String texto, String tipoPropiedad, String distrito, String estado,
+                            String operaciones, int pagina, int tamano) {
+    }
+
+    /** Lo que el filtro puede ofrecer sin inventarse opciones que no existen. */
+    record OpcionesDeFiltro(List<String> distritos) {
+    }
+
+    /** Pagina de la cartera del tenant, con los filtros resueltos en la base. */
+    Pagina<FilaPropiedad> listar(FiltrosPropiedad filtros, Actor actor);
+
+    /** Los valores que el filtro puede ofrecer, sacados de la cartera real. */
+    OpcionesDeFiltro opcionesDeFiltro(Actor actor);
 
     /**
      * Una caracteristica que <b>aplica</b> a un tipo de propiedad, derivada del

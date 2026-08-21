@@ -9,6 +9,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,6 +47,9 @@ import java.util.Optional;
  */
 @Component
 public class AtributosGobernados {
+
+    /** El mismo vocabulario que las once columnas de moneda del esquema. */
+    private static final List<String> MONEDAS = List.of("PEN", "USD");
 
     private final CatalogoAtributoRepository catalogo;
     private final AtributoPropiedadRepository valores;
@@ -104,6 +108,45 @@ public class AtributosGobernados {
     }
 
     /**
+     * <b>Lo que le falta a una propiedad para poder ANUNCIARSE</b> (V72).
+     *
+     * <p>ALT y PUB, mirando las dos autoridades igual que
+     * {@link #obligatoriasQueFaltan(long, Propiedad)}. Es la unica pregunta que
+     * debe hacer el caso de uso de publicacion: si cada controlador o cada
+     * pantalla volviera a interpretar los tres niveles, en dos cortes habria
+     * tres interpretaciones -- y una regla con tres duenos no es una regla.
+     *
+     * <p>Que devuelva una lista vacia significa «se puede publicar». Que
+     * devuelva claves significa que faltan, <b>con su nombre</b>, para que el
+     * mensaje diga que hacer en vez de que no se puede.
+     */
+    public List<String> faltantesDePropiedadParaPublicar(long idOrganizacion, Propiedad propiedad) {
+        String tipo = propiedad.getTipoInmueble();
+        List<String> faltan = new ArrayList<>(
+                valores.clavesQueImpidenPublicar(idOrganizacion, propiedad.getId(), tipo));
+
+        for (CatalogoAtributo definicion : aplicablesA(idOrganizacion, tipo)) {
+            if (definicion.esEstructural()
+                    && definicion.bloqueaPublicacionPara(tipo)
+                    && !EscritorEstructural.tieneValor(propiedad, definicion.getCampoEstructural())) {
+                faltan.add(definicion.getClave());
+            }
+        }
+        return List.copyOf(faltan);
+    }
+
+    /** Los rotulos de esas claves, para poder decirlo en palabras y no en claves. */
+    public List<String> rotulosDe(long idOrganizacion, String tipoPropiedad, List<String> claves) {
+        if (claves.isEmpty()) {
+            return List.of();
+        }
+        Map<String, CatalogoAtributo> porClave = definicionesDe(idOrganizacion, tipoPropiedad);
+        return claves.stream()
+                .map(clave -> porClave.containsKey(clave) ? porClave.get(clave).getRotulo() : clave)
+                .toList();
+    }
+
+    /**
      * Comprueba que la clave existe, que aplica a ese tipo y que el valor
      * encaja con su tipo de dato. Devuelve el atributo listo para guardar.
      *
@@ -111,20 +154,52 @@ public class AtributosGobernados {
      * no aplica a un terreno" son errores distintos y se arreglan distinto.
      */
     public AtributoPropiedad convertir(long idOrganizacion, long idPropiedad, String tipoPropiedad,
-                                       String clave, String valor) {
+                                       String clave, String valor, String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         exigirQueAplique(definicion, tipoPropiedad);
         String limpio = exigirValor(clave, valor);
 
-        return switch (definicion.getTipoDato()) {
-            case CatalogoAtributo.ENTERO -> AtributoPropiedad.deNumero(
+        return switch (definicion.tipo()) {
+            case ENTERO -> AtributoPropiedad.deNumero(
                     idOrganizacion, idPropiedad, clave, enRango(definicion, entero(clave, limpio)));
-            case CatalogoAtributo.DECIMAL -> AtributoPropiedad.deNumero(
+            case DECIMAL -> AtributoPropiedad.deNumero(
                     idOrganizacion, idPropiedad, clave, enRango(definicion, decimal(clave, limpio)));
-            case CatalogoAtributo.BOOLEANO -> AtributoPropiedad.deBooleano(
+            case IMPORTE -> AtributoPropiedad.deImporte(
+                    idOrganizacion, idPropiedad, clave, enRango(definicion, decimal(clave, limpio)),
+                    exigirMoneda(clave, moneda));
+            case BOOLEANO -> AtributoPropiedad.deBooleano(
                     idOrganizacion, idPropiedad, clave, booleano(clave, limpio));
-            default -> AtributoPropiedad.deTexto(idOrganizacion, idPropiedad, clave, limpio);
+            case FECHA -> AtributoPropiedad.deFecha(
+                    idOrganizacion, idPropiedad, clave, fecha(clave, limpio));
+            case TEXTO, LISTA -> AtributoPropiedad.deTexto(
+                    idOrganizacion, idPropiedad, clave, enLongitud(definicion, limpio));
+            // Un multivalor no se construye con un valor suelto: su fila es un
+            // ancla y sus valores viven aparte. Quien llegue aqui con uno esta
+            // usando la puerta equivocada, y decirselo es mas util que guardar
+            // el primero y perder los demas.
+            case LISTA_MULTIPLE -> throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" admite varios valores: se guarda con la via de "
+                            + "multivalor, no con un valor suelto.");
         };
+    }
+
+    /**
+     * El ancla de un multivalor, con sus valores.
+     *
+     * <p>Va aparte de {@link #convertir} porque no es el mismo acto: alli se
+     * escribe UN valor, aqui se sustituye un CONJUNTO. Y sustituir es lo
+     * correcto -- anadir dejaria sin forma de quitar una opcion, que es la
+     * mitad de lo que significa editar una lista.
+     */
+    public AtributoPropiedad convertirMultivalor(long idOrganizacion, long idPropiedad,
+                                                 String tipoPropiedad, String clave) {
+        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
+        exigirQueAplique(definicion, tipoPropiedad);
+        if (!definicion.tipo().esMultivalor()) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" no admite varios valores.");
+        }
+        return AtributoPropiedad.anclaDeMultivalor(idOrganizacion, idPropiedad, clave);
     }
 
     /**
@@ -141,12 +216,75 @@ public class AtributosGobernados {
     public void exigirValorCompatible(long idOrganizacion, String clave, String valor) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         String limpio = exigirValor(clave, valor);
-        switch (definicion.getTipoDato()) {
-            case CatalogoAtributo.ENTERO -> enRango(definicion, entero(clave, limpio));
-            case CatalogoAtributo.DECIMAL -> enRango(definicion, decimal(clave, limpio));
-            case CatalogoAtributo.BOOLEANO -> booleano(clave, limpio);
-            default -> { }
+        // Exhaustivo sobre el enum y SIN `default`: hasta 0B esto tenia un
+        // `default -> { }` que no validaba nada, asi que el motor aceptaba un
+        // valor que el trigger rechazaba a mitad de la transaccion. Ahora un
+        // noveno tipo de dato no compila hasta que se diga que hacer con el.
+        switch (definicion.tipo()) {
+            case ENTERO -> enRango(definicion, entero(clave, limpio));
+            case DECIMAL, IMPORTE -> enRango(definicion, decimal(clave, limpio));
+            case BOOLEANO -> booleano(clave, limpio);
+            case FECHA -> fecha(clave, limpio);
+            case TEXTO, LISTA -> enLongitud(definicion, limpio);
+            // Aqui no se conoce todavia el tipo de propiedad, asi que tampoco
+            // se puede consultar el vocabulario: un valor de multivalor se
+            // comprueba al guardarlo, contra el catalogo de opciones.
+            case LISTA_MULTIPLE -> { }
         }
+    }
+
+    /**
+     * La fecha, en ISO y nada mas.
+     *
+     * <p>Un solo formato a proposito: admitir {@code 03/04/2026} obligaria a
+     * decidir si es marzo o abril, y esa decision no la puede tomar el Core sin
+     * saber de donde vino el texto. El cliente formatea; el contrato no adivina.
+     */
+    private static LocalDate fecha(String clave, String valor) {
+        try {
+            return LocalDate.parse(valor);
+        } catch (RuntimeException e) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" es una fecha y llego \"" + valor
+                            + "\". Se escribe como 2026-08-21.");
+        }
+    }
+
+    /**
+     * La moneda de un importe. Se exige aqui y no se deduce: un monto con la
+     * moneda equivocada no falla, <b>miente</b>, y lo hace en el unico sitio
+     * donde el error cuesta dinero.
+     */
+    private static String exigirMoneda(String clave, String moneda) {
+        if (moneda == null || moneda.isBlank()) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" es un importe y llego sin moneda. Un numero sin "
+                            + "moneda no es dinero.");
+        }
+        String limpia = moneda.trim().toUpperCase(Locale.ROOT);
+        if (!MONEDAS.contains(limpia)) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" llego con la moneda \"" + moneda
+                            + "\", y son " + String.join(" o ", MONEDAS) + ".");
+        }
+        return limpia;
+    }
+
+    /**
+     * El techo de longitud que declara la clave.
+     *
+     * <p>Es la garantia que se perdio en V71 al retirar el {@code VARCHAR(120)}
+     * del rubro: {@code valor_texto} es TEXT y no acota nada. Ahora lo acota
+     * quien sabe cuanto mide cada concepto, que es el catalogo.
+     */
+    private static String enLongitud(CatalogoAtributo definicion, String valor) {
+        Integer techo = definicion.getLongitudMaxima();
+        if (techo != null && valor.length() > techo) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + definicion.getClave() + "\" admite " + techo
+                            + " caracteres y llegaron " + valor.length() + ".");
+        }
+        return valor;
     }
 
     private static void exigirQueAplique(CatalogoAtributo definicion, String tipoPropiedad) {
@@ -174,7 +312,8 @@ public class AtributosGobernados {
      * para JPA: reemplazar la fila perderia {@code fecha_creacion}, que es el
      * dato que dice desde cuando se sabe eso de la propiedad.
      */
-    public void actualizar(long idOrganizacion, AtributoPropiedad existente, String valor) {
+    public void actualizar(long idOrganizacion, AtributoPropiedad existente, String valor,
+                           String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, existente.getClave());
         String clave = existente.getClave();
         String limpio = valor == null ? null : valor.trim();
@@ -183,13 +322,19 @@ public class AtributosGobernados {
                     "El atributo \"" + clave + "\" llego sin valor. Para quitarlo, borralo; "
                             + "no se guarda vacio.");
         }
-        switch (definicion.getTipoDato()) {
-            case CatalogoAtributo.ENTERO ->
+        switch (definicion.tipo()) {
+            case ENTERO ->
                     existente.cambiarANumero(enRango(definicion, entero(clave, limpio)));
-            case CatalogoAtributo.DECIMAL ->
+            case DECIMAL ->
                     existente.cambiarANumero(enRango(definicion, decimal(clave, limpio)));
-            case CatalogoAtributo.BOOLEANO -> existente.cambiarABooleano(booleano(clave, limpio));
-            default -> existente.cambiarATexto(limpio);
+            case IMPORTE -> existente.cambiarAImporte(
+                    enRango(definicion, decimal(clave, limpio)), exigirMoneda(clave, moneda));
+            case BOOLEANO -> existente.cambiarABooleano(booleano(clave, limpio));
+            case FECHA -> existente.cambiarAFecha(fecha(clave, limpio));
+            case TEXTO, LISTA -> existente.cambiarATexto(enLongitud(definicion, limpio));
+            case LISTA_MULTIPLE -> throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" admite varios valores: se edita con la via de "
+                            + "multivalor, no con un valor suelto.");
         }
     }
 
@@ -213,7 +358,7 @@ public class AtributosGobernados {
      *         estructural y ya se aplico sobre la propiedad
      */
     public Optional<AtributoPropiedad> enrutar(long idOrganizacion, Propiedad propiedad,
-                                               String clave, String valor) {
+                                               String clave, String valor, String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         exigirQueAplique(definicion, propiedad.getTipoInmueble());
 
@@ -224,7 +369,7 @@ public class AtributosGobernados {
             return Optional.empty();
         }
         return Optional.of(convertir(idOrganizacion, propiedad.getId(),
-                propiedad.getTipoInmueble(), clave, valor));
+                propiedad.getTipoInmueble(), clave, valor, moneda));
     }
 
     /**
@@ -238,7 +383,7 @@ public class AtributosGobernados {
      */
     public Optional<AtributoPropiedad> enrutarEdicion(long idOrganizacion, Propiedad propiedad,
                                                       String clave, String valor,
-                                                      AtributoPropiedad existente) {
+                                                      AtributoPropiedad existente, String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         exigirQueAplique(definicion, propiedad.getTipoInmueble());
 
@@ -248,11 +393,11 @@ public class AtributosGobernados {
             return Optional.empty();
         }
         if (existente != null) {
-            actualizar(idOrganizacion, existente, valor);
+            actualizar(idOrganizacion, existente, valor, moneda);
             return Optional.of(existente);
         }
         return Optional.of(convertir(idOrganizacion, propiedad.getId(),
-                propiedad.getTipoInmueble(), clave, valor));
+                propiedad.getTipoInmueble(), clave, valor, moneda));
     }
 
     /**

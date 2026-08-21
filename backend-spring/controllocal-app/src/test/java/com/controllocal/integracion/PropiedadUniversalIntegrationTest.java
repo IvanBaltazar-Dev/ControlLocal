@@ -214,8 +214,11 @@ class PropiedadUniversalIntegrationTest {
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
         assertTrue(ficha.atributos().stream().anyMatch(a -> "zonificacion".equals(a.clave())));
 
-        List<String> preguntas = propiedades.catalogoDe("TERRENO", agenteA).stream()
-                .map(PropiedadUniversalService.PreguntaCatalogo::clave).toList();
+        // La definicion sale del motor, que desde 0B es el UNICO productor de
+        // "que se pregunta para este tipo". Sin operaciones: la cosa fisica.
+        List<String> preguntas = captura
+                .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", null, agenteA)
+                .delTipo().stream().map(MotorDeCaptura.Pregunta::clave).toList();
         assertTrue(preguntas.contains("zonificacion"), "el catalogo pregunta la zonificacion de un terreno");
         assertFalse(preguntas.contains("dormitorios"), "y no le pregunta dormitorios");
     }
@@ -960,7 +963,9 @@ class PropiedadUniversalIntegrationTest {
                 .anyMatch(a -> "vista_al_mar".equals(a.clave()) && "true".equals(a.valor())));
 
         // Y el tenant de al lado no lo ve.
-        assertFalse(propiedades.catalogoDe("DEPARTAMENTO", agenteB).stream()
+        assertFalse(captura
+                        .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "DEPARTAMENTO", null, agenteB)
+                        .delTipo().stream()
                         .anyMatch(p -> "vista_al_mar".equals(p.clave())),
                 "un atributo privado no cruza la frontera del tenant");
     }

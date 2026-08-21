@@ -77,6 +77,8 @@ class GateDeCierreTest {
                         // D-E4-3 — una autoridad persistente por clave publicada.
                         "AutoridadDelDatoIntegrationTest",
                         "BusquedaLocalesIntegrationTest",
+                        // Corte 0B - el catalogo aprende a hablar.
+                        "CatalogoQueHablaIntegrationTest",
                         // Corte 0A - editar no destruye lo que el usuario no toco.
                         "ConservacionDeLaEdicionIntegrationTest",
                         "ConvergenciaCampanaColaIntegrationTest",

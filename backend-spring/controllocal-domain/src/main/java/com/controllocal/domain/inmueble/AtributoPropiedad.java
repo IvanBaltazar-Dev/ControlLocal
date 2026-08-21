@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /**
@@ -55,6 +56,21 @@ public class AtributoPropiedad extends EntidadDeOrganizacion {
     @Column(name = "valor_booleano")
     private Boolean valorBooleano;
 
+    /** Una fecha del calendario, sin hora: disponible desde, entrega (V72). */
+    @Column(name = "valor_fecha")
+    private LocalDate valorFecha;
+
+    /**
+     * La moneda de un IMPORTE (V72). <b>No es un valor</b>, es la unidad de
+     * otro: por eso queda fuera del {@code num_nonnulls} de
+     * {@code ck_atributo_un_valor} y viaja pegada a {@link #valorNumero}.
+     *
+     * <p>Separarla en su propia clave habria dejado que retirar el monto
+     * abandonara una moneda huerfana perfectamente legal, que nada detecta.
+     */
+    @Column(name = "valor_moneda", length = 3)
+    private String valorMoneda;
+
     @Column(name = "fecha_creacion", insertable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
 
@@ -84,6 +100,42 @@ public class AtributoPropiedad extends EntidadDeOrganizacion {
         return a;
     }
 
+    public static AtributoPropiedad deFecha(Long idOrganizacion, Long idPropiedad, String clave,
+                                            LocalDate valor) {
+        AtributoPropiedad a = base(idOrganizacion, idPropiedad, clave);
+        a.valorFecha = exigir(valor, clave);
+        return a;
+    }
+
+    /**
+     * Un importe: monto <b>y</b> moneda, indivisibles. Los dos se exigen aqui
+     * porque un numero sin moneda no es dinero -- y el trigger de V72 rechaza
+     * la fila si falta cualquiera de los dos, asi que dejarlo pasar en Java solo
+     * moveria el fallo mas lejos de su causa.
+     */
+    public static AtributoPropiedad deImporte(Long idOrganizacion, Long idPropiedad, String clave,
+                                              BigDecimal monto, String moneda) {
+        AtributoPropiedad a = base(idOrganizacion, idPropiedad, clave);
+        a.valorNumero = exigir(monto, clave);
+        a.valorMoneda = exigir(moneda, clave);
+        return a;
+    }
+
+    /**
+     * La fila <b>ancla</b> de un LISTA_MULTIPLE: no lleva ningun escalar.
+     *
+     * <p>Todo su trabajo es decir «esta clave esta respondida» y sostener la FK
+     * de la que cuelgan sus valores en {@code atributo_propiedad_opcion}. Sin
+     * ella habria que retirar {@code uq_atributo_propiedad_clave}, que es el
+     * indice sobre el que V71 apoyo su propia justificacion al borrar la tabla
+     * espejo -- y con el se iria la garantia de un valor por propiedad y
+     * concepto, que es lo que hace comparables dos carteras.
+     */
+    public static AtributoPropiedad anclaDeMultivalor(Long idOrganizacion, Long idPropiedad,
+                                                      String clave) {
+        return base(idOrganizacion, idPropiedad, clave);
+    }
+
     private static AtributoPropiedad base(Long idOrganizacion, Long idPropiedad, String clave) {
         AtributoPropiedad a = new AtributoPropiedad();
         a.setOrganizacionId(idOrganizacion);
@@ -109,25 +161,72 @@ public class AtributoPropiedad extends EntidadDeOrganizacion {
         if (valorNumero != null) {
             return valorNumero;
         }
+        if (valorFecha != null) {
+            return valorFecha;
+        }
         return valorBooleano;
     }
 
-    public void cambiarATexto(String valor) {
-        this.valorTexto = exigir(valor, clave);
+    /**
+     * Deja los escalares a null antes de escribir el que toca.
+     *
+     * <p>Cada mutador la llama en vez de nombrar uno a uno los que no son
+     * suyos, y es deliberado: asi era antes, y anadir una quinta columna en
+     * V72 habria dejado a los tres mutadores existentes olvidandose de
+     * limpiarla -- un valor viejo sobreviviendo bajo uno nuevo, que es
+     * exactamente el tipo de resto callado que este corte persigue.
+     */
+    private void limpiarEscalares() {
+        this.valorTexto = null;
         this.valorNumero = null;
         this.valorBooleano = null;
+        this.valorFecha = null;
+        this.valorMoneda = null;
+    }
+
+    public void cambiarATexto(String valor) {
+        String nuevo = exigir(valor, clave);
+        limpiarEscalares();
+        this.valorTexto = nuevo;
     }
 
     public void cambiarANumero(BigDecimal valor) {
-        this.valorNumero = exigir(valor, clave);
-        this.valorTexto = null;
-        this.valorBooleano = null;
+        BigDecimal nuevo = exigir(valor, clave);
+        limpiarEscalares();
+        this.valorNumero = nuevo;
     }
 
     public void cambiarABooleano(Boolean valor) {
-        this.valorBooleano = exigir(valor, clave);
-        this.valorTexto = null;
-        this.valorNumero = null;
+        Boolean nuevo = exigir(valor, clave);
+        limpiarEscalares();
+        this.valorBooleano = nuevo;
+    }
+
+    public void cambiarAFecha(LocalDate valor) {
+        LocalDate nuevo = exigir(valor, clave);
+        limpiarEscalares();
+        this.valorFecha = nuevo;
+    }
+
+    public void cambiarAImporte(BigDecimal monto, String moneda) {
+        BigDecimal nuevoMonto = exigir(monto, clave);
+        String nuevaMoneda = exigir(moneda, clave);
+        limpiarEscalares();
+        this.valorNumero = nuevoMonto;
+        this.valorMoneda = nuevaMoneda;
+    }
+
+    /** Vuelve a ser el ancla de un multivalor: sin escalar, con sus opciones aparte. */
+    public void cambiarAAncla() {
+        limpiarEscalares();
+    }
+
+    public LocalDate getValorFecha() {
+        return valorFecha;
+    }
+
+    public String getValorMoneda() {
+        return valorMoneda;
     }
 
     public Long getId() {

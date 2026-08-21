@@ -287,4 +287,51 @@ class FichaUniversalNoVuelveAlModeloViejoTest {
         throw new IllegalStateException("No se encontro frontend-angular/src subiendo desde "
                 + Path.of("").toAbsolutePath());
     }
+
+    /**
+     * <b>La definicion tiene UN productor, y el heredado no vuelve.</b>
+     *
+     * <p>Hasta el Corte 0B habia dos endpoints contestando a «que se pregunta
+     * para este tipo»: {@code /propiedades/catalogo/{tipoPropiedad}} con seis
+     * campos y {@code /captura/definicion} con once, derivados de la MISMA
+     * consulta al catalogo. Dos productores de una autoridad divergen, y estos
+     * ya lo hacian -- publicaban un {@code orden} distinto para la misma clave
+     * y nadie lo noto en meses.
+     *
+     * <p>Este gate existe porque el endpoint retirado es facil de reponer «solo
+     * para KAIROS» o «solo para un listado»: es una consulta inofensiva y un
+     * DTO pequeno. Lo que no es inofensivo es tener otra vez dos verdades.
+     */
+    @Test
+    @DisplayName("la definicion tiene un solo productor: el motor de captura")
+    void elProductorHeredadoDeDefinicionNoResucita() {
+        List<String> reincidencias = new ArrayList<>();
+        for (Path fuente : ficheros("backend-spring")) {
+            String ruta = fuente.toString().replace(java.io.File.separatorChar, '/');
+            if (ruta.contains("/target/") || ruta.contains("/src/test/")) {
+                continue;
+            }
+            List<String> lineas = leer(fuente);
+            for (int i = 0; i < lineas.size(); i++) {
+                String linea = lineas.get(i);
+                if (linea.stripLeading().startsWith("*") || linea.stripLeading().startsWith("//")) {
+                    continue;
+                }
+                if (linea.contains("propiedades/catalogo") || linea.contains("PreguntaCatalogo")) {
+                    reincidencias.add(ruta + ":" + (i + 1) + "  " + linea.strip());
+                }
+            }
+        }
+        if (!reincidencias.isEmpty()) {
+            fail("""
+                    Volvio a haber dos productores de "que se pregunta para este tipo".
+
+                    La unica autoridad publica de definicion es GET /captura/definicion, que
+                    es la maquina compartida por BROX Web y KAIROS (D-E4-2). Sin operaciones
+                    devuelve la cosa fisica; con ellas, sus bloques economicos.
+
+                      %s
+                    """.formatted(String.join("\n      ", reincidencias)));
+        }
+    }
 }

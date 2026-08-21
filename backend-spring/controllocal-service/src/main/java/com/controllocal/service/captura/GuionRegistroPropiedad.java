@@ -239,16 +239,16 @@ public final class GuionRegistroPropiedad {
 
     static {
         declarar(TIPO_PROPIEDAD, "Tipo de propiedad", "LISTA", null,
-                List.of("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO"),
+                valores("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO"),
                 "Decide qué más hay que preguntar: un terreno no tiene dormitorios.");
-        declarar(OPERACIONES, "Operación", "LISTA_MULTIPLE", null, List.of("VENTA", "ALQUILER"),
+        declarar(OPERACIONES, "Operación", "LISTA_MULTIPLE", null, valores("VENTA", "ALQUILER"),
                 "Se puede elegir más de una: la propiedad se registra una vez y se abre un "
                         + "encargo por cada operación, cada uno con su precio y su histórico.");
         // Sin ayuda: el rotulo ya la lleva. Un campo que se titula «Precio de
         // venta» y debajo dice «segun la operacion declarada» repite lo que
         // acaba de decir, y en una conversacion KAIROS lo leeria en voz alta.
         declarar(IMPORTE, "Importe", "DECIMAL", "moneda", null, null);
-        declarar(MONEDA, "Moneda", "LISTA", null, List.of("PEN", "USD"), null);
+        declarar(MONEDA, "Moneda", "LISTA", null, valores("PEN", "USD"), null);
         // Tipo de dato propio y no TEXTO: el valor no es una frase, es «quien es
         // el dueno y en que cuota». Declararlo aqui es lo que permite al cliente
         // pintar el buscador de propietarios sin reconocer la clave `titulares`
@@ -257,7 +257,7 @@ public final class GuionRegistroPropiedad {
                 "Busca a la persona antes de crearla. Con varios titulares, las cuotas tienen que sumar 100 %.");
         declarar(DIRECCION, "Dirección", "TEXTO", null, null, null);
         declarar(DISTRITO, "Distrito", "TEXTO", null, null, null);
-        declarar(USO, "Uso", "LISTA", null, List.of("COMERCIAL", "VIVIENDA", "INDUSTRIAL", "MIXTO"),
+        declarar(USO, "Uso", "LISTA", null, valores("COMERCIAL", "VIVIENDA", "INDUSTRIAL", "MIXTO"),
                 "Si no se declara, se deduce del tipo: una casa es vivienda.");
         declarar(CODIGO, "Código interno", "TEXTO", null, null, "Si no se declara, lo genera BROX.");
         declarar(DESCRIPCION, "Descripción", "TEXTO", null, null, null);
@@ -315,8 +315,22 @@ public final class GuionRegistroPropiedad {
         return PREGUNTAS.containsKey(claveBase(clave));
     }
 
+    /**
+     * Un vocabulario del GUION, con valor y rotulo iguales.
+     *
+     * <p>Iguales a proposito y no por descuido: estos codigos ya viajaban asi y
+     * el cliente los pinta tal cual. Ponerles rotulo de verdad --"Local
+     * comercial" en vez de "LOCAL"-- es cambiar la presentacion, y eso no entra
+     * de contrabando en un corte que solo amplia capacidades.
+     */
+    private static List<MotorDeCaptura.Opcion> valores(String... codigos) {
+        return java.util.Arrays.stream(codigos)
+                .map(codigo -> new MotorDeCaptura.Opcion(codigo, codigo))
+                .toList();
+    }
+
     private static void declarar(String clave, String rotulo, String tipoDato, String unidad,
-                                 List<String> opciones, String ayuda) {
+                                 List<MotorDeCaptura.Opcion> opciones, String ayuda) {
         PREGUNTAS.put(clave, new Pregunta(clave, rotulo, tipoDato, unidad, opciones, false, ayuda));
     }
 }

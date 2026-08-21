@@ -4,6 +4,7 @@ import com.controllocal.domain.inmueble.AtributoPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.persistence.repositorio.AtributoPropiedadRepository;
+import com.controllocal.persistence.repositorio.ValorMultipleAtributoRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
@@ -50,10 +51,37 @@ public class LectorPorAutoridad {
 
     private final AtributosGobernados gobierno;
     private final AtributoPropiedadRepository valores;
+    private final ValorMultipleAtributoRepository multiples;
 
-    public LectorPorAutoridad(AtributosGobernados gobierno, AtributoPropiedadRepository valores) {
+    public LectorPorAutoridad(AtributosGobernados gobierno, AtributoPropiedadRepository valores,
+                              ValorMultipleAtributoRepository multiples) {
         this.gobierno = gobierno;
         this.valores = valores;
+        this.multiples = multiples;
+    }
+
+    /**
+     * Los valores multiples de un lote de filas ancla, en UNA consulta.
+     *
+     * <p>Hidratar N propiedades cuesta una consulta mas, sea N uno o quinientos.
+     * Preguntarlos por fila seria el N+1 que RC-003 retiro del repositorio, y
+     * reaparece siempre igual: con una capacidad nueva que se lee "solo para
+     * este caso".
+     */
+    private Map<Long, List<String>> multivaloresDe(List<AtributoPropiedad> filas) {
+        List<Long> anclas = filas.stream()
+                .filter(fila -> fila.valor() == null)
+                .map(AtributoPropiedad::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (anclas.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<String>> porAncla = new LinkedHashMap<>();
+        multiples.deVarios(anclas).forEach(valor -> porAncla
+                .computeIfAbsent(valor.getIdAtributoPropiedad(), id -> new java.util.ArrayList<>())
+                .add(valor.getValor()));
+        return porAncla;
     }
 
     /**
@@ -64,7 +92,7 @@ public class LectorPorAutoridad {
         List<AtributoPropiedad> filas =
                 valores.findByIdPropiedadOrderByClaveAsc(propiedad.getId());
         return armar(propiedad, filas, gobierno.definicionesDe(idOrganizacion,
-                propiedad.getTipoInmueble()));
+                propiedad.getTipoInmueble()), multivaloresDe(filas));
     }
 
     /**
@@ -79,6 +107,8 @@ public class LectorPorAutoridad {
         }
         Map<Long, List<AtributoPropiedad>> porPropiedad = agrupar(
                 propiedades.stream().map(Propiedad::getId).toList());
+        Map<Long, List<String>> multivalores = multivaloresDe(
+                porPropiedad.values().stream().flatMap(List::stream).toList());
 
         Map<String, Map<String, CatalogoAtributo>> definicionesPorTipo = new HashMap<>();
         Map<Long, ValoresDePropiedad> resultado = new LinkedHashMap<>();
@@ -87,7 +117,8 @@ public class LectorPorAutoridad {
                     propiedad.getTipoInmueble(),
                     tipo -> gobierno.definicionesDe(idOrganizacion, tipo));
             resultado.put(propiedad.getId(), armar(propiedad,
-                    porPropiedad.getOrDefault(propiedad.getId(), List.of()), definiciones));
+                    porPropiedad.getOrDefault(propiedad.getId(), List.of()), definiciones,
+                    multivalores));
         }
         return resultado;
     }
@@ -106,10 +137,15 @@ public class LectorPorAutoridad {
         if (idsPropiedad.isEmpty()) {
             return Map.of();
         }
-        Map<Long, ValoresDePropiedad> resultado = new LinkedHashMap<>();
-        agrupar(idsPropiedad).forEach((id, filas) -> {
+        Map<Long, ValoresDePropiedad> porPropiedad = new LinkedHashMap<>();
+        Map<Long, List<AtributoPropiedad>> filasPorPropiedad = agrupar(idsPropiedad);
+        Map<Long, List<String>> multivalores = multivaloresDe(
+                filasPorPropiedad.values().stream().flatMap(List::stream).toList());
+        Map<Long, ValoresDePropiedad> resultado = porPropiedad;
+        filasPorPropiedad.forEach((id, filas) -> {
             ValoresDePropiedad.Constructor constructor = new ValoresDePropiedad.Constructor();
-            filas.forEach(fila -> constructor.con(fila.getClave(), comoValor(fila)));
+            filas.forEach(fila -> constructor.con(fila.getClave(),
+                    comoValor(fila, multivalores.get(fila.getId()))));
             resultado.put(id, constructor.construir());
         });
         return resultado;
@@ -152,14 +188,16 @@ public class LectorPorAutoridad {
      * es exactamente lo que significa declararla.
      */
     private static ValoresDePropiedad armar(Propiedad propiedad, List<AtributoPropiedad> filas,
-                                            Map<String, CatalogoAtributo> definiciones) {
+                                            Map<String, CatalogoAtributo> definiciones,
+                                            Map<Long, List<String>> multivalores) {
         ValoresDePropiedad.Constructor constructor = new ValoresDePropiedad.Constructor();
         for (AtributoPropiedad fila : filas) {
             CatalogoAtributo definicion = definiciones.get(fila.getClave());
             if (definicion != null && definicion.esEstructural()) {
                 continue;
             }
-            constructor.con(fila.getClave(), comoValor(fila));
+            constructor.con(fila.getClave(),
+                    comoValor(fila, multivalores.get(fila.getId())));
         }
         for (CatalogoAtributo definicion : definiciones.values()) {
             if (definicion.esEstructural()) {
@@ -170,12 +208,28 @@ public class LectorPorAutoridad {
         return constructor.construir();
     }
 
-    private static ValorLogico comoValor(AtributoPropiedad fila) {
+    /**
+     * La fila, leida por la columna que le toca.
+     *
+     * <p>{@code multivalor} llega ya resuelto por el lote: una fila ancla no
+     * lleva escalar, y preguntar aqui por sus valores seria una consulta por
+     * fila -- el N+1 que RC-003 retiro del repositorio.
+     */
+    private static ValorLogico comoValor(AtributoPropiedad fila, List<String> multivalor) {
+        if (multivalor != null && !multivalor.isEmpty()) {
+            return ValorLogico.deValores(multivalor);
+        }
         if (fila.getValorTexto() != null) {
             return ValorLogico.deTexto(fila.getValorTexto());
         }
         if (fila.getValorNumero() != null) {
-            return ValorLogico.deNumero(fila.getValorNumero());
+            // La moneda viaja pegada al monto: un importe sin ella no es dinero.
+            return fila.getValorMoneda() == null
+                    ? ValorLogico.deNumero(fila.getValorNumero())
+                    : ValorLogico.deImporte(fila.getValorNumero(), fila.getValorMoneda());
+        }
+        if (fila.getValorFecha() != null) {
+            return ValorLogico.deFecha(fila.getValorFecha());
         }
         return ValorLogico.deBooleano(fila.getValorBooleano());
     }

@@ -397,11 +397,6 @@ public final class PropiedadUniversalDtos {
         }
     }
 
-    /** Lo que se pregunta para un tipo de propiedad. Lo deriva el catalogo. */
-    public record PreguntaCatalogoResponse(String clave, String rotulo, String tipoDato,
-                                           String unidad, boolean obligatoria, int orden) {
-    }
-
     // ------------------------------------------------------------------
     // El listado
     // ------------------------------------------------------------------

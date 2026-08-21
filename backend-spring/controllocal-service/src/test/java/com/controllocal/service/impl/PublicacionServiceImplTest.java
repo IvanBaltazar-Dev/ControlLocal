@@ -1,5 +1,7 @@
 package com.controllocal.service.impl;
 
+import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
@@ -47,15 +49,40 @@ class PublicacionServiceImplTest {
     private final PrecioPropiedadRepository precios = mock(PrecioPropiedadRepository.class);
 
     private final CaptacionRepository encargos = mock(CaptacionRepository.class);
+    private final PropiedadRepository propiedades = mock(PropiedadRepository.class);
+
+    /**
+     * Un catalogo que no encuentra nada faltante: estas pruebas blindan las
+     * reglas del ANUNCIO --moneda obligatoria, version incremental, fecha de
+     * baja--, no la completitud de la ficha, que tiene la suya contra PostgreSQL.
+     */
+    private final AtributosGobernados gobierno = mock(AtributosGobernados.class);
 
     private final PublicacionServiceImpl service =
-            new PublicacionServiceImpl(publicaciones, precios, encargos);
+            new PublicacionServiceImpl(publicaciones, precios, encargos, propiedades, gobierno);
 
     private static final long ORG = 1L;
     private static final long PROPIEDAD = 7L;
     private static final long ENCARGO = 55L;
 
     private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
+
+    @org.junit.jupiter.api.BeforeEach
+    void elCatalogoNoEncuentraNadaFaltante() {
+        org.mockito.Mockito.lenient()
+                .when(gobierno.faltantesDePropiedadParaPublicar(org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.List.of());
+        // El gate de publicacion necesita la propiedad para preguntarle al
+        // catalogo por su tipo: sin ella no puede saber que exige.
+        com.controllocal.domain.inmueble.Propiedad propiedad =
+                new com.controllocal.domain.inmueble.Propiedad();
+        propiedad.setTipoInmueble(com.controllocal.domain.inmueble.Propiedad.TIPO_LOCAL);
+        org.mockito.Mockito.lenient()
+                .when(propiedades.findByOrganizacionIdAndId(org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.Optional.of(propiedad));
+    }
 
     /**
      * El encargo del que cuelgan estas publicaciones.

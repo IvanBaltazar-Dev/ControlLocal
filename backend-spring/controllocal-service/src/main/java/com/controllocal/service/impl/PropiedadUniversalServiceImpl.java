@@ -33,6 +33,10 @@ import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.PublicacionService;
+import com.controllocal.domain.inmueble.ValorMultipleAtributo;
+import com.controllocal.persistence.repositorio.ValorMultipleAtributoRepository;
+import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ActividadDeLaPropiedad;
 import com.controllocal.service.soporte.AnunciosDeLosEncargos;
 import com.controllocal.service.soporte.AtributosGobernados;
@@ -120,6 +124,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final EventoDominioRepository eventos;
     private final BorradorCapturaRepository borradores;
     private final AtributosGobernados gobierno;
+    private final LectorPorAutoridad lector;
+    private final ValorMultipleAtributoRepository multivalores;
     private final ComandosIdempotentes comandos;
     private final Documentos documentos;
     private final Transiciones transiciones;
@@ -134,7 +140,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          PrecioPropiedadRepository precios,
                                          EventoDominioRepository eventos,
                                          BorradorCapturaRepository borradores,
-                                         AtributosGobernados gobierno,
+                                         AtributosGobernados gobierno, LectorPorAutoridad lector,
+                                       ValorMultipleAtributoRepository multivalores,
                                          ComandosIdempotentes comandos, Documentos documentos,
                                          Transiciones transiciones,
                                          ActividadDeLaPropiedad actividad,
@@ -150,6 +157,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.eventos = eventos;
         this.borradores = borradores;
         this.gobierno = gobierno;
+        this.lector = lector;
+        this.multivalores = multivalores;
         this.comandos = comandos;
         this.documentos = documentos;
         this.transiciones = transiciones;
@@ -189,7 +198,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         }
 
         List<OperacionSolicitada> operaciones = operacionesValidadas(comando.operaciones());
-        Map<String, String> valores = atributosValidados(comando.atributos());
+        Map<String, ValorAtributo> valores = atributosValidados(comando.atributos());
         List<Titular> titulares = titularesValidados(comando.titulares());
 
         // Se comprueba ANTES de escribir nada: "te falta el metraje" es un
@@ -257,23 +266,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     // ==================================================================
     // Lectura
     // ==================================================================
-
-    /**
-     * <b>La lista de campos de cada tipo se sirve, no se escribe.</b> Angular
-     * pinta lo que esto devuelve y KAIROS pregunta lo que esto devuelve; si
-     * alguno de los dos llevara su propia lista, anadir un atributo obligaria a
-     * desplegar tres cosas y las tres divergirian.
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<PreguntaCatalogo> catalogoDe(String tipoPropiedad, Actor actor) {
-        String tipo = tipoValidado(tipoPropiedad);
-        return gobierno.aplicablesA(actor.idOrganizacion(), tipo).stream()
-                .map(atributo -> new PreguntaCatalogo(atributo.getClave(), atributo.getRotulo(),
-                        atributo.getTipoDato(), atributo.getUnidad(),
-                        atributo.esRequeridoPara(tipo), atributo.getOrden()))
-                .toList();
-    }
 
     // ==================================================================
     // El listado
@@ -404,7 +396,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .orElseThrow(() -> new NoEncontradoException("Propiedad"));
         Procedencia procedencia = Procedencia.oPantalla(comando.procedencia());
 
-        Map<String, String> valores = atributosDeEdicion(comando.atributos());
+        Map<String, ValorAtributo> valores = atributosDeEdicion(comando.atributos());
         List<String> aBorrar = clavesABorrar(comando.atributosABorrar(), valores);
 
         String huella = documentos.huellaDe(new LinkedHashMap<>(Map.of(
@@ -550,10 +542,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * el enrutador devuelve {@code empty()} para ellos: <b>no se escriben dos
      * veces</b>. Esa exclusion mutua es toda la decision de D-E4-3.
      */
-    private void escribirAtributos(Actor actor, Propiedad propiedad, Map<String, String> valores) {
-        valores.forEach((clave, valor) -> gobierno
-                .enrutar(actor.idOrganizacion(), propiedad, clave, valor)
-                .ifPresent(atributos::save));
+    private void escribirAtributos(Actor actor, Propiedad propiedad, Map<String, ValorAtributo> valores) {
+        valores.forEach((clave, valor) -> {
+            if (valor.valores() != null) {
+                escribirMultivalor(actor, propiedad, clave, valor.valores());
+                return;
+            }
+            gobierno.enrutar(actor.idOrganizacion(), propiedad, clave, valor.valor(), valor.moneda())
+                    .ifPresent(atributos::save);
+        });
     }
 
     /**
@@ -566,10 +563,10 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * lo que el usuario hizo, que es la fuga que 0A contiene. Retirar un valor
      * tiene su via, se llama por su nombre y viaja aparte.
      */
-    private static Map<String, String> atributosDeEdicion(List<ValorAtributo> valores) {
-        Map<String, String> porClave = atributosValidados(valores);
+    private static Map<String, ValorAtributo> atributosDeEdicion(List<ValorAtributo> valores) {
+        Map<String, ValorAtributo> porClave = atributosValidados(valores);
         porClave.forEach((clave, valor) -> {
-            if (valor == null || valor.isBlank()) {
+            if (valor.valores() == null && (valor.valor() == null || valor.valor().isBlank())) {
                 throw new ReglaNegocioException(
                         "El atributo \"" + clave + "\" llego vacio. Un valor en blanco no es una "
                                 + "forma de borrar: si lo quieres retirar, nombralo en "
@@ -587,7 +584,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * ellas por precedencia —cualquier orden que se escoja seria una regla
      * inventada que el cliente no sabe— y no se aplica ninguna: se avisa.
      */
-    private static List<String> clavesABorrar(List<String> claves, Map<String, String> valores) {
+    private static List<String> clavesABorrar(List<String> claves, Map<String, ValorAtributo> valores) {
         if (claves == null || claves.isEmpty()) {
             return List.of();
         }
@@ -644,7 +641,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         }
     }
 
-    private void actualizarAtributos(Actor actor, Propiedad propiedad, Map<String, String> valores) {
+    private void actualizarAtributos(Actor actor, Propiedad propiedad, Map<String, ValorAtributo> valores) {
         valores.forEach((clave, valor) -> {
             Optional<AtributoPropiedad> existente =
                     atributos.findByIdPropiedadAndClave(propiedad.getId(), clave);
@@ -652,8 +649,12 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             // sobre la propiedad y NO deja atributo; si es gobernada, actualiza
             // el que hay o crea el que falta. Arreglar solo el alta dejaria la
             // fuga abierta en la operacion mas frecuente de las dos.
-            gobierno.enrutarEdicion(actor.idOrganizacion(), propiedad, clave, valor,
-                            existente.orElse(null))
+            if (valor.valores() != null) {
+                escribirMultivalor(actor, propiedad, clave, valor.valores());
+                return;
+            }
+            gobierno.enrutarEdicion(actor.idOrganizacion(), propiedad, clave, valor.valor(),
+                            existente.orElse(null), valor.moneda())
                     .ifPresent(atributos::save);
         });
     }
@@ -665,11 +666,34 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * {@code save}: {@code propiedad.metraje} es NOT NULL. Los atributos
      * gobernados, en cambio, necesitan que la propiedad ya exista.
      */
-    private void enrutarEstructurales(Actor actor, Propiedad propiedad, Map<String, String> valores) {
+    /**
+     * <b>Guarda un multivalor: su ancla y sus valores, sustituyendo.</b>
+     *
+     * <p>Sustituir y no anadir es toda la decision: sin borrar antes no habria
+     * forma de QUITAR una opcion, y quitar es la mitad de lo que significa
+     * editar una lista. El borrado va primero y en la misma transaccion, asi
+     * que no existe un instante en el que la ficha diga las dos cosas.
+     */
+    private void escribirMultivalor(Actor actor, Propiedad propiedad, String clave,
+                                    List<String> seleccionados) {
+        AtributoPropiedad ancla = atributos
+                .findByIdPropiedadAndClave(propiedad.getId(), clave)
+                .orElseGet(() -> atributos.save(gobierno.convertirMultivalor(
+                        actor.idOrganizacion(), propiedad.getId(),
+                        propiedad.getTipoInmueble(), clave)));
+        multivalores.borrarDe(ancla.getId());
+        for (String valor : seleccionados) {
+            multivalores.save(new ValorMultipleAtributo(
+                    actor.idOrganizacion(), ancla.getId(), valor));
+        }
+    }
+
+    private void enrutarEstructurales(Actor actor, Propiedad propiedad, Map<String, ValorAtributo> valores) {
         valores.forEach((clave, valor) -> {
             CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
             if (definicion.esEstructural()) {
-                EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(), valor, clave);
+                EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
+                        valor.valor(), clave);
             }
         });
     }
@@ -831,29 +855,32 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // y dejaba de poder leerse. Un cliente no tiene por que enterarse de
         // DONDE se guarda cada valor — sigue viendo `metraje_total` entre los
         // atributos aunque su fila ya no exista (D-E4-3).
+        // Y lo hace por el MISMO lector que todos los demas consumidores.
+        //
+        // Hasta el Corte 0B la ficha tenia su propia copia del recorrido —leia
+        // `atributo_propiedad` a mano y formateaba el valor ella misma—, y por
+        // eso un IMPORTE llegaba aqui sin su moneda y un multivalor no llegaba
+        // en absoluto: el lector sabia leerlos y este sitio no le preguntaba.
+        // Dos lectores del mismo dato divergen, exactamente igual que dos
+        // escritores.
         Map<String, CatalogoAtributo> definiciones = gobierno.definicionesDe(idOrganizacion, tipo);
+        ValoresDePropiedad leidos = lector.de(idOrganizacion, propiedad);
         List<AtributoFicha> valores = new ArrayList<>();
 
-        for (AtributoPropiedad atributo : atributos.findByIdPropiedadOrderByClaveAsc(idPropiedad)) {
-            CatalogoAtributo definicion = definiciones.get(atributo.getClave());
-            valores.add(new AtributoFicha(atributo.getClave(),
-                    definicion == null ? atributo.getClave() : definicion.getRotulo(),
+        for (String clave : leidos.claves()) {
+            CatalogoAtributo definicion = definiciones.get(clave);
+            valores.add(new AtributoFicha(clave,
+                    definicion == null ? clave : definicion.getRotulo(),
                     definicion == null ? null : definicion.getTipoDato(),
                     definicion == null ? null : definicion.getUnidad(),
-                    AtributosGobernados.comoTexto(atributo)));
+                    leidos.texto(clave)));
         }
-
-        for (CatalogoAtributo definicion : definiciones.values()) {
-            if (!definicion.esEstructural()) {
-                continue;
-            }
-            String valor = EscritorEstructural.leer(propiedad, definicion.getCampoEstructural());
-            if (valor != null) {
-                valores.add(new AtributoFicha(definicion.getClave(), definicion.getRotulo(),
-                        definicion.getTipoDato(), definicion.getUnidad(), valor));
-            }
-        }
-        valores.sort(java.util.Comparator.comparing(AtributoFicha::clave));
+        // Por el ORDEN del catalogo, no alfabetico por clave: la colocacion la
+        // gobierna el catalogo desde 0B, y ordenar por clave aqui la tiraba.
+        valores.sort(java.util.Comparator
+                .<AtributoFicha>comparingInt(a -> definiciones.containsKey(a.clave())
+                        ? definiciones.get(a.clave()).getOrden() : Integer.MAX_VALUE)
+                .thenComparing(AtributoFicha::clave));
 
         // La serie se lee UNA vez y se reparte por encargo. Consultarla dentro
         // del bucle serian dos consultas identicas por propiedad — el N+1 que
@@ -1236,8 +1263,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         return 0;
     }
 
-    private static Map<String, String> atributosValidados(List<ValorAtributo> valores) {
-        Map<String, String> porClave = new LinkedHashMap<>();
+    private static Map<String, ValorAtributo> atributosValidados(List<ValorAtributo> valores) {
+        Map<String, ValorAtributo> porClave = new LinkedHashMap<>();
         if (valores == null) {
             return porClave;
         }
@@ -1245,7 +1272,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             if (valor.clave() == null || valor.clave().isBlank()) {
                 throw new ReglaNegocioException("Un atributo sin clave no se puede guardar.");
             }
-            if (porClave.put(valor.clave().trim(), valor.valor()) != null) {
+            if (porClave.put(valor.clave().trim(), valor) != null) {
                 throw new ReglaNegocioException(
                         "El atributo \"" + valor.clave() + "\" llego dos veces con valores distintos.");
             }

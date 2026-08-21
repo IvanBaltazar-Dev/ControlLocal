@@ -117,15 +117,26 @@ public class CapturaController {
      * {@code DECIMAL} con unidad {@code moneda} y otro con unidad {@code m2} se
      * guardan igual y se piden distinto.
      */
-    public record PreguntaResponse(String clave, String rotulo, String familia, String control,
-                                   String tipoDato, String unidad, List<String> opciones,
+    /** Un valor admitido con su nombre: el cliente pinta el rótulo, devuelve el valor. */
+    public record OpcionResponse(String valor, String rotulo) {
+
+        static OpcionResponse desde(MotorDeCaptura.Opcion opcion) {
+            return new OpcionResponse(opcion.valor(), opcion.rotulo());
+        }
+    }
+
+    public record PreguntaResponse(String clave, String rotulo, String seccion, String familia,
+                                   String control, String tipoDato, String unidad,
+                                   List<OpcionResponse> opciones, String exigencia,
                                    boolean obligatoria, String ayuda, int orden,
                                    RestriccionesResponse restricciones) {
 
         static PreguntaResponse desde(MotorDeCaptura.Pregunta pregunta) {
-            return new PreguntaResponse(pregunta.clave(), pregunta.rotulo(), pregunta.familia(),
-                    pregunta.control(), pregunta.tipoDato(), pregunta.unidad(),
-                    pregunta.opciones(), pregunta.obligatoria(), pregunta.ayuda(),
+            return new PreguntaResponse(pregunta.clave(), pregunta.rotulo(), pregunta.seccion(),
+                    pregunta.familia(), pregunta.control(), pregunta.tipoDato(), pregunta.unidad(),
+                    pregunta.opciones() == null ? null
+                            : pregunta.opciones().stream().map(OpcionResponse::desde).toList(),
+                    pregunta.exigencia(), pregunta.obligatoria(), pregunta.ayuda(),
                     pregunta.orden(), RestriccionesResponse.desde(pregunta.restricciones()));
         }
     }
@@ -233,7 +244,7 @@ public class CapturaController {
     public DefinicionResponse definicion(
             @RequestParam(defaultValue = "REGISTRAR_PROPIEDAD") String intencion,
             @RequestParam String tipoPropiedad,
-            @RequestParam String operaciones) {
+            @RequestParam(required = false) String operaciones) {
         return DefinicionResponse.desde(
                 motor.definicion(intencion, tipoPropiedad, operaciones, SesionActual.actor()));
     }

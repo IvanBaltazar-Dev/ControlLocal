@@ -2,6 +2,7 @@ package com.controllocal.service.captura;
 
 import com.controllocal.domain.captura.BorradorCaptura;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
+import com.controllocal.domain.inmueble.TipoDato;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.persistence.repositorio.BorradorCapturaRepository;
@@ -142,17 +143,27 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 .orElseThrow(() -> new ReglaNegocioException(
                         "Tipo de propiedad desconocido: \"" + tipoPropiedad + "\". Son siete: LOCAL, "
                                 + "OFICINA, DEPARTAMENTO, CASA, TERRENO, ALMACEN y OTRO."));
-        // La operación se exige aquí igual que en la escritura: sin ella no se
-        // puede rotular el importe, y un importe sin nombre es el error que el
-        // modelo universal vino a impedir. Pueden ser dos: entonces la ficha
-        // física se pregunta una vez y la condición económica, dos.
-        List<OperacionInmobiliaria> declaradas = operacionesDeclaradas(operaciones);
+        // La operación NO se infiere, y desde el Corte 0B tampoco se exige.
+        //
+        // Ausente significa «pregúntame por la COSA FÍSICA»: comunes y sección
+        // del tipo, cero bloques de encargo. Es la consulta legítima de quien
+        // quiere saber qué tiene un departamento sin fingir todavía una
+        // intención comercial —KAIROS pregunta exactamente eso—, y es coherente
+        // con la tesis del modelo: la propiedad no tiene operación, la operación
+        // vive en el Encargo.
+        //
+        // Lo que no se hace es rellenarla con ALQUILER «porque es lo normal».
+        // Eso devolvería un bloque económico que nadie pidió, rotulado con una
+        // operación que nadie declaró.
+        List<OperacionInmobiliaria> declaradas = operaciones == null || operaciones.isBlank()
+                ? List.of()
+                : operacionesDeclaradas(operaciones);
 
         List<Pregunta> comunes = new ArrayList<>();
         for (String clave : GuionRegistroPropiedad.COMUNES) {
             Pregunta pregunta = conCatalogoDelSistema(GuionRegistroPropiedad.pregunta(clave));
             if (pregunta != null) {
-                comunes.add(pregunta.en(Pregunta.FAMILIA_COMUN, comunes.size()));
+                comunes.add(pregunta.en(Pregunta.SECCION_COMUN, comunes.size()));
             }
         }
 
@@ -164,14 +175,11 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 GuionRegistroPropiedad.EDIFICIO)) {
             if (GuionRegistroPropiedad.aplicaAlTipo(clave, codigoTipo)) {
                 delTipo.add(GuionRegistroPropiedad.pregunta(clave)
-                        .en(Pregunta.FAMILIA_TIPO, delTipo.size()));
+                        .en(Pregunta.SECCION_TIPO, delTipo.size()));
             }
         }
         for (CatalogoAtributo atributo : gobierno.aplicablesA(actor.idOrganizacion(), codigoTipo)) {
-            delTipo.add(conRestricciones(new Pregunta(atributo.getClave(), atributo.getRotulo(),
-                    atributo.getTipoDato(), atributo.getUnidad(), null,
-                    atributo.esRequeridoPara(codigoTipo), null), atributo)
-                    .en(Pregunta.FAMILIA_TIPO, delTipo.size()));
+            delTipo.add(delCatalogo(atributo, codigoTipo));
         }
 
         // Un bloque por encargo. Los dos tienen la misma forma y distinto
@@ -184,7 +192,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 Pregunta pregunta = GuionRegistroPropiedad.pregunta(
                         GuionRegistroPropiedad.para(base, op));
                 if (pregunta != null) {
-                    economicas.add(pregunta.en(Pregunta.FAMILIA_OPERACION, economicas.size()));
+                    economicas.add(pregunta.en(Pregunta.SECCION_OPERACION, economicas.size()));
                 }
             }
             deLaOperacion.add(new MotorDeCaptura.BloqueOperacion(op.name(),
@@ -222,8 +230,12 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         if (nombres.isEmpty()) {
             return pregunta;
         }
+        // El distrito se ofrece con su nombre como valor Y como rotulo: el
+        // catalogo de distritos no tiene codigo estable todavia, y fabricar uno
+        // aqui seria inventar vocabulario en el sitio equivocado.
         return new Pregunta(pregunta.clave(), pregunta.rotulo(), "LISTA", pregunta.unidad(),
-                nombres, pregunta.obligatoria(), pregunta.ayuda());
+                nombres.stream().map(n -> new MotorDeCaptura.Opcion(n, n)).toList(),
+                pregunta.obligatoria(), pregunta.ayuda());
     }
 
     /**
@@ -234,6 +246,34 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
      * excepción que el cable convierte en 400 con su mensaje. El enum no debe
      * conocer la capa de servicio, y el servicio no debe reescribir el motivo.
      */
+    /**
+     * <b>Una pregunta con todo lo que el catalogo declara sobre ella</b> (0B).
+     *
+     * <p>Hasta este corte el motor construia la pregunta con {@code opciones =
+     * null} y {@code ayuda = null}, y pisaba el {@code orden} con la posicion
+     * del bucle. Consecuencia: la unica LISTA sembrada viajaba como TEXTO
+     * —porque el control se deriva de si hay opciones—, y los dos endpoints de
+     * definicion publicaban un orden distinto para la misma clave sin que nadie
+     * lo notara.
+     *
+     * <p>Ahora el orden es <b>el del catalogo</b>. No se recalcula: si la
+     * colocacion esta gobernada, el motor la transmite. Lo unico que sigue
+     * saliendo del bucle es la posicion de las preguntas del guion, que no
+     * estan en el catalogo y no tienen quien las ordene.
+     */
+    private static Pregunta delCatalogo(CatalogoAtributo atributo, String codigoTipo) {
+        List<MotorDeCaptura.Opcion> opciones = atributo.opcionesVigentes().stream()
+                .map(opcion -> new MotorDeCaptura.Opcion(opcion.getValor(), opcion.getRotulo()))
+                .toList();
+        Pregunta base = new Pregunta(atributo.getClave(), atributo.getRotulo(),
+                atributo.getTipoDato(), atributo.getUnidad(), null, false, null);
+        return conRestricciones(base, atributo)
+                .conCatalogo(atributo.getFamilia(), atributo.getAyuda(),
+                        atributo.exigenciaPara(codigoTipo).codigo(),
+                        opciones.isEmpty() ? null : opciones)
+                .en(Pregunta.SECCION_TIPO, atributo.getOrden());
+    }
+
     private static List<OperacionInmobiliaria> operacionesDeclaradas(String valores) {
         try {
             return OperacionInmobiliaria.desdeLista(valores);
@@ -261,7 +301,7 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 GuionRegistroPropiedad.OPERACIONES)) {
             Pregunta pregunta = GuionRegistroPropiedad.pregunta(clave);
             if (pregunta != null) {
-                preguntas.add(pregunta.en(Pregunta.FAMILIA_APERTURA, preguntas.size()));
+                preguntas.add(pregunta.en(Pregunta.SECCION_APERTURA, preguntas.size()));
             }
         }
         return List.copyOf(preguntas);
@@ -575,16 +615,28 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
      * almacenamiento, no del concepto -- y viaja en null, que es la forma
      * honesta de decir que el catalogo no lo declara.
      */
+    /**
+     * Los limites que declara el catalogo, los CUATRO.
+     *
+     * <p>El maximo y la longitud maxima viajaban en {@code null} porque el
+     * esquema no sabia declararlos; V72 les dio columna y aqui dejan de ser
+     * huecos. El <b>minimo se conserva</b>: anadir el techo no puede costar el
+     * suelo que ya existia desde V62, y esa es exactamente la clase de perdida
+     * que se cuela al ampliar algo.
+     */
     private static Pregunta conRestricciones(Pregunta pregunta, CatalogoAtributo definicion) {
-        Integer decimales = CatalogoAtributo.ENTERO.equals(definicion.getTipoDato()) ? 0 : null;
-        if (definicion.getValorMinimo() == null && decimales == null) {
+        Integer decimales = definicion.tipo() == TipoDato.ENTERO ? 0 : null;
+        if (definicion.getValorMinimo() == null && definicion.getValorMaximo() == null
+                && definicion.getLongitudMaxima() == null && decimales == null) {
             return pregunta;
         }
-        return new Pregunta(pregunta.clave(), pregunta.rotulo(), pregunta.familia(),
-                pregunta.control(), pregunta.tipoDato(), pregunta.unidad(), pregunta.opciones(),
-                pregunta.obligatoria(), pregunta.ayuda(), pregunta.orden(),
+        return new Pregunta(pregunta.clave(), pregunta.rotulo(), pregunta.seccion(),
+                pregunta.familia(), pregunta.control(), pregunta.tipoDato(), pregunta.unidad(),
+                pregunta.opciones(), pregunta.exigencia(), pregunta.obligatoria(),
+                pregunta.ayuda(), pregunta.orden(),
                 new MotorDeCaptura.Restricciones(sinEscalaDeAlmacen(definicion.getValorMinimo()),
-                        null, null, decimales));
+                        sinEscalaDeAlmacen(definicion.getValorMaximo()),
+                        definicion.getLongitudMaxima(), decimales));
     }
 
     /**

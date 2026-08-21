@@ -391,8 +391,8 @@ class KairosImplTest {
 
     private static EstadoCaptura estado(Long id, List<String> faltante) {
         ClienteBrox.Pregunta siguiente = faltante.isEmpty() ? null
-                : new ClienteBrox.Pregunta(faltante.get(0), faltante.get(0), "TEXTO", null, null,
-                        true, null);
+                : new ClienteBrox.Pregunta(faltante.get(0), faltante.get(0), "COMUN", null,
+                        "TEXTO", "TEXTO", null, null, "ALT", true, null, 0);
         return new EstadoCaptura(id, "CAP-00001", "REGISTRAR_PROPIEDAD", "E", Map.of(), faltante,
                 siguiente, false, null);
     }

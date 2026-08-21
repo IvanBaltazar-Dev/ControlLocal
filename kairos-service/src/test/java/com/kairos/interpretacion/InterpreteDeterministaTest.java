@@ -297,6 +297,7 @@ class InterpreteDeterministaTest {
 
     private static ClienteBrox.Pregunta atributo(String clave, String rotulo, String tipoDato,
                                                  String unidad) {
-        return new ClienteBrox.Pregunta(clave, rotulo, tipoDato, unidad, null, false, null);
+        return new ClienteBrox.Pregunta(clave, rotulo, "TIPO", null, tipoDato, tipoDato, unidad,
+                null, "OPC", false, null, 100);
     }
 }

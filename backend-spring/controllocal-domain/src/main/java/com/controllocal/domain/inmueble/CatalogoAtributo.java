@@ -14,7 +14,9 @@ import jakarta.persistence.Transient;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
+import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Que caracteristicas puede tener un inmueble, con su tipo de dato, su unidad y
@@ -40,12 +42,18 @@ import java.util.Set;
 @Table(name = "catalogo_atributo")
 public class CatalogoAtributo {
 
-    public static final String TEXTO = "TEXTO";
-    public static final String ENTERO = "ENTERO";
-    public static final String DECIMAL = "DECIMAL";
-    public static final String BOOLEANO = "BOOLEANO";
-    public static final String LISTA = "LISTA";
-    public static final Set<String> TIPOS_DATO = Set.of(TEXTO, ENTERO, DECIMAL, BOOLEANO, LISTA);
+    /**
+     * Los codigos de tipo de dato, derivados del enum y no escritos otra vez.
+     *
+     * <p>Hasta el Corte 0B esto era una lista de cinco constantes de texto
+     * mantenida a mano, y ninguno de los tres {@code switch} que la consumian
+     * era exhaustivo. Ahora la verdad esta en {@link TipoDato} y esto es su
+     * proyeccion: anadir un noveno tipo no puede dejar esta lista corta, porque
+     * ya no es una lista.
+     */
+    public static final Set<String> TIPOS_DATO = Arrays.stream(TipoDato.values())
+            .map(TipoDato::codigo)
+            .collect(Collectors.toUnmodifiableSet());
 
     /** El valor vive en {@code atributo_propiedad}. Es el caso normal. */
     public static final String ATRIBUTO = "ATRIBUTO";
@@ -104,7 +112,7 @@ public class CatalogoAtributo {
     @Column(name = "rotulo", nullable = false, length = 120)
     private String rotulo;
 
-    @Column(name = "tipo_dato", nullable = false, length = 10)
+    @Column(name = "tipo_dato", nullable = false, length = 20)
     private String tipoDato;
 
     /** m2, kW, anios, moneda... NULL cuando el numero no tiene unidad. */
@@ -165,6 +173,36 @@ public class CatalogoAtributo {
     @Column(name = "valor_minimo", precision = 14, scale = 4)
     private java.math.BigDecimal valorMinimo;
 
+    /** El maximo admisible del valor numerico; NULL = sin techo (V72). */
+    @Column(name = "valor_maximo", precision = 14, scale = 4)
+    private java.math.BigDecimal valorMaximo;
+
+    /**
+     * Cuanto mide como mucho un valor de texto; NULL = sin techo (V72).
+     *
+     * <p>Repone la garantia que se perdio al retirar {@code detalle_local_comercial}:
+     * el rubro tenia {@code VARCHAR(120)} y {@code valor_texto} es TEXT.
+     */
+    @Column(name = "longitud_maxima")
+    private Integer longitudMaxima;
+
+    /** Para que sirve este dato, en palabras del corredor (V72). */
+    @Column(name = "ayuda")
+    private String ayuda;
+
+    /**
+     * La agrupacion TEMATICA que declara la clave: "edificio", "instalaciones"
+     * (V72). Junto al tipo de control, es la <b>unica</b> ramificacion que la
+     * frontera D-A-1 le permite a una interfaz.
+     *
+     * <p>No se confunde con la clasificacion estructural del motor de captura
+     * --de que lista salio la pregunta--, que viaja por el cable como
+     * {@code seccion}. Eran dos conceptos con el mismo nombre y el cliente
+     * recibia los dos en el mismo objeto.
+     */
+    @Column(name = "familia", length = 30)
+    private String familia;
+
     @Column(name = "fecha_creacion", insertable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
 
@@ -179,6 +217,19 @@ public class CatalogoAtributo {
             joinColumns = @JoinColumn(name = "id_catalogo_atributo"))
     private Set<AplicacionAtributo> aplicaciones = new LinkedHashSet<>();
 
+    /**
+     * El vocabulario de una LISTA o una LISTA_MULTIPLE (V72). Vacio en los
+     * demas tipos.
+     *
+     * <p>Misma forma que {@link #aplicaciones} y por la misma razon: una opcion
+     * no tiene vida fuera de su atributo. Se hidrata con el catalogo, asi que
+     * publicar las opciones no anade ninguna consulta por clave.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "catalogo_atributo_opcion",
+            joinColumns = @JoinColumn(name = "id_catalogo_atributo"))
+    private Set<OpcionDeAtributo> opciones = new LinkedHashSet<>();
+
     /** ¿Este atributo tiene sentido para una propiedad de este tipo? */
     @Transient
     public boolean aplicaA(String tipoPropiedad) {
@@ -188,17 +239,54 @@ public class CatalogoAtributo {
         return aplicaciones.stream().anyMatch(a -> a.getTipoPropiedad().equals(tipoPropiedad));
     }
 
-    /** ¿Y es obligatorio para ese tipo? Es lo que decide si el alta puede cerrarse. */
+    /**
+     * <b>Cuanto hace falta para ese tipo.</b> Tres niveles desde V72, no un
+     * booleano: ALT bloquea el alta, PUB bloquea publicar, OPC no bloquea.
+     *
+     * <p>Devuelve OPC cuando la clave no declara nada para ese tipo, que es lo
+     * unico honesto: una exigencia que no se declaro no puede bloquear nada.
+     */
     @Transient
-    public boolean esRequeridoPara(String tipoPropiedad) {
+    public Exigencia exigenciaPara(String tipoPropiedad) {
         return aplicaciones.stream()
                 .filter(a -> a.getTipoPropiedad().equals(tipoPropiedad))
-                .anyMatch(AplicacionAtributo::isRequerido);
+                .map(AplicacionAtributo::exigenciaTipada)
+                .findFirst()
+                .orElse(Exigencia.OPC);
+    }
+
+    /**
+     * ¿Bloquea el alta para ese tipo? Solo ALT.
+     *
+     * <p>Se pregunta asi y NO comparando contra un nivel: basta que un consumidor
+     * lea "lo que no sea OPC" para que el alta empiece a exigir de golpe todo lo
+     * que solo debia exigir el anuncio.
+     */
+    @Transient
+    public boolean esRequeridoPara(String tipoPropiedad) {
+        return exigenciaPara(tipoPropiedad).bloqueaAlta();
+    }
+
+    /** ¿Impide publicar para ese tipo? ALT y PUB. */
+    @Transient
+    public boolean bloqueaPublicacionPara(String tipoPropiedad) {
+        return exigenciaPara(tipoPropiedad).bloqueaPublicacion();
+    }
+
+    /**
+     * <b>El tipo de dato, tipado.</b> Es por donde debe preguntarse a partir del
+     * Corte 0B: devuelve un {@link TipoDato}, asi que un {@code switch} sobre el
+     * lo comprueba el compilador y anadir un noveno tipo deja de poder colarse
+     * por un {@code default} permisivo.
+     */
+    @Transient
+    public TipoDato tipo() {
+        return TipoDato.desde(tipoDato);
     }
 
     @Transient
     public boolean esNumerico() {
-        return ENTERO.equals(tipoDato) || DECIMAL.equals(tipoDato);
+        return tipo().esNumerico();
     }
 
     /**
@@ -220,6 +308,38 @@ public class CatalogoAtributo {
 
     public java.math.BigDecimal getValorMinimo() {
         return valorMinimo;
+    }
+
+    public java.math.BigDecimal getValorMaximo() {
+        return valorMaximo;
+    }
+
+    public void setValorMaximo(java.math.BigDecimal valorMaximo) {
+        this.valorMaximo = valorMaximo;
+    }
+
+    public Integer getLongitudMaxima() {
+        return longitudMaxima;
+    }
+
+    public void setLongitudMaxima(Integer longitudMaxima) {
+        this.longitudMaxima = longitudMaxima;
+    }
+
+    public String getAyuda() {
+        return ayuda;
+    }
+
+    public void setAyuda(String ayuda) {
+        this.ayuda = ayuda;
+    }
+
+    public String getFamilia() {
+        return familia;
+    }
+
+    public void setFamilia(String familia) {
+        this.familia = familia;
     }
 
     public String getCampoEstructural() {
@@ -308,6 +428,24 @@ public class CatalogoAtributo {
 
     public OffsetDateTime getFechaCreacion() {
         return fechaCreacion;
+    }
+
+    /** El vocabulario declarado, ya ordenado y sin las opciones retiradas. */
+    @Transient
+    public java.util.List<OpcionDeAtributo> opcionesVigentes() {
+        return opciones.stream()
+                .filter(OpcionDeAtributo::isActivo)
+                .sorted(java.util.Comparator.comparingInt(OpcionDeAtributo::getOrden)
+                        .thenComparing(OpcionDeAtributo::getValor))
+                .toList();
+    }
+
+    public Set<OpcionDeAtributo> getOpciones() {
+        return opciones;
+    }
+
+    public void setOpciones(Set<OpcionDeAtributo> opciones) {
+        this.opciones = opciones;
     }
 
     public Set<AplicacionAtributo> getAplicaciones() {

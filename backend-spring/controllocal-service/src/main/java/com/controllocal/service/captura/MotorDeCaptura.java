@@ -49,28 +49,54 @@ public interface MotorDeCaptura {
      * numerico, un si/no con un interruptor — sin tener que saberse la tabla.
      * {@code opciones} solo viene cuando el valor es de un conjunto cerrado.
      */
-    record Pregunta(String clave, String rotulo, String familia, String control, String tipoDato,
-                    String unidad, List<String> opciones, boolean obligatoria, String ayuda,
-                    int orden, Restricciones restricciones) {
+    /**
+     * Un valor admitido, con su nombre. El cliente pinta el rótulo y devuelve el
+     * valor: cambiar cómo se lee un rubro no puede invalidar las fichas que ya
+     * lo eligieron.
+     */
+    record Opcion(String valor, String rotulo) {
+    }
 
-        /** A qué familia pertenece. Decide qué se conserva al cambiar la selección. */
-        public static final String FAMILIA_COMUN = "COMUN";
+    record Pregunta(String clave, String rotulo, String seccion, String familia, String control,
+                    String tipoDato, String unidad, List<Opcion> opciones, String exigencia,
+                    boolean obligatoria, String ayuda, int orden, Restricciones restricciones) {
+
+        /**
+         * A qué SECCIÓN del guion pertenece. Decide qué se conserva al cambiar
+         * la selección: cambiar el tipo descarta lo de {@code TIPO} y conserva
+         * lo {@code COMUN}.
+         *
+         * <p>Se llamaba {@code familia} hasta el Corte 0B y hubo que
+         * renombrarlo: el catálogo declara <b>su propia</b> familia —la
+         * agrupación temática de la clave, «edificio», «instalaciones»— y el
+         * cliente recibía las dos con el mismo nombre en el mismo objeto.
+         */
+        public static final String SECCION_COMUN = "COMUN";
         /** Las que deciden el plan: hasta responderlas no hay nada más que preguntar. */
-        public static final String FAMILIA_APERTURA = "APERTURA";
-        public static final String FAMILIA_TIPO = "TIPO";
-        public static final String FAMILIA_OPERACION = "OPERACION";
+        public static final String SECCION_APERTURA = "APERTURA";
+        public static final String SECCION_TIPO = "TIPO";
+        public static final String SECCION_OPERACION = "OPERACION";
 
         /** Constructor breve: deriva el control y no declara restricciones. */
         public Pregunta(String clave, String rotulo, String tipoDato, String unidad,
-                        List<String> opciones, boolean obligatoria, String ayuda) {
-            this(clave, rotulo, FAMILIA_COMUN, controlDe(tipoDato, unidad, opciones), tipoDato,
-                    unidad, opciones, obligatoria, ayuda, 0, null);
+                        List<Opcion> opciones, boolean obligatoria, String ayuda) {
+            this(clave, rotulo, SECCION_COMUN, null, controlDe(tipoDato, unidad, opciones),
+                    tipoDato, unidad, opciones, obligatoria ? "ALT" : "OPC", obligatoria, ayuda,
+                    0, null);
         }
 
-        /** La misma pregunta, colocada en su familia y su orden. */
-        public Pregunta en(String familia, int orden) {
-            return new Pregunta(clave, rotulo, familia, control, tipoDato, unidad, opciones,
-                    obligatoria, ayuda, orden, restricciones);
+        /** La misma pregunta, colocada en su seccion y su orden. */
+        public Pregunta en(String seccion, int orden) {
+            return new Pregunta(clave, rotulo, seccion, familia, control, tipoDato, unidad,
+                    opciones, exigencia, obligatoria, ayuda, orden, restricciones);
+        }
+
+        /** La misma pregunta con lo que declara el catalogo: familia, ayuda y exigencia. */
+        public Pregunta conCatalogo(String familia, String ayuda, String exigencia,
+                                    List<Opcion> opciones) {
+            return new Pregunta(clave, rotulo, seccion, familia,
+                    controlDe(tipoDato, unidad, opciones), tipoDato, unidad, opciones,
+                    exigencia, "ALT".equals(exigencia), ayuda, orden, restricciones);
         }
 
         /**
@@ -84,7 +110,7 @@ public interface MotorDeCaptura {
          * {@code if (clave === 'piso')}: el cliente conoce controles genéricos,
          * nunca qué campo pertenece a qué tipo de propiedad.
          */
-        public static String controlDe(String tipoDato, String unidad, List<String> opciones) {
+        public static String controlDe(String tipoDato, String unidad, List<Opcion> opciones) {
             // Va antes que SELECTOR porque tambien trae opciones. La diferencia
             // es que admite mas de una, y de ahi salen los dos encargos de una
             // propiedad que se ofrece para venta y para alquiler.
@@ -105,6 +131,14 @@ public interface MotorDeCaptura {
             }
             if ("moneda".equals(unidad)) {
                 return "MONEDA";
+            }
+            if ("FECHA".equals(tipoDato)) {
+                return "FECHA";
+            }
+            // IMPORTE es su propio control: lleva cifra Y moneda, y un DECIMAL
+            // con un selector al lado seria pedirle al cliente que los una.
+            if ("IMPORTE".equals(tipoDato)) {
+                return "IMPORTE";
             }
             if ("ENTERO".equals(tipoDato)) {
                 return "ENTERO";

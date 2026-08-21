@@ -7,7 +7,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.EdicionRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.FilaPropiedadResponse;
-import com.controllocal.web.dto.PropiedadUniversalDtos.PreguntaCatalogoResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.PropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroResponse;
@@ -157,16 +156,4 @@ public class PropiedadesUniversalesController {
                 propiedades.editar(id, dto.aDatos(claveIdempotencia, procedencias.de(peticion)), SesionActual.actor()));
     }
 
-    /**
-     * Que se pregunta para un tipo de propiedad. Sale del catalogo, no de una
-     * lista escrita en el cliente: por eso un TERRENO no devuelve dormitorios.
-     */
-    @GetMapping("catalogo/{tipoPropiedad}")
-    public List<PreguntaCatalogoResponse> catalogo(@PathVariable String tipoPropiedad) {
-        return propiedades.catalogoDe(tipoPropiedad, SesionActual.actor()).stream()
-                .map(pregunta -> new PreguntaCatalogoResponse(pregunta.clave(), pregunta.rotulo(),
-                        pregunta.tipoDato(), pregunta.unidad(), pregunta.obligatoria(),
-                        pregunta.orden()))
-                .toList();
-    }
 }

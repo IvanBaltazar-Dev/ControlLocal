@@ -154,10 +154,37 @@ public class ClienteBroxHttp implements ClienteBrox {
         return lista(http.get().uri("/locales/distritos").headers(conSesion(sesion)));
     }
 
+    /**
+     * La definicion fisica: comunes + lo del tipo, sin ningun bloque economico.
+     *
+     * <p><b>Sin {@code operaciones} a proposito.</b> KAIROS pregunta «que tiene
+     * un departamento» antes de que exista ninguna intencion comercial, y
+     * mandar VENTA o ALQUILER «para que no falle» seria fingir una decision que
+     * el usuario no ha tomado -- y recibir un bloque de precio que nadie pidio.
+     */
     @Override
     public List<Pregunta> catalogoDe(SesionBrox sesion, String tipoPropiedad) {
-        return lista(http.get().uri("/propiedades/catalogo/{tipo}", tipoPropiedad)
-                .headers(conSesion(sesion)));
+        DefinicionCaptura definicion = definicionDe(sesion, tipoPropiedad, null);
+        List<Pregunta> todas = new java.util.ArrayList<>(definicion.comunes());
+        todas.addAll(definicion.delTipo());
+        return List.copyOf(todas);
+    }
+
+    @Override
+    public DefinicionCaptura definicionDe(SesionBrox sesion, String tipoPropiedad,
+                                          String operaciones) {
+        return http.get()
+                .uri(uri -> {
+                    var construida = uri.path("/captura/definicion")
+                            .queryParam("tipoPropiedad", tipoPropiedad);
+                    if (operaciones != null && !operaciones.isBlank()) {
+                        construida = construida.queryParam("operaciones", operaciones);
+                    }
+                    return construida.build();
+                })
+                .headers(conSesion(sesion))
+                .retrieve()
+                .body(DefinicionCaptura.class);
     }
 
     @Override

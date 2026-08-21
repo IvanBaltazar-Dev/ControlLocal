@@ -73,7 +73,7 @@ public interface AtributoPropiedadRepository extends JpaRepository<AtributoPropi
     @Query("""
             select c.clave from CatalogoAtributo c join c.aplicaciones a
             where c.activo = true
-              and a.requerido = true
+              and a.exigencia = 'ALT'
               and a.tipoPropiedad = :tipoPropiedad
               and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
               and c.destino = 'ATRIBUTO'
@@ -84,6 +84,30 @@ public interface AtributoPropiedadRepository extends JpaRepository<AtributoPropi
     List<String> clavesObligatoriasQueFaltan(@Param("idOrganizacion") long idOrganizacion,
                                              @Param("idPropiedad") long idPropiedad,
                                              @Param("tipoPropiedad") String tipoPropiedad);
+
+    /**
+     * <b>Que le falta para poder PUBLICARSE.</b> ALT y PUB, no solo ALT (V72).
+     *
+     * <p>Es una consulta aparte y no un parametro de la de arriba a proposito:
+     * las dos preguntas se hacen en momentos distintos y basta que una acabe
+     * respondiendo la otra para que el alta empiece a exigir de golpe todo lo
+     * que solo debia exigir el anuncio. Dos consultas con dos nombres no se
+     * confunden; un booleano si.
+     */
+    @Query("""
+            select c.clave from CatalogoAtributo c join c.aplicaciones a
+            where c.activo = true
+              and a.exigencia in ('ALT', 'PUB')
+              and a.tipoPropiedad = :tipoPropiedad
+              and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
+              and c.destino = 'ATRIBUTO'
+              and not exists (select 1 from AtributoPropiedad ap
+                               where ap.idPropiedad = :idPropiedad and ap.clave = c.clave)
+            order by c.orden asc
+            """)
+    List<String> clavesQueImpidenPublicar(@Param("idOrganizacion") long idOrganizacion,
+                                          @Param("idPropiedad") long idPropiedad,
+                                          @Param("tipoPropiedad") String tipoPropiedad);
 
     void deleteByIdPropiedadAndClave(long idPropiedad, String clave);
 }

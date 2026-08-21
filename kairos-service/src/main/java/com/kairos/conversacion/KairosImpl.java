@@ -320,8 +320,14 @@ public class KairosImpl implements Kairos {
     private static Respuesta conEstadoDeCaptura(Turno turno, Accion accion,
                                                 Interprete.Lectura lectura, Capacidad capacidad,
                                                 EstadoCaptura estado) {
+        // El ROTULO es lo que se dice en voz alta; el valor es lo que se
+        // devuelve. Antes eran la misma cadena porque la opcion era un String,
+        // y por eso KAIROS leia codigos como "LOCAL" en una conversacion.
         List<String> opciones = estado.siguiente() == null || estado.siguiente().opciones() == null
-                ? List.of() : estado.siguiente().opciones();
+                ? List.of()
+                : estado.siguiente().opciones().stream()
+                        .map(ClienteBrox.Opcion::rotulo)
+                        .toList();
         boolean completo = estado.faltante() == null || estado.faltante().isEmpty();
         return new Respuesta(turno.conversacionId(), turno.turnoId(), accion,
                 completo ? Desenlace.PROPUESTA : Desenlace.PREGUNTA,

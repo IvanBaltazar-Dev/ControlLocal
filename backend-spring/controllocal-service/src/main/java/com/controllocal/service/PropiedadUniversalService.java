@@ -67,7 +67,42 @@ public interface PropiedadUniversalService {
      * como texto y lo interpreta el catalogo: {@code dormitorios} es ENTERO y
      * {@code amoblado} BOOLEANO, y esa conversion no la decide el cliente.
      */
-    record ValorAtributo(String clave, String valor) {
+    /**
+     * El valor de una clave gobernada, tal cual se escribio.
+     *
+     * <p>Llega como texto y lo interpreta el catalogo: {@code dormitorios} es
+     * ENTERO y {@code amoblado} BOOLEANO, y esa conversion no la decide el
+     * cliente.
+     *
+     * <p><b>Dos formas no caben en un escalar</b>, y por eso tienen su hueco
+     * desde el Corte 0B en vez de codificarse dentro de {@code valor}:
+     *
+     * <ul>
+     *   <li>{@code moneda} acompana a un IMPORTE. Meterla dentro del texto
+     *       --{@code "120.50 USD"}-- obligaria al Core a parsear una cadena
+     *       compuesta y a decidir que hacer con {@code "120,50 US$"}.</li>
+     *   <li>{@code valores} es un LISTA_MULTIPLE. Mandarlo como
+     *       {@code "AGUA, LUZ"} es exactamente el defecto de
+     *       {@code servicios_disponibles} que 0B viene a cerrar: dos fichas que
+     *       dicen lo mismo en distinto orden dejan de poder compararse.</li>
+     * </ul>
+     */
+    record ValorAtributo(String clave, String valor, String moneda, List<String> valores) {
+
+        /** El caso normal: una clave y su valor. */
+        public ValorAtributo(String clave, String valor) {
+            this(clave, valor, null, null);
+        }
+
+        /** Un importe, que es monto y moneda o no es nada. */
+        public static ValorAtributo importe(String clave, String monto, String moneda) {
+            return new ValorAtributo(clave, monto, moneda, null);
+        }
+
+        /** Varios valores del mismo vocabulario. Sustituyen a los que hubiera. */
+        public static ValorAtributo multiple(String clave, List<String> valores) {
+            return new ValorAtributo(clave, null, null, valores);
+        }
     }
 
     /** Donde esta. Las coordenadas son opcionales; la direccion y el distrito no. */
@@ -447,25 +482,16 @@ public interface PropiedadUniversalService {
     /** Los valores que el filtro puede ofrecer, sacados de la cartera real. */
     OpcionesDeFiltro opcionesDeFiltro(Actor actor);
 
-    /**
-     * Una caracteristica que <b>aplica</b> a un tipo de propiedad, derivada del
-     * catalogo. Es lo que hace que registrar un terreno no pida dormitorios sin
-     * que ninguna pantalla lo sepa.
-     */
-    record PreguntaCatalogo(String clave, String rotulo, String tipoDato, String unidad,
-                            boolean obligatoria, int orden) {
-    }
-
-    // ------------------------------------------------------------------
-
-    /** Alta universal, en una sola transaccion. Todo o nada. */
+    /** El alta completa: propiedad, titulares, atributos y encargos, todo o nada. */
     ResultadoRegistro registrar(ComandoRegistro comando, Actor actor);
 
-    /**
-     * Que se pregunta para un tipo de propiedad. Lo consulta el cliente para
-     * pintar el formulario; la lista <b>no</b> se escribe en el cliente.
-     */
-    List<PreguntaCatalogo> catalogoDe(String tipoPropiedad, Actor actor);
+    // `catalogoDe` vivia aqui hasta el Corte 0B, y lo retiro el mismo cambio que
+    // migro a KAIROS. Respondia a «que se pregunta para este tipo» con seis
+    // campos, mientras `/captura/definicion` respondia a lo mismo con once y
+    // desde la misma consulta al catalogo. Dos productores de una autoridad
+    // divergen, y estos ya lo hacian: publicaban un `orden` distinto para la
+    // misma clave y nadie lo notaba. La unica definicion publica es la del
+    // motor, que es la maquina compartida por BROX Web y KAIROS (D-E4-2).
 
     /** La propiedad tal como la escribio el modelo universal. */
     FichaPropiedadUniversal consultar(long idPropiedad, Actor actor);

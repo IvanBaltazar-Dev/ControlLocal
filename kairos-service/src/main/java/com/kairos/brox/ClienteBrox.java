@@ -73,9 +73,37 @@ public interface ClienteBrox {
     // Captura: el motor de registro vive en BROX (§6)
     // ------------------------------------------------------------------
 
-    /** Una pregunta, ya resuelta por BROX contra su catalogo. KAIROS solo la dice. */
-    record Pregunta(String clave, String rotulo, String tipoDato, String unidad,
-                    List<String> opciones, boolean obligatoria, String ayuda) {
+    /** Un valor admitido con su nombre. KAIROS dice el rotulo y devuelve el valor. */
+    record Opcion(String valor, String rotulo) {
+    }
+
+    /**
+     * Una pregunta, ya resuelta por BROX contra su catalogo. KAIROS solo la dice.
+     *
+     * <p>Desde el Corte 0B viene con TODO lo que hace falta para decirla: su
+     * vocabulario con rotulos, para que forma parte, cuanto hace falta y sus
+     * limites. KAIROS no completa nada de esto -- si tuviera que hacerlo,
+     * tendria su propia matriz inmobiliaria y divergiria de BROX Web desde el
+     * primer atributo que alguien anadiera.
+     */
+    record Pregunta(String clave, String rotulo, String seccion, String familia, String control,
+                    String tipoDato, String unidad, List<Opcion> opciones, String exigencia,
+                    boolean obligatoria, String ayuda, int orden) {
+    }
+
+    /**
+     * Lo que BROX pregunta para un tipo, y opcionalmente para sus operaciones.
+     *
+     * <p>Sin operaciones vienen {@code deLaOperacion} vacio: la propiedad es la
+     * cosa fisica y la operacion vive en el Encargo.
+     */
+    record DefinicionCaptura(String intencion, String tipoPropiedad, List<String> operaciones,
+                             List<Pregunta> comunes, List<Pregunta> delTipo,
+                             List<BloqueOperacion> deLaOperacion) {
+    }
+
+    /** Las preguntas economicas de UNA operacion, con su rotulo ya puesto. */
+    record BloqueOperacion(String operacion, String rotulo, List<Pregunta> preguntas) {
     }
 
     /** Donde va una captura, segun BROX. KAIROS no calcula ni un solo campo de esto. */
@@ -151,8 +179,20 @@ public interface ClienteBrox {
     /**
      * Que se pregunta para un tipo de propiedad, derivado del catalogo del
      * tenant. Incluye los atributos comunes y los que esa organizacion se creo.
+     *
+     * <p>Desde el Corte 0B sale de {@code GET /captura/definicion} <b>sin
+     * operaciones</b>, que es la misma maquina que usa BROX Web. Antes habia un
+     * endpoint aparte, {@code /propiedades/catalogo/{tipo}}, que respondia a la
+     * misma pregunta con la mitad de los campos: dos productores de la misma
+     * autoridad divergen, y de hecho ya lo hacian en el {@code orden}.
      */
     List<Pregunta> catalogoDe(SesionBrox sesion, String tipoPropiedad);
+
+    /**
+     * La definicion completa, con los bloques economicos de las operaciones que
+     * se declaren. Sin operaciones, solo la cosa fisica.
+     */
+    DefinicionCaptura definicionDe(SesionBrox sesion, String tipoPropiedad, String operaciones);
 
     /**
      * Los resultados que admite una interaccion de ese contexto.

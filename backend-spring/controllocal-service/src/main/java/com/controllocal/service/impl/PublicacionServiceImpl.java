@@ -1,5 +1,8 @@
 package com.controllocal.service.impl;
 
+import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.persistence.repositorio.PropiedadRepository;
+import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comun.EstadosDominio.EstadoPublicacion;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
@@ -37,13 +40,19 @@ public class PublicacionServiceImpl implements PublicacionService {
     private final PublicacionRepository publicaciones;
     private final PrecioPropiedadRepository precios;
     private final CaptacionRepository encargos;
+    private final PropiedadRepository propiedades;
+    private final AtributosGobernados gobierno;
 
     public PublicacionServiceImpl(PublicacionRepository publicaciones,
                                   PrecioPropiedadRepository precios,
-                                  CaptacionRepository encargos) {
+                                  CaptacionRepository encargos,
+                                  PropiedadRepository propiedades,
+                                  AtributosGobernados gobierno) {
         this.publicaciones = publicaciones;
         this.precios = precios;
         this.encargos = encargos;
+        this.propiedades = propiedades;
+        this.gobierno = gobierno;
     }
 
     @Override
@@ -77,6 +86,7 @@ public class PublicacionServiceImpl implements PublicacionService {
                     "El encargo " + encargo.getCodigoCaptacion() + " no esta vigente: no se puede "
                             + "publicar lo que ya no se ofrece.");
         }
+        exigirFichaPublicable(encargo.getPropiedad(), actor);
         Publicacion creada = construir(encargo.getPropiedad().getId(), datos, actor);
         creada.setIdEncargo(idEncargo);
         publicaciones.save(creada);
@@ -125,6 +135,39 @@ public class PublicacionServiceImpl implements PublicacionService {
         publicaciones.save(p);
         registrarImportePublicado(p);
         return ficha(p, operacionDe(p));
+    }
+
+    /**
+     * <b>El gate de publicacion</b> (Corte 0B).
+     *
+     * <p>Una propiedad puede existir incompleta -- el corredor no sabe todo el
+     * inmueble en la primera conversacion y no tiene por que. Pero cuando lo
+     * ANUNCIA ya no es una nota suya: es una afirmacion publica, y publicar una
+     * ficha a medias es lo que hace incomparable una cartera entera.
+     *
+     * <p>La pregunta se la hace al Core una sola vez y por su nombre. Ni este
+     * servicio ni ningun controlador interpretan ALT/PUB/OPC: eso lo sabe
+     * {@code Exigencia}, y repartirlo seria tener la misma regla con tres
+     * duenos.
+     */
+    private void exigirFichaPublicable(Propiedad propiedad, Actor actor) {
+        List<String> faltan = gobierno.faltantesDePropiedadParaPublicar(actor.idOrganizacion(), propiedad);
+        if (faltan.isEmpty()) {
+            return;
+        }
+        List<String> rotulos = gobierno.rotulosDe(
+                actor.idOrganizacion(), propiedad.getTipoInmueble(), faltan);
+        throw new ReglaNegocioException(
+                "Esta ficha todavia no se puede publicar: falta " + String.join(", ", rotulos)
+                        + ". Se puede registrar sin " + (rotulos.size() == 1 ? "ese dato" : "esos datos")
+                        + ", pero no anunciarla.");
+    }
+
+    private Propiedad propiedadDe(Publicacion publicacion, Actor actor) {
+        return propiedades
+                .findByOrganizacionIdAndId(actor.idOrganizacion(), publicacion.getIdPropiedad())
+                .orElseThrow(() -> new ReglaNegocioException(
+                        "La publicacion apunta a una propiedad que no esta en la cartera."));
     }
 
     /** El anuncio en memoria, sin encargo todavia: lo pone quien lo crea. */
@@ -190,6 +233,13 @@ public class PublicacionServiceImpl implements PublicacionService {
             throw new ReglaNegocioException("Estado de publicacion no valido: " + estado);
         }
         Publicacion actual = delTenant(idPublicacion, actor);
+        // Los DOS caminos de exposicion externa preguntan lo mismo. Poner una
+        // publicacion en PUBLICADO es anunciar igual que crearla, y cerrar solo
+        // uno de los dos dejaria la regla puesta en la puerta y abierta la
+        // ventana.
+        if (Publicacion.ESTADO_PUBLICADO.equals(estado)) {
+            exigirFichaPublicable(propiedadDe(actual, actor), actor);
+        }
         actual.setEstado(estado);
         actual.setFechaBaja(Publicacion.ESTADO_CERRADO.equals(estado) ? OffsetDateTime.now() : null);
         if (Publicacion.ESTADO_PUBLICADO.equals(estado) && actual.getFechaPublicacion() == null) {

@@ -38,6 +38,8 @@ $integracion = @(
     # separarse.
     'AutoridadDelDatoIntegrationTest',
     'BusquedaLocalesIntegrationTest',
+    # Corte 0B: los tres tipos nuevos, el vocabulario y la exigencia PUB.
+    'CatalogoQueHablaIntegrationTest',
     # Corte 0A: la ida y vuelta de la edicion por los siete tipos.
     'ConservacionDeLaEdicionIntegrationTest',
     'ConvergenciaCampanaColaIntegrationTest',

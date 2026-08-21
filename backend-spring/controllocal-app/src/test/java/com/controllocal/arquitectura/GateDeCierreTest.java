@@ -99,6 +99,8 @@ class GateDeCierreTest {
                         // (cuotas diferidas, idempotencia, rollback y encargos
                         // simultaneos) no existen dentro de una transaccion que se
                         // deshace.
+                        // Convergencia del 0C: registrar no es encargar.
+                        "PropiedadSinEncargoIntegrationTest",
                         "PropiedadUniversalIntegrationTest",
                         "RepositorioEstadosIntegrationTest",
                         "SimulacroRecuperacionIntegrationTest",

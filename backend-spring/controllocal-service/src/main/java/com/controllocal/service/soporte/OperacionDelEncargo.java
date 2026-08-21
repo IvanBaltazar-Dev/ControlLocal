@@ -116,7 +116,15 @@ public class OperacionDelEncargo {
     private void exigirCoherenciaConLosEncargos(OperacionInmobiliaria operacion,
                                                 List<Captacion> vivos) {
         if (vivos.isEmpty()) {
-            return;
+            // Declarar la operacion a mano no crea el encargo que la sostiene
+            // (V75). Sin ningun encargo vivo, el hito nacia HUERFANO -con
+            // `id_captacion` nulo- y los dos lectores discrepaban: la ficha
+            // universal lo filtra y `GET /locales/{id}/precios` lo ensena. Un
+            // mismo dato con dos verdades es peor que no tenerlo.
+            throw new ReglaNegocioException(
+                    "Esta propiedad no tiene ningun encargo vivo, asi que no hay serie economica "
+                            + "donde anotar su " + operacion.nombreDelImporte() + ". Captala "
+                            + "primero: el precio autorizado pertenece a un encargo.");
         }
         boolean encaja = vivos.stream().anyMatch(c -> operacion == c.operacion());
         if (!encaja) {

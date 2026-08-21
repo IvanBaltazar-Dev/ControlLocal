@@ -43,7 +43,7 @@ locales de sus captaciones", prospección inicial al crear local).
 | POST `{id}/seguimiento` | **AGENTE** dueño | — | `ProspeccionResponse` (reinicia reloj de recontacto, 7 días) |
 | POST `{id}/rechazar` | **AGENTE** dueño | `RechazoProspeccionRequest{motivo}` | `ProspeccionResponse` |
 | POST `{id}/descartar` | **AGENTE** dueño | `RechazoProspeccionRequest{motivo}` | `ProspeccionResponse` |
-| POST `{id}/captar` | **AGENTE** dueño | `CaptarProspeccionRequest{comisionPactada}` | `ProspeccionResponse` (crea captación P) |
+| POST `{id}/captar` | **AGENTE** dueño | `CaptarProspeccionRequest{operacion, importe, moneda, comisionPactada, …}` — **cambió el 2026-08-21 (V75)** | `ProspeccionResponse` (crea captación P) |
 | POST `{id}/marcar-captado` | **AGENTE** dueño | `MarcarProspeccionCaptadaRequest{idCaptacion, codigoCaptacion}` | `ProspeccionResponse` |
 | GET `{id}/coincidencias` | — | — | **DIFERIDO a F3** |
 

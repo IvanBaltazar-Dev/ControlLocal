@@ -223,7 +223,13 @@ describe('PropiedadForm', () => {
     ]);
   });
 
-  it('no pide la definición hasta tener tipo Y operación', async () => {
+  /**
+   * El **tipo** manda: es quien decide qué se pregunta. La operación ya no,
+   * desde V75: una propiedad puede registrarse sin encargo —para prospectarla—
+   * y exigirla aquí dejaba la pantalla parada en la apertura, con el backend
+   * aceptando `operaciones: []` y BROX Web sin forma de mandarlo.
+   */
+  it('pide la definición en cuanto hay tipo, aunque no haya operación', async () => {
     await montar();
 
     const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
@@ -232,6 +238,24 @@ describe('PropiedadForm', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
+    expect(captura.definicion).toHaveBeenCalledWith('DEPARTAMENTO', '');
+  });
+
+  it('sin operación, avisa de que la propiedad queda registrada y no se ofrece', async () => {
+    await montar();
+
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
+    select.value = 'DEPARTAMENTO';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(textoVisible()).toContain('no se ofrece');
+  });
+
+  it('no pide la definición mientras no haya tipo', async () => {
+    await montar();
     expect(captura.definicion).not.toHaveBeenCalled();
   });
 

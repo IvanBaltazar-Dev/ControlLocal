@@ -59,6 +59,15 @@ function Sql($consulta) {
 
 $sufijo = Get-Random -Minimum 1000 -Maximum 9999
 $hoy = (Get-Date).ToString('yyyy-MM-dd')
+# Las visitas van RELATIVAS a hoy. Estaban escritas con fechas literales de
+# agosto de 2026 y el guion caducaba solo: al pasar el dia 20, la "agenda de
+# proximas" dejaba de incluir una visita que el propio guion acababa de
+# programar. No se vio antes porque la suite no arrancaba -su prologo llamaba a
+# `POST /locales`, retirado en el Corte 0A-.
+$enDias = { param($d) (Get-Date).AddDays($d).ToString('yyyy-MM-dd') }
+$visitaProxima = & $enDias 5
+$visitaReprogramada = & $enDias 9
+$visitaOtra = & $enDias 7
 $finEncargo = (Get-Date).AddDays(90).ToString('yyyy-MM-dd')
 
 Write-Host "`n== 1. Login de las tres bandas de rol ==" -ForegroundColor Cyan
@@ -71,17 +80,23 @@ Check 'login admin' ($admin.rol -eq 'ADMIN') $admin.rol
 
 Write-Host "`n== 2. Prologo F2: cartera con una captacion ACTIVA ==" -ForegroundColor Cyan
 # La demanda necesita oferta: local -> prospeccion -> captacion aprobada.
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-F3$sufijo"; direccion = 'Av. Demanda 789'; distrito = 'Miraflores'
-    metraje = 150.5; precioReferencial = 9200; monedaReferencial = 'PEN'; rubroPermitido = 'Cafeteria'
-    idPropietario = 43; estadoPublicacion = 'P'
-}
+# Registrar NO es encargar (V75): la propiedad nace sin encargo y se prospecta.
+# Antes `POST /locales` hacia las dos cosas y abria ademas la prospeccion de
+# rebote; ahora las dos son explicitas, que es lo que el embudo dice.
+$local = NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Av. Demanda 789' `
+    -IdPropietario 43 -Metraje 150.5 -Rubro 'Cafeteria' -Descripcion "Prospecto F3 $sufijo"
 $idLocal = $local.id
-$idProspeccion = (Api GET "/prospecciones?idLocal=$idLocal" $agente.token).items[0].id
+$idProspeccion = NuevaProspeccion -Token $agente.token -IdPropiedad $idLocal `
+    -Observaciones "Prospeccion F3 $sufijo"
 Api POST "/prospecciones/$idProspeccion/contactar" $agente.token $null | Out-Null
 Api POST "/prospecciones/$idProspeccion/reunion" $agente.token $null | Out-Null
 Api POST "/prospecciones/$idProspeccion/propuesta" $agente.token $null | Out-Null
-$captada = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{ comisionPactada = 100 }
+# La operacion se DECLARA. Hasta V75 captar la cableaba a ALQUILER y el importe
+# lo copiaba del espejo de la propiedad; ahora los trae quien capta, porque es
+# lo que el propietario acaba de aceptar.
+$captada = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
+    operacion = 'ALQUILER'; importe = 9200; moneda = 'PEN'; comisionPactada = 100
+}
 $idCaptacion = $captada.idCaptacion
 $codigoCaptacion = $captada.captacionCodigo
 Api PUT "/captaciones/$idCaptacion" $agente.token @{
@@ -94,12 +109,10 @@ Check 'la captacion del prologo quedo ACTIVA' ($activa.estado -eq 'A') $activa.e
 
 # Segundo local: su prospeccion inicial queda EN PROCESO para poder
 # colgarle una interaccion de contexto PROSPECCION mas abajo.
-$local2 = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-F3B$sufijo"; direccion = 'Jr. Segundo 321'; distrito = 'Miraflores'
-    metraje = 120; precioReferencial = 8000; monedaReferencial = 'PEN'; rubroPermitido = 'Cafeteria'
-    idPropietario = 43; estadoPublicacion = 'P'
-}
-$idProspeccion2 = (Api GET "/prospecciones?idLocal=$($local2.id)" $agente.token).items[0].id
+$local2 = NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Jr. Segundo 321' `
+    -IdPropietario 43 -Metraje 120 -Rubro 'Cafeteria' -Descripcion "Prospecto F3B $sufijo"
+$idProspeccion2 = NuevaProspeccion -Token $agente.token -IdPropiedad $local2.id `
+    -Observaciones "Prospeccion F3B $sufijo"
 Check 'la segunda prospeccion nace en P (en proceso)' `
     ((Api GET "/prospecciones?idLocal=$($local2.id)" $agente.token).items[0].estado -eq 'P') 'estado'
 
@@ -329,7 +342,7 @@ Check 'cierre-exitoso SIEMPRE responde 400 (cable real)' ($cierre.codigo -eq 400
 
 Write-Host "`n== 7. Visita: maquina de estados por PATCH ==" -ForegroundColor Cyan
 $visita = Api POST '/visitas' $agente.token @{
-    idOportunidad = $idOportunidad; fechaVisita = '2026-08-15'; horaVisita = '16:00'
+    idOportunidad = $idOportunidad; fechaVisita = $visitaProxima; horaVisita = '16:00'
     observaciones = 'Primera visita coordinada.'
 }
 $idVisita = $visita.id
@@ -337,9 +350,9 @@ Check 'POST /visitas programa en P' ($visita.estado -eq 'P') $visita.estado
 Check 'la visita nace con tenant' `
     ((Sql "select organizacion_id from visita where id_visita=$idVisita") -eq '1') 'organizacion_id'
 
-$reprogramada = Api PATCH "/visitas/$idVisita/reprogramar" $agente.token @{ fechaVisita = '2026-08-20'; horaVisita = '10:30' }
+$reprogramada = Api PATCH "/visitas/$idVisita/reprogramar" $agente.token @{ fechaVisita = $visitaReprogramada; horaVisita = '10:30' }
 Check 'PATCH reprogramar -> G' ($reprogramada.estado -eq 'G') $reprogramada.estado
-Check 'la nueva fecha quedo guardada' ($reprogramada.fechaVisita -match '2026-08-20') $reprogramada.fechaVisita
+Check 'la nueva fecha quedo guardada' ($reprogramada.fechaVisita -match $visitaReprogramada) $reprogramada.fechaVisita
 
 $proximas = Api GET '/visitas/proximas?tamano=8' $agente.token
 Check 'la agenda proximas incluye la visita viva' `
@@ -467,7 +480,7 @@ $oportunidadB = Api POST '/oportunidades' $agente.token @{
     idCliente = $idClienteB; idCaptacion = $idCaptacion; observaciones = 'Segundo interesado.'
 }
 $visitaB = Api POST '/visitas' $agente.token @{
-    idOportunidad = $oportunidadB.id; fechaVisita = '2026-08-18'; horaVisita = '11:00'
+    idOportunidad = $oportunidadB.id; fechaVisita = $visitaOtra; horaVisita = '11:00'
 }
 Api PATCH "/visitas/$($visitaB.id)/realizar" $agente.token $null | Out-Null
 $desenlaceB = Api PATCH "/visitas/$($visitaB.id)/resultado" $agente.token @{

@@ -211,6 +211,45 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
         disponibilidadComercial = DisponibilidadComercial.DISPONIBLE.codigo();
     }
 
+    /**
+     * <b>Registrada y activa, pero todavia sin oferta</b> (V75).
+     *
+     * <p>Es la propiedad que solo se esta prospectando: existe en el registro
+     * maestro, se le puede poner ubicacion, titularidad, atributos, duplicados e
+     * interacciones, y NO esta ofrecida. La disponibilidad queda en {@code null}
+     * a proposito, y no es un quinto estado: {@code DISPONIBILIDAD_PROPIEDAD} es
+     * una maquina con transiciones y rotulos, y «todavia no ha entrado en la
+     * maquina» es su ausencia, no un valor suyo.
+     *
+     * <p>Estamparle DISPONIBLE era una <b>deduccion</b>: nada decia lo
+     * contrario, asi que se afirmaba. Un inmueble que nadie ha encargado no
+     * esta disponible para alquilar; sencillamente no se ofrece.
+     */
+    public void registrarSinOferta() {
+        estadoRegistro = EstadoRegistroPropiedad.ACTIVO.codigo();
+        disponibilidadComercial = null;
+    }
+
+    /**
+     * <b>La propiedad entra en el mercado</b> al abrirse su primer encargo.
+     *
+     * <p>Va aqui y no en el alta porque el hecho que la pone en oferta es el
+     * ENCARGO, venga del alta comercial o de una prospeccion captada. Y no pisa
+     * una disponibilidad ya declarada: si esta ALQUILADA, RESERVADA o RETIRADA,
+     * abrir otro encargo no la vuelve a poner disponible.
+     */
+    public void entrarEnOferta() {
+        if (disponibilidadComercial == null) {
+            disponibilidadComercial = DisponibilidadComercial.DISPONIBLE.codigo();
+        }
+    }
+
+    /** ¿Se esta ofreciendo? {@code false} mientras no tenga ningun encargo. */
+    @Transient
+    public boolean estaOfrecida() {
+        return disponibilidadComercial != null;
+    }
+
     public void aplicarEstadoLegado(String estadoLegado) {
         if (LEGADO_INACTIVO.equals(estadoLegado)) {
             estadoRegistro = EstadoRegistroPropiedad.INACTIVO.codigo();

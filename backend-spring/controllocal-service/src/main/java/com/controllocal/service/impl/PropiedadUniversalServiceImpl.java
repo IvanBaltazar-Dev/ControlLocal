@@ -223,7 +223,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // transaccion no lo es.
         exigirObligatorios(actor.idOrganizacion(), tipoPropiedad, valores.keySet());
 
-        DetalleAgente agente = agenteDe(actor);
+        // El agente se resuelve solo si va a abrirse algun encargo: es el
+        // encargo el que necesita saber quien responde por el, y registrar una
+        // propiedad para prospectarla no abre ninguno. Exigirlo igualmente
+        // dejaba el mensaje de error hablando de un encargo inexistente.
+        DetalleAgente agente = operaciones.isEmpty() ? null : agenteDe(actor);
         Ubicacion ubicacion = ubicacionValidada(comando.ubicacion());
 
         Propiedad propiedad = new Propiedad();
@@ -247,13 +251,17 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // cable actual las lee. Se proyectan del encargo de ALQUILER si lo hay
         // -- la columna se llama "renta referencial" en media docena de sitios
         // -- y del de venta si solo hay venta.
-        OperacionSolicitada referencia = operacionDeReferencia(operaciones);
-        propiedad.setPrecioReferencial(referencia.importe());
-        propiedad.setMonedaReferencial(referencia.moneda());
+        operacionDeReferencia(operaciones).ifPresent(referencia -> {
+            propiedad.setPrecioReferencial(referencia.importe());
+            propiedad.setMonedaReferencial(referencia.moneda());
+        });
 
         List<PersonaRol> rolesTitulares = rolesDeTitulares(actor.idOrganizacion(), titulares);
         propiedad.setRolPropietario(rolesTitulares.get(indiceDelRepresentante(titulares)));
-        propiedad.aplicarEstadoLegado(Propiedad.LEGADO_DISPONIBLE);
+        // Registrada y activa. La OFERTA la abre el encargo, no el alta: con
+        // cero operaciones la propiedad queda en el registro maestro sin decir
+        // que esta disponible, que es lo que seria falso (V75).
+        propiedad.registrarSinOferta();
         propiedades.save(propiedad);
 
         escribirTitularidades(actor, propiedad.getId(), titulares, rolesTitulares);
@@ -888,6 +896,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         encargo.setAgente(agente);
         transiciones.iniciar(encargo, Captacion.PENDIENTE_REVISION);
         captaciones.save(encargo);
+        // Abrir el encargo es lo que pone la propiedad EN OFERTA (V75). Antes lo
+        // hacia el alta de forma incondicional, y por eso una propiedad que solo
+        // se prospectaba nacia diciendo «disponible».
+        entrarEnOferta(actor, propiedad, "Entra al mercado: se abrio el encargo "
+                + encargo.getCodigoCaptacion() + ".");
 
         // Primer hito 'U' (autorizado) de ESTA serie. Va atado al encargo: es
         // lo que permite que la venta y el alquiler de la misma propiedad
@@ -920,6 +933,26 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                         "operacion", operacion.name(), "importe", solicitada.importe(),
                         "moneda", solicitada.moneda()));
         return encargo.getId();
+    }
+
+    /**
+     * <b>La propiedad entra al mercado</b>, y queda dicho en su expediente.
+     *
+     * <p>Va por {@code Transiciones} y no por el setter del agregado porque
+     * {@code disponibilidad_comercial} tiene historial desde V20: «entra al
+     * mercado» es el hecho comercial mas importante de una propiedad y no puede
+     * ser el unico que no deje fila. Sin esto el expediente empezaria en
+     * DISPONIBLE sin decir como llego.
+     *
+     * <p>Y no pisa lo ya declarado: si la propiedad esta ALQUILADA, RESERVADA o
+     * RETIRADA, abrir otro encargo no la vuelve a poner disponible.
+     */
+    private void entrarEnOferta(Actor actor, Propiedad propiedad, String motivo) {
+        if (propiedad.estaOfrecida()) {
+            return;
+        }
+        transiciones.aplicarDisponibilidad(propiedad, propiedad.getId(),
+                EstadosDominio.DisponibilidadComercial.DISPONIBLE, actor, motivo);
     }
 
     /**
@@ -1504,11 +1537,22 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * operacion serian dos encargos identicos, que es lo que
      * {@code uq_captacion_viva_por_operacion} prohibe (V50).
      */
+    /**
+     * Las operaciones declaradas, normalizadas. <b>Cero es una respuesta
+     * valida</b> desde V75.
+     *
+     * <p>Exigir al menos una era la razon por la que toda propiedad nacia con
+     * un encargo vivo, y eso contradecia el embudo: la prospeccion existe para
+     * CONSEGUIR el encargo, asi que el encargo no puede tener que existir antes
+     * de prospectar. Registrar no es encargar.
+     *
+     * <p>Lo que NO se afloja es el resto: si viene una operacion, sigue
+     * teniendo que traer importe, moneda y una sola aparicion por operacion.
+     * Que la lista pueda estar vacia no significa que pueda estar a medias.
+     */
     private static List<OperacionSolicitada> operacionesValidadas(List<OperacionSolicitada> operaciones) {
         if (operaciones == null || operaciones.isEmpty()) {
-            throw new ReglaNegocioException(
-                    "Declara al menos una operacion: VENTA o ALQUILER. Sin operacion no hay precio "
-                            + "que registrar, porque el mismo numero significa cosas distintas.");
+            return List.of();
         }
         Set<OperacionInmobiliaria> vistas = new LinkedHashSet<>();
         List<OperacionSolicitada> normalizadas = new ArrayList<>();
@@ -1550,11 +1594,19 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * del cable actual, y una venta ahi haria que los listados mostraran
      * 180 000 donde esperan una mensualidad.
      */
-    private static OperacionSolicitada operacionDeReferencia(List<OperacionSolicitada> operaciones) {
-        return operaciones.stream()
+    private static Optional<OperacionSolicitada> operacionDeReferencia(
+            List<OperacionSolicitada> operaciones) {
+        if (operaciones.isEmpty()) {
+            // Sin encargo no hay precio de referencia, y no se inventa uno.
+            return Optional.empty();
+        }
+        return Optional.of(operaciones.stream()
                 .filter(solicitada -> OperacionInmobiliaria.ALQUILER.name().equals(solicitada.operacion()))
                 .findFirst()
-                .orElse(operaciones.get(0));
+                // `orElse` evalua su argumento SIEMPRE, tambien cuando el filtro
+                // ya encontro uno: sobre una lista vacia reventaba con
+                // IndexOutOfBounds antes de llegar a ninguna regla de negocio.
+                .orElseGet(() -> operaciones.get(0)));
     }
 
     private OperacionInmobiliaria operacionProyectada(Actor actor, Propiedad propiedad) {

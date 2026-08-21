@@ -31,7 +31,21 @@ public final class Vocabulario {
     // ------------------------------------------------------------------
 
     public static final String TIPO_PROPIEDAD = "tipoPropiedad";
-    public static final String OPERACION = "operacion";
+    /**
+     * <b>{@code operaciones}, en plural, porque asi se llama en BROX.</b>
+     *
+     * <p>Esta constante decia {@code "operacion"} y no coincidia con la clave
+     * que publica el guion de captura. No se notaba porque BROX exigia la
+     * operacion y KAIROS chocaba antes contra «Todavia falta: operaciones»:
+     * el dato viajaba bajo un nombre que nadie leia, y el motor lo archivaba
+     * como desconocido sin rechazarlo.
+     *
+     * <p>Desde V75 la operacion dejo de ser obligatoria en el alta, asi que el
+     * borrador habria quedado LISTO con la operacion guardada en la clave
+     * equivocada: el usuario diciendo «en venta» y la propiedad naciendo con
+     * cero encargos. La frase entendida, guardada, y sin llegar.
+     */
+    public static final String OPERACIONES_DECLARADAS = "operaciones";
     public static final String IMPORTE = "importe";
     public static final String MONEDA = "moneda";
     public static final String TITULARES = "titulares";

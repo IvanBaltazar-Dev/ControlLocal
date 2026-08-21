@@ -59,7 +59,7 @@ class InterpreteDeterministaTest {
         assertEquals(Accion.REGISTRAR_PROPIEDAD, lectura.accion());
         assertEquals("DEPARTAMENTO", lectura.datos().get(Vocabulario.TIPO_PROPIEDAD));
         assertEquals("180000", lectura.datos().get(Vocabulario.IMPORTE));
-        assertNull(lectura.datos().get(Vocabulario.OPERACION),
+        assertNull(lectura.datos().get(Vocabulario.OPERACIONES_DECLARADAS),
                 "180 mil es un precio de venta plausible Y una renta imposible, pero la frase no "
                         + "dice cual: emitir una operacion aqui archivaria el importe en la serie "
                         + "equivocada y ningun CHECK podria notarlo");
@@ -69,18 +69,18 @@ class InterpreteDeterministaTest {
     @DisplayName("la operacion se emite cuando la frase la dice, y solo entonces")
     void laOperacionSeEmiteSiSeDice() {
         assertEquals("VENTA", interprete.leer("registra un depa que se vende", AGENTE)
-                .datos().get(Vocabulario.OPERACION));
+                .datos().get(Vocabulario.OPERACIONES_DECLARADAS));
         assertEquals("ALQUILER", interprete.leer("registra un local en alquiler", AGENTE)
-                .datos().get(Vocabulario.OPERACION));
+                .datos().get(Vocabulario.OPERACIONES_DECLARADAS));
         assertEquals("ALQUILER", interprete.leer("registra una casa para arriendo", AGENTE)
-                .datos().get(Vocabulario.OPERACION));
+                .datos().get(Vocabulario.OPERACIONES_DECLARADAS));
     }
 
     @Test
     @DisplayName("'disponible' o 'en cartera' NO son operaciones")
     void loQueNoDeclaraOperacionNoLaDeclara() {
         assertNull(interprete.leer("registra un depa disponible en cartera", AGENTE)
-                        .datos().get(Vocabulario.OPERACION),
+                        .datos().get(Vocabulario.OPERACIONES_DECLARADAS),
                 "estar disponible no dice si se vende o se alquila");
     }
 

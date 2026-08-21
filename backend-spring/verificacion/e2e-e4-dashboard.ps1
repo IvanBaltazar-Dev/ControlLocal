@@ -92,7 +92,11 @@ $antesAgente = Api GET '/indicadores/resumen?periodo=7d' $agente.token $null
 $antesBroker = Api GET '/indicadores/resumen?periodo=7d' $broker.token $null
 $antesAdmin = Api GET '/indicadores/resumen?periodo=7d' $admin.token $null
 Check 'el ambito del ADMIN es global' ($antesAdmin.ambito -eq 'Reportes globales') $antesAdmin.ambito
-Check 'el ambito del BROKER es de equipo' ($antesBroker.ambito -eq 'Reportes de equipo') $antesBroker.ambito
+# El rotulo cambio a proposito: «Reportes de equipo» se leia como el titulo de
+# una seccion, no como el alcance de lo que se esta mirando
+# (`IndicadorServiceImpl:805`, con su prueba unitaria). Este guion llevaba el
+# texto viejo y nadie lo noto porque la suite no arrancaba.
+Check 'el ambito del BROKER es de equipo' ($antesBroker.ambito -eq 'Mi equipo') $antesBroker.ambito
 Check 'el ambito del AGENTE es personal' ($antesAgente.ambito -eq 'Mi actividad') $antesAgente.ambito
 Check 'ningun rol recibe 403 en /indicadores/resumen (el cable no lleva gate)' `
     ($null -ne $antesAgente.ambito -and $null -ne $antesBroker.ambito) 'sin gate de rol'
@@ -247,17 +251,23 @@ $cliente = Api POST '/clientes' $agente.token @{
     correo = "cliente.e4.$sufijo@test.local"; rubroComercial = 'Retail E4'
     consentimientoContacto = $true; consentimientoUsoDato = $true; estado = 'A'
 }
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-E4-$sufijo"; direccion = "Av. Indicadores E4 $sufijo"
-    distrito = 'Barranco'; metraje = 150; precioReferencial = 8100; monedaReferencial = 'PEN'
-    rubroPermitido = 'Retail E4'; idPropietario = $propietario.id; estadoPublicacion = 'P'
-}
+# Este fixture NECESITA elegir el codigo del encargo: media docena de
+# comprobaciones de abajo buscan las cinco etapas por `CAP-…-E4-$sufijo`. El
+# alta universal numera ella el encargo, asi que aqui la propiedad nace SIN
+# encargo -registrar no es encargar, V75- y el encargo se abre con
+# `POST /captaciones`, que si acepta el codigo.
+$local = NuevoInmuebleSinEncargo -Token $agente.token `
+    -Direccion "Av. Indicadores E4 $sufijo" -IdPropietario $propietario.id `
+    -Codigo "LOC-E4-$sufijo" -Distrito 'Barranco' -Metraje 150 -Rubro 'Retail E4' `
+    -Descripcion "Fixture pendiente E4 $sufijo"
 $captacionPendiente = Api POST '/captaciones' $agente.token @{
     codigoCaptacion = "CAP-P-E4-$sufijo"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
     fechaFinVigencia = $finEncargo
     comisionPactada = 100; observaciones = "Fixture pendiente E4 $sufijo"
     idLocal = $local.id; motivoOperacion = 'A'; urgencia = 1; exclusividad = $false
+    tipoOperacion = 'A'; importeReferencia = 8100; monedaReferencia = 'PEN'
 }
+$codigoPendiente = $captacionPendiente.codigoCaptacion
 $idLocal = [long]$local.id
 $idCliente = [long]$cliente.id
 $idAgente = [long]$agente.idDominio
@@ -268,20 +278,21 @@ Check 'la captacion nace PENDIENTE de revision' ($captacionPendiente.estado -eq 
     $captacionPendiente.estado
 
 # Segundo local + captacion ACTIVA: la que llevara oportunidad, visita y solicitud.
-$local2 = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-E4B-$sufijo"; direccion = "Av. Avance E4 $sufijo"
-    distrito = 'Barranco'; metraje = 210; precioReferencial = 9900; monedaReferencial = 'PEN'
-    rubroPermitido = 'Retail E4'; idPropietario = $propietario.id; estadoPublicacion = 'P'
-}
+$local2 = NuevoInmuebleSinEncargo -Token $agente.token `
+    -Direccion "Av. Avance E4 $sufijo" -IdPropietario $propietario.id `
+    -Codigo "LOC-E4B-$sufijo" -Distrito 'Barranco' -Metraje 210 -Rubro 'Retail E4' `
+    -Descripcion "Fixture activo E4 $sufijo"
 $captacion = Api POST '/captaciones' $agente.token @{
     codigoCaptacion = "CAP-A-E4-$sufijo"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
     fechaFinVigencia = $finEncargo
     comisionPactada = 100; observaciones = "Fixture activo E4 $sufijo"
     idLocal = $local2.id; motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
+    tipoOperacion = 'A'; importeReferencia = 9900; monedaReferencia = 'PEN'
 }
 $captacion = Api POST "/captaciones/$($captacion.id)/decision" $broker.token @{
     accion = 'A'; observacion = 'Aprobada para verificar E4.'
 }
+$codigoActiva = $captacion.codigoCaptacion
 $idCaptacion = [long]$captacion.id
 $idLocal2 = [long]$local2.id
 Check 'se activa la captacion del avance' ($captacion.estado -eq 'A') $captacion.estado
@@ -427,11 +438,11 @@ Check 'el admin ve el tenant completo' `
 
 Write-Host "`n== 8. Avance comercial (RF-017) ==" -ForegroundColor Cyan
 $avance = Api GET '/indicadores/avance' $agente.token $null
-$filaAvance = $avance.detalle | Where-Object { $_.codigoCaptacion -eq "CAP-A-E4-$sufijo" }
-Check 'la captacion ACTIVA aparece en el avance' ($null -ne $filaAvance) "CAP-A-E4-$sufijo"
+$filaAvance = $avance.detalle | Where-Object { $_.codigoCaptacion -eq $codigoActiva }
+Check 'la captacion ACTIVA aparece en el avance' ($null -ne $filaAvance) $codigoActiva
 Check 'la captacion PENDIENTE no aparece en el avance' `
-    (($avance.detalle | Where-Object { $_.codigoCaptacion -eq "CAP-P-E4-$sufijo" }).Count -eq 0) `
-    "CAP-P-E4-$sufijo"
+    (($avance.detalle | Where-Object { $_.codigoCaptacion -eq $codigoPendiente }).Count -eq 0) `
+    $codigoPendiente
 Check 'la fila del avance trae direccion, distrito y estado comercial' `
     ($filaAvance.direccion -eq "Av. Avance E4 $sufijo" -and $filaAvance.distrito -eq 'Barranco' `
         -and $filaAvance.estadoComercial -eq 'Activa') `
@@ -488,7 +499,7 @@ $segTodo = Api GET '/seguimiento-comercial' $agente.token $null
 Check 'la busqueda libre encuentra las 5 filas del fixture por codigo' `
     ($seg.totalRecords -eq 5) "total=$($seg.totalRecords)"
 $filaProspeccion = Fila $seg 'Prospeccion'
-$filaCaptacion = $seg.items | Where-Object { $_.codigo -eq "CAP-P-E4-$sufijo" }
+$filaCaptacion = $seg.items | Where-Object { $_.codigo -eq $codigoPendiente }
 $filaOportunidad = Fila $seg 'Oportunidad'
 $filaSolicitud = Fila $seg 'Solicitud'
 Check 'la prospeccion trae icono store, tono blue y su ruta' `
@@ -496,13 +507,13 @@ Check 'la prospeccion trae icono store, tono blue y su ruta' `
         -and $filaProspeccion.ruta -eq "prospeccion-detail/$idProspeccion") `
     "$($filaProspeccion.icono)/$($filaProspeccion.tono)/$($filaProspeccion.ruta)"
 Check 'la captacion trae icono pin y ruta por codigo' `
-    ($filaCaptacion.icono -eq 'pin' -and $filaCaptacion.ruta -eq "captacion-detail/CAP-P-E4-$sufijo") `
+    ($filaCaptacion.icono -eq 'pin' -and $filaCaptacion.ruta -eq "captacion-detail/$codigoPendiente") `
     "$($filaCaptacion.icono)/$($filaCaptacion.ruta)"
 Check 'solo la captacion PENDIENTE trae rutaRevision' `
-    ($filaCaptacion.rutaRevision -eq "captacion-review/CAP-P-E4-$sufijo") `
+    ($filaCaptacion.rutaRevision -eq "captacion-review/$codigoPendiente") `
     $filaCaptacion.rutaRevision
 Check 'la captacion ACTIVA no trae rutaRevision' `
-    ((($seg.items | Where-Object { $_.codigo -eq "CAP-A-E4-$sufijo" }).rutaRevision) -eq '') 'vacia'
+    ((($seg.items | Where-Object { $_.codigo -eq $codigoActiva }).rutaRevision) -eq '') 'vacia'
 Check 'la oportunidad trae icono target, tono info y su cliente' `
     ($filaOportunidad.icono -eq 'target' -and $filaOportunidad.tono -eq 'info' `
         -and $filaOportunidad.cliente -eq "Cliente E4 $sufijo" `
@@ -811,18 +822,33 @@ delete from prospeccion where codigo_prospeccion='PRO-E4-$sufijo'
 delete from reasignacion_captacion where id_captacion in ($idCaptacion, $idCaptacionPendiente);
 delete from historial_estado where entidad_tipo='CAPTACION'
   and id_entidad in ($idCaptacion, $idCaptacionPendiente);
+-- El hito 'U' del alta cuelga del ENCARGO desde V49, asi que hay que soltarlo
+-- antes de borrarlo: la serie economica se borra mas abajo con la propiedad,
+-- pero la FK a captacion muerde aqui.
+-- El hito 'U' y el anuncio cuelgan del ENCARGO (V49, V70), asi que hay que
+-- soltarlos antes de borrarlo o su FK muerde aqui, la transaccion aborta entera
+-- y la limpieza no borra NADA -- el residuo sale 2|2|1 y el fallo aparece lejos
+-- de su causa.
+delete from precio_propiedad where id_captacion in ($idCaptacion, $idCaptacionPendiente);
+delete from publicacion where id_captacion in ($idCaptacion, $idCaptacionPendiente);
 delete from captacion where id_captacion in ($idCaptacion, $idCaptacionPendiente);
 -- DISPONIBILIDAD_PROPIEDAD la escribe el cierre al sacar el local del mercado:
 -- es la cuarta fila auditada de la cascada (MEJ-01), y no la dejaba el SQL.
 delete from historial_estado
  where entidad_tipo in ('PROPIEDAD', 'INMUEBLE', 'DISPONIBILIDAD_PROPIEDAD')
    and id_entidad in ($idLocal, $idLocal2);
--- Crear el local con estadoPublicacion='P' deja una publicacion, y esas tres
--- colecciones hijas cuelgan del local: sin borrarlas la FK bloquea el propiedad.
+-- Esas tres colecciones hijas cuelgan del local: sin borrarlas la FK bloquea el
+-- propiedad. La publicacion ademas cuelga del ENCARGO desde V70, asi que va
+-- ANTES que la captacion o su FK muerde.
 delete from publicacion where id_propiedad in ($idLocal, $idLocal2);
 delete from foto_propiedad where id_propiedad in ($idLocal, $idLocal2);
 delete from precio_propiedad where id_propiedad in ($idLocal, $idLocal2);
 delete from atributo_propiedad where id_propiedad in ($idLocal, $idLocal2);
+-- La titularidad es la coleccion hija que el alta universal escribe y el alta
+-- de local no tenia: `POST /locales` guardaba el propietario en una columna,
+-- `POST /propiedades` abre una titularidad con su vigencia. Sin borrarla, la FK
+-- bloquea la propiedad y aborta la limpieza entera.
+delete from titularidad_propiedad where id_propiedad in ($idLocal, $idLocal2);
 delete from propiedad where id_propiedad in ($idLocal, $idLocal2);
 delete from detalle_cliente where id_persona_rol=$idCliente;
 delete from persona_rol where id_persona_rol in ($idCliente, $($propietario.id));

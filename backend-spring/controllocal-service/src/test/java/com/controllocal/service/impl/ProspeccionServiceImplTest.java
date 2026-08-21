@@ -18,6 +18,7 @@ import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.Actor;
+import com.controllocal.service.ProspeccionService.DatosCaptura;
 import com.controllocal.service.ProspeccionService.DatosProspeccion;
 import com.controllocal.service.ProspeccionService.FichaProspeccion;
 import com.controllocal.service.ProspeccionService.FiltrosProspeccion;
@@ -70,9 +71,22 @@ class ProspeccionServiceImplTest {
     private final SupervisionAgenteRepository supervisiones = mock(SupervisionAgenteRepository.class);
     private final AlertaService alertas = mock(AlertaService.class);
 
+    private final com.controllocal.persistence.repositorio.PrecioPropiedadRepository precios =
+            mock(com.controllocal.persistence.repositorio.PrecioPropiedadRepository.class);
+
     private final ProspeccionServiceImpl service = new ProspeccionServiceImpl(
             prospecciones, captaciones, propiedades, agentes, alcances, new Transiciones(historial),
-            supervisiones, alertas, lectorSinGobernados());
+            supervisiones, alertas, lectorSinGobernados(), precios);
+
+    /**
+     * Lo que se pacta al captar, con la operacion DICHA. Desde V75 no hay
+     * defecto: un encargo de venta nacido como alquiler llevaria toda su serie
+     * economica bajo la operacion equivocada.
+     */
+    private static DatosCaptura captura(java.math.BigDecimal comision) {
+        return new DatosCaptura("ALQUILER", new BigDecimal("2500"), "PEN",
+                comision, null, null, null, null, null, null);
+    }
 
     /** Organizacion de legado: el tenant que el backend resuelve para la sesion (V6). */
     private static final long ORG = 1L;
@@ -178,7 +192,7 @@ class ProspeccionServiceImplTest {
     @Test
     void captarConComisionNegativaRespondeElMensajeV1() {
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.captar(5L, new BigDecimal("-1"), agente));
+                () -> service.captar(5L, captura(new BigDecimal("-1")), agente));
         assertEquals("La comision pactada es obligatoria y no puede ser negativa.", error.getMessage());
     }
 
@@ -297,7 +311,7 @@ class ProspeccionServiceImplTest {
             return guardada;
         });
 
-        service.captar(5L, new BigDecimal("100.00"), agente);
+        service.captar(5L, captura(new BigDecimal("100.00")), agente);
 
         ArgumentCaptor<AlertaService.DatosAlerta> aviso =
                 ArgumentCaptor.forClass(AlertaService.DatosAlerta.class);
@@ -322,7 +336,7 @@ class ProspeccionServiceImplTest {
             return guardada;
         });
 
-        FichaProspeccion ficha = service.captar(5L, new BigDecimal("100.00"), agente);
+        FichaProspeccion ficha = service.captar(5L, captura(new BigDecimal("100.00")), agente);
 
         assertEquals("T", ficha.estado());
         assertEquals("A", ficha.resultadoPropuesta());

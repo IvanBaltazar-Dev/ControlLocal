@@ -233,7 +233,7 @@ que decide qué preguntar a partir del catálogo.
 
 | | |
 |---|---|
-| 2.1 | `RegistrarPropiedad`: **una transacción, nueve efectos** (propiedad, ubicación, titulares, titularidad, atributos, encargo por operación, condición económica, primer hito `U`, evento). Todo o nada. |
+| 2.1 | `RegistrarPropiedad`: **una transacción**. Con operaciones declaradas, nueve efectos (propiedad, ubicación, titulares, titularidad, atributos, encargo por operación, condición económica, primer hito `U`, evento). **Con cero operaciones, cinco**: la propiedad queda registrada y no ofrecida, y el encargo nace al captar (V75). Todo o nada. |
 | 2.2 | El ciclo cerrado: `POST /propiedades` → `GET` → `PUT` → `GET`. La misma información escrita por el modelo universal regresa por el modelo universal. |
 | 2.3 | Gobierno del catálogo (V55): una organización **no puede** borrar, retipar ni **sombrear** un atributo común de BROX; lo suyo sí puede crearlo. |
 | 2.4 | Idempotencia de comandos (V57): el mismo `Idempotency-Key` no crea una segunda propiedad — devuelve la del primer intento. |
@@ -420,8 +420,15 @@ este orden**:
 0A  contener la corrupción de edición   ✅ CERRADO 2026-08-20 · V71
 0B  el catálogo aprende a hablar        ✅ CERRADO 2026-08-21 · V72
 0C  declarar el sujeto del dato         ✅ CERRADO 2026-08-21 · V73 + V74
-1…7 profundidad por tipo                ⬜ siguiente, arranca en V75
+    └ convergencia: registrar no es encargar   ✅ 2026-08-21 · V75
+1…7 profundidad por tipo                ⬜ siguiente, arranca en V76
 ```
+
+**V75 no estaba en el plan y salió de la corrida de cierre de 0C.** El alta
+exigía al menos una operación, así que toda propiedad nacía con un encargo vivo
+— y el embudo dice `propietario → prospección → encargo`, de modo que el encargo
+no puede tener que existir antes de prospectar. `POST /propiedades` acepta ahora
+cero operaciones y el Encargo nace al captar, con su operación declarada.
 
 Los tres cortes técnicos están cerrados, cada uno con su gate y su evidencia en
 `backend-spring/verificacion/evidencia/`. Lo que queda es siembra: filas de
@@ -435,7 +442,7 @@ de lo que se puede perder. El gate de 0A es el de D-E4-3 un paso más allá —
 por los siete tipos, no por un departamento feliz.
 
 La cadena de migraciones arrancó en **V71** —V70 ya era la publicación por
-encargo— y va por **V74**. El Corte 1 empieza en V75.
+encargo— y va por **V75**. El Corte 1 empieza en V76.
 
 ---
 

@@ -60,6 +60,8 @@ $integracion = @(
     'PadronDeGobiernoIntegrationTest',
     # D-E4-1 / D-E4-2: los escenarios de aceptacion de la propiedad universal y
     # la captura. Es el unico que COMETE de verdad, en tenants propios.
+    # Convergencia del 0C: una propiedad puede existir sin estar encargada.
+    'PropiedadSinEncargoIntegrationTest',
     'PropiedadUniversalIntegrationTest',
     'RepositorioEstadosIntegrationTest',
     'SimulacroRecuperacionIntegrationTest',

@@ -145,39 +145,34 @@ Check 'una alerta inexistente responde 404 (no 403: no confirma que exista)' `
     ($inexistente.codigo -eq 404) "codigo=$($inexistente.codigo)"
 
 Write-Host "`n== 4. Prologo: cartera nueva, emitiendo alertas por el camino ==" -ForegroundColor Cyan
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-F6$sufijo"; direccion = 'Av. Alerta 100'; distrito = 'Miraflores'
-    metraje = 130; precioReferencial = 7000; monedaReferencial = 'PEN'; rubroPermitido = 'Cafeteria'
-    idPropietario = 43; estadoPublicacion = 'P'
-}
+# Registrar NO es encargar (V75): la propiedad nace sin encargo y se prospecta.
+$local = NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Av. Alerta 100' `
+    -IdPropietario 43 -Metraje 130 -Rubro 'Cafeteria' -Descripcion "Prospecto F6 $sufijo"
 $idLocal = $local.id
 
-# Deuda VIEJA de F2, cerrada con F6: cambiar metraje o rubro emite la alerta
-# de modificacion comercial sensible. Viaja con el tipo SOLICITUD_EVALUADA y
-# la entidad INMUEBLE: los dos son bugs congelados (D-F6-4 / D-F6-5).
-Api PUT "/locales/$idLocal" $agente.token @{
-    codigoLocal = "LOC-F6$sufijo"; direccion = 'Av. Alerta 100'; distrito = 'Miraflores'
-    metraje = 145; precioReferencial = 7000; monedaReferencial = 'PEN'; rubroPermitido = 'Cafeteria'
-    idPropietario = 43; estadoPublicacion = 'P'
-} | Out-Null
-Check 'F2: cambiar el metraje emite "Modificacion comercial sensible"' `
-    ((AlertasDe 'SOLICITUD_EVALUADA' 'INMUEBLE' $idLocal) -eq '1') 'alerta sensible'
-# El mensaje lleva tilde ("Modificación") y psql por docker exec la mangla al
-# volver a PowerShell 5.1: se compara por el tramo sin acentos, que es lo que
-# de verdad importa aqui — que el aviso es ese y viaja con el tipo equivocado.
-Check 'y lo hace con el tipo EQUIVOCADO del cable (bug congelado, D-F6-5)' `
-    ((MensajeDe 'SOLICITUD_EVALUADA' 'INMUEBLE' $idLocal) -like '*comercial sensible, revisar') 'mensaje'
-Check 'su entidad es INMUEBLE, que la v2 llama PROPIEDAD (D-F6-4)' `
-    ((Sql "select entidad_tipo from alerta where entidad_id=$idLocal and tipo='SOLICITUD_EVALUADA'") -eq 'INMUEBLE') 'entidad_tipo'
-$sensible = @((Api GET '/alertas' $agente.token).items | Where-Object { $_.entidadTipo -eq 'INMUEBLE' })
-Check 'y viaja SIN ruta: ruta() no enruta INMUEBLE (cable real)' `
-    ($sensible.Count -eq 0 -or $null -eq $sensible[0].ruta) 'ruta'
+# ---------------------------------------------------------------------
+# AQUI HABIA CUATRO COMPROBACIONES, Y LO QUE VERIFICABAN YA NO EXISTE.
+#
+# Cambiar el metraje o el rubro por `PUT /locales/{id}` emitia la alerta
+# "Modificacion comercial sensible" -con el tipo SOLICITUD_EVALUADA y la
+# entidad INMUEBLE, dos bugs congelados: D-F6-4 y D-F6-5-. El emisor vivia en
+# `LocalComercialService.actualizar`, que el Corte 0A retiro junto con su
+# endpoint. `PUT /propiedades/{id}` no lo repuso.
+#
+# No se reescriben aqui porque no hay a donde: la capacidad se perdio en el
+# backend, y devolverla tal cual seria reintroducir los dos bugs a proposito.
+# Queda anotada como deuda en la evidencia del corte; reponerla es decidir
+# antes con que tipo y con que entidad avisa, que es una decision de producto.
+# ---------------------------------------------------------------------
 
-$idProspeccion = (Api GET "/prospecciones?idLocal=$idLocal" $agente.token).items[0].id
+$idProspeccion = NuevaProspeccion -Token $agente.token -IdPropiedad $idLocal `
+    -Observaciones "Prospeccion F6 $sufijo"
 Api POST "/prospecciones/$idProspeccion/contactar" $agente.token $null | Out-Null
 Api POST "/prospecciones/$idProspeccion/reunion" $agente.token $null | Out-Null
 Api POST "/prospecciones/$idProspeccion/propuesta" $agente.token $null | Out-Null
-$captada = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{ comisionPactada = 5 }
+$captada = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
+    operacion = 'ALQUILER'; importe = 7000; moneda = 'PEN'; comisionPactada = 5
+}
 $idCaptacion = $captada.idCaptacion
 # 3.5 CORREGIDO el 2026-08-08. Aqui se comprobaba que captar NO avisaba: creaba
 # la captacion saltandose el alta que emite la alerta, asi que el broker solo se
@@ -189,16 +184,17 @@ Check 'captar SI avisa al broker por el camino normal (prospeccion -> captacion)
 
 # El alta directa SI avisa. Necesita su propio local: solo una captacion
 # ACTIVA por local, y la de arriba lo ocupa.
-$local2 = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-F6B$sufijo"; direccion = 'Jr. Aviso 200'; distrito = 'Miraflores'
-    metraje = 90; precioReferencial = 5000; monedaReferencial = 'PEN'; rubroPermitido = 'Retail'
-    idPropietario = 43; estadoPublicacion = 'P'
-}
+$local2 = NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Jr. Aviso 200' `
+    -IdPropietario 43 -Metraje 90 -Rubro 'Retail' -Descripcion "Alta directa F6B $sufijo"
+# El importe y la moneda VIAJAN. Antes se heredaban del espejo de la propiedad,
+# y desde V75 una propiedad registrada sin encargo llega sin precio: el encargo
+# trae el suyo, que es lo que se pacto.
 $captacionDirecta = Api POST '/captaciones' $agente.token @{
     codigoCaptacion = "CAP-D$sufijo"; fechaCaptacion = $hoy
     fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
     comisionPactada = 4; idLocal = $local2.id; motivoOperacion = 'A'
     urgencia = 3; exclusividad = $true
+    tipoOperacion = 'A'; importeReferencia = 5000; monedaReferencia = 'PEN'
 }
 Check 'POST /captaciones SI avisa al BROKER (CAPTACION_CREADA)' `
     ((AlertasDe 'CAPTACION_CREADA' 'CAPTACION' $captacionDirecta.id) -eq '1') 'alerta'

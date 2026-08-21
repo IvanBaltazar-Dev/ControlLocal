@@ -53,7 +53,7 @@
           <div class="grid tres resumen-local">
             <label class="campo"><span>Propietario</span><input [value]="valor(localActual()?.propietarioNombre)" disabled /></label>
             <label class="campo"><span>Área registrada</span><input [value]="areaLocal()" disabled /></label>
-            <label class="campo"><span>Precio referencial</span><input [value]="precioLocal()" disabled /></label>
+            <label class="campo"><span>Último precio registrado</span><input [value]="precioLocal()" disabled /></label>
             <label class="campo"><span>Distrito</span><input [value]="valor(localActual()?.distrito)" disabled /></label>
             <label class="campo"><span>Rubro permitido</span><input [value]="valor(localActual()?.rubroPermitido)" disabled /></label>
           </div>
@@ -72,6 +72,11 @@
           <div class="seccion-titulo"><span>3</span><div><h2>Encargo y comisión</h2><p>Periodo, modalidad económica, moneda e IGV pactados.</p></div></div>
           <div class="grid dos">
             <label class="campo"><span>Fecha de captación <b>*</b></span><input type="date" formControlName="fechaCaptacion" /></label>
+            <!-- El importe del ENCARGO. Se escribe, no se hereda: dos encargos
+                 de la misma propiedad pueden pactar cifras distintas, y una
+                 propiedad que solo se prospectaba no tiene ninguna que heredar. -->
+            <label class="campo"><span>{{ rotuloDelImporte() }} <b>*</b></span><input type="number" min="0" step="0.01" formControlName="importeReferencia" /><small class="ayuda">Es lo que el propietario acepta para este encargo.</small></label>
+            <label class="campo"><span>Moneda <b>*</b></span><select formControlName="monedaReferencia"><option value="PEN">PEN</option><option value="USD">USD</option></select></label>
             <label class="campo"><span>Modalidad de comisión <b>*</b></span><select formControlName="modalidadComision"><option value="E05">Medio mes de alquiler</option><option value="E1">Un mes de alquiler</option><option value="E15">Un mes y medio de alquiler</option><option value="E2">Dos meses de alquiler</option><option value="P">Porcentaje sobre la renta mensual</option><option value="F">Monto fijo</option><option value="S">Sin comisión</option></select><small>{{ descripcionComision() }}</small></label>
             <label class="campo"><span>Fecha de inicio del encargo <b>*</b></span><input type="date" formControlName="fechaInicioVigencia" /></label>
             <label class="campo"><span>Fecha final del encargo <b>*</b></span><input type="date" formControlName="fechaFinVigencia" /></label>

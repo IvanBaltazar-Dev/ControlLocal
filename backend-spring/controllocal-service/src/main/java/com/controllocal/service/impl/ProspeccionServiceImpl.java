@@ -1,15 +1,19 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Alerta;
+import com.controllocal.domain.comun.EstadosDominio;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comercial.Prospeccion;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
+import com.controllocal.domain.inmueble.OperacionInmobiliaria;
+import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
+import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.SupervisionAgenteRepository;
@@ -68,11 +72,18 @@ public class ProspeccionServiceImpl implements ProspeccionService {
      */
     private final AlertaService alertas;
 
+    /**
+     * La serie economica del encargo que nace al captar. Desde V75 el importe
+     * autorizado se declara aqui, asi que aqui empieza su historico.
+     */
+    private final PrecioPropiedadRepository precios;
+
     public ProspeccionServiceImpl(ProspeccionRepository prospecciones, CaptacionRepository captaciones,
                                   PropiedadRepository propiedades, DetalleAgenteRepository agentes,
                                   Alcances alcances, Transiciones transiciones,
                                   SupervisionAgenteRepository supervisiones,
-                                  AlertaService alertas, LectorPorAutoridad lector) {
+                                  AlertaService alertas, LectorPorAutoridad lector,
+                                  PrecioPropiedadRepository precios) {
         this.prospecciones = prospecciones;
         this.captaciones = captaciones;
         this.propiedades = propiedades;
@@ -82,6 +93,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         this.supervisiones = supervisiones;
         this.alertas = alertas;
         this.lector = lector;
+        this.precios = precios;
     }
 
     @Override
@@ -219,67 +231,119 @@ public class ProspeccionServiceImpl implements ProspeccionService {
 
     @Override
     @Transactional
-    public FichaProspeccion captar(long id, BigDecimal comisionPactada, Actor actor) {
-        CondicionesEconomicas.comisionPactada(comisionPactada);
+    public FichaProspeccion captar(long id, DatosCaptura datos, Actor actor) {
+        if (datos == null) {
+            throw new ReglaNegocioException("Faltan las condiciones de la captacion.");
+        }
+        // La OPERACION, primero y sin defecto. Hasta V75 estaba escrita a fuego
+        // como ALQUILER y una propiedad captada para venderse nacia con un
+        // encargo de alquiler -- sin excepcion, sin aviso, y con su historico
+        // economico entero bajo la operacion equivocada.
+        OperacionInmobiliaria operacion = operacionDeclarada(datos.operacion());
+        BigDecimal importe = importeDeclarado(datos.importe(), operacion);
+        String moneda = CondicionesEconomicas.moneda(datos.moneda(), "de la operacion");
+        // La comision tambien es parte del COMANDO, asi que se valida antes de
+        // tocar nada: "la comision pactada no puede ser negativa" es un mensaje
+        // sobre lo que se pidio, y llega igual exista o no la prospeccion.
+        CondicionesEconomicas.comisionPactada(datos.comisionPactada());
+
         Prospeccion p = cargarEnProceso(id, actor, "captar");
+        Propiedad propiedad = p.getPropiedad();
+        // La invariante que V50 escribio en el indice, dicha en palabras. Sin
+        // esto llegaba como violacion de integridad de PostgreSQL, que no le
+        // explica a nadie que la OTRA operacion si se puede abrir.
+        exigirEncargoLibre(actor.idOrganizacion(), propiedad, operacion);
 
         Captacion captacion = new Captacion();
         captacion.setOrganizacionId(actor.idOrganizacion());
         captacion.setCodigoCaptacion(generarCodigoCaptacion(actor.idOrganizacion()));
-        LocalDate inicioEncargo = LocalDate.now();
-        captacion.setFechaCaptacion(inicioEncargo);
+        LocalDate inicioEncargo = datos.inicioEncargo() != null
+                ? datos.inicioEncargo() : LocalDate.now();
+        captacion.setFechaCaptacion(LocalDate.now());
         // El periodo del encargo es obligatorio SIEMPRE (decision de equipo,
         // 2026-08-01). La v1 dejaba nacer el borrador sin fechas y solo las
-        // exigia al activar; aqui se completa con el defecto de la casa —el
-        // mismo que propone el formulario Angular— para que ningun camino de la
+        // exigia al activar; aqui se completa con el defecto de la casa -el
+        // mismo que propone el formulario Angular- para que ningun camino de la
         // v2 produzca una captacion sin periodo. El agente puede cambiarlo con
-        // PUT /captaciones/{id} mientras siga PENDIENTE u OBSERVADA. Divergencia
-        // de DATOS con la v1, no de contrato: el request y la respuesta de
-        // /captar no cambian.
+        // PUT /captaciones/{id} mientras siga PENDIENTE u OBSERVADA.
         captacion.setFechaInicioVigencia(inicioEncargo);
-        captacion.setFechaFinVigencia(PoliticaComercial.finDelEncargo(inicioEncargo));
-        captacion.setPropiedad(p.getPropiedad());
+        captacion.setFechaFinVigencia(datos.finEncargo() != null
+                ? datos.finEncargo() : PoliticaComercial.finDelEncargo(inicioEncargo));
+        captacion.setExclusividad(datos.exclusividad() != null ? datos.exclusividad() : Boolean.FALSE);
+        captacion.setPropiedad(propiedad);
         captacion.setAgente(p.getAgente());
+
         CondicionEconomicaCaptacion condicion = new CondicionEconomicaCaptacion();
         condicion.setOrganizacionId(actor.idOrganizacion());
-        condicion.setTipoOperacion(CondicionEconomicaCaptacion.ARRENDAMIENTO);
-        condicion.setImporteReferencia(p.getPropiedad().getPrecioReferencial());
-        condicion.setMonedaReferencia(CondicionesEconomicas.moneda(
-                p.getPropiedad().getMonedaReferencial(), "de referencia"));
-        condicion.setTipoComision(CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES);
-        condicion.setBaseCalculo(CondicionEconomicaCaptacion.RENTA_MENSUAL);
-        condicion.setValorComision(CondicionesEconomicas.comisionPactada(comisionPactada)
-                .divide(BigDecimal.valueOf(100)));
-        condicion.setMonedaComision(condicion.getMonedaReferencia());
-        condicion.setTratamientoIgv(CondicionEconomicaCaptacion.IGV_NO_APLICA);
+        condicion.setTipoOperacion(operacion.codigo());
+        // El importe y la moneda los declara QUIEN CAPTA. Antes se copiaban de
+        // `propiedad.precio_referencial`, que es la proyeccion de otro encargo y
+        // desde V75 puede estar vacia: tomarla convertia un dato de registro en
+        // precio autorizado sin que nadie lo autorizara.
+        condicion.setImporteReferencia(importe);
+        condicion.setMonedaReferencia(moneda);
+        // La base la implica la operacion, y es la misma regla que aplica el
+        // alta al abrir un encargo: una comision de venta calculada sobre
+        // "renta mensual" trataria un precio de venta como si fuera un alquiler.
+        condicion.setTipoComision(datos.tipoComision() != null
+                ? datos.tipoComision() : tipoComisionDe(operacion));
+        condicion.setBaseCalculo(datos.baseCalculo() != null
+                ? datos.baseCalculo() : baseDe(operacion));
+        condicion.setValorComision(valorDeComision(datos.comisionPactada(),
+                condicion.getTipoComision()));
+        condicion.setMonedaComision(moneda);
+        condicion.setTratamientoIgv(datos.tratamientoIgv() != null
+                ? datos.tratamientoIgv() : CondicionEconomicaCaptacion.IGV_NO_APLICA);
+        // `ck_condicion_sin_comision` exige que una comision de CERO diga por
+        // que. La regla es buena y no se rodea.
+        if (condicion.getValorComision().signum() == 0) {
+            condicion.setMotivoSinComision(
+                    "Comision no pactada al captar; se define antes de activar el encargo.");
+        }
         captacion.setCondicionEconomica(condicion);
         // La operacion del encargo se toma de SU condicion economica, que es
-        // quien acaba de declararla tres lineas mas arriba. Escribirla dos veces
-        // seria dos sitios que pueden divergir, y el trigger
-        // `tg_captacion_operacion_coherente` (V50) existe justamente porque
-        // divergen: rechaza un encargo cuya operacion no coincide con la de su
-        // condicion.
-        //
-        // Este camino —captar desde una prospeccion— es el NORMAL, y dependia
-        // del defecto `= "A"` de la entidad para rellenar `motivo_operacion`.
-        // Al retirarlo (D-E4-1) dejo de escribirse y la columna es NOT NULL:
-        // captar desde una prospeccion fallaba entero. Lo encontro `f4-solicitud`.
+        // quien acaba de declararla. Escribirla dos veces desde fuentes
+        // distintas seria dos sitios que pueden divergir, y el trigger
+        // `tg_captacion_operacion_coherente` (V50) existe justamente por eso.
         captacion.setMotivoOperacion(condicion.getTipoOperacion());
         transiciones.iniciar(captacion, Captacion.PENDIENTE_REVISION);
         captaciones.save(captacion);
+
+        // La columna espejo sigue lo que lee el cable heredado. Si la propiedad
+        // llega sin precio -registrada para prospectarla, V75- este encargo es
+        // el primero que se lo da; si ya lo tenia, manda el alquiler, que es lo
+        // que media docena de sitios llaman "renta referencial".
+        if (propiedad.getPrecioReferencial() == null
+                || operacion == OperacionInmobiliaria.ALQUILER) {
+            propiedad.setPrecioReferencial(importe);
+            propiedad.setMonedaReferencial(moneda);
+        }
+
+        // Y la propiedad entra en el mercado: es el ENCARGO el que la pone en
+        // oferta, no el alta (V75). Si ya estaba alquilada o retirada, no se
+        // toca. Va por Transiciones para que quede en su expediente: «entra al
+        // mercado» es el hecho comercial mas importante de una propiedad.
+        if (!propiedad.estaOfrecida()) {
+            transiciones.aplicarDisponibilidad(propiedad, propiedad.getId(),
+                    EstadosDominio.DisponibilidadComercial.DISPONIBLE, actor,
+                    "Entra al mercado: el propietario acepto y nacio el encargo "
+                            + captacion.getCodigoCaptacion() + ".");
+        }
+        propiedades.save(propiedad);
+
+        // El importe autorizado abre la serie economica de ESTE encargo, igual
+        // que en el alta comercial. Sin esto, un encargo nacido de prospeccion
+        // no tendria historico y su ficha empezaria en blanco.
+        precios.save(PrecioPropiedad.hito(actor.idOrganizacion(), propiedad.getId(), operacion,
+                        PrecioPropiedad.HITO_AUTORIZADO, moneda, importe, LocalDate.now())
+                .delEncargo(captacion.getId()));
 
         // 3.5 CORREGIDO (2026-08-08). Aqui NO se emitia nada, y era el bug mas
         // silencioso del lote: este metodo construye la captacion a mano en vez
         // de pasar por `CaptacionServiceImpl.registrar`, que es donde vive el
         // aviso. Como captar desde una prospeccion es el camino NORMAL, el
         // resultado era que el broker casi nunca se enteraba de que tenia una
-        // captacion esperando su revision — quedaba PENDIENTE_REVISION sin que
-        // nadie lo supiera hasta que alguien mirara la bandeja por su cuenta.
-        //
-        // Se emite el MISMO tipo y severidad que el otro camino: para quien la
-        // recibe es el mismo hecho, y dos tipos distintos para "hay una
-        // captacion que revisar" solo obligarian a tratarlos por separado en la
-        // campana. Lo que cambia es el texto, porque el origen sí es distinto.
+        // captacion esperando su revision.
         if (captacion.getId() != null && p.getAgente() != null && p.getAgente().getId() != null) {
             alertas.emitir(new AlertaService.DatosAlerta(Alerta.CAPTACION_CREADA, Alerta.MEDIA,
                     "CAPTACION", captacion.getId(), p.getAgente().getId(),
@@ -291,6 +355,85 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         transiciones.aplicar(p, p.getId(), Prospeccion.CAPTADO, actor,
                 "Propietario acepto; captacion " + captacion.getCodigoCaptacion() + " creada.");
         return ficha(p);
+    }
+
+    /**
+     * La operacion, dicha con todas sus letras. Sin defecto y con los dos
+     * nombres en el error: "falta la operacion" no le dice a nadie cuales hay.
+     */
+    private static OperacionInmobiliaria operacionDeclarada(String operacion) {
+        if (operacion == null || operacion.isBlank()) {
+            throw new ReglaNegocioException(
+                    "Declara la operacion del encargo: VENTA o ALQUILER. No se supone ninguna, "
+                            + "porque el mismo importe significa un precio de venta o una renta "
+                            + "mensual segun cual sea.");
+        }
+        try {
+            return OperacionInmobiliaria.desde(operacion);
+        } catch (IllegalArgumentException e) {
+            throw new ReglaNegocioException(e.getMessage());
+        }
+    }
+
+    private static BigDecimal importeDeclarado(BigDecimal importe, OperacionInmobiliaria operacion) {
+        if (importe == null || importe.signum() < 0) {
+            throw new ReglaNegocioException(
+                    "Falta el " + operacion.nombreDelImporte() + " del encargo. Una propiedad que "
+                            + "solo se prospectaba no tiene precio del que tirar: lo trae quien "
+                            + "capta, porque es lo que el propietario acaba de aceptar.");
+        }
+        return importe;
+    }
+
+    private static String tipoComisionDe(OperacionInmobiliaria operacion) {
+        return operacion == OperacionInmobiliaria.VENTA
+                ? CondicionEconomicaCaptacion.PORCENTAJE
+                : CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES;
+    }
+
+    private static String baseDe(OperacionInmobiliaria operacion) {
+        return operacion == OperacionInmobiliaria.VENTA
+                ? CondicionEconomicaCaptacion.PRECIO_VENTA
+                : CondicionEconomicaCaptacion.RENTA_MENSUAL;
+    }
+
+    /**
+     * El porcentaje pactado, en la unidad que su tipo espera.
+     *
+     * <p>{@code comisionPactada} viaja como porcentaje -lo llevaba asi el
+     * contrato heredado- y tanto EQUIVALENTE_MENSUALIDADES como PORCENTAJE lo
+     * guardan como fraccion: 100 % es una mensualidad, 5 % es 0,05 del precio.
+     */
+    private static BigDecimal valorDeComision(BigDecimal comisionPactada, String tipoComision) {
+        if (CondicionEconomicaCaptacion.MONTO_FIJO.equals(tipoComision)) {
+            return CondicionesEconomicas.comisionPactada(comisionPactada);
+        }
+        return CondicionesEconomicas.comisionPactada(comisionPactada)
+                .divide(BigDecimal.valueOf(100));
+    }
+
+    /**
+     * Un encargo vivo por operacion, dicho con palabras y no con un 23505.
+     *
+     * <p>Es la misma guarda que {@code CaptacionServiceImpl}, y hasta V75 aqui
+     * no hacia falta: toda propiedad nacia con su encargo, asi que captar
+     * chocaba SIEMPRE. Ahora que el encargo nace aqui, la invariante vuelve a
+     * significar lo que decia -- y su mensaje tiene que explicar que la OTRA
+     * operacion si se puede abrir.
+     */
+    private void exigirEncargoLibre(long idOrganizacion, Propiedad propiedad,
+                                    OperacionInmobiliaria operacion) {
+        if (propiedad == null || propiedad.getId() == null) {
+            return;
+        }
+        captaciones.encargoVivoDe(idOrganizacion, propiedad.getId(), operacion.codigo()).stream()
+                .findFirst()
+                .ifPresent(otro -> {
+                    throw new ReglaNegocioException(
+                            "Esta propiedad ya tiene un encargo de " + operacion.name()
+                                    + " vivo (" + otro.getCodigoCaptacion() + "). Cierralo antes de "
+                                    + "abrir otro. Un encargo de la OTRA operacion si es posible.");
+                });
     }
 
     @Override

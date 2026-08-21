@@ -81,7 +81,7 @@ Cada herramienta declara: **qué caso de uso invoca**, **qué permiso exige** y
 
 | Herramienta | Caso de uso | Por qué |
 |---|---|---|
-| `confirmar_captura` | `POST …/confirmar` | crea propiedad, titularidad y encargos |
+| `confirmar_captura` | `POST …/confirmar` | crea propiedad, titularidad y —si se declaró alguna operación— sus encargos |
 | `publicar_encargo` | `POST /publicaciones` | **sale al exterior** |
 | `presentar_oferta` | hito `O` del histórico | compromete un número frente al cliente |
 | `decidir_captacion` | `POST /captaciones/{id}/decision` | es una firma del broker |

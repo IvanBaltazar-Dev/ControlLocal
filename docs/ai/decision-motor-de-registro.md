@@ -4,11 +4,19 @@
 máquina de preguntas, servida por el backend y consumida por dos caras: el
 botón `+ Registrar` de la pantalla y KAIROS.
 
-**Estado:** propuesta congelable. Maqueta ejecutable:
+**Estado:** propuesta congelable, **corregida el 2026-08-21 (V75)**: la
+`operación` dejó de ser un paso fijo del alta. Ver §2 y la nota que la explica.
+
+Maqueta ejecutable:
 
 ```bash
 node docs/ai/modelo/motor-captura.js
 ```
+
+> La maqueta todavía codifica la regla vieja —corta el plan con
+> `if (!tipo || !op)`— y por tanto **ya no demuestra lo que el motor hace**. Lo
+> que gobierna es `GuionRegistroPropiedad` y su gate; la maqueta se queda como
+> ilustración del mecanismo, no como prueba.
 
 **Depende de:** `decision-modelo-universal-propiedad-operacion.md` (D-E4-1) —
 sin catálogo de atributos gobernado, el motor no puede derivar nada.
@@ -53,11 +61,11 @@ La maqueta lo demuestra sin trampa:
    Propiedad · Propietario · Cliente · Actividad
 
 → Propiedad
-   ¿Qué quieres hacer con la propiedad?
-   Alquilar · Vender · Las dos cosas
-
    ¿Qué tipo de propiedad es?
    Departamento · Casa · Local · Oficina · Terreno · Almacén · Otro
+
+   ¿Qué quieres hacer con la propiedad?
+   Alquilar · Vender · Las dos cosas · Todavía nada: solo registrarla
 
    ¿De quién es?
    [busca entre los propietarios registrados antes de pedir datos nuevos]
@@ -65,9 +73,33 @@ La maqueta lo demuestra sin trampa:
    … y a partir de ahí, solo lo que aplica.
 ```
 
-**Tres pasos fijos y ninguno más.** `operación`, `tipo` y `titular` son fijos
-porque son los que **ordenan** el resto: sin ellos el motor no sabe qué
-preguntar. Todo lo demás se deriva.
+**Dos pasos fijos, y un tercero que ordena si se responde.** `tipo` y `titular`
+son fijos: sin el tipo el motor no sabe qué preguntar, y sin titular no hay de
+quién es. La `operación` **ordena pero no bloquea**: decide si el importe que
+viene detrás es un precio de venta o una renta mensual, y por eso se pregunta
+antes que él — pero puede quedarse sin responder.
+
+> **Corregido el 2026-08-21 (V75).** Esta sección decía «tres pasos fijos» y
+> pintaba tres respuestas, todas comerciales. Describía un alta **comercial** y
+> no contemplaba el estado previo: una propiedad que solo se está prospectando.
+> El embudo de BROX es `propietario → prospección → encargo → publicación`, así
+> que si la prospección existe para conseguir el encargo, el encargo no puede
+> tener que existir antes de prospectar.
+>
+> La semántica queda así, y no necesita tres endpoints —es del caso de uso, no
+> del cable—:
+>
+> ```
+> REGISTRAR_PROPIEDAD   →  0, 1 o 2 operaciones
+> prospectar            →  0 operaciones: Propiedad + Prospección
+> captar                →  operación EXPLÍCITA: nace el Encargo
+> ```
+>
+> Y una distinción que no se deduce sola: **propiedad sin encargo ≠
+> prospección**. Son dos cosas que apuntan a la propiedad, no un estado suyo.
+> Una propiedad puede registrarse solo como dato maestro, tener una prospección
+> encima, o llevar varios episodios comerciales históricos, sin que haya que
+> inventar estados para distinguirlos.
 
 ### 2.1 Buscar antes de pedir
 

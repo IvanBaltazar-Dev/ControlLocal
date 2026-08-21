@@ -66,8 +66,51 @@ public interface ProspeccionService {
 
     FichaProspeccion descartar(long id, String motivo, Actor actor);
 
-    /** Captar: crea la captacion (estado P) y deja la prospeccion CAPTADA (T). */
-    FichaProspeccion captar(long id, BigDecimal comisionPactada, Actor actor);
+    /**
+     * <b>Lo que se pacta al captar</b> (V75).
+     *
+     * <p>Desde que la propiedad puede existir sin encargo, este es el sitio
+     * donde el Encargo NACE, y por eso trae lo que un encargo necesita para
+     * existir en vez de copiarlo del registro maestro.
+     *
+     * <p><b>La operacion es obligatoria y no tiene defecto.</b> Hasta V75 estaba
+     * escrita a fuego como ALQUILER: una propiedad captada para venderse nacia
+     * con un encargo de alquiler, con su serie economica bajo la operacion
+     * equivocada y sin un solo aviso. El proyecto ya tuvo que retirar
+     * exactamente esas inferencias.
+     *
+     * <p>El <b>importe</b> tampoco se hereda de {@code propiedad.precio_referencial}:
+     * ese campo es la proyeccion de OTRO encargo —y desde V75 puede estar
+     * vacio—, asi que tomarlo convertiria un dato de registro en precio
+     * autorizado sin que nadie lo autorice. Si el encargo fuera de venta,
+     * ademas, ese numero seria una renta.
+     *
+     * @param operacion       VENTA o ALQUILER, con esas palabras. Sin defecto
+     * @param importe         el precio de venta o la renta mensual pactada
+     * @param comisionPactada porcentaje; su significado depende de la base
+     * @param tipoComision    {@code null} = el que corresponde a la operacion
+     * @param baseCalculo     {@code null} = renta mensual en ALQUILER, precio
+     *                        de venta en VENTA. No es una inferencia de dato:
+     *                        es la aritmetica que la operacion implica, y es la
+     *                        misma que aplica el alta al abrir un encargo
+     */
+    record DatosCaptura(String operacion, BigDecimal importe, String moneda,
+                        BigDecimal comisionPactada, String tipoComision, String baseCalculo,
+                        String tratamientoIgv, Boolean exclusividad,
+                        LocalDate inicioEncargo, LocalDate finEncargo) {
+    }
+
+    /**
+     * <b>Captar: aqui nace el Encargo</b> (estado P) y la prospeccion queda
+     * CAPTADA (T).
+     *
+     * <p>Es el punto del embudo donde el propietario acepta:
+     * {@code propietario -> prospeccion -> ENCARGO -> publicacion}. No
+     * «completa» un encargo pendiente, porque antes de aceptar no hay ninguno
+     * que completar: eso convertiria la intencion del agente en una relacion
+     * comercial que el propietario no ha dado.
+     */
+    FichaProspeccion captar(long id, DatosCaptura datos, Actor actor);
 
     /** Enlaza una captacion ya creada por el agente y deja la prospeccion CAPTADA. */
     FichaProspeccion marcarCaptado(long id, Long idCaptacion, String codigoCaptacion, Actor actor);

@@ -91,6 +91,14 @@ export class CaptacionForm implements OnInit {
       fechaCaptacion: this.fb.nonNullable.control(hoyIso(), Validators.required),
       fechaInicioVigencia: this.fb.nonNullable.control(hoyIso(), Validators.required),
       fechaFinVigencia: this.fb.nonNullable.control(fechaEnMeses(POLITICA_COMERCIAL.encargoMesesPorDefecto), Validators.required),
+      // El importe del encargo se ESCRIBE aquí (V75). Antes era un espejo
+      // deshabilitado de `propiedad.precioReferencial`, y desde que una
+      // propiedad puede existir sin encargo ese espejo llega vacío: la pantalla
+      // no tenía dónde poner el precio que el propietario acaba de aceptar. Y
+      // aunque lo tuviera, el importe pertenece al encargo: dos encargos de la
+      // misma propiedad pueden pactar cifras distintas.
+      importeReferencia: this.fb.control<number | null>(null, [Validators.required, Validators.min(0)]),
+      monedaReferencia: this.fb.nonNullable.control<'PEN' | 'USD'>('PEN', Validators.required),
       modalidadComision: this.fb.nonNullable.control<ModalidadComision>('E1', Validators.required),
       valorComision: this.fb.control<number | null>(null, Validators.min(0)),
       monedaComision: this.fb.nonNullable.control<'PEN' | 'USD'>('PEN', Validators.required),
@@ -145,6 +153,19 @@ export class CaptacionForm implements OnInit {
   protected precioLocal(): string {
     const local = this.localActual();
     return monto(local?.precioReferencial, local?.monedaReferencial);
+  }
+
+  /**
+   * El rótulo del importe dice **qué** número es.
+   *
+   * <p>Hoy esta pantalla solo abre encargos de ALQUILER —`motivoOperacion` va
+   * fijo a `'A'` al enviar—, así que el rótulo es «Renta mensual» y no una
+   * ambigüedad. Cuando la pantalla sepa declarar la operación, este método es
+   * el sitio donde el rótulo la seguirá: un precio de venta rotulado «renta»
+   * es un error de bulto.
+   */
+  protected rotuloDelImporte(): string {
+    return 'Renta mensual';
   }
 
   protected requiereValorComision(): boolean {
@@ -267,6 +288,15 @@ export class CaptacionForm implements OnInit {
       fechaCaptacion: captacion.fechaCaptacion ?? hoyIso(),
       fechaInicioVigencia: captacion.fechaInicioVigencia ?? hoyIso(),
       fechaFinVigencia: captacion.fechaFinVigencia ?? fechaEnMeses(POLITICA_COMERCIAL.encargoMesesPorDefecto),
+      // Al editar se recupera lo que el encargo pacto, no lo que el inmueble
+      // proyecta: son cosas distintas desde V75 y la propiedad puede no tener
+      // ninguna.
+      importeReferencia: captacion.importeReferencia
+        ?? this.localActual()?.precioReferencial
+        ?? null,
+      monedaReferencia: monedaValida(captacion.monedaReferencia)
+        ?? monedaValida(this.localActual()?.monedaReferencial)
+        ?? 'PEN',
       modalidadComision: modalidadDesde(captacion),
       valorComision: valorEditableDesde(captacion),
       monedaComision: monedaValida(captacion.monedaComision)
@@ -298,7 +328,16 @@ export class CaptacionForm implements OnInit {
     this.totalLocales.set(1);
     this.formulario.controls.idLocal.setValue(local.id);
     const moneda = monedaValida(local.monedaReferencial);
-    if (moneda && !this.esEdicion()) this.formulario.controls.monedaComision.setValue(moneda);
+    if (moneda && !this.esEdicion()) {
+      this.formulario.controls.monedaComision.setValue(moneda);
+      this.formulario.controls.monedaReferencia.setValue(moneda);
+    }
+    // El último precio registrado se PROPONE como punto de partida; no se
+    // hereda. Si la propiedad nunca tuvo encargo llega vacío y el campo se
+    // queda esperando lo que el propietario acaba de aceptar (V75).
+    if (!this.esEdicion() && local.precioReferencial != null) {
+      this.formulario.controls.importeReferencia.setValue(local.precioReferencial);
+    }
   }
 
   private async cargarLocales(textoBusqueda: string): Promise<void> {
@@ -368,8 +407,10 @@ export class CaptacionForm implements OnInit {
     motivoSinComision: string | null;
   } {
     const valor = this.formulario.getRawValue();
-    const monedaReferencia = monedaValida(this.localActual()?.monedaReferencial);
-    const importeReferencia = this.localActual()?.precioReferencial ?? null;
+    // Lo que se escribió en el formulario, no lo que proyecta el inmueble: el
+    // importe es del ENCARGO (V75).
+    const monedaReferencia = monedaValida(valor.monedaReferencia);
+    const importeReferencia = valor.importeReferencia;
     const modalidad = valor.modalidadComision;
     if (modalidad.startsWith('E')) {
       return {

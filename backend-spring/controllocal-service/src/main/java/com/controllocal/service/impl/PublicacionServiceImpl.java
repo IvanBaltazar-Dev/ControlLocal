@@ -136,6 +136,11 @@ public class PublicacionServiceImpl implements PublicacionService {
         if (idPropiedad <= 0) {
             throw new ReglaNegocioException("El local de la publicacion es obligatorio.");
         }
+        // No se anuncia lo que nadie ha encargado (V75). Desde que la propiedad
+        // puede existir sin encargo, este camino -que no nombra ninguno- podia
+        // publicar un inmueble que solo se estaba prospectando: ofrecerlo al
+        // mercado sin que el propietario lo haya encargado.
+        exigirAlgunEncargo(idPropiedad, actor);
         Publicacion p = construir(idPropiedad, datos, actor);
         publicaciones.save(p);
         registrarImportePublicado(p);
@@ -225,6 +230,22 @@ public class PublicacionServiceImpl implements PublicacionService {
         return encargos.findById(idEncargo)
                 .filter(encargo -> encargo.getOrganizacionId() == actor.idOrganizacion())
                 .orElse(null);
+    }
+
+    /**
+     * Publicar exige que la propiedad este <b>encargada</b>.
+     *
+     * <p>La ruta por encargo ({@code crearEnEncargo}) lo tiene garantizado por
+     * construccion; esta no nombra ninguno, asi que hay que preguntarlo. El
+     * mensaje dice que hacer -captarla- y no solo que no se puede.
+     */
+    private void exigirAlgunEncargo(long idPropiedad, Actor actor) {
+        if (encargos.encargosDe(actor.idOrganizacion(), idPropiedad).isEmpty()) {
+            throw new ReglaNegocioException(
+                    "Esta propiedad no tiene ningun encargo: esta registrada, pero nadie la ha "
+                            + "encargado todavia. Captala primero -- anunciar lo que no se ofrece "
+                            + "pone en el mercado algo que no esta a la venta ni en alquiler.");
+        }
     }
 
     private Propiedad propiedadDe(Publicacion publicacion, Actor actor) {

@@ -61,19 +61,25 @@ Check 'GET /locales responde el total del tenant' ($totalPrevio -ge 2) "total=$t
 $localesAdmin = Api GET '/locales?pagina=1&tamano=10' $admin.token
 Check 'el ADMIN ve el mismo universo (su organizacion)' ($localesAdmin.totalRecords -eq $totalPrevio) "$($localesAdmin.totalRecords) vs $totalPrevio"
 
-Write-Host "`n== 3. Alta de local (estampa el tenant + prospeccion inicial) ==" -ForegroundColor Cyan
+Write-Host "`n== 3. Alta universal (estampa el tenant en todo lo que crea) ==" -ForegroundColor Cyan
 $sufijo = Get-Random -Minimum 1000 -Maximum 9999
-$nuevoLocal = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-V6$sufijo"; direccion = 'Av. Multi-tenant 456'; distrito = 'Miraflores'
-    metraje = 150.5; precioReferencial = 9200; monedaReferencial = 'PEN'; rubroPermitido = 'Cafeteria'
-    idPropietario = 43; estadoPublicacion = 'P'
-}
+# `POST /locales` se retiro en el Corte 0A. Hacia tres cosas -registrar, abrir
+# prospeccion y crear anuncio-; el alta universal hace UNA, y las otras dos se
+# declaran. Lo que esta suite verifica sigue siendo lo mismo: que el tenant se
+# estampa en todo lo que nace.
+$nuevoLocal = NuevoInmuebleConEncargo -Token $agente.token `
+    -Direccion 'Av. Multi-tenant 456' -IdPropietario 43 -Codigo "LOC-V6$sufijo" -Metraje 150.5 -Rubro 'Cafeteria' `
+    -Importe 9200 -Moneda 'PEN' -Descripcion "Alta multi-tenant V6 $sufijo"
 $idLocal = $nuevoLocal.id
-Check 'POST /locales crea con defaults v1' ($nuevoLocal.estado -eq 'D' -and $nuevoLocal.tipoInmueble -eq 'L' -and $nuevoLocal.uso -eq 'C') "$($nuevoLocal.estado)/$($nuevoLocal.tipoInmueble)/$($nuevoLocal.uso)"
+Check 'el alta universal crea con los defaults del modelo' `
+    ((Sql "select tipo_inmueble||'/'||uso from propiedad where id_propiedad=$idLocal") -eq 'L/C') 'tipo/uso'
 Check 'la propiedad nace en BROX_LEGACY' ((Sql "select organizacion_id from propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
 Check 'el atributo gobernado hereda el tenant' ((Sql "select distinct organizacion_id from atributo_propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
-Check 'la publicacion sincronizada lleva tenant' ((Sql "select count(*) from publicacion where id_propiedad=$idLocal and organizacion_id=1") -eq '1') 'publicacion'
-Check 'el alta abrio la prospeccion inicial con tenant' ((Sql "select count(*) from prospeccion where id_propiedad=$idLocal and organizacion_id=1") -eq '1') 'prospeccion inicial'
+Check 'el encargo hereda el tenant' ((Sql "select count(*) from captacion where id_propiedad=$idLocal and organizacion_id=1") -eq '1') 'captacion'
+# El encargo la pone EN OFERTA: registrar no es encargar, pero encargar si es
+# ofrecer (V75).
+Check 'abrir el encargo deja la propiedad disponible' ((Sql "select disponibilidad_comercial from propiedad where id_propiedad=$idLocal") -eq 'D') 'disponibilidad'
+Check 'y lo deja dicho en su expediente' ((Sql "select count(*) from historial_estado where entidad_tipo='DISPONIBILIDAD_PROPIEDAD' and id_entidad=$idLocal") -eq '1') 'historial'
 
 $totalNuevo = (Api GET '/locales?pagina=1&tamano=10' $agente.token).totalRecords
 Check 'el total del tenant subio en 1' ($totalNuevo -eq $totalPrevio + 1) "$totalNuevo vs $totalPrevio"
@@ -83,12 +89,13 @@ $ficha = Api GET "/locales/$idLocal" $agente.token
 Check 'GET /locales/{id} devuelve la ficha' ($ficha.codigoLocal -eq "LOC-V6$sufijo") $ficha.codigoLocal
 Check 'la ficha trae el propietario resuelto' ($null -ne $ficha.propietarioNombre) 'propietarioNombre'
 
-$editado = Api PUT "/locales/$idLocal" $agente.token @{
-    codigoLocal = "LOC-V6$sufijo"; direccion = 'Av. Multi-tenant 456'; distrito = 'Miraflores'
-    metraje = 150.5; precioReferencial = 9900; monedaReferencial = 'PEN'; rubroPermitido = 'Cafeteria'
-    idPropietario = 43; estadoPublicacion = 'P'
-}
-Check 'PUT actualiza el precio' ($editado.precioReferencial -eq 9900) $editado.precioReferencial
+# `PUT /locales/{id}` se retiro en el Corte 0A. El precio se cambia donde vive:
+# en el ENCARGO, y cambiarlo ANADE un hito 'U' -no sobrescribe el anterior-.
+Api PUT "/propiedades/$idLocal" $agente.token @{
+    operaciones = @(@{ operacion = 'ALQUILER'; importe = 9900; moneda = 'PEN' })
+} | Out-Null
+$editado = Api GET "/locales/$idLocal" $agente.token
+Check 'editar el encargo actualiza el precio de la ficha' ($editado.precioReferencial -eq 9900) $editado.precioReferencial
 # E0.1 (2026-08-10): la serie de precios es APPEND-ONLY y el alta ya deja su
 # PRIMER hito 'U' con el precio autorizado de salida. Esta comprobacion exigia
 # UNA sola fila, y era correcta mientras el unico productor de 'U' fuera la
@@ -111,24 +118,26 @@ Check 'POST /precios registra el hito' ($precio.hito -eq 'O') $precio.hito
 Check 'el hito declara su operacion' ($precio.operacion -eq 'ALQUILER') $precio.operacion
 Check 'el precio manual lleva tenant' ((Sql "select organizacion_id from precio_propiedad where id_precio=$($precio.id)") -eq '1') 'organizacion_id'
 
-# Y sin operacion declarada NO se inventa ninguna: se rechaza. Este local no
-# tiene encargo vivo todavia, asi que no hay de donde deducirla.
-$rechazado = $false
-try {
-    Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9600 } | Out-Null
-} catch {
-    $rechazado = $true
-}
-Check 'un hito sin operacion se rechaza en vez de suponer alquiler' $rechazado 'rechazado'
+# Sin operacion declarada, el servidor la DEDUCE cuando no hay ambiguedad: esta
+# propiedad tiene un unico encargo vivo -el de alquiler que abrio el alta-, asi
+# que el hito se archiva en su serie sin suponer nada.
+$deducido = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9600 }
+Check 'con un solo encargo vivo, la operacion se deduce de el' ($deducido.operacion -eq 'ALQUILER') $deducido.operacion
 
-$publicacion = Api POST "/locales/$idLocal/publicaciones" $agente.token @{ canal = 'URBANIA'; rentaPublicada = 9900; moneda = 'PEN'; estado = 'P' }
+$publicacion = Api POST "/encargos/$($nuevoLocal.idEncargo)/publicaciones" $agente.token @{ canal = 'URBANIA'; importePublicado = 9900; moneda = 'PEN'; estado = 'P' }
 Check 'POST /publicaciones crea el anuncio' ($publicacion.estado -eq 'P') $publicacion.estado
 Check 'la publicacion nueva lleva tenant' ((Sql "select organizacion_id from publicacion where id_publicacion=$($publicacion.id)") -eq '1') 'organizacion_id'
 
 Write-Host "`n== 5. Prospeccion: maquina de estados + auditoria ==" -ForegroundColor Cyan
+# La prospeccion se declara. `POST /locales` la abria de rebote y por eso esta
+# suite la encontraba hecha; el alta universal no crea prospecciones -lo dice su
+# propia documentacion- porque prospectar es una decision, no un efecto de
+# registrar.
+$idProspeccion = NuevaProspeccion -Token $agente.token -IdPropiedad $idLocal `
+    -Observaciones "Prospeccion multi-tenant V6 $sufijo"
 $prospecciones = Api GET "/prospecciones?idLocal=$idLocal" $agente.token
-$idProspeccion = $prospecciones.items[0].id
-Check 'la prospeccion inicial esta en P' ($prospecciones.items[0].estado -eq 'P') $prospecciones.items[0].estado
+Check 'la prospeccion nace en P' ($prospecciones.items[0].estado -eq 'P') $prospecciones.items[0].estado
+Check 'y hereda el tenant' ((Sql "select organizacion_id from prospeccion where id_prospeccion=$idProspeccion") -eq '1') 'organizacion_id'
 Check 'el correlativo sigue el formato PRO-####' ($prospecciones.items[0].codigoProspeccion -match '^PRO-\d{4}$') $prospecciones.items[0].codigoProspeccion
 
 $p = Api POST "/prospecciones/$idProspeccion/contactar" $agente.token $null
@@ -146,12 +155,27 @@ $historialSinTenant = Sql "select count(*) from historial_estado where entidad_t
 Check 'ninguna fila de auditoria quedo sin tenant' ($historialSinTenant -eq '0') "sin tenant=$historialSinTenant"
 
 Write-Host "`n== 6. Captacion: alta desde la prospeccion y revision del broker ==" -ForegroundColor Cyan
-$p = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{ comisionPactada = 100 }
+# La propiedad ya tiene un encargo de ALQUILER vivo, asi que captar declara
+# VENTA: la invariante `uq_captacion_viva_por_operacion` prohibe el segundo
+# vivo de la MISMA operacion, no un encargo de la otra (V75).
+$p = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
+    operacion = 'VENTA'; importe = 350000; moneda = 'USD'; comisionPactada = 3
+}
 $idCaptacion = $p.idCaptacion
 Check 'captar -> T (captado)' ($p.estado -eq 'T') $p.estado
 Check 'se creo la captacion' ($null -ne $idCaptacion) 'idCaptacion'
 Check 'el correlativo sigue el formato CAP-####' ($p.captacionCodigo -match '^CAP-\d{4}$') $p.captacionCodigo
 Check 'la captacion nace con tenant' ((Sql "select organizacion_id from captacion where id_captacion=$idCaptacion") -eq '1') 'organizacion_id'
+
+# Y AHORA la propiedad tiene DOS encargos vivos -alquiler y venta-, asi que un
+# hito sin operacion ya no se puede deducir: se rechaza en vez de suponer.
+$rechazado = $false
+try {
+    Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9700 } | Out-Null
+} catch {
+    $rechazado = $true
+}
+Check 'con venta y alquiler vivos, un hito sin operacion se rechaza' $rechazado 'rechazado'
 
 $pendientes = Api GET '/captaciones/pendientes?pagina=1&tamano=20' $broker.token
 Check 'la captacion aparece en la bandeja del broker' (@($pendientes.items | Where-Object { $PSItem.id -eq $idCaptacion }).Count -eq 1) "total=$($pendientes.totalRecords)"

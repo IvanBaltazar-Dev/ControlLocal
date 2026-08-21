@@ -285,7 +285,13 @@
 
       @if (!planListo()) {
         <p class="ayuda">
-          Elige el tipo y la operación para ver qué hace falta.
+          Elige el tipo de propiedad para ver qué hace falta.
+        </p>
+      } @else if (sinOperaciones() && !revisando()) {
+        <p class="ayuda">
+          Sin operación declarada: la propiedad queda registrada y
+          <strong>no se ofrece</strong>. El encargo nace cuando el propietario
+          acepta, al captar la prospección.
         </p>
       } @else if (!revisando()) {
         <p class="ayuda">

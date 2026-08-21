@@ -99,7 +99,7 @@ public final class GuionRegistroPropiedad {
      * da {@link #obligatorias(List)}.
      */
     private static final List<String> OBLIGATORIAS_SIN_OPERACION = List.of(
-            TIPO_PROPIEDAD, OPERACIONES, TITULARES, DIRECCION, DISTRITO);
+            TIPO_PROPIEDAD, TITULARES, DIRECCION, DISTRITO);
 
     /** Lo obligatorio de <b>cada</b> encargo. Una copia por operacion declarada. */
     private static final List<String> OBLIGATORIAS_DE_CADA_ENCARGO = List.of(IMPORTE, MONEDA);
@@ -117,6 +117,18 @@ public final class GuionRegistroPropiedad {
      * <p>Con las operaciones todavia sin declarar, la lista llega hasta
      * {@link #OPERACIONES} y para: no se puede preguntar un importe sin saber
      * de que es.
+     *
+     * <h2>La operacion se PREGUNTA, pero ya no BLOQUEA</h2>
+     * Sigue estando en la lista y en este orden —decide si el importe que viene
+     * detras es un precio de venta o una renta—, pero salio de
+     * {@link #OBLIGATORIAS_SIN_OPERACION} en V75: una propiedad puede
+     * registrarse para PROSPECTARLA, y entonces todavia no hay ninguna
+     * operacion que declarar. El encargo nace despues, cuando el propietario
+     * acepta.
+     *
+     * <p>Lo que no se afloja: en cuanto se declara una operacion, su importe y
+     * su moneda vuelven a ser obligatorios. Cero operaciones es una respuesta;
+     * una operacion a medias no.
      */
     public static List<String> obligatorias(List<OperacionInmobiliaria> operaciones) {
         List<String> ordenadas = new java.util.ArrayList<>();

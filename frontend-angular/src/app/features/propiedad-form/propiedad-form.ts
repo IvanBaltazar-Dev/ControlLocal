@@ -129,10 +129,26 @@ export class PropiedadForm implements OnInit {
     () => this.valores()[PropiedadForm.CLAVE_OPERACIONES] ?? '',
   );
 
-  /** Hasta que el tipo y la operación estén, no hay plan que pintar. */
+  /**
+   * Hasta que el **tipo** esté, no hay plan que pintar.
+   *
+   * <p>La operación ya no hace falta: desde V75 una propiedad puede registrarse
+   * sin encargo —para prospectarla— y el encargo nace cuando el propietario
+   * acepta. Exigirla aquí dejaba la pantalla parada en la apertura, así que el
+   * backend aceptaba `operaciones: []` y desde BROX Web no había forma de
+   * mandarlo: la única puerta humana del alta se quedaba sin la salida.
+   *
+   * <p>Lo que sí sigue mandando el tipo: es él quien decide qué se pregunta.
+   */
   protected readonly planListo = computed(
-    () => !!this.tipoElegido() && !!this.operacionesElegidas() && !!this.definicion(),
+    () => !!this.tipoElegido() && !!this.definicion(),
   );
+
+  /**
+   * ¿Se está registrando sin encargo? La pantalla lo dice en voz alta para que
+   * nadie crea que se le olvidó elegir: registrar no es encargar.
+   */
+  protected readonly sinOperaciones = computed(() => !this.operacionesElegidas());
 
   /**
    * El bloque de titularidad. Se separa por su **control**, no por su clave: es
@@ -314,7 +330,7 @@ export class PropiedadForm implements OnInit {
   private async rehacerElPlan(): Promise<void> {
     const tipo = this.tipoElegido();
     const operaciones = this.operacionesElegidas();
-    if (!tipo || !operaciones) {
+    if (!tipo) {
       this.definicion.set(null);
       return;
     }

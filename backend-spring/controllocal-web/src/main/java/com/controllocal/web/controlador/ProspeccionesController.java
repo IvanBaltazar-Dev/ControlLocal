@@ -135,12 +135,18 @@ public class ProspeccionesController {
                 prospecciones.descartar(id, dto != null ? dto.motivo() : null, SesionActual.actor()));
     }
 
+    /**
+     * <b>Aqui nace el Encargo</b> (V75). El cuerpo es obligatorio desde que la
+     * operacion tiene que declararse: con {@code required = false} un POST sin
+     * cuerpo dejaba llegar todo nulo por el mismo hueco por el que antes se
+     * colaba el ALQUILER por defecto.
+     */
     @PostMapping("{id}/captar")
     @PreAuthorize("hasRole('AGENTE')")
     public ProspeccionResponse captar(@PathVariable long id,
-                                      @RequestBody(required = false) CaptarProspeccionRequest dto) {
-        return ProspeccionResponse.desde(prospecciones.captar(id,
-                dto != null ? dto.comisionPactada() : null, SesionActual.actor()));
+                                      @RequestBody CaptarProspeccionRequest dto) {
+        return ProspeccionResponse.desde(
+                prospecciones.captar(id, dto == null ? null : dto.aDatos(), SesionActual.actor()));
     }
 
     @PostMapping("{id}/marcar-captado")

@@ -124,30 +124,20 @@ order by pr.id_persona_rol
 limit 1
 "@)
 
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-E2-$sufijo"
-    direccion = "Av. Reporte E2 $sufijo"
-    distrito = 'Miraflores'
-    metraje = 125
-    precioReferencial = 6800
-    monedaReferencial = 'PEN'
-    rubroPermitido = 'Comercio E2'
-    idPropietario = $idPropietario
-    estadoPublicacion = 'P'
-}
-$captacion = Api POST '/captaciones' $agente.token @{
-    codigoCaptacion = "CAP-E2-$sufijo"
-    fechaCaptacion = $fechaCaptacion
-    fechaInicioVigencia = $fechaCaptacion
-    fechaFinVigencia = (Get-Date).AddDays(90).ToString('yyyy-MM-dd')
-    comisionPactada = 100
-    observaciones = "Fixture reportes E2 $sufijo"
-    idLocal = $local.id
-    motivoOperacion = 'A'
-    urgencia = 2
-    exclusividad = $true
-}
-$idCaptacion = [long]$captacion.id
+$local = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. Reporte E2 $sufijo" -Codigo "LOC-E2-$sufijo" `
+    -IdPropietario $idPropietario -Metraje 125 -Rubro 'Comercio E2' `
+    -Importe 6800 -Moneda 'PEN' -TipoComision 'P' -BaseCalculo 'R' -ValorComision 1.00 `
+    -TratamientoIgv 'N' -InicioEncargo $fechaCaptacion `
+    -FinEncargo (Get-Date).AddDays(90).ToString('yyyy-MM-dd') `
+    -Descripcion "Fixture reportes E2 $sufijo"
+$idCaptacion = [long]$local.idEncargo
+# El reloj de F7 cuenta desde la FECHA DE CAPTACION, y el alta la pone hoy: es
+# la fecha en que el encargo se abrio de verdad. Esta suite necesita un encargo
+# de hace veinte dias para que la tarea de reporte ya este vencida, asi que se
+# retrasa aqui -en el fixture y a la vista- en vez de pedirle al caso de uso que
+# acepte una fecha de captacion inventada.
+Sql "update captacion set fecha_captacion = date '$fechaCaptacion' where id_captacion=$idCaptacion" | Out-Null
+$captacion = Api GET "/captaciones/$idCaptacion" $agente.token
 Check 'se crea un local aislado para E2' ($local.id -gt 0) "local=$($local.id)"
 Check 'se crea una captacion propia con reloj vencido' `
     ($idCaptacion -gt 0 -and $captacion.idAgente -eq $agente.idDominio) `

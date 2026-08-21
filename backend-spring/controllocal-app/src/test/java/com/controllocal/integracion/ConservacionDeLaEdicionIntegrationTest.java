@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -687,6 +688,69 @@ class ConservacionDeLaEdicionIntegrationTest {
                     espejo.titulares(), null, null, null);
             default -> throw new IllegalArgumentException(bloque.nombre());
         };
+    }
+
+    // ==================================================================
+    // La propiedad que todavia nadie ha encargado
+    // ==================================================================
+
+    /**
+     * <b>Una propiedad prospectada, con CERO encargos, tambien se conserva</b>
+     * (V75).
+     *
+     * <p>Los ocho escenarios comerciales de arriba tienen todos su encargo, y
+     * eso no constituye una invariante: desde V75 una propiedad puede existir
+     * sin estar encargada -- registrada en el maestro mientras se intenta
+     * captarla -- y el editor tiene que devolverla exactamente igual.
+     *
+     * <p>El bloque de encargo se queda fuera a proposito y no por comodidad:
+     * pedir un cambio de operacion sobre una propiedad que no tiene ninguna no
+     * es «no tocar nada», es pedir algo que no existe. Lo que se comprueba aqui
+     * es que <b>guardar no le inventa uno</b>.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("tipos")
+    @DisplayName("una propiedad sin encargos se guarda igual, y no le nace ninguno")
+    void unaPropiedadSinEncargosSeConserva(CasoDeTipo caso) {
+        long id = registrar(caso, List.of());
+        FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
+        assertTrue(antes.encargos().isEmpty(), "el caso parte de cero encargos");
+
+        ComandoEdicion espejo = comandoEspejo(antes);
+        propiedades.editar(id, espejo, actor());
+
+        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        assertTrue(despues.encargos().isEmpty(),
+                "guardar le invento un encargo a una propiedad que nadie ha encargado ("
+                        + caso.tipo() + ").");
+        exigirIdentico(retrato(antes), retrato(despues), Set.of(),
+                "Guardar sin tocar nada cambio la propiedad sin encargos (" + caso.tipo() + ").");
+    }
+
+    /**
+     * Y cambiar UNA cosa tampoco se la inventa. Es el mismo caso que
+     * {@link #cambiarUnaSolaCosaConservaElResto}, sobre el estado que hasta V75
+     * no podia existir.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("tipos")
+    @DisplayName("editar una propiedad sin encargos no la pone en oferta")
+    void editarUnaPropiedadSinEncargosNoLaOfrece(CasoDeTipo caso) {
+        long id = registrar(caso, List.of());
+        FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
+
+        ComandoEdicion espejo = comandoEspejo(antes);
+        propiedades.editar(id, new ComandoEdicion(null, null, "Otra descripcion",
+                espejo.ubicacion(), espejo.titulares(), espejo.atributos(),
+                espejo.operaciones(), null), actor());
+
+        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        assertEquals("Otra descripcion", despues.descripcion(), "El cambio pedido no llego.");
+        assertNull(despues.disponibilidadComercial(),
+                "editar no la pone «disponible»: la oferta la abre el encargo (" + caso.tipo() + ").");
+        exigirIdentico(retrato(antes), retrato(despues), Set.of("descripcion"),
+                "Editar la descripcion movio algo mas en una propiedad sin encargos ("
+                        + caso.tipo() + ").");
     }
     // ==================================================================
     // El espejo: la ficha vuelta comando, como haria una pantalla fiel

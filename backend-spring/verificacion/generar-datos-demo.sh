@@ -195,7 +195,10 @@ if [ ${#PROPS[@]} -eq 0 ]; then
 fi
 
 # ----------------------------------------------------------------- 2. locales
-# El alta de local crea ademas su prospeccion inicial.
+# El alta universal (`POST /propiedades`) registra la propiedad y abre su
+# encargo. Ya NO crea la prospeccion de rebote: `POST /locales` hacia las tres
+# cosas y se retiro en el Corte 0A. Prospectar es una decision, no un efecto de
+# registrar, asi que aqui se declara aparte.
 paso "Locales"
 mapa_por_codigo_local "$AGE" > "$CONT/locales.map"
 n=0; nuevos=0; existentes=0
@@ -205,8 +208,14 @@ while IFS='|' read -r cod dir dist met precio mon rubro tipo amb ant; do
         existentes=$((existentes+1)); n=$((n+1)); continue
     fi
     prop=${PROPS[$((n % ${#PROPS[@]}))]}
-    crear "local $cod" POST /locales "$AGE" \
-        "{\"codigoLocal\":\"$cod\",\"direccion\":\"$dir\",\"distrito\":\"$dist\",\"metraje\":$met,\"precioReferencial\":$precio,\"monedaReferencial\":\"$mon\",\"rubroPermitido\":\"$rubro\",\"descripcion\":\"$rubro en $dist, listo para operar\",\"idPropietario\":$prop,\"estado\":\"D\",\"tipoInmueble\":\"$tipo\",\"uso\":\"C\",\"ambientes\":$amb,\"antiguedadAnios\":$ant,\"zonaUrbanizacion\":\"$dist\",\"estadoPublicacion\":\"B\"}" >/dev/null
+    nuevo=$(crear "local $cod" POST /propiedades "$AGE" \
+        "{\"codigo\":\"$cod\",\"tipoPropiedad\":\"$tipo\",\"uso\":\"C\",\"descripcion\":\"$rubro en $dist, listo para operar\",\"ubicacion\":{\"direccion\":\"$dir\",\"distrito\":\"$dist\",\"zonaUrbanizacion\":\"$dist\"},\"titulares\":[{\"idPropietario\":$prop,\"representante\":true}],\"atributos\":[{\"clave\":\"metraje_total\",\"valor\":\"$met\"},{\"clave\":\"rubro_permitido\",\"valor\":\"$rubro\"},{\"clave\":\"ambientes\",\"valor\":\"$amb\"},{\"clave\":\"antiguedad_anios\",\"valor\":\"$ant\"}],\"operaciones\":[{\"operacion\":\"ALQUILER\",\"importe\":$precio,\"moneda\":\"$mon\"}]}")
+    # Y su prospeccion, explicita: sin ella no hay embudo que mirar en pantalla.
+    idNuevo=$(printf '%s' "$nuevo" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).idPropiedad||'')}catch(e){}})")
+    if [ -n "$idNuevo" ]; then
+        crear "prospeccion de $cod" POST /prospecciones "$AGE" \
+            "{\"idLocal\":$idNuevo,\"observaciones\":\"Prospeccion inicial de $cod\"}" >/dev/null
+    fi
     nuevos=$((nuevos+1)); n=$((n+1))
 done <<'EOF'
 LOC-D010|Av. Benavides 2145|Miraflores|85.0|3800|PEN|Cafeteria|L|2|6
@@ -352,8 +361,10 @@ for loc in "${LOCAL_DE[@]}"; do
         0) canal="URBANIA";; 1) canal="ADONDEVIVIR";;
         2) canal="FACEBOOK";; *) canal="WEB_PROPIA";;
     esac
-    crear "publicacion local $loc" POST "/locales/$loc/publicaciones" "$AGE" \
-        "{\"canal\":\"$canal\",\"estado\":\"P\",\"rentaPublicada\":$(( 2800 + p * 520 )),\"moneda\":\"PEN\",\"urlPublicacion\":\"https://demo.test/aviso-$loc\"}" >/dev/null
+    # El anuncio cuelga del ENCARGO desde V70: una publicacion por local no
+    # podia decir si publicaba la venta o el alquiler.
+    crear "publicacion encargo ${ACTIVAS[$p]}" POST "/encargos/${ACTIVAS[$p]}/publicaciones" "$AGE" \
+        "{\"canal\":\"$canal\",\"estado\":\"P\",\"importePublicado\":$(( 2800 + p * 520 )),\"moneda\":\"PEN\",\"urlPublicacion\":\"https://demo.test/aviso-$loc\"}" >/dev/null
     p=$((p+1))
 done
 log "publicaciones: $p"

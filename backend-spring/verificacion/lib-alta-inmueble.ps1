@@ -28,6 +28,10 @@ function NuevoInmuebleConEncargo {
         [Parameter(Mandatory = $true)] [string] $Token,
         [Parameter(Mandatory = $true)] [string] $Direccion,
         [Parameter(Mandatory = $true)] $IdPropietario,
+        # El codigo del inmueble. Vacio = lo genera el Core (PROP-####). Los
+        # guiones que buscan por codigo -o que lo afirman en un Check- pasan el
+        # suyo, igual que hacian con `codigoLocal`.
+        [string] $Codigo = $null,
         [string] $Distrito = 'Barranco',
         [string] $TipoPropiedad = 'LOCAL',
         [string] $Uso = 'C',
@@ -73,7 +77,7 @@ function NuevoInmuebleConEncargo {
     if ($InteriorUnidad)   { $ubicacion['interiorUnidad']   = $InteriorUnidad }
     if ($Piso)             { $ubicacion['piso']             = $Piso }
 
-    $alta = Api POST '/propiedades' $Token @{
+    $cuerpo = @{
         tipoPropiedad = $TipoPropiedad
         uso           = $Uso
         descripcion   = $Descripcion
@@ -82,10 +86,78 @@ function NuevoInmuebleConEncargo {
         atributos     = $listaAtributos
         operaciones   = @($bloque)
     }
+    if ($Codigo) { $cuerpo['codigo'] = $Codigo }
+    $alta = Api POST '/propiedades' $Token $cuerpo
 
     [pscustomobject]@{
         id        = [long] $alta.idPropiedad
         codigo    = $alta.codigo
         idEncargo = [long] $alta.idsEncargos[0]
     }
+}
+
+# ---------------------------------------------------------------------
+# La propiedad que TODAVIA NADIE HA ENCARGADO (V75).
+#
+# Registrar no es encargar: una propiedad puede existir en el registro maestro
+# mientras se intenta captarla, y el encargo nace cuando el propietario acepta.
+# Es lo que necesitan los guiones que arrancan de una prospeccion -f3, f4,
+# f6-f7-: con un encargo ya abierto, `captar` chocaba contra
+# `uq_captacion_viva_por_operacion`.
+#
+# Devuelve solo `id` y `codigo`: no hay `idEncargo` que devolver, y ese es el
+# punto.
+# ---------------------------------------------------------------------
+function NuevoInmuebleSinEncargo {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Token,
+        [Parameter(Mandatory = $true)] [string] $Direccion,
+        [Parameter(Mandatory = $true)] $IdPropietario,
+        [string] $Codigo = $null,
+        [string] $Distrito = 'Miraflores',
+        [string] $TipoPropiedad = 'LOCAL',
+        [string] $Uso = 'C',
+        [string] $Descripcion = 'Registrada para prospectar',
+        $Metraje = 90,
+        [string] $Rubro = 'Retail',
+        $Atributos = $null
+    )
+
+    $listaAtributos = @()
+    if ($null -ne $Metraje) { $listaAtributos += @{ clave = 'metraje_total'; valor = "$Metraje" } }
+    if ($Rubro) { $listaAtributos += @{ clave = 'rubro_permitido'; valor = $Rubro } }
+    if ($Atributos) { foreach ($extra in $Atributos) { $listaAtributos += $extra } }
+
+    $cuerpo = @{
+        tipoPropiedad = $TipoPropiedad
+        uso           = $Uso
+        descripcion   = $Descripcion
+        ubicacion     = @{ direccion = $Direccion; distrito = $Distrito }
+        titulares     = @(@{ idPropietario = $IdPropietario; representante = $true })
+        atributos     = $listaAtributos
+        # Cero operaciones. La propiedad queda registrada y NO ofrecida.
+        operaciones   = @()
+    }
+    if ($Codigo) { $cuerpo['codigo'] = $Codigo }
+    $alta = Api POST '/propiedades' $Token $cuerpo
+
+    [pscustomobject]@{
+        id     = [long] $alta.idPropiedad
+        codigo = $alta.codigo
+    }
+}
+
+# La prospeccion, explicita. `POST /locales` la abria de rebote y los guiones se
+# apoyaban en ese efecto lateral (`GET /prospecciones?idLocal` -> items[0]); el
+# alta universal no crea prospecciones y lo dice en su propia documentacion.
+function NuevaProspeccion {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Token,
+        [Parameter(Mandatory = $true)] $IdPropiedad,
+        [string] $Observaciones = 'Prospeccion de guion E2E'
+    )
+    $p = Api POST '/prospecciones' $Token @{
+        idLocal = $IdPropiedad; observaciones = $Observaciones
+    }
+    return [long] $p.id
 }

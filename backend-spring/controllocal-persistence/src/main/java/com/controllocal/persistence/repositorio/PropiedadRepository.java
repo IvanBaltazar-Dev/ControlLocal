@@ -59,7 +59,16 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                    or lower(per.nombresORazonSocial) like lower(concat('%', cast(:texto as string), '%')))
             """;
 
-    /** Adaptador JPQL del contrato legado D/N/I; no existe como columna. */
+    /**
+     * Adaptador JPQL del contrato legado D/N/I; no existe como columna.
+     *
+     * <p>Desde V75 {@code disponibilidadComercial} puede ser NULL —propiedad
+     * registrada que todavia nadie ha encargado—, y cae al {@code else 'N'}:
+     * <b>no disponible</b>, que es la verdad. El filtro de abajo tiene que
+     * nombrar el NULL explicitamente porque en SQL {@code NULL <> 'D'} es
+     * UNKNOWN, no TRUE: sin eso la fila salia como 'N' en el listado y no
+     * aparecia al filtrar por 'N'.
+     */
     String ESTADO_LEGADO = " case "
             + "when p.estadoRegistro = 'I' then 'I' "
             + "when p.disponibilidadComercial = 'D' then 'D' "
@@ -69,7 +78,9 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
               and (:estado is null
                    or (:estado = 'I' and p.estadoRegistro = 'I')
                    or (:estado = 'D' and p.estadoRegistro = 'A' and p.disponibilidadComercial = 'D')
-                   or (:estado = 'N' and p.estadoRegistro = 'A' and p.disponibilidadComercial <> 'D'))
+                   or (:estado = 'N' and p.estadoRegistro = 'A'
+                       and (p.disponibilidadComercial is null
+                            or p.disponibilidadComercial <> 'D')))
             """;
 
     String DESDE = ASOCIACIONES_LISTADO + """
@@ -276,7 +287,8 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                    or (cast(:estado as varchar) = 'D' and p.estado_registro = 'A'
                        and p.disponibilidad_comercial = 'D')
                    or (cast(:estado as varchar) = 'N' and p.estado_registro = 'A'
-                       and p.disponibilidad_comercial <> 'D'))
+                       and (p.disponibilidad_comercial is null
+                            or p.disponibilidad_comercial <> 'D')))
             """;
 
     /**

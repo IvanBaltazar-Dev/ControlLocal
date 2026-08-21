@@ -126,30 +126,21 @@ $cliente = Api POST '/clientes' $agente.token @{
     consentimientoUsoDato = $true
     estado = 'A'
 }
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-E3-$sufijo"
-    direccion = "Av. Ficha E3 $sufijo"
-    distrito = 'Miraflores'
-    metraje = 140
-    precioReferencial = 7200
-    monedaReferencial = 'PEN'
-    rubroPermitido = 'Retail E3'
-    idPropietario = $propietario.id
-    estadoPublicacion = 'P'
-}
-$captacion = Api POST '/captaciones' $agente.token @{
-    codigoCaptacion = "CAP-E3-$sufijo"
-    fechaCaptacion = $fechaCaptacion
-    fechaInicioVigencia = $fechaCaptacion
-    fechaFinVigencia = (Get-Date).AddDays(90).ToString('yyyy-MM-dd')
-    comisionPactada = 100
-    observaciones = "Fixture ficha E3 $sufijo"
-    idLocal = $local.id
-    motivoOperacion = 'A'
-    urgencia = 2
-    exclusividad = $true
-}
-$captacion = Api POST "/captaciones/$($captacion.id)/decision" $broker.token @{
+$local = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. Ficha E3 $sufijo" -Codigo "LOC-E3-$sufijo" `
+    -IdPropietario $propietario.id -Metraje 140 -Rubro 'Retail E3' `
+    -Importe 7200 -Moneda 'PEN' -TipoComision 'P' -BaseCalculo 'R' -ValorComision 1.00 `
+    -TratamientoIgv 'N' -InicioEncargo $fechaCaptacion `
+    -FinEncargo (Get-Date).AddDays(90).ToString('yyyy-MM-dd') `
+    -Descripcion "Fixture ficha E3 $sufijo"
+# El anuncio, explicito: `POST /locales` lo creaba de rebote con
+# `estadoPublicacion` y el alta universal no publica. La cascada del contrato
+# tiene que encontrar un anuncio VIVO para poder cerrarlo, que es parte de lo
+# que esta suite comprueba.
+Api POST "/encargos/$($local.idEncargo)/publicaciones" $agente.token @{
+    canal = 'URBANIA'; estado = 'P'; importePublicado = 7200; moneda = 'PEN'
+    tituloAnuncio = "Anuncio E3 $sufijo"
+} | Out-Null
+$captacion = Api POST "/captaciones/$($local.idEncargo)/decision" $broker.token @{
     accion = 'A'; observacion = 'Aprobada para verificar la ficha E3.'
 }
 
@@ -470,7 +461,7 @@ select
   (select count(*) from persona where correo='propietario.e3.$sufijo@test.local') || '|' ||
   (select count(*) from persona where correo='cliente.e3.$sufijo@test.local') || '|' ||
   (select count(*) from propiedad where codigo='LOC-E3-$sufijo') || '|' ||
-  (select count(*) from captacion where codigo_captacion='CAP-E3-$sufijo')
+  (select count(*) from captacion where id_captacion=$idCaptacion)
 "@
 Check 'los registros E3 quedan identificables en desarrollo' ($persistenciaE3 -eq '1|1|1|1') $persistenciaE3
 

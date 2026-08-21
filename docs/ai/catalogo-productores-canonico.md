@@ -111,11 +111,11 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | organizacion.estado | I | PRODUCIDO | Baja de organizacion |
 | persona.estado | A | PRODUCIDO | Personas.nueva: alta de cliente y propietario |
 | persona.estado | I | PRODUCIDO | ClienteServiceImpl y PropietarioServiceImpl: desactivacion |
-| propiedad.disponibilidad_comercial | D | PRODUCIDO | ContratoServiceImpl.revisarDisponibilidad VOLVER_AL_MERCADO y alta del local |
+| propiedad.disponibilidad_comercial | D | PRODUCIDO | `ContratoServiceImpl.revisarDisponibilidad` VOLVER_AL_MERCADO y **la apertura del encargo** — `PropiedadUniversalServiceImpl.entrarEnOferta` (alta con operaciones) y `ProspeccionServiceImpl.captar`. Desde V75 el alta NO la produce: una propiedad registrada sin encargo queda con la columna NULL, porque no hay oferta que declarar |
 | propiedad.disponibilidad_comercial | A | PRODUCIDO | ContratoServiceImpl.cerrarLocal |
 | propiedad.disponibilidad_comercial | T | PRODUCIDO | ContratoServiceImpl.revisarDisponibilidad RETIRAR_DEL_MERCADO y baja del local |
 | propiedad.disponibilidad_comercial | R | RESERVADO_FUTURO | 7.3.2 fijo que un contrato P no es reserva. Falta una operacion real de reserva |
-| propiedad.estado_registro | A | PRODUCIDO | LocalComercialServiceImpl: alta y reactivacion |
+| propiedad.estado_registro | A | PRODUCIDO | `PropiedadUniversalServiceImpl.registrar` (alta universal) y `LocalComercialServiceImpl` en la reactivación. Ya no lo produce el alta de local: ese endpoint se retiró en el Corte 0A |
 | propiedad.estado_registro | I | PRODUCIDO | LocalComercialServiceImpl: desactivacion |
 | prospeccion.estado | P | PRODUCIDO | ProspeccionServiceImpl: alta |
 | prospeccion.estado | C | PRODUCIDO | ProspeccionServiceImpl: contactar |

@@ -115,18 +115,20 @@ Check 'login broker de otro equipo (BRK-002)' ($brokerAjeno.rol -eq 'BROKER') $b
 Check 'login admin' ($admin.rol -eq 'ADMIN') $admin.rol
 
 Write-Host "`n== 2. Prologo F2 + F3: oferta, captacion ACTIVA y oportunidad ==" -ForegroundColor Cyan
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-F4$sufijo"; direccion = 'Av. Cierre 456'; distrito = 'Miraflores'
-    metraje = 140; precioReferencial = 8000; monedaReferencial = 'PEN'; rubroPermitido = 'Cafeteria'
-    idPropietario = 43; estadoPublicacion = 'P'
-}
+# Registrar NO es encargar (V75): el inmueble entra en el registro maestro y se
+# prospecta; el encargo nace al captar, cuando el propietario acepta.
+$local = NuevoInmuebleSinEncargo -Token $agente.token -Direccion 'Av. Cierre 456' `
+    -IdPropietario 43 -Metraje 140 -Rubro 'Cafeteria' -Descripcion "Prospecto F4 $sufijo"
 $idLocal = $local.id
-$idProspeccion = (Api GET "/prospecciones?idLocal=$idLocal" $agente.token).items[0].id
+$idProspeccion = NuevaProspeccion -Token $agente.token -IdPropiedad $idLocal `
+    -Observaciones "Prospeccion F4 $sufijo"
 Api POST "/prospecciones/$idProspeccion/contactar" $agente.token $null | Out-Null
 Api POST "/prospecciones/$idProspeccion/reunion" $agente.token $null | Out-Null
 Api POST "/prospecciones/$idProspeccion/propuesta" $agente.token $null | Out-Null
 # comisionPactada es un PORCENTAJE: 5 % de la renta propuesta.
-$captada = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{ comisionPactada = 5 }
+$captada = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
+    operacion = 'ALQUILER'; importe = 8000; moneda = 'PEN'; comisionPactada = 5
+}
 $idCaptacion = $captada.idCaptacion
 Api PUT "/captaciones/$idCaptacion" $agente.token @{
     fechaCaptacion = $hoy; fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
@@ -137,8 +139,10 @@ Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'A'; obs
 Check 'la captacion del prologo quedo ACTIVA' `
     ((Sql "select estado from captacion where id_captacion=$idCaptacion") -eq 'A') 'estado captacion'
 
-$idPublicacion = (Api POST "/locales/$idLocal/publicaciones" $agente.token @{
-    canal = 'URBANIA'; estado = 'P'; rentaPublicada = 8500; moneda = 'PEN'
+# El anuncio cuelga del ENCARGO desde V70: `/locales/{id}/publicaciones` devolvia
+# las series de venta y alquiler juntas sin poder decir cual publicaba que.
+$idPublicacion = (Api POST "/encargos/$idCaptacion/publicaciones" $agente.token @{
+    canal = 'URBANIA'; estado = 'P'; importePublicado = 8500; moneda = 'PEN'
     urlPublicacion = "https://demo.test/f4-$sufijo"
 }).id
 Check 'el local tiene una publicacion PUBLICADA (para el efecto 6)' ($null -ne $idPublicacion) 'publicacion'

@@ -129,12 +129,15 @@ E2E del cierre    comision-movimientos    65 OK / 0 fallas
                   f4-solicitud            BLOQUEADA — ver abajo
 ```
 
-**`Verificar-Cierre.ps1` no corre entera todavía, y no por este corte.** Su fase
-E2E destapó una deuda del Corte 0A: diez guiones seguían llamando a
-`POST /locales`, retirado en V71, y contestaba 405. Tres de las cuatro suites del
-cierre están migradas al alta universal y verdes; la cuarta —y otras dos que no
-están en el gate— dependen de una capacidad que el Corte 0A dejó sin entrada, y
-eso es una decisión de producto. Está detallado al final.
+**La fase E2E de `Verificar-Cierre.ps1` destapó una deuda del Corte 0A**: diez
+guiones seguían llamando a `POST /locales`, retirado en V71, y contestaba 405.
+Tres de las cuatro suites del cierre se migraron aquí; la cuarta dependía de una
+capacidad que 0A había dejado sin entrada —registrar una propiedad que sólo se
+está prospectando—, y resolverlo era una decisión de producto.
+
+> **Resuelto el mismo día en `V75`**, con la opción que el usuario eligió:
+> `POST /propiedades` acepta cero operaciones. Los diez guiones corren y están
+> verdes. Evidencia en `2026-08-21-registrar-no-es-encargar.md`.
 
 `SujetoDelDatoIntegrationTest` — **21/21**, contra PostgreSQL real porque casi
 todo lo que afirma lo garantiza un trigger o un índice único, y eso no lo lee
@@ -220,7 +223,14 @@ quedó en 0B. Nadie debe leerla.
 
 ---
 
-## Bloqueo abierto, heredado del Corte 0A: la prospección se quedó sin entrada
+## ~~Bloqueo abierto~~ · CERRADO el mismo día por `V75`
+
+Lo que sigue describe el bloqueo tal como se encontró. Se resolvió con la
+primera de las tres opciones —`POST /propiedades` acepta cero operaciones—; el
+razonamiento y la implementación están en
+`2026-08-21-registrar-no-es-encargar.md`.
+
+### Heredado del Corte 0A: la prospección se quedó sin entrada
 
 **No es de este corte y no se resuelve solo.** Lo destapó la corrida de cierre.
 
@@ -252,8 +262,4 @@ La primera es la que mejor encaja con D-E4-1 —propiedad y encargo son cosas
 distintas y el encargo es un episodio—, pero **es una decisión de producto**, no
 un arreglo: cambia qué significa registrar.
 
-Migradas y verdes: `comision-movimientos`, `disponibilidad-contrato`,
-`estabilizacion-alquiler`. Sin migrar y sin poder migrarse todavía:
-`f3-demanda`, `f4-solicitud`, `f6-f7-alertas-tareas`. Sin migrar y sin bloqueo
-—sustitución mecánica pendiente—: `e4-dashboard`, `ficha-comercial`,
-`reportes-propietario`, `v6`.
+Al cerrar el bloqueo con `V75`, **los diez guiones quedaron migrados y verdes**.

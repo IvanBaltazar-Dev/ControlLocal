@@ -223,7 +223,7 @@ public class InterpreteDeterminista implements Interprete {
     private void propiedad(String llano, SesionBrox sesion, Map<String, String> datos,
                            List<String> noEntendido) {
         tipoDe(llano).ifPresent(t -> datos.put(Vocabulario.TIPO_PROPIEDAD, t));
-        operacionDe(llano).ifPresent(o -> datos.put(Vocabulario.OPERACION, o));
+        operacionDe(llano).ifPresent(o -> datos.put(Vocabulario.OPERACIONES_DECLARADAS, o));
 
         precioDe(llano).ifPresent(precio -> {
             datos.put(Vocabulario.IMPORTE, precio.importe().toPlainString());

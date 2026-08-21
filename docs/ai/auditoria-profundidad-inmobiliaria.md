@@ -401,7 +401,7 @@ Sólo cuando 0A esté verde.
 
 ### **Corte 1 — Filas gratis: las 19 claves que ya existen** · el mejor coste/valor del plan
 
-- **Migración V75**: todo el §3.1. Filas en `catalogo_atributo_tipo` (`banos` en L,O,A; `cuota_mantenimiento` en C,A; `zonificacion` en O; `pisos_edificacion` en D,O; `frente` en C), flips de exigencia, cambios de `tipo_dato` (`zonificacion` y `rubro_permitido` a LISTA/LISTA_MULTIPLE con sus opciones, `cuota_mantenimiento` a IMPORTE, `banos` a ENTERO), quitar `aplica_todos` de `antiguedad_anios` y `estacionamientos`, rótulo de `metraje_total`, habilitar `interiorUnidad`/`nombreEdificioGaleria` para A, retirar `servicios_disponibles`, retirar `metraje_construido` de D.
+- **Migración V76**: todo el §3.1. Filas en `catalogo_atributo_tipo` (`banos` en L,O,A; `cuota_mantenimiento` en C,A; `zonificacion` en O; `pisos_edificacion` en D,O; `frente` en C), flips de exigencia, cambios de `tipo_dato` (`zonificacion` y `rubro_permitido` a LISTA/LISTA_MULTIPLE con sus opciones, `cuota_mantenimiento` a IMPORTE, `banos` a ENTERO), quitar `aplica_todos` de `antiguedad_anios` y `estacionamientos`, rótulo de `metraje_total`, habilitar `interiorUnidad`/`nombreEdificioGaleria` para A, retirar `servicios_disponibles`, retirar `metraje_construido` de D.
 - **Código**: `GuionRegistroPropiedad` deja de restringir `interiorUnidad`/`nombreEdificioGaleria` a L,O,D. Migrar el dato existente de `banos` DECIMAL a `banos` ENTERO + `medios_banos` **sin inferir**: `2.5` → 2 completos + 1 medio es la única lectura documentada, y lo que no encaje se declara FALTANTE.
 - **Prueba**: E2E que comprueba que un TERRENO ya no pregunta antigüedad ni estacionamientos, y que un LOCAL pregunta baños.
 - **Valor**: sin una sola clave nueva desaparecen dos preguntas sin sentido, la zonificación pasa a filtrable, el mantenimiento deja de ser un número sin moneda y el local deja de registrarse sin SS.HH.
@@ -410,7 +410,7 @@ Sólo cuando 0A esté verde.
 
 ### **Corte 2 — Identidad registral** · §3.2
 
-- **Migración V76**: `propiedad.partida_registral`, `propiedad.oficina_registral` (destino ESTRUCTURAL, gracias a C-8) + las claves `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. `condicion_compraventa.partida_registral` pasa a ser lo que debió ser siempre: **la partida vigente en esa venta, copia fechada de la del activo**, no su único domicilio.
+- **Migración V77**: `propiedad.partida_registral`, `propiedad.oficina_registral` (destino ESTRUCTURAL, gracias a C-8) + las claves `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. `condicion_compraventa.partida_registral` pasa a ser lo que debió ser siempre: **la partida vigente en esa venta, copia fechada de la del activo**, no su único domicilio.
 - **Prueba**: E2E que verifica que una captación de **alquiler** puede registrar la partida (hoy es imposible) y que la solicitud de venta la hereda.
 - **Valor**: el broker verifica titular y cargas en SUNARP **antes** de firmar el encargo, no al cerrar.
 

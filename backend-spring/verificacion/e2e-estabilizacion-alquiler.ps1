@@ -96,12 +96,13 @@ $cliente = Api POST '/clientes' $agente.token @{
     correo = "cliente.$marca@test.local"; rubroComercial = 'Retail'
     consentimientoContacto = $true; consentimientoUsoDato = $true; estado = 'A'
 }
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-$marca"; direccion = "Av. $marca 100"
-    distrito = 'Miraflores'; metraje = 120; precioReferencial = 7200
-    monedaReferencial = 'PEN'; rubroPermitido = 'Retail'; idPropietario = $propietario.id
-    estado = 'D'; estadoPublicacion = 'P'
-}
+# El alta universal crea el inmueble y abre su encargo: `POST /locales` se
+# retiro en el Corte 0A y el importe no viaja sin su operacion.
+$local = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. $marca 100" `
+    -Distrito 'Miraflores' -IdPropietario $propietario.id -Metraje 120 `
+    -Importe 7200 -Moneda 'PEN' -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1.00 `
+    -TratamientoIgv 'N' -InicioEncargo $hoy -FinEncargo $fechaFinEncargo `
+    -Descripcion "Estabilizacion economica $marca"
 $captacionBase = @{
     codigoCaptacion = "CAP-$marca"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
     fechaFinVigencia = $fechaFinEncargo
@@ -120,9 +121,21 @@ Check 'el backend rechaza una combinacion tipo/base invalida' `
     ($rechazoApi.codigo -eq 400 -and $rechazoApi.error -match 'tipo y base') `
     "codigo=$($rechazoApi.codigo) error=$($rechazoApi.error)"
 
-$captacion = Api POST '/captaciones' $agente.token $captacionBase
-$captacion = Api POST "/captaciones/$($captacion.id)/decision" $broker.token @{
+# El encargo ya nacio con el alta; aqui solo lo aprueba el broker. `$captacionBase`
+# se conserva porque la comprobacion de arriba lo clona para el caso invalido:
+# esa validacion corre ANTES de la unicidad del encargo vivo, asi que sigue
+# devolviendo el 400 de tipo/base que la prueba afirma.
+$captacion = Api POST "/captaciones/$($local.idEncargo)/decision" $broker.token @{
     accion = 'A'; observacion = "Porcentaje confirmado $marca"
+}
+# El anuncio, explicito. `POST /locales` lo creaba de rebote con
+# `estadoPublicacion = 'P'`; el alta universal no publica -lo dice su propia
+# documentacion- porque publicar es una decision, no un efecto secundario de
+# registrar. La cascada del contrato tiene que encontrar un anuncio VIVO para
+# poder cerrarlo, que es justo lo que esta suite comprueba.
+$anuncio = Api POST "/encargos/$($local.idEncargo)/publicaciones" $agente.token @{
+    canal = 'URBANIA'; estado = 'P'; importePublicado = 7200; moneda = 'PEN'
+    tituloAnuncio = "Anuncio $marca"
 }
 $idCaptacion = [long]$captacion.id
 $preferenciaErrores = $ErrorActionPreference

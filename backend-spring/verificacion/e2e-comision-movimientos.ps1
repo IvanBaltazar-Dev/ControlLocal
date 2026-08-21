@@ -152,22 +152,14 @@ $cliente = Api POST '/clientes' $agente.token @{
     correo = "cliente.$marca@test.local"; rubroComercial = 'Retail'
     consentimientoContacto = $true; consentimientoUsoDato = $true; estado = 'A'
 }
-$local = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-$marca"; direccion = "Av. $marca 200"
-    distrito = 'Barranco'; metraje = 90; precioReferencial = 1000
-    monedaReferencial = 'PEN'; rubroPermitido = 'Retail'; idPropietario = $propietario.id
-    estado = 'D'; estadoPublicacion = 'P'
-}
-$captacion = Api POST '/captaciones' $agente.token @{
-    codigoCaptacion = "CAP-$marca"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
-    fechaFinVigencia = $fechaFinEncargo
-    observaciones = "Captacion $marca"; idLocal = $local.id
-    idAgente = $agente.idDominio; motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
-    tipoOperacion = 'A'; importeReferencia = 1000; monedaReferencia = 'PEN'
-    tipoComision = 'E'; baseCalculo = 'R'; valorComision = 1.00
-    monedaComision = 'PEN'; tratamientoIgv = 'N'
-}
-$captacion = Api POST "/captaciones/$($captacion.id)/decision" $broker.token @{
+# Alta y encargo en un solo acto: `POST /locales` se retiro en el Corte 0A y
+# `POST /propiedades` abre el encargo con la propiedad, porque un importe sin
+# operacion declarada no dice si es precio de venta o renta.
+$local = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. $marca 200" `
+    -IdPropietario $propietario.id -Importe 1000 -Moneda 'PEN' `
+    -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1.00 -TratamientoIgv 'N' `
+    -InicioEncargo $hoy -FinEncargo $fechaFinEncargo -Descripcion "Captacion $marca"
+$captacion = Api POST "/captaciones/$($local.idEncargo)/decision" $broker.token @{
     accion = 'A'; observacion = "Captacion aprobada $marca"
 }
 $idCaptacion = [long]$captacion.id
@@ -509,23 +501,12 @@ $cliente0 = Api POST '/clientes' $agente.token @{
     correo = "cliente.$marca0@test.local"; rubroComercial = 'Retail'
     consentimientoContacto = $true; consentimientoUsoDato = $true; estado = 'A'
 }
-$local0 = Api POST '/locales' $agente.token @{
-    codigoLocal = "LOC-$marca0"; direccion = "Av. $marca0 300"
-    distrito = 'Surco'; metraje = 60; precioReferencial = 900
-    monedaReferencial = 'PEN'; rubroPermitido = 'Retail'; idPropietario = $propietario0.id
-    estado = 'D'; estadoPublicacion = 'P'
-}
-$captacion0 = Api POST '/captaciones' $agente.token @{
-    codigoCaptacion = "CAP-$marca0"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
-    fechaFinVigencia = $fechaFinEncargo; observaciones = "Sin comision $marca0"
-    idLocal = $local0.id; idAgente = $agente.idDominio; motivoOperacion = 'A'
-    urgencia = 3; exclusividad = $true
-    tipoOperacion = 'A'; importeReferencia = 900; monedaReferencia = 'PEN'
-    tipoComision = 'E'; baseCalculo = 'R'; valorComision = 0
-    monedaComision = 'PEN'; tratamientoIgv = 'N'
-    motivoSinComision = 'Acuerdo de cortesia con el propietario'
-}
-$captacion0 = Api POST "/captaciones/$($captacion0.id)/decision" $broker.token @{
+$local0 = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. $marca0 300" `
+    -Distrito 'Surco' -IdPropietario $propietario0.id -Metraje 60 `
+    -Importe 900 -Moneda 'PEN' -TipoComision 'E' -BaseCalculo 'R' -ValorComision 0 `
+    -TratamientoIgv 'N' -InicioEncargo $hoy -FinEncargo $fechaFinEncargo `
+    -Descripcion "Sin comision $marca0"
+$captacion0 = Api POST "/captaciones/$($local0.idEncargo)/decision" $broker.token @{
     accion = 'A'; observacion = "Sin comision aprobada $marca0"
 }
 $oportunidad0 = Api POST '/oportunidades' $agente.token @{

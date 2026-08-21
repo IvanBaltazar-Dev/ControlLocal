@@ -138,3 +138,10 @@ function Connect-ControlLocalE2E {
     return ($conFactor | Add-Member -NotePropertyName Secreto `
         -NotePropertyValue $enrolamiento.secreto -PassThru)
 }
+
+# El alta de un inmueble con su encargo, comun a todas las suites. Vive aparte
+# porque el Corte 0A retiro `POST /locales` y diez guiones lo llamaban: con la
+# funcion en un solo fichero, la siguiente puerta que se retire se cambia una
+# vez y no diez. Llama a la funcion `Api` de cada guion -PowerShell resuelve el
+# nombre al invocar, no al cargar-, asi que no importa que se defina despues.
+. "$PSScriptRoot/lib-alta-inmueble.ps1"

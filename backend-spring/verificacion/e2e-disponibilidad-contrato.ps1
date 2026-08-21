@@ -101,20 +101,14 @@ function MontarOperacion($etiqueta) {
         nombre = "Cliente $m"; telefono = '987700002'; correo = "cli.$m@test.local"
         rubroComercial = 'Retail'; consentimientoContacto = $true; consentimientoUsoDato = $true; estado = 'A'
     }
-    $local = Api POST '/locales' $agente.token @{
-        codigoLocal = "LOC-$m"; direccion = "Av. $m 100"; distrito = 'Lince'; metraje = 80
-        precioReferencial = 2000; monedaReferencial = 'PEN'; rubroPermitido = 'Retail'
-        idPropietario = $propietario.id; estado = 'D'; estadoPublicacion = 'P'
-    }
-    $captacion = Api POST '/captaciones' $agente.token @{
-        codigoCaptacion = "CAP-$m"; fechaCaptacion = $hoy; fechaInicioVigencia = $hoy
-        fechaFinVigencia = $fechaFinEncargo; observaciones = "Captacion $m"; idLocal = $local.id
-        idAgente = $agente.idDominio; motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
-        tipoOperacion = 'A'; importeReferencia = 2000; monedaReferencia = 'PEN'
-        tipoComision = 'E'; baseCalculo = 'R'; valorComision = 1.00
-        monedaComision = 'PEN'; tratamientoIgv = 'N'
-    }
-    $captacion = Api POST "/captaciones/$($captacion.id)/decision" $broker.token @{
+    # `POST /locales` se retiro en el Corte 0A: el alta universal crea el
+    # inmueble y abre su encargo en el mismo acto.
+    $local = NuevoInmuebleConEncargo -Token $agente.token -Direccion "Av. $m 100" `
+        -Distrito 'Lince' -IdPropietario $propietario.id -Metraje 80 `
+        -Importe 2000 -Moneda 'PEN' -TipoComision 'E' -BaseCalculo 'R' -ValorComision 1.00 `
+        -TratamientoIgv 'N' -InicioEncargo $hoy -FinEncargo $fechaFinEncargo `
+        -Descripcion "Captacion $m"
+    $captacion = Api POST "/captaciones/$($local.idEncargo)/decision" $broker.token @{
         accion = 'A'; observacion = "Aprobada $m"
     }
     $oportunidad = Api POST '/oportunidades' $agente.token @{

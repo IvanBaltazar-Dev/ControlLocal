@@ -9,9 +9,17 @@
    Es lo que la distingue de la zona de trabajo — el Radar no es una
    caja más del tablero.
 
-   Los nombres de `@keyframes` van prefijados: en la encapsulación
-   emulada de Angular las animaciones NO se scopean, y `entra` o
-   `crecer` son nombres que cualquier otra pantalla puede reclamar.
+   Los nombres de `@keyframes` van prefijados. Angular SI las scopea
+   con encapsulacion emulada --le antepone al nombre el atributo del
+   componente que las declara--, asi que el prefijo `brox-` ya no evita
+   ningun choque; se conserva porque leerlo dice de donde sale la
+   animacion.
+
+   Lo que si importa del scopeo: UNA HOJA QUE USA UNA `@keyframes` TIENE
+   QUE DECLARARLA. Si la declara otra, el `animation-name` sale sin
+   prefijar, no resuelve ninguna animacion y la regla se queda muda, sin
+   error de compilacion ni aviso. `radar-antecedentes.scss` repite
+   `brox-aflorar` por esto.
 
    AQUI VIVE EL ARMAZON, NO LAS TARJETAS. La superficie, la cabecera de
    los dos modos, `.radar-cuerpo`, la ruta del caso y el conmutador de

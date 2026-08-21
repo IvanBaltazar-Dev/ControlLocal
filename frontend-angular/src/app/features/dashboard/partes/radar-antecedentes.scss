@@ -11,9 +11,15 @@
    anfitrion seria inline y la tarjeta se descuadraria-- y el `padding`
    que antes ponia `.rz`.
 
-   `brox-aflorar` se define en `radar.scss`. Las `@keyframes` no se
-   scopean con encapsulacion emulada y el padre siempre esta pintado
-   cuando este componente existe, asi que la referencia resuelve.
+   `brox-aflorar` SE REPITE AL FINAL, y no es descuido. Angular SI
+   scopea las `@keyframes` con encapsulacion emulada: antepone a su
+   nombre el atributo del componente que las declara. Un
+   `animation: brox-aflorar` en una hoja que no la declara sale del
+   compilador SIN prefijar, no encuentra ninguna animacion con ese
+   nombre y la regla se queda muda. Es lo que pasaba aqui al partir el
+   Radar: las cuatro filas del expediente perdian su entrada
+   escalonada --`opacity` en 1 y `transform` en `none` desde el primer
+   fotograma-- y lo cazo la comparacion de estilo calculado.
    ==================================================================== */
 
 :host {
@@ -265,6 +271,7 @@
     opacity: 0;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .ant-fila,
   .ant-b i,
@@ -299,5 +306,21 @@
 
   &:hover cl-icono {
     transform: translateX(3px);
+  }
+}
+
+/* La misma que `radar.scss`, repetida porque Angular scopea las
+   `@keyframes` por componente (ver la cabecera). Entra desenfocado y
+   ENFOCA: un desenfoque que se resuelve se lee como algo que se esta
+   formando; un `translate`, como algo que se empuja. */
+@keyframes brox-aflorar {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.994);
+    filter: blur(6px);
+  }
+
+  60% {
+    filter: blur(0);
   }
 }

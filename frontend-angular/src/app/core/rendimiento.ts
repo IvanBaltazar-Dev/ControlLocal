@@ -83,6 +83,86 @@ export function lecturaDe(kpi: KpiCanonico, esAgente: boolean): string {
 }
 
 /**
+ * **La meta y lo que falta**, en una línea.
+ *
+ * Es la primera mitad de `lecturaDe`, publicada aparte porque Indicadores la
+ * enseña en su propio renglón mientras el pie del Inicio la encadena con el
+ * ritmo. Las dos salen de aquí para que no puedan divergir: si mañana «te
+ * faltan» pasa a decirse de otra manera, cambia en un sitio.
+ *
+ * Dice **la meta primero y la deuda después** — «Meta 24 · te faltan 5» —, no el
+ * porcentaje: lo que mueve es lo cerca que estás, no un 79 %.
+ *
+ * @param esAgente cambia la voz, no los números. Al broker no se le atribuye la
+ * producción del equipo como si fuera suya (D-E2-2, instrucción 4).
+ */
+export function metaDe(kpi: KpiCanonico, esAgente: boolean): string {
+  if (kpi.metaPeriodo == null) {
+    return porQueSinBase(kpi.motivoSinBase);
+  }
+  const cabeza = `Meta ${kpi.metaPeriodo}`;
+  const falta = kpi.metaPeriodo - kpi.actual;
+  if (falta === 0) {
+    return `${cabeza} · alcanzada`;
+  }
+  if (falta < 0) {
+    return `${cabeza} · superada por ${-falta}`;
+  }
+  return `${cabeza} · ${esAgente ? 'te faltan' : 'faltan'} ${falta}`;
+}
+
+/**
+ * **Dónde tocaría estar hoy.** No es una segunda meta: es la del periodo medida
+ * hasta hoy, y por eso no se rotula «meta» — dos líneas seguidas empezando por
+ * esa palabra hacían leer que había dos objetivos y que el de hoy ya estaba
+ * cumplido, que es lo contrario de lo que hay que entender.
+ *
+ * Devuelve cadena vacía cuando no hay nada que decir; el adelanto lo dice
+ * `adelantoDe`, que es una marca y no una frase.
+ */
+export function ritmoEsperadoDe(kpi: KpiCanonico, esAgente: boolean): string {
+  if (kpi.metaPeriodo == null) {
+    return 'No hay ritmo que evaluar';
+  }
+  if (kpi.sinCadencia) {
+    // Repartir una meta de dos contratos por días inventaría una cadencia que el
+    // negocio no tiene. Lo declara el dominio, no un umbral de aquí.
+    return 'Muy pocos para medir ritmo';
+  }
+  if (kpi.motivoSinBase === 'PERIODO_SIN_RECORRIDO') {
+    return 'El periodo recién empieza';
+  }
+  if (kpi.metaEsperadaAHoy == null) {
+    return '';
+  }
+  return esAgente
+    ? `Hoy deberías ir por ${kpi.metaEsperadaAHoy}`
+    : `Hoy el equipo debería ir por ${kpi.metaEsperadaAHoy}`;
+}
+
+/**
+ * El adelanto o el retraso contra el calendario, con su signo.
+ *
+ * Contesta «¿y esto es bueno?» sin que el lector reste. **Convive con «te faltan
+ * 5»**: una habla del calendario y la otra del objetivo, y las dos son ciertas a
+ * la vez. `null` cuando no hay referencia contra la que compararse —sin meta,
+ * sin cadencia o con el periodo recién empezado—, porque entonces la resta no
+ * significa nada.
+ *
+ * Es aritmética sobre dos hechos que ya llegan decididos, no una clasificación:
+ * el veredicto lo sigue dando `estadoRitmo`.
+ */
+export function adelantoDe(kpi: KpiCanonico): number | null {
+  if (kpi.metaEsperadaAHoy == null || kpi.metaPeriodo == null || kpi.sinCadencia) {
+    return null;
+  }
+  if (kpi.motivoSinBase === 'PERIODO_SIN_RECORRIDO') {
+    return null;
+  }
+  return kpi.actual - kpi.metaEsperadaAHoy;
+}
+
+/**
  * Por qué no concluye.
  *
  * «Sin base» a secas obliga a adivinar si falta la meta propia, la de un

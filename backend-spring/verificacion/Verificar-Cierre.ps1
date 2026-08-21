@@ -38,6 +38,7 @@ $integracion = @(
     # separarse.
     'AutoridadDelDatoIntegrationTest',
     'BusquedaLocalesIntegrationTest',
+    'ConvergenciaCampanaColaIntegrationTest',
     # D-E2-5 / E2.5: el broker tiene sus propios asuntos, y no comparte ni un id
     # con la bandeja del agente.
     'FocoDelBrokerIntegrationTest',

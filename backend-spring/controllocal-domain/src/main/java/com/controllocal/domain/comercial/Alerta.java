@@ -134,6 +134,25 @@ public class Alerta extends EntidadDeOrganizacion {
         fechaResolucion = OffsetDateTime.now();
     }
 
+    /**
+     * <b>Cierra el aviso porque su motivo dejo de existir</b>, no porque nadie
+     * lo mirara.
+     *
+     * <p>Es el otro lado de la reconciliacion: si la prospeccion volvio a
+     * contactarse, el recontacto ya no esta vencido y el aviso no puede seguir
+     * activo diciendo que si. Sin esto la campana y la bandeja divergian — la
+     * tarea se auto-completa al reconciliar y la alerta se quedaba viva para
+     * siempre, hasta que alguien pulsara «Atender» una cosa que ya no pasaba.
+     *
+     * <p>Se distingue de {@link #atender()} a proposito. Las dos cierran, pero
+     * no dicen lo mismo: una persona decidio, o el mundo cambio. Mezclarlas
+     * dejaria la auditoria sin poder responder cual de las dos fue.
+     */
+    public void descartar() {
+        estado = DESCARTADA;
+        fechaResolucion = OffsetDateTime.now();
+    }
+
     public boolean estaActiva() {
         return ACTIVA.equals(getEstado());
     }

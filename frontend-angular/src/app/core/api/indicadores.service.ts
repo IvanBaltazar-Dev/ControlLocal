@@ -33,10 +33,20 @@ export interface IndicadorConteo {
   valor: number;
 }
 
+/**
+ * Un **nivel** del embudo, no un salto: cuántas oportunidades hay en ese punto.
+ *
+ * `porcentaje` es la proporción contra la **primera fila**, y ya no lleva el
+ * `100` fijo de la v1 — se corrigió el 2026-08-08 al descongelar el contrato, a
+ * la vez que «Con visita realizada», que no miraba el estado de la visita.
+ *
+ * La pantalla de Indicadores **no usa `porcentaje`**: dibuja los saltos entre
+ * niveles consecutivos, porque lo que informa de un embudo es lo que retiene
+ * cada tramo, no la proporción de todos contra el primero.
+ */
 export interface IndicadorEmbudo {
   etapa: string;
   valor: number;
-  /** La primera fila viaja con `100` aunque `valor` sea 0 (bug congelado). */
   porcentaje: number;
 }
 

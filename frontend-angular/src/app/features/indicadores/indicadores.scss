@@ -1,333 +1,317 @@
+/* ====================================================================
+   INDICADORES COMERCIALES
+   --------------------------------------------------------------------
+   Portado de `docs/ai/prototipos/indicadores.html`. Los valores están
+   copiados, no reinterpretados.
+
+   DOS SISTEMAS DE COLOR QUE NO SE PISAN:
+     IDENTIDAD  la rampa `--p1..--p4`, un tono por paso del proceso. El
+                KPI de arriba y su salto en el embudo comparten tono.
+     ESTADO     verde en ritmo · ámbar atención · rojo fuera de ritmo ·
+                gris sin base. El azul es BROX y lo pulsable.
+   Relleno con el tono vivo, texto con la variante de voz.
+
+   NOTA SOBRE EL RADIO. Este prototipo usa `--r: 13px` y el del Inicio
+   `10px`: los dos son «el prototipo» y no coinciden. Aquí se toma el
+   valor local en `--r-t` en vez de mover el token global, que gobierna
+   las 57 pantallas. Cuál de los dos gana es una decisión de sistema y
+   no se resuelve en silencio desde una pantalla.
+   ==================================================================== */
+
 :host {
   display: block;
+  --r-t: 13px;
+  --r-chico: 8px;
 }
 
-.periodo {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.78rem;
-  color: var(--cl-tinta-suave);
-
-  select {
-    padding: 0.45rem 0.6rem;
-    border: 1px solid var(--cl-borde);
-    border-radius: 0.45rem;
-    background: var(--cl-superficie);
-    color: var(--cl-tinta);
-    font: inherit;
-    font-size: 0.84rem;
-  }
-}
-
-/* La conversión es el número con el que se abre la pantalla. */
-.hero {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 1rem;
-
-  .figura {
-    margin: 0;
-    font-size: 3rem;
-    font-weight: 800;
-    line-height: 1;
-    color: var(--cl-primario);
-    font-variant-numeric: tabular-nums;
-
-    span {
-      margin-left: 0.15rem;
-      font-size: 1.4rem;
-      font-weight: 600;
-      color: var(--cl-tinta-suave);
-    }
-  }
-
-  .medida {
-    flex: 1;
-    min-width: 15rem;
-  }
-
-  p {
-    margin: 0.35rem 0 0;
-  }
-}
-
-.medidor {
-  height: 0.55rem;
-  border-radius: 999px;
-  background: var(--cl-borde);
-  overflow: hidden;
-
-  i {
-    display: block;
-    height: 100%;
-    border-radius: 999px;
-    background: var(--cl-primario-claro);
-  }
-}
-
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.rejilla {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
-  align-items: start;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.cl-tarjeta {
-  margin-bottom: 1rem;
-}
-
-.rejilla .cl-tarjeta {
-  margin-bottom: 0;
-}
-
-/* Embudo: barras horizontales, que es lo que admite nombres largos. */
-.embudo {
+/* El lienzo apila tarjetas: el hueco entre ellas es parte del ritmo de la
+   pantalla, no un margen suelto de cada una. */
+.lienzo {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  .rotulo {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-bottom: 0.25rem;
-    font-size: 0.86rem;
-  }
-
-  .cifras {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .pista {
-    height: 0.6rem;
-    border-radius: 999px;
-    background: var(--cl-borde);
-    overflow: hidden;
-
-    i {
-      display: block;
-      height: 100%;
-      border-radius: 999px;
-    }
-  }
-}
-
-.barra {
-  display: flex;
-  gap: 2px;
-  height: 1.35rem;
-  margin-bottom: 0.9rem;
-  border-radius: 0.4rem;
-  overflow: hidden;
-  background: var(--cl-borde);
-}
-
-.tramo {
-  min-width: 3px;
-}
-
-.leyenda {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: 0.35rem 1.2rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.85rem;
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .punto {
-    width: 0.6rem;
-    height: 0.6rem;
-    flex-shrink: 0;
-    border-radius: 3px;
-  }
-
-  .nombre {
-    flex: 1;
-    min-width: 0;
-  }
-
-  b {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .pct {
-    min-width: 2.6rem;
-    text-align: right;
-  }
-}
-
-/* Las notas explican las rarezas del cable; van al pie, no compiten con el dato. */
-.nota {
-  margin: 0.8rem 0 0;
-  padding-top: 0.6rem;
-  border-top: 1px solid color-mix(in srgb, var(--cl-borde) 70%, transparent);
+  gap: 7px;
 }
 
 /* ====================================================================
-   RENDIMIENTO · los cuatro KPI canónicos contra su meta (D-E2-2 §3)
-   --------------------------------------------------------------------
-   Cada círculo responde cinco cosas: actual, meta, avance, faltante y
-   estado. Y lleva la marca del ritmo esperado a hoy, que es la que hace
-   que el semáforo se entienda: sin ella un 79 % no dice si vas por
-   delante o por detrás.
-
-   Claro, como todo BROX. El color aparece solo en el arco y en los
-   puntos del pulso; el texto va en tinta.
+   CABECERA
    ==================================================================== */
 
-.rendimiento {
-  margin-bottom: 1.5rem;
-  padding: 1.25rem 1.5rem;
-  border: 1px solid var(--cl-borde);
-  border-radius: var(--cl-radio);
-  background: var(--cl-superficie);
-}
-
-.titulo-rendimiento {
+.cab {
   display: flex;
-  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
+  gap: 18px;
+  flex-wrap: wrap;
 
-  h2 {
+  h1 {
     margin: 0;
-    font-size: 1.05rem;
+    font-size: 21px;
+    line-height: 27px;
+    font-weight: 600;
+    letter-spacing: -0.022em;
   }
 
-  p {
-    margin: 0.15rem 0 0;
+  .sub {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    color: var(--ink-2);
+
+    b {
+      font-weight: 600;
+      color: var(--ink);
+    }
   }
 }
 
-/* Una sola cifra de dinero en toda la sección, igual que en el pie. */
-.en-juego-indicadores {
-  text-align: right;
+.mandos {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-  .rotulo {
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+.periodos {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+
+  button {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ink-2);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: var(--ink);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--accion);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+  }
+}
+
+.refrescar {
+  padding: 6px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--ink);
   }
 
-  .cifra {
-    margin: 0.2rem 0 0;
-    font-size: 1.35rem;
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.filtro-metrica {
+  padding: 2px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--canvas);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--ink);
+  cursor: pointer;
+  max-width: 150px;
+}
+
+/* ====================================================================
+   TARJETAS
+   ==================================================================== */
+
+.t {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-t);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.t-cab {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 13px;
+  border-bottom: 1px solid var(--hairline);
+  min-height: 30px;
+
+  .k {
+    font-size: 10.5px;
     font-weight: 700;
-    color: var(--cl-tinta);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    white-space: nowrap;
   }
 
-  /* Lo único de esta franja sobre lo que el broker actúa (D-E2-2 §8). */
-  .palanca {
-    margin-top: 0.25rem;
-    font-weight: 600;
-    color: var(--cl-primario);
+  .der {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--ink-3);
+
+    b {
+      font-weight: 600;
+      color: var(--ink-2);
+    }
   }
 }
 
-.circulos {
+.t-cuerpo {
+  padding: 8px 13px 9px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.f2 {
+  display: grid;
+  grid-template-columns: minmax(0, 2.05fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.f3 {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.45fr) minmax(0, 0.92fr);
+  gap: 10px;
+}
+
+.vacio {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.nota {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--ink-3);
+
+  b {
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+}
+
+/* ====================================================================
+   LOS CUATRO KPI
+   ==================================================================== */
+
+.tira {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1.5rem;
 }
 
-.circulo-kpi {
-  text-align: center;
-
-  p {
-    margin: 0;
-  }
-
-  /* El nombre va completo: abreviarlo desharía la distinción de D-E2-2 §1.1. */
-  .nombre {
-    font-size: 0.8rem;
-    font-weight: 600;
-    line-height: 1.3;
-    color: var(--cl-tinta);
-    min-height: 2.1em;
-  }
-
-  .lectura {
-    margin-top: 0.6rem;
-    font-size: 0.8rem;
-    line-height: 1.35;
-    color: var(--cl-tinta-suave);
-  }
-
-  .estado {
-    margin-top: 0.15rem;
-    font-weight: 600;
-  }
-
-  .variacion,
-  .hecho {
-    margin-top: 0.15rem;
-  }
-
-  /* Qué fila cuenta exactamente. Discreto, pero presente: es lo que separa
-     un indicador de una cifra que hay que creerse. */
-  .hecho {
-    font-style: italic;
-    opacity: 0.75;
-  }
-}
-
-.anillo {
+.kpi {
   position: relative;
-  width: 120px;
-  margin: 0.5rem auto 0;
+  padding: 9px 13px 8px;
 
-  svg {
-    width: 100%;
-    height: auto;
-    /* El arco arranca arriba y avanza en el sentido del reloj, que es como se
-       lee el paso del tiempo. */
-    transform: rotate(-90deg);
+  + .kpi {
+    border-left: 1px solid var(--hairline);
   }
 
-  .pista {
-    fill: none;
-    stroke: var(--cl-fondo);
-    stroke-width: 10;
+  /* Con el arco en color de estado, este filete queda como ÚNICO portador
+     de la identidad del KPI — el que enlaza la cifra de arriba con su paso
+     en el embudo. Por eso cruza toda la columna. */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 13px;
+    right: 13px;
+    top: 0;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background: var(--tono);
   }
 
-  .arco {
-    fill: none;
-    stroke-width: 10;
-    stroke-linecap: round;
-    transition: stroke-dashoffset 0.4s ease;
+  .rot {
+    display: block;
+    font-size: 10.5px;
+    line-height: 14px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
   }
 
-  .marca-esperada {
-    stroke: var(--cl-tinta-suave);
-    stroke-width: 2.5;
+  .fila {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-top: 4px;
   }
+
+  .lado {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .avance {
+    margin: 2px 0 0;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--ink-2);
+
+    b {
+      font-weight: 600;
+      color: var(--ink);
+    }
+  }
+
+  .esperado {
+    margin: 1px 0 0;
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--ink-3);
+  }
+
+  .sub {
+    display: block;
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1px solid var(--hairline);
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--ink-3);
+
+    + .sub {
+      margin-top: 2px;
+      padding-top: 0;
+      border-top: 0;
+    }
+  }
+}
+
+.esfera-caja {
+  position: relative;
+  flex: none;
+  width: 62px;
+  height: 62px;
 
   .centro {
     position: absolute;
@@ -336,175 +320,687 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-
-    .cifra {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--cl-tinta);
-    }
-
-    .porcentaje {
-      font-size: 0.78rem;
-      color: var(--cl-tinta-suave);
-    }
-  }
-}
-
-/* El tono lo pone el ESTADO que decide el dominio; aquí solo se traduce. */
-.circulo-kpi[data-ritmo='EN_RITMO'] .arco {
-  stroke: var(--cl-exito);
-}
-
-.circulo-kpi[data-ritmo='ATENCION'] .arco {
-  stroke: var(--cl-acento);
-}
-
-.circulo-kpi[data-ritmo='FUERA_DE_RITMO'] .arco {
-  stroke: var(--cl-error);
-}
-
-/* Sin base no se pinta color: un gris honesto vale más que un verde
-   inventado, y el arco queda vacío porque no hay avance que mostrar. */
-.circulo-kpi[data-ritmo='SIN_BASE'] {
-  .arco {
-    stroke: var(--cl-borde);
+    line-height: 1;
+    pointer-events: none;
   }
 
-  .centro .cifra {
-    color: var(--cl-tinta-suave);
-  }
-}
-
-/* Inmediatamente debajo de los cuatro, y una sola vez (D-E2-2 §6.1). */
-.pulso-equipo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.75rem;
-  margin: 1.25rem 0 0;
-  padding-top: 1rem;
-  border-top: 1px solid var(--cl-borde);
-  font-size: 0.82rem;
-  color: var(--cl-tinta-suave);
-
-  .rotulo {
+  /* La cifra del centro va en TINTA. Es un hecho, no un estado — y con el
+     tono de identidad se leía verde azulado junto a un arco rojo. */
+  .ac {
+    font-size: 18px;
     font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--cl-tinta);
-  }
-
-  .dato::before {
-    content: '●';
-    margin-right: 0.3rem;
-  }
-
-  .en-ritmo::before {
-    color: var(--cl-exito);
-  }
-
-  .atencion::before {
-    color: var(--cl-acento);
-  }
-
-  .fuera::before {
-    color: var(--cl-error);
-  }
-
-  .sin-base::before {
-    color: var(--cl-borde);
-  }
-
-  .total {
-    margin-left: auto;
+    letter-spacing: -0.03em;
+    color: var(--ink);
   }
 }
 
-@media (max-width: 900px) {
-  .circulos {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.fila-e {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ritmo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--e);
+
+  i {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--e);
+  }
+}
+
+/* LA MARCA DE ADELANTO: contesta «¿y esto es bueno?» sin que el lector
+   reste. El verde dice que vas por delante del calendario — no que hayas
+   acabado, que eso lo sigue diciendo «te faltan 2» en la línea de abajo. */
+.marca {
+  flex: none;
+  padding: 1px 6px 2px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+
+  &.mas {
+    color: var(--positivo-voz);
+    background: var(--positivo-p);
   }
 
-  .en-juego-indicadores {
-    text-align: left;
+  &.menos {
+    color: var(--atencion-voz);
+    background: var(--atencion-p);
+  }
+
+  /* `--ink-2` y no `--ink-3`: sobre el canvas el gris claro cae a 4,27. */
+  &.eq {
+    color: var(--ink-2);
+    background: var(--canvas);
+    font-weight: 550;
   }
 }
 
 /* ====================================================================
-   GESTIÓN DE METAS · dentro de Indicadores, no en un módulo aparte
-   --------------------------------------------------------------------
-   La meta pertenece a la pantalla donde se mide el rendimiento: sacarla
-   a un «Metas» propio obligaría a saltar de sitio para entender por qué
-   el semáforo dice lo que dice.
-
-   Al agente NO se le da un lápiz editable: propone, con motivo. Si
-   pudiera fijarla, el indicador sería manipulable.
+   PULSO DEL EQUIPO · gestión por excepción
    ==================================================================== */
 
-.mis-objetivos,
-.metas-equipo {
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--cl-borde);
+.pulso-franja {
+  padding: 7px 13px 8px;
+  border-top: 1px solid var(--hairline);
+  background: var(--hueco);
+  border-radius: 0 0 12px 12px;
+}
 
-  h3 {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.6rem;
-    margin: 0 0 0.75rem;
-    font-size: 0.9rem;
+.pulso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 12px;
+  font-size: 12px;
+  line-height: 16px;
+
+  /* Sobre superficie apagada el texto terciario sube a `--ink-2`: el otro
+     está calibrado contra blanco y aquí se queda en 4,42. */
+  .rot {
+    font-size: 10px;
+    line-height: 16px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-2);
   }
 
-  ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .e {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--ink-2);
+
+    i {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--e);
+    }
+
+    b {
+      font-weight: 600;
+      color: var(--ink);
+    }
   }
 
-  input[type='number'] {
-    width: 5rem;
-  }
-
-  input[type='text'] {
-    width: 100%;
-    min-width: 12rem;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.78rem;
-    color: var(--cl-tinta-suave);
+  .total {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--ink-3);
   }
 }
 
-/* --- El agente --- */
-.mis-objetivos > ul > li {
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--cl-borde);
+.excs {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--ink-2);
+
+  b {
+    font-weight: 600;
+    color: var(--atencion-voz);
+  }
+}
+
+/* ====================================================================
+   LECTURA · el diagnóstico
+   ==================================================================== */
+
+/* Tantas columnas como grupos traiga el dominio —tres o cuatro—, y las que no
+   quepan bajan. `minmax(0, 1fr)` con `auto-fit` colapsaría a UNA sola columna:
+   sin un mínimo definido el navegador no puede contar cuántas caben. */
+.lectura {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0;
+}
+
+.lec {
+  padding: 0 14px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  + .lec {
+    border-left: 1px solid var(--hairline);
+  }
+
+  &:first-child {
+    padding-left: 0;
+  }
 
   &:last-child {
-    border-bottom: 0;
+    padding-right: 0;
+  }
+}
+
+.lec-cab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 5px;
+
+  span:last-child {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--voz);
+  }
+}
+
+/* Marcas geométricas, no iconografía. */
+.mk-alto,
+.mk-medio,
+.mk-bien,
+.mk-mirar {
+  flex: none;
+}
+
+.mk-bien {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--positivo);
+}
+
+.mk-alto {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--riesgo);
+}
+
+.mk-medio {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--atencion);
+}
+
+.mk-mirar {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 2px solid var(--accion);
+}
+
+.ind {
+  padding: 6px 0;
+  border-top: 1px solid var(--hairline);
+
+  .l1 {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .n {
+    font-size: 12.5px;
+    line-height: 17px;
+    color: var(--ink-2);
+  }
+
+  .c {
+    margin-left: auto;
+    font-size: 15px;
+    line-height: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+
+    /* La unidad va pegada a la cifra: `DEMORA_DE_SEGUIMIENTO` vale DÍAS, y
+       sin decirlo la columna sumaría peras con manzanas. */
+    small {
+      margin-left: 2px;
+      font-size: 11px;
+      font-weight: 550;
+      color: var(--ink-3);
+      letter-spacing: 0;
+    }
+  }
+
+  .l2 {
+    margin: 3px 0 0;
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--ink-3);
+  }
+}
+
+/* ====================================================================
+   EN JUEGO
+   ==================================================================== */
+
+.juego {
+  .kk {
+    display: block;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .v {
+    margin: 3px 0 0;
+    font-size: 22px;
+    line-height: 26px;
+    font-weight: 650;
+    letter-spacing: -0.026em;
+  }
+
+  .d {
+    margin: 2px 0 0;
+    font-size: 11.5px;
+    line-height: 16px;
+    color: var(--ink-3);
+
+    &.aviso {
+      color: var(--atencion-voz);
+    }
+  }
+}
+
+.palanca {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 5px 10px;
+  border-radius: var(--r-chico);
+  background: var(--accion-p);
+  border: 1px solid var(--accion-b);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accion);
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+
+  cl-icono {
+    transition: transform var(--t1) ease;
+  }
+
+  &:hover cl-icono {
+    transform: translateX(3px);
+  }
+}
+
+.cobertura {
+  margin: auto 0 0;
+  padding-top: 9px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--ink-3);
+
+  b {
+    font-weight: 650;
+    color: var(--ink);
+  }
+}
+
+/* ====================================================================
+   CARTERA
+   ==================================================================== */
+
+.salud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--hairline);
+
+  .tot {
+    font-size: 12px;
+    line-height: 17px;
+    color: var(--ink-2);
+    margin-right: 3px;
+
+    b {
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+  }
+}
+
+.sf {
+  padding: 3px 8px 4px;
+  border-radius: 6px;
+  background: var(--hueco);
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--ink-2);
+
+  b {
+    font-weight: 650;
+    color: var(--ink);
+  }
+
+  /* Lo que reclama una mirada lleva su voz; el resto va en tinta neutra. */
+  &.ojo {
+    background: var(--atencion-p);
+    color: var(--atencion-voz);
+
+    b {
+      color: var(--atencion-voz);
+    }
+  }
+}
+
+.barras {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.bfila {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr) 1.6rem;
+  gap: 8px;
+  align-items: center;
+
+  .n {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Riel siempre BLOQUE: un `<span>` es inline, ignora `height`, y el
+     `height:100%` del hijo resuelve contra la celda entera. */
+  .riel {
+    display: block;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--hueco);
+    box-shadow: inset 0 0 0 1px var(--hairline);
+    overflow: hidden;
+
+    i {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--tono);
+      transform-origin: left center;
+      animation: ind-crecer 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+    }
+  }
+
+  .c {
+    font-size: 11.5px;
+    font-weight: 550;
+    text-align: right;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes ind-crecer {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* ====================================================================
+   EMBUDO · el paso se ve, no se lee
+   ==================================================================== */
+
+.salto {
+  display: grid;
+  grid-template-columns: 1.7rem minmax(0, 1fr) 1.7rem 4.8rem;
+  gap: 3px 7px;
+  align-items: center;
+  padding: 6px 0 7px;
+  border-top: 1px solid var(--hairline);
+
+  &:first-child {
+    border-top: 0;
+    padding-top: 2px;
+  }
+
+  /* Trazo FINO en todas las cifras: la sección se lee mejor cuanto menos
+     pesa. El jerarquizado lo hace el tamaño y el color, no el grosor. */
+  .par {
+    grid-column: 1 / 4;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+
+    b {
+      font-weight: 550;
+    }
+  }
+
+  .de,
+  .a {
+    grid-row: 2;
+    font-size: 11.5px;
+    line-height: 15px;
+    font-weight: 550;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .de {
+    grid-column: 1;
+    text-align: right;
+  }
+
+  .a {
+    grid-column: 3;
+    color: var(--tono);
+  }
+
+  .via {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--hueco);
+    box-shadow: inset 0 0 0 1px var(--hairline);
+
+    i {
+      display: block;
+      height: 100%;
+    }
+
+    .pasa {
+      background: var(--tono);
+      transform-origin: left center;
+      animation: ind-crecer 0.55s cubic-bezier(0.32, 0.72, 0, 1) both;
+    }
+
+    /* La trama dice «estos se quedaron aquí». El vacío no significa nada y
+       la trama sí; con `hairline` no se veía, así que va en `plata`. */
+    .cae {
+      background: repeating-linear-gradient(
+        135deg,
+        var(--plata) 0 1.4px,
+        transparent 1.4px 4.4px
+      );
+    }
+  }
+
+  /* El porcentaje y su nota son UN bloque a la derecha, con ancho fijo: si
+     lo decidiera el texto, «39 se quedaron» y «2 se quedaron» darían barras
+     distintas y dejarían de ser comparables. */
+  .fin {
+    grid-column: 4;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+  }
+
+  .pc {
+    font-size: 14px;
+    line-height: 17px;
+    font-weight: 550;
+    letter-spacing: -0.02em;
+    color: var(--tono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ns {
+    font-size: 10px;
+    line-height: 13px;
+    color: var(--ink-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Un tramo sin casos no tiene tasa: no se calcula, se dice. */
+  &.magro {
+    .pc,
+    .a {
+      color: var(--ink-3);
+    }
+
+    .via .pasa {
+      background: var(--plata);
+    }
+  }
+}
+
+/* ====================================================================
+   EVOLUCIÓN
+   ==================================================================== */
+
+.evo-lead {
+  margin: 0 0 3px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+
+  b {
+    font-weight: 600;
+    color: var(--ink);
+  }
+}
+
+/* ====================================================================
+   METAS
+   ==================================================================== */
+
+.bt {
+  padding: 5px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    color: var(--ink);
+    border-color: var(--plata);
+  }
+
+  &.primario {
+    background: var(--accion);
+    border-color: var(--accion);
+    color: #fff;
+    font-weight: 600;
+
+    &:hover:not(:disabled) {
+      background: var(--accion-fuerte);
+      color: #fff;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
+.mis-objetivos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  > li {
+    padding: 9px 0;
+    border-top: 1px solid var(--hairline);
+
+    &:first-child {
+      border-top: 0;
+      padding-top: 2px;
+    }
   }
 }
 
 .objetivo {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 12px;
+  flex-wrap: wrap;
 
   .nombre {
-    flex: 1 1 12rem;
+    font-size: 13px;
     font-weight: 600;
-    font-size: 0.86rem;
+    min-width: 12rem;
   }
 
   .valor {
-    font-size: 0.82rem;
-    color: var(--cl-tinta-suave);
+    font-size: 12.5px;
+    color: var(--ink-2);
+
+    b {
+      font-weight: 650;
+      color: var(--ink);
+    }
+
+    em {
+      font-style: normal;
+      color: var(--atencion-voz);
+    }
+  }
+
+  .pendiente {
+    padding: 2px 8px 3px;
+    border-radius: 999px;
+    background: var(--accion-p);
+    border: 1px solid var(--accion-b);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accion);
+  }
+
+  > :last-child {
+    margin-left: auto;
   }
 }
 
@@ -513,104 +1009,233 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.6rem;
-  padding: 0.75rem;
-  border-radius: var(--cl-radio);
-  background: var(--cl-fondo);
+  gap: 10px;
+  margin-top: 9px;
+  padding: 10px 12px;
+  border-radius: var(--r-chico);
+  background: var(--hueco);
+  border: 1px solid var(--hairline);
+
+  label {
+    display: grid;
+    gap: 4px;
+
+    span {
+      font-size: 9.5px;
+      font-weight: 650;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+  }
 
   .motivo {
-    flex: 1 1 18rem;
+    flex: 1;
+    min-width: 14rem;
   }
 
   .acciones {
     display: flex;
-    gap: 0.5rem;
+    gap: 6px;
+    margin-left: auto;
   }
 }
 
-/* Cómo se llegó a la meta. Sin esto, un número sin procedencia. */
+input[type='number'],
+input[type='text'] {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+
+  &:focus {
+    outline: 0;
+    border-color: var(--accion);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
+}
+
+input[type='number'] {
+  max-width: 5.5rem;
+}
+
 .historial {
-  margin-top: 0.5rem;
-  padding-left: 0.9rem;
-  border-left: 2px solid var(--cl-borde);
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--cl-tinta-suave);
-
-  li + li {
-    margin-top: 0.15rem;
-  }
-}
-
-/* --- El broker --- */
-
-/* Lo que espera decisión va primero: es lo único con algo pendiente. */
-.propuestas {
-  margin-bottom: 1rem;
+  margin: 8px 0 0;
+  padding: 0 0 0 12px;
+  list-style: none;
+  border-left: 2px solid var(--hairline);
 
   li {
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    border: 1px solid var(--cl-acento);
-    border-radius: var(--cl-radio);
-    background: var(--cl-superficie);
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--ink-3);
+  }
+}
+
+.propuestas {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+
+  li {
+    padding: 9px 11px;
+    border-radius: var(--r-chico);
+    background: var(--accion-p);
+    border: 1px solid var(--accion-b);
+
+    + li {
+      margin-top: 6px;
+    }
   }
 
   .peticion {
     margin: 0;
-    font-size: 0.86rem;
+    font-size: 12.5px;
+    line-height: 18px;
+
+    b {
+      font-weight: 650;
+    }
   }
 
   .motivo {
-    margin: 0.2rem 0 0.5rem;
-    font-style: italic;
+    margin: 2px 0 8px;
+    font-size: 11.5px;
+    line-height: 16px;
+    color: var(--ink-2);
   }
 }
 
 .tabla-metas {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: 12.5px;
 
   th,
   td {
-    padding: 0.45rem 0.5rem;
+    padding: 7px 9px;
     text-align: left;
-    border-bottom: 1px solid var(--cl-borde);
-    vertical-align: middle;
+    border-top: 1px solid var(--hairline);
   }
 
   thead th {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--cl-tinta-suave);
+    border-top: 0;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    white-space: nowrap;
   }
 
   tbody th {
     font-weight: 600;
   }
 
-  /* «sin fijar» no es cero, y verlo es lo que permite arreglarlo: una sola
-     meta que falte deja al equipo entero sin semáforo. */
   .sin-meta {
-    color: var(--cl-acento);
     font-style: normal;
+    font-size: 11.5px;
+    color: var(--atencion-voz);
   }
 
   td.acciones {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
     align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 }
 
-.cl-oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+/* ====================================================================
+   RESPONSIVE
+   ==================================================================== */
+
+@media (max-width: 1320px) {
+  .f2 {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+
+  .f3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > :last-child {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+@media (max-width: 1060px) {
+  .f2,
+  .f3 {
+    grid-template-columns: minmax(0, 1fr);
+
+    > :last-child {
+      grid-column: auto;
+    }
+  }
+
+  .tira {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi:nth-child(3) {
+    border-left: 0;
+  }
+
+  .kpi:nth-child(n + 3) {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .lectura {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lec {
+    padding: 0;
+
+    + .lec {
+      border-left: 0;
+      border-top: 1px solid var(--hairline);
+      padding-top: 9px;
+      margin-top: 2px;
+    }
+  }
+}
+
+@media (max-width: 860px) {
+  .mandos {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .periodos {
+    width: 100%;
+
+    button {
+      flex: 1;
+      padding: 5px 2px;
+      font-size: 11.5px;
+      text-align: center;
+    }
+  }
+
+  .tira {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kpi + .kpi {
+    border-left: 0;
+    border-top: 1px solid var(--hairline);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bfila .riel i,
+  .salto .via .pasa {
+    animation: none;
+  }
 }

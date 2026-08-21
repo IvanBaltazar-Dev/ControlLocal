@@ -77,6 +77,7 @@ class GateDeCierreTest {
                         // D-E4-3 — una autoridad persistente por clave publicada.
                         "AutoridadDelDatoIntegrationTest",
                         "BusquedaLocalesIntegrationTest",
+                        "ConvergenciaCampanaColaIntegrationTest",
                         // E0.2 — el historico economico contra PostgreSQL real.
                         "FocoDelBrokerIntegrationTest",
                         "HistoricoPrecioIntegrationTest",

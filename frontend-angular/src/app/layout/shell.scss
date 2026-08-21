@@ -333,3 +333,12 @@
   padding: 1.5rem;
   flex: 1;
 }
+
+/* El Inicio y los Indicadores traen su propio lienzo —el del prototipo:
+   16/30/12 y tope de 1720 px—, así que aquí no se les añade otro relleno. Las
+   demás pantallas siguen con el del cascarón hasta que se porten una a una;
+   hacerlo global ahora movería 54 pantallas que nadie ha revisado. */
+.contenido:has(> app-dashboard),
+.contenido:has(> app-indicadores) {
+  padding: 0;
+}

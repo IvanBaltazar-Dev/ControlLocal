@@ -112,6 +112,39 @@ public class AlertaServiceImpl implements AlertaService {
         alertas.save(alerta);
     }
 
+    /**
+     * <b>Reconciliacion simetrica del recontacto.</b>
+     *
+     * <p>Antes esto solo creaba. La tarea equivalente de la bandeja se
+     * auto-completa al reconciliar, asi que en cuanto alguien contactaba la
+     * prospeccion la tarea desaparecia y <b>el aviso se quedaba vivo</b>: la
+     * campana enseñaba PRO-0003, PRO-0005 y PRO-0011 mientras la cola iba por
+     * otras. Dos representaciones activas y contradictorias del mismo hecho.
+     *
+     * <p>Ahora las cuatro transiciones estan declaradas:
+     *
+     * <pre>
+     *   entra en condicion      -> se crea el aviso
+     *   sigue en condicion      -> se mantiene el MISMO (no se duplica)
+     *   deja de cumplirla       -> se descarta solo, con su fecha
+     *   vuelve a incumplir      -> NUEVO ciclo, aviso nuevo
+     * </pre>
+     *
+     * <p>La cuarta es una decision, no un efecto: no se reabre el aviso viejo.
+     * Un recontacto vencido en agosto y otro en octubre son dos hechos, y
+     * reactivar el primero perderia que hubo un contacto en medio — que es
+     * justo lo que la auditoria necesita poder leer.
+     *
+     * <p><b>El plazo sale de {@link PoliticaComercial} y de ningun otro sitio</b>,
+     * que es lo que garantiza que campana, bandeja e indicador hablen del mismo
+     * vencimiento. Y la condicion de cierre es literalmente la de creacion
+     * negada, resuelta en SQL: dos redacciones de la misma regla volverian a
+     * separarse.
+     *
+     * @return cuantos avisos se crearon. Los descartados no se cuentan aqui: el
+     *         cable de la campana declara «creadas», y sumarlos cambiaria el
+     *         significado del numero.
+     */
     @Override
     @Transactional
     public int sincronizarRecontacto(Actor actor) {
@@ -119,6 +152,15 @@ public class AlertaServiceImpl implements AlertaService {
         // la bandeja y el que cuenta el indicador: la campana no puede avisar de
         // un atraso que el tablero todavia no reconoce.
         LocalDate limite = PoliticaComercial.limiteDeRecontacto(LocalDate.now());
+
+        // PRIMERO se cierra lo que ya no aplica. El orden importa: al reves, un
+        // aviso recien creado para una prospeccion al limite podria caer en la
+        // misma pasada si las dos consultas vieran instantes distintos.
+        for (Alerta desfasada : alertas.recontactosQueYaNoAplican(
+                actor.idOrganizacion(), Tarea.ENTIDAD_PROSPECCION, Alerta.SIN_RESPUESTA, limite)) {
+            desfasada.descartar();
+            alertas.save(desfasada);
+        }
         // El barrido es del TENANT entero, no del alcance del que consulta: la
         // v1 recorre todas las prospecciones por recontactar sin mirar quien
         // abrio la campana. Lo unico que se le anade es la frontera de

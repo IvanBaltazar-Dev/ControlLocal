@@ -1,0 +1,163 @@
+/* ====================================================================
+   LA VENTANA RÁPIDA
+   --------------------------------------------------------------------
+   Vive dentro del bloque de resolución del Radar, así que hereda su
+   superficie: nada de caja propia. Los controles son los del prototipo
+   (`.campo`, `.bt-p`, `.bt-t`), en pequeño, porque la columna mide
+   340 px y aquí solo caben dos campos.
+   ==================================================================== */
+
+:host {
+  display: block;
+}
+
+.fallo {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-chico);
+  background: color-mix(in srgb, var(--riesgo) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--riesgo) 28%, transparent);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--riesgo-voz);
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.campo {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+
+  span {
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  input,
+  select {
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 9px;
+    border: 1px solid #dde7f8;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--ink);
+    transition:
+      border-color var(--t1) ease,
+      box-shadow var(--t1) ease;
+
+    &:focus {
+      outline: 0;
+      border-color: var(--accion);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+  }
+}
+
+.botones {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* El botón principal es el del prototipo, sin el haz: aquí la acción es
+   inmediata y no hay trabajo que anunciar. */
+.bt-p {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2e6df3, #1d4ed8);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(29, 78, 216, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition:
+    filter var(--t1) ease,
+    transform var(--t1) ease;
+
+  &.ancho {
+    width: 100%;
+  }
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.07);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+/* «No se realizó» no es la acción esperada, pero tampoco es un descarte:
+   va en secundario, con el mismo peso de lectura y sin color de alarma. */
+.bt-s {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--accion-b);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--accion);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--accion-p);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.bt-t {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color var(--t1) ease;
+
+  &:hover:not(:disabled) {
+    color: var(--accion);
+  }
+
+  &.suelto {
+    margin-top: 9px;
+  }
+
+  cl-icono {
+    transition: transform var(--t1) ease;
+  }
+
+  &:hover cl-icono {
+    transform: translateX(3px);
+  }
+}

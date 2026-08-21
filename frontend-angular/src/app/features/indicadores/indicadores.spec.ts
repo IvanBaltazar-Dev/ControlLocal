@@ -164,6 +164,10 @@ describe('Indicadores', () => {
   let api: jasmine.SpyObj<IndicadoresService>;
   let fixture: ComponentFixture<Indicadores>;
 
+  function raiz(): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
+  }
+
   async function montar(rol: RolSesion = 'BROKER', periodo?: string): Promise<Indicadores> {
     await TestBed.configureTestingModule({
       imports: [Indicadores],
@@ -186,11 +190,26 @@ describe('Indicadores', () => {
     return fixture.componentInstance;
   }
 
+  /** El mismo resumen con un trozo cambiado, para no repetir el fixture entero. */
+  function conResumen(parcial: Partial<IndicadoresResumen>): void {
+    api.resumen.and.resolveTo({ ...RESUMEN, ...parcial });
+  }
+
   beforeEach(() => {
     TestBed.resetTestingModule();
-    api = jasmine.createSpyObj<IndicadoresService>('IndicadoresService', ['resumen']);
+    api = jasmine.createSpyObj<IndicadoresService>('IndicadoresService', [
+      'resumen',
+      'metas',
+      'propuestasDeMeta',
+    ]);
     api.resumen.and.resolveTo(RESUMEN);
+    api.metas.and.resolveTo([]);
+    api.propuestasDeMeta.and.resolveTo([]);
   });
+
+  // ==================================================================
+  // Carga y periodo
+  // ==================================================================
 
   it('pide el periodo por defecto y respeta el de la URL', async () => {
     await montar('BROKER');
@@ -208,68 +227,6 @@ describe('Indicadores', () => {
     expect(api.resumen).toHaveBeenCalledOnceWith('6m');
   });
 
-  /**
-   * La regla de forma que no se negocia: conteos y porcentaje no comparten
-   * marco. Dos escalas en un mismo gráfico es la forma más fácil de mentir.
-   */
-  it('separa los conteos del porcentaje en dos series distintas', async () => {
-    const pantalla = await montar();
-
-    expect(pantalla['seriesConteo']().map((s) => s.nombre)).toEqual(['Captaciones', 'Cierres']);
-    expect(pantalla['serieConversion']().length).toBe(1);
-    expect(pantalla['serieConversion']()[0].nombre).toBe('Conversión');
-  });
-
-  /** Los dos colores de serie están validados; distintos por construcción. */
-  it('da a cada serie de conteo un color propio', async () => {
-    const pantalla = await montar();
-    const [captaciones, cierres] = pantalla['seriesConteo']();
-
-    expect(captaciones.color).not.toBe(cierres.color);
-  });
-
-  it('el embudo conserva el 100 fijo del cable y lo marca como tal', async () => {
-    const pantalla = await montar();
-    const embudo = pantalla['embudo']();
-
-    expect(embudo[0].porcentaje).toBe(100);
-    expect(embudo[0].valor).toBe(0);
-    expect(embudo[0].fijo).toBeTrue();
-    expect(embudo[1].fijo).toBeFalse();
-  });
-
-  /** Las etapas son un reparto exclusivo: sus porcentajes salen de su total. */
-  it('reparte las etapas sobre su propio total, no sobre las captaciones', async () => {
-    const pantalla = await montar();
-
-    expect(pantalla['totalEtapas']()).toBe(4);
-    expect(pantalla['etapas']().map((e) => e.porcentaje)).toEqual([25, 25, 0, 0, 50]);
-  });
-
-  it('rotula el desempeno segun quien mira', async () => {
-    const broker = await montar('BROKER');
-    expect(broker['tituloDesempeno']()).toBe('Desempeño por agente');
-
-    TestBed.resetTestingModule();
-    const admin = await montar('TENANT_ADMIN');
-    expect(admin['tituloDesempeno']()).toBe('Desempeño por broker');
-
-    TestBed.resetTestingModule();
-    const agente = await montar('AGENTE');
-    expect(agente['tituloDesempeno']()).toBe('Mi desempeño');
-  });
-
-  it('el ADMIN suma la tarjeta de plantilla que los otros no ven', async () => {
-    const broker = await montar('BROKER');
-    const admin = await (async () => {
-      TestBed.resetTestingModule();
-      return montar('TENANT_ADMIN');
-    })();
-
-    expect(broker['kpis']().some((k) => k.etiqueta === 'Equipo activo')).toBeFalse();
-    expect(admin['kpis']().some((k) => k.etiqueta === 'Equipo activo')).toBeTrue();
-  });
-
   it('un fallo deja la pantalla en error y sin datos a medias', async () => {
     api.resumen.and.rejectWith(new Error('boom'));
     const pantalla = await montar();
@@ -278,13 +235,15 @@ describe('Indicadores', () => {
     expect(pantalla['error']()).toBeTruthy();
   });
 
-  // ==================================================================
-  // RENDIMIENTO · los cuatro círculos (E2.6)
-  // ==================================================================
+  it('el ambito lo rotula el backend, no la pantalla', async () => {
+    await montar('BROKER');
 
-  function rendimiento(): HTMLElement | null {
-    return (fixture.nativeElement as HTMLElement).querySelector('.rendimiento');
-  }
+    expect(raiz().querySelector('.cab .sub')?.textContent).toContain('Reportes de equipo');
+  });
+
+  // ==================================================================
+  // LOS CUATRO KPI Y SU ESFERA
+  // ==================================================================
 
   /**
    * Los mismos cuatro nombres que el pie del Inicio, **letra por letra**. Los
@@ -294,8 +253,8 @@ describe('Indicadores', () => {
    */
   it('los cuatro KPI canonicos salen del cable, en el orden del embudo', async () => {
     await montar('AGENTE');
-    const nombres = [...(rendimiento()?.querySelectorAll('.circulo-kpi .nombre') ?? [])].map(
-      (n) => n.textContent?.trim(),
+    const nombres = Array.from(raiz().querySelectorAll('.tira .kpi .rot')).map((n) =>
+      n.textContent?.trim(),
     );
 
     expect(nombres).toEqual([
@@ -306,88 +265,245 @@ describe('Indicadores', () => {
     ]);
   });
 
-  /** El estado lo decide el dominio; la pantalla lo traduce a un atributo. */
-  it('el tono del arco sale del estado que manda el dominio', async () => {
+  it('no añade un quinto indicador', async () => {
     await montar('AGENTE');
-    const estados = [...(rendimiento()?.querySelectorAll('.circulo-kpi') ?? [])].map((c) =>
-      c.getAttribute('data-ritmo'),
+
+    expect(raiz().querySelectorAll('.tira .kpi').length).toBe(4);
+  });
+
+  /**
+   * El estado lo decide el dominio. La pantalla lo traduce a un atributo y el
+   * color sale de ahí; nunca al revés.
+   */
+  it('el estado de ritmo viaja al DOM sin traducir', async () => {
+    await montar('AGENTE');
+    const estados = Array.from(raiz().querySelectorAll('.tira .kpi')).map((k) =>
+      k.getAttribute('data-ritmo'),
     );
 
     expect(estados).toEqual(['EN_RITMO', 'ATENCION', 'FUERA_DE_RITMO', 'SIN_BASE']);
   });
 
   /**
-   * El círculo responde cinco cosas: actual, meta, avance, faltante y estado
-   * (D-E2-2 §3). Si falta una, deja de servir para decidir.
+   * La esfera contesta cinco cosas: cuánto llevas (arco y manija), hasta dónde
+   * llegarás (la prolongación), cuál es la meta (la marca del final) y dónde
+   * tocaría estar hoy (la marca de dentro).
    */
-  it('cada circulo responde las cinco preguntas de D-E2-2', async () => {
+  it('cada esfera responde las cinco preguntas', async () => {
     await montar('AGENTE');
-    const primero = rendimiento()?.querySelector('.circulo-kpi');
+    const primera = raiz().querySelector('cl-esfera');
 
-    expect(primero?.querySelector('.centro .cifra')?.textContent).toContain('19 de 24');
-    expect(primero?.querySelector('.centro .porcentaje')?.textContent).toContain('79 %');
-    expect(primero?.querySelector('.lectura')?.textContent).toContain('A 5 de la meta');
-    expect(primero?.querySelector('.estado')?.textContent?.trim()).toBe('En ritmo');
-  });
-
-  /** Sin ella, un 79 % no dice si vas por delante o por detrás. */
-  it('el arco lleva la marca del ritmo esperado a hoy', async () => {
-    await montar('AGENTE');
-    const marca = rendimiento()?.querySelector('.circulo-kpi .marca-esperada');
-
-    // 15 de meta 24 = 63 % del arco = 226,8 grados.
-    expect(marca?.getAttribute('transform')).toContain('rotate(226.8');
-  });
-
-  /** Sin meta no se pinta un cero, ni un porcentaje que no existe. */
-  it('un KPI sin meta no inventa porcentaje ni marca', async () => {
-    await montar('AGENTE');
-    const sinMeta = [...(rendimiento()?.querySelectorAll('.circulo-kpi') ?? [])].find((c) =>
-      c.textContent?.includes('Contratos firmados'),
-    );
-
-    expect(sinMeta?.querySelector('.centro .cifra')?.textContent?.trim()).toBe('4');
-    expect(sinMeta?.querySelector('.centro .porcentaje')).toBeNull();
-    expect(sinMeta?.querySelector('.marca-esperada')).toBeNull();
-    expect(sinMeta?.querySelector('.estado')?.textContent?.trim()).toBe('Sin base suficiente');
+    expect(primera?.querySelector('.arco')).not.toBeNull();
+    expect(primera?.querySelector('.proy')).not.toBeNull();
+    expect(primera?.querySelector('.manija')).not.toBeNull();
+    expect(primera?.querySelector('.mk-meta')).not.toBeNull();
+    expect(primera?.querySelector('.mk-hoy')).not.toBeNull();
   });
 
   /**
-   * Qué fila cuenta exactamente. Es lo que separa un indicador auditable de una
-   * cifra que hay que creerse.
+   * **Sin meta no hay recorrido que dibujar.** Una esfera vacía dice «aquí no
+   * hay nada que medir» mejor que un cero, que diría que el objetivo era cero.
    */
-  it('cada KPI dice que hecho cuenta', async () => {
+  it('un KPI sin meta deja la esfera sin arco ni marcas', async () => {
     await montar('AGENTE');
-    const hechos = [...(rendimiento()?.querySelectorAll('.circulo-kpi .hecho') ?? [])].map((h) =>
-      h.textContent?.trim(),
+    const esferas = raiz().querySelectorAll('cl-esfera');
+    const sinMeta = esferas[esferas.length - 1];
+
+    expect(sinMeta.querySelector('.pista')).not.toBeNull();
+    expect(sinMeta.querySelector('.arco')).toBeNull();
+    expect(sinMeta.querySelector('.manija')).toBeNull();
+    expect(sinMeta.querySelector('.mk-meta')).toBeNull();
+  });
+
+  /** Primero la meta y lo que falta; el ritmo va debajo, en su propia línea. */
+  it('cada KPI dice la meta y lo que falta antes que el ritmo', async () => {
+    await montar('AGENTE');
+    const primero = raiz().querySelector('.tira .kpi');
+
+    expect(primero?.querySelector('.avance')?.textContent?.trim()).toBe('Meta 24 · te faltan 5');
+    expect(primero?.querySelector('.esperado')?.textContent?.trim()).toBe(
+      'Hoy deberías ir por 15',
     );
-
-    expect(hechos.length).toBe(4);
-    expect(hechos[1]).toContain('transicion de captacion a ACTIVA');
   });
 
-  /** El mes lo cuenta el backend; la pantalla lo repite, y en español. */
-  it('la cabecera ensena el mes de calendario y su corte', async () => {
-    await montar('AGENTE');
-    const texto = rendimiento()?.querySelector('.cl-menudo')?.textContent ?? '';
-
-    expect(texto).toContain('agosto de 2026');
-    expect(texto).toContain('día 19 de 31');
-  });
-
-  /** Instrucción 4 de D-E2-2: al broker no se le atribuye producción personal. */
+  /**
+   * **Instrucción 4 de D-E2-2**: al broker no se le atribuye una producción
+   * personal que él no hace. Los números son los mismos; la voz, no.
+   */
   it('al broker se le habla del equipo, no de lo que deberia llevar el', async () => {
     await montar('BROKER');
-    const texto = rendimiento()?.textContent ?? '';
+    const texto = raiz().querySelector('.tira')?.textContent ?? '';
 
-    expect(texto).not.toContain('hoy deberías ir por');
-    expect(texto).toContain('el equipo');
+    expect(texto).not.toContain('te faltan');
+    expect(texto).not.toContain('Hoy deberías ir por');
+    expect(texto).toContain('Hoy el equipo debería ir por');
   });
 
-  /** Cero operaciones se dice, no se calla. */
-  it('sin operaciones que cerrar lo dice', async () => {
-    api.resumen.and.resolveTo({
-      ...RESUMEN,
+  /**
+   * La marca de adelanto contesta «¿y esto es bueno?» sin que el lector reste,
+   * y **convive con «te faltan 5»**: una habla del calendario y la otra del
+   * objetivo.
+   */
+  it('la marca de adelanto sale de la resta contra donde tocaba estar hoy', async () => {
+    await montar('AGENTE');
+    const marcas = Array.from(raiz().querySelectorAll('.tira .kpi .marca')).map((m) => ({
+      clase: m.className,
+      texto: m.textContent?.trim(),
+    }));
+
+    // 19 contra 15 esperados, 9 contra 9, 2 contra 5. El cuarto no tiene meta.
+    expect(marcas.length).toBe(3);
+    expect(marcas[0]).toEqual({ clase: 'marca mas', texto: '+4' });
+    expect(marcas[1]).toEqual({ clase: 'marca eq', texto: 'al día' });
+    expect(marcas[2]).toEqual({ clase: 'marca menos', texto: '−3' });
+  });
+
+  /** Qué fila cuenta exactamente: es lo que separa un indicador de una impresión. */
+  it('cada KPI dice que hecho cuenta', async () => {
+    await montar('AGENTE');
+
+    expect(raiz().querySelector('.tira .kpi .sub')?.textContent).toContain(
+      'prospeccion con fecha de contacto dentro del mes',
+    );
+  });
+
+  /** El calendario se dice UNA vez para los cuatro, y lo cuenta el backend. */
+  it('la cabecera ensena el mes de calendario y su corte', async () => {
+    await montar('AGENTE');
+    const cabecera = raiz().querySelector('.t-cab .der')?.textContent ?? '';
+
+    expect(cabecera).toContain('agosto de 2026');
+    expect(cabecera).toContain('día 19 de 31');
+    expect(cabecera).toContain('quedan 12 días');
+  });
+
+  // ==================================================================
+  // PULSO DEL EQUIPO
+  // ==================================================================
+
+  /** Su pulso sería su propio ritmo contado otra vez (instrucción 14). */
+  it('el agente no ve pulso de equipo', async () => {
+    await montar('AGENTE');
+
+    expect(raiz().querySelector('.pulso')).toBeNull();
+  });
+
+  it('el broker ve el pulso una sola vez y sin nombres', async () => {
+    conResumen({
+      rendimiento: {
+        ...RESUMEN.rendimiento,
+        pulso: { enRitmo: 6, atencion: 1, fueraDeRitmo: 1, sinBase: 0, agentes: 8 },
+      },
+    });
+    await montar('BROKER');
+    const pulsos = raiz().querySelectorAll('.pulso');
+
+    expect(pulsos.length).toBe(1);
+    expect(pulsos[0].textContent).toContain('6 en ritmo');
+    expect(pulsos[0].textContent).toContain('1 fuera de ritmo');
+    expect(pulsos[0].textContent).toContain('sobre 8 agentes');
+    // Los grupos vacíos no ocupan sitio: «0 sin meta fijada» no es un dato.
+    expect(pulsos[0].textContent).not.toContain('0 sin meta');
+  });
+
+  /**
+   * **La pantalla no lleva tabla de posiciones.** Un agente con cartera recién
+   * asignada y otro con expedientes maduros no compiten, y ordenarlos por
+   * cierres es exactamente lo que prohíbe la instrucción 13 de D-E2-2.
+   */
+  it('no hay tabla de posiciones del equipo', async () => {
+    await montar('BROKER');
+    const texto = raiz().textContent ?? '';
+
+    expect(texto).not.toContain('Desempeño por agente');
+    expect(texto).not.toContain('Ana Perez');
+  });
+
+  // ==================================================================
+  // LA LECTURA
+  // ==================================================================
+
+  /**
+   * **La clasificación llega hecha** (R-07, E1): la pantalla agrupa por el
+   * nivel que manda el dominio y no decide cuándo algo pasa a ser grave.
+   */
+  it('agrupa las senales por el nivel que manda el dominio', async () => {
+    conResumen({
+      senales: [
+        {
+          concepto: 'RECONTACTO_VENCIDO',
+          valor: 3,
+          nivelAtencion: 'ALTO',
+          requiereAtencion: true,
+          prioridad: 1,
+        },
+        {
+          concepto: 'VISITA_PENDIENTE',
+          valor: 2,
+          nivelAtencion: 'INFORMATIVO',
+          requiereAtencion: false,
+          prioridad: 6,
+        },
+        {
+          concepto: 'CAPTACION_POR_REVISAR',
+          valor: 0,
+          nivelAtencion: 'SIN_PENDIENTES',
+          requiereAtencion: false,
+          prioridad: 3,
+        },
+      ],
+    });
+    await montar('BROKER');
+    const columnas = Array.from(raiz().querySelectorAll('.lec .lec-cab span:last-child')).map(
+      (c) => c.textContent?.trim(),
+    );
+
+    // «Vigilar» no sale: ninguna señal llegó en nivel MEDIO, y un rótulo sobre
+    // el vacío no informa.
+    expect(columnas).toEqual(['Atender ya', 'Al día', 'Para mirar']);
+  });
+
+  /**
+   * `DEMORA_DE_SEGUIMIENTO` vale **días**, no cosas. Sin decirlo, la columna
+   * sumaría peras con manzanas — el mismo error que hacía decir «17 cosas»
+   * donde había 8 pendientes y 9 días de atraso.
+   */
+  it('la senal que se mide en dias lo dice', async () => {
+    conResumen({
+      senales: [
+        {
+          concepto: 'DEMORA_DE_SEGUIMIENTO',
+          valor: 9,
+          nivelAtencion: 'MEDIO',
+          requiereAtencion: true,
+          prioridad: 5,
+        },
+      ],
+    });
+    await montar('BROKER');
+    const senal = raiz().querySelector('.ind');
+
+    expect(senal?.querySelector('.n')?.textContent?.trim()).toBe('Demora de seguimiento');
+    expect(senal?.querySelector('.c small')?.textContent?.trim()).toBe('días');
+  });
+
+  // ==================================================================
+  // EN JUEGO
+  // ==================================================================
+
+  /** El importe conserva su moneda: no se convierte para redondear. */
+  it('la cifra en juego conserva su moneda', async () => {
+    await montar('BROKER');
+
+    expect(raiz().querySelector('.juego .v')?.textContent).toContain('PEN');
+  });
+
+  /**
+   * Cero operaciones **no se esconde**: es información, y esconderla dejaría el
+   * hueco a que alguien lo leyera como un fallo de carga.
+   */
+  it('sin operaciones que cerrar lo dice, en vez de callarse', async () => {
+    conResumen({
       rendimiento: {
         ...RESUMEN.rendimiento,
         puedeCerrarse: {
@@ -399,35 +515,155 @@ describe('Indicadores', () => {
         },
       },
     });
-    await montar('AGENTE');
+    await montar('BROKER');
 
-    expect(rendimiento()?.querySelector('.en-juego-indicadores')?.textContent).toContain(
+    expect(raiz().querySelector('.juego')?.textContent).toContain(
       'Ninguna operación puede cerrarse este mes',
     );
+    expect(raiz().querySelector('.juego .v')).toBeNull();
   });
 
-  /** Su pulso sería su propio ritmo contado otra vez (instrucción 14). */
-  it('el agente no ve pulso de equipo', async () => {
+  /** La palanca es del broker: al agente no se le ofrece una decisión que no es suya. */
+  it('solo quien decide ve la palanca de las que esperan decision', async () => {
+    await montar('BROKER');
+    expect(raiz().querySelector('.palanca')?.getAttribute('href')).toBe('/solicitudes/revisar');
+
+    TestBed.resetTestingModule();
+    await montar('AGENTE');
+    expect(raiz().querySelector('.palanca')).toBeNull();
+  });
+
+  // ==================================================================
+  // CARTERA
+  // ==================================================================
+
+  /**
+   * **El riel es la cartera entera, no la fila más grande.** Normalizado contra
+   * el máximo, la etapa mayor salía a barra llena y se leía «toda mi cartera
+   * está en Activa» cuando eran 5 de 13.
+   */
+  it('reparte las etapas sobre su propio total, no sobre la fila mayor', async () => {
+    const pantalla = await montar();
+
+    expect(pantalla['etapas']().map((e) => e.ancho)).toEqual([25, 25, 0, 0, 50]);
+  });
+
+  it('la salud tiñe lo que reclama una mirada y deja el resto en tinta', async () => {
+    conResumen({
+      captacionesSalud: [
+        { nombre: 'Activas', valor: 3 },
+        { nombre: 'Por revisar', valor: 2 },
+      ],
+    });
+    await montar();
+    const fichas = raiz().querySelectorAll('.sf');
+
+    expect(fichas[0].classList.contains('ojo')).toBeFalse();
+    expect(fichas[1].classList.contains('ojo')).toBeTrue();
+  });
+
+  // ==================================================================
+  // EMBUDO
+  // ==================================================================
+
+  /**
+   * El cable trae NIVELES y el embudo se lee en SALTOS: de las 24 que entraron,
+   * 16 llegaron a visita. Así el porcentaje dice lo que retiene ese tramo, en
+   * vez de repetir la proporción contra la primera fila.
+   */
+  it('el embudo se lee en saltos, con su origen y su destino', async () => {
+    conResumen({
+      embudo: [
+        { etapa: 'Oportunidades activas', valor: 24, porcentaje: 100 },
+        { etapa: 'Con visita realizada', valor: 16, porcentaje: 67 },
+        { etapa: 'Con solicitud creada', valor: 4, porcentaje: 17 },
+      ],
+    });
+    await montar();
+    const saltos = raiz().querySelectorAll('.salto');
+
+    expect(saltos.length).toBe(2);
+    expect(saltos[0].querySelector('.par')?.textContent?.trim()).toBe(
+      'Oportunidades activas → con visita realizada',
+    );
+    expect(saltos[0].querySelector('.de')?.textContent?.trim()).toBe('24');
+    expect(saltos[0].querySelector('.a')?.textContent?.trim()).toBe('16');
+    expect(saltos[0].querySelector('.pc')?.textContent?.trim()).toBe('67 %');
+    expect(saltos[0].querySelector('.ns')?.textContent?.trim()).toBe('8 se quedaron');
+  });
+
+  /**
+   * **Un tramo sin casos no tiene tasa.** Con 0 de origen el porcentaje era
+   * 0/0 = NaN y se colaba en pantalla. No se calcula: se dice.
+   */
+  it('un salto sin casos no inventa una tasa', async () => {
+    await montar();
+    const salto = raiz().querySelector('.salto');
+
+    expect(salto?.classList.contains('magro')).toBeTrue();
+    expect(salto?.querySelector('.pc')?.textContent?.trim()).toBe('—');
+    expect(salto?.querySelector('.ns')?.textContent?.trim()).toBe('sin casos');
+  });
+
+  // ==================================================================
+  // EVOLUCIÓN
+  // ==================================================================
+
+  /**
+   * Una serie, no cuatro. Cuatro líneas simultáneas son ruido (D-E2-2 §10), y
+   * mezclar conteos con un porcentaje obligaría a dos escalas en el mismo marco.
+   */
+  it('la evolucion ensena una sola metrica por vez', async () => {
+    const pantalla = await montar();
+
+    expect(pantalla['serie']().length).toBe(1);
+    expect(pantalla['serie']()[0].nombre).toBe('Captaciones');
+
+    pantalla['cambiarMetrica']('conversion');
+    expect(pantalla['serie']()[0].nombre).toBe('Conversión');
+    expect(pantalla['serie']()[0].valores).toEqual(RESUMEN.conversionPorPeriodo);
+  });
+
+  it('descarta una metrica que no existe', async () => {
+    const pantalla = await montar();
+
+    pantalla['cambiarMetrica']('inventada');
+
+    expect(pantalla['metrica']()).toBe('captaciones');
+  });
+
+  /**
+   * La meta se dice con palabras y no se dibuja como línea sobre los seis
+   * tramos: el cable no publica metas históricas, y una línea de lado a lado
+   * afirmaría que ese objetivo rigió los seis periodos.
+   */
+  it('la meta de la serie es la del mes en curso, y solo si existe', async () => {
+    const pantalla = await montar();
+
+    // Captaciones ↔ «Propiedades captadas», que en el fixture tiene meta 15.
+    expect(pantalla['metaDeLaSerie']()).toBe(15);
+
+    pantalla['cambiarMetrica']('conversion');
+    expect(pantalla['metaDeLaSerie']()).toBeNull();
+  });
+
+  // ==================================================================
+  // METAS
+  // ==================================================================
+
+  /** La meta vive donde se mide el rendimiento, no en un módulo aparte. */
+  it('la gestion de metas vive en esta pantalla', async () => {
+    await montar('BROKER');
+
+    expect(raiz().querySelector('#metas')).not.toBeNull();
+    expect(raiz().querySelector('#metas .tabla-metas')).not.toBeNull();
+  });
+
+  /** El agente PROPONE; si pudiera fijarla, el indicador sería manipulable. */
+  it('el agente no recibe la tabla con la que se fijan metas', async () => {
     await montar('AGENTE');
 
-    expect(rendimiento()?.querySelector('.pulso-equipo')).toBeNull();
+    expect(raiz().querySelector('#metas .tabla-metas')).toBeNull();
+    expect(raiz().querySelector('#metas .mis-objetivos')).not.toBeNull();
   });
-
-  /** Va una vez, debajo de los cuatro, y sin nombres: es distribución, no ranking. */
-  it('el broker ve el pulso una sola vez y sin nombres', async () => {
-    api.resumen.and.resolveTo({
-      ...RESUMEN,
-      rendimiento: {
-        ...RESUMEN.rendimiento,
-        pulso: { enRitmo: 6, atencion: 1, fueraDeRitmo: 1, sinBase: 0, agentes: 8 },
-      },
-    });
-    await montar('BROKER');
-    const pulsos = rendimiento()?.querySelectorAll('.pulso-equipo') ?? [];
-
-    expect(pulsos.length).toBe(1);
-    expect(pulsos[0].textContent).toContain('6 en ritmo');
-    expect(pulsos[0].textContent).toContain('sobre 8 agentes');
-  });
-
 });

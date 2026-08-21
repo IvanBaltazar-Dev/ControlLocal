@@ -1,402 +1,359 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Panel</p>
-    <h1>{{ titulo() }}</h1>
-    <p class="sub">
-      {{ subtitulo() }}
-      @if (indicadores(); as i) {
-        <span class="cl-badge">{{ i.ambito }}</span>
-      }
-    </p>
-  </div>
+<div class="lienzo">
+  <cl-estado-listado
+    [cargando]="cargando()"
+    [error]="error()"
+    [vacio]="false"
+    mensajeCarga="Cargando tu Inicio…"
+    (reintentar)="cargar()"
+  />
 
-  <div class="acciones">
-    <label class="periodo">
-      <span>Periodo</span>
-      <!--
-        `[selected]` en la opción, no solo `[value]` en el select: el `value`
-        del elemento se asigna antes de que existan las opciones, así que el
-        navegador cae a la primera y la pantalla mentiría sobre qué periodo
-        está mostrando.
-      -->
-      <select (change)="cambiarPeriodo($any($event.target).value)" [disabled]="cargando()">
-        @for (opcion of periodos; track opcion.valor) {
-          <option [value]="opcion.valor" [selected]="opcion.valor === periodo()">
-            {{ opcion.etiqueta }}
-          </option>
+  @if (!cargando() && indicadores()) {
+    <!--
+      LA CABECERA DEL DÍA. El saludo y la fecha, y una pastilla con el estado
+      de la jornada. La fecha sale de `generadoEn`, no del reloj del navegador.
+    -->
+    <div class="cab-dia">
+      <p class="saludo">{{ saludo() }}</p>
+      <div class="estado-dia">
+        <span class="pastilla" [style.color]="pastilla().color">{{ pastilla().texto }}</span>
+        @if (fecha(); as dia) {
+          <span class="fecha">{{ dia }}</span>
         }
-      </select>
-    </label>
-    <button type="button" class="cl-btn" (click)="cargar()" [disabled]="cargando()">
-      Actualizar
-    </button>
-  </div>
-</header>
-
-<cl-estado-listado
-  [cargando]="cargando()"
-  [error]="error()"
-  [vacio]="false"
-  mensajeCarga="Cargando tu panel…"
-  (reintentar)="cargar()"
-/>
-
-@if (!cargando() && indicadores(); as i) {
-  <!--
-    E2.1 — Cabecera de decisión. Lo primero que se lee no es un número suelto
-    sino una frase: cuántas cosas te reclaman y cuántas operaciones tienes
-    abiertas. El conteo de pendientes lo suma el dominio (`pendientesDeAtencion`),
-    no esta plantilla: sumar las señales aquí colaría los días de atraso entre
-    las "cosas".
-  -->
-  <section class="decision" [class.tranquila]="i.pendientesDeAtencion === 0">
-    <p class="titular">
-      @if (i.pendientesDeAtencion === 0) {
-        Nada te reclama ahora mismo
-      } @else {
-        <b>{{ i.pendientesDeAtencion }}</b>
-        {{ i.pendientesDeAtencion === 1 ? 'cosa necesita' : 'cosas necesitan' }} tu atención
-      }
-    </p>
-    <p class="apoyo">
-      @if (i.oportunidadesActivas > 0) {
-        {{ i.oportunidadesActivas }}
-        {{ i.oportunidadesActivas === 1 ? 'operación abierta' : 'operaciones abiertas' }}
-      } @else {
-        Sin operaciones abiertas
-      }
-      <!--
-        Única línea económica, y solo cuando el dato aguanta: alquileres
-        firmados en el periodo. No se muestra renta ni comisión agregada porque
-        el resumen no las trae, y no vamos a insinuar una cifra que no tenemos.
-      -->
-      @if (i.cierres > 0) {
-        <span class="separador">·</span>
-        {{ i.cierres }}
-        {{ i.cierres === 1 ? 'alquiler firmado' : 'alquileres firmados' }} en
-        {{ etiquetaPeriodo().toLowerCase() }}
-      }
-    </p>
-  </section>
-
-
-  <div class="cl-columnas anchas">
-    <div>
-      <!-- Bandeja del agente / centro de control de quien supervisa -->
-      <section class="cl-tarjeta">
-        <header>
-          <div>
-            <h2>{{ esAgente() ? 'Tu bandeja de trabajo' : 'Centro de control' }}</h2>
-            <p>
-              @if (esAgente()) {
-                Lo que necesita tu acción, ordenado por prioridad y demora
-              } @else if (esBroker()) {
-                Decisiones y riesgos del equipo, ordenados por urgencia
-              } @else {
-                Focos de auditoría de toda la corredora
-              }
-            </p>
-          </div>
-          @if (esAgente() && totalBandeja() > 0) {
-            <span class="cl-badge">
-              {{ totalBandeja() }} {{ totalBandeja() === 1 ? 'pendiente' : 'pendientes' }}
-            </span>
-          }
-        </header>
-
-        @if (avisoBandeja(); as aviso) {
-          <p class="cl-aviso">{{ aviso }}</p>
-        }
-        @if (errorTodas(); as fallo) {
-          <p class="cl-aviso">{{ fallo }}</p>
-        }
-
-        @if (esAgente()) {
-          @if (bandeja().length === 0) {
-            <p class="cl-vacio">
-              Todo al día: no tienes tareas pendientes. La bandeja se rearma sola con tu
-              seguimiento, tus visitas y tus expedientes.
-            </p>
-          } @else {
-            <!--
-              La tarjeta se queda SIEMPRE en las primeras: es lo que cabe sin
-              estirar la columna izquierda por debajo de la derecha. El resto
-              se recorre en el panel, que tiene su propio scroll.
-            -->
-            <ul class="tareas">
-              @for (tarea of bandeja(); track tarea.id) {
-                <li>
-                  <ng-container
-                    [ngTemplateOutlet]="filaTarea"
-                    [ngTemplateOutletContext]="{ $implicit: tarea }"
-                  />
-                </li>
-              }
-            </ul>
-
-            @if (hayMasTareas()) {
-              <button type="button" class="cl-btn ver-todas" (click)="abrirPanel()">
-                <span>Ver las {{ totalBandeja() }} tareas</span>
-                <span class="restantes">+{{ totalBandeja() - bandeja().length }}</span>
-              </button>
-            }
-          }
-
-          <!--
-            LO QUE BROX ENCONTRO — superficie propia, fuera de la bandeja.
-
-            Va DESPUES y separada a proposito. Una tarea dice "hay algo que debes
-            resolver"; un hallazgo dice "encontre algo que vale la pena mirar", y
-            mezclarlos hacia que una coincidencia de cartera desplazara a una
-            solicitud pendiente de los cinco puestos del foco (E2.3).
-
-            Ni puntaje ni recomendacion se componen aqui: `porQue` llega escrito
-            desde el dominio.
-          -->
-          @if (hallazgos().length > 0) {
-            <section class="hallazgos">
-              <h3>
-                Lo que BROX encontró
-                <span class="cuenta">{{ hallazgos().length }}</span>
-              </h3>
-              <p class="cl-sub">No te reclaman nada; están aquí por si valen la pena.</p>
-
-              <ul>
-                @for (hallazgo of hallazgos(); track hallazgo.id) {
-                  <li>
-                    <a [routerLink]="['/' + hallazgo.destino]">
-                      <span class="titulo">{{ hallazgo.titulo }}</span>
-                      <span class="porque">{{ hallazgo.porQue }}</span>
-                      @if (hallazgo.codigoCaptacion) {
-                        <span class="origen">{{ hallazgo.codigoCaptacion }}</span>
-                      }
-                    </a>
-                  </li>
-                }
-              </ul>
-            </section>
-          }
-        } @else if (focoDelBroker().length > 0) {
-          <!--
-            LO QUE TIENES QUE DECIDIR — los asuntos del BROKER (D-E2-5).
-
-            No es la bandeja del agente: son captaciones que aprobar, solicitudes
-            que evaluar y comisiones que cobrar. Operaciones que la matriz
-            reserva solo para el, y que hasta ahora no aparecian en ninguna parte
-            del Inicio.
-
-            Llegan ordenadas por la misma politica y ya interpretadas.
-          -->
-          <ul class="tareas">
-            @for (asunto of focoDelBroker(); track asunto.id) {
-              <li>
-                <div class="cuerpo">
-                  <p class="titulo">{{ asunto.entidadCodigo || asunto.tipo }}</p>
-                  @if (asunto.interpretacion?.comoEsta?.hechos?.length) {
-                    <ul class="como-esta">
-                      @for (hecho of asunto.interpretacion!.comoEsta.hechos; track $index) {
-                        <li [class]="'hecho-' + hecho.estado.toLowerCase()">
-                          <span class="marca" aria-hidden="true">{{ marcaDelHecho(hecho.estado) }}</span>
-                          <span class="texto">{{ hecho.texto }}</span>
-                        </li>
-                      }
-                    </ul>
-                  }
-                </div>
-                <div class="acciones-tarea">
-                  <a class="cl-btn primario" [routerLink]="['/' + asunto.destino]">Decidir</a>
-                </div>
-              </li>
-            }
-          </ul>
-        } @else if (focos().length === 0) {
-          <p class="cl-vacio">
-            Nada pendiente por ahora: no hay solicitudes ni captaciones esperando tu revisión, ni
-            prospectos sin contactar a tiempo.
-          </p>
-        } @else {
-          <ul class="focos">
-            @for (foco of focos(); track foco.concepto) {
-              <li>
-                <span class="valor" [class]="'tono-' + foco.tono">{{ foco.valor }}</span>
-                <div class="cuerpo">
-                  <p class="titulo">{{ foco.titulo }}</p>
-                  <p class="cl-menudo">{{ foco.descripcion }}</p>
-                </div>
-                <a class="cl-btn primario" [routerLink]="foco.ruta">Revisar</a>
-              </li>
-            }
-          </ul>
-        }
-
-      <!--
-        ACCESOS RAPIDOS -- lo que se empieza desde cero (D-E2-1 seccion 6.1).
-
-        Van DEBAJO y no arriba, y el orden importa: primero se resuelve lo que ya
-        existe (el foco), despues lo que sigue en la cola, y solo entonces lo que
-        se crea de nuevo. Empezar algo nuevo con cinco cosas sin atender es
-        exactamente lo que el Inicio viene a evitar.
-
-        Los cuatro NO son los mismos para los dos roles y aqui no se decide
-        cuales: llegan resueltos del dominio. Ni un `if (esBroker)` eligiendo
-        rotulos ni rutas.
-      -->
-      @if (accesos().length > 0) {
-        <nav class="accesos-rapidos" aria-label="Empezar algo nuevo">
-          @for (acceso of accesos(); track acceso.destino) {
-            <a class="cl-btn" [routerLink]="['/' + acceso.destino]">{{ acceso.etiqueta }}</a>
-          }
-        </nav>
-      }
-      </section>
-
+      </div>
     </div>
-
-    <div>
-
-      @if (esAgente()) {
-      } @else {
-      }
-    </div>
-  </div>
-}
-
-<!--
-  La fila de una tarea, una sola vez: la pinta la tarjeta (5 primeras) y el
-  panel (todas). Estaba duplicada y era el sitio perfecto para que "Resolver"
-  se comportara distinto en cada sitio.
--->
-<ng-template #filaTarea let-tarea>
-  <span class="cl-badge" [class]="tonoPrioridad(tarea.prioridad)">
-    {{ tarea.prioridad }}
-  </span>
-  <div class="cuerpo">
-    <p class="titulo">{{ tarea.descripcion }}</p>
 
     <!--
-      CÓMO ESTÁ — cada hecho con SU estado, no con el del asunto.
-
-      La marca y el color salen de `hecho.estado`, que decide el dominio. Si se
-      dedujeran del tono de la fila, un asunto en rojo pintaría de rojo también
-      sus buenas noticias — que es justo lo que D-E2-1 §10.1 arregló.
-
-      El orden es el que llega: narrativo (lo que está → lo que falta → lo que
-      frena), no por gravedad. Reordenar aquí lo rompería.
+      EL TITULAR. Cuántos asuntos dependen de ti, y por dónde empezar. La
+      segunda línea nombra lo que falta en el primero — la escribe el dominio.
+      Sin asuntos no hay titular: la tarjeta ya lleva el suyo, y repetirlo
+      reparte la atención entre dos frases que dicen lo mismo.
     -->
-    @if (tarea.interpretacion?.comoEsta?.hechos?.length) {
-      <ul class="como-esta">
-        @for (hecho of tarea.interpretacion.comoEsta.hechos; track $index) {
-          <li [class]="'hecho-' + hecho.estado.toLowerCase()">
-            <span class="marca" aria-hidden="true">{{ marcaDelHecho(hecho.estado) }}</span>
-            <span class="texto">{{ hecho.texto }}</span>
-          </li>
+    @if (totalAsuntos() > 0) {
+      <h1 class="titular">
+        Hay {{ totalAsuntos() }}
+        {{ totalAsuntos() === 1 ? 'asunto que depende' : 'asuntos que dependen' }} de ti.
+        @if (propuesta(); as motivo) {
+          <span class="segunda">
+            Empieza por el <span class="prop">01</span>: {{ motivo }}
+          </span>
         }
-      </ul>
+      </h1>
     }
 
-    <p class="cl-menudo">
-      @if (tarea.entidadCodigo) {
-        <span>{{ tarea.entidadCodigo }}</span>
-        <span aria-hidden="true"> · </span>
-      }
-      <span>{{ diasTexto(tarea.diasSinAccion) }}</span>
-      @if (vencimiento(tarea)) {
-        <span aria-hidden="true"> · </span>
-        <span>{{ vencimiento(tarea) }}</span>
-      }
-    </p>
+    <!--
+      `resolviendo` es el modo B: en una columna no conviven la lista y el
+      Radar, así que seleccionar ABRE la resolución y el foco se retira
+      (D-E2-1 §15). En escritorio la clase no hace nada — allí caben los dos.
+    -->
+    <div class="rejilla" [class.resolviendo]="seleccionado() !== null">
+      <div class="izq">
+        <!--
+          CABECERA DE ZONA. El ámbito lo dice el dominio, la cifra es la del
+          foco, y los filtros solo aparecen si hay de los dos lados: un botón
+          que no separa nada es un botón que estorba.
+        -->
+        @if (foco().length) {
+          <div class="cab-zona">
+            <span class="t">Qué atender ahora</span>
+            <span class="n">{{ foco().length }}</span>
+            @if (enCola() > 0) {
+              <span class="mas-t">+ {{ enCola() }} en la cola</span>
+            }
+
+            @if (hayFiltroDeLado()) {
+              <div class="filtros" role="group" aria-label="Filtrar por lado de la operación">
+                <button
+                  type="button"
+                  [class.on]="filtro() === ''"
+                  [attr.aria-pressed]="filtro() === ''"
+                  (click)="filtrarLado('')"
+                >
+                  Todo
+                </button>
+                <button
+                  type="button"
+                  data-f="oferta"
+                  [class.on]="filtro() === 'OFERTA'"
+                  [attr.aria-pressed]="filtro() === 'OFERTA'"
+                  (click)="filtrarLado('OFERTA')"
+                >
+                  Propietario <b>{{ porLado().OFERTA }}</b>
+                </button>
+                <button
+                  type="button"
+                  data-f="demanda"
+                  [class.on]="filtro() === 'DEMANDA'"
+                  [attr.aria-pressed]="filtro() === 'DEMANDA'"
+                  (click)="filtrarLado('DEMANDA')"
+                >
+                  Cliente <b>{{ porLado().DEMANDA }}</b>
+                </button>
+              </div>
+            }
+          </div>
+        }
+
+        <!--
+          EL FOCO. Hasta cinco asuntos, y nunca se rellena hasta cinco. La fila
+          IDENTIFICA y SELECCIONA: no lleva botón de acción — ese vive en el
+          Radar, y dos CTA iguales compiten entre sí (D-E2-1 §5).
+        -->
+        <section class="foco" [class.mezcla]="!filtro()" aria-label="Qué atender ahora">
+          @if (avisoBandeja(); as aviso) {
+            <p class="aviso-foco">{{ aviso }}</p>
+          }
+
+          @if (!foco().length) {
+            <!--
+              Día cubierto. El sello se cierra y después se dibuja la marca: un
+              solo gesto. Para el administrador no es un logro sino un hecho —
+              desde D-F4-5 no decide operaciones comerciales.
+            -->
+            <div class="cubierto">
+              <svg class="sello" viewBox="0 0 64 64" aria-hidden="true">
+                <circle class="aro" cx="32" cy="32" r="28" />
+                <circle class="arco" cx="32" cy="32" r="28" />
+                <path class="marca" d="M21 33 L28.5 40.5 L43 25" />
+              </svg>
+              @if (esAdmin()) {
+                <p class="f">Aquí no hay nada que decidir</p>
+                <p>
+                  La operación comercial la resuelven brokers y agentes. Tu Inicio no lleva cola
+                  porque un tablero de asuntos que no puedes cerrar no ayudaría a nadie.
+                </p>
+              } @else {
+                <p class="f">Día cubierto</p>
+                <p>
+                  No queda nada esperándote. La cola se rearma sola con tu seguimiento, tus visitas
+                  y tus expedientes.
+                </p>
+              }
+            </div>
+          } @else if (!focoVisible().length) {
+            <div class="fila sin-nada">
+              <span class="num"></span>
+              <div class="cuerpo">
+                <p class="hecho">
+                  Nada de
+                  {{ filtro() === 'OFERTA' ? 'propietario' : 'cliente' }} en el foco de hoy.
+                </p>
+              </div>
+            </div>
+          } @else {
+            @for (fila of focoVisible(); track fila.asunto.id) {
+              <article
+                class="fila"
+                [class.l-oferta]="fila.asunto.lado === 'OFERTA'"
+                [class.l-demanda]="fila.asunto.lado === 'DEMANDA'"
+                [class.sel]="seleccionado() === fila.asunto.id"
+                [style.--tono]="
+                  fila.asunto.tono === 'alta'
+                    ? 'var(--riesgo)'
+                    : fila.asunto.tono === 'media'
+                      ? 'var(--atencion)'
+                      : 'var(--ink-3)'
+                "
+                tabindex="0"
+                role="button"
+                [attr.aria-pressed]="seleccionado() === fila.asunto.id"
+                (click)="seleccionar(fila.asunto.id)"
+                (keydown.enter)="seleccionar(fila.asunto.id)"
+                (keydown.space)="$event.preventDefault(); seleccionar(fila.asunto.id)"
+              >
+                <span class="num">{{ fila.numero }}</span>
+                <div class="cuerpo">
+                  <div class="tit">
+                    <span class="ic-proc" [style.--pc]="fila.asunto.proceso.color">
+                      <cl-icono [nombre]="fila.asunto.proceso.icono" [tamano]="15" [grosor]="1.6" />
+                    </span>
+                    {{ fila.asunto.titulo }}
+                  </div>
+                  <p class="hecho">{{ fila.asunto.hecho }}</p>
+                </div>
+                <span class="chev" aria-hidden="true">
+                  <cl-icono nombre="chevron-d" [tamano]="15" [grosor]="1.8" />
+                </span>
+              </article>
+            }
+          }
+        </section>
+
+        <!--
+          LA COLA. Una banda, no otra tabla: existe y se ve que existe, pero no
+          se despliega dentro del Inicio — el resto se recorre en su panel.
+        -->
+        @if (enCola() > 0 && esAgente()) {
+          <div class="cola">
+            <span class="q">{{ enCola() }} siguen en tu cola</span>
+            <button type="button" class="ir" (click)="abrirPanel()">
+              Revisar cola completa
+              <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+            </button>
+            <span class="d">Ordenadas por lo que urge y por lo que llevan sin atención</span>
+          </div>
+        }
+
+        <!--
+          ACCESOS RÁPIDOS — lo que se empieza desde cero (D-E2-1 §6.1).
+
+          Van DEBAJO y el orden importa: primero se resuelve lo que ya existe,
+          después lo que sigue en la cola, y solo entonces lo que se crea nuevo.
+          Los cuatro NO son los mismos para los dos roles y aquí no se decide
+          cuáles: llegan resueltos del dominio.
+        -->
+        @if (accesos().length) {
+          <nav class="accesos" aria-label="Empezar algo nuevo">
+            <span class="kicker">Accesos rápidos</span>
+            <div class="lista">
+              @for (acceso of accesos(); track acceso.destino) {
+                <a class="acceso" [routerLink]="'/' + acceso.destino">
+                  @if (acceso.icono) {
+                    <span class="ic" [style.--pc]="acceso.color">
+                      <cl-icono [nombre]="acceso.icono" [tamano]="15" [grosor]="1.6" />
+                    </span>
+                  }
+                  {{ acceso.etiqueta }}
+                </a>
+              }
+            </div>
+          </nav>
+        }
+      </div>
+
+      <!--
+        EL CARRIL. La superficie de BROX, pegada mientras se recorre la cola.
+      -->
+      <aside class="carril" aria-label="Radar BROX">
+        <cl-radar
+          [asunto]="asuntoAbierto()"
+          [hallazgos]="hallazgos()"
+          [vigila]="vigila()"
+          (volver)="seleccionado.set(null)"
+          (irAlAsunto)="seleccionar($event)"
+          (abrir)="abrir($event)"
+          (verHallazgos)="abrirHallazgos()"
+          (resolver)="resolver($event)"
+          (cancelar)="pedirCancelacion($event)"
+          (resuelto)="trasResolver($event)"
+        />
+      </aside>
+    </div>
 
     <!--
-      EL EXPEDIENTE · cuatro renglones de evidencia (D-E2-1 §10.3)
+      EL PIE · anticipo de Indicadores, no una métrica nueva (D-E2-1 §6.2).
 
-      Viajaba desde E2.4 y no se pintaba en ninguna parte: el dato existía en el
-      cable y la pantalla lo tiraba. Aquí se pinta.
-
-      Son SIEMPRE cuatro, pero no siempre los mismos: un asunto con encargo trae
-      Encargo · Renta · Actividad · Propietario, y una prospección —que es
-      anterior a la captación— trae Prospección · Contacto · Avance ·
-      Propietario. Los rótulos vienen del backend; la pantalla no elige cuáles.
-
-      No repite `CÓMO ESTÁ`, que habla del ESTADO. Esto es el HISTORIAL.
+      Los cuatro nombres van COMPLETOS y salen del backend: son los mismos que
+      usa la pantalla de Indicadores, letra por letra. Abreviarlos aquí desharía
+      la distinción que D-E2-2 §1.1 vino a fijar. El enlace es la franja entera.
     -->
-    @if (tarea.interpretacion?.expediente?.length) {
-      <dl class="expediente">
-        @for (renglon of tarea.interpretacion.expediente; track renglon.rotulo) {
-          <div
-            class="renglon"
-            [class]="renglon.estado ? 'renglon senal-' + renglon.estado.toLowerCase() : 'renglon'"
-          >
-            <dt>{{ renglon.rotulo }}</dt>
-            <dd>
-              <span class="valor">{{ renglon.valor }}</span>
+    @if (rendimiento(); as r) {
+      <a class="pie" routerLink="/indicadores">
+        <cl-malla-brox />
 
-              <!-- La ventana lleva sus DOS números y no el porcentaje: 168/180 se
-                   puede leer, y el 93 % solo se puede pintar. -->
-              @if (renglon.ventana; as v) {
-                <span class="ventana" role="img"
-                      [attr.aria-label]="v.consumido + ' de ' + v.total">
-                  <span class="consumido"
-                        [style.width.%]="v.total ? (v.consumido * 100) / v.total : 0"></span>
+        @if (cierreDelMes(); as cierre) {
+          <span class="juego">
+            <span class="kicker">Puede cerrarse este mes</span>
+            <span class="fila">
+              <span>
+                <!-- Sin operaciones no hay cifra que dar; el detalle lo dice
+                     con palabras y un guion no aportaría nada. -->
+                @if (cierre.importe; as importe) {
+                  <span class="v">{{ importe }}</span>
+                }
+                <span class="e">{{ cierre.detalle }}</span>
+                @if (cierre.variasMonedas) {
+                  <span class="e">Hay más de una moneda; se muestra la principal</span>
+                }
+                @if (!esAgente() && cierre.esperanDecision > 0) {
+                  <span class="e palanca">
+                    {{ cierre.esperanDecision }}
+                    {{ cierre.esperanDecision === 1 ? 'espera' : 'esperan' }} tu decisión
+                  </span>
+                }
+              </span>
+            </span>
+          </span>
+        }
+
+        <span class="kpis">
+          <span class="fila-k">
+            @for (kpi of kpisDelPie(); track kpi.codigo) {
+              <!-- El estado lo decide el dominio y viaja al DOM sin traducir:
+                   el color sale de él, nunca al revés. -->
+              <span class="kpi" [attr.data-ritmo]="kpi.estadoRitmo" [style.--tono]="colorDeRitmo(kpi)">
+                <span class="n">{{ kpi.rotulo }}</span>
+                <span class="d">
+                  {{ kpi.actual }}
+                  @if (kpi.metaPeriodo != null) {
+                    <small>de {{ kpi.metaPeriodo }}</small>
+                  }
+                </span>
+                <!--
+                  La barra lleva DOS marcas: lo recorrido y el ritmo esperado a
+                  hoy. Sin la segunda, un 87 % no dice si vas por delante.
+                -->
+                <span
+                  class="pista"
+                  role="img"
+                  [attr.aria-label]="kpi.rotulo + ': ' + cifraDe(kpi) + '. ' + lecturaDe(kpi)"
+                >
+                  <i [style.width.%]="avanceDe(kpi)"></i>
+                  @if (marcaEsperadaDe(kpi); as esperado) {
+                    <b [style.left.%]="esperado"></b>
+                  }
+                </span>
+                <span class="empuje" [class.hecha]="kpi.faltante === 0">
+                  {{ lecturaDe(kpi) }}
+                </span>
+              </span>
+            }
+          </span>
+
+          <!--
+            Un total verde puede esconder un equipo roto: la distribución va
+            debajo de los cuatro, una sola vez y sin nombres.
+          -->
+          @if (pulso().length) {
+            <span class="pulso">
+              <span class="k">Pulso del equipo</span>
+              @for (grupo of pulso(); track grupo.voz) {
+                <span class="g" [style.--c]="grupo.color">
+                  <b>{{ grupo.n }}</b> {{ grupo.voz.toLowerCase() }}
                 </span>
               }
+            </span>
+          }
+        </span>
 
-              <!--
-                EL CONTRASTE (E2.6): dónde cae el dato respecto de NUESTRA
-                operación. Nunca del sector.
-
-                Casi siempre llegará degradado, y está bien: el rango necesita
-                diez propiedades comparables con renta publicada. Cuando no las
-                hay se dice, con su N — «3 propiedades» informa y un silencio no.
-              -->
-              @if (renglon.contraste; as c) {
-                @if (c.forma === 'POSICION_EN_RANGO' && c.posicionPorcentaje !== null) {
-                  <span class="contraste">
-                    <span class="escala" role="img"
-                          [attr.aria-label]="'en el ' + c.posicionPorcentaje + ' % del rango'">
-                      <span class="aguja" [style.left.%]="c.posicionPorcentaje"></span>
-                    </span>
-                    en el {{ c.posicionPorcentaje }} % del rango de {{ c.zona }} ·
-                    {{ c.minimo }}–{{ c.maximo }} · {{ c.observaciones }} propiedades
-                  </span>
-                } @else if (c.motivo !== 'SIN_GRUPO_COMPARABLE') {
-                  <span class="contraste sin-referencia">
-                    {{ textoDelContraste(c) }}
-                  </span>
-                }
-              }
-            </dd>
-          </div>
-        }
-      </dl>
+        <span class="ir">
+          <span class="cierre-mes">
+            {{ r.periodo.diasTranscurridos }} de {{ r.periodo.diasTotales }} días del mes
+            @if (calculadoHace(); as hace) {
+              <span class="frescura">· calculado {{ hace }}</span>
+            }
+          </span>
+          <span class="ver">
+            Ver indicadores
+            <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+          </span>
+        </span>
+      </a>
     }
-
-    <!-- La lectura de BROX: sintetiza el expediente. Ausente = nada que concluir. -->
-    @if (tarea.interpretacion?.lectura) {
-      <p class="lectura"><span aria-hidden="true">◇</span> {{ tarea.interpretacion.lectura }}</p>
-    }
-  </div>
-  <div class="acciones-tarea">
-    @if (puedeResolver(tarea)) {
-      <button type="button" class="cl-btn primario" (click)="resolver(tarea)">Resolver</button>
-    }
-    <button type="button" class="cl-btn" (click)="pedirCancelacion(tarea)">Cancelar</button>
-  </div>
-</ng-template>
+  }
+</div>
 
 <!--
-  La bandeja entera, fuera del flujo de la página: el dashboard no cambia de
-  alto tenga 6 tareas o 60, y cerrar devuelve la home intacta sin volver a
-  pedirla (`GET /tareas` reconcilia, así que cada vistazo cuesta).
+  LA COLA COMPLETA, fuera del flujo de la página: el Inicio no cambia de alto
+  tenga 6 asuntos o 60, y cerrar devuelve la pantalla intacta.
 -->
 @if (esAgente()) {
   <cl-panel-lateral
     [abierto]="panelAbierto()"
-    titulo="Tu bandeja de trabajo"
-    subtitulo="Ordenadas por prioridad y por lo que llevan sin atención. Resolver te lleva a la pantalla donde se trabaja cada una."
-    ancho="40rem"
+    titulo="Tu cola completa"
+    subtitulo="Ordenadas por lo que urge y por lo que llevan sin atención. Abrir te lleva a la pantalla donde se trabaja cada una."
+    ancho="520px"
     (cerrar)="cerrarPanel()"
   >
-    <!-- Chips de prioridad: las cuentas salen de la lista, no están escritas. -->
     @if (chipsPrioridad().length > 1) {
       <div class="chips" role="group" aria-label="Filtrar por prioridad">
         @for (chip of chipsPrioridad(); track chip.valor) {
@@ -428,7 +385,7 @@
       [cargando]="cargandoTodas()"
       [error]="errorTodas()"
       [vacio]="false"
-      mensajeCarga="Actualizando tu bandeja…"
+      mensajeCarga="Actualizando tu cola…"
       (reintentar)="recargarTodas()"
     />
 
@@ -437,117 +394,57 @@
         <p class="cl-aviso">{{ aviso }}</p>
       }
 
-      @if (tareasFiltradas().length === 0) {
+      @if (!tareasFiltradas().length) {
         <p class="cl-vacio">
           @if (hayFiltroTareas()) {
-            Ninguna de tus {{ bandejaTodas().length }} tareas coincide con este filtro.
+            Ninguno de tus {{ bandejaTodas().length }} asuntos coincide con este filtro.
           } @else {
-            Todo al día: no tienes tareas pendientes.
+            Todo al día: no te queda nada en la cola.
           }
         </p>
       } @else {
-        <ul class="tareas en-panel">
-          @for (tarea of tareasFiltradas(); track tarea.id) {
-            <li>
-              <ng-container
-                [ngTemplateOutlet]="filaTarea"
-                [ngTemplateOutletContext]="{ $implicit: tarea }"
-              />
-            </li>
-          }
-        </ul>
+        @for (asunto of tareasFiltradas(); track asunto.id) {
+          <div class="fila-cola">
+            <button type="button" class="t" (click)="traerDeLaCola(asunto)">
+              {{ asunto.titulo }}
+            </button>
+            <span class="h">{{ asunto.hecho }}</span>
+            @if (asunto.tarea; as tarea) {
+              <button type="button" class="a" (click)="pedirCancelacion(tarea)">Cancelar</button>
+            }
+          </div>
+        }
       }
     }
   </cl-panel-lateral>
 }
 
-
 <!--
-  EL PIE · anticipo de Indicadores, no una métrica nueva (D-E2-1 §6.2)
-
-  Los cuatro nombres van COMPLETOS y salen del backend: son los mismos que usa
-  la pantalla de Indicadores, letra por letra. Abreviarlos aquí desharía la
-  distinción que D-E2-2 §1.1 vino a fijar — 31 registros creados no son 31
-  propietarios contactados.
-
-  Cuatro KPI, ni uno más, y una sola cifra de dinero. El detalle vive en
-  Indicadores, a un clic: el enlace es la franja entera.
+  LOS HALLAZGOS, UNO POR CLIENTE. En el Radar van agrupados por local porque un
+  local que encaja con doce clientes es UN hallazgo, no doce; aquí se abre el
+  grupo, que es donde la diferencia entre clientes importa — cada uno queda
+  fuera por otra cosa.
 -->
-@if (rendimiento(); as r) {
-  <a class="pie-indicadores" routerLink="/indicadores">
-    @if (cierreDelMes(); as cierre) {
-      <div class="en-juego">
-        <p class="rotulo">Puede cerrarse este mes</p>
-        @if (cierre.importe) {
-          <p class="cifra">{{ cierre.importe }}</p>
-        }
-        <p class="detalle">{{ cierre.detalle }}</p>
-        @if (cierre.variasMonedas) {
-          <p class="detalle aviso">
-            Hay operaciones en más de una moneda; se muestra la de mayor importe.
-          </p>
-        }
-        @if (!esAgente() && cierre.esperanDecision > 0) {
-          <p class="palanca">
-            {{ cierre.esperanDecision }}
-            {{ cierre.esperanDecision === 1 ? 'espera' : 'esperan' }} tu decisión
-          </p>
-        }
+<cl-panel-lateral
+  [abierto]="panelHallazgos()"
+  titulo="Lo que encontré"
+  subtitulo="No te reclaman nada: son coincidencias entre tu cartera y los clientes que ya tienes. Abrir te lleva a la ficha del cliente."
+  ancho="520px"
+  (cerrar)="panelHallazgos.set(false)"
+>
+  @if (!hallazgosDelPanel().length) {
+    <p class="cl-vacio">No hay ninguna coincidencia que proponerte ahora mismo.</p>
+  } @else {
+    @for (fila of hallazgosDelPanel(); track fila.hallazgo.id) {
+      <div class="fila-cola">
+        <button type="button" class="t" (click)="abrirDesdePanel(fila.hallazgo.destino)">
+          {{ fila.local }}
+        </button>
+        <span class="h">{{ fila.hallazgo.porQue }}</span>
       </div>
     }
-
-    <div class="kpis-pie">
-      @for (kpi of kpisDelPie(); track kpi.codigo) {
-        <div class="kpi-pie" [attr.data-ritmo]="kpi.estadoRitmo">
-          <p class="nombre">{{ kpi.rotulo }}</p>
-          <p class="cifra">{{ cifraDe(kpi) }}</p>
-          <!--
-            La barra lleva DOS marcas: lo recorrido y el ritmo esperado a hoy.
-            Sin la segunda, un 87 % no dice si vas por delante o por detrás.
-          -->
-          <div
-            class="barra"
-            role="img"
-            [attr.aria-label]="kpi.rotulo + ': ' + cifraDe(kpi) + '. ' + lecturaDe(kpi)"
-          >
-            <span class="recorrido" [style.width.%]="avanceDe(kpi)"></span>
-            @if (marcaEsperadaDe(kpi); as esperado) {
-              <span class="marca-esperada" [style.left.%]="esperado"></span>
-            }
-          </div>
-          <p class="lectura">{{ lecturaDe(kpi) }}</p>
-        </div>
-      }
-    </div>
-
-    <div class="cierre-pie">
-      <!--
-        El pulso va UNA vez y sin nombres (D-E2-2 §6.1 e instrucción 13): esto
-        es una distribución, no un ranking. Y solo lo ve quien supervisa: para
-        un agente sería su propio ritmo contado otra vez.
-      -->
-      @if (r.pulso; as pulso) {
-        <p class="pulso">
-          <span class="rotulo">Pulso del equipo</span>
-          <span class="dato en-ritmo">{{ pulso.enRitmo }} en ritmo</span>
-          <span class="dato atencion">{{ pulso.atencion }} requieren atención</span>
-          <span class="dato fuera">{{ pulso.fueraDeRitmo }} fuera de ritmo</span>
-          @if (pulso.sinBase > 0) {
-            <span class="dato sin-base">{{ pulso.sinBase }} sin meta fijada</span>
-          }
-        </p>
-      }
-      <p class="periodo-pie">
-        <span>{{ r.periodo.diasTranscurridos }} de {{ r.periodo.diasTotales }} días del mes</span>
-        @if (calculadoHace(); as hace) {
-          <span class="separador">·</span>
-          <span class="frescura">calculado {{ hace }}</span>
-        }
-      </p>
-      <span class="ver-mas">Ver indicadores →</span>
-    </div>
-  </a>
-}
+  }
+</cl-panel-lateral>
 
 <cl-confirmacion
   [abierto]="porCancelar() !== null"

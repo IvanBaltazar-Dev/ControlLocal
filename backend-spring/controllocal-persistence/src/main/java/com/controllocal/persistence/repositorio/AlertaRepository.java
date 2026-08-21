@@ -7,7 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -71,6 +73,43 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long> {
                            @Param("entidadTipo") String entidadTipo,
                            @Param("entidadId") long entidadId,
                            @Param("tipo") String tipo);
+
+    /**
+     * <b>Avisos de recontacto que ya no aplican.</b> La otra mitad de la
+     * reconciliacion: {@link #existeActivaDe} impide crear dos, y esto cierra
+     * los que sobrevivieron a su motivo.
+     *
+     * <p>La condicion es <b>la misma</b> que la de
+     * {@code ProspeccionRepository.recontactables} —fecha de recontacto vencida
+     * y prospeccion en proceso—, negada. Se escribe aqui como {@code not
+     * exists} y no restando conjuntos en memoria por una razon concreta: el
+     * barrido que crea esta acotado a 500, y una diferencia de conjuntos
+     * cerraria en falso todos los avisos cuya prospeccion quedo fuera de esa
+     * pagina.
+     *
+     * <p>Sin filtro de alcance a proposito: el barrido es del tenant entero,
+     * igual que el de creacion. Cerrar un aviso que ya no aplica no depende de
+     * quien abra la campana.
+     */
+    @Query("""
+            select a from Alerta a
+            where a.organizacionId = :idOrganizacion
+              and a.estado = 'A'
+              and a.tipo = :tipo
+              and a.entidadTipo = :entidadTipo
+              and not exists (
+                select 1 from Prospeccion p
+                where p.id = a.entidadId
+                  and p.organizacionId = :idOrganizacion
+                  and p.fechaRecontacto is not null
+                  and p.fechaRecontacto <= :limite
+                  and p.estado not in ('T', 'D')
+              )
+            """)
+    List<Alerta> recontactosQueYaNoAplican(@Param("idOrganizacion") long idOrganizacion,
+                                           @Param("entidadTipo") String entidadTipo,
+                                           @Param("tipo") String tipo,
+                                           @Param("limite") LocalDate limite);
 
     /**
      * La pagina de la campana, con la persona resuelta en el mismo select: la

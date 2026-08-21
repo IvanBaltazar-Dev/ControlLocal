@@ -56,9 +56,40 @@
   --lado-oferta: 200, 146, 32;
   --lado-demanda: 56, 122, 214;
 
-  --riesgo: #d14343;
-  --atencion: #c67c10;
-  --positivo: #199a5c;
+  /* --- Estado: rellenos ------------------------------------------------
+     Barras, puntos y arcos. No son texto, así que no piden contraste: piden
+     viveza. Estos son los valores calibrados del prototipo de Indicadores,
+     que llegó después del de Inicio y documenta los anteriores como
+     «apagados por arrastre» — el verde iba en croma 53 y el rojo en 64. */
+  --riesgo: #dd4546; /* L 52,0 · croma 68,0 */
+  --atencion: #e69500; /* L 68,3 · croma 76,3 · 73,4° */
+  --positivo: #05ac65; /* L 62,0 · croma 60,0 */
+
+  /* --- Estado: voces, para TEXTO ---------------------------------------
+     Calibradas contra la superficie clara más oscura del sistema
+     (`--accion-p`), no contra el blanco: dentro de una caja de recomendación
+     —que es donde más se usan— el blanco las dejaba en 4,2. Y buscando el
+     croma máximo que cumple ese mínimo, en vez de oscurecer: oscurecer
+     conserva el tono pero mata la viveza. */
+  --riesgo-voz: #cd3b3d;
+  --atencion-voz: #9d6400;
+  --positivo-voz: #02804a;
+
+  /* --- Estado: tintes, para el FONDO de una marca ----------------------
+     Su luminancia no puede bajar de la de `--accion-p` (0,915): las voces
+     están calibradas justo contra esa superficie, así que cualquier fondo
+     más oscuro las tumba. */
+  --atencion-p: #fdf6ea;
+  --positivo-p: #eef9f4;
+
+  /* --- Rampa de identidad del proceso ----------------------------------
+     Un tono por paso del embudo: el KPI de arriba y su salto comparten
+     color. Comprobada contra el fondo (≥ 4,5:1) y entre vecinos con ΔE
+     44 / 81 / 40, muy por encima del umbral de confusión (~15). */
+  --p1: #4977b8; /* prospección */
+  --p2: #2563eb; /* captación   */
+  --p3: #0f7a85; /* solicitudes */
+  --p4: #168650; /* contratos   */
 
   /* Un color por proceso: el canto de la tarjeta dice de qué habla sin
      que haya que leer el rótulo. */
@@ -354,7 +385,11 @@ button {
   }
 }
 
-.fecha {
+/* Acotada a `.lienzo` a proposito. `.fecha` es un nombre demasiado natural
+   para dejarlo suelto en la hoja global: la ficha de propiedad, el histórico
+   económico y la actividad lo usan también, y heredaban en silencio el estilo
+   —y el `display: none`— de la cabecera del Inicio. */
+.lienzo .fecha {
   font-size: 12.5px;
   color: var(--ink-2);
 }
@@ -419,15 +454,31 @@ button {
   padding: 0 2px;
 }
 
-/* En móvil el Radar baja debajo del foco: en una columna no hay carril
-   (D-E2-1 §15). */
-@media (max-width: 1080px) {
+/* Por debajo de 1240 px el Radar baja debajo del foco: en una columna no hay
+   carril (D-E2-1 §15). El corte es el del prototipo — con 340 px mínimos de
+   carril más 22 de hueco, por debajo de eso la izquierda se estrangula. */
+@media (max-width: 1240px) {
   .rejilla {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 
+@media (max-width: 860px) {
   .lienzo {
-    padding: 14px 16px 12px;
+    padding: 16px 15px 26px;
+  }
+
+  /* La fecha DE LA CABECERA del Inicio. Sin acotar, esta regla escondía la
+     fecha de cada hito del histórico económico y de cada hecho de la
+     actividad en cualquier pantalla estrecha: un movimiento sin fecha no es
+     un movimiento, y la ficha quedaba con filas mudas. */
+  .lienzo .fecha {
+    display: none;
+  }
+
+  .titular {
+    font-size: 21px;
+    line-height: 28px;
   }
 }
 

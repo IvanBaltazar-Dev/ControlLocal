@@ -1,0 +1,1391 @@
+/* ====================================================================
+   RADAR BROX
+   --------------------------------------------------------------------
+   Portado de `docs/ai/prototipos/inicio.html`. Los valores están
+   copiados, no reinterpretados.
+
+   La superficie se levanta del lienzo: sombra fina y tintada, borde en
+   degradado enmascarado y un halo que toma el color del caso abierto.
+   Es lo que la distingue de la zona de trabajo — el Radar no es una
+   caja más del tablero.
+
+   Los nombres de `@keyframes` van prefijados: en la encapsulación
+   emulada de Angular las animaciones NO se scopean, y `entra` o
+   `crecer` son nombres que cualquier otra pantalla puede reclamar.
+   ==================================================================== */
+
+:host {
+  display: block;
+}
+
+.radar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  --aura: rgba(190, 140, 30, 0.34);
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--radar-fondo);
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 1px 2px rgba(12, 29, 52, 0.07),
+    0 10px 22px -14px rgba(12, 29, 52, 0.22),
+    0 30px 60px -30px var(--aura);
+  transition: box-shadow 520ms var(--curva);
+
+  /* El halo va con los mismos rojos y ámbares del sistema de estado, en
+     literal porque `rgba()` necesita los canales sueltos. */
+  &.t-alta {
+    --aura: rgba(221, 69, 70, 0.4);
+  }
+
+  &.t-media {
+    --aura: rgba(230, 149, 0, 0.38);
+  }
+
+  /* Borde en degradado, enmascarado: uno plano lo dejaba en «otra caja».
+     Va por encima del cuerpo y no intercepta el puntero. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      158deg,
+      rgba(224, 161, 27, 0.62) 0%,
+      #c6d7f2 22%,
+      #c9d9f3 62%,
+      color-mix(in srgb, var(--aura) 70%, #c9d9f3) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+/* ====================================================================
+   LA CABECERA · azul noche, y una sola cosa en movimiento
+   ==================================================================== */
+
+.radar-cab {
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  color: #fff;
+  background:
+    radial-gradient(80% 150% at 11% 160%, rgba(224, 161, 27, 0.16), transparent 58%),
+    radial-gradient(110% 150% at 94% -40%, rgba(59, 130, 246, 0.26), transparent 62%),
+    linear-gradient(135deg, #0c1d34 0%, #07101e 100%);
+  box-shadow: inset 0 -1px 0 rgba(224, 161, 27, 0.36);
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* En resolución el título es un nombre propio, no una marca: ni
+     versalitas ni tracking, y con el proceso delante. */
+  .titulo-caso {
+    min-width: 0;
+  }
+
+  .t-caso {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: -0.008em;
+    line-height: 19px;
+    color: #fff;
+
+    .sello-p {
+      flex: none;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #f2dfb4;
+      box-shadow: inset 0 0 0 1px rgba(224, 161, 27, 0.3);
+    }
+  }
+
+  /* El oro sobre el azul noche va por `background-clip`, no por color:
+     un ámbar plano sobre este fondo sale marrón. */
+  .t {
+    display: block;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    line-height: 19px;
+    background: linear-gradient(104deg, #ffffff 0%, #fff1d2 46%, #e8b54a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 14px rgba(224, 161, 27, 0.28));
+  }
+
+  .s {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 4px;
+    font-size: 11.5px;
+    font-weight: 450;
+    letter-spacing: 0.005em;
+    color: rgba(226, 237, 252, 0.88);
+
+    i {
+      font-style: normal;
+      color: rgba(255, 255, 255, 0.28);
+    }
+  }
+
+  .volver {
+    margin-left: auto;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(224, 161, 27, 0.34);
+    color: #f3e3c0;
+    font-size: 11.5px;
+    font-weight: 550;
+    cursor: pointer;
+    transition:
+      background var(--t1) ease,
+      border-color var(--t1) ease;
+
+    &:hover {
+      background: rgba(224, 161, 27, 0.18);
+      border-color: rgba(224, 161, 27, 0.6);
+    }
+  }
+}
+
+/* Punto de actividad: convención de sistema en vivo, 3,2 s, casi quieto.
+   Es la ÚNICA cosa que se mueve en la cabecera — el emblema va grabado. */
+.vivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 7px;
+  vertical-align: 1px;
+
+  i {
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: #66d6a0;
+    box-shadow: 0 0 0 0 rgba(102, 214, 160, 0.5);
+    animation: brox-latir 3.2s ease-in-out infinite;
+  }
+}
+
+@keyframes brox-latir {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(102, 214, 160, 0.45);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(102, 214, 160, 0);
+  }
+}
+
+/* ====================================================================
+   EL CUERPO · tarjetas sobre sustrato, nunca bandas con filete
+   ==================================================================== */
+
+.radar-cuerpo {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 9px;
+  scrollbar-width: thin;
+  scrollbar-color: #b9cef0 transparent;
+
+  &::-webkit-scrollbar {
+    width: 9px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #c2d5f2;
+    border-radius: 999px;
+    border: 2px solid var(--radar-fondo);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #9db9e6;
+  }
+
+  > * {
+    background: #fff;
+    border: 1px solid #e4edfb;
+    border-radius: 8px;
+    box-shadow:
+      0 1px 2px rgba(16, 32, 56, 0.045),
+      0 6px 16px -12px rgba(16, 32, 56, 0.3);
+    /* Se compone de arriba abajo, 55 ms por bloque: se percibe como una
+       conclusión formándose, no como una página pintándose. */
+    animation: brox-aflorar 520ms var(--curva) both;
+    animation-delay: calc(var(--i, 0) * 55ms);
+  }
+
+  > * + * {
+    margin-top: 8px;
+  }
+}
+
+/* Entra desenfocado y ENFOCA. Un desenfoque que se resuelve se lee como
+   algo que se está formando; un `translate`, como algo que se empuja. */
+@keyframes brox-aflorar {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.994);
+    filter: blur(6px);
+  }
+
+  60% {
+    filter: blur(0);
+  }
+}
+
+/* ====================================================================
+   IDENTIDAD DEL CASO · de quién es y en qué punto va
+   ==================================================================== */
+
+.radar-caso {
+  display: block;
+  padding: 8px 12px;
+
+  .ruta {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+
+    &.l-oferta {
+      --l: var(--lado-oferta);
+    }
+
+    &.l-demanda {
+      --l: var(--lado-demanda);
+    }
+  }
+
+  /* De quién es la operación: un canto de color y una versalita. Sin
+     pastilla, sin icono, sin curva. */
+  .lado {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+    margin-right: 4px;
+    border-right: 1px solid var(--hairline);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgb(var(--l));
+
+    &::before {
+      content: '';
+      width: 3px;
+      height: 13px;
+      border-radius: 1px;
+      background: rgb(var(--l));
+    }
+  }
+
+  /* Solo el paso actual. Al operar no interesa el itinerario. */
+  .paso-actual {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--pc);
+    white-space: nowrap;
+  }
+
+  .pasos {
+    display: flex;
+    gap: 3px;
+    flex: none;
+
+    i {
+      width: 16px;
+      height: 3.5px;
+      border-radius: 999px;
+      background: #e1e9f6;
+      animation: brox-paso 420ms var(--curva) both;
+    }
+
+    i.hecho {
+      background: color-mix(in srgb, var(--pc) 38%, #e1e9f6);
+    }
+
+    i.aqui {
+      background: var(--pc);
+      box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--pc) 16%, transparent);
+    }
+  }
+
+  .ruta .e {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+}
+
+@keyframes brox-paso {
+  from {
+    opacity: 0;
+    transform: scaleX(0.2);
+  }
+}
+
+/* ====================================================================
+   SECCIONES DEL CUERPO
+   ==================================================================== */
+
+.rz {
+  padding: 10px 13px 11px;
+
+  > p {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--ink-2);
+  }
+}
+
+/* Canto de 3 px y versalita teñida: el mismo recurso del expediente.
+   Ninguna cabecera de sección lleva icono (D-E2-1). */
+.cab-rz {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+  --sc: var(--ink-3);
+
+  .kicker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+    padding-left: 11px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--sc) 80%, var(--ink));
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 3px;
+      height: 11px;
+      margin-top: -5.5px;
+      border-radius: 1px;
+      background: var(--sc);
+    }
+  }
+}
+
+.n-sec {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink-3) 12%, transparent);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.placa {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--sc);
+  background: color-mix(in srgb, var(--sc) 11%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc) 17%, transparent);
+
+  &.mini {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+  }
+}
+
+/* ====================================================================
+   HALLAZGO · editorial, y solo cuando existe
+   ==================================================================== */
+
+.hallazgo {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 13px 13px;
+  /* Es la pieza más alta de la pila: se le nota. */
+  background: linear-gradient(168deg, #ffffff 0%, #fbfefc 58%, #f2faf6 100%) !important;
+  border-color: color-mix(in srgb, var(--positivo) 24%, #e4edfb) !important;
+  box-shadow:
+    0 1px 2px rgba(16, 32, 56, 0.05),
+    0 10px 24px -14px color-mix(in srgb, var(--positivo) 42%, transparent) !important;
+
+  .cab-rz {
+    margin-bottom: 11px;
+  }
+
+  .q {
+    margin: 0;
+    font-size: 15.5px;
+    line-height: 21px;
+    font-weight: 650;
+    letter-spacing: -0.016em;
+  }
+
+  .c {
+    margin: 5px 0 0;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--ink-2);
+  }
+}
+
+/* Puntero: ya es un asunto del foco, aquí no se vuelve a pedir acción. */
+.en-cola {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accion);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+}
+
+.mas {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--accion);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+
+  cl-icono {
+    transition: transform var(--t1) ease;
+  }
+
+  &:hover cl-icono {
+    transform: translateX(3px);
+  }
+}
+
+/* Una fila de agenda / de hallazgo secundario. */
+.ag {
+  display: grid;
+  grid-template-columns: 56px 17px minmax(0, 1fr);
+  gap: 9px;
+  padding: 4px 0;
+  align-items: center;
+
+  /* Un hallazgo no tiene día: la columna de la fecha no se deja vacía, se
+     quita. Un hueco de 56 px sin nada dentro se lee como un dato perdido. */
+  &.sin-dia {
+    grid-template-columns: 17px minmax(0, 1fr);
+  }
+
+  .q {
+    font-size: 13px;
+    line-height: 19px;
+
+    b {
+      font-weight: 600;
+    }
+
+    span {
+      color: var(--ink-2);
+    }
+
+    button {
+      font-weight: 600;
+      color: var(--accion);
+      cursor: pointer;
+
+      &:hover {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+    }
+  }
+}
+
+.vacio-radar p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+/* ====================================================================
+   CONMUTADOR DE VISTAS · filete a todo el ancho, sin fondo ni caja
+   ==================================================================== */
+
+.radar-cuerpo > .vistas {
+  position: relative;
+  display: flex;
+  gap: 22px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--radar-linea);
+  }
+
+  .ind {
+    position: absolute;
+    left: 3px;
+    bottom: 0;
+    height: 2px;
+    width: var(--w, 70px);
+    background: var(--ink);
+    transform: translateX(var(--x, 0));
+    /* El resorte de `linear()`: un rebote contenido, sin librería. */
+    transition:
+      transform 420ms var(--muelle),
+      width 420ms var(--muelle);
+  }
+
+  button {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 1px 9px;
+    font-size: 12.5px;
+    font-weight: 550;
+    color: var(--ink-3);
+    cursor: pointer;
+    transition: color 220ms var(--curva);
+
+    &.on {
+      color: var(--ink);
+      font-weight: 650;
+    }
+
+    &:not(.on):hover {
+      color: var(--ink-2);
+    }
+
+    .k {
+      min-width: 16px;
+      padding: 0 4px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 15px;
+      text-align: center;
+      color: var(--ink-3);
+      background: rgba(16, 32, 56, 0.07);
+    }
+
+    &.on .k {
+      color: var(--ink);
+      background: rgba(16, 32, 56, 0.1);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-cuerpo > .vistas .ind {
+    transition: none;
+  }
+}
+
+/* ====================================================================
+   MODO RESOLVER
+   ==================================================================== */
+
+.reco {
+  position: relative;
+  overflow: hidden;
+  padding: 11px 13px 12px;
+  background: linear-gradient(168deg, #ffffff 0%, #fcfdff 52%, #f4f8ff 100%) !important;
+  border-color: #dce8fb !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(20, 25, 30, 0.05),
+    0 14px 30px -16px rgba(37, 99, 235, 0.3) !important;
+
+  /* El contenido por encima de la firma. **No es `> *`**: ese selector
+     alcanzaba también a la malla y le devolvía `position: relative`, que la
+     sacaba de su capa y la metía en el flujo — 400 px de hueco antes de «qué
+     hacer ahora». Se nombran los hijos que sí van encima. */
+  > .cab,
+  > .que,
+  > .kk-para,
+  > .para,
+  > .control {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* La firma de BROX, detrás y casi invisible. */
+  cl-malla-brox {
+    right: -52px;
+    bottom: -46px;
+    width: 158px;
+    height: 158px;
+    opacity: 0.05;
+    --malla-trazo: var(--accion);
+    --malla-grosor: 0.9;
+    --malla-nodo: var(--oro);
+  }
+
+  .cab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-bottom: 7px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #edf3fd;
+
+    cl-icono {
+      color: var(--accion);
+      flex: none;
+    }
+
+    > span {
+      font-size: 9.5px;
+      font-weight: 650;
+      letter-spacing: 0.19em;
+      text-transform: uppercase;
+      color: var(--accion);
+    }
+  }
+
+  .que {
+    margin: 0;
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 650;
+    letter-spacing: -0.018em;
+  }
+
+  /* «Para qué» va pegado a su frase: son una sola cosa. */
+  .kk-para {
+    display: block;
+    margin: 8px 0 1px;
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .para {
+    margin: 0;
+    font-size: 13px;
+    line-height: 18.5px;
+    color: var(--ink-2);
+  }
+
+  .control {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 9px;
+  }
+
+  .sin-destino {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--ink-2);
+  }
+}
+
+/* Atribución: sobre cuántos hechos se apoya esto. Pulsarlo los ilumina —
+   la frase deja de ser una frase y pasa a tener respaldo. */
+.senales {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #dee8f9;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-3);
+  transition:
+    background var(--t1) ease,
+    border-color var(--t1) ease,
+    color var(--t1) ease;
+
+  cl-icono {
+    color: var(--oro);
+    transition: color var(--t1) ease;
+  }
+
+  &:hover {
+    background: var(--accion-p);
+    border-color: var(--accion-b);
+    color: var(--accion);
+
+    cl-icono {
+      color: var(--accion);
+    }
+  }
+}
+
+/* El destello de atribución: dura lo justo para ver DÓNDE mira. */
+.senalada {
+  animation: brox-destacar 1500ms var(--curva) 1;
+  border-radius: 4px;
+}
+
+@keyframes brox-destacar {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    background: transparent;
+  }
+
+  18% {
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.13);
+    background: rgba(37, 99, 235, 0.06);
+  }
+
+  100% {
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0);
+    background: transparent;
+  }
+}
+
+/* --- El botón que ejecuta ------------------------------------------- */
+
+/* El ángulo, registrado: sin `@property` el navegador no sabe interpolar
+   un `conic-gradient` y el haz no se movería. */
+@property --giro {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.bt-p {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2e6df3, #1d4ed8);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(29, 78, 216, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition:
+    filter var(--t1) ease,
+    transform var(--t1) ease,
+    background 260ms var(--curva),
+    box-shadow 260ms var(--curva);
+
+  &.ancho {
+    width: 100%;
+  }
+
+  &:hover {
+    filter: brightness(1.07);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+
+  /* EL HAZ: un cono que gira, enmascarado a 2 px de canto. El arco ocupa
+     130° — con 68° la luz pasaba tan rápido que no se veía. */
+  .haz {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    pointer-events: none;
+    padding: 2px;
+    transition: opacity 240ms var(--curva);
+    background: conic-gradient(
+      from var(--giro),
+      transparent 0deg,
+      transparent 230deg,
+      rgba(255, 255, 255, 0.3) 280deg,
+      rgba(255, 255, 255, 0.92) 328deg,
+      #ffffff 342deg,
+      rgba(255, 255, 255, 0.3) 356deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  &:hover .haz {
+    opacity: 0.8;
+    animation: brox-girar 2600ms linear infinite;
+  }
+
+  .et {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition:
+      opacity 190ms var(--curva),
+      transform 190ms var(--curva);
+  }
+
+  .curso {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    transition: opacity 190ms var(--curva);
+  }
+
+  /* Mientras ejecuta, el azul baja DOS paradas y sale un anillo: dice
+     «esto está ocurriendo» sin apagar el botón. */
+  &.trabajando {
+    background: linear-gradient(180deg, #16409f, #0b2570);
+    box-shadow:
+      0 0 0 3px rgba(37, 99, 235, 0.2),
+      0 2px 10px -2px rgba(11, 37, 112, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+    .haz {
+      opacity: 1;
+      animation: brox-girar 760ms linear infinite;
+    }
+
+    .et {
+      opacity: 0.55;
+    }
+  }
+
+  /* Y al terminar, la marca se DIBUJA. No aparece: se traza. */
+  &.listo {
+    background: linear-gradient(180deg, #1ba968, #158a54);
+    box-shadow:
+      0 1px 2px rgba(21, 138, 84, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+
+    .haz {
+      opacity: 0;
+    }
+
+    .et {
+      opacity: 0;
+      transform: translateY(-7px);
+    }
+
+    .curso {
+      opacity: 1;
+    }
+  }
+
+  .curso .ok {
+    path {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 30;
+      stroke-dashoffset: 30;
+    }
+  }
+
+  &.listo .curso .ok path {
+    animation: brox-trazar-ok 300ms var(--curva) forwards;
+  }
+}
+
+@keyframes brox-girar {
+  to {
+    --giro: 360deg;
+  }
+}
+
+@keyframes brox-trazar-ok {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.bt-t {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  color: var(--accion);
+  transition: color var(--t1) ease;
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+
+  /* Cancelar no es la acción: no compite en color con el botón. */
+  &.descartar {
+    color: var(--ink-3);
+    font-weight: 500;
+
+    &:hover {
+      color: var(--riesgo);
+    }
+  }
+}
+
+/* --- Cómo está ------------------------------------------------------- */
+
+.ahora {
+  ul {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Un punto por hecho, del color de ESE hecho. Antes los tres compartían
+     el tono del asunto y una buena noticia se leía como una alarma. */
+  li {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 15px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    font-size: 13px;
+    line-height: 19px;
+    color: var(--ink-2);
+
+    + li {
+      margin-top: 5px;
+    }
+
+    cl-icono {
+      margin-top: 2.5px;
+      color: var(--marca);
+    }
+
+    b {
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    &.hecho {
+      --marca: var(--positivo);
+    }
+
+    &.falta {
+      --marca: var(--atencion);
+    }
+
+    &.plazo {
+      --marca: var(--riesgo);
+    }
+
+    &.freno {
+      --marca: var(--riesgo);
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    &.dato {
+      --marca: var(--ink-3);
+    }
+  }
+}
+
+/* Solo donde hay algo real que contar: documentos, observaciones,
+   criterios. Es lo que responde «cuánto me falta» de un vistazo. */
+.avance {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 9px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+
+  .barra {
+    display: flex;
+    gap: 3px;
+    flex: none;
+
+    i {
+      width: 15px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--hairline);
+      transition: background var(--t2) var(--curva);
+
+      &.on {
+        background: var(--positivo);
+      }
+    }
+  }
+
+  b {
+    font-weight: 650;
+    color: var(--ink);
+  }
+}
+
+.proximo {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--radar-linea);
+  font-size: 13px;
+
+  .e {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  b {
+    font-weight: 600;
+  }
+
+  &.sin {
+    color: var(--ink-2);
+  }
+}
+
+/* ====================================================================
+   ANTECEDENTES · cuatro renglones, no cuatro fechas
+   ==================================================================== */
+
+/* La lectura de BROX: una frase, no un párrafo. Es lo primero que se ve
+   al abrir, y lo que evita atar los cuatro renglones a mano. */
+.lectura {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin: 0 0 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: linear-gradient(148deg, var(--accion-p) 0%, rgba(37, 99, 235, 0.028) 100%);
+  border: 1px solid var(--accion-b);
+  border-left: 2px solid var(--accion);
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink);
+
+  cl-icono {
+    margin-top: 2px;
+    color: var(--accion);
+  }
+}
+
+.ant-fila {
+  display: grid;
+  gap: 2px;
+  padding: 7px 0 8px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--ink);
+  --e: var(--ink-3);
+  animation: brox-aflorar 380ms var(--curva) both;
+  animation-delay: calc(var(--j, 0) * 55ms + 60ms);
+
+  &:first-of-type {
+    padding-top: 2px;
+  }
+
+  + .ant-fila {
+    border-top: 1px solid var(--radar-linea);
+  }
+
+  &.e-bien {
+    --e: var(--positivo);
+  }
+
+  &.e-ojo {
+    --e: var(--atencion);
+  }
+
+  &.e-mal {
+    --e: var(--riesgo);
+  }
+
+  /* El rótulo lleva el color del estado del renglón; el dato, tinta
+     plena. Sin icono y con la señal donde no compite: en la etiqueta. */
+  .f {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+
+    .iz {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .n {
+      min-width: 0;
+    }
+  }
+
+  .v {
+    display: block;
+    color: var(--ink);
+
+    b {
+      font-weight: 650;
+      color: var(--ink);
+    }
+  }
+
+  &.e-bien .f,
+  &.e-ojo .f,
+  &.e-mal .f {
+    color: color-mix(in srgb, var(--e) 82%, var(--ink));
+  }
+
+  /* Con señal: a la versalita le crece un canto delante. Es el mismo
+     canto del lado y del filtro — un solo idioma. */
+  &.e-bien .f .n::before,
+  &.e-ojo .f .n::before,
+  &.e-mal .f .n::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 9px;
+    margin-right: 8px;
+    vertical-align: -1px;
+    border-radius: 1px;
+    background: var(--e);
+  }
+}
+
+/* Ventana consumida. Sin cifra propia no es un dato, es un adorno. */
+.ant-medida {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+
+  .r {
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: 0;
+    text-transform: none;
+    font-variant-numeric: tabular-nums;
+    color: var(--e);
+  }
+
+  /* Cuando el plazo se pasa, el rótulo lo dice con su signo. */
+  &.pasada .r {
+    font-weight: 700;
+  }
+}
+
+/* El riel tiene que verse con el relleno al 8 %, o la barra desaparece. */
+.ant-b {
+  flex: none;
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-3) 20%, transparent);
+  overflow: hidden;
+
+  i {
+    display: block;
+    height: 100%;
+    width: var(--w);
+    border-radius: 999px;
+    background: var(--e);
+    /* Se dibuja al abrir, no antes: si la barra ya está llena cuando
+       despliegas, el gesto no cuenta nada. */
+    animation: brox-crecer 720ms var(--curva) 260ms both;
+  }
+}
+
+@keyframes brox-crecer {
+  from {
+    width: 0;
+  }
+}
+
+.ant-s {
+  flex: none;
+  color: var(--e);
+  overflow: visible;
+
+  polyline {
+    stroke-dasharray: 70;
+    stroke-dashoffset: 70;
+    animation: brox-trazar 820ms var(--curva) 260ms forwards;
+  }
+
+  circle {
+    opacity: 0;
+    animation: brox-puntear 260ms 940ms var(--curva) forwards;
+  }
+}
+
+@keyframes brox-trazar {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brox-puntear {
+  to {
+    opacity: 1;
+  }
+}
+
+/* El contraste: la posición del dato dentro de TU operación. Sin esto,
+   «US$ 4,500» no dice si es caro, barato o normal. */
+.vs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--ink-3);
+
+  b {
+    font-weight: 700;
+    color: var(--ink-2);
+  }
+
+  .esc {
+    position: relative;
+    flex: none;
+    width: 54px;
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e7edf8, #c9d8ee);
+
+    i {
+      position: absolute;
+      top: 50%;
+      left: var(--x);
+      width: 3px;
+      height: 10px;
+      margin: -5px 0 0 -1.5px;
+      border-radius: 2px;
+      background: var(--e);
+      box-shadow: 0 0 0 2px #fff;
+      animation: brox-situar 640ms var(--curva) 300ms both;
+    }
+  }
+}
+
+@keyframes brox-situar {
+  from {
+    left: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-cuerpo > *,
+  .ant-fila,
+  .ant-b i,
+  .ant-s polyline,
+  .ant-s circle,
+  .vs .esc i,
+  .radar-caso .pasos i {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+
+  .bt-p .haz {
+    animation: none;
+  }
+
+  .vivo i {
+    animation: none;
+  }
+}

@@ -1,0 +1,114 @@
+<!--
+  LA VENTANA RÁPIDA. Lo que se ofrece cierra EL hecho que se enuncia arriba: si
+  falta cerrar la visita, aquí están «se realizó» y «no se realizó», no un
+  formulario general.
+-->
+@if (error(); as fallo) {
+  <p class="fallo">{{ fallo }}</p>
+}
+
+@switch (forma()) {
+  @case ('CERRAR_VISITA') {
+    @if (paso() === 'no-realizada') {
+      <label class="campo">
+        <span>Por qué no se realizó</span>
+        <input
+          type="text"
+          placeholder="Ej.: el cliente no llegó y no avisó"
+          [value]="motivo()"
+          (input)="motivo.set($any($event.target).value)"
+        />
+      </label>
+      <div class="botones">
+        <button type="button" class="bt-p" [disabled]="guardando()" (click)="marcarNoRealizada()">
+          Registrar
+        </button>
+        <button type="button" class="bt-t" [disabled]="guardando()" (click)="volver()">
+          Volver
+        </button>
+      </div>
+    } @else {
+      <div class="botones">
+        <button type="button" class="bt-p" [disabled]="guardando()" (click)="marcarRealizada()">
+          Sí, se realizó
+        </button>
+        <button
+          type="button"
+          class="bt-s"
+          [disabled]="guardando()"
+          (click)="paso.set('no-realizada')"
+        >
+          No se realizó
+        </button>
+      </div>
+      <button type="button" class="bt-t suelto" (click)="abrirExpediente.emit()">
+        Abrir el expediente
+        <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+      </button>
+    }
+  }
+
+  @case ('REGISTRAR_CONTACTO') {
+    @if (paso() === 'contacto') {
+      <div class="campos">
+        <label class="campo">
+          <span>Por dónde</span>
+          <select [value]="canal()" (change)="canal.set($any($event.target).value)">
+            <option value="">Elige…</option>
+            @for (opcion of opcionesCanal; track opcion.valor) {
+              <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+            }
+          </select>
+        </label>
+        <label class="campo">
+          <span>Cómo salió</span>
+          <select [value]="resultado()" (change)="resultado.set($any($event.target).value)">
+            <option value="">Elige…</option>
+            @for (opcion of opcionesResultado; track opcion.valor) {
+              <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+            }
+          </select>
+        </label>
+      </div>
+      <label class="campo">
+        <span>Nota (opcional)</span>
+        <input
+          type="text"
+          placeholder="Lo que convenga recordar"
+          [value]="nota()"
+          (input)="nota.set($any($event.target).value)"
+        />
+      </label>
+      <div class="botones">
+        <button type="button" class="bt-p" [disabled]="guardando()" (click)="registrarContacto()">
+          Registrar el contacto
+        </button>
+        <button type="button" class="bt-t" [disabled]="guardando()" (click)="volver()">
+          Volver
+        </button>
+      </div>
+    } @else {
+      <div class="botones">
+        <button type="button" class="bt-p" [disabled]="guardando()" (click)="paso.set('contacto')">
+          Registrar el contacto
+        </button>
+      </div>
+      <button type="button" class="bt-t suelto" (click)="abrirExpediente.emit()">
+        Abrir el expediente
+        <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+      </button>
+    }
+  }
+
+  @default {
+    <!--
+      Sin forma rápida: no se inventa una. Evaluar una solicitud o conformar
+      documentos no cabe en una columna de 340 px, y fingir que sí sería peor
+      que el viaje a su pantalla.
+    -->
+    <button type="button" class="bt-p ancho" (click)="abrirExpediente.emit()">
+      Abrir el expediente
+      <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+    </button>
+  }
+}

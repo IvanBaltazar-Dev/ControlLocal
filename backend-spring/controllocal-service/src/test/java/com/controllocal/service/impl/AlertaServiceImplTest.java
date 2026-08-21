@@ -20,6 +20,7 @@ import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Transiciones;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,9 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,6 +45,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -307,8 +312,154 @@ class AlertaServiceImplTest {
     }
 
     // ------------------------------------------------------------------
+    // Reconciliacion simetrica: la campana no puede contradecir a la cola
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>El bug que esto cierra.</b> La tarea de la bandeja se auto-completa al
+     * reconciliar, asi que en cuanto alguien contactaba la prospeccion la tarea
+     * desaparecia y el aviso se quedaba activo: la campana enseñaba PRO-0003 y
+     * PRO-0005 mientras la cola iba por otras. Dos representaciones activas del
+     * mismo hecho, diciendo cosas distintas.
+     */
+    @Test
+    void elAvisoSeCierraSoloCuandoElRecontactoDejaDeEstarVencido() {
+        Alerta viva = alertaDeRecontacto(11L);
+        when(alertas.recontactosQueYaNoAplican(eq(ORG), eq("PROSPECCION"),
+                eq(Alerta.SIN_RESPUESTA), any(LocalDate.class)))
+                .thenReturn(List.of(viva));
+        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
+                any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        assertEquals(0, service.sincronizarRecontacto(agente));
+
+        verify(alertas).save(viva);
+        assertEquals(Alerta.DESCARTADA, viva.getEstado());
+        assertNotNull(viva.getFechaResolucion(), "ck_alerta_resolucion la exige al cerrar");
+        assertFalse(viva.estaActiva());
+    }
+
+    /**
+     * <b>Cerrado por el sistema no es lo mismo que atendido por alguien.</b> Las
+     * dos apagan el aviso, pero la auditoria tiene que poder distinguir si una
+     * persona decidio o si el mundo cambio.
+     */
+    @Test
+    void elCierreAutomaticoNoSeDisfrazaDeAtendido() {
+        Alerta viva = alertaDeRecontacto(11L);
+        when(alertas.recontactosQueYaNoAplican(anyLong(), anyString(), anyString(),
+                any(LocalDate.class))).thenReturn(List.of(viva));
+        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
+                any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.sincronizarRecontacto(agente);
+
+        assertNotEquals(Alerta.ATENDIDA, viva.getEstado());
+    }
+
+    /**
+     * El plazo de cierre es <b>el mismo</b> de la politica que el de creacion.
+     * Dos redacciones de la misma regla volverian a separarse: es exactamente
+     * lo que pasaba con el plazo de recontacto repetido en cinco sitios.
+     */
+    @Test
+    void abrirYCerrarUsanElMismoPlazoDeLaPolitica() {
+        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
+                any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.sincronizarRecontacto(agente);
+
+        LocalDate limite = LocalDate.now().minusDays(7);
+        verify(alertas).recontactosQueYaNoAplican(ORG, "PROSPECCION", Alerta.SIN_RESPUESTA, limite);
+        verify(prospecciones).recontactables(eq(ORG), eq(true), eq(List.of(-1L)), eq(limite),
+                any(Pageable.class));
+    }
+
+    /**
+     * Se cierra ANTES de crear. Al reves, un aviso recien creado para una
+     * prospeccion justo en el limite podria caer en la misma pasada si las dos
+     * consultas vieran instantes distintos.
+     */
+    @Test
+    void primeroSeCierraLoQueSobraYDespuesSeCreaLoQueFalta() {
+        when(alertas.recontactosQueYaNoAplican(anyLong(), anyString(), anyString(),
+                any(LocalDate.class))).thenReturn(List.of(alertaDeRecontacto(11L)));
+        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
+                any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(prospeccion(12L, "PRO-0002"))));
+        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
+
+        service.sincronizarRecontacto(agente);
+
+        InOrder orden = inOrder(alertas);
+        orden.verify(alertas).recontactosQueYaNoAplican(anyLong(), anyString(), anyString(),
+                any(LocalDate.class));
+        orden.verify(alertas).existeActivaDe(anyLong(), anyString(), anyLong(), anyString());
+    }
+
+    /**
+     * <b>Repetir el barrido no mueve nada.</b> `GET /alertas` sincroniza en cada
+     * lectura, asi que abrir la campana tres veces no puede dejar tres avisos ni
+     * reabrir el que se cerro.
+     */
+    @Test
+    void barridosRepetidosNoDuplicanNiReabren() {
+        Prospeccion vencida = prospeccion(12L, "PRO-0002");
+        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
+                any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(vencida)));
+        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
+
+        assertEquals(1, service.sincronizarRecontacto(agente));
+
+        // Segunda pasada: ya hay una activa para esa prospeccion.
+        when(alertas.existeActivaDe(ORG, "PROSPECCION", 12L, Alerta.SIN_RESPUESTA)).thenReturn(true);
+        assertEquals(0, service.sincronizarRecontacto(agente));
+        assertEquals(0, service.sincronizarRecontacto(agente));
+
+        verify(alertas, times(1)).save(any(Alerta.class));
+    }
+
+    /**
+     * <b>Volver a vencer abre un ciclo nuevo, no reabre el viejo.</b> Es una
+     * decision, no un efecto: un recontacto vencido en agosto y otro en octubre
+     * son dos hechos, y reactivar el primero perderia que hubo un contacto en
+     * medio — que es justo lo que la auditoria necesita poder leer.
+     */
+    @Test
+    void siVuelveAVencerSeAbreUnCicloNuevo() {
+        Alerta delCicloAnterior = alertaDeRecontacto(12L);
+        delCicloAnterior.descartar();
+
+        Prospeccion vencidaOtraVez = prospeccion(12L, "PRO-0002");
+        when(prospecciones.recontactables(anyLong(), anyBoolean(), anyCollection(),
+                any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(vencidaOtraVez)));
+        // Descartada no es activa, asi que el guardado de duplicados no la ve.
+        when(alertas.existeActivaDe(ORG, "PROSPECCION", 12L, Alerta.SIN_RESPUESTA)).thenReturn(false);
+        when(agentes.getReferenceById(ROL_AGENTE)).thenReturn(detalleAgente("Valentina Mora"));
+
+        assertEquals(1, service.sincronizarRecontacto(agente));
+
+        Alerta nueva = alertaGuardada();
+        assertNotSame(delCicloAnterior, nueva, "el aviso viejo no se reabre");
+        assertTrue(nueva.estaActiva());
+        assertEquals(Alerta.DESCARTADA, delCicloAnterior.getEstado());
+    }
+
+    // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
+
+    /** Un aviso de recontacto vivo, del tipo y la entidad que barre la campana. */
+    private static Alerta alertaDeRecontacto(Long idProspeccion) {
+        Alerta alerta = alerta("PROSPECCION", idProspeccion);
+        alerta.setTipo(Alerta.SIN_RESPUESTA);
+        return alerta;
+    }
 
     private static DatosAlerta datos(Long idRolAgente, Long entidadId) {
         return new DatosAlerta(Alerta.SIN_AVANCE, Alerta.INFO, "PROSPECCION", entidadId,

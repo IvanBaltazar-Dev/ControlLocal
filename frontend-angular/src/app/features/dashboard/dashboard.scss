@@ -1,904 +1,953 @@
+/* ====================================================================
+   INICIO · foco y resolución
+   --------------------------------------------------------------------
+   Portado de `docs/ai/prototipos/inicio.html`. Los valores están
+   copiados, no reinterpretados: si algo tiene que cambiar, cambia en el
+   prototipo y baja aquí.
+
+   El armazón —`.lienzo`, `.cab-dia`, `.titular`, `.rejilla`, `.izq`,
+   `.cab-zona`— vive en `styles.scss` desde la tanda de la fundación
+   visual, porque lo comparten el Inicio y los Indicadores. Aquí van
+   solo las piezas propias de esta pantalla.
+   ==================================================================== */
+
 :host {
   display: block;
 }
 
-/* El selector de periodo va en la cabecera, con su etiqueta visible. */
-.periodo {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.78rem;
-  color: var(--cl-tinta-suave);
+/* ====================================================================
+   CABECERA DE ZONA
+   ==================================================================== */
 
-  select {
-    padding: 0.45rem 0.6rem;
-    border: 1px solid var(--cl-borde);
-    border-radius: 0.45rem;
-    background: var(--cl-superficie);
-    color: var(--cl-tinta);
-    font: inherit;
-    font-size: 0.84rem;
+.cab-zona {
+  .t {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .n {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--oro);
+  }
+
+  .mas-t {
+    font-size: 11.5px;
+    color: var(--ink-3);
   }
 }
 
-/*
-  E2.1 — Cabecera de decisión. Es lo primero que se lee, así que pesa más que
-  una tarjeta: fondo del color de la marca y una frase, no un número suelto.
-  La franja lateral cambia de acento a verde cuando no hay nada pendiente —el
-  único caso en que la cabecera es una buena noticia y no una lista de trabajo—.
-*/
-.decision {
-  margin-bottom: 1rem;
-  padding: 1rem 1.15rem;
-  border-radius: var(--cl-radio);
-  border-left: 5px solid var(--cl-acento);
-  background: var(--cl-primario);
-  color: #fff;
-  box-shadow: var(--cl-sombra);
-
-  &.tranquila {
-    border-left-color: var(--cl-exito);
-  }
-
-  .titular {
-    margin: 0;
-    font-size: 1.18rem;
-    line-height: 1.35;
-    font-weight: 500;
-
-    b {
-      font-size: 1.6rem;
-      font-weight: 700;
-      margin-right: 0.15rem;
-    }
-  }
-
-  .apoyo {
-    margin: 0.3rem 0 0;
-    font-size: 0.87rem;
-    /* Legible sobre el fondo oscuro sin competir con el titular. */
-    color: rgba(255, 255, 255, 0.82);
-  }
-
-  .separador {
-    margin: 0 0.4rem;
-    color: rgba(255, 255, 255, 0.45);
-  }
-}
-
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-/* Sin muestra no hay porcentaje: el guion ocupa el sitio del número. */
-.medidor-valor.sin-dato {
-  color: var(--cl-tinta-suave);
-}
-
-/* El KPI enlazado se comporta como tarjeta clicable sin heredar el subrayado. */
-.kpi-enlace {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  border-radius: var(--cl-radio);
-  transition: transform 0.12s ease;
-
-  &:hover,
-  &:focus-visible {
-    transform: translateY(-1px);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--cl-primario-claro);
-    outline-offset: 2px;
-  }
-}
-
-/* La columna principal es más ancha que en una ficha: aquí manda la bandeja. */
-.cl-columnas.anchas {
-  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
-}
-
-.tareas,
-.focos {
+/* Grupo segmentado, rectilíneo: los puntos redondos y la cápsula leían
+   «app de consumo». El activo se marca con un canto inferior del color
+   de su lado — el mismo idioma que el lavado de las filas. */
+.filtros {
+  margin-left: auto;
   display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.7rem 0.8rem;
-    border: 1px solid var(--cl-borde);
-    border-radius: 0.6rem;
-    background: color-mix(in srgb, var(--cl-fondo) 45%, var(--cl-superficie));
-  }
-
-  .cuerpo {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .titulo {
-    margin: 0 0 0.15rem;
-    font-weight: 620;
-    font-size: 0.9rem;
-    overflow-wrap: anywhere;
-  }
-
-  p {
-    margin: 0;
-  }
-}
-
-.acciones-tarea {
-  display: flex;
-  flex-shrink: 0;
-  gap: 0.4rem;
-}
-
-/* El número del foco es el dato, así que lleva el peso visual de la fila. */
-.focos .valor {
-  flex-shrink: 0;
-  min-width: 2.4rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 0.5rem;
-  background: #eef1f6;
-  color: var(--cl-tinta);
-  font-size: 1.05rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-
-  &.tono-rojo {
-    background: color-mix(in srgb, var(--cl-error) 12%, transparent);
-    color: var(--cl-error);
-  }
-
-  &.tono-ambar {
-    background: color-mix(in srgb, #e08a00 16%, transparent);
-    color: #8a5400;
-  }
-
-  &.tono-verde {
-    background: color-mix(in srgb, var(--cl-exito) 14%, transparent);
-    color: var(--cl-exito);
-  }
-
-  &.tono-azul,
-  &.tono-info {
-    background: color-mix(in srgb, var(--cl-primario-claro) 12%, transparent);
-    color: var(--cl-primario);
-  }
-}
-
-/*
- * Abre el panel con la bandeja entera. Ocupa el ancho de la tarjeta y lleva
- * cuántas quedan fuera: sin ese número, "Ver las 32" no dice si te estás
- * perdiendo dos o veintisiete.
- */
-.ver-todas {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  margin-top: 0.7rem;
-
-  .restantes {
-    padding: 0.05rem 0.45rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--cl-primario-claro) 12%, transparent);
-    color: var(--cl-primario);
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
-  }
-}
-
-/* En el panel el fondo ya es gris: las filas van en blanco o se pierden. */
-.tareas.en-panel li {
-  background: var(--cl-superficie);
-}
-
-/*
- * Chips de prioridad del panel. Filtro de un solo eje y con pocos valores:
- * botones a la vista, no un `<select>` que esconde las opciones y su cuenta.
- */
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-}
-
-.chip {
-  --tono-chip: var(--cl-primario);
-
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--cl-borde);
-  border-radius: 999px;
-  background: var(--cl-superficie);
-  color: var(--cl-tinta-suave);
-  font-size: 0.82rem;
-  font-weight: 650;
-  cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease,
-    color 0.12s ease;
-
-  &.mal {
-    --tono-chip: var(--cl-error);
-  }
-
-  &.aviso {
-    --tono-chip: #8a5400;
-  }
-
-  b {
-    padding: 0 0.35rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--tono-chip) 12%, transparent);
-    color: var(--tono-chip);
-    font-variant-numeric: tabular-nums;
-  }
-
-  &:hover:not(.activo) {
-    border-color: var(--tono-chip);
-    color: var(--cl-tinta);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--cl-primario-claro);
-    outline-offset: 1px;
-  }
-
-  &.activo {
-    border-color: var(--tono-chip);
-    background: var(--tono-chip);
-    color: #fff;
-
-    b {
-      background: rgba(255, 255, 255, 0.24);
-      color: #fff;
-    }
-  }
-}
-
-/*
- * Barra apilada: un gap de superficie entre tramos los separa sin necesidad de
- * un borde, que engordaría los tramos pequeños.
- */
-.barra {
-  display: flex;
-  gap: 2px;
-  height: 1.35rem;
-  margin-bottom: 0.9rem;
-  border-radius: 0.4rem;
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
   overflow: hidden;
-  background: var(--cl-borde);
-}
+  background: var(--surface);
 
-.tramo {
-  min-width: 3px;
-}
-
-.leyenda {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: 0.35rem 1.2rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.85rem;
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .punto {
-    width: 0.6rem;
-    height: 0.6rem;
-    flex-shrink: 0;
-    border-radius: 3px;
-  }
-
-  .nombre {
-    flex: 1;
-    min-width: 0;
-  }
-
-  b {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .pct {
-    min-width: 2.6rem;
-    text-align: right;
-  }
-}
-
-.senales {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
-  gap: 0.6rem;
-}
-
-/* Medidor: un ratio contra su límite, con el número como figura principal. */
-.medidor-valor {
-  margin: 0 0 0.4rem;
-  font-size: 2.4rem;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--cl-primario);
-  font-variant-numeric: tabular-nums;
-
-  span {
-    margin-left: 0.15rem;
-    font-size: 1.1rem;
+  button {
+    position: relative;
+    padding: 4px 11px 5px;
+    font-size: 11px;
     font-weight: 600;
-    color: var(--cl-tinta-suave);
+    letter-spacing: 0.01em;
+    color: var(--ink-3);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color var(--t1) ease,
+      background var(--t1) ease;
+
+    + button {
+      border-left: 1px solid var(--hairline);
+    }
+
+    &:hover {
+      color: var(--ink-2);
+      background: var(--hueco);
+    }
+
+    &.on {
+      color: var(--ink);
+      background: var(--hueco);
+
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background: rgb(var(--l, 20, 25, 30));
+      }
+    }
+
+    &[data-f='oferta'] {
+      --l: var(--lado-oferta);
+    }
+
+    &[data-f='demanda'] {
+      --l: var(--lado-demanda);
+    }
+
+    b {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
   }
-}
-
-.medidor {
-  height: 0.5rem;
-  margin-bottom: 0.9rem;
-  border-radius: 999px;
-  background: var(--cl-borde);
-  overflow: hidden;
-
-  i {
-    display: block;
-    height: 100%;
-    border-radius: 999px;
-    background: var(--cl-primario-claro);
-  }
-}
-
-.avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin-right: 0.45rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cl-primario-claro) 15%, transparent);
-  color: var(--cl-primario);
-  font-size: 0.65rem;
-  font-weight: 700;
-  vertical-align: middle;
-}
-
-.cl-tarjeta + .cl-tarjeta {
-  margin-top: 0;
-}
-
-@media (max-width: 60rem) {
-  .cl-columnas.anchas {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ---------------------------------------------------------------------
-   LO QUE BROX ENCONTRÓ
-
-   Separada de la bandeja también en lo visual: la bandeja reclama y esto
-   propone. Sin numeración (no compite por un puesto), sin semáforo (no hay
-   nada vencido) y con el canto verde que D-E2-1 §? reserva para las buenas
-   noticias.
-   --------------------------------------------------------------------- */
-.hallazgos {
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--cl-borde, #e5e7eb);
-}
-
-.hallazgos h3 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--cl-tinta-2, #4b5563);
-}
-
-.hallazgos h3 .cuenta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.35rem;
-  border-radius: 6px;
-  background: var(--cl-verde-suave, #dcfce7);
-  color: var(--cl-verde-tinta, #166534);
-  font-size: 0.6875rem;
-  letter-spacing: 0;
-}
-
-.hallazgos .cl-sub {
-  margin: 0.25rem 0 0.75rem;
-  font-size: 0.8125rem;
-  color: var(--cl-tinta-3, #6b7280);
-}
-
-.hallazgos ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.hallazgos a {
-  display: grid;
-  gap: 0.15rem;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--cl-borde, #e5e7eb);
-  border-left: 3px solid var(--cl-verde, #16a34a);
-  border-radius: 8px;
-  text-decoration: none;
-  color: inherit;
-  transition: background 120ms ease;
-}
-
-.hallazgos a:hover,
-.hallazgos a:focus-visible {
-  background: var(--cl-fondo-2, #f9fafb);
-}
-
-.hallazgos .titulo {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--cl-tinta, #111827);
-}
-
-.hallazgos .porque {
-  font-size: 0.8125rem;
-  color: var(--cl-tinta-2, #4b5563);
-}
-
-.hallazgos .origen {
-  font-size: 0.75rem;
-  color: var(--cl-tinta-3, #6b7280);
-}
-
-/* ---------------------------------------------------------------------
-   CÓMO ESTÁ — cada hecho con su marca y su color
-
-   Solo FRENO va en tinta plena: la marca roja ya carga la alarma, y subir
-   además el peso hacía que la consecuencia compitiera con el titular, que
-   es lo único que se pide leer primero (D-E2-1 §10.1).
-   --------------------------------------------------------------------- */
-.como-esta {
-  margin: 0.4rem 0 0.35rem;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.15rem;
-}
-
-.como-esta li {
-  display: grid;
-  grid-template-columns: 1rem 1fr;
-  gap: 0.35rem;
-  align-items: baseline;
-  font-size: 0.8125rem;
-  color: var(--cl-tinta-2, #4b5563);
-}
-
-.como-esta .marca {
-  font-size: 0.75rem;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.como-esta .hecho-hecho .marca,
-.como-esta li.hecho-hecho .marca { color: var(--cl-verde, #16a34a); }
-.como-esta li.hecho-falta .marca { color: var(--cl-ambar, #d97706); }
-.como-esta li.hecho-plazo .marca { color: var(--cl-rojo, #dc2626); }
-.como-esta li.hecho-freno .marca { color: var(--cl-rojo, #dc2626); }
-.como-esta li.hecho-dato  .marca { color: var(--cl-tinta-3, #9ca3af); }
-
-/* La consecuencia, y solo ella, en tinta plena. */
-.como-esta li.hecho-freno .texto {
-  color: var(--cl-tinta, #111827);
-  font-weight: 500;
-}
-
-/* La lectura de BROX: sintetiza, no recita. */
-.lectura {
-  margin: 0.35rem 0 0;
-  font-size: 0.8125rem;
-  font-style: italic;
-  color: var(--cl-tinta-2, #4b5563);
-}
-
-.lectura span[aria-hidden] {
-  font-style: normal;
-  margin-right: 0.25rem;
-  color: var(--cl-azul, #2563eb);
 }
 
 /* ====================================================================
-   EL PIE · anticipo de Indicadores (D-E2-1 §6.2)
-   --------------------------------------------------------------------
-   Claro, como todo BROX. El color aparece solo en marcas pequeñas —la
-   barra de cada KPI y los puntos del pulso—; el texto va en tinta.
-
-   Y lo gráfico es información, no adorno: la barra dice lo recorrido y
-   la marca fina dice el ritmo esperado a hoy. Sin la segunda, un 87 %
-   no distingue ir por delante de ir por detrás.
+   EL FOCO
    ==================================================================== */
 
-.pie-indicadores {
-  display: grid;
-  grid-template-columns: minmax(13rem, 18rem) 1fr auto;
-  gap: 1.5rem 2rem;
-  align-items: start;
-  margin-top: 1.5rem;
-  padding: 1.25rem 1.5rem;
-  border: 1px solid var(--cl-borde);
-  border-radius: var(--cl-radio);
-  background: var(--cl-superficie);
-  color: var(--cl-tinta);
-  text-decoration: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+.foco {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-top: 2px solid var(--oro);
+  border-radius: var(--r);
+  overflow: hidden;
+}
 
-  /* El enlace es la franja entera, así que tiene que notarse que lo es. */
-  &:hover,
-  &:focus-visible {
-    border-color: var(--cl-primario);
-    box-shadow: var(--cl-sombra);
+.aviso-foco {
+  margin: 0;
+  padding: 10px 20px;
+  background: var(--oro-tenue);
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12.5px;
+  color: var(--oro-voz);
+}
+
+/* La fila IDENTIFICA y SELECCIONA. Sin CTA: el botón vive en el Radar. */
+.fila {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 16px;
+  gap: 0 12px;
+  align-items: center;
+  padding: 11px 20px 11px 18px;
+  cursor: pointer;
+  transition: background var(--t1) ease;
+
+  /* Separador corto, no una línea de tabla de lado a lado. */
+  + .fila::before {
+    content: '';
+    position: absolute;
+    left: 60px;
+    right: 20px;
+    top: 0;
+    height: 1px;
+    background: var(--hairline);
+  }
+
+  &:hover {
+    background: var(--hueco);
+  }
+
+  /* La selección va en GRAFITO, nunca en el azul de BROX ni en el color
+     del lado: en la misma fila esos dos ya significan otra cosa. */
+  &.sel {
+    background: linear-gradient(
+      90deg,
+      rgba(20, 25, 30, 0.055),
+      rgba(20, 25, 30, 0.022) 46%,
+      rgba(20, 25, 30, 0.01) 100%
+    );
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--ink);
+    }
+
+    .tit {
+      font-weight: 650;
+    }
+
+    .chev {
+      color: var(--accion);
+    }
+  }
+
+  &.sin-nada {
+    cursor: default;
+  }
+
+  /* El número lleva el tono: es la única marca de clasificación que queda. */
+  .num {
+    justify-self: center;
+    font-size: 11.5px;
+    font-weight: 650;
+    color: var(--tono);
+    letter-spacing: -0.01em;
+  }
+
+  .cuerpo {
+    min-width: 0;
+  }
+
+  .tit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    line-height: 21px;
+    font-weight: 600;
+    letter-spacing: -0.012em;
+  }
+
+  .ic-proc {
+    flex: none;
+    color: var(--pc);
+    display: inline-flex;
+  }
+
+  .hecho {
+    margin: 2px 0 0;
+    font-size: 13px;
+    line-height: 19px;
+    color: var(--ink-2);
+  }
+
+  .chev {
+    justify-self: end;
+    color: var(--plata);
+    transition:
+      color var(--t1) ease,
+      transform var(--t1) ease;
+  }
+
+  &:hover .chev {
+    color: var(--ink-3);
+    transform: translateX(2px);
+  }
+}
+
+/* Los dos lados del negocio son TEMPERATURAS, no los tres del semáforo:
+   en la misma fila el rojo y el ámbar ya significan otra cosa. Solo se
+   lavan cuando están mezclados — si el filtro ya separa, sobra. */
+.foco.mezcla .fila {
+  &.l-oferta {
+    --l: var(--lado-oferta);
+    --la: 0.62;
+  }
+
+  &.l-demanda {
+    --l: var(--lado-demanda);
+    --la: 1;
+  }
+
+  &.l-oferta,
+  &.l-demanda {
+    background: linear-gradient(
+      90deg,
+      rgba(var(--l), calc(0.66 * var(--la))) 0 3px,
+      rgba(var(--l), calc(0.125 * var(--la))) 3px,
+      rgba(var(--l), calc(0.06 * var(--la))) 52%,
+      rgba(var(--l), calc(0.024 * var(--la))) 100%
+    );
+
+    &:hover {
+      background: linear-gradient(
+        90deg,
+        rgba(var(--l), calc(0.74 * var(--la))) 0 3px,
+        rgba(var(--l), calc(0.18 * var(--la))) 3px,
+        rgba(var(--l), calc(0.088 * var(--la))) 52%,
+        rgba(var(--l), calc(0.036 * var(--la))) 100%
+      );
+    }
+  }
+
+  &.sel {
+    background: linear-gradient(
+      90deg,
+      rgba(20, 25, 30, 0.055),
+      rgba(20, 25, 30, 0.022) 46%,
+      rgba(20, 25, 30, 0.01) 100%
+    );
+  }
+}
+
+/* Día cubierto: un solo gesto — el anillo se cierra y después se dibuja
+   la marca. */
+.cubierto {
+  padding: 30px 24px 26px;
+  text-align: left;
+
+  .sello {
+    width: 58px;
+    height: 58px;
+    margin-bottom: 15px;
+
+    .aro {
+      fill: none;
+      stroke: var(--hairline);
+      stroke-width: 3;
+    }
+
+    .arco {
+      fill: none;
+      stroke: var(--positivo);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 176;
+      stroke-dashoffset: 176;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+      animation: inicio-cerrar 900ms var(--curva) forwards;
+    }
+
+    .marca {
+      fill: none;
+      stroke: var(--positivo);
+      stroke-width: 3.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 32;
+      stroke-dashoffset: 32;
+      animation: inicio-marcar 420ms 620ms var(--curva) forwards;
+    }
+  }
+
+  .f {
+    margin: 0 0 5px;
+    font-size: 21px;
+    line-height: 28px;
+    font-weight: 650;
+    letter-spacing: -0.022em;
   }
 
   p {
     margin: 0;
+    max-width: 58ch;
+    font-size: 13.5px;
+    line-height: 20px;
+    color: var(--ink-2);
   }
+}
 
-  .rotulo {
-    font-size: 0.7rem;
+@keyframes inicio-cerrar {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes inicio-marcar {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ====================================================================
+   LA COLA · una banda, no otra tabla
+   ==================================================================== */
+
+.cola {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 16px;
+  align-items: center;
+  padding: 13px 20px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+
+  /* Posiciones explícitas: un elemento con `grid-row` definido se coloca
+     ANTES que los automáticos, así que sin esto el enlace se iba a la
+     izquierda. */
+  .q {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 13.5px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--cl-tinta-suave);
   }
 
-  /* --- La cifra en juego: una sola cifra de dinero en todo el pie --- */
-  .en-juego {
-    .cifra {
-      margin-top: 0.35rem;
-      font-size: 1.6rem;
-      font-weight: 700;
-      line-height: 1.1;
-      color: var(--cl-tinta);
-    }
-
-    .detalle {
-      margin-top: 0.2rem;
-      font-size: 0.82rem;
-      color: var(--cl-tinta-suave);
-    }
-
-    /* Cuando hay dos monedas se dice, en vez de sumarlas. */
-    .aviso {
-      color: var(--cl-acento);
-    }
-
-    /* Lo único de esta franja sobre lo que el broker actúa (D-E2-2 §8). */
-    .palanca {
-      margin-top: 0.45rem;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: var(--cl-primario);
-    }
+  .d {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 12.5px;
+    color: var(--ink-2);
   }
 
-  /* --- Los cuatro KPI --- */
-  .kpis-pie {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1.25rem;
+  .ir {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 550;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--t1) ease;
+
+    &:hover {
+      color: var(--accion);
+    }
+
+    cl-icono {
+      transition: transform var(--t1) ease;
+    }
+
+    &:hover cl-icono {
+      transform: translateX(3px);
+    }
+  }
+}
+
+/* ====================================================================
+   ACCESOS RÁPIDOS
+   ==================================================================== */
+
+.accesos {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+
+  > .kicker {
+    flex: none;
+    font-size: 9.5px;
+    letter-spacing: 0.17em;
   }
 
-  .kpi-pie {
+  .lista {
+    display: flex;
+    align-items: center;
+    flex: 1;
     min-width: 0;
+  }
+}
 
-    /* El nombre va completo y no se recorta: abreviarlo deshace la
-       distinción que D-E2-2 §1.1 fijó. Si no cabe, parte en dos líneas. */
-    .nombre {
-      font-size: 0.72rem;
-      font-weight: 600;
-      line-height: 1.25;
-      color: var(--cl-tinta-suave);
-    }
+.acceso {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition:
+    color var(--t1) ease,
+    background var(--t1) ease;
 
-    .cifra {
-      margin-top: 0.3rem;
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--cl-tinta);
-    }
-
-    .lectura {
-      margin-top: 0.3rem;
-      font-size: 0.74rem;
-      line-height: 1.3;
-      color: var(--cl-tinta-suave);
-    }
+  + .acceso {
+    box-shadow: inset 1px 0 0 var(--hairline);
   }
 
-  .barra {
+  &:hover {
+    color: var(--ink);
+    background: var(--hueco);
+  }
+}
+
+/* ====================================================================
+   EL CARRIL
+   ==================================================================== */
+
+.carril {
+  position: sticky;
+  top: 12px;
+  align-self: start;
+}
+
+/* EL RADAR NUNCA EMPUJA LA PÁGINA. Su cuerpo scrollea solo, pero para que ese
+   scroll exista la superficie necesita un tope; sin él crecía con la lista y
+   estiraba la rejilla entera. El prototipo lo mide en JS contra la cabecera que
+   tiene encima; aquí se acota contra la ventana, que es la aproximación que no
+   necesita un observador. */
+@media (min-width: 1241px) {
+  .carril .radar {
+    max-height: calc(100dvh - 6rem);
+  }
+}
+
+@media (max-width: 1240px) {
+  .carril {
+    position: static;
+  }
+
+  /* Apilado bajo el foco tampoco puede crecer sin fin. */
+  .carril .radar {
+    max-height: 34rem;
+  }
+}
+
+/* ====================================================================
+   EL PIE · los cuatro KPI y la cifra del mes
+   ==================================================================== */
+
+.pie {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-top: 12px;
+  padding: 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  transition:
+    border-color var(--t1) ease,
+    box-shadow var(--t1) ease;
+
+  &:hover {
+    border-color: var(--accion-b);
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.07);
+  }
+
+  /* Igual que en el Radar: se nombran los hijos que van por encima de la
+     firma, en vez de `> *`, que también la alcanzaba a ella y la devolvía al
+     flujo como un bloque de 168 px. */
+  > .juego,
+  > .kpis,
+  > .ir {
     position: relative;
-    height: 5px;
-    margin-top: 0.45rem;
-    border-radius: 999px;
-    background: var(--cl-fondo);
-    overflow: visible;
+    z-index: 1;
+  }
 
-    .recorrido {
+  /* La firma, detrás de todo y casi invisible. El color va por variables:
+     un selector sobre su `path` no cruzaría la encapsulación. */
+  cl-malla-brox {
+    right: -26px;
+    top: 50%;
+    width: 168px;
+    height: 168px;
+    margin-top: -84px;
+    opacity: 0.07;
+    --malla-trazo: var(--oro);
+    --malla-nodo: var(--accion);
+  }
+
+  .juego {
+    flex: none;
+    max-width: 220px;
+    padding-right: 26px;
+    border-right: 1px solid var(--hairline);
+
+    .kicker {
       display: block;
-      height: 100%;
-      border-radius: 999px;
-      background: var(--cl-tinta-suave);
+      margin-bottom: 3px;
+      font-size: 9.5px;
+      letter-spacing: 0.15em;
     }
 
-    /* El ritmo esperado a hoy. Fina y discreta, pero es la que hace que
-       el semáforo se entienda (D-E2-2 §3). */
-    .marca-esperada {
-      position: absolute;
-      top: -3px;
-      width: 2px;
-      height: 11px;
-      border-radius: 1px;
-      background: var(--cl-tinta-suave);
-    }
-  }
-
-  /* El tono lo pone el ESTADO que decide el dominio; la pantalla solo lo
-     traduce a color. Nunca al revés. */
-  .kpi-pie[data-ritmo='EN_RITMO'] .recorrido {
-    background: var(--cl-exito);
-  }
-
-  .kpi-pie[data-ritmo='ATENCION'] .recorrido {
-    background: var(--cl-acento);
-  }
-
-  .kpi-pie[data-ritmo='FUERA_DE_RITMO'] .recorrido {
-    background: var(--cl-error);
-  }
-
-  /* Sin base no se pinta ningún color: un gris honesto vale más que un
-     verde inventado. */
-  .kpi-pie[data-ritmo='SIN_BASE'] {
-    .recorrido {
-      background: var(--cl-borde);
+    .fila {
+      display: flex;
+      align-items: center;
+      gap: 14px;
     }
 
-    .cifra {
-      color: var(--cl-tinta-suave);
+    .v {
+      font-size: 19px;
+      font-weight: 650;
+      letter-spacing: -0.022em;
+      line-height: 22px;
+    }
+
+    .e {
+      display: block;
+      margin-top: 1px;
+      font-size: 11.5px;
+      color: var(--ink-3);
+    }
+
+    .palanca {
+      color: var(--oro-voz);
+      font-weight: 600;
     }
   }
 
-  /* --- El cierre de la franja --- */
-  .cierre-pie {
+  .kpis {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
-    gap: 0.4rem;
-    text-align: right;
-    white-space: nowrap;
+    gap: 11px;
+    flex: 1;
+    min-width: 0;
+
+    .fila-k {
+      display: flex;
+      gap: 24px;
+      min-width: 0;
+    }
+  }
+
+  .kpi {
+    min-width: 0;
+    flex: 1;
+
+    .n {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 650;
+      letter-spacing: 0.11em;
+      line-height: 13px;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      text-wrap: balance;
+    }
+
+    .d {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      margin: 3px 0 6px;
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: -0.012em;
+
+      small {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--ink-3);
+      }
+    }
+
+    /* Barra de 3 px: lo recorrido en el tono del ritmo y una marca fina
+       en lo que se esperaba a hoy. `display:block` es obligatorio — es un
+       `<span>` y sin él la altura no aplica. */
+    .pista {
+      display: block;
+      position: relative;
+      height: 3px;
+      max-width: 132px;
+      border-radius: 999px;
+      background: var(--hairline);
+
+      i {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        border-radius: 999px;
+        background: var(--tono);
+      }
+
+      b {
+        position: absolute;
+        top: -2px;
+        bottom: -2px;
+        width: 1.5px;
+        border-radius: 1px;
+        background: var(--ink-3);
+        opacity: 0.55;
+      }
+    }
+
+    /* Lo que empuja: a cuánto estás de la meta, y solo después el ritmo.
+       «22 de 24» informa; «a 2 de la meta» mueve. */
+    .empuje {
+      display: block;
+      margin-top: 6px;
+      max-width: 132px;
+      font-size: 10.5px;
+      line-height: 14px;
+      color: var(--ink-3);
+
+      &.hecha {
+        color: var(--positivo);
+        font-weight: 600;
+      }
+    }
   }
 
   .pulso {
     display: flex;
+    align-items: center;
+    gap: 14px;
     flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    font-size: 0.74rem;
-    color: var(--cl-tinta-suave);
+    padding-top: 9px;
+    border-top: 1px solid var(--hairline);
+    font-size: 10.5px;
+    color: var(--ink-3);
 
-    .rotulo {
-      display: block;
-      width: 100%;
+    .k {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      color: var(--ink-3);
     }
 
-    .dato::before {
-      content: '●';
-      margin-right: 0.25rem;
+    .g {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+
+      &::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--c);
+      }
     }
 
-    .en-ritmo::before {
-      color: var(--cl-exito);
-    }
-
-    .atencion::before {
-      color: var(--cl-acento);
-    }
-
-    .fuera::before {
-      color: var(--cl-error);
-    }
-
-    .sin-base::before {
-      color: var(--cl-borde);
+    b {
+      font-weight: 700;
+      color: var(--ink-2);
     }
   }
 
-  .periodo-pie {
+  .ir {
+    margin-left: auto;
+    flex: none;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 0.3rem;
-    font-size: 0.74rem;
-    color: var(--cl-tinta-suave);
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    white-space: nowrap;
+
+    .cierre-mes {
+      font-size: 10.5px;
+      color: var(--ink-3);
+    }
+
+    .ver {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12.5px;
+      font-weight: 550;
+      color: var(--accion);
+    }
+
+    cl-icono {
+      transition: transform var(--t1) ease;
+    }
   }
 
-  .ver-mas {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--cl-primario);
+  &:hover .ir cl-icono {
+    transform: translateX(3px);
   }
 }
 
-/* En móvil el pie se apila y los KPI van en 2 × 2 (D-E2-1 §15): en 402 px
-   cuatro columnas dejan los nombres completos ilegibles, y el nombre
-   completo no es negociable. */
-@media (max-width: 900px) {
-  .pie-indicadores {
-    grid-template-columns: 1fr;
+/* ====================================================================
+   EL PANEL DE LA COLA
+   ==================================================================== */
 
-    .kpis-pie {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    border-color var(--t1) ease,
+    color var(--t1) ease;
+
+  b {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &.activo {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  &.mal b {
+    color: var(--riesgo);
+  }
+
+  &.aviso b {
+    color: var(--atencion);
+  }
+}
+
+.fila-cola {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline);
+
+  .t {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: left;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color var(--t1) ease;
+
+    &:hover {
+      color: var(--accion);
     }
+  }
 
-    .cierre-pie {
-      align-items: flex-start;
-      text-align: left;
-      white-space: normal;
-    }
+  .h {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
 
-    .pulso {
-      justify-content: flex-start;
+  .a {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--riesgo);
     }
   }
 }
 
 /* ====================================================================
-   EL EXPEDIENTE · cuatro renglones de evidencia (D-E2-1 §10.3)
+   MÓVIL
    --------------------------------------------------------------------
-   Viajaba desde E2.4 y no se pintaba: el dato llegaba y la pantalla lo
-   tiraba. Es el historial, no el estado — `CÓMO ESTÁ` ya dice cómo va.
-
-   Solo uno o dos renglones llevan color: teñir los cuatro es no teñir
-   ninguno.
+   En una columna no hay carril: el Radar baja debajo del foco. Los
+   accesos y los KPI se reparten en 2 × 2, que es lo que cabe a 402 px
+   sin que ningún rótulo se corte.
    ==================================================================== */
 
-.expediente {
-  margin: 0.6rem 0 0;
-  display: grid;
-  gap: 0.3rem;
-
-  .renglon {
-    display: grid;
-    grid-template-columns: 6.5rem 1fr;
-    gap: 0.5rem;
-    align-items: baseline;
-    padding-left: 0.5rem;
-    border-left: 2px solid transparent;
+@media (max-width: 860px) {
+  /* Modo B: en una columna no conviven la lista y el Radar. Seleccionar abre
+     la resolución y el foco se retira; «General» lo devuelve. */
+  .rejilla.resolviendo .izq {
+    display: none;
   }
 
-  dt {
-    margin: 0;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--cl-tinta-suave);
-  }
-
-  dd {
-    margin: 0;
-    font-size: 0.78rem;
-    line-height: 1.35;
-    color: var(--cl-tinta);
-    min-width: 0;
-  }
-
-  /* El canto de color, no un fondo: BROX es claro y el color va en marcas
-     pequeñas (D-E2-1 §7.0.c). */
-  .senal-bien {
-    border-left-color: var(--cl-exito);
-  }
-
-  .senal-ojo {
-    border-left-color: var(--cl-acento);
-  }
-
-  .senal-mal {
-    border-left-color: var(--cl-error);
-  }
-
-  /* La ventana del encargo: lo consumido sobre lo pactado. */
-  .ventana {
+  .accesos {
     display: block;
-    height: 4px;
-    margin-top: 0.3rem;
-    max-width: 12rem;
-    border-radius: 999px;
-    background: var(--cl-fondo);
+    padding: 11px 14px;
 
-    .consumido {
+    > .kicker {
       display: block;
-      height: 100%;
-      border-radius: 999px;
-      background: var(--cl-tinta-suave);
+      margin-bottom: 8px;
+    }
+
+    .lista {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px 6px;
     }
   }
 
-  .senal-mal .ventana .consumido {
-    background: var(--cl-error);
+  .acceso {
+    padding: 7px 8px;
+    white-space: normal;
+    line-height: 17px;
+
+    + .acceso {
+      box-shadow: none;
+    }
   }
 
-  .senal-ojo .ventana .consumido {
-    background: var(--cl-acento);
+  .fila {
+    padding: 12px 14px 12px 12px;
+    grid-template-columns: 26px minmax(0, 1fr) 14px;
+    gap: 0 9px;
+
+    + .fila::before {
+      left: 47px;
+      right: 14px;
+    }
   }
 
-  /* El contraste: dónde cae el dato respecto de NUESTRA operación. Casi
-     siempre llega degradado, y eso también se lee. */
-  .contraste {
+  .cab-zona {
+    padding: 0;
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .filtros {
+    flex-basis: 100%;
+    margin-left: 0;
+
+    button {
+      flex: 1;
+      justify-content: center;
+      padding: 6px 4px 7px;
+    }
+  }
+
+  .pie {
     display: block;
-    margin-top: 0.25rem;
-    font-size: 0.72rem;
-    color: var(--cl-tinta-suave);
-  }
+    padding: 13px 14px;
 
-  .contraste.sin-referencia {
-    font-style: italic;
-    opacity: 0.85;
-  }
+    .juego {
+      max-width: none;
+      padding: 0 0 11px;
+      border-right: 0;
+      border-bottom: 1px solid var(--hairline);
+    }
 
-  .escala {
-    position: relative;
-    display: inline-block;
-    width: 5rem;
-    height: 3px;
-    margin-right: 0.4rem;
-    vertical-align: middle;
-    border-radius: 999px;
-    background: var(--cl-borde);
+    .kpis {
+      margin-top: 12px;
+      gap: 12px;
 
-    .aguja {
-      position: absolute;
-      top: -3px;
-      width: 2px;
-      height: 9px;
-      border-radius: 1px;
-      background: var(--cl-primario);
+      .fila-k {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px 16px;
+      }
+    }
+
+    .kpi .pista {
+      max-width: none;
+    }
+
+    .ir {
+      align-items: flex-start;
+      margin: 12px 0 0;
+      padding-top: 10px;
+      border-top: 1px solid var(--hairline);
+    }
+
+    /* A 402 px cualquier posición cruza los rótulos: la firma se va a la
+       esquina inferior, pequeña, donde no hay texto. */
+    cl-malla-brox {
+      right: -44px;
+      top: auto;
+      bottom: -44px;
+      margin-top: 0;
+      width: 118px;
+      height: 118px;
+      opacity: 0.05;
     }
   }
 }
 
-@media (max-width: 640px) {
-  .expediente .renglon {
-    grid-template-columns: 1fr;
-    gap: 0.1rem;
+@media (prefers-reduced-motion: reduce) {
+  .cubierto .sello .arco,
+  .cubierto .sello .marca {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
   }
 }

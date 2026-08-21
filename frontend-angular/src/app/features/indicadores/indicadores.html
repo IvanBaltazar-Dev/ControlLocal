@@ -1,174 +1,391 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Gestión · Indicadores</p>
-    <h1>Indicadores comerciales</h1>
-    <p class="sub">
-      Lectura analítica del periodo: conversión, embudo, evolución y desempeño.
-      @if (datos(); as i) {
-        <span class="cl-badge">{{ i.ambito }}</span>
-      }
-    </p>
-  </div>
+<div class="lienzo">
+  <cl-estado-listado
+    [cargando]="cargando()"
+    [error]="error()"
+    [vacio]="false"
+    mensajeCarga="Cargando los indicadores…"
+    (reintentar)="cargar()"
+  />
 
-  <div class="acciones">
-    <label class="periodo">
-      <span>Periodo</span>
-      <select (change)="cambiarPeriodo($any($event.target).value)" [disabled]="cargando()">
-        @for (opcion of periodos; track opcion.valor) {
-          <option [value]="opcion.valor" [selected]="opcion.valor === periodo()">
-            {{ opcion.etiqueta }}
-          </option>
-        }
-      </select>
-    </label>
-    <button type="button" class="cl-btn" (click)="cargar()" [disabled]="cargando()">
-      Actualizar
-    </button>
-  </div>
-</header>
+  @if (!cargando() && datos(); as i) {
+    <!--
+      CABECERA. El ámbito lo resuelve el backend y se rotula tal cual: los tres
+      roles entran a esta pantalla y lo que cambia es el alcance, no la
+      definición de los indicadores.
+    -->
+    <div class="cab">
+      <div>
+        <h1>Indicadores comerciales</h1>
+        <p class="sub">{{ i.ambito }} · <b>{{ etiquetaPeriodo() }}</b></p>
+      </div>
 
-<cl-estado-listado
-  [cargando]="cargando()"
-  [error]="error()"
-  [vacio]="false"
-  mensajeCarga="Calculando indicadores…"
-  (reintentar)="cargar()"
-/>
-
-@if (!cargando() && datos(); as i) {
-  <!--
-    RENDIMIENTO · los cuatro KPI canónicos contra su meta (D-E2-2 §3)
-
-    Cada círculo responde cinco cosas: actual, meta, avance, faltante y estado.
-    Y lleva DOS marcas sobre el arco — la meta y el ritmo esperado a hoy —,
-    porque sin la segunda un 79 % no dice si vas por delante o por detrás.
-
-    Miden contra un MES DE CALENDARIO, no contra el periodo de arriba. Son dos
-    preguntas distintas y por eso se rotula cuál es cuál: la ventana móvil sirve
-    para las series; la meta necesita un mes con días transcurridos.
-  -->
-  @if (rendimiento(); as r) {
-    <section class="rendimiento">
-      <header class="titulo-rendimiento">
-        <div>
-          <h2>Rendimiento del mes</h2>
-          <p class="cl-menudo">
-            {{ mesLargo(r.periodo.desde) }} · día
-            {{ r.periodo.diasTranscurridos }} de {{ r.periodo.diasTotales }}
-            @if (calculadoHace(); as hace) {
-              <span> · calculado {{ hace }}</span>
-            }
-          </p>
+      <div class="mandos">
+        <div class="periodos" role="group" aria-label="Periodo">
+          @for (opcion of periodos; track opcion.valor) {
+            <button
+              type="button"
+              [attr.aria-pressed]="opcion.valor === periodo()"
+              [disabled]="cargando()"
+              (click)="cambiarPeriodo(opcion.valor)"
+            >
+              {{ opcion.etiqueta }}
+            </button>
+          }
         </div>
-        @if (cierreDelMes(); as cierre) {
-          <div class="en-juego-indicadores">
-            <p class="cl-menudo rotulo">Puede cerrarse este mes</p>
-            @if (cierre.importe) {
-              <p class="cifra">{{ cierre.importe }}</p>
+        <button type="button" class="refrescar" [disabled]="cargando()" (click)="cargar()">
+          Actualizar
+        </button>
+      </div>
+    </div>
+
+    <!--
+      ¿VOY AL RITMO NECESARIO? · los cuatro KPI canónicos.
+
+      La misma definición para agente y broker; lo único que cambia es el
+      alcance. El semáforo mide PROYECCIÓN AL CIERRE, no consumo — y lo decide
+      el dominio, no esta pantalla.
+    -->
+    @if (rendimiento(); as r) {
+      <section class="t">
+        <div class="t-cab">
+          <span class="k">
+            {{ esAgente() ? '¿Vas al ritmo necesario?' : '¿Va el equipo al ritmo necesario?' }}
+          </span>
+          <!--
+            EL PERIODO SE DICE UNA VEZ, aquí, y no cuatro veces dentro de las
+            tarjetas: junto a «hoy deberías ir por 15» explica de dónde sale esa
+            cifra. Los días los cuenta el backend.
+          -->
+          <span class="der">
+            <span>{{ mesLargo(r.periodo.desde) }} · {{ corteDelMes() }}</span>
+            @if (calculadoHace(); as hace) {
+              <span class="frescura">· calculado {{ hace }}</span>
             }
-            <p class="cl-menudo">{{ cierre.detalle }}</p>
-            @if (!esAgente() && cierre.esperanDecision > 0) {
-              <p class="cl-menudo palanca">
-                {{ cierre.esperanDecision }}
-                {{ cierre.esperanDecision === 1 ? 'espera' : 'esperan' }} tu decisión
+          </span>
+        </div>
+
+        <div class="tira">
+          @for (fila of kpis(); track fila.kpi.codigo) {
+            <div class="kpi" [style.--tono]="fila.identidad" [attr.data-ritmo]="fila.kpi.estadoRitmo">
+              <span class="rot">{{ fila.kpi.rotulo }}</span>
+
+              <div class="fila">
+                <span class="esfera-caja">
+                  <cl-esfera [kpi]="fila.kpi" />
+                  <!-- La cifra del centro va en TINTA: es un hecho, no un
+                       estado. El estado lo dicen el arco y el rótulo. -->
+                  <span class="centro">
+                    <span class="ac">{{ fila.kpi.actual }}</span>
+                  </span>
+                </span>
+
+                <span class="lado">
+                  <span class="fila-e">
+                    <span class="ritmo" [style.--e]="colorDeRitmo(fila.kpi)">
+                      <i aria-hidden="true"></i>{{ vozDelRitmo(fila.kpi.estadoRitmo) }}
+                    </span>
+
+                    <!--
+                      LA MARCA DE ADELANTO. Contesta «¿y esto es bueno?» sin que
+                      el lector reste, y convive con «te faltan 5»: una habla
+                      del calendario y la otra del objetivo.
+                    -->
+                    @if (fila.adelanto !== null) {
+                      @if (fila.adelanto > 0) {
+                        <span class="marca mas">+{{ fila.adelanto }}</span>
+                      } @else if (fila.adelanto < 0) {
+                        <span class="marca menos">−{{ -fila.adelanto }}</span>
+                      } @else {
+                        <span class="marca eq">al día</span>
+                      }
+                    }
+                  </span>
+
+                  <p class="avance">{{ metaDe(fila.kpi) }}</p>
+                  <p class="esperado">{{ ritmoEsperadoDe(fila.kpi) }}</p>
+                </span>
+              </div>
+
+              <!-- Qué fila cuenta exactamente. Hace el número auditable, que es
+                   lo que separa un indicador de una impresión. -->
+              <span class="sub">{{ fila.kpi.hecho }}</span>
+              @if (variacionDe(fila.kpi); as variacion) {
+                <span class="sub variacion">{{ variacion }}</span>
+              }
+            </div>
+          }
+        </div>
+
+        <!--
+          PULSO DEL EQUIPO. Vive pegado a los cuatro totales porque contesta lo
+          que esos totales esconden: un equipo puede firmar 21 con meta de 20 y
+          estar verde mientras dos hacen 17 y tres hacen cero.
+        -->
+        @if (pulso().length) {
+          <div class="pulso-franja">
+            <div class="pulso">
+              <span class="rot">Pulso del equipo</span>
+              @for (grupo of pulso(); track grupo.voz) {
+                <span class="e" [style.--e]="grupo.color">
+                  <i aria-hidden="true"></i><b>{{ grupo.n }}</b> {{ grupo.voz.toLowerCase() }}
+                </span>
+              }
+              <span class="total">sobre {{ agentesDelPulso() }} agentes</span>
+            </div>
+
+            <!--
+              La única excepción que el cable sostiene hoy: a quién le falta
+              meta. No es un ranking — es una configuración a medio hacer, y sin
+              ella el semáforo del equipo entero se queda sin base.
+            -->
+            @if (sinMeta().length) {
+              <p class="excs">
+                Sin meta fijada:
+                <b>{{ sinMeta().join(' · ') }}</b>
               </p>
             }
           </div>
         }
-      </header>
+      </section>
+    }
 
-      <div class="circulos">
-        @for (kpi of kpisCanonicos(); track kpi.codigo) {
-          <article class="circulo-kpi" [attr.data-ritmo]="kpi.estadoRitmo">
-            <p class="nombre">{{ kpi.rotulo }}</p>
-
-            <div
-              class="anillo"
-              role="img"
-              [attr.aria-label]="kpi.rotulo + ': ' + cifraDe(kpi) + '. ' + lecturaDe(kpi)"
-            >
-              <svg viewBox="0 0 120 120" aria-hidden="true">
-                <!-- El tramo pendiente: lo que falta también es información. -->
-                <circle class="pista" cx="60" cy="60" r="52" />
-                <!-- Lo recorrido. -->
-                <circle
-                  class="arco"
-                  cx="60"
-                  cy="60"
-                  r="52"
-                  [attr.stroke-dasharray]="perimetro"
-                  [attr.stroke-dashoffset]="restoDelArco(kpi)"
-                />
-                <!-- La marca del ritmo esperado a hoy: fina, discreta, y la que
-                     hace que el semáforo se entienda. -->
-                @if (marcaEsperadaDe(kpi); as esperado) {
-                  <line
-                    class="marca-esperada"
-                    x1="60"
-                    y1="4"
-                    x2="60"
-                    y2="16"
-                    [attr.transform]="'rotate(' + esperado * 3.6 + ' 60 60)'"
-                  />
-                }
-              </svg>
-              <div class="centro">
-                <p class="cifra">{{ cifraDe(kpi) }}</p>
-                @if (kpi.porcentajeMeta != null) {
-                  <p class="porcentaje">{{ kpi.porcentajeMeta }} %</p>
-                }
-              </div>
+    <div class="f2">
+      <!--
+        LA LECTURA. Las señales llegan CLASIFICADAS por el dominio (R-07): aquí
+        solo se agrupan por su nivel y se les pone nombre.
+      -->
+      <section class="t">
+        <div class="t-cab">
+          <span class="k">Cómo va</span>
+          <span class="der">ahora · {{ i.senales.length }} señales</span>
+        </div>
+        <div class="t-cuerpo">
+          @if (!lectura().length) {
+            <p class="vacio">Todavía no hay señales que leer en este alcance.</p>
+          } @else {
+            <div class="lectura">
+              @for (grupo of lectura(); track grupo.nivel) {
+                <div class="lec" [style.--voz]="grupo.voz">
+                  <div class="lec-cab">
+                    <span [class]="grupo.marca" aria-hidden="true"></span>
+                    <span>{{ grupo.titulo }}</span>
+                  </div>
+                  @for (senal of grupo.senales; track senal.concepto) {
+                    <div class="ind">
+                      <div class="l1">
+                        <span class="n">{{ senal.rotulo }}</span>
+                        <span class="c">
+                          {{ senal.valor }}
+                          @if (senal.unidad) {
+                            <small>{{ senal.unidad }}</small>
+                          }
+                        </span>
+                      </div>
+                      <p class="l2">{{ senal.pie }}</p>
+                    </div>
+                  }
+                </div>
+              }
             </div>
+          }
+        </div>
+      </section>
 
-            <p class="lectura">{{ lecturaDe(kpi) }}</p>
-            <p class="cl-menudo estado">{{ vozDelRitmo(kpi.estadoRitmo) }}</p>
-            @if (variacionDe(kpi); as variacion) {
-              <p class="cl-menudo variacion">{{ variacion }}</p>
+      <!--
+        EN JUEGO. El pie del Inicio la anticipa y enlaza aquí; ésta es la casa
+        de la cifra, con su detalle y su palanca.
+      -->
+      <section class="t">
+        <div class="t-cab"><span class="k">En juego</span><span class="der">este mes</span></div>
+        <div class="t-cuerpo">
+          @if (enJuego(); as cierre) {
+            <div class="juego">
+              <span class="kk">Puede cerrarse este mes</span>
+              @if (cierre.importe; as importe) {
+                <p class="v">{{ importe }}</p>
+              }
+              <p class="d">{{ cierre.detalle }}</p>
+              @if (cierre.variasMonedas) {
+                <p class="d aviso">
+                  Hay operaciones en más de una moneda; se muestra la principal. Sumarlas
+                  necesitaría un tipo de cambio que nadie declaró.
+                </p>
+              }
+              <!-- La palanca del broker: lo único de esa franja sobre lo que
+                   actúa. Al agente no se le ofrece: no es su decisión. -->
+              @if (!esAgente() && cierre.esperanDecision > 0) {
+                <a class="palanca" routerLink="/solicitudes/revisar">
+                  {{ cierre.esperanDecision }}
+                  {{ cierre.esperanDecision === 1 ? 'espera' : 'esperan' }} tu decisión
+                  <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+                </a>
+              }
+            </div>
+          }
+
+          @if (!esAgente() && cobertura().total > 0) {
+            <p class="cobertura">
+              <b>{{ cobertura().completos }} de {{ cobertura().total }}</b> agentes con las
+              cuatro metas fijadas.
+              @if (cobertura().completos < cobertura().total) {
+                Mientras falte una, el equipo se queda sin semáforo.
+              }
+            </p>
+          }
+        </div>
+      </section>
+    </div>
+
+    <div class="f3">
+      <!-- CARTERA · qué tienes, y en qué estado. -->
+      <section class="t">
+        <div class="t-cab"><span class="k">Cartera</span><span class="der">ahora</span></div>
+        <div class="t-cuerpo">
+          <div class="salud">
+            <span class="tot"><b>{{ carteraTotal() }}</b> en cartera</span>
+            @for (cubo of salud(); track cubo.nombre) {
+              <span class="sf" [class.ojo]="cubo.ojo"><b>{{ cubo.valor }}</b> {{ cubo.nombre }}</span>
             }
-            <!-- Qué fila cuenta exactamente. Hace el número auditable, que es lo
-                 que separa un indicador de una cifra que hay que creerse. -->
-            <p class="cl-menudo hecho">{{ kpi.hecho }}</p>
-          </article>
-        }
+          </div>
+
+          @if (!hayEtapas()) {
+            <!--
+              Vacío ≠ «no hay captaciones»: el reparto solo cuenta las ACTIVAS,
+              así que una cartera entera en revisión da cero aquí.
+            -->
+            <p class="vacio">
+              Ninguna captación activa todavía. Este reparto solo cuenta las que el broker ya
+              aprobó; las que siguen en revisión aparecen cuando se aprueban.
+            </p>
+          } @else {
+            <div class="barras">
+              @for (etapa of etapas(); track etapa.nombre) {
+                <div class="bfila" [style.--tono]="etapa.color">
+                  <span class="n">{{ etapa.nombre }}</span>
+                  <!-- El riel es la CARTERA ENTERA, no la fila más grande: así
+                       el hueco significa algo — es el resto de la cartera. -->
+                  <span
+                    class="riel"
+                    role="img"
+                    [attr.aria-label]="etapa.valor + ' de ' + carteraTotal()"
+                  >
+                    <i [style.width.%]="etapa.ancho"></i>
+                  </span>
+                  <span class="c">{{ etapa.valor }}</span>
+                </div>
+              }
+            </div>
+            <p class="nota">Cada captación cae en <b>una sola</b> etapa: la más avanzada que alcanzó.</p>
+          }
+        </div>
+      </section>
+
+      <!-- EMBUDO · cada salto nombra su origen y su destino. -->
+      <section class="t">
+        <div class="t-cab">
+          <span class="k">Embudo</span>
+          <span class="der">en {{ etiquetaPeriodo().toLowerCase() }}</span>
+        </div>
+        <div class="t-cuerpo">
+          @if (!saltos().length) {
+            <p class="vacio">Sin oportunidades en el periodo.</p>
+          } @else {
+            @for (salto of saltos(); track salto.de) {
+              <div class="salto" [style.--tono]="salto.color" [class.magro]="salto.porcentaje === null">
+                <span class="par"><b>{{ salto.de }} → {{ salto.a.toLowerCase() }}</b></span>
+                <span class="de">{{ salto.entran }}</span>
+                <!-- Lo que se queda por el camino NO es hueco: es una zona
+                     rayada, porque el vacío no significa nada y la trama sí. -->
+                <span class="via">
+                  <i class="pasa" [style.width.%]="salto.porcentaje ?? 0"></i>
+                  <i class="cae" [style.width.%]="100 - (salto.porcentaje ?? 100)"></i>
+                </span>
+                <span class="a">{{ salto.pasan }}</span>
+                <span class="fin">
+                  <span class="pc">{{ salto.porcentaje === null ? '—' : salto.porcentaje + ' %' }}</span>
+                  <span class="ns">
+                    @if (salto.porcentaje === null) {
+                      sin casos
+                    } @else if (salto.quedan === 0) {
+                      sin pérdidas
+                    } @else {
+                      {{ salto.quedan }} {{ salto.quedan === 1 ? 'se quedó' : 'se quedaron' }}
+                    }
+                  </span>
+                </span>
+              </div>
+            }
+          }
+        </div>
+      </section>
+
+      <!-- EVOLUCIÓN · una métrica por vez. -->
+      <section class="t">
+        <div class="t-cab">
+          <span class="k">Evolución</span>
+          <span class="der">
+            <select
+              class="filtro-metrica"
+              aria-label="Métrica"
+              (change)="cambiarMetrica($any($event.target).value)"
+            >
+              @for (opcion of metricasEvo; track opcion.valor) {
+                <option [value]="opcion.valor" [selected]="opcion.valor === metrica()">
+                  {{ opcion.etiqueta }}
+                </option>
+              }
+            </select>
+          </span>
+        </div>
+        <div class="t-cuerpo">
+          <p class="evo-lead">
+            {{ opcionEvo().etiqueta }} por tramo del periodo
+            @if (metaDeLaSerie() !== null) {
+              · meta de este mes <b>{{ metaDeLaSerie() }}</b>
+            }
+          </p>
+          <cl-grafico-serie
+            [etiquetas]="etiquetasSerie()"
+            [series]="serie()"
+            tipo="linea"
+            [sufijo]="opcionEvo().sufijo"
+            [alto]="150"
+            [descripcion]="opcionEvo().etiqueta + ' por tramo del periodo'"
+          />
+        </div>
+      </section>
+    </div>
+
+    <!--
+      GESTIÓN DE METAS · dentro de Indicadores, no en un módulo aparte.
+
+      La meta pertenece a la pantalla donde se mide el rendimiento: sacarla a un
+      «Metas» propio obligaría a saltar de sitio para entender por qué el
+      semáforo dice lo que dice.
+
+      Y no hay lápiz editable directo para el agente: PROPONE, con motivo. Si
+      pudiera fijarla, el indicador sería manipulable — voy al 60 %, bajo la
+      meta y vuelvo a verde.
+    -->
+    <section class="t metas" id="metas">
+      <div class="t-cab">
+        <span class="k">{{ esAgente() ? 'Tus objetivos del mes' : 'Objetivos del equipo' }}</span>
+        <span class="der">
+          @if (!esAgente()) {
+            {{ cobertura().completos }} de {{ cobertura().total }} con las cuatro fijadas
+          } @else if (rendimiento(); as r) {
+            {{ mesLargo(r.periodo.desde) }}
+          }
+        </span>
       </div>
 
-      <!--
-        El pulso va inmediatamente debajo de los cuatro KPI (D-E2-2 §6.1): un
-        total en meta puede esconder un equipo roto. Una sola vez y sin nombres
-        — esto es una distribución, no un ranking.
-      -->
-      @if (r.pulso; as pulso) {
-        <p class="pulso-equipo">
-          <span class="rotulo">Pulso del equipo</span>
-          <span class="dato en-ritmo">{{ pulso.enRitmo }} en ritmo</span>
-          <span class="dato atencion">{{ pulso.atencion }} requieren atención</span>
-          <span class="dato fuera">{{ pulso.fueraDeRitmo }} fuera de ritmo</span>
-          @if (pulso.sinBase > 0) {
-            <span class="dato sin-base">{{ pulso.sinBase }} sin meta fijada</span>
-          }
-          <span class="cl-menudo total">sobre {{ pulso.agentes }} agentes</span>
-        </p>
-      }
+      <div class="t-cuerpo">
+        @if (errorMetas(); as fallo) {
+          <p class="cl-aviso">{{ fallo }}</p>
+        }
 
-      <!--
-        GESTIÓN DE METAS · dentro de Indicadores, no en un módulo aparte.
-
-        La meta pertenece a la pantalla donde se mide el rendimiento: sacarla a
-        un «Metas» propio obligaría a saltar de sitio para entender por qué el
-        semáforo dice lo que dice.
-
-        Y no hay lápiz editable directo para el agente: PROPONE, con motivo. Si
-        pudiera fijarla, el indicador sería manipulable — voy al 60 %, bajo la
-        meta y vuelvo a verde.
-      -->
-      @if (errorMetas(); as fallo) {
-        <p class="cl-aviso">{{ fallo }}</p>
-      }
-
-      @if (esAgente()) {
-        <div class="mis-objetivos">
-          <h3>Tus objetivos del mes</h3>
-          <ul>
+        @if (esAgente()) {
+          <ul class="mis-objetivos">
             @for (meta of misObjetivos(); track meta.kpi) {
               <li>
                 <div class="objetivo">
@@ -181,11 +398,11 @@
                     }
                   </span>
                   @if (meta.propuesta) {
-                    <span class="cl-badge">
+                    <span class="pendiente">
                       Pediste {{ meta.propuesta.valorPropuesto }} · esperando a tu broker
                     </span>
                   } @else if (ajustando() !== meta.kpi) {
-                    <button type="button" class="cl-btn" (click)="abrirAjuste(meta)">
+                    <button type="button" class="bt" (click)="abrirAjuste(meta)">
                       Solicitar ajuste
                     </button>
                   }
@@ -215,10 +432,10 @@
                       />
                     </label>
                     <div class="acciones">
-                      <button type="submit" class="cl-btn primario" [disabled]="guardandoMetas()">
+                      <button type="submit" class="bt primario" [disabled]="guardandoMetas()">
                         Enviar al broker
                       </button>
-                      <button type="button" class="cl-btn" (click)="cerrarAjuste()">Cancelar</button>
+                      <button type="button" class="bt" (click)="cerrarAjuste()">Cancelar</button>
                     </div>
                   </form>
                 }
@@ -234,17 +451,7 @@
               </li>
             }
           </ul>
-        </div>
-      } @else {
-        <div class="metas-equipo">
-          <h3>
-            Objetivos del equipo
-            <span class="cl-menudo">
-              {{ cobertura().completos }} de {{ cobertura().total }} agentes con las cuatro
-              fijadas
-            </span>
-          </h3>
-
+        } @else {
           <!--
             Lo que espera decisión va PRIMERO: es lo único de esta sección sobre
             lo que el broker tiene algo pendiente que hacer.
@@ -262,13 +469,10 @@
                     }
                     <b>{{ propuesta.valorPropuesto }}</b>
                   </p>
-                  <p class="cl-menudo motivo">«{{ propuesta.motivo }}»</p>
+                  <p class="motivo">«{{ propuesta.motivo }}»</p>
 
                   @if (resolviendo() === propuesta.idRevision) {
-                    <form
-                      class="decision"
-                      (submit)="$event.preventDefault()"
-                    >
+                    <form class="decision" (submit)="$event.preventDefault()">
                       <label>
                         <span>Por qué</span>
                         <!-- Se exige también al rechazar: un «no» sin explicar
@@ -283,7 +487,7 @@
                       <div class="acciones">
                         <button
                           type="button"
-                          class="cl-btn primario"
+                          class="bt primario"
                           [disabled]="guardandoMetas()"
                           (click)="decidir(propuesta.idRevision, true)"
                         >
@@ -291,19 +495,17 @@
                         </button>
                         <button
                           type="button"
-                          class="cl-btn"
+                          class="bt"
                           [disabled]="guardandoMetas()"
                           (click)="decidir(propuesta.idRevision, false)"
                         >
                           Rechazar
                         </button>
-                        <button type="button" class="cl-btn" (click)="cerrarDecision()">
-                          Volver
-                        </button>
+                        <button type="button" class="bt" (click)="cerrarDecision()">Volver</button>
                       </div>
                     </form>
                   } @else {
-                    <button type="button" class="cl-btn" (click)="abrirDecision(propuesta)">
+                    <button type="button" class="bt" (click)="abrirDecision(propuesta)">
                       Resolver
                     </button>
                   }
@@ -312,226 +514,73 @@
             </ul>
           }
 
-          <table class="tabla-metas">
-            <thead>
-              <tr>
-                <th scope="col">Agente</th>
-                @for (kpi of kpisCanonicos(); track kpi.codigo) {
-                  <th scope="col">{{ kpi.rotulo }}</th>
-                }
-                <th scope="col"><span class="cl-oculto">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (fila of equipo(); track fila.id) {
-                <tr [class.incompleta]="fijandoA() !== fila.id">
-                  <th scope="row">{{ fila.nombre }}</th>
-                  @for (meta of fila.metas; track meta.kpi) {
-                    <td>
+          <div class="cl-tabla-marco">
+            <table class="tabla-metas">
+              <thead>
+                <tr>
+                  <th scope="col">Agente</th>
+                  @for (kpi of kpisCanonicos(); track kpi.codigo) {
+                    <th scope="col">{{ kpi.rotulo }}</th>
+                  }
+                  <th scope="col"><span class="cl-oculto">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (fila of equipo(); track fila.id) {
+                  <tr>
+                    <th scope="row">{{ fila.nombre }}</th>
+                    @for (meta of fila.metas; track meta.kpi) {
+                      <td>
+                        @if (fijandoA() === fila.id) {
+                          <input
+                            type="number"
+                            min="0"
+                            [attr.aria-label]="meta.rotulo + ' de ' + fila.nombre"
+                            [value]="valorFijado(meta.kpi)"
+                            (input)="cambiarValorFijado(meta.kpi, $any($event.target).value)"
+                          />
+                        } @else if (meta.valor == null) {
+                          <!-- Sin meta no es cero. Y verlo es lo que permite
+                               arreglar la cobertura incompleta. -->
+                          <em class="sin-meta">sin fijar</em>
+                        } @else {
+                          {{ meta.valor }}
+                        }
+                      </td>
+                    }
+                    <td class="acciones">
                       @if (fijandoA() === fila.id) {
+                        <!-- El motivo va una vez por agente: fijarle las cuatro
+                             metas a alguien es una sola decisión. -->
                         <input
-                          type="number"
-                          min="0"
-                          [attr.aria-label]="meta.rotulo + ' de ' + fila.nombre"
-                          [value]="valorFijado(meta.kpi)"
-                          (input)="cambiarValorFijado(meta.kpi, $any($event.target).value)"
+                          type="text"
+                          class="motivo"
+                          placeholder="Por qué"
+                          [value]="motivoFijado()"
+                          (input)="motivoFijado.set($any($event.target).value)"
                         />
-                      } @else if (meta.valor == null) {
-                        <!-- Sin meta no es cero. Y verlo es lo que permite
-                             arreglar la cobertura incompleta. -->
-                        <em class="sin-meta">sin fijar</em>
+                        <button
+                          type="button"
+                          class="bt primario"
+                          [disabled]="guardandoMetas()"
+                          (click)="guardarMetas(fila.id)"
+                        >
+                          Guardar
+                        </button>
+                        <button type="button" class="bt" (click)="cerrarFijar()">Cancelar</button>
                       } @else {
-                        {{ meta.valor }}
+                        <button type="button" class="bt" (click)="abrirFijar(fila)">
+                          {{ fila.metas[0].valor == null ? 'Fijar metas' : 'Revisar metas' }}
+                        </button>
                       }
                     </td>
-                  }
-                  <td class="acciones">
-                    @if (fijandoA() === fila.id) {
-                      <!-- El motivo va una vez por agente: fijarle las cuatro
-                           metas a alguien es una sola decisión. -->
-                      <input
-                        type="text"
-                        class="motivo"
-                        placeholder="Por qué"
-                        [value]="motivoFijado()"
-                        (input)="motivoFijado.set($any($event.target).value)"
-                      />
-                      <button
-                        type="button"
-                        class="cl-btn primario"
-                        [disabled]="guardandoMetas()"
-                        (click)="guardarMetas(fila.id)"
-                      >
-                        Guardar
-                      </button>
-                      <button type="button" class="cl-btn" (click)="cerrarFijar()">Cancelar</button>
-                    } @else {
-                      <button type="button" class="cl-btn" (click)="abrirFijar(fila)">
-                        {{ fila.metas[0].valor == null ? 'Fijar metas' : 'Revisar metas' }}
-                      </button>
-                    }
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
     </section>
   }
-
-
-  <div class="rejilla">
-    <section class="cl-tarjeta">
-      <header>
-        <div>
-          <h2>Embudo de conversión</h2>
-          <p>Oportunidades del periodo, etapa por etapa</p>
-        </div>
-      </header>
-
-      @if (embudo().length === 0) {
-        <p class="cl-vacio">Sin oportunidades en el periodo.</p>
-      } @else {
-        <ul class="embudo">
-          @for (fila of embudo(); track fila.etapa) {
-            <li>
-              <div class="rotulo">
-                <span class="nombre">{{ fila.etapa }}</span>
-                <span class="cifras">
-                  <b>{{ fila.valor }}</b>
-                  <span class="cl-menudo">{{ fila.porcentaje }}%</span>
-                </span>
-              </div>
-              <div class="pista">
-                <i [style.width.%]="fila.porcentaje" [style.background]="fila.color"></i>
-              </div>
-            </li>
-          }
-        </ul>
-        <p class="cl-menudo nota">
-          Dos rarezas del sistema que se muestran tal cual: la primera fila lleva
-          <b>100 % fijo</b> aunque no haya oportunidades, y <b>“Con visita realizada”</b> cuenta
-          oportunidades con visita <b>de cualquier estado</b>, incluida una cancelada.
-        </p>
-      }
-    </section>
-
-    <section class="cl-tarjeta">
-      <header>
-        <div>
-          <h2>Captaciones por etapa</h2>
-          <p>Reparto acumulado de toda tu cartera; no depende del periodo</p>
-        </div>
-        <span class="cl-badge">
-          {{ totalEtapas() }} {{ totalEtapas() === 1 ? 'activa' : 'activas' }}
-        </span>
-      </header>
-
-      @if (totalEtapas() === 0) {
-        <!--
-          Vacío ≠ "no hay captaciones": el reparto solo cuenta las ACTIVAS, así
-          que una cartera entera en revisión da cero aquí. Decir "no hay
-          captaciones" sería falso y mandaría a buscar un problema que no existe.
-        -->
-        <p class="cl-vacio">
-          Ninguna captación activa todavía. Este reparto solo cuenta las que el broker ya aprobó;
-          las que siguen en revisión aparecen cuando se aprueban.
-        </p>
-      } @else {
-        <div
-          class="barra"
-          role="img"
-          [attr.aria-label]="'Reparto de ' + totalEtapas() + ' captaciones por etapa del proceso'"
-        >
-          @for (etapa of etapas(); track etapa.nombre) {
-            @if (etapa.valor > 0) {
-              <span
-                class="tramo"
-                [style.flex-grow]="etapa.valor"
-                [style.background]="etapa.color"
-                [title]="etapa.nombre + ': ' + etapa.valor"
-              ></span>
-            }
-          }
-        </div>
-        <ul class="leyenda">
-          @for (etapa of etapas(); track etapa.nombre) {
-            <li>
-              <span class="punto" [style.background]="etapa.color" aria-hidden="true"></span>
-              <span class="nombre">{{ etapa.nombre }}</span>
-              <b>{{ etapa.valor }}</b>
-              <span class="cl-menudo pct">{{ etapa.porcentaje }}%</span>
-            </li>
-          }
-        </ul>
-        <p class="cl-menudo nota">
-          Cada captación cae en <b>una sola</b> etapa: la más avanzada que alcanzó.
-        </p>
-      }
-    </section>
-  </div>
-
-  <!--
-    EVOLUCIÓN · una sola serie por vez.
-
-    Aquí había DOS tarjetas —«Evolución» y «Conversión por periodo»— sobre los
-    mismos tramos del mismo periodo. Cuatro líneas simultáneas son ruido
-    (D-E2-2 §10): se conserva la de conteos, que es la que responde «cómo vengo
-    trabajando», y el porcentaje vive donde se interpreta, en el embudo.
-  -->
-  <section class="cl-tarjeta">
-    <header>
-      <div>
-        <h2>Evolución</h2>
-        <p>Captaciones y cierres por {{ i.mesesEtiquetas.length > 12 ? 'día' : 'periodo' }}</p>
-      </div>
-    </header>
-    <cl-grafico-serie
-      [etiquetas]="etiquetasSerie()"
-      [series]="seriesConteo()"
-      tipo="columnas"
-      descripcion="Captaciones y cierres por periodo"
-    />
-  </section>
-
-
-  <div class="rejilla">
-    <section class="cl-tarjeta">
-      <header>
-        <div>
-          <h2>{{ tituloDesempeno() }}</h2>
-          <p>Hasta 8 filas, ordenadas por cierres del periodo</p>
-        </div>
-      </header>
-      @if (desempeno().length === 0) {
-        <p class="cl-vacio">Sin actividad registrada en {{ etiquetaPeriodo().toLowerCase() }}.</p>
-      } @else {
-        <div class="cl-tabla-marco">
-          <table class="cl-tabla">
-            <thead>
-              <tr>
-                <th>{{ esAdmin() ? 'Broker' : 'Agente' }}</th>
-                <th class="num">Captaciones</th>
-                <th class="num">Cierres</th>
-                <th class="num">Conversión</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (fila of desempeno(); track fila.nombre) {
-                <tr>
-                  <td>{{ fila.nombre }}</td>
-                  <td class="num">{{ fila.captaciones }}</td>
-                  <td class="num">
-                    <b>{{ fila.cierres }}</b>
-                  </td>
-                  <td class="num">{{ fila.conversion }}%</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-    </section>
-  </div>
-}
+</div>

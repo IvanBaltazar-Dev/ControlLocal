@@ -1068,6 +1068,64 @@ describe('Inicio', () => {
     expect(raiz().querySelector('.vs')).toBeNull();
   });
 
+  /**
+   * ¿La animación que declara este elemento EXISTE?
+   *
+   * No basta con mirar que `animation-name` no sea `none`. Angular encapsula
+   * los nombres de `@keyframes` por componente: si una regla usa una animación
+   * declarada en la hoja de OTRO componente, el nombre sale sin prefijar,
+   * `animation-name` se sigue leyendo como un nombre, y aun así no hay ninguna
+   * animación que se llame así. Lo que se comprueba es que el nombre calculado
+   * corresponde a una `@keyframes` viva en el documento.
+   */
+  function laAnimacionResuelve(elemento: Element): boolean {
+    const nombre = getComputedStyle(elemento).animationName;
+    if (!nombre || nombre === 'none') {
+      return false;
+    }
+    return Array.from(document.styleSheets).some((hoja) => {
+      let reglas: CSSRuleList;
+      try {
+        reglas = hoja.cssRules;
+      } catch {
+        // Hoja de otro origen: no se puede leer, y tampoco es de la aplicación.
+        return false;
+      }
+      return Array.from(reglas).some(
+        (regla) => regla instanceof CSSKeyframesRule && regla.name === nombre,
+      );
+    });
+  }
+
+  /**
+   * La entrada escalonada del expediente tiene que seguir existiendo.
+   *
+   * Se rompió al partir el Radar en cuatro componentes (2026-08-21): `.ant-fila`
+   * se mudó a `radar-antecedentes.scss` y dejó atrás su `@keyframes`, así que
+   * las cuatro filas aparecían de golpe. Ni el build ni los 653 tests lo vieron.
+   */
+  it('la entrada de cada renglon apunta a una animacion que existe', async () => {
+    await montarConExpediente(EXPEDIENTE_CON_ENCARGO);
+
+    const filas = renglones();
+    expect(filas.length).toBe(4);
+    filas.forEach((fila) => expect(laAnimacionResuelve(fila)).toBe(true));
+  });
+
+  /** Y lo mismo para todo lo demás que se anima dentro de la superficie. */
+  it('ninguna animacion del Radar se queda sin su keyframes', async () => {
+    await montarConExpediente(EXPEDIENTE_CON_ENCARGO);
+
+    const animados = Array.from(raiz().querySelectorAll('.radar, .radar *')).filter(
+      (elemento) => getComputedStyle(elemento).animationName !== 'none',
+    );
+    expect(animados.length).toBeGreaterThan(0);
+    const huerfanas = animados
+      .filter((elemento) => !laAnimacionResuelve(elemento))
+      .map((elemento) => `${elemento.tagName.toLowerCase()} → ${getComputedStyle(elemento).animationName}`);
+    expect(huerfanas).toEqual([]);
+  });
+
   // ==================================================================
   // EL PIE · anticipo de Indicadores (D-E2-1 §6.2, E2.6)
   // ==================================================================

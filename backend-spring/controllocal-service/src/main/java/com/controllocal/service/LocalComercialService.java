@@ -111,20 +111,6 @@ public interface LocalComercialService {
 
     Optional<FichaLocal> buscarPorId(long id, Actor actor);
 
-    /**
-     * Alta del local con las reglas de la v1 (estado por defecto D, solo
-     * tipo L/O y uso C, distrito resuelto contra el catalogo) + la
-     * publicacion principal sincronizada si llega estadoPublicacion.
-     */
-    FichaLocal registrar(DatosLocal datos, Actor actor);
-
-    /**
-     * Edicion comercial (RF-004): si cambia el precio se registra el hito
-     * 'U' en el historico; si cambia el estado, la transicion queda
-     * auditada en historial_estado.
-     */
-    FichaLocal actualizar(long id, DatosLocal datos, Actor actor);
-
     /** Baja logica (estado I) con transicion auditada. */
     boolean desactivar(long id, Actor actor);
 

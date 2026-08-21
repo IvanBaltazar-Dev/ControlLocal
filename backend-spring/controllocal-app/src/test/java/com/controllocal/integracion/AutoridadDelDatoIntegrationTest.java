@@ -3,9 +3,6 @@ package com.controllocal.integracion;
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.Actor;
-import com.controllocal.service.LocalComercialService.DatosLocal;
-import com.controllocal.service.LocalComercialService.FichaLocal;
-import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.captura.GuionRegistroPropiedad;
@@ -74,7 +71,6 @@ class AutoridadDelDatoIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MotorDeCaptura motor;
     @Autowired PropiedadUniversalService propiedades;
-    @Autowired LocalComercialService locales;
 
     /**
      * Un departamento con un valor de cada familia de autoridad: `ambientes`
@@ -405,92 +401,6 @@ class AutoridadDelDatoIntegrationTest {
     }
 
     /**
-     * <b>El ida y vuelta de {@code /locales}, que es el camino que el paso 7 tuvo
-     * que migrar por los DOS lados.</b>
-     *
-     * <p>Este recurso escribia los seis conceptos en columnas de {@code propiedad}
-     * y los leia de las mismas columnas: una isla coherente consigo misma y ciega
-     * respecto del modelo universal. Migrar solo el lector habria dejado cada PUT
-     * escribiendo donde ya nadie lee, y es este test el que lo nota -- porque la
-     * edicion del final no menciona ninguno de los seis.
-     */
-    @Test
-    @DisplayName("/locales: los seis gobernados sobreviven a una edicion que no los toca")
-    void localesIdaYVuelta() {
-        Actor actor = actorAgente();
-        String codigo = codigoIrrepetible();
-
-        FichaLocal alta = locales.registrar(datosDePrueba(codigo, actor, new BigDecimal("7000")), actor);
-        assertEquals(4, alta.ambientes(),
-                "la respuesta del alta ya se lee por autoridad, no del objeto que llego");
-
-        // --- leer por la ficha del detalle
-        FichaLocal leida = locales.buscarPorId(alta.id(), actor).orElseThrow();
-        assertEquals(4, leida.ambientes());
-        assertEquals(12, leida.antiguedadAnios());
-        assertEquals(0, new BigDecimal("6.5").compareTo(leida.frente()));
-        assertEquals("CZ", leida.zonificacion());
-        assertEquals(2, leida.numeroEstacionamientos());
-        assertEquals(0, new BigDecimal("350").compareTo(leida.cuotaMantenimiento()));
-
-        // --- leer por el LISTADO, que es otra consulta y otra hidratacion
-        FichaLocal enListado = locales.listar(
-                        new LocalComercialService.FiltrosLocal(codigo, null, 1, 10), actor)
-                .items().stream().filter(f -> codigo.equals(f.codigoLocal())).findFirst()
-                .orElseThrow(() -> new AssertionError("el alta no aparece en su propio listado"));
-        assertEquals(4, enListado.ambientes(),
-                "el listado hidrata los gobernados por lote; si se olvida, la columna sale vacia");
-        assertEquals("CZ", enListado.zonificacion());
-        assertEquals(0, new BigDecimal("350").compareTo(enListado.cuotaMantenimiento()));
-        assertNotNull(enListado.metraje(),
-                "y el estructural sigue viniendo de la proyeccion, que es donde se puede ordenar");
-
-        // --- editar SOLO el precio: ninguno de los seis se menciona
-        locales.actualizar(alta.id(), datosDePrueba(codigo, actor, new BigDecimal("7500")), actor);
-
-        FichaLocal despues = locales.buscarPorId(alta.id(), actor).orElseThrow();
-        assertEquals(0, new BigDecimal("7500").compareTo(despues.precioReferencial()));
-        assertEquals(4, despues.ambientes(), "ambientes no se toco y no puede haberse perdido");
-        assertEquals("CZ", despues.zonificacion());
-        assertEquals(0, new BigDecimal("350").compareTo(despues.cuotaMantenimiento()));
-        assertEquals(2, despues.numeroEstacionamientos());
-        assertEquals(12, despues.antiguedadAnios());
-        assertEquals(0, new BigDecimal("6.5").compareTo(despues.frente()));
-    }
-
-    /**
-     * <b>Un valor que se retira se retira de verdad.</b>
-     *
-     * <p>{@code PUT /locales} manda el objeto ENTERO, asi que un campo vacio
-     * significa "ya no lo se" y no "no lo toques". Eso lo hacia antes gratis un
-     * {@code UPDATE} que ponia la columna a NULL; con la autoridad en
-     * {@code atributo_propiedad} hay que retirar la FILA, y olvidarlo dejaria un
-     * valor viejo pegado a la propiedad para siempre.
-     */
-    @Test
-    @DisplayName("/locales: vaciar un gobernado retira su fila, no la deja con el valor viejo")
-    void vaciarUnGobernadoLoRetira() {
-        Actor actor = actorAgente();
-        String codigo = codigoIrrepetible();
-        FichaLocal alta = locales.registrar(datosDePrueba(codigo, actor, new BigDecimal("7000")), actor);
-
-        DatosLocal sinZonificacion = new DatosLocal(codigo, "Av. Ida y Vuelta " + codigo,
-                "Miraflores", new BigDecimal("120"), new BigDecimal("7000"), "PEN", "Cafeteria",
-                "Local de prueba del ida y vuelta de autoridad", alta.idPropietario(), "D", "L",
-                null, 4, 12, "Zona A", null, null, null, new BigDecimal("6.5"), null,
-                Boolean.TRUE, null, 2, new BigDecimal("350"));
-        locales.actualizar(alta.id(), sinZonificacion, actor);
-
-        assertEquals(null, locales.buscarPorId(alta.id(), actor).orElseThrow().zonificacion(),
-                "la zonificacion llego vacia: su fila tiene que haberse retirado");
-        assertEquals(0L, jdbc.queryForObject("""
-                select count(*) from atributo_propiedad
-                 where id_propiedad = ? and clave = 'zonificacion'
-                """, Long.class, alta.id()),
-                "y no quedar en la tabla con el valor anterior");
-    }
-
-    /**
      * <b>El rango que V4 tenia en un CHECK sigue vigente tras mudarse.</b>
      *
      * <p>Al retirar las columnas espejo, PostgreSQL se llevo cuatro CHECK de rango
@@ -594,21 +504,6 @@ class AutoridadDelDatoIntegrationTest {
                 .map(a -> a.valor())
                 .findFirst()
                 .orElse(null);
-    }
-
-    /** Un LOCAL con los seis gobernados puestos. El precio es lo unico que varia. */
-    private DatosLocal datosDePrueba(String codigo, Actor actor, BigDecimal precio) {
-        Long idPropietario = jdbc.queryForObject("""
-                select min(r.id_persona_rol) from persona_rol r
-                 where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
-                   and r.organizacion_id = ?
-                """, Long.class, actor.idOrganizacion());
-        return new DatosLocal(codigo, "Av. Ida y Vuelta " + codigo, "Miraflores",
-                new BigDecimal("120"), precio, "PEN", "Cafeteria",
-                "Local de prueba del ida y vuelta de autoridad", idPropietario, "D", "L",
-                null, 4, 12, "Zona A", null, null, null,
-                new BigDecimal("6.5"), "CZ", Boolean.TRUE, null, 2,
-                new BigDecimal("350"));
     }
 
     /**

@@ -207,8 +207,10 @@ class BusquedaLocalesIntegrationTest {
         jdbc.update("update propiedad set codigo='LOC-GAVIOTA-1' where id_propiedad=?", idPorCodigo);
         jdbc.update("update propiedad set direccion='Calle GAVIOTA 200' where id_propiedad=?", idPorDireccion);
         jdbc.update("update propiedad set distrito='GAVIOTA Alto' where id_propiedad=?", idPorDistrito);
-        jdbc.update("update detalle_local_comercial set rubro_permitido='Tienda de GAVIOTA' where id_propiedad=?",
-                idPorRubro);
+        jdbc.update("""
+                update atributo_propiedad set valor_texto='Tienda de GAVIOTA'
+                 where clave='rubro_permitido' and id_propiedad=?
+                """, idPorRubro);
 
         List<Long> gaviota = idsDelConjunto("GAVIOTA");
         assertTrue(gaviota.containsAll(List.of(idPorCodigo, idPorDireccion, idPorDistrito, idPorRubro)));
@@ -306,9 +308,11 @@ class BusquedaLocalesIntegrationTest {
                 values (?, ?, ?, 100, 5000, 'PEN', 'A', 'D', 'L', 'C', ?, ?)
                 returning id_propiedad
                 """, Long.class, codigo, direccion, distrito, rolPropietario, organizacion);
+        // El rubro es un atributo gobernado desde V71: la busqueda lo encuentra
+        // por su autoridad, no por una tabla por tipo.
         jdbc.update("""
-                insert into detalle_local_comercial (id_propiedad, rubro_permitido, organizacion_id)
-                values (?, ?, ?)
+                insert into atributo_propiedad (id_propiedad, clave, valor_texto, organizacion_id)
+                values (?, 'rubro_permitido', ?, ?)
                 """, id, rubro, organizacion);
         return id;
     }

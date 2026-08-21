@@ -16,6 +16,8 @@ import com.controllocal.persistence.repositorio.FotoPropiedadRepository;
 import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.ReasignacionCaptacionRepository;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import com.controllocal.service.Actor;
 import com.controllocal.service.AlertaService;
 import com.controllocal.service.CaptacionService.DatosCaptacion;
@@ -35,6 +37,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,6 +48,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -76,7 +80,8 @@ class CaptacionServiceImplTest {
 
     private final CaptacionServiceImpl service = new CaptacionServiceImpl(
             captaciones, reasignaciones, propiedades, agentes, brokers, fotos,
-            alcances, new Transiciones(historial), mock(AlertaService.class));
+            alcances, new Transiciones(historial), mock(AlertaService.class),
+            lectorSinGobernados());
 
     /** Organizacion de legado: el tenant que el backend resuelve para la sesion (V6). */
     private static final long ORG = 1L;
@@ -385,7 +390,6 @@ class CaptacionServiceImplTest {
         propiedad.setMetraje(new BigDecimal("120.00"));
         propiedad.setPrecioReferencial(new BigDecimal("8500.00"));
         propiedad.setMonedaReferencial("PEN");
-        propiedad.asignarDetalleLocal("Comercio minorista", null, null);
         propiedad.iniciarDisponible();
         ReflectionTestUtils.setField(propiedad, "id", id);
         return propiedad;
@@ -419,5 +423,23 @@ class CaptacionServiceImplTest {
         ArgumentCaptor<HistorialEstado> evento = ArgumentCaptor.forClass(HistorialEstado.class);
         verify(historial).save(evento.capture());
         return evento.getValue();
+    }
+
+    /**
+     * Un lector que no encuentra ningun valor gobernado.
+     *
+     * <p>Estas pruebas no afirman nada sobre el rubro; solo necesitan que el
+     * servicio pueda construir su ficha. Devolver lotes vacios —y no un mock
+     * sin respuestas— es lo correcto: {@code ValoresDePropiedad.vacio()}
+     * significa "no se sabe nada de esta propiedad", que es un estado legitimo
+     * del dominio, mientras que un null seria un fallo del andamiaje
+     * disfrazado de dato.
+     */
+    private static LectorPorAutoridad lectorSinGobernados() {
+        LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
+        lenient().when(lector.de(anyLong(), any())).thenReturn(ValoresDePropiedad.vacio());
+        lenient().when(lector.deVarias(anyLong(), any())).thenReturn(Map.of());
+        lenient().when(lector.gobernadosDeVarias(any())).thenReturn(Map.of());
+        return lector;
     }
 }

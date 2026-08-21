@@ -5,7 +5,6 @@ import com.controllocal.domain.comun.EstadosDominio.DisponibilidadComercial;
 import com.controllocal.domain.comun.EstadosDominio.EstadoRegistroPropiedad;
 import com.controllocal.domain.comun.Transicionable;
 import com.controllocal.domain.persona.PersonaRol;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -14,7 +13,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -25,9 +23,10 @@ import java.util.Set;
 
 /**
  * Inmueble de la cartera (generaliza el local_comercial de la v1, MEJ-12/31):
- * aqui viven los atributos comunes a cualquier tipo; lo especifico del local
- * comercial esta en {@link DetalleLocalComercial} (composicion, obligatoria
- * para tipo L/O). El propietario es el rol PROPIETARIO de una persona
+ * aqui viven los atributos comunes a cualquier tipo. Lo especifico de cada uno
+ * NO cuelga del agregado: son atributos gobernados por el catalogo, y desde
+ * V71 tampoco lo comercial -- rubro, apto para licencia y carga electrica
+ * tenian una tabla por tipo y ya no. El propietario es el rol PROPIETARIO de una persona
  * (Party-Role): en el cable congelado idPropietario = persona_rol.id.
  * Los codigos de 1 caracter son el vocabulario heredado del cable; los enums
  * legibles llegan tras el corte del modulo.
@@ -43,16 +42,30 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     public static final String LEGADO_DISPONIBLE = "D";
     public static final String LEGADO_NO_DISPONIBLE = "N";
     public static final String LEGADO_INACTIVO = "I";
-    public static final Set<String> ESTADOS = Set.of("D", "N", "I");
-
-    /** 'L' local, 'O' oficina, 'D' departamento, 'C' casa, 'T' terreno, 'X' otro. */
     public static final String TIPO_LOCAL = "L";
     public static final String TIPO_OFICINA = "O";
-    public static final Set<String> TIPOS_INMUEBLE = Set.of("L", "O", "D", "C", "T", "X");
 
     /** 'C' comercial, 'V' vivienda, 'I' industrial, 'M' mixto. */
     public static final String USO_COMERCIAL = "C";
     public static final Set<String> USOS = Set.of("C", "V", "I", "M");
+
+    // ------------------------------------------------------------------
+    // Aqui vivian `TIPOS_INMUEBLE` y `ESTADOS`. Los retiro V71 con la puerta
+    // heredada, que era su unico usuario.
+    //
+    // `TIPOS_INMUEBLE` no se repone, y esta es la razon: declaraba SEIS
+    // codigos -- L O D C T X -- cuando la base admite SIETE desde V54, y esa
+    // discrepancia era justo lo que impedia editar un ALMACEN ("Valor invalido
+    // para tipo de inmueble: A"). El vocabulario vive en un solo sitio,
+    // `AtributosGobernados.codigoDelTipo`, que los tiene los siete. Dos listas
+    // de tipos es como se llega a que la base acepte uno que el codigo rechaza.
+    //
+    // `USO_COMERCIAL` si se queda, porque abajo alimenta el defecto del campo
+    // `uso`. Ese defecto es material del corte siguiente, no de este: cambiarlo
+    // aqui alteraria en silencio el uso de toda propiedad que se cree sin
+    // declararlo, y eso es exactamente la clase de reinterpretacion callada que
+    // 0A viene a impedir. Queda anotado, no arreglado de paso.
+    // ------------------------------------------------------------------
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -140,9 +153,6 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_rol_propietario", nullable = false)
     private PersonaRol rolPropietario;
-
-    @OneToOne(mappedBy = "propiedad", cascade = CascadeType.ALL, orphanRemoval = true)
-    private DetalleLocalComercial detalleLocal;
 
     @Column(name = "fecha_registro", insertable = false, updatable = false)
     private OffsetDateTime fechaRegistro;
@@ -244,22 +254,11 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
         return disponibilidadComercial;
     }
 
-    /**
-     * Asigna o actualiza el detalle de local comercial manteniendo la
-     * composicion. El detalle es parte del agregado, asi que hereda el tenant
-     * de la propiedad: quien crea la propiedad no tiene que acordarse de
-     * estampar la organizacion dos veces.
-     */
-    public void asignarDetalleLocal(String rubroPermitido, Boolean aptoLicenciaFuncionamiento,
-                                    BigDecimal cargaElectricaKw) {
-        if (detalleLocal == null) {
-            detalleLocal = new DetalleLocalComercial(this);
-        }
-        detalleLocal.setOrganizacionId(getOrganizacionId());
-        detalleLocal.setRubroPermitido(rubroPermitido);
-        detalleLocal.setAptoLicenciaFuncionamiento(aptoLicenciaFuncionamiento);
-        detalleLocal.setCargaElectricaKw(cargaElectricaKw);
-    }
+    // `asignarDetalleLocal` vivia aqui hasta V71. El rubro, el apto para
+    // licencia y la carga electrica dejaron de tener una tabla por tipo: son
+    // tres claves gobernadas mas, y se escriben por el enrutador de autoridad
+    // como las otras. El agregado ya no sabe que existen, que es justo lo que
+    // hace universal al modelo.
 
     public Long getId() {
         return id;
@@ -384,10 +383,6 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
 
     public void setRolPropietario(PersonaRol rolPropietario) {
         this.rolPropietario = rolPropietario;
-    }
-
-    public DetalleLocalComercial getDetalleLocal() {
-        return detalleLocal;
     }
 
     public OffsetDateTime getFechaRegistro() {

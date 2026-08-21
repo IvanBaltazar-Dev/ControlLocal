@@ -22,6 +22,8 @@ import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
 import com.controllocal.persistence.repositorio.SolicitudAlquilerRepository;
 import com.controllocal.persistence.repositorio.VisitaRepository;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import com.controllocal.service.Actor;
 import com.controllocal.service.FichaComercialService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
@@ -40,6 +42,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,7 +50,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -77,7 +83,8 @@ class FichaComercialServiceImplTest {
     void preparar() {
         servicio = new FichaComercialServiceImpl(
                 clientes, roles, requerimientos, prospecciones, captaciones,
-                oportunidades, interacciones, visitas, solicitudes, contratos, alcances);
+                oportunidades, interacciones, visitas, solicitudes, contratos, alcances,
+                lectorSinGobernados());
         lenient().when(alcances.de(ADMIN)).thenReturn(new Alcances.Alcance(ORG, true, List.of()));
         lenient().when(alcances.de(AGENTE)).thenReturn(new Alcances.Alcance(ORG, false, List.of(10L)));
         lenient().when(alcances.de(BROKER)).thenReturn(new Alcances.Alcance(ORG, false, List.of(31L)));
@@ -389,7 +396,6 @@ class FichaComercialServiceImplTest {
         propiedad.setDireccion("Av. E3 " + id);
         propiedad.setDistrito("Miraflores");
         propiedad.setRolPropietario(propietario);
-        propiedad.asignarDetalleLocal("Retail", true, null);
         return propiedad;
     }
 
@@ -429,5 +435,23 @@ class FichaComercialServiceImplTest {
         oportunidad.setCaptacion(captacion);
         oportunidad.setFechaRegistro(OffsetDateTime.parse("2026-07-20T10:00:00Z"));
         return oportunidad;
+    }
+
+    /**
+     * Un lector que no encuentra ningun valor gobernado.
+     *
+     * <p>Estas pruebas no afirman nada sobre el rubro; solo necesitan que el
+     * servicio pueda construir su ficha. Devolver lotes vacios —y no un mock
+     * sin respuestas— es lo correcto: {@code ValoresDePropiedad.vacio()}
+     * significa "no se sabe nada de esta propiedad", que es un estado legitimo
+     * del dominio, mientras que un null seria un fallo del andamiaje
+     * disfrazado de dato.
+     */
+    private static LectorPorAutoridad lectorSinGobernados() {
+        LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
+        lenient().when(lector.de(anyLong(), any())).thenReturn(ValoresDePropiedad.vacio());
+        lenient().when(lector.deVarias(anyLong(), any())).thenReturn(Map.of());
+        lenient().when(lector.gobernadosDeVarias(any())).thenReturn(Map.of());
+        return lector;
     }
 }

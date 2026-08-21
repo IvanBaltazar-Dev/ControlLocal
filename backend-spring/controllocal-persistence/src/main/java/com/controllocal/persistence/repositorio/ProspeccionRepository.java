@@ -135,7 +135,6 @@ public interface ProspeccionRepository extends JpaRepository<Prospeccion, Long> 
     @Query("""
             select p from Prospeccion p
               join fetch p.propiedad prop
-              left join fetch prop.detalleLocal
               left join fetch prop.rolPropietario rp
               left join fetch rp.persona
               join fetch p.agente ag

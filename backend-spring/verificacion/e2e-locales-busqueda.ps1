@@ -103,15 +103,18 @@ select 'PERF-' || lpad(g::text, 7, '0'),
 from generate_series(1, $VOLUMEN) g
 "@ | Out-Null
 Sql @"
-insert into detalle_local_comercial (id_propiedad, rubro_permitido, apto_licencia_funcionamiento, organizacion_id)
-select p.id_propiedad,
-       case when p.id_propiedad % 1000 = 0 then 'Boutique de autor' else 'Carga RC-003' end,
-       true, 1
+insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
+select 1, p.id_propiedad, 'rubro_permitido',
+       case when p.id_propiedad % 1000 = 0 then 'Boutique de autor' else 'Carga RC-003' end
+  from propiedad p
+ where p.organizacion_id = 1 and p.codigo like 'PERF-%';
+insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_booleano)
+select 1, p.id_propiedad, 'apto_licencia_funcionamiento', true
   from propiedad p
  where p.organizacion_id = 1 and p.codigo like 'PERF-%'
 "@ | Out-Null
 Sql 'analyze propiedad' | Out-Null
-Sql 'analyze detalle_local_comercial' | Out-Null
+Sql 'analyze atributo_propiedad' | Out-Null
 Sql 'analyze persona' | Out-Null
 $cargados = [int](Sql "select count(*) from propiedad where codigo like 'PERF-%'")
 Check "el banco tiene $VOLUMEN locales" ($cargados -eq $VOLUMEN) "cargados=$cargados"
@@ -138,8 +141,9 @@ Check 'un texto sin coincidencias devuelve vacio y total 0' `
 Sql @"
 update propiedad set codigo='PERF-CRUCE-1', direccion='Avenida CRUCE', distrito='CRUCE'
  where id_propiedad = (select min(id_propiedad) from propiedad where codigo like 'PERF-%');
-update detalle_local_comercial set rubro_permitido='Rubro CRUCE'
- where id_propiedad = (select min(id_propiedad) from propiedad where codigo like 'PERF-%');
+update atributo_propiedad set valor_texto='Rubro CRUCE'
+ where clave = 'rubro_permitido'
+   and id_propiedad = (select min(id_propiedad) from propiedad where codigo like 'PERF-%');
 "@ | Out-Null
 $cruce = Api GET '/locales?page=1&tamano=10&texto=CRUCE' $token $null
 Check 'casar por varias ramas no duplica la fila' ($cruce.totalRecords -eq 1) "total=$($cruce.totalRecords)"

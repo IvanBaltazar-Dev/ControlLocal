@@ -983,7 +983,7 @@ class PropiedadUniversalIntegrationTest {
                 () -> propiedades.consultar(alta.idPropiedad(), agenteB));
         assertThrows(NoEncontradoException.class,
                 () -> propiedades.editar(alta.idPropiedad(),
-                        new ComandoEdicion(null, PANTALLA, "intento del vecino", null, null, null, null),
+                        new ComandoEdicion(null, PANTALLA, "intento del vecino", null, null, null, null, null),
                         agenteB));
 
         // Y un titular de otro tenant tampoco sirve dentro del propio.
@@ -1103,7 +1103,7 @@ class PropiedadUniversalIntegrationTest {
         // --- editar el precio: 180 000 -> 175 000
         propiedades.editar(alta.idPropiedad(), new ComandoEdicion(null, PANTALLA, null, null, null, null,
                 List.of(new OperacionSolicitada("VENTA", new BigDecimal("175000"), "USD",
-                        null, null, null, null, null, null, null))), agenteA);
+                        null, null, null, null, null, null, null)), null), agenteA);
 
         // --- leer: el precio nuevo manda y el anterior SIGUE AHI
         FichaPropiedadUniversal despues = propiedades.consultar(alta.idPropiedad(), agenteA);
@@ -1126,7 +1126,7 @@ class PropiedadUniversalIntegrationTest {
                 List.of(new ValorAtributo("metraje_total", "80"))), agenteA);
 
         propiedades.editar(alta.idPropiedad(), new ComandoEdicion(null, PANTALLA, null, null,
-                List.of(new Titular(propietarioCarlos, null, true)), null, null), agenteA);
+                List.of(new Titular(propietarioCarlos, null, true)), null, null, null), agenteA);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
         assertEquals(1, ficha.titulares().size());

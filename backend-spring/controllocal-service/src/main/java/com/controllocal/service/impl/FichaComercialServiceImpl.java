@@ -8,6 +8,7 @@ import com.controllocal.domain.comercial.Prospeccion;
 import com.controllocal.domain.comercial.RequerimientoCliente;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
 import com.controllocal.domain.comercial.Visita;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
@@ -33,6 +34,8 @@ import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +44,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -77,6 +81,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
     private final SolicitudAlquilerRepository solicitudes;
     private final ContratoAlquilerRepository contratos;
     private final Alcances alcances;
+    private final LectorPorAutoridad lector;
 
     public FichaComercialServiceImpl(DetalleClienteRepository clientes,
                                      PersonaRolRepository roles,
@@ -88,7 +93,8 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                                      VisitaRepository visitas,
                                      SolicitudAlquilerRepository solicitudes,
                                      ContratoAlquilerRepository contratos,
-                                     Alcances alcances) {
+                                     Alcances alcances,
+                                     LectorPorAutoridad lector) {
         this.clientes = clientes;
         this.roles = roles;
         this.requerimientos = requerimientos;
@@ -100,6 +106,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         this.solicitudes = solicitudes;
         this.contratos = contratos;
         this.alcances = alcances;
+        this.lector = lector;
     }
 
     @Override
@@ -269,22 +276,46 @@ public class FichaComercialServiceImpl implements FichaComercialService {
 
     private List<FilaFicha> filasPropiedadesCliente(DatosCliente datos, Contexto contexto) {
         Map<Object, FilaFicha> filas = new LinkedHashMap<>();
+        List<Propiedad> locales = new ArrayList<>();
+        datos.oportunidades().stream().filter(o -> visible(o, contexto)).map(o -> local(o))
+                .forEach(locales::add);
+        datos.visitas().stream().filter(v -> visible(v, contexto)).map(v -> local(v))
+                .forEach(locales::add);
+        datos.solicitudes().stream().filter(s -> visible(s, contexto)).map(s -> local(s))
+                .forEach(locales::add);
+        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(locales);
+
         datos.oportunidades().stream().filter(o -> visible(o, contexto))
-                .forEach(o -> putLocal(filas, local(o), o.getCaptacion(), o.getAgente(),
+                .forEach(o -> putLocal(filas, gobernados, local(o), o.getCaptacion(), o.getAgente(),
                         "Propiedad mostrada", "oportunidad-detail/" + textoId(o.getId()),
                         local(o.getFechaRegistro())));
         datos.visitas().stream().filter(v -> visible(v, contexto))
-                .forEach(v -> putLocal(filas, local(v), captacion(v), v.getAgente(),
+                .forEach(v -> putLocal(filas, gobernados, local(v), captacion(v), v.getAgente(),
                         "Propiedad visitada",
                         v.getOportunidad() != null && v.getOportunidad().getId() != null
                                 ? "oportunidad-detail/" + v.getOportunidad().getId() : "",
                         dia(v.getFechaVisita())));
         datos.solicitudes().stream().filter(s -> visible(s, contexto))
-                .forEach(s -> putLocal(filas, local(s), captacion(s), s.getAgente(),
+                .forEach(s -> putLocal(filas, gobernados, local(s), captacion(s), s.getAgente(),
                         "Solicitud enviada",
                         s.getCodigoSolicitud() != null ? "solicitud-detail/" + s.getCodigoSolicitud() : "",
                         dia(s.getFechaRegistro())));
         return filas.values().stream().sorted(orden()).toList();
+    }
+
+    /**
+     * Los valores gobernados de todos los locales de la ficha, <b>en una sola
+     * consulta</b>.
+     *
+     * <p>El rubro dejo de ser una columna del agregado en V71 y pasa a ser una
+     * clave gobernada mas. Leerlo fila a fila seria un N+1 en una pantalla que
+     * pinta una linea por hecho, que es exactamente lo que RC-003 vino a quitar;
+     * asi que se hidrata en lote antes de construir ninguna fila.
+     */
+    private Map<Long, ValoresDePropiedad> gobernadosDe(Collection<Propiedad> locales) {
+        List<Long> ids = locales.stream().filter(Objects::nonNull)
+                .map(Propiedad::getId).filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of() : lector.gobernadosDeVarias(ids);
     }
 
     private List<FilaFicha> filasAgentesCliente(DatosCliente datos, Contexto contexto) {
@@ -304,11 +335,18 @@ public class FichaComercialServiceImpl implements FichaComercialService {
             DatosPropietario datos, Contexto contexto) {
         Map<Object, FilaFicha> filas = new LinkedHashMap<>();
         Map<Long, CierreCaptacion> cierres = cierresPorCaptacion(datos, contexto);
+        List<Propiedad> locales = new ArrayList<>();
         datos.captaciones().stream().filter(c -> visible(c, contexto))
-                .forEach(c -> putLocalCaptacion(filas, c, cierres.get(c.getId())));
+                .forEach(c -> locales.add(c.getPropiedad()));
         datos.prospecciones().stream().filter(p -> visible(p, contexto))
-                .forEach(p -> putLocal(filas, p.getPropiedad(), p.getCaptacion(), p.getAgente(),
-                        "Local en prospeccion", rutaLocal(p.getPropiedad()),
+                .forEach(p -> locales.add(p.getPropiedad()));
+        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(locales);
+
+        datos.captaciones().stream().filter(c -> visible(c, contexto))
+                .forEach(c -> putLocalCaptacion(filas, gobernados, c, cierres.get(c.getId())));
+        datos.prospecciones().stream().filter(p -> visible(p, contexto))
+                .forEach(p -> putLocal(filas, gobernados, p.getPropiedad(), p.getCaptacion(),
+                        p.getAgente(), "Local en prospeccion", rutaLocal(p.getPropiedad()),
                         local(p.getFechaRegistro())));
         return filas.values().stream().sorted(orden()).toList();
     }
@@ -476,7 +514,8 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 texto(estado), texto(fecha), texto(ruta, ""), icono, tono, fechaOrden);
     }
 
-    private void putLocal(Map<Object, FilaFicha> filas, Propiedad local, Captacion captacion,
+    private void putLocal(Map<Object, FilaFicha> filas, Map<Long, ValoresDePropiedad> gobernados,
+                          Propiedad local, Captacion captacion,
                           DetalleAgente agente, String titulo, String ruta,
                           LocalDateTime fechaOrden) {
         if (local == null) {
@@ -486,13 +525,14 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         filas.putIfAbsent(clave, filaBase(
                 textoId(local.getId()),
                 texto(captacion != null ? captacion.getCodigoCaptacion() : null, codigoLocal(local)),
-                "Propiedad", titulo, texto(rubro(local), local.getDescripcion()),
+                "Propiedad", titulo, texto(rubro(local, gobernados), local.getDescripcion()),
                 local, null, agente, estadoLocal(local.estadoLegado()), fecha(fechaOrden),
                 texto(ruta, rutaLocal(local)), "store", "blue", fechaOrden));
     }
 
-    private void putLocalCaptacion(
-            Map<Object, FilaFicha> filas, Captacion captacion, CierreCaptacion cierre) {
+    private void putLocalCaptacion(Map<Object, FilaFicha> filas,
+            Map<Long, ValoresDePropiedad> gobernados,
+            Captacion captacion, CierreCaptacion cierre) {
         Propiedad local = captacion != null ? captacion.getPropiedad() : null;
         if (local == null || local.getId() == null) {
             return;
@@ -506,7 +546,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 "Propiedad", alquilada ? "Alquiler cerrado" : "Local captado",
                 alquilada && !"-".equals(clienteNombre)
                         ? "Alquilada a " + clienteNombre
-                        : texto(rubro(local), local.getDescripcion()),
+                        : texto(rubro(local, gobernados), local.getDescripcion()),
                 local, cliente, captacion.getAgente(),
                 alquilada ? "Alquilada" : estadoLocal(local.estadoLegado()),
                 fecha(alquilada && fechaCierre != null ? fechaCierre : dia(captacion.getFechaCaptacion())),
@@ -848,9 +888,19 @@ public class FichaComercialServiceImpl implements FichaComercialService {
         return propiedad != null ? texto(propiedad.getCodigo()) : "-";
     }
 
-    private static String rubro(Propiedad propiedad) {
-        return propiedad != null && propiedad.getDetalleLocal() != null
-                ? propiedad.getDetalleLocal().getRubroPermitido() : null;
+    /**
+     * El rubro, leido por su AUTORIDAD y no por una columna.
+     *
+     * <p>Hasta V71 salia de `detalle_local_comercial`. Ahora es una clave
+     * gobernada como las demas, y este metodo no sabe donde vive: pide por
+     * clave logica al lote ya hidratado.
+     */
+    private static String rubro(Propiedad propiedad, Map<Long, ValoresDePropiedad> gobernados) {
+        if (propiedad == null || propiedad.getId() == null) {
+            return null;
+        }
+        return LectorPorAutoridad.de(gobernados, propiedad.getId())
+                .texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO);
     }
 
     private static String propietario(Propiedad propiedad) {

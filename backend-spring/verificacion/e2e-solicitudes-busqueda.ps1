@@ -171,8 +171,11 @@ from generate_series(1, $VOLUMEN) g
 "@ | Out-Null
 
 Sql @"
-insert into detalle_local_comercial (id_propiedad, rubro_permitido, apto_licencia_funcionamiento, organizacion_id)
-select p.id_propiedad, 'Carga solicitudes', true, 1
+insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
+select 1, p.id_propiedad, 'rubro_permitido', 'Carga solicitudes'
+  from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFS-%';
+insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_booleano)
+select 1, p.id_propiedad, 'apto_licencia_funcionamiento', true
   from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFS-%'
 "@ | Out-Null
 

@@ -32,8 +32,6 @@ public interface LocalListado {
 
     String getMonedaReferencial();
 
-    String getRubroPermitido();
-
     String getDescripcion();
 
     String getEstado();
@@ -51,10 +49,6 @@ public interface LocalListado {
     BigDecimal getGeoLat();
 
     BigDecimal getGeoLong();
-
-    Boolean getAptoLicenciaFuncionamiento();
-
-    BigDecimal getCargaElectricaKw();
 
     Long getIdDistrito();
 

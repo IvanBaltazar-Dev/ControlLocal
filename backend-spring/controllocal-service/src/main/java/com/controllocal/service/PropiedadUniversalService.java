@@ -105,17 +105,45 @@ public interface PropiedadUniversalService {
     }
 
     /**
-     * La edicion. Lo que llega {@code null} <b>no se toca</b>: editar el precio
-     * no debe exigir reenviar los titulares, y reenviarlos "para completar"
-     * es como se pierden datos que nadie queria cambiar.
+     * La edicion. <b>La semantica completa, que es la invariante del Corte 0A</b>:
+     *
+     * <pre>
+     *   bloque ausente o null      = no tocar
+     *   campo ausente o null       = no tocar
+     *   campo con valor            = cambiar a ese valor
+     *   clave en atributosABorrar  = retirar el valor
+     * </pre>
+     *
+     * <p>Las cuatro lineas dicen lo mismo desde arriba: <b>lo que la interfaz no
+     * recibio o no modifico conserva exactamente su semantica anterior</b>.
+     * Editar el precio no debe exigir reenviar los titulares, y reenviarlos
+     * "para completar" es como se pierden datos que nadie queria cambiar.
+     *
+     * <p><b>{@code null} no significa borrar</b>, y no se le cambia el
+     * significado en este corte: reinterpretar un valor existente es
+     * exactamente la clase de perdida callada que 0A viene a contener. Borrar
+     * es una <b>intencion declarada</b>, y el blanco tampoco sirve — mandar
+     * {@code ""} donde iba un valor se rechaza, no se adivina.
      *
      * <p>{@code operaciones} sigue la misma regla que en el alta: cada una
      * declara la suya. Cambiar el importe de una operacion <b>anade</b> un hito
      * al historico; nunca sobrescribe el anterior.
+     *
+     * @param atributosABorrar claves <b>logicas</b> cuyo valor se retira. Un
+     *                         nombre logico y no un sitio: quien pide retirar
+     *                         dice «quita el piso» y no sabe si eso es una fila
+     *                         de {@code atributo_propiedad}, una columna del
+     *                         agregado o una pieza de la ubicacion. El Core
+     *                         enruta el borrado por la misma autoridad por la
+     *                         que enruta la lectura y la escritura. Una clave
+     *                         que llegue <b>a la vez</b> con valor y en esta
+     *                         lista es un error del cliente y se rechaza: entre
+     *                         dos intenciones contrarias no se elige, se avisa
      */
     record ComandoEdicion(String claveIdempotencia, Procedencia procedencia, String descripcion,
                           Ubicacion ubicacion, List<Titular> titulares,
-                          List<ValorAtributo> atributos, List<OperacionSolicitada> operaciones) {
+                          List<ValorAtributo> atributos, List<OperacionSolicitada> operaciones,
+                          List<String> atributosABorrar) {
     }
 
     // ------------------------------------------------------------------

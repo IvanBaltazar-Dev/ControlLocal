@@ -74,9 +74,11 @@ select '$prefijo-' || lpad(g::text,4,'0'),
 from generate_series(1,1005) g
 "@ | Out-Null
     Sql @"
-insert into detalle_local_comercial
-    (id_propiedad,rubro_permitido,apto_licencia_funcionamiento,organizacion_id)
-select id_propiedad,'Prueba rendimiento',true,1
+insert into atributo_propiedad (organizacion_id,id_propiedad,clave,valor_texto)
+select 1,id_propiedad,'rubro_permitido','Prueba rendimiento'
+from propiedad where organizacion_id=1 and codigo like '$prefijo-%';
+insert into atributo_propiedad (organizacion_id,id_propiedad,clave,valor_booleano)
+select 1,id_propiedad,'apto_licencia_funcionamiento',true
 from propiedad where organizacion_id=1 and codigo like '$prefijo-%'
 "@ | Out-Null
 
@@ -91,9 +93,11 @@ select '$prefijo-' || lpad(g::text,4,'0'),
 from generate_series(1,7) g
 "@ | Out-Null
     Sql @"
-insert into detalle_local_comercial
-    (id_propiedad,rubro_permitido,apto_licencia_funcionamiento,organizacion_id)
-select id_propiedad,'Prueba otro tenant',true,$idOrganizacionOtra
+insert into atributo_propiedad (organizacion_id,id_propiedad,clave,valor_texto)
+select $idOrganizacionOtra,id_propiedad,'rubro_permitido','Prueba otro tenant'
+from propiedad where organizacion_id=$idOrganizacionOtra and codigo like '$prefijo-%';
+insert into atributo_propiedad (organizacion_id,id_propiedad,clave,valor_booleano)
+select $idOrganizacionOtra,id_propiedad,'apto_licencia_funcionamiento',true
 from propiedad where organizacion_id=$idOrganizacionOtra and codigo like '$prefijo-%'
 "@ | Out-Null
 
@@ -140,7 +144,7 @@ from propiedad where organizacion_id=$idOrganizacionOtra and codigo like '$prefi
 finally {
     Write-Host "`n== Limpieza del fixture ==" -ForegroundColor DarkGray
     if ($idOrganizacionOtra) {
-        Sql "delete from detalle_local_comercial where organizacion_id in (1,$idOrganizacionOtra) and id_propiedad in (select id_propiedad from propiedad where codigo like '$prefijo-%')" | Out-Null
+        Sql "delete from atributo_propiedad where organizacion_id in (1,$idOrganizacionOtra) and id_propiedad in (select id_propiedad from propiedad where codigo like '$prefijo-%')" | Out-Null
         Sql "delete from propiedad where codigo like '$prefijo-%' and organizacion_id in (1,$idOrganizacionOtra)" | Out-Null
         if ($idPersonaOtra) {
             Sql "delete from persona_rol where organizacion_id=$idOrganizacionOtra and id_persona=$idPersonaOtra" | Out-Null
@@ -148,7 +152,7 @@ finally {
         }
         Sql "delete from organizacion where id_organizacion=$idOrganizacionOtra" | Out-Null
     } else {
-        Sql "delete from detalle_local_comercial where organizacion_id=1 and id_propiedad in (select id_propiedad from propiedad where codigo like '$prefijo-%')" | Out-Null
+        Sql "delete from atributo_propiedad where organizacion_id=1 and id_propiedad in (select id_propiedad from propiedad where codigo like '$prefijo-%')" | Out-Null
         Sql "delete from propiedad where organizacion_id=1 and codigo like '$prefijo-%'" | Out-Null
     }
 }

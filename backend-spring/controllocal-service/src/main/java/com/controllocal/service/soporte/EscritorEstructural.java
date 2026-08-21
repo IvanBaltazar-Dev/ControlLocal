@@ -63,6 +63,35 @@ public final class EscritorEstructural {
         }
     }
 
+    /**
+     * <b>Retira el valor del campo canonico que representa su concepto.</b>
+     *
+     * <p>El simetrico de {@link #aplicar} para el borrado explicito, y esta
+     * aqui por la misma razon: quien pide retirar dice la <b>clave logica</b>
+     * —«quiero quitar el piso»— y no sabe ni tiene por que saber si esa clave
+     * vive en {@code atributo_propiedad} o en una columna del agregado. El
+     * enrutado del borrado es el mismo que el de la lectura y el de la
+     * escritura, o la regla «clave → autoridad» solo valdria para dos tercios
+     * de las operaciones.
+     *
+     * <p>No todo concepto se puede vaciar, y el que no se pueda <b>lo dice</b>:
+     * `METRAJE` es NOT NULL porque una propiedad sin metraje no es una
+     * propiedad. Dejarlo pasar en silencio, o vaciarlo a cero, seria inventar
+     * un dato — justo lo que este corte contiene.
+     */
+    public static void vaciar(Propiedad propiedad, String concepto, String clave) {
+        switch (concepto == null ? "" : concepto) {
+            case CatalogoAtributo.CAMPO_PISO -> propiedad.setPiso(null);
+            case CatalogoAtributo.CAMPO_METRAJE -> throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" no se puede retirar: toda propiedad tiene "
+                            + "metraje. Corrigelo mandando el valor nuevo.");
+            default -> throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" no se puede retirar: su autoridad es el campo "
+                            + "canonico \"" + concepto + "\" y todavia no esta definido que "
+                            + "significa dejarlo vacio.");
+        }
+    }
+
     /** ¿Hay escritor para este concepto? Lo usa el gate antes de que sea tarde. */
     public static boolean sabeEscribir(String concepto) {
         return CatalogoAtributo.CAMPO_METRAJE.equals(concepto)

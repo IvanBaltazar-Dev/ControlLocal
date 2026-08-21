@@ -78,15 +78,4 @@ describe('LocalesService', () => {
     expect(api.get$).toHaveBeenCalledOnceWith('locales/resumen', { texto: 'camana' });
   });
 
-  it('registra con el cuerpo congelado sin renombrar ni envolver campos', async () => {
-    await service.registrar(SOLICITUD);
-
-    expect(api.post).toHaveBeenCalledOnceWith('locales', SOLICITUD);
-  });
-
-  it('actualiza el recurso exacto con el mismo cuerpo congelado', async () => {
-    await service.actualizar(77, SOLICITUD);
-
-    expect(api.put).toHaveBeenCalledOnceWith('locales/77', SOLICITUD);
-  });
 });

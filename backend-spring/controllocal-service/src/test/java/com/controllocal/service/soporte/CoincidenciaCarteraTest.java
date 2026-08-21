@@ -144,7 +144,6 @@ class CoincidenciaCarteraTest {
         // Ya no hay `propiedad.setFrente`: V62 retiro la columna y el campo. La
         // trampa que habia aqui —columna con un valor que no cumple— la hace
         // ahora el compilador, que es mejor guardia que un test.
-        propiedad.asignarDetalleLocal("Cafeteria y panaderia", null, null);
         return propiedad;
     }
 
@@ -157,6 +156,12 @@ class CoincidenciaCarteraTest {
     private static ValoresDePropiedad valoresCompletos() {
         return ValoresDePropiedad.constructor()
                 .con(CatalogoAtributo.CLAVE_FRENTE, ValorLogico.deNumero(new BigDecimal("8.00")))
+                // El rubro dejo de ser columna en V71 y pasa por la misma
+                // puerta que el frente. El puntaje que afirman los casos de
+                // abajo NO cambia: es la prueba de que mover el dato de sitio
+                // no movio el resultado del matcher.
+                .con(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO,
+                        ValorLogico.deTexto("Cafeteria y panaderia"))
                 .construir();
     }
 

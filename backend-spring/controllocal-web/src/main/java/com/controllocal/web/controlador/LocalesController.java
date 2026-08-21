@@ -140,20 +140,6 @@ public class LocalesController {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Local"));
     }
 
-    @PostMapping
-    @PreAuthorize("hasRole('AGENTE')")
-    public ResponseEntity<LocalResponse> registrar(@RequestBody(required = false) LocalRequest dto) {
-        validarDto(dto);
-        LocalResponse creado = LocalResponse.desde(locales.registrar(dto.aDatos(), SesionActual.actor()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
-    }
-
-    @PutMapping("{id}")
-    @PreAuthorize("hasRole('AGENTE')")
-    public LocalResponse actualizar(@PathVariable long id, @RequestBody(required = false) LocalRequest dto) {
-        validarDto(dto);
-        return LocalResponse.desde(locales.actualizar(id, dto.aDatos(), SesionActual.actor()));
-    }
 
     @DeleteMapping("{id}")
     @PreAuthorize("hasRole('AGENTE')")

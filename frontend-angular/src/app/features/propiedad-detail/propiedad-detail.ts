@@ -198,13 +198,6 @@ export class PropiedadDetail implements OnInit {
     this.encargoElegido.set(idEncargo);
   }
 
-  protected editar(): void {
-    const actual = this.ficha();
-    if (actual) {
-      void this.router.navigate(['/propiedades', actual.id, 'editar']);
-    }
-  }
-
   protected abrir(hecho: HechoDeActividad): void {
     if (hecho.ruta) {
       void this.router.navigateByUrl(`/${hecho.ruta}`);

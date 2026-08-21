@@ -71,7 +71,7 @@ $nuevoLocal = Api POST '/locales' $agente.token @{
 $idLocal = $nuevoLocal.id
 Check 'POST /locales crea con defaults v1' ($nuevoLocal.estado -eq 'D' -and $nuevoLocal.tipoInmueble -eq 'L' -and $nuevoLocal.uso -eq 'C') "$($nuevoLocal.estado)/$($nuevoLocal.tipoInmueble)/$($nuevoLocal.uso)"
 Check 'la propiedad nace en BROX_LEGACY' ((Sql "select organizacion_id from propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
-Check 'el detalle_local hereda el tenant' ((Sql "select organizacion_id from detalle_local_comercial where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
+Check 'el atributo gobernado hereda el tenant' ((Sql "select distinct organizacion_id from atributo_propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
 Check 'la publicacion sincronizada lleva tenant' ((Sql "select count(*) from publicacion where id_propiedad=$idLocal and organizacion_id=1") -eq '1') 'publicacion'
 Check 'el alta abrio la prospeccion inicial con tenant' ((Sql "select count(*) from prospeccion where id_propiedad=$idLocal and organizacion_id=1") -eq '1') 'prospeccion inicial'
 

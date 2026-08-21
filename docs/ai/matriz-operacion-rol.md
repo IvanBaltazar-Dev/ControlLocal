@@ -88,9 +88,7 @@ dar de alta y editar agentes pasó a ser gobierno (filas 17 y 18). La tabla list
 | GET | `/locales/resumen` | TODOS | Mismo alcance que el listado (tenant, sin rol) y el mismo filtro `texto`, para que los KPI cuadren con la lista. Se calcula con un `group by` en la BD, **no** contando filas descargadas. | F2 |
 | GET | `/locales/{id}` | TODOS | Cartera de la organización. | F2 |
 | GET | `/locales/mis-locales` | AGENTE | Los locales de **sus captaciones** (RF-004), no los que registró. | F2 |
-| POST | `/locales` | AGENTE | Alta en la organización del actor; crea la prospección inicial. | F2 |
 | POST | `/locales/posibles-duplicados` | AGENTE | Advertencia no bloqueante dentro del tenant: compara inmuebles del mismo propietario por dirección técnica, unidad/piso compatibles y metraje aproximado. | F2 |
-| PUT | `/locales/{id}` | AGENTE | Solo locales que el agente **prospectó o captó**. Un cambio comercial sensible emite alerta al broker. | F2 |
 | DELETE | `/locales/{id}` | AGENTE | Baja lógica (estado I); solo locales que el agente **prospectó o captó**. | F2 |
 | GET | `/locales/{id}/precios` | TODOS | Colección hija: se alcanza por el id del padre, que sí va filtrado por tenant. | F2 |
 | POST | `/locales/{id}/precios` | AGENTE | Hito del histórico sobre un local de sus captaciones. | F2 |

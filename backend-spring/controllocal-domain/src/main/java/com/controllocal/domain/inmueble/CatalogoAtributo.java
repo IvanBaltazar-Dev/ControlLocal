@@ -84,6 +84,10 @@ public class CatalogoAtributo {
     /** Ojo: la clave del catalogo es esta; la columna espejo se llamaba `numero_estacionamientos`. */
     public static final String CLAVE_ESTACIONAMIENTOS = "estacionamientos";
     public static final String CLAVE_ANTIGUEDAD_ANIOS = "antiguedad_anios";
+    // Los tres que dejaron de tener tabla espejo en V71.
+    public static final String CLAVE_RUBRO_PERMITIDO = "rubro_permitido";
+    public static final String CLAVE_APTO_LICENCIA = "apto_licencia_funcionamiento";
+    public static final String CLAVE_CARGA_ELECTRICA_KW = "carga_electrica_kw";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

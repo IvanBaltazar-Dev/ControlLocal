@@ -373,8 +373,20 @@ SELECT pg_temp.comprobar('SIN ROMPER las columnas del cable siguen existiendo',
       WHERE table_name = 'propiedad'
         AND column_name IN ('precio_referencial', 'moneda_referencial', 'id_rol_propietario', 'disponibilidad_comercial')));
 
-SELECT pg_temp.comprobar('SIN ROMPER detalle_local_comercial sigue intacta',
-    (SELECT count(*) = 21 FROM detalle_local_comercial));
+-- V71 retiro la tabla espejo. La comprobacion cambia de sentido y con eso gana:
+-- ya no vigila que el espejo siga ahi, vigila que al retirarlo no se perdiera
+-- ningun rubro. Los 21 que tenia la cartera tienen que estar, ahora como valor
+-- gobernado.
+SELECT pg_temp.comprobar('SIN ROMPER detalle_local_comercial ya no existe',
+    (SELECT count(*) = 0 FROM information_schema.tables
+      WHERE table_name = 'detalle_local_comercial'));
+
+SELECT pg_temp.comprobar('SIN ROMPER los 21 rubros sobrevivieron a la retirada',
+    (SELECT count(*) = 21 FROM atributo_propiedad WHERE clave = 'rubro_permitido'));
+
+SELECT pg_temp.comprobar('SIN ROMPER la busqueda por rubro conserva su indice',
+    (SELECT count(*) = 1 FROM pg_indexes
+      WHERE indexname = 'ix_atributo_rubro_trgm'));
 
 SELECT pg_temp.comprobar('SIN ROMPER no se perdio ninguna propiedad',
     (SELECT count(*) = 21 FROM propiedad));

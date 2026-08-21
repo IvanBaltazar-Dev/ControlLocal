@@ -4,7 +4,6 @@ import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.Prospeccion;
 import com.controllocal.domain.comercial.RequerimientoCliente;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
-import com.controllocal.domain.inmueble.DetalleLocalComercial;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleCliente;
@@ -193,7 +192,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
     private static Coincidencia filaPropiedad(Captacion captacion, Propiedad propiedad,
                                               Evaluacion e, long idCliente,
                                               ValoresDePropiedad valores) {
-        DetalleLocalComercial detalle = propiedad.getDetalleLocal();
+
         String proponer = captacion.getId() != null
                 ? "oportunidad-form?clienteId=" + idCliente + "&captacionId=" + captacion.getId()
                 : "";
@@ -202,7 +201,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
                 captacion.getId(),
                 texto(captacion.getCodigoCaptacion(), propiedad.getCodigo()),
                 texto(propiedad.getDireccion(), "Local sin direccion"),
-                texto(detalle != null ? detalle.getRubroPermitido() : null, propiedad.getDescripcion()),
+                texto(valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO), propiedad.getDescripcion()),
                 texto(propiedad.getDistrito()),
                 monto(propiedad.getPrecioReferencial()),
                 medida(propiedad.getMetraje(), "m2"),

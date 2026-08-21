@@ -256,35 +256,36 @@ public class AtributosGobernados {
     }
 
     /**
-     * <b>Fija el valor de una clave, incluido el caso de que llegue vacio.</b>
+     * <b>Retira el valor de una clave logica, enrutando por su autoridad.</b>
      *
-     * <p>Existe por los endpoints que mandan el objeto ENTERO — {@code PUT
-     * /locales} es el caso — donde un campo ausente no significa "no lo toques"
-     * sino <b>"ya no lo se"</b>. Esa semantica no la puede inventar el caso de
-     * uso, porque borrar un valor es distinto segun su autoridad: en un atributo
-     * gobernado se retira la fila, en un campo canonico habria que definir que
-     * significa vaciarlo, y hoy no esta definido para ninguno.
+     * <p>Quien llama dice «quiero quitar el piso» y nada mas. No sabe —ni tiene
+     * por que saber— si esa clave se guarda hoy como fila de
+     * {@code atributo_propiedad} o como columna del agregado, ni si manana
+     * cambia de sitio. La regla del trazado se completa aqui:
      *
-     * <p>Sin esto, migrar los lectores de {@code /locales} sin migrar su
-     * escritor dejaria cada PUT escribiendo en una columna que ya nadie lee:
-     * el mismo fallo que se acaba de arreglar, con el espejo puesto.
+     * <pre>
+     *   clave  →  autoridad  →  leer / escribir / <b>borrar</b>
+     * </pre>
+     *
+     * <p>Es distinto de mandar el valor en blanco, y a proposito: en blanco es
+     * un valor que llego mal, y retirar es una <b>intencion declarada</b>. Este
+     * corte no le da a {@code ""} ningun significado nuevo.
+     *
+     * @return {@code false} si la clave no esta en el catalogo, para que el
+     *         llamante pueda probar el otro espacio de nombres antes de
+     *         rechazarla. Lanza si esta y su autoridad no admite quedarse vacia
      */
-    public void fijar(long idOrganizacion, Propiedad propiedad, String clave, String valor) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
-        if (valor != null && !valor.isBlank()) {
-            AtributoPropiedad existente = definicion.esEstructural() ? null
-                    : valores.findByIdPropiedadAndClave(propiedad.getId(), clave).orElse(null);
-            enrutarEdicion(idOrganizacion, propiedad, clave, valor, existente)
-                    .ifPresent(valores::save);
-            return;
+    public boolean retirar(long idOrganizacion, Propiedad propiedad, String clave) {
+        Optional<CatalogoAtributo> definicion = catalogo.porClave(idOrganizacion, clave);
+        if (definicion.isEmpty()) {
+            return false;
         }
-        if (definicion.esEstructural()) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" es estructural y no se puede dejar en blanco por "
-                            + "esta via: vaciar un campo canonico es una operacion del agregado, y "
-                            + "todavia no esta definida para \"" + definicion.getCampoEstructural() + "\".");
+        if (definicion.get().esEstructural()) {
+            EscritorEstructural.vaciar(propiedad, definicion.get().getCampoEstructural(), clave);
+            return true;
         }
         valores.deleteByIdPropiedadAndClave(propiedad.getId(), clave);
+        return true;
     }
 
     /** La definicion de una clave: la de la organizacion gana sobre la del sistema. */

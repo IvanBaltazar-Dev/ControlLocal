@@ -8,6 +8,16 @@
  * por una carga—. De ahí {@link rubrosCon}: al editar hay que ofrecer el valor
  * actual aunque no esté en la lista, o el selector lo cambiaría en silencio por
  * el primero. El Blazor ya lo resolvía así y conviene no perderlo.
+ *
+ * **Esto es el rubro del CLIENTE, no el de la propiedad.** V71 retiró
+ * `local-form` y con él `catalogos-local.ts`, que traía su propia copia para el
+ * `rubro_permitido` del inmueble; ese vocabulario ya es del catálogo y lo sirve
+ * el Core. Éste sobrevive porque `cliente-form` describe a qué se dedica un
+ * cliente, que es otra cosa y todavía no está gobernada.
+ *
+ * Sacarlo de aquí es material del **Corte 0B**: hasta que el Core sepa publicar
+ * las opciones de una lista con su rótulo, moverlo sólo cambiaría de sitio la
+ * copia.
  */
 export const RUBROS_COMERCIALES: readonly string[] = [
   'Restaurante / Cafe',

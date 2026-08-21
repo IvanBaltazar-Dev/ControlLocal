@@ -2,7 +2,6 @@ package com.controllocal.service.soporte;
 
 import com.controllocal.domain.comercial.RequerimientoCliente;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
-import com.controllocal.domain.inmueble.DetalleLocalComercial;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.Propiedad;
 
@@ -63,7 +62,7 @@ public final class CoincidenciaCartera {
         }
         List<Criterio> criterios = List.of(
                 evalDistrito(r, propiedad),
-                evalRubro(r, propiedad),
+                evalRubro(r, valores),
                 evalTipo(r, propiedad),
                 evalRenta(r, propiedad),
                 evalArea(r, propiedad),
@@ -106,12 +105,12 @@ public final class CoincidenciaCartera {
     }
 
     /** El rubro coincide por inclusion en CUALQUIER direccion ("Cafeteria" ~ "Cafeteria y panaderia"). */
-    private static Criterio evalRubro(RequerimientoCliente r, Propiedad propiedad) {
+    private static Criterio evalRubro(RequerimientoCliente r, ValoresDePropiedad valores) {
         String req = r.getRubro();
         if (req == null || req.isBlank()) {
             return NA;
         }
-        String loc = rubroPermitido(propiedad);
+        String loc = valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO);
         if (loc == null || loc.isBlank()) {
             return new Criterio(Resultado.NO_CUMPLE, "Rubro: el local no especifica rubro permitido");
         }
@@ -194,11 +193,6 @@ public final class CoincidenciaCartera {
             case "TERRENO_COMERCIAL" -> "T";
             default -> null;
         };
-    }
-
-    private static String rubroPermitido(Propiedad propiedad) {
-        DetalleLocalComercial detalle = propiedad.getDetalleLocal();
-        return detalle != null ? detalle.getRubroPermitido() : null;
     }
 
     /** Descripciones del enum TipoInmueble v1 (las frases viajan en el cable). */

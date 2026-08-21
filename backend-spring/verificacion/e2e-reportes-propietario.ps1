@@ -500,11 +500,11 @@ with nueva_org as (
            'PROPIETARIO', organizacion_id
     from rol_propietario
     returning id_propiedad, organizacion_id
-), detalle_local as (
-    insert into detalle_local_comercial (
-        id_propiedad, rubro_permitido, organizacion_id
+), atributo_local as (
+    insert into atributo_propiedad (
+        organizacion_id, id_propiedad, clave, valor_texto
     )
-    select id_propiedad, 'Temporal E2', organizacion_id from propiedad_org2
+    select organizacion_id, id_propiedad, 'rubro_permitido', 'Temporal E2' from propiedad_org2
 ), persona_agente as (
     insert into persona (
         tipo_persona, tipo_documento, numero_documento,
@@ -568,7 +568,7 @@ delete from reporte_propietario
 where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
 delete from captacion
 where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from detalle_local_comercial
+delete from atributo_propiedad
 where id_propiedad in (
     select id_propiedad from propiedad
     where organizacion_id=(

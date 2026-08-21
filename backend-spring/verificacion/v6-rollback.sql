@@ -75,7 +75,7 @@ DECLARE
     privadas TEXT[] := ARRAY[
         'persona', 'persona_rol', 'credencial_usuario', 'detalle_broker',
         'detalle_agente', 'supervision_agente', 'historial_estado',
-        'propiedad', 'detalle_local_comercial', 'foto_propiedad',
+        'propiedad', 'atributo_propiedad', 'foto_propiedad',
         'precio_propiedad', 'publicacion', 'captacion', 'prospeccion',
         'reasignacion_captacion'
     ];

@@ -2,7 +2,7 @@ package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.RequerimientoCliente;
-import com.controllocal.domain.inmueble.DetalleLocalComercial;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleCliente;
@@ -14,6 +14,7 @@ import com.controllocal.service.HallazgoService.Hallazgo;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValorLogico;
 import com.controllocal.service.soporte.ValoresDePropiedad;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -61,6 +62,8 @@ class HallazgoServiceImplTest {
             new HallazgoServiceImpl(captaciones, requerimientos, oportunidades, lector,
                     alcances, agentesRepo);
 
+    private static final long ID_PROPIEDAD = 900L;
+
     private final Actor agente = new Actor(ORG, 3L, ROL_AGENTE, "AGENTE");
     private final Actor broker = new Actor(ORG, 2L, 20L, "BROKER");
 
@@ -71,7 +74,14 @@ class HallazgoServiceImplTest {
         when(oportunidades.idsClienteDelEquipo(anyLong(), any())).thenReturn(List.of(ID_CLIENTE));
         when(oportunidades.paresClienteCaptacionDelEquipo(anyLong(), any())).thenReturn(List.of());
         when(requerimientos.listarActivos(anyLong())).thenReturn(List.of(requerimientoQueEncaja()));
-        when(lector.deVarias(anyLong(), any())).thenReturn(Map.of());
+        // El rubro del local viaja por su AUTORIDAD desde V71. El puntaje que
+        // afirman los casos NO cambia: es la prueba de que mover el dato de
+        // sitio no movio el resultado del matcher.
+        when(lector.deVarias(anyLong(), any())).thenReturn(Map.of(ID_PROPIEDAD,
+                ValoresDePropiedad.constructor()
+                        .con(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO,
+                                ValorLogico.deTexto("Cafeteria y panaderia"))
+                        .construir()));
     }
 
     // ==================================================================
@@ -214,7 +224,7 @@ class HallazgoServiceImplTest {
         propiedad.setTipoInmueble(Propiedad.TIPO_LOCAL);
         propiedad.setMetraje(new BigDecimal("120.00"));
         propiedad.setPrecioReferencial(new BigDecimal("8500.00"));
-        propiedad.asignarDetalleLocal("Cafeteria y panaderia", null, null);
+        ReflectionTestUtils.setField(propiedad, "id", ID_PROPIEDAD);
         return propiedad;
     }
 

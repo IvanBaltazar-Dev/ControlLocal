@@ -5,7 +5,6 @@ import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comun.EstadosDominio.DisponibilidadComercial;
 import com.controllocal.domain.comun.EstadosDominio.EstadoRegistroPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
-import com.controllocal.domain.inmueble.DetalleLocalComercial;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.FotoPropiedad;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
@@ -252,129 +251,6 @@ public class LocalComercialServiceImpl implements LocalComercialService {
 
     @Override
     @Transactional
-    public FichaLocal registrar(DatosLocal datos, Actor actor) {
-        String estado = estadoResuelto(datos.estado());
-        String tipoInmueble = tipoInmuebleResuelto(datos.tipoInmueble());
-        validarUso(datos.uso());
-        validarObligatorios(datos);
-
-        Propiedad propiedad = new Propiedad();
-        // El tenant se fija ANTES de copiar campos: asignarDetalleLocal lo
-        // propaga al detalle, que es parte del mismo agregado.
-        propiedad.setOrganizacionId(actor.idOrganizacion());
-        copiarCampos(datos, propiedad);
-        propiedad.setTipoInmueble(tipoInmueble);
-        propiedad.setUso(Propiedad.USO_COMERCIAL);
-        propiedad.setRolPropietario(rolPropietarioVigente(datos.idPropietario()));
-        propiedad.aplicarEstadoLegado(estado);
-        resolverDistrito(propiedad);
-        propiedades.save(propiedad);
-        fijarGobernados(actor.idOrganizacion(), propiedad, datos);
-
-        // E0.1 — el alta deja su PRIMER hito 'U' (autorizado).
-        //
-        // Sin esto el precio de SALIDA vivia unicamente en
-        // `propiedad.precio_referencial`, y la primera edicion lo borraba para
-        // siempre: `actualizar` graba el hito con el precio NUEVO, jamas con el
-        // anterior. Justo ese primer numero es el que mide cuanto cedio el
-        // propietario hasta el cierre, y no se reconstruye desde ninguna otra
-        // tabla.
-        //
-        // Va ANTES de sincronizar la publicacion a proposito: el orden natural
-        // de la serie es autorizado -> publicado, y ambos caen el mismo dia.
-        //
-        // Precio y moneda son no-nulos aqui: `validarObligatorios` exige el
-        // precio y `copiarCampos` normaliza la moneda con CondicionesEconomicas.
-        PrecioPropiedad inicial = new PrecioPropiedad();
-        inicial.setOrganizacionId(propiedad.getOrganizacionId());
-        inicial.setIdPropiedad(propiedad.getId());
-        inicial.setOperacion(OPERACION_DEL_ALTA);
-        inicial.setHito(PrecioPropiedad.HITO_AUTORIZADO);
-        inicial.setMoneda(propiedad.getMonedaReferencial());
-        inicial.setMonto(propiedad.getPrecioReferencial());
-        inicial.setFecha(LocalDate.now());
-        precios.save(inicial);
-
-        publicaciones.sincronizar(propiedad.getId(), propiedad.getCodigo(),
-                propiedad.getPrecioReferencial(), propiedad.getMonedaReferencial(),
-                datos.estadoPublicacion(), actor);
-
-        // Deuda F2 cerrada: el alta abre la PROSPECCION inicial del agente sobre
-        // el local (paridad con registrarProspeccionInicial de la v1). Es lo que
-        // ademas hace al agente "dueno" del local para poder editarlo despues.
-        prospecciones.registrar(new ProspeccionService.DatosProspeccion(propiedad.getId(), null), actor);
-
-        // Paridad v1 del POST: no se re-lee la fila, asi que propietarioNombre,
-        // fechaRegistro y portada salen nulos en la respuesta del alta.
-        return ficha(propiedad, publicaciones.codigoEstadoPublicacion(propiedad.getId()), null, null,
-                lector.de(actor.idOrganizacion(), propiedad));
-    }
-
-    @Override
-    @Transactional
-    public FichaLocal actualizar(long id, DatosLocal datos, Actor actor) {
-        Propiedad original = propiedades.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new ReglaNegocioException("Local no encontrado"));
-
-        exigirPertenencia(id, actor);
-
-        String estadoNuevo = estadoResuelto(datos.estado());
-        String tipoInmueble = tipoInmuebleResuelto(datos.tipoInmueble());
-        validarUso(datos.uso());
-        validarObligatorios(datos);
-        PersonaRol rolPropietario = rolPropietarioVigente(datos.idPropietario());
-
-        // Trazabilidad RF-004: precio nuevo => hito 'U' (autorizado) en el historico.
-        if (original.getPrecioReferencial().compareTo(datos.precioReferencial()) != 0
-                || !Objects.equals(original.getMonedaReferencial(), datos.monedaReferencial())) {
-            PrecioPropiedad hito = new PrecioPropiedad();
-            hito.setOrganizacionId(original.getOrganizacionId());
-            hito.setIdPropiedad(id);
-            hito.setOperacion(OPERACION_DEL_ALTA);
-            hito.setHito(PrecioPropiedad.HITO_AUTORIZADO);
-            hito.setMoneda(datos.monedaReferencial());
-            hito.setMonto(datos.precioReferencial());
-            hito.setFecha(LocalDate.now());
-            precios.save(hito);
-        }
-
-        String rubroOriginal = original.getDetalleLocal() != null
-                ? original.getDetalleLocal().getRubroPermitido() : null;
-        boolean cambioSensible = original.getMetraje().compareTo(datos.metraje()) != 0
-                || !Objects.equals(rubroOriginal, datos.rubroPermitido());
-        if (cambioSensible) {
-            // Deuda vieja de F2, cerrada con F6. Dos rarezas del cable que se
-            // replican tal cual y NO se arreglan aqui:
-            //  * viaja con el tipo SOLICITUD_EVALUADA. La v1 lo admite en un
-            //    comentario —"por las restricciones del CHECK ck_alerta_tipo"—:
-            //    no existe un tipo que encaje. Es un bug congelado (D-F6-5);
-            //  * su entidad es INMUEBLE, que la v2 renombro a PROPIEDAD pero el
-            //    cable sigue emitiendo asi (D-F6-4). Como ruta() no enruta
-            //    INMUEBLE, esta alerta se muestra sin enlace.
-            alertas.emitir(new AlertaService.DatosAlerta(Alerta.SOLICITUD_EVALUADA, Alerta.MEDIA,
-                    "INMUEBLE", id, actor.idRolOperativo(),
-                    "Modificación comercial sensible, revisar"), actor);
-        }
-
-        aplicarEstadoLegado(original, id, estadoNuevo, actor);
-
-        copiarCampos(datos, original);
-        original.setTipoInmueble(tipoInmueble);
-        original.setUso(Propiedad.USO_COMERCIAL);
-        original.setRolPropietario(rolPropietario);
-        resolverDistrito(original);
-        propiedades.save(original);
-        fijarGobernados(actor.idOrganizacion(), original, datos);
-
-        publicaciones.sincronizar(id, original.getCodigo(),
-                original.getPrecioReferencial(), original.getMonedaReferencial(),
-                datos.estadoPublicacion(), actor);
-
-        return fichaCompleta(actor.idOrganizacion(), original);
-    }
-
-    @Override
-    @Transactional
     public boolean desactivar(long id, Actor actor) {
         validarId(id, "El id de local comercial");
         Propiedad propiedad = propiedades.findByOrganizacionIdAndId(actor.idOrganizacion(), id)
@@ -496,124 +372,15 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         }
     }
 
-    private static String estadoResuelto(String estado) {
-        if (estado == null || estado.isBlank()) {
-            return Propiedad.LEGADO_DISPONIBLE;
-        }
-        if (!Propiedad.ESTADOS.contains(estado)) {
-            throw new ReglaNegocioException("Valor invalido para estado del local: " + estado);
-        }
-        return estado;
-    }
-
-    private static String tipoInmuebleResuelto(String tipoInmueble) {
-        String tipo = tipoInmueble == null || tipoInmueble.isBlank() ? Propiedad.TIPO_LOCAL : tipoInmueble;
-        if (!Propiedad.TIPOS_INMUEBLE.contains(tipo)) {
-            throw new ReglaNegocioException("Valor invalido para tipo de inmueble: " + tipoInmueble);
-        }
-        if (!Propiedad.TIPO_LOCAL.equals(tipo) && !Propiedad.TIPO_OFICINA.equals(tipo)) {
-            throw new ReglaNegocioException(
-                    "ControlLocal solo admite local u oficina como tipo de inmueble comercial.");
-        }
-        return tipo;
-    }
-
-    private static void validarUso(String uso) {
-        if (uso != null && !uso.isBlank() && !Propiedad.USO_COMERCIAL.equals(uso)) {
-            throw new ReglaNegocioException("ControlLocal solo admite inmuebles de uso comercial.");
-        }
-    }
-
-    private static void validarObligatorios(DatosLocal datos) {
-        texto(datos.codigoLocal(), "El codigo del local");
-        texto(datos.direccion(), "La direccion");
-        texto(datos.distrito(), "El distrito");
-        if (datos.metraje() == null || datos.metraje().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ReglaNegocioException("El metraje debe ser mayor que cero.");
-        }
-        if (datos.precioReferencial() == null || datos.precioReferencial().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ReglaNegocioException("El precio referencial no puede ser negativo.");
-        }
-        CondicionesEconomicas.moneda(datos.monedaReferencial(), "del precio referencial");
-        texto(datos.rubroPermitido(), "El rubro permitido");
-        if (datos.idPropietario() == null || datos.idPropietario() <= 0) {
-            throw new ReglaNegocioException("El propietario del local debe ser mayor que cero.");
-        }
-    }
-
     private static void texto(String valor, String campo) {
         if (valor == null || valor.isBlank()) {
             throw new ReglaNegocioException(campo + " es obligatorio.");
         }
     }
 
-    private PersonaRol rolPropietarioVigente(Long idRolPropietario) {
-        return roles.findById(idRolPropietario)
-                .filter(rol -> rol.getTipoRol() == TipoRol.PROPIETARIO && rol.estaVigente())
-                .orElseThrow(() -> new ReglaNegocioException(
-                        "El propietario del local no existe o no tiene el rol de propietario vigente."));
-    }
-
     // ------------------------------------------------------------------
     // Mapeo y soporte.
     // ------------------------------------------------------------------
-
-    private void copiarCampos(DatosLocal datos, Propiedad propiedad) {
-        propiedad.setCodigo(datos.codigoLocal());
-        propiedad.setDireccion(datos.direccion());
-        propiedad.setDistrito(datos.distrito());
-        propiedad.setMetraje(datos.metraje());
-        propiedad.setPrecioReferencial(datos.precioReferencial());
-        propiedad.setMonedaReferencial(
-                CondicionesEconomicas.moneda(datos.monedaReferencial(), "del precio referencial"));
-        propiedad.setDescripcion(datos.descripcion());
-        propiedad.setZonaUrbanizacion(datos.zonaUrbanizacion());
-        propiedad.setGeoLat(datos.geoLat());
-        propiedad.setGeoLong(datos.geoLong());
-        // Los seis gobernados NO se copian aqui: se fijan tras el save, por
-        // `fijarGobernados`, porque un atributo necesita el id de la propiedad.
-        propiedad.setInteriorUnidad(enBlancoANulo(datos.interiorUnidad()));
-        propiedad.setPiso(enBlancoANulo(datos.piso()));
-        propiedad.setReferenciaInterna(enBlancoANulo(datos.referenciaInterna()));
-        propiedad.setNombreEdificioGaleria(enBlancoANulo(datos.nombreEdificioGaleria()));
-        propiedad.asignarDetalleLocal(datos.rubroPermitido(), datos.aptoLicenciaFuncionamiento(),
-                datos.cargaElectricaKw());
-    }
-
-    /**
-     * <b>Los seis conceptos que este endpoint sigue publicando, escritos donde
-     * manda su autoridad</b> (D-E4-3, paso 7).
-     *
-     * <p>Va DESPUES de {@code save} y no dentro de {@link #copiarCampos}
-     * porque un atributo gobernado cuelga del id de la propiedad, y en el alta
-     * ese id no existe hasta que la fila esta escrita.
-     *
-     * <p><b>Un null aqui significa \"ya no lo se\", no \"no lo toques\"</b>. Es
-     * el comportamiento que este recurso ya tenia —manda el objeto entero y
-     * cada PUT reescribia las seis columnas, nulos incluidos— y se conserva
-     * tal cual: {@code fijar} retira la fila cuando el valor llega vacio. Si
-     * se hubiera cambiado a \"solo escribo lo que venga con valor\", borrar un
-     * dato desde la pantalla dejaria de funcionar sin que nadie lo pidiera.
-     *
-     * <p>Y la aplicabilidad la decide el catalogo, no este metodo: mandar un
-     * {@code frente} para una OFICINA se rechaza con el mensaje del catalogo.
-     * Antes se aceptaba en silencio porque una columna no sabe a que tipo de
-     * inmueble pertenece.
-     */
-    private void fijarGobernados(long idOrganizacion, Propiedad propiedad, DatosLocal datos) {
-        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_AMBIENTES,
-                texto(datos.ambientes()));
-        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_ANTIGUEDAD_ANIOS,
-                texto(datos.antiguedadAnios()));
-        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_FRENTE,
-                texto(datos.frente()));
-        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_ZONIFICACION,
-                datos.zonificacion());
-        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_ESTACIONAMIENTOS,
-                texto(datos.numeroEstacionamientos()));
-        gobierno.fijar(idOrganizacion, propiedad, CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO,
-                texto(datos.cuotaMantenimiento()));
-    }
 
     /** El numero como lo espera el enrutador, o null si no hay numero. */
     private static String texto(Number valor) {
@@ -701,24 +468,6 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         return p.getRolPropietario().getPersona().getNombresORazonSocial();
     }
 
-    private void aplicarEstadoLegado(Propiedad propiedad, long id, String estadoLegado, Actor actor) {
-        if (Propiedad.LEGADO_INACTIVO.equals(estadoLegado)) {
-            transiciones.aplicar(propiedad, id, EstadoRegistroPropiedad.INACTIVO.codigo(),
-                    actor, "Inactivacion del registro del local");
-            transiciones.aplicarDisponibilidad(propiedad, id, DisponibilidadComercial.RETIRADO,
-                    actor, "Retiro comercial por inactivacion del registro");
-            return;
-        }
-        if (propiedad.estadoRegistroTipado() == EstadoRegistroPropiedad.INACTIVO) {
-            transiciones.aplicar(propiedad, id, EstadoRegistroPropiedad.ACTIVO.codigo(),
-                    actor, "Reactivacion del registro del local");
-        }
-        DisponibilidadComercial destino = Propiedad.LEGADO_DISPONIBLE.equals(estadoLegado)
-                ? DisponibilidadComercial.DISPONIBLE : DisponibilidadComercial.RETIRADO;
-        transiciones.aplicarDisponibilidad(propiedad, id, destino, actor,
-                "Actualizacion de disponibilidad comercial");
-    }
-
     /**
      * <b>El consumidor pide por clave logica; no sabe donde vive cada valor.</b>
      *
@@ -729,11 +478,11 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      */
     private FichaLocal ficha(Propiedad p, String estadoPublicacion, String fotoPortadaClave,
                              String propietarioNombre, ValoresDePropiedad valores) {
-        DetalleLocalComercial detalle = p.getDetalleLocal();
+
         return new FichaLocal(
                 p.getId(), p.getCodigo(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
                 p.getPrecioReferencial(), p.getMonedaReferencial(),
-                detalle != null ? detalle.getRubroPermitido() : null,
+                valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO),
                 p.getDescripcion(), p.estadoLegado(),
                 p.getRolPropietario() != null ? p.getRolPropietario().getId() : null,
                 propietarioNombre,
@@ -743,8 +492,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 p.getZonaUrbanizacion(), p.getGeoLat(), p.getGeoLong(), estadoPublicacion,
                 valores.decimal(CatalogoAtributo.CLAVE_FRENTE),
                 valores.texto(CatalogoAtributo.CLAVE_ZONIFICACION),
-                detalle != null ? detalle.getAptoLicenciaFuncionamiento() : null,
-                detalle != null ? detalle.getCargaElectricaKw() : null,
+                valores.booleano(CatalogoAtributo.CLAVE_APTO_LICENCIA),
+                valores.decimal(CatalogoAtributo.CLAVE_CARGA_ELECTRICA_KW),
                 valores.entero(CatalogoAtributo.CLAVE_ESTACIONAMIENTOS),
                 valores.decimal(CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO), p.getIdDistrito(),
                 Fechas.local(p.getFechaRegistro()), fotoPortadaClave,
@@ -764,7 +513,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         return new FichaLocal(
                 p.getId(), p.getCodigoLocal(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
                 p.getPrecioReferencial(), p.getMonedaReferencial(),
-                p.getRubroPermitido(), p.getDescripcion(), p.getEstado(),
+                valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO), p.getDescripcion(), p.getEstado(),
                 p.getIdPropietario(), p.getPropietarioNombre(), p.getTipoInmueble(), p.getUso(),
                 valores.entero(CatalogoAtributo.CLAVE_AMBIENTES),
                 valores.entero(CatalogoAtributo.CLAVE_ANTIGUEDAD_ANIOS),
@@ -772,7 +521,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 p.getGeoLong(), estadoPublicacion,
                 valores.decimal(CatalogoAtributo.CLAVE_FRENTE),
                 valores.texto(CatalogoAtributo.CLAVE_ZONIFICACION),
-                p.getAptoLicenciaFuncionamiento(), p.getCargaElectricaKw(),
+                valores.booleano(CatalogoAtributo.CLAVE_APTO_LICENCIA),
+                valores.decimal(CatalogoAtributo.CLAVE_CARGA_ELECTRICA_KW),
                 valores.entero(CatalogoAtributo.CLAVE_ESTACIONAMIENTOS),
                 valores.decimal(CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO), p.getIdDistrito(),
                 Fechas.local(p.getFechaRegistro()), fotoPortadaClave,

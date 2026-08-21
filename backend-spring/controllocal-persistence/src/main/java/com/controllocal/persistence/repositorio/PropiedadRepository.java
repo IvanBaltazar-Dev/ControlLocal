@@ -26,7 +26,6 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             select p from Propiedad p
             join fetch p.rolPropietario rp
             join fetch rp.persona
-            left join fetch p.detalleLocal
             where p.organizacionId = :idOrganizacion and p.id = :id
             """)
     Optional<Propiedad> buscarFicha(@Param("idOrganizacion") long idOrganizacion, @Param("id") long id);
@@ -117,7 +116,6 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                    p.metraje as metraje,
                    p.precioReferencial as precioReferencial,
                    p.monedaReferencial as monedaReferencial,
-                   d.rubroPermitido as rubroPermitido,
                    p.descripcion as descripcion,
                    """ + ESTADO_LEGADO + """
                     as estado,
@@ -128,12 +126,9 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                    p.zonaUrbanizacion as zonaUrbanizacion,
                    p.geoLat as geoLat,
                    p.geoLong as geoLong,
-                   d.aptoLicenciaFuncionamiento as aptoLicenciaFuncionamiento,
-                   d.cargaElectricaKw as cargaElectricaKw,
                    p.idDistrito as idDistrito,
                    p.fechaRegistro as fechaRegistro
             """ + ASOCIACIONES_LISTADO + """
-              left join p.detalleLocal d
             """;
 
     @Query(value = PROYECCION_LISTADO + """
@@ -302,12 +297,13 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                     or lower(p.distrito)""" + PATRON_TEXTO + """
                    )
             union
-            select d.id_propiedad as id
-              from detalle_local_comercial d
-              join propiedad p on p.id_propiedad = d.id_propiedad
-             where d.organizacion_id = :idOrganizacion and p.organizacion_id = :idOrganizacion
+            select a.id_propiedad as id
+              from atributo_propiedad a
+              join propiedad p on p.id_propiedad = a.id_propiedad
+             where a.organizacion_id = :idOrganizacion and p.organizacion_id = :idOrganizacion
             """ + FILTRO_ESTADO_NATIVO + """
-               and lower(d.rubro_permitido)""" + PATRON_TEXTO + """
+               and a.clave = 'rubro_permitido'
+               and lower(a.valor_texto)""" + PATRON_TEXTO + """
 
             union
             select p.id_propiedad as id

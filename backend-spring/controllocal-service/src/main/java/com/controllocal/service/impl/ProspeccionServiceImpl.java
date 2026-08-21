@@ -4,7 +4,7 @@ import com.controllocal.domain.comercial.Alerta;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comercial.Prospeccion;
-import com.controllocal.domain.inmueble.DetalleLocalComercial;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.PersonaRol;
@@ -21,6 +21,8 @@ import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Transiciones;
@@ -35,6 +37,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Reglas y mensajes calcados del ProspeccionBusinessLogicImpl v1, con dos
@@ -54,6 +57,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
     private final PropiedadRepository propiedades;
     private final DetalleAgenteRepository agentes;
     private final Alcances alcances;
+    private final LectorPorAutoridad lector;
     private final Transiciones transiciones;
 
     private final SupervisionAgenteRepository supervisiones;
@@ -68,7 +72,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
                                   PropiedadRepository propiedades, DetalleAgenteRepository agentes,
                                   Alcances alcances, Transiciones transiciones,
                                   SupervisionAgenteRepository supervisiones,
-                                  AlertaService alertas) {
+                                  AlertaService alertas, LectorPorAutoridad lector) {
         this.prospecciones = prospecciones;
         this.captaciones = captaciones;
         this.propiedades = propiedades;
@@ -77,6 +81,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         this.transiciones = transiciones;
         this.supervisiones = supervisiones;
         this.alertas = alertas;
+        this.lector = lector;
     }
 
     @Override
@@ -109,7 +114,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
                     alcance.paramRoles(), estado, vacioNull(f.distrito()),
                     f.idCaptacion(), f.idLocal(), f.idAgente(), filtrarPorBroker, agentesDelBroker,
                     vacioNull(f.q()), pageable);
-        return new Pagina<>(page.getContent().stream().map(ProspeccionServiceImpl::ficha).toList(),
+        return new Pagina<>(fichas(page.getContent()),
                 page.getTotalElements());
     }
 
@@ -123,7 +128,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         LocalDate limite = LocalDate.now().minusDays(Math.max(0, dias));
         Page<Prospeccion> page = prospecciones.recontactables(alcance.idOrganizacion(), alcance.global(),
                 alcance.paramRoles(), limite, PageRequest.of(Math.max(0, pagina - 1), tamano(tamano)));
-        return new Pagina<>(page.getContent().stream().map(ProspeccionServiceImpl::ficha).toList(),
+        return new Pagina<>(fichas(page.getContent()),
                 page.getTotalElements());
     }
 
@@ -383,9 +388,34 @@ public class ProspeccionServiceImpl implements ProspeccionService {
     }
 
     /** Mapea la entidad al contrato congelado; usa las asociaciones ya cargadas. */
-    private static FichaProspeccion ficha(Prospeccion p) {
+    /** Una sola ficha: hidrata sus gobernados y delega. */
+    private FichaProspeccion ficha(Prospeccion p) {
+        return ficha(p, gobernadosDe(List.of(p)));
+    }
+
+    /** Una pagina entera, con UNA consulta de gobernados para todas. */
+    private List<FichaProspeccion> fichas(List<Prospeccion> lote) {
+        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(lote);
+        return lote.stream().map(p -> ficha(p, gobernados)).toList();
+    }
+
+    /**
+     * Los valores gobernados de estas prospecciones, en una sola consulta.
+     *
+     * <p>El rubro dejo de tener columna propia en V71. En lote y no fila a
+     * fila: estas listas son paginadas y una consulta por fila seria el N+1
+     * que RC-003 quito.
+     */
+    private Map<Long, ValoresDePropiedad> gobernadosDe(List<Prospeccion> lote) {
+        List<Long> ids = lote.stream().map(Prospeccion::getPropiedad).filter(Objects::nonNull)
+                .map(Propiedad::getId).filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of() : lector.gobernadosDeVarias(ids);
+    }
+
+    private static FichaProspeccion ficha(Prospeccion p, Map<Long, ValoresDePropiedad> gobernados) {
         Propiedad prop = p.getPropiedad();
-        DetalleLocalComercial detalle = prop != null ? prop.getDetalleLocal() : null;
+        ValoresDePropiedad valores = prop == null ? ValoresDePropiedad.vacio()
+                : LectorPorAutoridad.de(gobernados, prop.getId());
         DetalleAgente agente = p.getAgente();
         Captacion captacion = p.getCaptacion();
         return new FichaProspeccion(
@@ -395,7 +425,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
                 prop != null ? prop.getDireccion() : null,
                 prop != null ? prop.getDistrito() : null,
                 prop != null ? prop.getMetraje() : null,
-                detalle != null ? detalle.getRubroPermitido() : null,
+                valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO),
                 prop != null ? prop.getPrecioReferencial() : null,
                 prop != null ? prop.getMonedaReferencial() : null,
                 nombrePropietario(prop),

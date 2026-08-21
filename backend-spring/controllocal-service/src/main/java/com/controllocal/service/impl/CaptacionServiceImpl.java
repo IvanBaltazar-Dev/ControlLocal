@@ -4,7 +4,7 @@ import com.controllocal.domain.comercial.Alerta;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comercial.ReasignacionCaptacion;
-import com.controllocal.domain.inmueble.DetalleLocalComercial;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.FotoPropiedad;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.Propiedad;
@@ -25,6 +25,8 @@ import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
+import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValoresDePropiedad;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.OperacionDelEncargo;
@@ -42,6 +44,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Reglas y mensajes calcados del CaptacionBusinessLogicImpl v1. La revision del
@@ -67,12 +71,13 @@ public class CaptacionServiceImpl implements CaptacionService {
     private final Alcances alcances;
     private final Transiciones transiciones;
     private final AlertaService alertas;
+    private final LectorPorAutoridad lector;
 
     public CaptacionServiceImpl(CaptacionRepository captaciones, ReasignacionCaptacionRepository reasignaciones,
                                 PropiedadRepository propiedades, DetalleAgenteRepository agentes,
                                 DetalleBrokerRepository brokers, FotoPropiedadRepository fotos,
                                 Alcances alcances, Transiciones transiciones,
-                                AlertaService alertas) {
+                                AlertaService alertas, LectorPorAutoridad lector) {
         this.captaciones = captaciones;
         this.reasignaciones = reasignaciones;
         this.propiedades = propiedades;
@@ -82,6 +87,7 @@ public class CaptacionServiceImpl implements CaptacionService {
         this.alcances = alcances;
         this.transiciones = transiciones;
         this.alertas = alertas;
+        this.lector = lector;
     }
 
     @Override
@@ -463,7 +469,7 @@ public class CaptacionServiceImpl implements CaptacionService {
     private FichaCaptacion fichaConPortada(Captacion cap) {
         String portada = fotos.findByIdPropiedadOrderByOrdenAscIdAsc(cap.getPropiedad().getId()).stream()
                 .findFirst().map(FotoPropiedad::getClave).orElse(null);
-        return ficha(cap, portada);
+        return ficha(cap, portada, gobernadosDe(List.of(cap)));
     }
 
     private Pagina<FichaCaptacion> paginaConPortada(Page<Captacion> page) {
@@ -471,10 +477,26 @@ public class CaptacionServiceImpl implements CaptacionService {
         var portadas = idsPropiedad.isEmpty() ? java.util.Map.<Long, String>of()
                 : fotos.portadas(idsPropiedad).stream()
                     .collect(java.util.stream.Collectors.toMap(f -> f.getIdPropiedad(), f -> f.getClave()));
+        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(page.getContent());
         List<FichaCaptacion> items = page.getContent().stream()
-                .map(c -> ficha(c, portadas.get(c.getPropiedad().getId())))
+                .map(c -> ficha(c, portadas.get(c.getPropiedad().getId()), gobernados))
                 .toList();
         return new Pagina<>(items, page.getTotalElements());
+    }
+
+    /**
+     * Los valores gobernados de las propiedades de estas captaciones, en una
+     * sola consulta.
+     *
+     * <p>El rubro dejo de tener columna propia en V71 y se lee por autoridad
+     * como el resto. En lote y no fila a fila: la lista de captaciones es
+     * paginada, y una consulta por fila seria el N+1 que RC-003 quito.
+     */
+    private Map<Long, ValoresDePropiedad> gobernadosDe(List<Captacion> captacionesDeLaPagina) {
+        List<Long> ids = captacionesDeLaPagina.stream()
+                .map(Captacion::getPropiedad).filter(Objects::nonNull)
+                .map(Propiedad::getId).filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of() : lector.gobernadosDeVarias(ids);
     }
 
     private static void exigirTexto(String valor, String campo) {
@@ -491,9 +513,11 @@ public class CaptacionServiceImpl implements CaptacionService {
         return v == null || v.isBlank() ? null : v;
     }
 
-    private static FichaCaptacion ficha(Captacion c, String fotoPortadaClave) {
+    private static FichaCaptacion ficha(Captacion c, String fotoPortadaClave,
+                                        Map<Long, ValoresDePropiedad> gobernados) {
         Propiedad prop = c.getPropiedad();
-        DetalleLocalComercial detalle = prop != null ? prop.getDetalleLocal() : null;
+        ValoresDePropiedad valores = prop == null ? ValoresDePropiedad.vacio()
+                : LectorPorAutoridad.de(gobernados, prop.getId());
         DetalleAgente agente = c.getAgente();
         DetalleBroker broker = c.getBrokerRevisor();
         CondicionEconomicaCaptacion ce = c.getCondicionEconomica();
@@ -506,7 +530,7 @@ public class CaptacionServiceImpl implements CaptacionService {
                 prop != null ? prop.getDireccion() : null,
                 prop != null ? prop.getDistrito() : null,
                 prop != null ? prop.getMetraje() : null,
-                detalle != null ? detalle.getRubroPermitido() : null,
+                valores.texto(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO),
                 nombrePropietario(prop),
                 agente != null ? agente.getId() : null,
                 nombrePersona(agente != null ? agente.getRol() : null),

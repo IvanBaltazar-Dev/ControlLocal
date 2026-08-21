@@ -38,6 +38,8 @@ $integracion = @(
     # separarse.
     'AutoridadDelDatoIntegrationTest',
     'BusquedaLocalesIntegrationTest',
+    # Corte 0A: la ida y vuelta de la edicion por los siete tipos.
+    'ConservacionDeLaEdicionIntegrationTest',
     'ConvergenciaCampanaColaIntegrationTest',
     # D-E2-5 / E2.5: el broker tiene sus propios asuntos, y no comparte ni un id
     # con la bandeja del agente.

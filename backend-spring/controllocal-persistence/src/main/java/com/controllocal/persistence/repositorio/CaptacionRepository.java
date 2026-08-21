@@ -111,13 +111,14 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
                        prop.codigo                   as codigoLocal,
                        prop.direccion                as direccion,
                        prop.distrito                 as distrito,
-                       dl.rubro_permitido            as rubro,
+                       atr.valor_texto               as rubro,
                        prop.metraje                  as areaM2,
                        cap.id_rol_agente             as idAgente,
                        agp.nombres_o_razon_social    as agenteNombre
                   from captacion cap
                   join propiedad prop on prop.id_propiedad = cap.id_propiedad
-                  left join detalle_local_comercial dl on dl.id_propiedad = prop.id_propiedad
+                  left join atributo_propiedad atr on atr.id_propiedad = prop.id_propiedad
+                                                  and atr.clave = 'rubro_permitido'
                   join detalle_agente ag on ag.id_persona_rol = cap.id_rol_agente
                   join persona_rol agr on agr.id_persona_rol = ag.id_persona_rol
                   join persona agp on agp.id_persona = agr.id_persona
@@ -185,7 +186,6 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
     String FICHA = """
             select cap from Captacion cap
               join fetch cap.propiedad prop
-              left join fetch prop.detalleLocal
               left join fetch prop.rolPropietario rp
               left join fetch rp.persona
               join fetch cap.agente ag
@@ -312,7 +312,6 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
     @Query("""
             select distinct cap from Captacion cap
               join fetch cap.propiedad prop
-              left join fetch prop.detalleLocal
               join fetch cap.agente ag
             where cap.organizacionId = :idOrganizacion
               and (:sinScope = true or ag.id in :rolesAgente)
@@ -364,7 +363,6 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
     @Query("""
             select cap from Captacion cap
               join fetch cap.propiedad prop
-              left join fetch prop.detalleLocal
             where cap.organizacionId = :idOrganizacion
               and cap.agente.id = :idRolAgente
               and cap.estado = 'A'

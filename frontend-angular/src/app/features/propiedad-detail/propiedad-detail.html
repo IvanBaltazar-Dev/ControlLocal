@@ -33,9 +33,6 @@
       @if (p.estadoRegistro !== "A" && p.estadoRegistroRotulo) {
         <span class="estado" data-estado="I">{{ p.estadoRegistroRotulo }}</span>
       }
-      @if (puedeEditar()) {
-        <button type="button" class="primario" (click)="editar()">Editar</button>
-      }
     </div>
   </header>
 

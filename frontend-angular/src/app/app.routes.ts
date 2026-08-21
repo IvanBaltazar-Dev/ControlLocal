@@ -76,16 +76,6 @@ export const routes: Routes = [
           import('./features/propiedad-form/propiedad-form').then((m) => m.PropiedadForm),
       },
       {
-        // La EDICIÓN sigue en el formulario heredado a propósito: el motor de
-        // captura es de ALTA (D-E4-2 §6). Editar tiene otra forma y otros
-        // permisos, y migrarlo va con la ficha universal, no con el alta.
-        path: 'propiedades/:id/editar',
-        canActivate: [rolGuard],
-        data: { roles: ['AGENTE'] },
-        loadComponent: () =>
-          import('./features/local-form/local-form').then((m) => m.LocalForm),
-      },
-      {
         // Cierres exitosos. Sin `data.roles`: los tres roles entran y lo que
         // cambia es el ALCANCE, que resuelve el backend.
         path: 'propiedades-alquiladas',
@@ -511,11 +501,10 @@ export const routes: Routes = [
       // Estos redirects existen para los enlaces ya guardados y para el
       // historial del navegador de quien lleva meses usando BROX. **Son
       // temporales**: código nuevo, navegación y pruebas apuntan a la
-      // canónica, y estas cuatro filas se retiran cuando deje de haber
+      // canónica, y estas tres filas se retiran cuando deje de haber
       // tráfico hacia ellas.
       // ----------------------------------------------------------------
       { path: 'locales/nuevo', redirectTo: 'propiedades/nueva', pathMatch: 'full' },
-      { path: 'locales/:id/editar', redirectTo: 'propiedades/:id/editar', pathMatch: 'full' },
       { path: 'locales/:id', redirectTo: 'propiedades/:id', pathMatch: 'full' },
       { path: 'locales', redirectTo: 'propiedades', pathMatch: 'full' },
       {

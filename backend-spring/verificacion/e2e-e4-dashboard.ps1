@@ -675,9 +675,9 @@ with nueva_org as (
            100, 5000, 'PEN', 'A', 'D', 'L', 'C', id_persona_rol, 'PROPIETARIO', organizacion_id
     from rol_propietario
     returning id_propiedad, organizacion_id
-), detalle_local as (
-    insert into detalle_local_comercial (id_propiedad, rubro_permitido, organizacion_id)
-    select id_propiedad, 'Temporal E4', organizacion_id from propiedad_org2
+), atributo_local as (
+    insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
+    select organizacion_id, id_propiedad, 'rubro_permitido', 'Temporal E4' from propiedad_org2
 ), persona_agente as (
     insert into persona (
         tipo_persona, tipo_documento, numero_documento,
@@ -738,7 +738,7 @@ select id_captacion from captacion_org2
         Sql @"
 delete from captacion
 where organizacion_id=(select id_organizacion from organizacion where codigo='$codigoOrg2');
-delete from detalle_local_comercial
+delete from atributo_propiedad
 where id_propiedad in (
     select id_propiedad from propiedad
     where organizacion_id=(
@@ -822,7 +822,7 @@ delete from historial_estado
 delete from publicacion where id_propiedad in ($idLocal, $idLocal2);
 delete from foto_propiedad where id_propiedad in ($idLocal, $idLocal2);
 delete from precio_propiedad where id_propiedad in ($idLocal, $idLocal2);
-delete from detalle_local_comercial where id_propiedad in ($idLocal, $idLocal2);
+delete from atributo_propiedad where id_propiedad in ($idLocal, $idLocal2);
 delete from propiedad where id_propiedad in ($idLocal, $idLocal2);
 delete from detalle_cliente where id_persona_rol=$idCliente;
 delete from persona_rol where id_persona_rol in ($idCliente, $($propietario.id));

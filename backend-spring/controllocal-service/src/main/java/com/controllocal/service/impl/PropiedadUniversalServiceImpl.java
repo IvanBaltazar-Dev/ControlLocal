@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * El alta, la lectura y la edicion universales (D-E4-1, D-E4-2).
@@ -403,11 +404,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .orElseThrow(() -> new NoEncontradoException("Propiedad"));
         Procedencia procedencia = Procedencia.oPantalla(comando.procedencia());
 
+        Map<String, String> valores = atributosDeEdicion(comando.atributos());
+        List<String> aBorrar = clavesABorrar(comando.atributosABorrar(), valores);
+
         String huella = documentos.huellaDe(new LinkedHashMap<>(Map.of(
                 "idPropiedad", idPropiedad,
                 "descripcion", texto(comando.descripcion()),
                 "titulares", titularesEnHuella(comando.titulares()),
                 "atributos", atributosEnHuella(comando.atributos()),
+                "borrados", String.join(",", aBorrar),
                 "operaciones", operacionesEnHuella(comando.operaciones()))));
         Optional<ComandoIdempotente> yaHecho =
                 comandos.buscar(actor, comando.claveIdempotencia(), COMANDO_EDICION, huella);
@@ -419,14 +424,17 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             propiedad.setDescripcion(comando.descripcion());
         }
         if (comando.ubicacion() != null) {
-            aplicarUbicacion(propiedad, ubicacionValidada(comando.ubicacion()));
+            aplicarUbicacion(propiedad, ubicacionDeEdicion(comando.ubicacion()));
         }
         if (comando.titulares() != null) {
-            reemplazarTitularidades(actor, propiedad, titularesValidados(comando.titulares()));
+            conciliarTitularidades(actor, propiedad, titularesValidados(comando.titulares()));
         }
         if (comando.atributos() != null) {
-            actualizarAtributos(actor, propiedad, atributosValidados(comando.atributos()));
+            actualizarAtributos(actor, propiedad, valores);
         }
+        // Despues de los valores: si la misma peticion cambia unas claves y
+        // retira otras, el orden no puede depender de como se recorra el mapa.
+        retirarValores(actor, propiedad, aBorrar);
         if (comando.operaciones() != null) {
             for (OperacionSolicitada solicitada : operacionesValidadas(comando.operaciones())) {
                 actualizarEncargo(actor, propiedad, solicitada, procedencia);
@@ -467,6 +475,58 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * borrandola: una venta no borra al dueno de antes, le pone fecha de fin.
      * Sin eso, el historico de propiedad se pierde en el primer cierre.
      */
+    /**
+     * <b>Reemplaza solo si de verdad cambio algo.</b>
+     *
+     * <p>Devolver la titularidad exactamente como la ficha la publico —que es
+     * lo que hace cualquier pantalla que carga el formulario del Core y lo
+     * guarda— cerraba la vigente y abria otra con fecha de hoy. Los anios que
+     * el dueno llevaba con la propiedad desaparecian en un guardado que no
+     * cambio nada, y el gate de conservacion lo veia en los siete tipos:
+     * <pre>
+     *   titular.43.desde: "2022-08-20"  ->  "2026-08-20"
+     * </pre>
+     *
+     * <p>Reemplazar una titularidad por si misma no es una transmision. La
+     * comparacion es por <b>identidad y contenido</b> —quien, con que cuota, y
+     * quien representa— y no por el orden en que llego la lista.
+     */
+    private void conciliarTitularidades(Actor actor, Propiedad propiedad, List<Titular> titulares) {
+        if (mismaTitularidad(titularidades.vigentesDe(propiedad.getId()), titulares)) {
+            return;
+        }
+        reemplazarTitularidades(actor, propiedad, titulares);
+    }
+
+    /** Mismo conjunto de titulares, con la misma cuota y el mismo representante. */
+    private static boolean mismaTitularidad(List<TitularidadPropiedad> vigentes,
+                                            List<Titular> titulares) {
+        if (vigentes.size() != titulares.size()) {
+            return false;
+        }
+        Map<Long, String> actual = new LinkedHashMap<>();
+        for (TitularidadPropiedad titularidad : vigentes) {
+            actual.put(titularidad.getRolPropietario().getId(),
+                    huellaDeTitular(titularidad.getCuota(), titularidad.isEsRepresentante()));
+        }
+        // El representante se compara YA RESUELTO: si nadie lo declara manda el
+        // primero, y comparar la bandera cruda haria distintas dos listas que
+        // acabarian escribiendo lo mismo.
+        int representante = indiceDelRepresentante(titulares);
+        for (int i = 0; i < titulares.size(); i++) {
+            String esperado = huellaDeTitular(titulares.get(i).cuota(), i == representante);
+            if (!esperado.equals(actual.get(titulares.get(i).idRolPropietario()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String huellaDeTitular(BigDecimal cuota, boolean representante) {
+        return (cuota == null ? "-" : cuota.stripTrailingZeros().toPlainString())
+                + "/" + representante;
+    }
+
     private void reemplazarTitularidades(Actor actor, Propiedad propiedad, List<Titular> titulares) {
         List<TitularidadPropiedad> vigentes = titularidades.vigentesDe(propiedad.getId());
         for (TitularidadPropiedad anterior : vigentes) {
@@ -494,6 +554,94 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         valores.forEach((clave, valor) -> gobierno
                 .enrutar(actor.idOrganizacion(), propiedad, clave, valor)
                 .ifPresent(atributos::save));
+    }
+
+    /**
+     * Los valores de una edicion. Igual que en el alta, mas una regla propia:
+     * <b>un valor en blanco se rechaza</b>.
+     *
+     * <p>Porque {@code ""} es ambiguo y este corte no adivina. Puede ser "lo
+     * quiero quitar", puede ser un campo que la pantalla no relleno, y puede
+     * ser un espacio de mas. Darle a los tres el mismo destino es reinterpretar
+     * lo que el usuario hizo, que es la fuga que 0A contiene. Retirar un valor
+     * tiene su via, se llama por su nombre y viaja aparte.
+     */
+    private static Map<String, String> atributosDeEdicion(List<ValorAtributo> valores) {
+        Map<String, String> porClave = atributosValidados(valores);
+        porClave.forEach((clave, valor) -> {
+            if (valor == null || valor.isBlank()) {
+                throw new ReglaNegocioException(
+                        "El atributo \"" + clave + "\" llego vacio. Un valor en blanco no es una "
+                                + "forma de borrar: si lo quieres retirar, nombralo en "
+                                + "\"atributosABorrar\".");
+            }
+        });
+        return porClave;
+    }
+
+    /**
+     * Las claves a retirar, comprobadas contra lo que la misma peticion cambia.
+     *
+     * <p>Una clave que llega <b>a la vez</b> con valor y en la lista de borrado
+     * son dos intenciones contrarias en el mismo comando. No se elige entre
+     * ellas por precedencia —cualquier orden que se escoja seria una regla
+     * inventada que el cliente no sabe— y no se aplica ninguna: se avisa.
+     */
+    private static List<String> clavesABorrar(List<String> claves, Map<String, String> valores) {
+        if (claves == null || claves.isEmpty()) {
+            return List.of();
+        }
+        List<String> limpias = new ArrayList<>();
+        for (String clave : claves) {
+            if (clave == null || clave.isBlank()) {
+                throw new ReglaNegocioException("\"atributosABorrar\" trae una clave vacia.");
+            }
+            String limpia = clave.trim();
+            if (valores.containsKey(limpia)) {
+                throw new ReglaNegocioException(
+                        "El atributo \"" + limpia + "\" llego con valor y a la vez en "
+                                + "\"atributosABorrar\". Son dos ordenes contrarias: manda una.");
+            }
+            if (!limpias.contains(limpia)) {
+                limpias.add(limpia);
+            }
+        }
+        return limpias;
+    }
+
+    /**
+     * <b>Retira cada clave por su autoridad</b>, igual que se lee y se escribe.
+     *
+     * <p>Quien pide el borrado manda un <b>nombre logico</b> y nada mas. No
+     * dice —ni sabe— si {@code piso} vive hoy en {@code atributo_propiedad} o
+     * en una columna del agregado, ni si manana se mueve. Primero se prueba el
+     * catalogo, que es donde se declara la autoridad de las claves gobernadas;
+     * lo que no esta ahi se busca entre los campos logicos que la propia ficha
+     * publica. Lo que no encaja en ninguno de los dos se rechaza <b>con su
+     * nombre</b>, porque un borrado que no borra nada y calla es peor que un
+     * error.
+     */
+    private void retirarValores(Actor actor, Propiedad propiedad, List<String> claves) {
+        for (String clave : claves) {
+            if (gobierno.retirar(actor.idOrganizacion(), propiedad, clave)) {
+                continue;
+            }
+            switch (clave) {
+                case "descripcion" -> propiedad.setDescripcion(null);
+                case "zonaUrbanizacion" -> propiedad.setZonaUrbanizacion(null);
+                case "interiorUnidad" -> propiedad.setInteriorUnidad(null);
+                case "referenciaInterna" -> propiedad.setReferenciaInterna(null);
+                case "nombreEdificioGaleria" -> propiedad.setNombreEdificioGaleria(null);
+                case "latitud" -> propiedad.setGeoLat(null);
+                case "longitud" -> propiedad.setGeoLong(null);
+                case "direccion", "distrito" -> throw new ReglaNegocioException(
+                        "\"" + clave + "\" no se puede retirar: toda propiedad esta en algun "
+                                + "sitio. Corrigelo mandando el valor nuevo.");
+                default -> throw new ReglaNegocioException(
+                        "No se puede retirar \"" + clave + "\": no es una clave del catalogo ni "
+                                + "un campo de la propiedad.");
+            }
+        }
     }
 
     private void actualizarAtributos(Actor actor, Propiedad propiedad, Map<String, String> valores) {
@@ -1005,6 +1153,28 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     }
 
     /**
+     * La misma ubicacion, con la regla de la <b>edicion</b>: {@code null} es "no
+     * lo estoy editando", tambien en direccion y distrito.
+     *
+     * <p>Exigirlas aqui como en el alta convertiria la fusion en una mentira:
+     * un contrato donde un campo ausente no se toca no puede tener dos campos
+     * que hay que mandar siempre. Lo que <b>si</b> se rechaza es el blanco: son
+     * NOT NULL y no existe forma de dejar una propiedad sin direccion, asi que
+     * {@code ""} no puede colarse como un borrado disfrazado.
+     */
+    private static Ubicacion ubicacionDeEdicion(Ubicacion ubicacion) {
+        if (ubicacion.direccion() != null && ubicacion.direccion().isBlank()) {
+            throw new ReglaNegocioException(
+                    "La direccion no se puede dejar en blanco: toda propiedad esta en algun sitio.");
+        }
+        if (ubicacion.distrito() != null && ubicacion.distrito().isBlank()) {
+            throw new ReglaNegocioException(
+                    "El distrito no se puede dejar en blanco: toda propiedad esta en algun sitio.");
+        }
+        return ubicacion;
+    }
+
+    /**
      * Las cuotas se comprueban <b>antes</b> de escribir. La base lo garantiza
      * con un constraint trigger diferido (V47), pero ese estalla al COMMIT y
      * su mensaje habla de sumas, no de titulares: aqui se puede decir "las
@@ -1176,19 +1346,39 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     // Utilidades
     // ==================================================================
 
+    /**
+     * <b>Fusiona, no reemplaza.</b> Un campo que llega {@code null} no se toca.
+     *
+     * <p>Antes esto era una copia campo a campo del objeto entero, y por eso un
+     * editor que solo pintaba direccion y distrito —lo unico que el Core
+     * exige— borraba de un guardado la zona, el interior, el piso, la
+     * referencia, el nombre del edificio y las dos coordenadas. Siete datos que
+     * nadie pidio borrar, y el usuario no se enteraba: la pantalla se los
+     * mostraba vacios como si nunca hubieran estado.
+     *
+     * <p>En el alta se comporta igual porque la propiedad es nueva y todo
+     * empieza a null. Retirar un valor tiene su propia via declarada:
+     * {@code atributosABorrar}.
+     */
     private void aplicarUbicacion(Propiedad propiedad, Ubicacion ubicacion) {
-        propiedad.setDireccion(ubicacion.direccion().trim());
-        propiedad.setDistrito(ubicacion.distrito().trim());
-        propiedad.setZonaUrbanizacion(ubicacion.zonaUrbanizacion());
-        propiedad.setInteriorUnidad(ubicacion.interiorUnidad());
-        propiedad.setPiso(ubicacion.piso());
-        propiedad.setReferenciaInterna(ubicacion.referenciaInterna());
-        propiedad.setNombreEdificioGaleria(ubicacion.nombreEdificioGaleria());
+        siViene(ubicacion.direccion(), valor -> propiedad.setDireccion(valor.trim()));
+        siViene(ubicacion.distrito(), valor -> propiedad.setDistrito(valor.trim()));
+        siViene(ubicacion.zonaUrbanizacion(), propiedad::setZonaUrbanizacion);
+        siViene(ubicacion.interiorUnidad(), propiedad::setInteriorUnidad);
+        siViene(ubicacion.piso(), propiedad::setPiso);
+        siViene(ubicacion.referenciaInterna(), propiedad::setReferenciaInterna);
+        siViene(ubicacion.nombreEdificioGaleria(), propiedad::setNombreEdificioGaleria);
         // `ubicacion` (geography) la deriva el trigger de V46 a partir de estas
         // dos: escribirla desde Java exigiria PostGIS en el modelo JPA.
-        propiedad.setGeoLat(ubicacion.latitud());
-        propiedad.setGeoLong(ubicacion.longitud());
+        siViene(ubicacion.latitud(), propiedad::setGeoLat);
+        siViene(ubicacion.longitud(), propiedad::setGeoLong);
         resolverDistrito(propiedad);
+    }
+
+    private static <T> void siViene(T valor, Consumer<T> destino) {
+        if (valor != null) {
+            destino.accept(valor);
+        }
     }
 
     private void resolverDistrito(Propiedad propiedad) {

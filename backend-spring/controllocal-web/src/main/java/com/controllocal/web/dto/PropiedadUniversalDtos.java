@@ -106,10 +106,30 @@ public final class PropiedadUniversalDtos {
         }
     }
 
-    /** La edicion. Lo que llega {@code null} no se toca. */
+    /**
+     * La edicion.
+     *
+     * <pre>
+     *   ausente o null             = no tocar
+     *   con valor                  = cambiar
+     *   clave en atributosABorrar  = retirar
+     * </pre>
+     *
+     * <p>{@code null} <b>no</b> significa borrar, y {@code ""} tampoco: los dos
+     * se rechazan o se ignoran segun el campo, nunca se adivinan. Borrar es una
+     * intencion que se declara con su nombre.
+     *
+     * @param atributosABorrar claves <b>logicas</b> — {@code "piso"},
+     *                         {@code "interiorUnidad"} — sin decir donde viven.
+     *                         El cliente no sabe si una clave se guarda como
+     *                         atributo gobernado o como campo del agregado, ni
+     *                         le hace falta: el Core enruta el borrado por la
+     *                         misma autoridad por la que enruta leer y escribir
+     */
     public record EdicionRequest(String descripcion, UbicacionRequest ubicacion,
                                  List<TitularRequest> titulares, List<AtributoRequest> atributos,
-                                 List<OperacionRequest> operaciones) {
+                                 List<OperacionRequest> operaciones,
+                                 List<String> atributosABorrar) {
 
         public PropiedadUniversalService.ComandoEdicion aDatos(String claveIdempotencia,
                                                                Procedencia procedencia) {
@@ -117,7 +137,8 @@ public final class PropiedadUniversalDtos {
                     ubicacion == null ? null : ubicacion.aDatos(),
                     titulares == null ? null : titulares.stream().map(TitularRequest::aDatos).toList(),
                     atributos == null ? null : atributos.stream().map(AtributoRequest::aDatos).toList(),
-                    operaciones == null ? null : operaciones.stream().map(OperacionRequest::aDatos).toList());
+                    operaciones == null ? null : operaciones.stream().map(OperacionRequest::aDatos).toList(),
+                    atributosABorrar);
         }
     }
 

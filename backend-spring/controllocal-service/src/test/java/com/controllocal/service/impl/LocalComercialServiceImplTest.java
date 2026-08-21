@@ -1,6 +1,7 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.auditoria.HistorialEstado;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.Persona;
 import com.controllocal.domain.persona.PersonaRol;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
+import com.controllocal.service.soporte.ValorLogico;
 import com.controllocal.service.soporte.ValoresDePropiedad;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
@@ -129,131 +131,9 @@ class LocalComercialServiceImplTest {
     // Mensajes del contrato (paridad v1)
     // ------------------------------------------------------------------
 
-    @Test
-    void rechazaTipoDeInmuebleNoComercial() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(datos(null, "D", null, BigDecimal.ONE, BigDecimal.ONE), agente));
-        assertEquals("ControlLocal solo admite local u oficina como tipo de inmueble comercial.",
-                error.getMessage());
-    }
-
-    @Test
-    void rechazaUsoNoComercial() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(datos(null, null, "V", BigDecimal.ONE, BigDecimal.ONE), agente));
-        assertEquals("ControlLocal solo admite inmuebles de uso comercial.", error.getMessage());
-    }
-
-    @Test
-    void rechazaEstadoInvalido() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(datos("Z", null, null, BigDecimal.ONE, BigDecimal.ONE), agente));
-        assertEquals("Valor invalido para estado del local: Z", error.getMessage());
-    }
-
-    @Test
-    void rechazaMetrajeNoPositivo() {
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(datos(null, null, null, BigDecimal.ZERO, BigDecimal.ONE), agente));
-        assertEquals("El metraje debe ser mayor que cero.", error.getMessage());
-    }
-
-    @Test
-    void rechazaPropietarioSinRolVigente() {
-        when(roles.findById(9L)).thenReturn(Optional.empty());
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.registrar(datosValidos(), agente));
-        assertEquals("El propietario del local no existe o no tiene el rol de propietario vigente.",
-                error.getMessage());
-    }
-
     // ------------------------------------------------------------------
     // Alta y trazabilidad
     // ------------------------------------------------------------------
-
-    @Test
-    void elAltaAplicaLosDefaultsDelContratoYSincronizaLaPublicacion() {
-        when(roles.findById(9L)).thenReturn(Optional.of(rolPropietario("Inmobiliaria Pacifico SAC")));
-        when(distritos.findByActivoTrueOrderByNombre()).thenReturn(List.of());
-        when(propiedades.save(any(Propiedad.class))).thenAnswer(inv -> conId(inv.getArgument(0), 7L));
-        when(publicaciones.codigoEstadoPublicacion(anyLong())).thenReturn("B");
-
-        FichaLocal ficha = service.registrar(datosValidos(), agente);
-
-        // Defaults v1: estado D, tipo L, uso C; el POST no re-lee la fila,
-        // asi que propietarioNombre/fechaRegistro/portada salen nulos.
-        assertEquals("D", ficha.estado());
-        assertEquals("L", ficha.tipoInmueble());
-        assertEquals("C", ficha.uso());
-        assertEquals("Comercio minorista", ficha.rubroPermitido());
-        assertEquals("B", ficha.estadoPublicacion());
-        assertNull(ficha.propietarioNombre());
-        assertNull(ficha.fechaRegistro());
-        assertNull(ficha.fotoPortadaClave());
-        verify(publicaciones).sincronizar(eq(7L), eq("LOC-0100"), eq(new BigDecimal("8500.00")),
-                eq("PEN"), any(), eq(agente));
-    }
-
-    @Test
-    void elAltaEstampaLaOrganizacionDelActorEnElAgregado() {
-        when(roles.findById(9L)).thenReturn(Optional.of(rolPropietario("Inmobiliaria Pacifico SAC")));
-        when(distritos.findByActivoTrueOrderByNombre()).thenReturn(List.of());
-        when(propiedades.save(any(Propiedad.class))).thenAnswer(inv -> conId(inv.getArgument(0), 7L));
-        when(publicaciones.codigoEstadoPublicacion(anyLong())).thenReturn("B");
-
-        service.registrar(datosValidos(), agente);
-
-        ArgumentCaptor<Propiedad> guardada = ArgumentCaptor.forClass(Propiedad.class);
-        verify(propiedades).save(guardada.capture());
-        assertEquals(ORG, guardada.getValue().getOrganizacionId());
-        // El detalle es parte del agregado: hereda el tenant sin que el
-        // caso de uso lo estampe dos veces.
-        assertEquals(ORG, guardada.getValue().getDetalleLocal().getOrganizacionId());
-    }
-
-    /**
-     * E0.1. El hueco que cierra: hasta ahora el alta NO dejaba hito, asi que el
-     * precio de SALIDA vivia solo en la columna de la propiedad y la primera
-     * edicion lo pisaba —{@code actualizar} graba el precio nuevo, nunca el
-     * anterior—. Con el alta instrumentada la serie conserva los dos numeros, y
-     * la brecha entre lo que el propietario pedia y lo que acepto se vuelve
-     * calculable. Por eso el test hace las DOS operaciones: lo que se protege no
-     * es que el alta escriba, es que la edicion posterior no borre.
-     */
-    @Test
-    void elAltaDejaElPrimerHitoAutorizadoYLaEdicionNoLoPisa() {
-        when(roles.findById(9L)).thenReturn(Optional.of(rolPropietario("Inmobiliaria Pacifico SAC")));
-        when(distritos.findByActivoTrueOrderByNombre()).thenReturn(List.of());
-        when(propiedades.save(any(Propiedad.class))).thenAnswer(inv -> conId(inv.getArgument(0), 7L));
-        when(publicaciones.codigoEstadoPublicacion(anyLong())).thenReturn("B");
-
-        service.registrar(datosValidos(), agente);
-
-        when(propiedades.buscarFicha(ORG, 7L)).thenReturn(Optional.of(propiedadExistente()));
-        when(fotos.findByIdPropiedadOrderByOrdenAscIdAsc(anyLong())).thenReturn(List.of());
-        when(prospeccionesRepo.existsByOrganizacionIdAndPropiedadIdAndAgenteId(ORG, 7L, 30L))
-                .thenReturn(true);
-
-        service.actualizar(7L, datos(null, null, null,
-                new BigDecimal("120.00"), new BigDecimal("9000.00")), agente);
-
-        ArgumentCaptor<com.controllocal.domain.inmueble.PrecioPropiedad> hitos =
-                ArgumentCaptor.forClass(com.controllocal.domain.inmueble.PrecioPropiedad.class);
-        verify(precios, org.mockito.Mockito.times(2)).save(hitos.capture());
-
-        com.controllocal.domain.inmueble.PrecioPropiedad salida = hitos.getAllValues().get(0);
-        assertEquals("U", salida.getHito());
-        assertEquals(new BigDecimal("8500.00"), salida.getMonto());
-        assertEquals("PEN", salida.getMoneda());
-        assertEquals(7L, salida.getIdPropiedad());
-        assertEquals(ORG, salida.getOrganizacionId());
-        assertEquals(java.time.LocalDate.now(), salida.getFecha());
-
-        // El segundo hito es el precio nuevo, en una fila aparte: el de salida
-        // sigue intacto. Ese es exactamente el dato que antes se perdia.
-        assertEquals(new BigDecimal("9000.00"), hitos.getAllValues().get(1).getMonto());
-        assertEquals(new BigDecimal("8500.00"), salida.getMonto());
-    }
 
     @Test
     void desactivarTransicionaAInactivoYLoAudita() {
@@ -279,37 +159,6 @@ class LocalComercialServiceImplTest {
         // La auditoria hereda el tenant de la entidad auditada, no del actor.
         assertEquals(ORG, registro.getOrganizacionId());
         assertEquals(ORG, disponibilidad.getOrganizacionId());
-    }
-
-    @Test
-    void alCambiarElPrecioSeRegistraElHitoAutorizado() {
-        Propiedad propiedad = propiedadExistente();
-        when(propiedades.buscarFicha(ORG, 7L)).thenReturn(Optional.of(propiedad));
-        when(roles.findById(9L)).thenReturn(Optional.of(rolPropietario("Inmobiliaria Pacifico SAC")));
-        when(distritos.findByActivoTrueOrderByNombre()).thenReturn(List.of());
-        when(propiedades.save(any(Propiedad.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(publicaciones.codigoEstadoPublicacion(anyLong())).thenReturn("B");
-        when(fotos.findByIdPropiedadOrderByOrdenAscIdAsc(anyLong())).thenReturn(List.of());
-        when(prospeccionesRepo.existsByOrganizacionIdAndPropiedadIdAndAgenteId(ORG, 7L, 30L)).thenReturn(true);
-
-        service.actualizar(7L, datos(null, null, null,
-                new BigDecimal("120.00"), new BigDecimal("9000.00")), agente);
-
-        ArgumentCaptor<com.controllocal.domain.inmueble.PrecioPropiedad> hito =
-                ArgumentCaptor.forClass(com.controllocal.domain.inmueble.PrecioPropiedad.class);
-        verify(precios).save(hito.capture());
-        assertEquals("U", hito.getValue().getHito());
-        assertEquals("PEN", hito.getValue().getMoneda());
-        assertEquals(new BigDecimal("9000.00"), hito.getValue().getMonto());
-        assertEquals(ORG, hito.getValue().getOrganizacionId());
-    }
-
-    @Test
-    void actualizarUnLocalInexistenteRespondeElMensajeV1() {
-        when(propiedades.buscarFicha(ORG, 99L)).thenReturn(Optional.empty());
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.actualizar(99L, datosValidos(), agente));
-        assertEquals("Local no encontrado", error.getMessage());
     }
 
     // ------------------------------------------------------------------
@@ -528,7 +377,6 @@ class LocalComercialServiceImplTest {
         propiedad.setDistrito("Miraflores");
         propiedad.setMetraje(new BigDecimal("120.00"));
         propiedad.setPrecioReferencial(new BigDecimal("8500.00"));
-        propiedad.asignarDetalleLocal("Comercio minorista", null, null);
         propiedad.setRolPropietario(rolPropietario("Inmobiliaria Pacifico SAC"));
         propiedad.iniciarDisponible();
         return conId(propiedad, 7L);

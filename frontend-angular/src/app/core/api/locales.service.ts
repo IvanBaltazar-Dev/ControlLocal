@@ -193,14 +193,6 @@ export class LocalesService {
     return this.api.get$<Local>(`locales/${id}`);
   }
 
-  registrar(datos: LocalRequest): Promise<Local> {
-    return this.api.post<Local>('locales', datos);
-  }
-
-  actualizar(id: number, datos: LocalRequest): Promise<Local> {
-    return this.api.put<Local>(`locales/${id}`, datos);
-  }
-
   posiblesDuplicados(
     datos: LocalRequest,
     idExcluir?: number,

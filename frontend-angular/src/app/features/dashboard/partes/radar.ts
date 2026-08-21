@@ -167,11 +167,6 @@ export class Radar {
     Math.max(0, this.hallazgos().length - 1 - EN_EL_RADAR),
   );
 
-  /** Cuántos locales encajaron, y con cuántos clientes en total. */
-  protected readonly clientesQueEncajan = computed(() =>
-    this.hallazgos().reduce((total, h) => total + h.clientes, 0),
-  );
-
   protected readonly segmentos = computed(() => {
     const a = this.asunto();
     return a ? segmentosDe(a.lado, a.paso) : [];

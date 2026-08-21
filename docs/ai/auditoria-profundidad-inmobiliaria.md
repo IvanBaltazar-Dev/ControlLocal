@@ -11,18 +11,23 @@ modelo actual para unidades relacionadas).
 **Evidencia cruda:** las diez respuestas completas quedan en el journal del
 workflow `wf_6c24292a-f7c`.
 
-> **No gobierna todavía.** Es una medición y un plan propuesto, no una decisión
-> tomada: los cortes que describe están pendientes de aprobación.
+> **Qué de esto está decidido y qué no.** El ORDEN de los cortes sí: es la
+> secuencia acordada el 2026-08-20 y §6 la fija. El CONTENIDO de cada corte —las
+> claves concretas, sus rótulos, sus exigencias— sigue siendo una propuesta
+> medida, no una decisión: se confirma corte a corte, al ejecutarlo.
 
-> **Ojo con la numeración de migraciones.** El plan se redactó cuando la última
-> aplicada era V69 y propone V70 para el Corte 0. **V70 ya existe** y es otra
-> cosa: la publicacion que pasa a pertenecer al encargo. Los cortes empiezan, por
-> tanto, en **V71**.
+> **El orden de los cortes se corrigió el 2026-08-20, y con él la numeración.**
+> El plan se redactó poniendo el catálogo delante de la edición; es al revés,
+> porque la corrupción del editor es daño activo y el vocabulario es expansión.
+> La secuencia vigente es **0A contención → 0B catálogo → 0C sujeto → resto**, y
+> la cadena de migraciones arranca en **V71** (V70 ya está ocupada por la
+> publicación por encargo). Todo eso está en §6, que es la que manda; el resto
+> del documento se dejó como se midió.
 
 ---
 # PLAN DE CATÁLOGO — BROX / profundidad inmobiliaria
 
-Verificado contra la base viva (`catalogo_atributo` = 19 filas, `catalogo_atributo_tipo`, `condicion_economica_captacion`, `captacion`) y contra el estado de migraciones (última aplicada **V69**; la siguiente es **V70**). Auditoría de sólo lectura: no se modificó ningún fichero.
+Verificado contra la base viva (`catalogo_atributo` = 19 filas, `catalogo_atributo_tipo`, `condicion_economica_captacion`, `captacion`) y contra el estado de migraciones (última aplicada entonces **V69**; hoy **V70**, y la siguiente libre es **V71**). Auditoría de sólo lectura: no se modificó ningún fichero.
 
 ---
 
@@ -327,80 +332,123 @@ unidad_relacionada
 
 Un corte se cierra con **gate + tests + evidencia**. La verificación de cierre es `verificacion/Verificar-Cierre.ps1` con `TEST_DB_URL`, nunca `mvn clean install`. Todo endpoint nuevo necesita su fila en `docs/ai/matriz-operacion-rol.md` o `MatrizOperacionRolTest` tumba la compilación.
 
----
-
-### **Corte 0 — El catálogo aprende a hablar** · bloqueante, sin ninguna clave nueva
-
-| | |
-|---|---|
-| **Migración** | **V70**: tabla `catalogo_atributo_opcion`; `atributo_propiedad_opcion`; columnas `valor_fecha`, `valor_moneda` en `atributo_propiedad`; `valor_maximo` en `catalogo_atributo`; ensanchar `ck_catalogo_atributo_tipo_dato` a `LISTA_MULTIPLE, FECHA, IMPORTE`; ensanchar `ck_catalogo_campo_estructural`; sustituir `catalogo_atributo_tipo.requerido` por `exigencia VARCHAR(3)`; `sujeto` en `catalogo_atributo`; extender el trigger `exigir_atributo_gobernado` a pertenencia de opción, rango min/max y moneda obligatoria en IMPORTE. |
-| **Código** | `MotorDeCapturaImpl` deja de pasar `opciones=null`; `Pregunta.controlDe` gana LISTA_MULTIPLE / FECHA / IMPORTE; `PreguntaCatalogo` y `PreguntaCatalogoResponse` ganan `opciones[{valor,rotulo}]`, `valorMinimo`, `valorMaximo`, `exigencia`, `ayuda`; `/captura/apertura` publica opciones **con rótulo**. |
-| **Prueba** | Test que recorre `catalogo_atributo` y falla si una LISTA no tiene opciones. E2E que verifica que `servicios_disponibles` llega con `control='LISTA'` y valores. Test que verifica que ninguna clave de tipo IMPORTE se guarda sin moneda. |
-| **Evidencia** | La única LISTA sembrada hoy deja de viajar como texto libre. |
-| **Por qué primero** | Sin esto, ~40 de las claves de §3 no se pueden representar y las listas acabarían escritas en Angular. |
+> **Este orden se corrigió el 2026-08-20, después de escribir el plan.** La
+> primera versión ponía el catálogo delante de la edición. Es el orden
+> equivocado: **contención antes que expansión del vocabulario**. Mientras el
+> único editor pueda rechazar cinco tipos, inventar `rubro_permitido` y aplastar
+> `uso` a `'C'`, cada día que pasa corrompe inmuebles — y añadir capacidades
+> inmobiliarias encima es ampliar la superficie de lo que se puede perder.
+>
+> La numeración de migraciones se rehízo entera con él. **V70 está ocupada** por
+> la publicación por encargo, así que la cadena arranca en **V71**.
 
 ---
 
-### **Corte 1 — Una sola puerta de edición** · **para de perder y corromper datos hoy**
+### **Corte 0A — Contener la corrupción de edición** · va primero, y no es negociable
+
+Antes de añadir **una sola** capacidad inmobiliaria nueva tiene que existir un
+gate de conservación:
+
+```
+leer → abrir el editor → NO modificar ese dato → guardar → releer  ==  idéntico
+```
+
+Y no vale probarlo con un departamento feliz. Cubre **los siete códigos**
+`L, O, D, C, T, A, X`, propiedad **y** encargos, y varios tipos de valor
+gobernado — texto, entero, decimal, booleano y el que hoy es LISTA. Es la misma
+forma de ida y vuelta que cerró D-E4-3 (`crear → leer → editar otra cosa →
+releer`), y allí ya demostró encontrar pérdidas que ninguna prueba de
+persistencia aislada ve.
+
+Aquí entra también **la puerta única de edición**.
 
 | | |
 |---|---|
 | **Migración** | **V71**: retirar `detalle_local_comercial` con el patrón V60→V61→V62 (consolidar `rubro_permitido`, `apto_licencia_funcionamiento`, `carga_electrica_kw` en `atributo_propiedad` y **borrar la tabla espejo**). |
-| **Código** | Editor **universal** en el SPA que consume `PUT /propiedades/{id}` (el endpoint existe y está en la matriz; `PropiedadesService` no lo llama). Retirar `local-form`, `catalogos-local.ts` (42 distritos y 25 rubros duplicados, con la fuente ya publicada en `GET propiedades/filtros`), `core/rubros.ts` (copia byte a byte) y el `uso: 'C'` literal de `locales.service.ts:61` + `LocalComercialServiceImpl:267,363`. `CoincidenciaCartera.rubroPermitido()` y `CoincidenciaServiceImpl.filaPropiedad()` dejan de leer `getDetalleLocal()`. El listado universal `/propiedades` busca rubro por `atributo_propiedad`. `codigos.ts`: retirar `TIPO_INMUEBLE`, `USO_INMUEBLE` y consumir `tipoRotulo` / `usoRotulo`, que el contrato ya publica. |
-| **Prueba** | Añadir **los códigos unitarios `L,O,D,C,T,A,X`** a `TIPOS_DE_PROPIEDAD` en `FronteraDeAutoridadEnElSpaTest` y una tercera comprobación para la matriz *incondicional* (hoy los tres gates no ven `local-form` porque no ramifica: pinta la matriz entera sin condición). Con eso el build **falla hoy mismo**, que es lo que se quiere. E2E: editar un DEPARTAMENTO sin que `uso` se convierta en `'C'` ni `rubro_permitido` se invente. |
-| **Por qué aquí** | Hoy `PUT /propiedades/{id}` no se llama desde ninguna parte, y el único botón «Editar» de la ficha lleva a un formulario que rechaza cinco de los siete tipos, inventa el rubro y aplasta el uso. Añadir 85 atributos antes de esto es añadir 85 campos que nadie puede rellenar. |
+| **Código** | Editor **universal** en el SPA que consume `PUT /propiedades/{id}` — el endpoint existe, está en la matriz, y `PropiedadesService` no lo llama desde ninguna parte. Retirar `local-form`, `catalogos-local.ts` (42 distritos y 25 rubros duplicados, con la fuente ya publicada en `GET propiedades/filtros`), `core/rubros.ts` (copia byte a byte) y el `uso: 'C'` literal de `locales.service.ts:61` + `LocalComercialServiceImpl:267,363`. `CoincidenciaCartera.rubroPermitido()` y `CoincidenciaServiceImpl.filaPropiedad()` dejan de leer `getDetalleLocal()`. El listado universal `/propiedades` busca rubro por `atributo_propiedad`. `codigos.ts`: retirar `TIPO_INMUEBLE`, `USO_INMUEBLE` y consumir `tipoRotulo` / `usoRotulo`, que el contrato ya publica. |
+| **Invariantes** | Lo que la interfaz **no recibió o no modificó** conserva exactamente su semántica anterior. `uso` no se inventa. `rubro_permitido` no aparece porque Angular lo suponga. Ninguna matriz fija de campos en Angular. |
+| **Prueba** | El gate de conservación de arriba, por los siete tipos. Más: añadir **los códigos unitarios `L,O,D,C,T,A,X`** a `TIPOS_DE_PROPIEDAD` en `FronteraDeAutoridadEnElSpaTest` y una tercera comprobación para la matriz *incondicional* — hoy los tres gates no ven `local-form` porque no ramifica: pinta la matriz entera sin condición. Con eso el build **falla hoy mismo**, que es lo que se quiere. |
+| **Por qué primero** | Es lo único de este plan que está causando daño ahora. Y es coherente con la frontera ya congelada: BROX Core decide qué es verdad; BROX Web representa y ejecuta el caso de uso (D-A-1). |
 
 ---
 
-### **Corte 2 — El ENCARGO como sujeto gobernado**
+### **Corte 0B — El catálogo aprende a hablar** · bloqueante, sin ninguna clave nueva
 
-- **Migración V72**: `catalogo_atributo_operacion(id, tipo_propiedad, tipo_operacion, exigencia)`; `atributo_encargo` con FK compuesta a `uq_captacion_org`; trigger análogo a `exigir_atributo_gobernado`.
-- **Código**: `MotorDeCaptura` gana el paso de encargo; `AtributosGobernados` traduce por (tipo, operación); DTO de captación publica los atributos del encargo; los tres pares del §4 quedan separados en el guion.
-- **Prueba**: test que falla si una clave con `sujeto='ENCARGO'` tiene fila en `catalogo_atributo_tipo` (o al revés). Test de tenant: `atributo_encargo` lleva discriminador.
-- **Siembra**: las ~25 claves de §4. **Aquí es donde `amoblado` deja de mentir.**
+Sólo cuando 0A esté verde.
+
+| | |
+|---|---|
+| **Migración** | **V72**: tabla `catalogo_atributo_opcion`; `atributo_propiedad_opcion`; columnas `valor_fecha`, `valor_moneda` en `atributo_propiedad`; `valor_maximo` en `catalogo_atributo`; ensanchar `ck_catalogo_atributo_tipo_dato` a `LISTA_MULTIPLE, FECHA, IMPORTE`; ensanchar `ck_catalogo_campo_estructural`; sustituir `catalogo_atributo_tipo.requerido` por `exigencia VARCHAR(3)` (`ALT`/`PUB`/`OPC`); extender el trigger `exigir_atributo_gobernado` a pertenencia de opción, rango min/max y moneda obligatoria en IMPORTE. |
+| **Código** | `MotorDeCapturaImpl` deja de pasar `opciones=null`; `Pregunta.controlDe` gana LISTA_MULTIPLE / FECHA / IMPORTE; `PreguntaCatalogo` y `PreguntaCatalogoResponse` ganan `opciones[{valor,rotulo}]`, `valorMinimo`, `valorMaximo`, `exigencia`, `ayuda`; `/captura/apertura` y `/captura/definicion` publican opciones **con rótulo**. |
+| **Prueba** | Test que recorre `catalogo_atributo` y falla si una LISTA no tiene opciones. E2E que verifica que `servicios_disponibles` llega con `control='LISTA'` y valores. Test que verifica que ninguna clave de tipo IMPORTE se guarda sin moneda. |
+| **Evidencia** | La única LISTA sembrada hoy deja de viajar como texto libre. |
+| **Por qué antes de sembrar** | Hoy una `LISTA` no tiene vocabulario persistente y el motor acaba tratándola como texto libre. Sembrar decenas de campos antes de resolverlo trasladaría el catálogo a Angular — que es justo lo que el gate de D-A-1 rompe. |
 
 ---
 
-### **Corte 3 — Filas gratis: las 19 claves que ya existen** · el mejor coste/valor del plan
+### **Corte 0C — El ENCARGO como sujeto gobernado**
 
-- **Migración V73**: todo el §3.1. Filas en `catalogo_atributo_tipo` (`banos` en L,O,A; `cuota_mantenimiento` en C,A; `zonificacion` en O; `pisos_edificacion` en D,O; `frente` en C), flips de exigencia, cambios de `tipo_dato` (`zonificacion` y `rubro_permitido` a LISTA/LISTA_MULTIPLE con sus opciones, `cuota_mantenimiento` a IMPORTE, `banos` a ENTERO), quitar `aplica_todos` de `antiguedad_anios` y `estacionamientos`, rótulo de `metraje_total`, habilitar `interiorUnidad`/`nombreEdificioGaleria` para A, retirar `servicios_disponibles`, retirar `metraje_construido` de D.
+| | |
+|---|---|
+| **Migración** | **V73**: `catalogo_atributo.sujeto VARCHAR(10)` CHECK `('PROPIEDAD','ENCARGO')`; `catalogo_atributo_operacion(id, tipo_propiedad, tipo_operacion, exigencia)`; `atributo_encargo` con FK **real** compuesta a `uq_captacion_org`; trigger análogo a `exigir_atributo_gobernado`. |
+| **Código** | `MotorDeCaptura` gana el paso de encargo; `AtributosGobernados` traduce por (tipo, operación); el DTO de captación publica los atributos del encargo; los tres pares del §4 quedan separados en el guion. |
+| **Prueba** | Test que falla si una clave con `sujeto='ENCARGO'` tiene fila en `catalogo_atributo_tipo` (o al revés). Test de tenant: `atributo_encargo` lleva discriminador. |
+| **Siembra** | Las ~25 claves de §4. **Aquí es donde `amoblado` deja de mentir.** |
+| **Regla que congela** | Toda clave gobernada declara **exactamente un vocabulario, exactamente un sujeto y exactamente una autoridad** — y el sujeto **no** se resuelve con una FK polimórfica. Ver D-E4-3 §9. |
+
+---
+
+### **Corte 1 — Filas gratis: las 19 claves que ya existen** · el mejor coste/valor del plan
+
+- **Migración V74**: todo el §3.1. Filas en `catalogo_atributo_tipo` (`banos` en L,O,A; `cuota_mantenimiento` en C,A; `zonificacion` en O; `pisos_edificacion` en D,O; `frente` en C), flips de exigencia, cambios de `tipo_dato` (`zonificacion` y `rubro_permitido` a LISTA/LISTA_MULTIPLE con sus opciones, `cuota_mantenimiento` a IMPORTE, `banos` a ENTERO), quitar `aplica_todos` de `antiguedad_anios` y `estacionamientos`, rótulo de `metraje_total`, habilitar `interiorUnidad`/`nombreEdificioGaleria` para A, retirar `servicios_disponibles`, retirar `metraje_construido` de D.
 - **Código**: `GuionRegistroPropiedad` deja de restringir `interiorUnidad`/`nombreEdificioGaleria` a L,O,D. Migrar el dato existente de `banos` DECIMAL a `banos` ENTERO + `medios_banos` **sin inferir**: `2.5` → 2 completos + 1 medio es la única lectura documentada, y lo que no encaje se declara FALTANTE.
 - **Prueba**: E2E que comprueba que un TERRENO ya no pregunta antigüedad ni estacionamientos, y que un LOCAL pregunta baños.
 - **Valor**: sin una sola clave nueva desaparecen dos preguntas sin sentido, la zonificación pasa a filtrable, el mantenimiento deja de ser un número sin moneda y el local deja de registrarse sin SS.HH.
 
 ---
 
-### **Corte 4 — Identidad registral** · §3.2
+### **Corte 2 — Identidad registral** · §3.2
 
-- **Migración V74**: `propiedad.partida_registral`, `propiedad.oficina_registral` (destino ESTRUCTURAL, gracias a C-8) + las claves `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. `condicion_compraventa.partida_registral` pasa a ser lo que debió ser siempre: **la partida vigente en esa venta, copia fechada de la del activo**, no su único domicilio.
+- **Migración V75**: `propiedad.partida_registral`, `propiedad.oficina_registral` (destino ESTRUCTURAL, gracias a C-8) + las claves `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. `condicion_compraventa.partida_registral` pasa a ser lo que debió ser siempre: **la partida vigente en esa venta, copia fechada de la del activo**, no su único domicilio.
 - **Prueba**: E2E que verifica que una captación de **alquiler** puede registrar la partida (hoy es imposible) y que la solicitud de venta la hereda.
 - **Valor**: el broker verifica titular y cargas en SUNARP **antes** de firmar el encargo, no al cerrar.
 
 ---
 
-### **Corte 5 — Vivienda: D y C** · §3.3, §3.6, §3.4 (parte)
+### **Corte 3 — Vivienda: D y C** · §3.3, §3.6, §3.4 (parte)
 Siembra + opciones + E2E de alta/edición/publicación por tipo. Aquí entran `tipologia`, `estado_conservacion`, `ascensores`, `vigilancia`, `areas_comunes`, `vista`, el bloque de baños/servicio y las áreas exteriores.
 
-### **Corte 6 — Comercial: L, O, A** · §3.7, §3.5
+### **Corte 4 — Comercial: L, O, A** · §3.7, §3.5
 `tipo_acceso` (el único ALT nuevo de L), `clase_edificio`, `nivel_implementacion`, `metraje_arrendable`, `aforo_itse`, `certificado_itse`, el bloque logístico completo y las instalaciones.
 
-### **Corte 7 — Terreno: T** · §3.8
+### **Corte 5 — Terreno: T** · §3.8
 Parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. Cierra la duplicidad `metraje_total`/`area_terreno` para T.
 
-### **Corte 8 — Unidades relacionadas** · §5
-V-siguiente con `unidad_relacionada`, códigos `'E'` y `'B'`, `unidadesRelacionadas[]` en el DTO, paso en el guion, y la resignificación deliberada de `numeroEstacionamientos` en `FronteraDeAutoridadEnElSpaTest`.
+### **Corte 6 — Unidades relacionadas** · §5
+Una unidad con partida propia **es una Propiedad relacionada**, con identidad, titularidad, partida, histórico y eventualmente encargo propios — no un escalar dentro de un EAV. Migración con `unidad_relacionada`, códigos `'E'` y `'B'`, `unidadesRelacionadas[]` en el DTO, paso en el guion, y la resignificación deliberada de `numeroEstacionamientos` en `FronteraDeAutoridadEnElSpaTest`.
 
-### **Corte 9 — Demanda y matcher**
+### **Corte 7 — Demanda y matcher**
 Unificar el vocabulario de tipo (hoy la demanda usa `LOCAL_COMERCIAL, OFICINA, DEPOSITO_ALMACEN, STAND_MODULO, TERRENO_COMERCIAL, OTRO` y `mapTipo` sólo traduce tres, con lo que ALMACÉN y DEPOSITO_ALMACEN —el mismo concepto— se declaran no comparables y el criterio pasa a NO_APLICA). Permitir que un requerimiento pida atributos gobernados. Y **arreglar el sesgo**: hoy un dato faltante hace que el criterio NO APLIQUE sin castigar el puntaje, así que **la propiedad peor capturada obtiene mejor puntaje** al reducir el denominador.
 
 ---
 
+### La cadena de migraciones, de un vistazo
+
+```
+V70  ✅ APLICADA   la publicacion pertenece al encargo
+V71     0A         retirar detalle_local_comercial (puerta unica de edicion)
+V72     0B         capacidades del catalogo: opciones, multivalor, fecha, importe, exigencia
+V73     0C         sujeto del dato: atributo_encargo
+V74     1          las 19 claves que ya existen, bien declaradas
+V75     2          identidad registral
+```
+
 ## 7. Lo que NO haría ahora
 
-1. **No sembrar ninguna clave antes del Corte 0.** Una LISTA sin tabla de opciones obliga a Angular a inventar el vocabulario y rompe D-A-1. Es la razón por la que este plan tiene un corte técnico delante.
+1. **No sembrar ninguna clave antes del Corte 0B**, ni tocar el editor antes de tener el gate de conservación del **0A**. Una LISTA sin tabla de opciones obliga a Angular a inventar el vocabulario y rompe D-A-1; y ampliar lo que se puede editar antes de garantizar que editar no destruye es ampliar la superficie de la pérdida. Por eso este plan tiene dos cortes técnicos delante, y en ese orden.
 2. **No añadir `disponible_desde` como TEXTO «provisional».** Es la propuesta que aparece en cuatro auditorías y es un parche: no filtraría «disponible este mes» ni ordenaría. El tipo FECHA cuesta una columna.
 3. **No crear un tipo de propiedad «cochera» antes de la relación genérica.** Sin `unidad_relacionada`, una cochera dada de alta suelta queda huérfana en la cartera — peor que el contador actual.
-4. **No tocar el matcher hasta el Corte 9.** Cambiar el puntaje mientras la mitad de la cartera está sin datos produce rankings que nadie puede interpretar. Primero el dato, después el criterio.
+4. **No tocar el matcher hasta el Corte 7.** Cambiar el puntaje mientras la mitad de la cartera está sin datos produce rankings que nadie puede interpretar. Primero el dato, después el criterio.
 5. **No rellenar retroactivamente lo que hoy está vacío.** Las cuatro propiedades existentes se quedan con sus atributos FALTANTES. Inferir `VIVIENDA` de que el tipo sea D, o `ENTREGA_INMEDIATA` porque es lo frecuente, es exactamente lo que la ayuda de `uso` («si no se declara, se deduce del tipo») hace mal hoy.
 6. **No estrechar `piso` a numérico ni añadir `piso_numero`.** `TEXTO` está ahí porque L y O admiten «Sótano» y «Mezzanine». Que «del piso 5 hacia arriba» no se resuelva en SQL para D es real, pero se arregla estrechando el tipo **por tipo de propiedad** o separando la clave — decisión de modelo, no un atributo más. Un `piso_numero` al lado repetiría el defecto que V67 acaba de cerrar.
 7. **No convertir `metraje_total` en dos claves por tipo.** Se resuelve con rótulo + ayuda («área techada») y con `area_terreno` obligatoria en C y PUB en T. Partir la clave rompería `campo_estructural=METRAJE`, que es de los pocos sitios donde la autoridad ya está limpia.
@@ -411,4 +459,4 @@ Unificar el vocabulario de tipo (hoy la demanda usa `LOCAL_COMERCIAL, OFICINA, D
 ---
 
 **Ficheros que este plan toca (referencia para quien lo ejecute):**
-`D:/init/ControlLocal/backend-spring/controllocal-app/src/main/resources/db/migration/` (desde V70) · `.../controllocal-service/src/main/java/com/controllocal/service/soporte/AtributosGobernados.java` · `.../service/captura/GuionRegistroPropiedad.java` · `.../service/impl/MotorDeCapturaImpl.java` · `.../service/impl/PropiedadUniversalServiceImpl.java` · `.../service/impl/LocalComercialServiceImpl.java` (se retira) · `.../service/soporte/CoincidenciaCartera.java` · `.../controllocal-web/src/main/java/com/controllocal/web/dto/PropiedadUniversalDtos.java` · `.../web/controlador/PropiedadesUniversalesController.java` · `.../controllocal-domain/src/main/java/com/controllocal/domain/inmueble/CatalogoAtributo.java` · `.../controllocal-app/src/test/java/com/controllocal/arquitectura/FronteraDeAutoridadEnElSpaTest.java` · `D:/init/ControlLocal/frontend-angular/src/app/features/local-form/` (se retira) · `.../src/app/core/api/codigos.ts` · `.../src/app/features/propiedad-detail/` · `D:/init/ControlLocal/docs/ai/matriz-operacion-rol.md`
+`D:/init/ControlLocal/backend-spring/controllocal-app/src/main/resources/db/migration/` (desde V71) · `.../controllocal-service/src/main/java/com/controllocal/service/soporte/AtributosGobernados.java` · `.../service/captura/GuionRegistroPropiedad.java` · `.../service/impl/MotorDeCapturaImpl.java` · `.../service/impl/PropiedadUniversalServiceImpl.java` · `.../service/impl/LocalComercialServiceImpl.java` (se retira) · `.../service/soporte/CoincidenciaCartera.java` · `.../controllocal-web/src/main/java/com/controllocal/web/dto/PropiedadUniversalDtos.java` · `.../web/controlador/PropiedadesUniversalesController.java` · `.../controllocal-domain/src/main/java/com/controllocal/domain/inmueble/CatalogoAtributo.java` · `.../controllocal-app/src/test/java/com/controllocal/arquitectura/FronteraDeAutoridadEnElSpaTest.java` · `D:/init/ControlLocal/frontend-angular/src/app/features/local-form/` (se retira) · `.../src/app/core/api/codigos.ts` · `.../src/app/features/propiedad-detail/` · `D:/init/ControlLocal/docs/ai/matriz-operacion-rol.md`

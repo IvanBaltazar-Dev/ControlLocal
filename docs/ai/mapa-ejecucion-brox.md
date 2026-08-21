@@ -413,8 +413,22 @@ tipos) rechaza cinco de ellos, **inventa `rubro_permitido`** y **aplasta `uso` a
 `'C'`** al guardar. `PUT /propiedades/{id}` existe, está en la matriz, y el SPA
 no lo llama desde ninguna parte.
 
-El plan propone diez cortes, y el primero es técnico a propósito: el catálogo
-tiene que aprender a hablar antes de que se le pueda añadir una sola clave.
+El plan propone diez cortes, y los dos primeros son técnicos a propósito — **en
+este orden**:
+
+```
+0A  contener la corrupción de edición   ← lo único que hace daño HOY
+0B  el catálogo aprende a hablar        ← antes de sembrar una sola clave
+0C  declarar el sujeto del dato         ← propiedad ≠ encargo
+```
+
+**0A va delante de 0B**, y esto se corrigió después de escribir el plan: mientras
+editar pueda destruir, añadir capacidades inmobiliarias es ampliar la superficie
+de lo que se puede perder. El gate de 0A es el de D-E4-3 un paso más allá —
+*leer → abrir el editor → no tocar ese dato → guardar → releer = idéntico*—, y
+por los siete tipos, no por un departamento feliz.
+
+La cadena de migraciones arranca en **V71**: V70 ya es la publicación por encargo.
 
 ---
 

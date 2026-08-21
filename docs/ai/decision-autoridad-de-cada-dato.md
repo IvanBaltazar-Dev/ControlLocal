@@ -3,7 +3,7 @@
 **Qué decide:** para cada dato que `/captura/definicion` publica, **dónde vive
 de verdad**. Exactamente una autoridad por clave.
 
-**Estado:** **CERRADA el 2026-08-18**, los once pasos. Una sola autoridad
+**Estado:** **CERRADA el 2026-08-18**, los once pasos. **Ampliada el 2026-08-20** con §9, que congela la regla del SUJETO — la pregunta que va antes de la autoridad: no *donde vive* el dato, sino *de quien es*. La decision original no se toca. Una sola autoridad
 por clave, las seis columnas espejo retiradas del esquema y del agregado (V62), y
 835 pruebas verdes con las 37 de integración ejecutadas de verdad. **Angular no
 necesitó ningún cambio**, que es la prueba de que el contrato lógico no se movió.
@@ -483,7 +483,7 @@ que no se confunda con lo que sí se cerró.
 > el formulario la consuma, y eso es la normalización del alta, no esta tanda.
 
 
-Esta decisión queda **cerrada**. Lo que habilita —ampliar a casa, departamento,
+Esta decisión queda **cerrada** en lo que decidió — la autoridad por clave. Lo que sigue en **§9** no la reabre: le añade la pregunta que quedaba delante, descubierta dos días después al medir la profundidad inmobiliaria. Lo que habilita —ampliar a casa, departamento,
 terreno u oficina sin añadir una columna por cada tipo— es real, pero **no se
 sigue normalizando propiedades ahora**: el trabajo vigente es E2 (dashboard y
 normalización transversal del SPA), y una victoria técnica que se convierte en
@@ -496,3 +496,102 @@ incoherente consolidar la autoridad del dato y volver a introducir una autoridad
 paralela en los formularios — que es exactamente lo que describe la deuda de
 arriba.
 
+
+---
+
+## 9. El sujeto del dato — la pregunta anterior a la autoridad (2026-08-20)
+
+Esta decisión respondió **dónde vive** cada dato. La auditoría de profundidad
+inmobiliaria destapó que faltaba responder algo que va **antes**:
+
+> **¿De quién es cada dato?**
+
+Porque el catálogo presupone hoy una sola respuesta:
+
+```
+atributo  →  Propiedad
+```
+
+`catalogo_atributo` sólo se mapea contra `tipo_propiedad`, y `atributo_propiedad`
+cuelga de `id_propiedad`. Por construcción, **todo atributo gobernado es un hecho
+de la cosa física**. Y eso es insuficiente.
+
+### Lo que demuestra que lo es
+
+`amoblado` está hoy declarado como atributo de la PROPIEDAD. Pero una vivienda
+puede tener muebles y, con los mismos muebles:
+
+- venderse sin ellos;
+- alquilarse amoblada;
+- tener dos encargos en momentos distintos con condiciones distintas.
+
+Esas tres historias no se fusionan — por la misma razón por la que dos encargos
+no fusionan precio, operación ni histórico (D-E4-1). Con un solo sujeto, la
+tercera es imposible de representar: el dato se sobrescribe.
+
+Y hay una familia entera sin domicilio: garantía, adelanto, plazo mínimo,
+disponible desde, mascotas aceptadas, se ofrece amoblado. Todas son **condiciones
+de una comercialización concreta**, y hoy no tienen dónde escribirse.
+
+### La regla que queda congelada
+
+> **Toda clave gobernada declara exactamente un vocabulario, exactamente un
+> sujeto y exactamente una autoridad.**
+
+```
+clave  →  vocabulario  →  sujeto  →  autoridad  →  mecanismo de persistencia
+```
+
+Los sujetos, hoy, son dos. Pueden aparecer más —`REQUERIMIENTO` es el candidato
+obvio del lado demanda— pero **no se declaran hasta que hagan falta**.
+
+| Sujeto | Qué describe | Dónde persiste |
+|---|---|---|
+| `PROPIEDAD` | la cosa física, estable | `atributo_propiedad` |
+| `ENCARGO` | cómo se ofrece esa cosa en **una** operación concreta | `atributo_encargo` |
+| — | identidad o invariante estructural | su campo canónico del agregado (§3) |
+
+### El sujeto NO se resuelve con una FK polimórfica
+
+Nada de `tipo_sujeto` + `id_sujeto`. Esa forma parece que ahorra una tabla y lo
+que hace es **renunciar a la integridad referencial**: la base deja de poder
+garantizar que el atributo apunta a algo que existe, y el borrado de un encargo
+deja de tener quien lo pare.
+
+Dos persistencias explícitas, cada una con su FK real, compartiendo **un solo
+catálogo** que declara de quién es cada clave. Es la misma elección que ya se
+hizo en §3 para la autoridad: el enrutamiento se decide una vez, en el catálogo,
+y el mecanismo se elige en consecuencia.
+
+### Y el tercer caso, que no es un atributo
+
+Hay datos que no son de la propiedad ni del encargo porque **no son datos**: son
+otra entidad.
+
+Una cochera con partida registral propia, un depósito independizado, un almacén
+anexo — cada uno tiene identidad, titularidad, partida, histórico y
+eventualmente encargo propios. Representarlos como
+
+```
+cochera_partida
+cochera_numero
+cochera_area
+cochera_precio
+```
+
+es construir una entidad **dentro** de un EAV, y se paga dos veces: no se puede
+consultar, y no se puede vender por separado.
+
+> **Un activo con identidad registral propia no se degrada a un atributo de otro
+> activo.** Es una **Propiedad relacionada**, y la relación es genérica
+> —accesoria, independiente— para que sirva igual a cochera, depósito y almacén
+> anexo. No una relación `cochera_departamento`.
+
+### Qué se hace con esto, y cuándo
+
+Nada todavía. La regla se congela aquí para que el corte que la implemente no
+tenga que volver a discutirla; el plan y su orden están en
+`auditoria-profundidad-inmobiliaria.md` §6 — **0A contención → 0B vocabulario →
+0C sujeto**. Declarar el sujeto antes de que el catálogo sepa declarar un
+vocabulario, o antes de que editar deje de corromper, sería ampliar un modelo que
+todavía pierde datos.

@@ -545,11 +545,11 @@ clave  →  vocabulario  →  sujeto  →  autoridad  →  mecanismo de persiste
 Los sujetos, hoy, son dos. Pueden aparecer más —`REQUERIMIENTO` es el candidato
 obvio del lado demanda— pero **no se declaran hasta que hagan falta**.
 
-| Sujeto | Qué describe | Dónde persiste |
-|---|---|---|
-| `PROPIEDAD` | la cosa física, estable | `atributo_propiedad` |
-| `ENCARGO` | cómo se ofrece esa cosa en **una** operación concreta | `atributo_encargo` |
-| — | identidad o invariante estructural | su campo canónico del agregado (§3) |
+| Sujeto | Qué describe | Dónde declara a qué aplica | Dónde persiste |
+|---|---|---|---|
+| `PROPIEDAD` | la cosa física, estable | `catalogo_atributo_tipo` — por tipo de propiedad | `atributo_propiedad` |
+| `ENCARGO` | cómo se ofrece esa cosa en **una** operación concreta | `catalogo_atributo_operacion` — por tipo **y** operación | `atributo_encargo` |
+| — | identidad o invariante estructural | — | su campo canónico del agregado (§3) |
 
 ### El sujeto NO se resuelve con una FK polimórfica
 
@@ -562,6 +562,20 @@ Dos persistencias explícitas, cada una con su FK real, compartiendo **un solo
 catálogo** que declara de quién es cada clave. Es la misma elección que ya se
 hizo en §3 para la autoridad: el enrutamiento se decide una vez, en el catálogo,
 y el mecanismo se elige en consecuencia.
+
+Y esas FK apuntan al **`id_catalogo_atributo`**, no a la `clave`. La `clave` es la
+identidad *estable* del catálogo —la que viaja por el cable y la que el gate de
+D-A-1 impide que Angular reinvente—, pero no es una identidad *única*:
+`uq_catalogo_atributo_clave` es única sobre `COALESCE(organizacion_id, 0), clave`,
+porque un tenant puede declarar la suya junto a la del sistema. Referenciar por
+`clave` obligaría a una FK compuesta con `organizacion_id`, y en los atributos del
+sistema esa columna es NULL, con lo que la comprobación no comprobaría nada.
+
+Es la misma razón por la que una tabla de aplicabilidad **no lleva `id` propio**:
+no clasifica una fila cualquiera, clasifica **un atributo**, y eso pertenece a su
+clave primaria — `(id_catalogo_atributo, tipo_propiedad)` en
+`catalogo_atributo_tipo` desde V48, y `(id_catalogo_atributo, tipo_propiedad,
+tipo_operacion)` en la del encargo.
 
 ### Y el tercer caso, que no es un atributo
 

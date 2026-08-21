@@ -1,0 +1,118 @@
+/* ====================================================================
+   HALLAZGO DESTACADO · editorial, y solo cuando existe
+   --------------------------------------------------------------------
+   Una de las cuatro tarjetas del Radar; el armazon sigue en
+   `radar.scss`. EL ANFITRION ES LA TARJETA: de ahi `display: block` y
+   los `!important`, que siguen haciendo falta para ganarle a
+   `.radar-cuerpo > *`.
+
+   `.cab-rz` y `.mas` se repiten aqui por la encapsulacion, igual que
+   `accion-rapida` repite `.bt-p`. La lista «Lo que encontre» conserva
+   sus copias en `radar.scss`, que es donde se pinta.
+   ==================================================================== */
+
+:host {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  padding: 12px 13px 13px;
+  /* Es la pieza más alta de la pila: se le nota. */
+  background: linear-gradient(168deg, #ffffff 0%, #fbfefc 58%, #f2faf6 100%) !important;
+  border-color: color-mix(in srgb, var(--positivo) 24%, #e4edfb) !important;
+  box-shadow:
+    0 1px 2px rgba(16, 32, 56, 0.05),
+    0 10px 24px -14px color-mix(in srgb, var(--positivo) 42%, transparent) !important;
+
+  .cab-rz {
+    margin-bottom: 11px;
+  }
+
+  .q {
+    margin: 0;
+    font-size: 15.5px;
+    line-height: 21px;
+    font-weight: 650;
+    letter-spacing: -0.016em;
+  }
+
+  .c {
+    margin: 5px 0 0;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--ink-2);
+  }
+}
+
+/* Canto de 3 px y versalita teñida: el mismo recurso del expediente.
+   Ninguna cabecera de sección lleva icono (D-E2-1). */
+.cab-rz {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+  --sc: var(--ink-3);
+
+  .kicker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+    padding-left: 11px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--sc) 80%, var(--ink));
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 3px;
+      height: 11px;
+      margin-top: -5.5px;
+      border-radius: 1px;
+      background: var(--sc);
+    }
+  }
+}
+
+/* Puntero: ya es un asunto del foco, aquí no se vuelve a pedir acción. */
+.en-cola {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accion);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+}
+
+.mas {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--accion);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+
+  cl-icono {
+    transition: transform var(--t1) ease;
+  }
+
+  &:hover cl-icono {
+    transform: translateX(3px);
+  }
+}

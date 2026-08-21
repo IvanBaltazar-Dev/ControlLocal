@@ -31,7 +31,8 @@ import { Icono } from '../../shared/icono/icono';
 import { MallaBrox } from '../../shared/marca-brox/malla-brox';
 import { PanelLateral } from '../../shared/panel-lateral/panel-lateral';
 import { AsuntoDelFoco, desdeAsuntoDelBroker, desdeTarea } from './asunto-del-foco';
-import { HallazgoEnRadar, Radar } from './partes/radar';
+import { Radar } from './partes/radar';
+import { HallazgoEnRadar } from './partes/radar-hallazgo';
 
 /**
  * Cuántos asuntos caben en el foco. **Es layout, no política**: si solo hay dos

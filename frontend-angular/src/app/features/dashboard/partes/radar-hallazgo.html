@@ -1,0 +1,37 @@
+<div class="cab-rz" [style.--sc]="'var(--positivo)'">
+  <span class="kicker">Hallazgo destacado</span>
+</div>
+<p class="q">{{ hallazgo().titulo }}</p>
+<!--
+  Con un cliente se enseña la frase que redactó el dominio. Con
+  varios, el hecho ya no es esa frase: es cuántos encajan. Repetir la
+  dirección una vez por cliente era lo que estiraba la columna.
+-->
+@if (hallazgo().clientes === 1) {
+  <p class="c">{{ hallazgo().porQue }}</p>
+} @else {
+  <p class="c">
+    <b>{{ hallazgo().clientes }} clientes</b> de tu cartera encajan con este local.
+  </p>
+}
+
+<!--
+  Regla del hogar único: lo que ya está en el foco no vuelve a ser
+  tarjeta aquí — queda el puntero a su número.
+-->
+@if (hallazgo().posicion; as posicion) {
+  <button type="button" class="en-cola" (click)="irAlAsunto.emit(hallazgo().id)">
+    <cl-icono nombre="arriba" [tamano]="12" [grosor]="1.9" />
+    Está en tu atención · {{ posicion }}
+  </button>
+} @else if (hallazgo().clientes === 1) {
+  <button type="button" class="mas" (click)="abrir.emit(hallazgo().destino)">
+    Ver la coincidencia
+    <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+  </button>
+} @else {
+  <button type="button" class="mas" (click)="verHallazgos.emit()">
+    Ver los {{ hallazgo().clientes }} clientes
+    <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+  </button>
+}

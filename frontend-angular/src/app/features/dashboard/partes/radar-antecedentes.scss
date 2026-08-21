@@ -1,0 +1,303 @@
+/* ====================================================================
+   ANTECEDENTES · cuatro renglones, no cuatro fechas
+   --------------------------------------------------------------------
+   Una de las cuatro tarjetas del Radar. El armazon --`.radar`, la
+   cabecera, `.radar-cuerpo`, la ruta y el conmutador-- sigue en
+   `radar.scss`; aqui va solo lo propio de esta tarjeta.
+
+   EL ANFITRION ES LA TARJETA. `.radar-cuerpo > *` da fondo, borde y
+   entrada escalonada al hijo directo, y el hijo directo es este
+   componente: por eso `:host` lleva `display: block` --sin el, el
+   anfitrion seria inline y la tarjeta se descuadraria-- y el `padding`
+   que antes ponia `.rz`.
+
+   `brox-aflorar` se define en `radar.scss`. Las `@keyframes` no se
+   scopean con encapsulacion emulada y el padre siempre esta pintado
+   cuando este componente existe, asi que la referencia resuelve.
+   ==================================================================== */
+
+:host {
+  display: block;
+  padding: 10px 13px 11px;
+
+  /* Se reproduce tal cual estaba en `.rz > p`. Gana en especificidad a
+     `.lectura`, que es un `<p>` directo del anfitrion: llevarse el
+     bloque sin traerse esta regla cambiaria el cuerpo de la lectura. */
+  > p {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--ink-2);
+  }
+}
+
+/* La lectura de BROX: una frase, no un párrafo. Es lo primero que se ve
+   al abrir, y lo que evita atar los cuatro renglones a mano. */
+.lectura {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin: 0 0 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: linear-gradient(148deg, var(--accion-p) 0%, rgba(37, 99, 235, 0.028) 100%);
+  border: 1px solid var(--accion-b);
+  border-left: 2px solid var(--accion);
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink);
+
+  cl-icono {
+    margin-top: 2px;
+    color: var(--accion);
+  }
+}
+
+.ant-fila {
+  display: grid;
+  gap: 2px;
+  padding: 7px 0 8px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--ink);
+  --e: var(--ink-3);
+  animation: brox-aflorar 380ms var(--curva) both;
+  animation-delay: calc(var(--j, 0) * 55ms + 60ms);
+
+  &:first-of-type {
+    padding-top: 2px;
+  }
+
+  + .ant-fila {
+    border-top: 1px solid var(--radar-linea);
+  }
+
+  &.e-bien {
+    --e: var(--positivo);
+  }
+
+  &.e-ojo {
+    --e: var(--atencion);
+  }
+
+  &.e-mal {
+    --e: var(--riesgo);
+  }
+
+  /* El rótulo lleva el color del estado del renglón; el dato, tinta
+     plena. Sin icono y con la señal donde no compite: en la etiqueta. */
+  .f {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+
+    .iz {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .n {
+      min-width: 0;
+    }
+  }
+
+  .v {
+    display: block;
+    color: var(--ink);
+
+    b {
+      font-weight: 650;
+      color: var(--ink);
+    }
+  }
+
+  &.e-bien .f,
+  &.e-ojo .f,
+  &.e-mal .f {
+    color: color-mix(in srgb, var(--e) 82%, var(--ink));
+  }
+
+  /* Con señal: a la versalita le crece un canto delante. Es el mismo
+     canto del lado y del filtro — un solo idioma. */
+  &.e-bien .f .n::before,
+  &.e-ojo .f .n::before,
+  &.e-mal .f .n::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 9px;
+    margin-right: 8px;
+    vertical-align: -1px;
+    border-radius: 1px;
+    background: var(--e);
+  }
+}
+
+/* Ventana consumida. Sin cifra propia no es un dato, es un adorno. */
+.ant-medida {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+
+  .r {
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: 0;
+    text-transform: none;
+    font-variant-numeric: tabular-nums;
+    color: var(--e);
+  }
+
+  /* Cuando el plazo se pasa, el rótulo lo dice con su signo. */
+  &.pasada .r {
+    font-weight: 700;
+  }
+}
+
+/* El riel tiene que verse con el relleno al 8 %, o la barra desaparece. */
+.ant-b {
+  flex: none;
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-3) 20%, transparent);
+  overflow: hidden;
+
+  i {
+    display: block;
+    height: 100%;
+    width: var(--w);
+    border-radius: 999px;
+    background: var(--e);
+    /* Se dibuja al abrir, no antes: si la barra ya está llena cuando
+       despliegas, el gesto no cuenta nada. */
+    animation: brox-crecer 720ms var(--curva) 260ms both;
+  }
+}
+
+@keyframes brox-crecer {
+  from {
+    width: 0;
+  }
+}
+
+.ant-s {
+  flex: none;
+  color: var(--e);
+  overflow: visible;
+
+  polyline {
+    stroke-dasharray: 70;
+    stroke-dashoffset: 70;
+    animation: brox-trazar 820ms var(--curva) 260ms forwards;
+  }
+
+  circle {
+    opacity: 0;
+    animation: brox-puntear 260ms 940ms var(--curva) forwards;
+  }
+}
+
+@keyframes brox-trazar {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brox-puntear {
+  to {
+    opacity: 1;
+  }
+}
+
+/* El contraste: la posición del dato dentro de TU operación. Sin esto,
+   «US$ 4,500» no dice si es caro, barato o normal. */
+.vs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--ink-3);
+
+  b {
+    font-weight: 700;
+    color: var(--ink-2);
+  }
+
+  .esc {
+    position: relative;
+    flex: none;
+    width: 54px;
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e7edf8, #c9d8ee);
+
+    i {
+      position: absolute;
+      top: 50%;
+      left: var(--x);
+      width: 3px;
+      height: 10px;
+      margin: -5px 0 0 -1.5px;
+      border-radius: 2px;
+      background: var(--e);
+      box-shadow: 0 0 0 2px #fff;
+      animation: brox-situar 640ms var(--curva) 300ms both;
+    }
+  }
+}
+
+@keyframes brox-situar {
+  from {
+    left: 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ant-fila,
+  .ant-b i,
+  .ant-s polyline,
+  .ant-s circle,
+  .vs .esc i {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
+
+/* El pie de la tarjeta. Mismo boton que en los hallazgos: se repite
+   porque la encapsulacion no lo comparte, igual que `accion-rapida`
+   repite `.bt-p` y `.bt-t`. */
+.mas {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--accion);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+
+  cl-icono {
+    transition: transform var(--t1) ease;
+  }
+
+  &:hover cl-icono {
+    transform: translateX(3px);
+  }
+}

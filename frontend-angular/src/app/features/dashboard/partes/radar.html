@@ -96,227 +96,43 @@
           lectura de relleno enseña a no leerla, así que su ausencia se
           respeta.
         -->
-        <div class="rz" [style.--i]="'2'">
-          @if (lectura(); as frase) {
-            <p class="lectura">
-              <cl-icono nombre="rombo" [tamano]="12" [grosor]="1.7" />
-              <span>{{ frase }}</span>
-            </p>
-          }
-
-          @for (renglon of expediente(); track renglon.rotulo; let j = $index) {
-            <div class="ant-fila" [class]="claseDelRenglon(renglon)" [style.--j]="'' + j">
-              <span class="f">
-                <span class="iz"><span class="n">{{ renglon.rotulo }}</span></span>
-
-                <!--
-                  La ventana lleva sus DOS números y no el porcentaje: `168/180`
-                  se puede leer y un 93 % solo se puede pintar. Cuando el plazo
-                  ya se pasó, el rótulo dice el sobrepaso — «17/15» no es una
-                  fracción.
-                -->
-                @if (renglon.ventana; as v) {
-                  <span class="ant-medida" [class.pasada]="ventanaPasada(v)">
-                    <span class="r">{{ rotuloDeVentana(v) }}</span>
-                    <span
-                      class="ant-b"
-                      role="img"
-                      [attr.aria-label]="v.consumido + ' de ' + v.total"
-                    >
-                      <i [style.--w]="anchoDeVentana(v) + '%'"></i>
-                    </span>
-                  </span>
-                } @else if (renglon.serie && renglon.serie.length > 1) {
-                  <!-- La chispa de la renta: hitos reales del histórico (E0). -->
-                  <svg
-                    class="ant-s"
-                    width="48"
-                    height="14"
-                    viewBox="0 0 48 14"
-                    role="img"
-                    aria-label="serie de la renta"
-                  >
-                    <polyline
-                      [attr.points]="puntosDeSerie(renglon.serie)"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <circle cx="47" [attr.cy]="ultimoY(renglon.serie)" r="2" fill="currentColor" />
-                  </svg>
-                }
-              </span>
-
-              <span class="v">{{ renglon.valor }}</span>
-
-              <!--
-                EL CONTRASTE: dónde cae el dato respecto de NUESTRA operación.
-                Nunca del sector. Casi siempre llega degradado y está bien: el
-                rango necesita bastantes propiedades comparables con renta
-                publicada. Cuando no las hay se dice, con su N.
-              -->
-              @if (renglon.contraste; as c) {
-                @if (c.forma === 'POSICION_EN_RANGO' && c.posicionPorcentaje != null) {
-                  <span class="vs">
-                    <span
-                      class="esc"
-                      role="img"
-                      [attr.aria-label]="'posición ' + c.posicionPorcentaje + ' por ciento'"
-                    >
-                      <i [style.--x]="c.posicionPorcentaje + '%'"></i>
-                    </span>
-                    <span>
-                      en el <b>{{ c.posicionPorcentaje }} %</b> del rango de {{ c.zona }} ·
-                      {{ c.observaciones }}
-                      {{ c.observaciones === 1 ? 'propiedad' : 'propiedades' }}
-                    </span>
-                  </span>
-                } @else if (c.motivo !== 'SIN_GRUPO_COMPARABLE') {
-                  <span class="vs"><span>{{ textoDelContraste(c) }}</span></span>
-                }
-              }
-            </div>
-          }
-
-          @if (a.destino; as destino) {
-            <button type="button" class="mas" (click)="abrir.emit(destino)">
-              Ver expediente completo
-              <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
-            </button>
-          }
-        </div>
+        <cl-radar-antecedentes
+          [style.--i]="'2'"
+          [lectura]="lectura()"
+          [expediente]="expediente()"
+          [destino]="a.destino"
+          (abrir)="abrir.emit($event)"
+        />
       } @else {
         <!--
           RESOLVER. Aquí iría la recomendación de BROX; el cable todavía no la
           emite, así que se enseñan las frases que el dominio SÍ escribe: qué
           falta, y qué queda parado mientras tanto. No se redacta ninguna aquí.
         -->
-        <div class="reco" [style.--i]="hayAntecedentes() ? '2' : '1'">
-          <cl-malla-brox />
-          <div class="cab">
-            <cl-icono nombre="rombo" [tamano]="12" [grosor]="1.6" />
-            <span>Qué hacer ahora</span>
-            @if (senales() > 0) {
-              <button
-                type="button"
-                class="senales"
-                (click)="senalar()"
-                [attr.aria-label]="'Iluminar los ' + senales() + ' hechos en los que se apoya'"
-              >
-                <cl-icono nombre="chispa" [tamano]="11" [grosor]="1.5" />
-                {{ senales() }} {{ senales() === 1 ? 'señal' : 'señales' }}
-              </button>
-            }
-          </div>
-
-          @if (queFalta(); as falta) {
-            <p class="que">{{ falta }}</p>
-          } @else {
-            <p class="que">{{ a.titulo }}</p>
-          }
-
-          @if (queFrena(); as freno) {
-            <span class="kk-para">Para qué</span>
-            <p class="para">{{ freno }}</p>
-          }
-
-          <div class="control">
-            <!--
-              LA VENTANA RÁPIDA. Lo que se cierra con un dato se cierra aquí,
-              sin salir del Inicio y sin perder el sitio en la cola. Lo que no
-              cabe en dos campos sigue abriendo su pantalla — y lo dice.
-            -->
-            @if (a.tarea) {
-              <cl-accion-rapida
-                [asunto]="a"
-                (resuelto)="resuelto.emit($event)"
-                (abrirExpediente)="ejecutar()"
-              />
-            } @else if (a.destino) {
-              <button
-                type="button"
-                class="bt-p ancho"
-                [class.trabajando]="ejecutando() === 'trabajando'"
-                [class.listo]="ejecutando() === 'listo'"
-                (click)="ejecutar()"
-              >
-                <span class="haz" aria-hidden="true"></span>
-                <span class="et">
-                  Abrir el expediente
-                  <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
-                </span>
-                <span class="curso" aria-hidden="true">
-                  <svg class="ok" width="20" height="20" viewBox="0 0 20 20">
-                    <path d="M4.6 10.4 8 13.8l7.4-7.8" />
-                  </svg>
-                </span>
-              </button>
-            } @else {
-              <p class="sin-destino">Este asunto todavía no tiene una pantalla a la que llevarte.</p>
-            }
-
-            <!--
-              Cancelar va aparte y en texto: no compite con la acción, y la
-              cancelación es definitiva — el reconciliador no volverá a crear
-              esta tarea para ese registro.
-            -->
-            @if (a.tarea; as tarea) {
-              <button type="button" class="bt-t descartar" (click)="cancelar.emit(tarea)">
-                Cancelar esta tarea
-              </button>
-            }
-          </div>
-        </div>
+        <cl-radar-resolver
+          [style.--i]="hayAntecedentes() ? '2' : '1'"
+          [asunto]="a"
+          [senales]="senales()"
+          [queFalta]="queFalta()"
+          [queFrena]="queFrena()"
+          (senalar)="senalar()"
+          (resolver)="resolver.emit($event)"
+          (cancelar)="cancelar.emit($event)"
+          (resuelto)="resuelto.emit($event)"
+        />
 
         <!--
           CÓMO ESTÁ — cada hecho con SU estado, no con el del asunto. La marca y
           el color salen de `hecho.estado`, que decide el dominio: en el mismo
           asunto conviven un ✓ verde y un ⊘ rojo (D-E2-1 §10.1).
         -->
-        <div class="rz ahora" [style.--i]="hayAntecedentes() ? '3' : '2'">
-          <div class="cab-rz" [style.--sc]="'var(--ink-3)'">
-            <span class="kicker">Cómo está</span>
-          </div>
-
-          <!--
-            La barra solo donde hay requisitos contables de verdad (documentos,
-            observaciones, criterios). Una barra de dos segmentos inventada
-            sería peor que no ponerla.
-          -->
-          @if (avance(); as av) {
-            <p class="avance" [class.pleno]="av.hechos === av.total">
-              <span class="barra" aria-hidden="true">
-                @for (encendido of barraDeAvance(); track $index) {
-                  <i [class.on]="encendido"></i>
-                }
-              </span>
-              <span><b>{{ av.hechos }} de {{ av.total }}</b> {{ av.unidad }}</span>
-            </p>
-          }
-
-          @if (hechos().length) {
-            <ul>
-              @for (hecho of hechosVisibles(); track $index) {
-                <li [class]="claseDelHecho(hecho.estado)" [class.senalada]="senalado()">
-                  <cl-icono [nombre]="marcaDe(hecho.estado)" [tamano]="14" [grosor]="2" />
-                  <span>{{ hecho.texto }}</span>
-                </li>
-              }
-            </ul>
-          }
-
-          <!-- `null` se dice, no se esconde: muchas veces es el dato importante. -->
-          @if (a.proximo; as proximo) {
-            <div class="proximo">
-              <span class="e">Próximo</span>
-              <b>{{ proximo }}</b>
-            </div>
-          } @else {
-            <div class="proximo sin">Sin próxima actividad programada.</div>
-          }
-        </div>
+        <cl-radar-como-esta
+          [style.--i]="hayAntecedentes() ? '3' : '2'"
+          [hechos]="hechos()"
+          [avance]="avance()"
+          [proximo]="a.proximo"
+          [senalado]="senalado()"
+        />
       }
     </div>
   } @else {
@@ -342,45 +158,13 @@
           rellena. Y NO reclama nada: una tarea dice «resuelve esto», un
           hallazgo dice «encontré algo que vale la pena mirar».
         -->
-        <div class="hallazgo" [style.--i]="'0'">
-          <div class="cab-rz" [style.--sc]="'var(--positivo)'">
-            <span class="kicker">Hallazgo destacado</span>
-          </div>
-          <p class="q">{{ hallazgo.titulo }}</p>
-          <!--
-            Con un cliente se enseña la frase que redactó el dominio. Con
-            varios, el hecho ya no es esa frase: es cuántos encajan. Repetir la
-            dirección una vez por cliente era lo que estiraba la columna.
-          -->
-          @if (hallazgo.clientes === 1) {
-            <p class="c">{{ hallazgo.porQue }}</p>
-          } @else {
-            <p class="c">
-              <b>{{ hallazgo.clientes }} clientes</b> de tu cartera encajan con este local.
-            </p>
-          }
-
-          <!--
-            Regla del hogar único: lo que ya está en el foco no vuelve a ser
-            tarjeta aquí — queda el puntero a su número.
-          -->
-          @if (hallazgo.posicion; as posicion) {
-            <button type="button" class="en-cola" (click)="irAlAsunto.emit(hallazgo.id)">
-              <cl-icono nombre="arriba" [tamano]="12" [grosor]="1.9" />
-              Está en tu atención · {{ posicion }}
-            </button>
-          } @else if (hallazgo.clientes === 1) {
-            <button type="button" class="mas" (click)="abrir.emit(hallazgo.destino)">
-              Ver la coincidencia
-              <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
-            </button>
-          } @else {
-            <button type="button" class="mas" (click)="verHallazgos.emit()">
-              Ver los {{ hallazgo.clientes }} clientes
-              <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
-            </button>
-          }
-        </div>
+        <cl-radar-hallazgo
+          [style.--i]="'0'"
+          [hallazgo]="hallazgo"
+          (irAlAsunto)="irAlAsunto.emit($event)"
+          (abrir)="abrir.emit($event)"
+          (verHallazgos)="verHallazgos.emit()"
+        />
       }
 
       @if (restoDeHallazgos().length) {

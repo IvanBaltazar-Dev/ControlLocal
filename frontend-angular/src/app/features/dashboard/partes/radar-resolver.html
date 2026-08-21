@@ -1,0 +1,74 @@
+<cl-malla-brox />
+<div class="cab">
+  <cl-icono nombre="rombo" [tamano]="12" [grosor]="1.6" />
+  <span>Qué hacer ahora</span>
+  @if (senales() > 0) {
+    <button
+      type="button"
+      class="senales"
+      (click)="senalar.emit()"
+      [attr.aria-label]="'Iluminar los ' + senales() + ' hechos en los que se apoya'"
+    >
+      <cl-icono nombre="chispa" [tamano]="11" [grosor]="1.5" />
+      {{ senales() }} {{ senales() === 1 ? 'señal' : 'señales' }}
+    </button>
+  }
+</div>
+
+@if (queFalta(); as falta) {
+  <p class="que">{{ falta }}</p>
+} @else {
+  <p class="que">{{ asunto().titulo }}</p>
+}
+
+@if (queFrena(); as freno) {
+  <span class="kk-para">Para qué</span>
+  <p class="para">{{ freno }}</p>
+}
+
+<div class="control">
+  <!--
+    LA VENTANA RÁPIDA. Lo que se cierra con un dato se cierra aquí,
+    sin salir del Inicio y sin perder el sitio en la cola. Lo que no
+    cabe en dos campos sigue abriendo su pantalla — y lo dice.
+  -->
+  @if (asunto().tarea) {
+    <cl-accion-rapida
+      [asunto]="asunto()"
+      (resuelto)="resuelto.emit($event)"
+      (abrirExpediente)="ejecutar()"
+    />
+  } @else if (asunto().destino) {
+    <button
+      type="button"
+      class="bt-p ancho"
+      [class.trabajando]="ejecutando() === 'trabajando'"
+      [class.listo]="ejecutando() === 'listo'"
+      (click)="ejecutar()"
+    >
+      <span class="haz" aria-hidden="true"></span>
+      <span class="et">
+        Abrir el expediente
+        <cl-icono nombre="flecha" [tamano]="13" [grosor]="1.7" />
+      </span>
+      <span class="curso" aria-hidden="true">
+        <svg class="ok" width="20" height="20" viewBox="0 0 20 20">
+          <path d="M4.6 10.4 8 13.8l7.4-7.8" />
+        </svg>
+      </span>
+    </button>
+  } @else {
+    <p class="sin-destino">Este asunto todavía no tiene una pantalla a la que llevarte.</p>
+  }
+
+  <!--
+    Cancelar va aparte y en texto: no compite con la acción, y la
+    cancelación es definitiva — el reconciliador no volverá a crear
+    esta tarea para ese registro.
+  -->
+  @if (asunto().tarea; as tarea) {
+    <button type="button" class="bt-t descartar" (click)="cancelar.emit(tarea)">
+      Cancelar esta tarea
+    </button>
+  }
+</div>

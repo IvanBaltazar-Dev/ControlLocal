@@ -1,0 +1,350 @@
+/* ====================================================================
+   QUE HACER AHORA · la tarjeta que resuelve
+   --------------------------------------------------------------------
+   Una de las cuatro tarjetas del Radar; el armazon sigue en
+   `radar.scss`. EL ANFITRION ES LA TARJETA: `.radar-cuerpo > *` le da
+   fondo, borde y entrada escalonada, y por eso los `!important` de
+   abajo siguen siendo necesarios --`:host` pesa menos que
+   `.radar-cuerpo > *` y sin ellos el degradado no ganaria.
+
+   `.bt-p` y `.bt-t` viven aqui porque el boton solo existe dentro de
+   esta tarjeta. `accion-rapida` los repite en pequeño por su cuenta:
+   la encapsulacion no comparte reglas entre componentes.
+   ==================================================================== */
+
+:host {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  padding: 11px 13px 12px;
+  background: linear-gradient(168deg, #ffffff 0%, #fcfdff 52%, #f4f8ff 100%) !important;
+  border-color: #dce8fb !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(20, 25, 30, 0.05),
+    0 14px 30px -16px rgba(37, 99, 235, 0.3) !important;
+
+  /* El contenido por encima de la firma. **No es `> *`**: ese selector
+     alcanzaba también a la malla y le devolvía `position: relative`, que la
+     sacaba de su capa y la metía en el flujo — 400 px de hueco antes de «qué
+     hacer ahora». Se nombran los hijos que sí van encima. */
+  > .cab,
+  > .que,
+  > .kk-para,
+  > .para,
+  > .control {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* La firma de BROX, detrás y casi invisible. */
+  cl-malla-brox {
+    right: -52px;
+    bottom: -46px;
+    width: 158px;
+    height: 158px;
+    opacity: 0.05;
+    --malla-trazo: var(--accion);
+    --malla-grosor: 0.9;
+    --malla-nodo: var(--oro);
+  }
+
+  .cab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-bottom: 7px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #edf3fd;
+
+    cl-icono {
+      color: var(--accion);
+      flex: none;
+    }
+
+    > span {
+      font-size: 9.5px;
+      font-weight: 650;
+      letter-spacing: 0.19em;
+      text-transform: uppercase;
+      color: var(--accion);
+    }
+  }
+
+  .que {
+    margin: 0;
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 650;
+    letter-spacing: -0.018em;
+  }
+
+  /* «Para qué» va pegado a su frase: son una sola cosa. */
+  .kk-para {
+    display: block;
+    margin: 8px 0 1px;
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .para {
+    margin: 0;
+    font-size: 13px;
+    line-height: 18.5px;
+    color: var(--ink-2);
+  }
+
+  .control {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 9px;
+  }
+
+  .sin-destino {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--ink-2);
+  }
+}
+
+/* Atribución: sobre cuántos hechos se apoya esto. Pulsarlo los ilumina —
+   la frase deja de ser una frase y pasa a tener respaldo. */
+.senales {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #dee8f9;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-3);
+  transition:
+    background var(--t1) ease,
+    border-color var(--t1) ease,
+    color var(--t1) ease;
+
+  cl-icono {
+    color: var(--oro);
+    transition: color var(--t1) ease;
+  }
+
+  &:hover {
+    background: var(--accion-p);
+    border-color: var(--accion-b);
+    color: var(--accion);
+
+    cl-icono {
+      color: var(--accion);
+    }
+  }
+}
+
+/* --- El botón que ejecuta ------------------------------------------- */
+
+/* El ángulo, registrado: sin `@property` el navegador no sabe interpolar
+   un `conic-gradient` y el haz no se movería. */
+@property --giro {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.bt-p {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2e6df3, #1d4ed8);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(29, 78, 216, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition:
+    filter var(--t1) ease,
+    transform var(--t1) ease,
+    background 260ms var(--curva),
+    box-shadow 260ms var(--curva);
+
+  &.ancho {
+    width: 100%;
+  }
+
+  &:hover {
+    filter: brightness(1.07);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+
+  /* EL HAZ: un cono que gira, enmascarado a 2 px de canto. El arco ocupa
+     130° — con 68° la luz pasaba tan rápido que no se veía. */
+  .haz {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    pointer-events: none;
+    padding: 2px;
+    transition: opacity 240ms var(--curva);
+    background: conic-gradient(
+      from var(--giro),
+      transparent 0deg,
+      transparent 230deg,
+      rgba(255, 255, 255, 0.3) 280deg,
+      rgba(255, 255, 255, 0.92) 328deg,
+      #ffffff 342deg,
+      rgba(255, 255, 255, 0.3) 356deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  &:hover .haz {
+    opacity: 0.8;
+    animation: brox-girar 2600ms linear infinite;
+  }
+
+  .et {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition:
+      opacity 190ms var(--curva),
+      transform 190ms var(--curva);
+  }
+
+  .curso {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    transition: opacity 190ms var(--curva);
+  }
+
+  /* Mientras ejecuta, el azul baja DOS paradas y sale un anillo: dice
+     «esto está ocurriendo» sin apagar el botón. */
+  &.trabajando {
+    background: linear-gradient(180deg, #16409f, #0b2570);
+    box-shadow:
+      0 0 0 3px rgba(37, 99, 235, 0.2),
+      0 2px 10px -2px rgba(11, 37, 112, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+    .haz {
+      opacity: 1;
+      animation: brox-girar 760ms linear infinite;
+    }
+
+    .et {
+      opacity: 0.55;
+    }
+  }
+
+  /* Y al terminar, la marca se DIBUJA. No aparece: se traza. */
+  &.listo {
+    background: linear-gradient(180deg, #1ba968, #158a54);
+    box-shadow:
+      0 1px 2px rgba(21, 138, 84, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+
+    .haz {
+      opacity: 0;
+    }
+
+    .et {
+      opacity: 0;
+      transform: translateY(-7px);
+    }
+
+    .curso {
+      opacity: 1;
+    }
+  }
+
+  .curso .ok {
+    path {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 30;
+      stroke-dashoffset: 30;
+    }
+  }
+
+  &.listo .curso .ok path {
+    animation: brox-trazar-ok 300ms var(--curva) forwards;
+  }
+}
+
+@keyframes brox-girar {
+  to {
+    --giro: 360deg;
+  }
+}
+
+@keyframes brox-trazar-ok {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.bt-t {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  color: var(--accion);
+  transition: color var(--t1) ease;
+
+  &:hover {
+    color: var(--accion-fuerte);
+  }
+
+  /* Cancelar no es la acción: no compite en color con el botón. */
+  &.descartar {
+    color: var(--ink-3);
+    font-weight: 500;
+
+    &:hover {
+      color: var(--riesgo);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bt-p .haz {
+    animation: none;
+  }
+}

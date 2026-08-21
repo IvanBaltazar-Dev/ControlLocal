@@ -1,0 +1,40 @@
+<div class="cab-rz" [style.--sc]="'var(--ink-3)'">
+  <span class="kicker">Cómo está</span>
+</div>
+
+<!--
+  La barra solo donde hay requisitos contables de verdad (documentos,
+  observaciones, criterios). Una barra de dos segmentos inventada
+  sería peor que no ponerla.
+-->
+@if (avance(); as av) {
+  <p class="avance" [class.pleno]="av.hechos === av.total">
+    <span class="barra" aria-hidden="true">
+      @for (encendido of barraDeAvance(); track $index) {
+        <i [class.on]="encendido"></i>
+      }
+    </span>
+    <span><b>{{ av.hechos }} de {{ av.total }}</b> {{ av.unidad }}</span>
+  </p>
+}
+
+@if (hechos().length) {
+  <ul>
+    @for (hecho of hechosVisibles(); track $index) {
+      <li [class]="claseDelHecho(hecho.estado)" [class.senalada]="senalado()">
+        <cl-icono [nombre]="marcaDe(hecho.estado)" [tamano]="14" [grosor]="2" />
+        <span>{{ hecho.texto }}</span>
+      </li>
+    }
+  </ul>
+}
+
+<!-- `null` se dice, no se esconde: muchas veces es el dato importante. -->
+@if (proximo(); as texto) {
+  <div class="proximo">
+    <span class="e">Próximo</span>
+    <b>{{ texto }}</b>
+  </div>
+} @else {
+  <div class="proximo sin">Sin próxima actividad programada.</div>
+}

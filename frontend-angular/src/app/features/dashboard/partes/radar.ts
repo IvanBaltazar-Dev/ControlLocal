@@ -11,49 +11,15 @@ import {
   viewChild,
 } from '@angular/core';
 
-import { Hallazgo } from '../../../core/api/dashboard.service';
-import {
-  ContrasteDelRenglon,
-  EstadoDelHecho,
-  RenglonExpediente,
-  Tarea,
-  VentanaDelRenglon,
-} from '../../../core/api/tareas.service';
-import { textoDelContraste } from '../../../core/contraste';
+import { Tarea } from '../../../core/api/tareas.service';
 import { rotuloDelLado, segmentosDe } from '../../../core/procesos';
-import { Icono, NombreIcono } from '../../../shared/icono/icono';
-import { MallaBrox } from '../../../shared/marca-brox/malla-brox';
+import { Icono } from '../../../shared/icono/icono';
 import { NucleoBrox } from '../../../shared/marca-brox/nucleo-brox';
 import { AsuntoDelFoco } from '../asunto-del-foco';
-import { AccionRapida } from './accion-rapida';
-
-/**
- * Un hallazgo listo para dibujar.
- *
- * **Está agrupado por local**, no por par cliente-local. El motor evalúa cada
- * cliente contra cada captación, así que un local que encaja con doce clientes
- * produce doce hallazgos con el mismo título: en pantalla eso era la misma
- * dirección repetida doce veces, y con dos locales así el Radar se estiraba
- * hasta deformar la página. El hecho no son doce hallazgos: es **un local que
- * encaja con doce clientes**.
- */
-export interface HallazgoEnRadar extends Hallazgo {
-  /** «03» cuando el mismo registro ya ocupa un puesto del foco; `null` si no. */
-  posicion: string | null;
-  /** Cuántos clientes distintos encajan con este local. Nunca menor que 1. */
-  clientes: number;
-  /** Los de dentro del grupo, para el panel. Uno por cliente. */
-  detalle: readonly Hallazgo[];
-}
-
-/** La marca de cada estado. La pone el dominio; aquí solo se elige el símbolo. */
-const MARCA: Record<EstadoDelHecho, NombreIcono> = {
-  HECHO: 'check',
-  FALTA: 'circulo',
-  PLAZO: 'reloj',
-  FRENO: 'freno',
-  DATO: 'raya',
-};
+import { RadarAntecedentes } from './radar-antecedentes';
+import { RadarComoEsta } from './radar-como-esta';
+import { HallazgoEnRadar, RadarHallazgo } from './radar-hallazgo';
+import { RadarResolver } from './radar-resolver';
 
 /** El halo de la superficie toma el tono del caso abierto. */
 const AURA: Record<string, string> = { alta: 't-alta', media: 't-media', baja: '' };
@@ -80,26 +46,31 @@ const EN_EL_RADAR = 3;
  * - **Resolución**, con un asunto elegido: su identidad, su ruta en la cadena, y
  *   dos vistas —`Resolver` y `Antecedentes`— que se conmutan sin scrollear.
  *
+ * ## Este componente es el armazón, no las tarjetas
+ *
+ * Aquí viven la superficie, la cabecera de los dos modos, el cuerpo, la ruta del
+ * caso y el conmutador de vistas. Cada tarjeta del cuerpo es su propio
+ * componente —`cl-radar-hallazgo`, `cl-radar-resolver`, `cl-radar-como-esta` y
+ * `cl-radar-antecedentes`— y **el anfitrión de cada uno ES la tarjeta**: lo
+ * viste `.radar-cuerpo > *` desde `radar.scss`, así que ninguno añade un nivel
+ * al DOM ni pierde el fondo y la entrada escalonada.
+ *
+ * Lo que se queda aquí es lo que dos tarjetas comparten. `senalado` es el caso:
+ * el botón que enciende el destello está en `Resolver` y los hechos que se
+ * iluminan están en `Cómo está`, así que el estado no puede vivir en ninguna de
+ * las dos.
+ *
  * ## Lo que este componente NO hace
  *
  * No clasifica ni un hecho. El estado de cada uno (`HECHO`/`FALTA`/`PLAZO`/
  * `FRENO`/`DATO`), el expediente, la ventana, el contraste y la lectura llegan
- * decididos por el dominio; aquí se traducen a marca, color y anchura. Deducir
- * el estado del tono del asunto devolvería el problema que D-E2-1 §10.1 cerró:
- * un asunto en rojo pintando de rojo también sus buenas noticias.
- *
- * ## Lo que el cable todavía no trae
- *
- * D-E2-1 dibuja una **recomendación** («qué hacer» + «para qué») redactada por
- * el dominio. `GET /dashboard` no la emite. En vez de escribirla aquí —que sería
- * inventar el criterio de BROX en el cliente— se usan las frases que el dominio
- * **sí** escribe: el hecho `FALTA` dice qué falta y el hecho `FRENO` dice qué
- * queda parado mientras tanto. Cuando el cable traiga la recomendación, este
- * bloque la muestra y estas dos líneas se retiran.
+ * decididos por el dominio; aquí solo se reparten entre las tarjetas. Deducir el
+ * estado del tono del asunto devolvería el problema que D-E2-1 §10.1 cerró: un
+ * asunto en rojo pintando de rojo también sus buenas noticias.
  */
 @Component({
   selector: 'cl-radar',
-  imports: [AccionRapida, Icono, MallaBrox, NucleoBrox],
+  imports: [Icono, NucleoBrox, RadarAntecedentes, RadarComoEsta, RadarHallazgo, RadarResolver],
   templateUrl: './radar.html',
   styleUrl: './radar.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -131,7 +102,6 @@ export class Radar {
 
   /** El destello de atribución. Se apaga solo. */
   protected readonly senalado = signal(false);
-  protected readonly ejecutando = signal<'quieto' | 'trabajando' | 'listo'>('quieto');
 
   private readonly barra = viewChild<ElementRef<HTMLElement>>('vistas');
 
@@ -151,14 +121,9 @@ export class Radar {
   });
 
   protected readonly hechos = computed(() => this.asunto()?.interpretacion?.comoEsta?.hechos ?? []);
-  /** Tres viñetas, sin párrafos: es el tope que fija D-E2-1 §10.1. */
-  protected readonly hechosVisibles = computed(() => this.hechos().slice(0, 3));
-  protected readonly avance = computed(() => this.asunto()?.interpretacion?.comoEsta?.avance ?? null);
-  /** Un segmento por requisito, encendido o no. Sin `avance`, ninguno. */
-  protected readonly barraDeAvance = computed(() => {
-    const av = this.avance();
-    return av ? Array.from({ length: av.total }, (_, i) => i < av.hechos) : [];
-  });
+  protected readonly avance = computed(
+    () => this.asunto()?.interpretacion?.comoEsta?.avance ?? null,
+  );
   protected readonly expediente = computed(() => this.asunto()?.interpretacion?.expediente ?? []);
   protected readonly lectura = computed(() => this.asunto()?.interpretacion?.lectura ?? null);
 
@@ -196,9 +161,7 @@ export class Radar {
    * Radar es una columna, no una lista sin fondo. Lo que no cabe se recorre en
    * el panel, que tiene su propio scroll y no estira la página.
    */
-  protected readonly restoDeHallazgos = computed(() =>
-    this.hallazgos().slice(1, 1 + EN_EL_RADAR),
-  );
+  protected readonly restoDeHallazgos = computed(() => this.hallazgos().slice(1, 1 + EN_EL_RADAR));
 
   protected readonly hallazgosOcultos = computed(() =>
     Math.max(0, this.hallazgos().length - 1 - EN_EL_RADAR),
@@ -221,37 +184,16 @@ export class Radar {
     return lado === 'OFERTA' ? 'l-oferta' : lado === 'DEMANDA' ? 'l-demanda' : '';
   });
 
-  /** La misma redacción que usa cualquier otra pantalla con expediente. */
-  protected textoDelContraste(contraste: ContrasteDelRenglon): string {
-    return textoDelContraste(contraste);
-  }
-
-  protected marcaDe(estado: EstadoDelHecho): NombreIcono {
-    return MARCA[estado] ?? 'raya';
-  }
-
-  protected claseDelHecho(estado: EstadoDelHecho): string {
-    return estado.toLowerCase();
-  }
-
-  protected claseDelRenglon(renglon: RenglonExpediente): string {
-    switch (renglon.estado) {
-      case 'BIEN':
-        return 'e-bien';
-      case 'OJO':
-        return 'e-ojo';
-      case 'MAL':
-        return 'e-mal';
-      default:
-        return '';
-    }
-  }
-
   protected cambiarVista(vista: 'resolver' | 'antecedentes'): void {
     this.vista.set(vista);
   }
 
-  /** Ilumina los hechos que sostienen lo que se está diciendo. */
+  /**
+   * Ilumina los hechos que sostienen lo que se está diciendo.
+   *
+   * Lo pide `Resolver` y lo pinta `Cómo está`: por eso el estado vive aquí y no
+   * dentro de ninguna de las dos tarjetas.
+   */
   protected senalar(): void {
     this.senalado.set(false);
     // Un fotograma de por medio: reasignar la clase sin soltarla no reinicia la
@@ -260,74 +202,6 @@ export class Radar {
       this.senalado.set(true);
       setTimeout(() => this.senalado.set(false), 1600);
     });
-  }
-
-  protected ejecutar(): void {
-    const asunto = this.asunto();
-    if (!asunto || this.ejecutando() !== 'quieto') {
-      return;
-    }
-    this.ejecutando.set('trabajando');
-    this.resolver.emit(asunto);
-    // La confirmación dura lo justo: si la navegación prospera, la pantalla ya
-    // no está; si no, el botón vuelve a estar disponible en vez de quedarse
-    // girando para siempre.
-    setTimeout(() => {
-      this.ejecutando.set('listo');
-      setTimeout(() => this.ejecutando.set('quieto'), 900);
-    }, 420);
-  }
-
-  /**
-   * La proporción consumida de una ventana, acotada.
-   *
-   * Se acota porque pasarse del plazo es un hecho, no una barra que se sale de
-   * su riel; el exceso lo dice el rótulo, que es donde se puede leer.
-   */
-  protected anchoDeVentana(v: VentanaDelRenglon): number {
-    return v.total > 0 ? Math.min(100, Math.round((v.consumido * 100) / v.total)) : 0;
-  }
-
-  /** `168/180`, o `+12` cuando ya se pasó. Una barra sin cifra es un adorno. */
-  protected rotuloDeVentana(v: VentanaDelRenglon): string {
-    const exceso = v.consumido - v.total;
-    return exceso > 0 ? `+${exceso}` : `${v.consumido}/${v.total}`;
-  }
-
-  protected ventanaPasada(v: VentanaDelRenglon): boolean {
-    return v.consumido > v.total;
-  }
-
-  /**
-   * La chispa de la serie, normalizada a su propia caja.
-   *
-   * Sale del histórico económico (E0): son hitos reales de renta, no una
-   * tendencia dibujada. Con menos de dos puntos no hay línea que trazar.
-   */
-  protected puntosDeSerie(serie: number[]): string {
-    if (serie.length < 2) {
-      return '';
-    }
-    const min = Math.min(...serie);
-    const max = Math.max(...serie);
-    const rango = max - min || 1;
-    return serie
-      .map((v, i) => {
-        const x = (1 + i * (46 / (serie.length - 1))).toFixed(1);
-        const y = (12 - ((v - min) / rango) * 9.5).toFixed(1);
-        return `${x},${y}`;
-      })
-      .join(' ');
-  }
-
-  protected ultimoY(serie: number[]): string {
-    if (serie.length < 2) {
-      return '7';
-    }
-    const min = Math.min(...serie);
-    const max = Math.max(...serie);
-    const rango = max - min || 1;
-    return (12 - ((serie[serie.length - 1] - min) / rango) * 9.5).toFixed(1);
   }
 
   private medirPestanas(): void {

@@ -102,6 +102,8 @@ class GateDeCierreTest {
                         "PropiedadUniversalIntegrationTest",
                         "RepositorioEstadosIntegrationTest",
                         "SimulacroRecuperacionIntegrationTest",
+                        // Corte 0C - de quien es cada dato.
+                        "SujetoDelDatoIntegrationTest",
                         "VocabularioPersistidoIntegrationTest"),
                 conBaseDeDatos,
                 "Cambio el inventario de tests de integracion. Actualiza esta lista y comprueba "

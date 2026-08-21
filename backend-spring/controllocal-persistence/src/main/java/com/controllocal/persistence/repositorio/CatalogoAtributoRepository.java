@@ -40,6 +40,7 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
             select distinct c from CatalogoAtributo c
             left join fetch c.aplicaciones a
             where c.activo = true
+              and c.sujeto = 'PROPIEDAD'
               and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
               and (c.aplicaTodos = true
                    or exists (select 1 from CatalogoAtributo c2 join c2.aplicaciones a2
@@ -48,6 +49,38 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
             """)
     List<CatalogoAtributo> aplicablesA(@Param("idOrganizacion") long idOrganizacion,
                                        @Param("tipoPropiedad") String tipoPropiedad);
+
+    /**
+     * <b>Lo que se pregunta para UNA comercializacion</b> (V73).
+     *
+     * <p>Gemela de la de arriba y separada a proposito. Podrian parecer la misma
+     * consulta con un parametro mas, y no lo son: preguntan por sujetos
+     * distintos, miran tablas de aplicabilidad distintas y responden en momentos
+     * distintos --lo fisico se sabe al registrar el inmueble; lo comercial, al
+     * firmar el encargo--. Fundirlas en un metodo con {@code tipoOperacion}
+     * anulable haria que un descuido devolviera condiciones comerciales dentro
+     * del bloque fisico, que es exactamente el saco comun que este corte
+     * prohibe.
+     *
+     * <p>El {@code sujeto = 'ENCARGO'} no es defensivo: es la mitad del
+     * enrutamiento. Sin el, una clave fisica que por error declarara
+     * aplicabilidad por operacion se colaria en el bloque del encargo.
+     */
+    @Query("""
+            select distinct c from CatalogoAtributo c
+            left join fetch c.aplicacionesOperacion o
+            where c.activo = true
+              and c.sujeto = 'ENCARGO'
+              and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
+              and (c.aplicaTodos = true
+                   or exists (select 1 from CatalogoAtributo c2 join c2.aplicacionesOperacion o2
+                               where c2 = c and o2.tipoPropiedad = :tipoPropiedad
+                                 and o2.tipoOperacion = :tipoOperacion))
+            order by c.orden asc, c.clave asc
+            """)
+    List<CatalogoAtributo> aplicablesAEncargo(@Param("idOrganizacion") long idOrganizacion,
+                                              @Param("tipoPropiedad") String tipoPropiedad,
+                                              @Param("tipoOperacion") String tipoOperacion);
 
     /**
      * Una clave concreta. La del sistema y la de la organizacion pueden coexistir

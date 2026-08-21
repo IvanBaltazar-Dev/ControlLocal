@@ -137,7 +137,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3b** | **El alta universal, visible** | `/propiedades/nueva` sirve a los siete tipos y a las dos operaciones; el listado deja de ser una tabla de locales | ✅ **CERRADO** 2026-08-20 |
 | **3c** | **La ficha universal** | `/propiedades/:id` deja de leer el modelo heredado: la cosa física, un bloque **por encargo** con su histórico, la actividad con su procedencia y la **historia del inmueble** | ✅ **CERRADO** 2026-08-20 |
 | **3d** | **La publicación por encargo** | `Propiedad → Encargo → Publicación`: API canónica, editor fuera del detalle heredado, y `features/local-detail/` borrado | ✅ **CERRADO** 2026-08-20 |
-| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **MEDIDO, sin empezar** — ver `auditoria-profundidad-inmobiliaria.md` |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — los tres cortes técnicos cerrados (0A `V71`, 0B `V72`, 0C `V73`+`V74`); queda la siembra por tipo, cortes 1–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
@@ -417,10 +417,16 @@ El plan propone diez cortes, y los dos primeros son técnicos a propósito — *
 este orden**:
 
 ```
-0A  contener la corrupción de edición   ← lo único que hace daño HOY
-0B  el catálogo aprende a hablar        ← antes de sembrar una sola clave
-0C  declarar el sujeto del dato         ← propiedad ≠ encargo
+0A  contener la corrupción de edición   ✅ CERRADO 2026-08-20 · V71
+0B  el catálogo aprende a hablar        ✅ CERRADO 2026-08-21 · V72
+0C  declarar el sujeto del dato         ✅ CERRADO 2026-08-21 · V73 + V74
+1…7 profundidad por tipo                ⬜ siguiente, arranca en V75
 ```
+
+Los tres cortes técnicos están cerrados, cada uno con su gate y su evidencia en
+`backend-spring/verificacion/evidencia/`. Lo que queda es siembra: filas de
+catálogo, tipo por tipo, sobre un mecanismo que ya sabe declarar vocabulario,
+exigencia y **de quién es cada dato**.
 
 **0A va delante de 0B**, y esto se corrigió después de escribir el plan: mientras
 editar pueda destruir, añadir capacidades inmobiliarias es ampliar la superficie
@@ -428,7 +434,8 @@ de lo que se puede perder. El gate de 0A es el de D-E4-3 un paso más allá —
 *leer → abrir el editor → no tocar ese dato → guardar → releer = idéntico*—, y
 por los siete tipos, no por un departamento feliz.
 
-La cadena de migraciones arranca en **V71**: V70 ya es la publicación por encargo.
+La cadena de migraciones arrancó en **V71** —V70 ya era la publicación por
+encargo— y va por **V74**. El Corte 1 empieza en V75.
 
 ---
 

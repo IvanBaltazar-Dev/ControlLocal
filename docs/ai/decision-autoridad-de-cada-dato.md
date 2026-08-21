@@ -3,7 +3,7 @@
 **Qué decide:** para cada dato que `/captura/definicion` publica, **dónde vive
 de verdad**. Exactamente una autoridad por clave.
 
-**Estado:** **CERRADA el 2026-08-18**, los once pasos. **Ampliada el 2026-08-20** con §9, que congela la regla del SUJETO — la pregunta que va antes de la autoridad: no *donde vive* el dato, sino *de quien es*. La decision original no se toca. Una sola autoridad
+**Estado:** **CERRADA el 2026-08-18**, los once pasos. **Ampliada el 2026-08-20** con §9, que congela la regla del SUJETO, e **implementada el 2026-08-21** en el Corte 0C (`V73`+`V74`) — la pregunta que va antes de la autoridad: no *donde vive* el dato, sino *de quien es*. La decision original no se toca. Una sola autoridad
 por clave, las seis columnas espejo retiradas del esquema y del agregado (V62), y
 835 pruebas verdes con las 37 de integración ejecutadas de verdad. **Angular no
 necesitó ningún cambio**, que es la prueba de que el contrato lógico no se movió.
@@ -609,3 +609,48 @@ tenga que volver a discutirla; el plan y su orden están en
 0C sujeto**. Declarar el sujeto antes de que el catálogo sepa declarar un
 vocabulario, o antes de que editar deje de corromper, sería ampliar un modelo que
 todavía pierde datos.
+
+---
+
+### Implementada el 2026-08-21 — Corte 0C, `V73` + `V74`
+
+La regla dejó de estar congelada. Evidencia en
+`backend-spring/verificacion/evidencia/2026-08-21-corte-0c-el-sujeto-del-dato.md`.
+
+La cadena, ahora entera y con gate:
+
+```
+clave  →  vocabulario  →  SUJETO  →  autoridad  →  mecanismo
+
+PROPIEDAD  →  catalogo_atributo_tipo       →  atributo_propiedad | campo canónico
+ENCARGO    →  catalogo_atributo_operacion  →  atributo_encargo
+              nunca en las dos
+```
+
+Tres cosas quedaron decididas al construirlo, y las tres son de esta decisión:
+
+**La identidad del valor de encargo es `id_captacion`, jamás la operación.** El
+índice único es `(id_captacion, clave)`. Dos alquileres sucesivos de la misma
+propiedad comparten operación y no comparten nada más; agruparlos por operación
+haría que el segundo heredara lo pactado en el primero, en silencio.
+
+**Un enrutador por sujeto, no un `if` dentro de uno.** `AtributosGobernados` y
+`AtributosDeEncargo` cambian las cuatro cosas a la vez —tabla de aplicabilidad,
+tabla de valores, identidad y autoridades admitidas—, así que una sola clase
+tendría esa bifurcación repetida en cada método y bastaría olvidarla en uno —el
+de borrar, el de contar faltantes— para que un dato se escribiera en un sujeto y
+se leyera del otro. Lo que sí comparten es la conversión de valores, que no
+depende del sujeto: vive en `ConversionDeValores`.
+
+**Un solo lector, y ahora con gate.** `LectorPorAutoridad` lee los dos sujetos.
+`UnSoloLectorPorSujetoTest` rompe el build si alguien más toca los repositorios
+de valores. Existe por lo que pasó en el Corte 0B: apareció un segundo lector
+dentro de `ficha()` que llevaba tiempo dejando fuera la moneda de los importes y
+todos los multivalores. Un segundo lector no falla —**diverge**—, y eso no se
+arregla arreglando aquel sitio.
+
+**Y la composición se ve.** Publicar necesita dos respuestas —¿le falta algo al
+inmueble?, ¿le falta algo a este encargo?— y las compone `PublicacionService`,
+en el caso de uso y a la vista. Ningún componente inferior recibe la propiedad y
+el encargo juntos: uno que decidiera por los dos sujetos volvería a mezclarlos un
+nivel más abajo, donde ya no se ve.

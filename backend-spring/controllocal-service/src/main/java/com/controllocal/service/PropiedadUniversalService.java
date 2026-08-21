@@ -121,7 +121,18 @@ public interface PropiedadUniversalService {
     record OperacionSolicitada(String operacion, BigDecimal importe, String moneda,
                                String tipoComision, String baseCalculo, BigDecimal valorComision,
                                String tratamientoIgv, Boolean exclusividad,
-                               LocalDate inicioEncargo, LocalDate finEncargo) {
+                               LocalDate inicioEncargo, LocalDate finEncargo,
+                               List<ValorAtributo> condiciones) {
+
+        /** El alta de siempre, sin condiciones gobernadas todavia. */
+        public OperacionSolicitada(String operacion, BigDecimal importe, String moneda,
+                                   String tipoComision, String baseCalculo,
+                                   BigDecimal valorComision, String tratamientoIgv,
+                                   Boolean exclusividad, LocalDate inicioEncargo,
+                                   LocalDate finEncargo) {
+            this(operacion, importe, moneda, tipoComision, baseCalculo, valorComision,
+                    tratamientoIgv, exclusividad, inicioEncargo, finEncargo, null);
+        }
     }
 
     /**
@@ -178,7 +189,53 @@ public interface PropiedadUniversalService {
     record ComandoEdicion(String claveIdempotencia, Procedencia procedencia, String descripcion,
                           Ubicacion ubicacion, List<Titular> titulares,
                           List<ValorAtributo> atributos, List<OperacionSolicitada> operaciones,
-                          List<String> atributosABorrar) {
+                          List<String> atributosABorrar,
+                          List<CondicionesDeEncargo> condiciones) {
+
+        /**
+         * Una edicion que no toca ninguna condicion comercial.
+         *
+         * <p>{@code null} no es un descuido: es la regla de bloques dicha en el
+         * constructor. Quien edita la ubicacion o los titulares no manda
+         * condiciones, y no mandarlas significa <b>conservarlas</b> --nunca
+         * vaciarlas ni completarlas por defecto.
+         */
+        public ComandoEdicion(String claveIdempotencia, Procedencia procedencia, String descripcion,
+                              Ubicacion ubicacion, List<Titular> titulares,
+                              List<ValorAtributo> atributos, List<OperacionSolicitada> operaciones,
+                              List<String> atributosABorrar) {
+            this(claveIdempotencia, procedencia, descripcion, ubicacion, titulares, atributos,
+                    operaciones, atributosABorrar, null);
+        }
+    }
+
+    /**
+     * <b>Las condiciones pactadas en UN encargo</b> (Corte 0C).
+     *
+     * <p>Viaja como lista de bloques —uno por {@code idEncargo}— y no como un
+     * saco comun. Es la unica forma de representar la propiedad que tiene una
+     * venta y un alquiler abiertos a la vez: la garantia pertenece al alquiler,
+     * y un saco unico obligaria al Core a adivinar a cual de los dos encargos
+     * asignar cada respuesta.
+     *
+     * <p><b>La identidad es {@code idEncargo}, jamas la operacion.</b> Dos
+     * alquileres sucesivos de la misma propiedad son dos episodios; enviarlos
+     * como «bloque ALQUILER» haria que editar el de 2026 pisara el de 2024.
+     *
+     * <p>Y la regla de bloques de 0A se aplica entera, un nivel mas adentro:
+     * <b>un bloque ausente no se toca, y un bloque presente no toca a ningun
+     * otro</b>. Enviar solo el encargo de venta deja el de alquiler exactamente
+     * como estaba, con sus valores, sus vacios y sus fechas.
+     *
+     * @param atributos        {@code null} = no tocar ninguna condicion de este
+     *                         encargo. Lista vacia significa lo mismo: no es
+     *                         «borralas todas»
+     * @param atributosABorrar claves logicas a retirar <b>de este encargo</b>.
+     *                         Misma regla que arriba: valor y borrado a la vez
+     *                         son dos intenciones contrarias y se rechaza
+     */
+    record CondicionesDeEncargo(Long idEncargo, List<ValorAtributo> atributos,
+                                List<String> atributosABorrar) {
     }
 
     // ------------------------------------------------------------------
@@ -254,6 +311,8 @@ public interface PropiedadUniversalService {
                         BigDecimal importe, String moneda, String importeRotulo,
                         Boolean exclusividad, Long idAgente, String agenteNombre,
                         LocalDate inicio, LocalDate fin, List<HitoFicha> historico,
+                        List<AtributoFicha> condiciones,
+                        List<AtributoQueFalta> faltanParaPublicar,
                         List<PublicacionService.FichaPublicacion> publicaciones,
                         GestionDePublicacion publicacionGestionable) {
     }

@@ -35,7 +35,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -283,7 +283,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 .forEach(locales::add);
         datos.solicitudes().stream().filter(s -> visible(s, contexto)).map(s -> local(s))
                 .forEach(locales::add);
-        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(locales);
+        Map<Long, ValoresGobernados> gobernados = gobernadosDe(locales);
 
         datos.oportunidades().stream().filter(o -> visible(o, contexto))
                 .forEach(o -> putLocal(filas, gobernados, local(o), o.getCaptacion(), o.getAgente(),
@@ -312,7 +312,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
      * pinta una linea por hecho, que es exactamente lo que RC-003 vino a quitar;
      * asi que se hidrata en lote antes de construir ninguna fila.
      */
-    private Map<Long, ValoresDePropiedad> gobernadosDe(Collection<Propiedad> locales) {
+    private Map<Long, ValoresGobernados> gobernadosDe(Collection<Propiedad> locales) {
         List<Long> ids = locales.stream().filter(Objects::nonNull)
                 .map(Propiedad::getId).filter(Objects::nonNull).distinct().toList();
         return ids.isEmpty() ? Map.of() : lector.gobernadosDeVarias(ids);
@@ -340,7 +340,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 .forEach(c -> locales.add(c.getPropiedad()));
         datos.prospecciones().stream().filter(p -> visible(p, contexto))
                 .forEach(p -> locales.add(p.getPropiedad()));
-        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(locales);
+        Map<Long, ValoresGobernados> gobernados = gobernadosDe(locales);
 
         datos.captaciones().stream().filter(c -> visible(c, contexto))
                 .forEach(c -> putLocalCaptacion(filas, gobernados, c, cierres.get(c.getId())));
@@ -514,7 +514,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
                 texto(estado), texto(fecha), texto(ruta, ""), icono, tono, fechaOrden);
     }
 
-    private void putLocal(Map<Object, FilaFicha> filas, Map<Long, ValoresDePropiedad> gobernados,
+    private void putLocal(Map<Object, FilaFicha> filas, Map<Long, ValoresGobernados> gobernados,
                           Propiedad local, Captacion captacion,
                           DetalleAgente agente, String titulo, String ruta,
                           LocalDateTime fechaOrden) {
@@ -531,7 +531,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
     }
 
     private void putLocalCaptacion(Map<Object, FilaFicha> filas,
-            Map<Long, ValoresDePropiedad> gobernados,
+            Map<Long, ValoresGobernados> gobernados,
             Captacion captacion, CierreCaptacion cierre) {
         Propiedad local = captacion != null ? captacion.getPropiedad() : null;
         if (local == null || local.getId() == null) {
@@ -895,7 +895,7 @@ public class FichaComercialServiceImpl implements FichaComercialService {
      * gobernada como las demas, y este metodo no sabe donde vive: pide por
      * clave logica al lote ya hidratado.
      */
-    private static String rubro(Propiedad propiedad, Map<Long, ValoresDePropiedad> gobernados) {
+    private static String rubro(Propiedad propiedad, Map<Long, ValoresGobernados> gobernados) {
         if (propiedad == null || propiedad.getId() == null) {
             return null;
         }

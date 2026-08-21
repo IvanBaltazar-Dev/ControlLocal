@@ -15,7 +15,7 @@ import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValorLogico;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -78,7 +78,7 @@ class HallazgoServiceImplTest {
         // afirman los casos NO cambia: es la prueba de que mover el dato de
         // sitio no movio el resultado del matcher.
         when(lector.deVarias(anyLong(), any())).thenReturn(Map.of(ID_PROPIEDAD,
-                ValoresDePropiedad.constructor()
+                ValoresGobernados.constructor()
                         .con(CatalogoAtributo.CLAVE_RUBRO_PERMITIDO,
                                 ValorLogico.deTexto("Cafeteria y panaderia"))
                         .construir()));

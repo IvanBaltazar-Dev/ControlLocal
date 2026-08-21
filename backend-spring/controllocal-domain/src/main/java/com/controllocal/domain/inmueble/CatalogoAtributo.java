@@ -133,6 +133,21 @@ public class CatalogoAtributo {
     private boolean activo = true;
 
     /**
+     * <b>De quien es esta clave</b> (Corte 0C, V73). Es la pregunta anterior a
+     * la autoridad: primero de quien, luego donde.
+     *
+     * <p>Existe porque el catalogo presuponia una sola respuesta --todo era de
+     * la Propiedad-- y eso hace irrepresentable la condicion negociada. Con un
+     * solo sujeto, `se_ofrece_amoblado` tiene un valor por inmueble; el segundo
+     * alquiler pisa al primero y nadie se entera.
+     *
+     * <p>De el se deriva TODO lo demas: donde se declara la aplicabilidad, en
+     * que tabla vive el valor y que trigger lo vigila.
+     */
+    @Column(name = "sujeto", nullable = false, length = 10)
+    private String sujeto = Sujeto.PROPIEDAD.codigo();
+
+    /**
      * <b>Donde vive el valor de esta clave</b> (D-E4-3, V60). Es la respuesta a
      * "¿quien es la autoridad?", y solo puede haber una.
      *
@@ -218,6 +233,22 @@ public class CatalogoAtributo {
     private Set<AplicacionAtributo> aplicaciones = new LinkedHashSet<>();
 
     /**
+     * A que <b>(tipo, operacion)</b> aplica cuando el sujeto es ENCARGO, y
+     * cuanto hace falta ahi (V73). Vacia cuando el sujeto es PROPIEDAD.
+     *
+     * <p>Es la gemela de {@link #aplicaciones} y las dos son excluyentes: una
+     * clave declara su aplicabilidad <b>donde manda su sujeto</b>, nunca en las
+     * dos tablas. Una clave fisica con aplicabilidad por operacion diria que la
+     * cosa cambia segun se venda o se alquile; una comercial con aplicabilidad
+     * por tipo diria que la condicion es un hecho del inmueble. La invariante la
+     * vigila {@code SujetoDelDatoIntegrationTest}.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "catalogo_atributo_operacion",
+            joinColumns = @JoinColumn(name = "id_catalogo_atributo"))
+    private Set<AplicacionPorOperacion> aplicacionesOperacion = new LinkedHashSet<>();
+
+    /**
      * El vocabulario de una LISTA o una LISTA_MULTIPLE (V72). Vacio en los
      * demas tipos.
      *
@@ -237,6 +268,58 @@ public class CatalogoAtributo {
             return true;
         }
         return aplicaciones.stream().anyMatch(a -> a.getTipoPropiedad().equals(tipoPropiedad));
+    }
+
+    /**
+     * ¿Esta clave tiene sentido para <b>esta comercializacion</b>? (V73)
+     *
+     * <p>Se pregunta con las dos dimensiones porque la aplicabilidad comercial
+     * depende de las dos: `garantia_meses` aplica al alquiler de un
+     * departamento y no a su venta; `partida_registral` es al reves.
+     */
+    @Transient
+    public boolean aplicaA(String tipoPropiedad, String tipoOperacion) {
+        if (aplicaTodos) {
+            return true;
+        }
+        return aplicacionesOperacion.stream()
+                .anyMatch(a -> a.getTipoPropiedad().equals(tipoPropiedad)
+                        && a.getTipoOperacion().equals(tipoOperacion));
+    }
+
+    /**
+     * Cuanto hace falta el dato para ese (tipo, operacion). OPC cuando no se
+     * declaro nada: una exigencia sin declarar no puede bloquear nada.
+     */
+    @Transient
+    public Exigencia exigenciaPara(String tipoPropiedad, String tipoOperacion) {
+        return aplicacionesOperacion.stream()
+                .filter(a -> a.getTipoPropiedad().equals(tipoPropiedad)
+                        && a.getTipoOperacion().equals(tipoOperacion))
+                .map(AplicacionPorOperacion::exigenciaTipada)
+                .findFirst()
+                .orElse(Exigencia.OPC);
+    }
+
+    /** ¿Impide publicar ESTE encargo? ALT y PUB, igual que en la propiedad. */
+    @Transient
+    public boolean bloqueaPublicacionPara(String tipoPropiedad, String tipoOperacion) {
+        return exigenciaPara(tipoPropiedad, tipoOperacion).bloqueaPublicacion();
+    }
+
+    /**
+     * <b>De quien es el dato.</b> Quien escribe, lee, borra o cuenta faltantes
+     * pregunta esto ANTES que nada: el sujeto elige el mecanismo entero.
+     */
+    @Transient
+    public Sujeto sujeto() {
+        return Sujeto.desde(sujeto);
+    }
+
+    /** Atajo de {@code sujeto() == ENCARGO}, que es la bifurcacion real. */
+    @Transient
+    public boolean esDeEncargo() {
+        return sujeto().esDeEncargo();
     }
 
     /**
@@ -446,6 +529,22 @@ public class CatalogoAtributo {
 
     public void setOpciones(Set<OpcionDeAtributo> opciones) {
         this.opciones = opciones;
+    }
+
+    public String getSujeto() {
+        return sujeto;
+    }
+
+    public void setSujeto(Sujeto sujeto) {
+        this.sujeto = sujeto.codigo();
+    }
+
+    public Set<AplicacionPorOperacion> getAplicacionesOperacion() {
+        return aplicacionesOperacion;
+    }
+
+    public void setAplicacionesOperacion(Set<AplicacionPorOperacion> aplicacionesOperacion) {
+        this.aplicacionesOperacion = aplicacionesOperacion;
     }
 
     public Set<AplicacionAtributo> getAplicaciones() {

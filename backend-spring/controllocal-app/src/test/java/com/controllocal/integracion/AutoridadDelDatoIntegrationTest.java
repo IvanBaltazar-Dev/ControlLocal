@@ -162,26 +162,45 @@ class AutoridadDelDatoIntegrationTest {
 
         for (String clave : clavesPublicadas()) {
             boolean esEstructuralDelGuion = GuionRegistroPropiedad.esEstructural(clave);
+            // Una clave publicada puede venir CALIFICADA con su operacion
+            // --`garantia_meses:ALQUILER`, `importe:VENTA`--. Lo que se busca en
+            // el catalogo es siempre la base: el sufijo dice a que encargo
+            // pertenece la respuesta, no que clave es.
+            String base = GuionRegistroPropiedad.claveBase(clave);
 
             Map<String, Object> enCatalogo = jdbc.queryForList("""
-                    select destino, campo_estructural from catalogo_atributo
+                    select destino, campo_estructural, sujeto from catalogo_atributo
                      where clave = ? and activo limit 1
-                    """, clave).stream().findFirst().orElse(null);
+                    """, base).stream().findFirst().orElse(null);
 
             // La autoridad del guion y la del catalogo NO se suman: si el
             // catalogo declara ESTRUCTURAL, esta cediendo al campo canonico, y
             // eso sigue siendo UNA autoridad.
             boolean autoridadEstructural = esEstructuralDelGuion
                     || (enCatalogo != null && "ESTRUCTURAL".equals(enCatalogo.get("destino")));
-            boolean autoridadAtributo =
-                    enCatalogo != null && "ATRIBUTO".equals(enCatalogo.get("destino"));
+            boolean deLaPropiedad = enCatalogo != null
+                    && "ATRIBUTO".equals(enCatalogo.get("destino"))
+                    && !"ENCARGO".equals(enCatalogo.get("sujeto"));
+            // Desde el Corte 0C hay una tercera autoridad legitima, y es UNA:
+            // `atributo_encargo`. Sin contarla, cada condicion comercial que el
+            // motor publique se leeria aqui como campo fantasma.
+            boolean delEncargo = enCatalogo != null
+                    && "ENCARGO".equals(enCatalogo.get("sujeto"));
 
-            int autoridades = (autoridadEstructural ? 1 : 0) + (autoridadAtributo ? 1 : 0);
+            int autoridades = (autoridadEstructural ? 1 : 0) + (deLaPropiedad ? 1 : 0)
+                    + (delEncargo ? 1 : 0);
 
             if (autoridades == 0) {
                 fantasmas.add(clave);
             } else if (autoridades > 1) {
-                doblesVerdades.add(clave + " (estructural del guion Y atributo del catalogo)");
+                doblesVerdades.add(clave + " (mas de una autoridad declarada)");
+            }
+            // Y una condicion del ENCARGO tiene que viajar CALIFICADA. Desnuda
+            // no dice a cual de los dos encargos pertenece la respuesta, y con
+            // una venta y un alquiler declarados a la vez eso no se puede
+            // adivinar: adivinarlo seria escribir en el equivocado.
+            if (delEncargo && GuionRegistroPropiedad.operacionDe(clave) == null) {
+                doblesVerdades.add(clave + " (es del ENCARGO y se publica sin su operacion)");
             }
         }
 

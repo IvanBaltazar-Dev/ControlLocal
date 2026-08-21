@@ -26,7 +26,7 @@ import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.OperacionDelEncargo;
@@ -477,7 +477,7 @@ public class CaptacionServiceImpl implements CaptacionService {
         var portadas = idsPropiedad.isEmpty() ? java.util.Map.<Long, String>of()
                 : fotos.portadas(idsPropiedad).stream()
                     .collect(java.util.stream.Collectors.toMap(f -> f.getIdPropiedad(), f -> f.getClave()));
-        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(page.getContent());
+        Map<Long, ValoresGobernados> gobernados = gobernadosDe(page.getContent());
         List<FichaCaptacion> items = page.getContent().stream()
                 .map(c -> ficha(c, portadas.get(c.getPropiedad().getId()), gobernados))
                 .toList();
@@ -492,7 +492,7 @@ public class CaptacionServiceImpl implements CaptacionService {
      * como el resto. En lote y no fila a fila: la lista de captaciones es
      * paginada, y una consulta por fila seria el N+1 que RC-003 quito.
      */
-    private Map<Long, ValoresDePropiedad> gobernadosDe(List<Captacion> captacionesDeLaPagina) {
+    private Map<Long, ValoresGobernados> gobernadosDe(List<Captacion> captacionesDeLaPagina) {
         List<Long> ids = captacionesDeLaPagina.stream()
                 .map(Captacion::getPropiedad).filter(Objects::nonNull)
                 .map(Propiedad::getId).filter(Objects::nonNull).distinct().toList();
@@ -514,9 +514,9 @@ public class CaptacionServiceImpl implements CaptacionService {
     }
 
     private static FichaCaptacion ficha(Captacion c, String fotoPortadaClave,
-                                        Map<Long, ValoresDePropiedad> gobernados) {
+                                        Map<Long, ValoresGobernados> gobernados) {
         Propiedad prop = c.getPropiedad();
-        ValoresDePropiedad valores = prop == null ? ValoresDePropiedad.vacio()
+        ValoresGobernados valores = prop == null ? ValoresGobernados.vacio()
                 : LectorPorAutoridad.de(gobernados, prop.getId());
         DetalleAgente agente = c.getAgente();
         DetalleBroker broker = c.getBrokerRevisor();

@@ -15,7 +15,7 @@ import com.controllocal.service.soporte.HallazgoDeConcentracion;
 import com.controllocal.service.soporte.CoincidenciaCartera.Evaluacion;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.PoliticaComercial;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -108,7 +108,7 @@ public class HallazgoServiceImpl implements HallazgoService {
 
         // Los atributos gobernados de toda la cartera candidata, en una consulta:
         // `frente` entra en el puntaje y su columna espejo ya no existe (D-E4-3).
-        Map<Long, ValoresDePropiedad> valores = lector.deVarias(org,
+        Map<Long, ValoresGobernados> valores = lector.deVarias(org,
                 disponibles.stream().map(Captacion::getPropiedad).filter(Objects::nonNull)
                         .distinct().toList());
 

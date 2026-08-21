@@ -58,8 +58,12 @@ class PublicacionServiceImplTest {
      */
     private final AtributosGobernados gobierno = mock(AtributosGobernados.class);
 
-    private final PublicacionServiceImpl service =
-            new PublicacionServiceImpl(publicaciones, precios, encargos, propiedades, gobierno);
+    /** Y su gemelo del otro sujeto, por la misma razon. */
+    private final com.controllocal.service.soporte.AtributosDeEncargo condiciones =
+            mock(com.controllocal.service.soporte.AtributosDeEncargo.class);
+
+    private final PublicacionServiceImpl service = new PublicacionServiceImpl(
+            publicaciones, precios, encargos, propiedades, gobierno, condiciones);
 
     private static final long ORG = 1L;
     private static final long PROPIEDAD = 7L;
@@ -82,6 +86,14 @@ class PublicacionServiceImplTest {
                 .when(propiedades.findByOrganizacionIdAndId(org.mockito.ArgumentMatchers.anyLong(),
                         org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(java.util.Optional.of(propiedad));
+        // Y el otro sujeto tampoco echa nada en falta. Estan los dos porque el
+        // gate pregunta a los dos: si esta prueba solo apagara uno, el dia que
+        // alguien retirara la pregunta al encargo seguiria pasando en verde.
+        org.mockito.Mockito.lenient()
+                .when(condiciones.faltantesDeEncargoParaPublicar(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.List.of());
     }
 
     /**

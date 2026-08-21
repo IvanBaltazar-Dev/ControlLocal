@@ -1,6 +1,7 @@
 package com.controllocal.domain.inmueble;
 
 import com.controllocal.domain.comun.EntidadDeOrganizacion;
+import com.controllocal.domain.comun.FilaDeValorGobernado;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -33,7 +34,7 @@ import java.time.OffsetDateTime;
  */
 @Entity
 @Table(name = "atributo_propiedad")
-public class AtributoPropiedad extends EntidadDeOrganizacion {
+public class AtributoPropiedad extends EntidadDeOrganizacion implements FilaDeValorGobernado {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

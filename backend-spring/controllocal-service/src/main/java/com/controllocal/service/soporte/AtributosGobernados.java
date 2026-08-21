@@ -48,9 +48,6 @@ import java.util.Optional;
 @Component
 public class AtributosGobernados {
 
-    /** El mismo vocabulario que las once columnas de moneda del esquema. */
-    private static final List<String> MONEDAS = List.of("PEN", "USD");
-
     private final CatalogoAtributoRepository catalogo;
     private final AtributoPropiedadRepository valores;
 
@@ -214,77 +211,30 @@ public class AtributosGobernados {
      * comprueba en cuanto el tipo se conoce, y otra vez al guardar.
      */
     public void exigirValorCompatible(long idOrganizacion, String clave, String valor) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
-        String limpio = exigirValor(clave, valor);
-        // Exhaustivo sobre el enum y SIN `default`: hasta 0B esto tenia un
-        // `default -> { }` que no validaba nada, asi que el motor aceptaba un
-        // valor que el trigger rechazaba a mitad de la transaccion. Ahora un
-        // noveno tipo de dato no compila hasta que se diga que hacer con el.
-        switch (definicion.tipo()) {
-            case ENTERO -> enRango(definicion, entero(clave, limpio));
-            case DECIMAL, IMPORTE -> enRango(definicion, decimal(clave, limpio));
-            case BOOLEANO -> booleano(clave, limpio);
-            case FECHA -> fecha(clave, limpio);
-            case TEXTO, LISTA -> enLongitud(definicion, limpio);
-            // Aqui no se conoce todavia el tipo de propiedad, asi que tampoco
-            // se puede consultar el vocabulario: un valor de multivalor se
-            // comprueba al guardarlo, contra el catalogo de opciones.
-            case LISTA_MULTIPLE -> { }
-        }
+        ConversionDeValores.exigirCompatible(definicionDe(idOrganizacion, clave), valor);
     }
 
-    /**
-     * La fecha, en ISO y nada mas.
-     *
-     * <p>Un solo formato a proposito: admitir {@code 03/04/2026} obligaria a
-     * decidir si es marzo o abril, y esa decision no la puede tomar el Core sin
-     * saber de donde vino el texto. El cliente formatea; el contrato no adivina.
-     */
+    // ------------------------------------------------------------------
+    // Convertir un texto en un valor tipado NO depende del sujeto: un entero es
+    // un entero lo lleve una propiedad o un encargo, y las monedas que existen
+    // son las mismas. Eso vive entero en ConversionDeValores desde V73.
+    //
+    // Copiarlo en el enrutador del encargo habria creado dos definiciones de la
+    // misma regla, y habrian divergido en el primer arreglo hecho en una sola.
+    // Aqui quedan los atajos para que el codigo de enrutamiento --que si
+    // depende del sujeto-- se lea seguido.
+    // ------------------------------------------------------------------
+
     private static LocalDate fecha(String clave, String valor) {
-        try {
-            return LocalDate.parse(valor);
-        } catch (RuntimeException e) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" es una fecha y llego \"" + valor
-                            + "\". Se escribe como 2026-08-21.");
-        }
+        return ConversionDeValores.fecha(clave, valor);
     }
 
-    /**
-     * La moneda de un importe. Se exige aqui y no se deduce: un monto con la
-     * moneda equivocada no falla, <b>miente</b>, y lo hace en el unico sitio
-     * donde el error cuesta dinero.
-     */
     private static String exigirMoneda(String clave, String moneda) {
-        if (moneda == null || moneda.isBlank()) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" es un importe y llego sin moneda. Un numero sin "
-                            + "moneda no es dinero.");
-        }
-        String limpia = moneda.trim().toUpperCase(Locale.ROOT);
-        if (!MONEDAS.contains(limpia)) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" llego con la moneda \"" + moneda
-                            + "\", y son " + String.join(" o ", MONEDAS) + ".");
-        }
-        return limpia;
+        return ConversionDeValores.exigirMoneda(clave, moneda);
     }
 
-    /**
-     * El techo de longitud que declara la clave.
-     *
-     * <p>Es la garantia que se perdio en V71 al retirar el {@code VARCHAR(120)}
-     * del rubro: {@code valor_texto} es TEXT y no acota nada. Ahora lo acota
-     * quien sabe cuanto mide cada concepto, que es el catalogo.
-     */
     private static String enLongitud(CatalogoAtributo definicion, String valor) {
-        Integer techo = definicion.getLongitudMaxima();
-        if (techo != null && valor.length() > techo) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + definicion.getClave() + "\" admite " + techo
-                            + " caracteres y llegaron " + valor.length() + ".");
-        }
-        return valor;
+        return ConversionDeValores.enLongitud(definicion, valor);
     }
 
     private static void exigirQueAplique(CatalogoAtributo definicion, String tipoPropiedad) {
@@ -297,13 +247,7 @@ public class AtributosGobernados {
     }
 
     private static String exigirValor(String clave, String valor) {
-        if (valor == null || valor.isBlank()) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" llego sin valor. Un atributo sin responder se "
-                            + "omite, no se guarda vacio: el matcher tiene que poder distinguir "
-                            + "\"no aplica\" de \"no lo se\".");
-        }
-        return valor.trim();
+        return ConversionDeValores.exigirValor(clave, valor);
     }
 
     /**
@@ -425,6 +369,10 @@ public class AtributosGobernados {
         if (definicion.isEmpty()) {
             return false;
         }
+        // Borrar enruta por sujeto igual que leer y escribir. Sin esto, pedir
+        // que se retire una condicion del encargo saldria como "no esta en el
+        // catalogo" -- un mensaje falso sobre una clave que existe.
+        exigirQueSeaDePropiedad(definicion.get());
         if (definicion.get().esEstructural()) {
             EscritorEstructural.vaciar(propiedad, definicion.get().getCampoEstructural(), clave);
             return true;
@@ -435,11 +383,33 @@ public class AtributosGobernados {
 
     /** La definicion de una clave: la de la organizacion gana sobre la del sistema. */
     public CatalogoAtributo definicionDe(long idOrganizacion, String clave) {
-        return catalogo.porClave(idOrganizacion, clave)
+        CatalogoAtributo definicion = catalogo.porClave(idOrganizacion, clave)
                 .orElseThrow(() -> new ReglaNegocioException(
                         "El atributo \"" + clave + "\" no esta en el catalogo. Una clave existe "
                                 + "antes que su valor: si no, dos propiedades dicen lo mismo con "
                                 + "nombres distintos y dejan de poder compararse."));
+        exigirQueSeaDePropiedad(definicion);
+        return definicion;
+    }
+
+    /**
+     * La mitad Java de la regla que el trigger {@code tg_atributo_gobernado}
+     * garantiza en la base desde V73.
+     *
+     * <p>Es la direccion contraria de la que vigila {@link AtributosDeEncargo},
+     * y ninguna es simetrica de la otra. Guardar una condicion negociada como
+     * hecho del inmueble no falla: <b>miente</b>, y ademas la pierde -- porque
+     * `uq_atributo_propiedad_clave` deja un valor por propiedad, asi que el
+     * segundo encargo pisa al primero sin dejar rastro.
+     */
+    private static void exigirQueSeaDePropiedad(CatalogoAtributo definicion) {
+        if (definicion.esDeEncargo()) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + definicion.getClave() + "\" es una condicion del ENCARGO "
+                            + "y se intento tratar como un hecho de la propiedad. Se pacta en "
+                            + "cada comercializacion: guardarlo en el inmueble haria que el "
+                            + "siguiente encargo heredara lo pactado en el anterior.");
+        }
     }
 
     /** Las definiciones de un lote de claves, por clave. Evita el N+1 de la ficha. */
@@ -482,53 +452,24 @@ public class AtributosGobernados {
      * El rango que declara el catalogo, comprobado <b>aqui</b> y no solo en el
      * trigger.
      *
-     * <p>{@code tg_atributo_gobernado} lo rechazaria igualmente, pero con un
-     * mensaje de PostgreSQL a mitad de una transaccion, y eso no se le puede
-     * ensenar a nadie. Es exactamente el mismo motivo por el que el TIPO se
-     * valida arriba teniendo el trigger detras: la base es la garantia, este es
-     * el mensaje.
-     *
-     * <p>El minimo sale de {@code catalogo_atributo.valor_minimo}, no de una
-     * constante: escribir aqui "ambientes >= 1" seria devolver la regla al
-     * codigo el mismo dia que se le dio dueno (D-E4-3).
+     * <p>El trigger lo rechazaria igualmente, pero con un mensaje de PostgreSQL
+     * a mitad de una transaccion, y eso no se le puede ensenar a nadie: la base
+     * es la garantia, esto es el mensaje.
      */
     private static BigDecimal enRango(CatalogoAtributo definicion, BigDecimal valor) {
-        BigDecimal minimo = definicion.getValorMinimo();
-        if (minimo != null && valor.compareTo(minimo) < 0) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + definicion.getClave() + "\" no puede ser menor que "
-                            + minimo.stripTrailingZeros().toPlainString() + " y llego "
-                            + valor.stripTrailingZeros().toPlainString() + ".");
-        }
-        return valor;
+        return ConversionDeValores.enRango(definicion, valor);
     }
 
     private static BigDecimal entero(String clave, String valor) {
-        BigDecimal numero = decimal(clave, valor);
-        if (numero.stripTrailingZeros().scale() > 0) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" es un numero entero y llego \"" + valor + "\".");
-        }
-        return numero;
+        return ConversionDeValores.entero(clave, valor);
     }
 
     private static BigDecimal decimal(String clave, String valor) {
-        try {
-            return new BigDecimal(valor.replace(",", "."));
-        } catch (NumberFormatException e) {
-            throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" es numerico y llego \"" + valor + "\".");
-        }
+        return ConversionDeValores.decimal(clave, valor);
     }
 
     private static Boolean booleano(String clave, String valor) {
-        String normalizado = valor.toLowerCase(Locale.ROOT);
-        return switch (normalizado) {
-            case "true", "si", "sí", "1", "s", "y", "yes" -> Boolean.TRUE;
-            case "false", "no", "0", "n" -> Boolean.FALSE;
-            default -> throw new ReglaNegocioException(
-                    "El atributo \"" + clave + "\" es de si/no y llego \"" + valor + "\".");
-        };
+        return ConversionDeValores.booleano(clave, valor);
     }
 
     /** El nombre del tipo, para que el error no diga "tipo T". */

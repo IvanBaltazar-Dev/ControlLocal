@@ -1,6 +1,8 @@
 package com.controllocal.service.impl;
 
+import com.controllocal.service.soporte.AtributosDeEncargo;
 import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.service.soporte.Comercializacion;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.comercial.Captacion;
@@ -42,17 +44,20 @@ public class PublicacionServiceImpl implements PublicacionService {
     private final CaptacionRepository encargos;
     private final PropiedadRepository propiedades;
     private final AtributosGobernados gobierno;
+    private final AtributosDeEncargo condiciones;
 
     public PublicacionServiceImpl(PublicacionRepository publicaciones,
                                   PrecioPropiedadRepository precios,
                                   CaptacionRepository encargos,
                                   PropiedadRepository propiedades,
-                                  AtributosGobernados gobierno) {
+                                  AtributosGobernados gobierno,
+                                  AtributosDeEncargo condiciones) {
         this.publicaciones = publicaciones;
         this.precios = precios;
         this.encargos = encargos;
         this.propiedades = propiedades;
         this.gobierno = gobierno;
+        this.condiciones = condiciones;
     }
 
     @Override
@@ -86,7 +91,7 @@ public class PublicacionServiceImpl implements PublicacionService {
                     "El encargo " + encargo.getCodigoCaptacion() + " no esta vigente: no se puede "
                             + "publicar lo que ya no se ofrece.");
         }
-        exigirFichaPublicable(encargo.getPropiedad(), actor);
+        exigirPublicable(encargo.getPropiedad(), encargo, actor);
         Publicacion creada = construir(encargo.getPropiedad().getId(), datos, actor);
         creada.setIdEncargo(idEncargo);
         publicaciones.save(creada);
@@ -138,29 +143,88 @@ public class PublicacionServiceImpl implements PublicacionService {
     }
 
     /**
-     * <b>El gate de publicacion</b> (Corte 0B).
+     * <b>El gate de publicacion</b> (Corte 0B, ampliado a los dos sujetos en 0C).
      *
      * <p>Una propiedad puede existir incompleta -- el corredor no sabe todo el
      * inmueble en la primera conversacion y no tiene por que. Pero cuando lo
      * ANUNCIA ya no es una nota suya: es una afirmacion publica, y publicar una
      * ficha a medias es lo que hace incomparable una cartera entera.
      *
-     * <p>La pregunta se la hace al Core una sola vez y por su nombre. Ni este
-     * servicio ni ningun controlador interpretan ALT/PUB/OPC: eso lo sabe
-     * {@code Exigencia}, y repartirlo seria tener la misma regla con tres
+     * <h2>Dos preguntas, no una</h2>
+     * Publicar necesita que estén completas <b>la cosa y el trato</b>, y son
+     * cosas distintas que se arreglan en pantallas distintas:
+     *
+     * <pre>
+     *   ¿le falta algo al INMUEBLE?   -> AtributosGobernados   -> se edita en la ficha
+     *   ¿le falta algo a ESTE ENCARGO? -> AtributosDeEncargo    -> se edita en el encargo
+     * </pre>
+     *
+     * <p>El mismo departamento puede estar listo para alquilarse y no para
+     * venderse. Por eso se preguntan por separado y el mensaje dice <b>cual de
+     * las dos cosas</b> falta: una lista fundida obligaria al corredor a
+     * adivinar donde va a arreglarlo.
+     *
+     * <p><b>La composicion vive aqui, en el caso de uso, y a la vista.</b> Nadie
+     * mas abajo recibe la propiedad y el encargo juntos: un componente que
+     * decidiera por los dos sujetos volveria a mezclarlos donde ya no se ve, que
+     * es como se pierde la simetria que este corte acaba de establecer.
+     *
+     * <p>Ni este servicio ni ningun controlador interpretan ALT/PUB/OPC: eso lo
+     * sabe {@code Exigencia}, y repartirlo seria tener la misma regla con tres
      * duenos.
+     *
+     * @param encargo el episodio concreto, o {@code null} cuando la publicacion
+     *                no cuelga de ninguno -- entonces solo se puede preguntar
+     *                por el inmueble, y decir que el trato esta completo seria
+     *                inventarse un trato
      */
-    private void exigirFichaPublicable(Propiedad propiedad, Actor actor) {
-        List<String> faltan = gobierno.faltantesDePropiedadParaPublicar(actor.idOrganizacion(), propiedad);
-        if (faltan.isEmpty()) {
+    private void exigirPublicable(Propiedad propiedad, Captacion encargo, Actor actor) {
+        List<String> deLaFicha = gobierno.rotulosDe(actor.idOrganizacion(),
+                propiedad.getTipoInmueble(),
+                gobierno.faltantesDePropiedadParaPublicar(actor.idOrganizacion(), propiedad));
+
+        List<String> delEncargo = List.of();
+        if (encargo != null) {
+            Comercializacion donde = Comercializacion.de(encargo, propiedad);
+            delEncargo = condiciones.rotulosDe(actor.idOrganizacion(), donde,
+                    condiciones.faltantesDeEncargoParaPublicar(actor.idOrganizacion(), donde));
+        }
+
+        if (deLaFicha.isEmpty() && delEncargo.isEmpty()) {
             return;
         }
-        List<String> rotulos = gobierno.rotulosDe(
-                actor.idOrganizacion(), propiedad.getTipoInmueble(), faltan);
+        List<String> partes = new java.util.ArrayList<>();
+        if (!deLaFicha.isEmpty()) {
+            partes.add("de la ficha del inmueble falta " + String.join(", ", deLaFicha));
+        }
+        if (!delEncargo.isEmpty()) {
+            partes.add("de las condiciones de este encargo falta "
+                    + String.join(", ", delEncargo));
+        }
+        int cuantos = deLaFicha.size() + delEncargo.size();
         throw new ReglaNegocioException(
-                "Esta ficha todavia no se puede publicar: falta " + String.join(", ", rotulos)
-                        + ". Se puede registrar sin " + (rotulos.size() == 1 ? "ese dato" : "esos datos")
-                        + ", pero no anunciarla.");
+                "Todavia no se puede publicar: " + String.join("; y ", partes)
+                        + ". Se puede registrar sin " + (cuantos == 1 ? "ese dato" : "esos datos")
+                        + ", pero no anunciarlo.");
+    }
+
+    /**
+     * El encargo del que cuelga una publicacion, o {@code null} si no cuelga de
+     * ninguno.
+     *
+     * <p>No falla cuando no hay encargo: {@code crear(idPropiedad, ...)} existe
+     * y produce publicaciones sueltas. Lo que no se hace es dar por buenas sus
+     * condiciones comerciales -- no hay ninguna que mirar, y eso no es lo mismo
+     * que estar completas.
+     */
+    private Captacion encargoDe(Publicacion publicacion, Actor actor) {
+        Long idEncargo = publicacion.getIdEncargo();
+        if (idEncargo == null || idEncargo <= 0) {
+            return null;
+        }
+        return encargos.findById(idEncargo)
+                .filter(encargo -> encargo.getOrganizacionId() == actor.idOrganizacion())
+                .orElse(null);
     }
 
     private Propiedad propiedadDe(Publicacion publicacion, Actor actor) {
@@ -238,7 +302,7 @@ public class PublicacionServiceImpl implements PublicacionService {
         // uno de los dos dejaria la regla puesta en la puerta y abierta la
         // ventana.
         if (Publicacion.ESTADO_PUBLICADO.equals(estado)) {
-            exigirFichaPublicable(propiedadDe(actual, actor), actor);
+            exigirPublicable(propiedadDe(actual, actor), encargoDe(actual, actor), actor);
         }
         actual.setEstado(estado);
         actual.setFechaBaja(Publicacion.ESTADO_CERRADO.equals(estado) ? OffsetDateTime.now() : null);

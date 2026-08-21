@@ -22,7 +22,7 @@ import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Transiciones;
@@ -395,7 +395,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
 
     /** Una pagina entera, con UNA consulta de gobernados para todas. */
     private List<FichaProspeccion> fichas(List<Prospeccion> lote) {
-        Map<Long, ValoresDePropiedad> gobernados = gobernadosDe(lote);
+        Map<Long, ValoresGobernados> gobernados = gobernadosDe(lote);
         return lote.stream().map(p -> ficha(p, gobernados)).toList();
     }
 
@@ -406,15 +406,15 @@ public class ProspeccionServiceImpl implements ProspeccionService {
      * fila: estas listas son paginadas y una consulta por fila seria el N+1
      * que RC-003 quito.
      */
-    private Map<Long, ValoresDePropiedad> gobernadosDe(List<Prospeccion> lote) {
+    private Map<Long, ValoresGobernados> gobernadosDe(List<Prospeccion> lote) {
         List<Long> ids = lote.stream().map(Prospeccion::getPropiedad).filter(Objects::nonNull)
                 .map(Propiedad::getId).filter(Objects::nonNull).distinct().toList();
         return ids.isEmpty() ? Map.of() : lector.gobernadosDeVarias(ids);
     }
 
-    private static FichaProspeccion ficha(Prospeccion p, Map<Long, ValoresDePropiedad> gobernados) {
+    private static FichaProspeccion ficha(Prospeccion p, Map<Long, ValoresGobernados> gobernados) {
         Propiedad prop = p.getPropiedad();
-        ValoresDePropiedad valores = prop == null ? ValoresDePropiedad.vacio()
+        ValoresGobernados valores = prop == null ? ValoresGobernados.vacio()
                 : LectorPorAutoridad.de(gobernados, prop.getId());
         DetalleAgente agente = p.getAgente();
         Captacion captacion = p.getCaptacion();

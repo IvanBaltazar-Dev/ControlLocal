@@ -22,7 +22,7 @@ import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.CoincidenciaCartera;
 import com.controllocal.service.soporte.CoincidenciaCartera.Evaluacion;
 import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,7 +85,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
             // Los atributos gobernados de TODA la cartera candidata, en una sola
             // consulta. Dentro del bucle serian tantas como candidatas: el N+1
             // que RC-003 quito, reintroducido por la puerta de la autoridad.
-            Map<Long, ValoresDePropiedad> valores = lector.deVarias(actor.idOrganizacion(),
+            Map<Long, ValoresGobernados> valores = lector.deVarias(actor.idOrganizacion(),
                     candidatas.stream().map(Captacion::getPropiedad).filter(Objects::nonNull)
                             .distinct().toList());
             for (Captacion captacion : candidatas) {
@@ -93,7 +93,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
                 if (propiedad == null || !Propiedad.LEGADO_DISPONIBLE.equals(propiedad.estadoLegado())) {
                     continue;
                 }
-                ValoresDePropiedad suyos =
+                ValoresGobernados suyos =
                         LectorPorAutoridad.de(valores, propiedad.getId());
                 Evaluacion mejor = null;
                 for (RequerimientoCliente r : activos) {
@@ -145,7 +145,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
             return List.of();
         }
         Set<Long> permitidos = idsClientesDelActor(actor); // null = sin limite (ADMIN)
-        ValoresDePropiedad valores = lector.de(actor.idOrganizacion(), propiedad);
+        ValoresGobernados valores = lector.de(actor.idOrganizacion(), propiedad);
         Map<Long, Evaluacion> mejorPorCliente = new LinkedHashMap<>();
         Map<Long, RequerimientoCliente> reqPorCliente = new LinkedHashMap<>();
 
@@ -191,7 +191,7 @@ public class CoincidenciaServiceImpl implements CoincidenciaService {
 
     private static Coincidencia filaPropiedad(Captacion captacion, Propiedad propiedad,
                                               Evaluacion e, long idCliente,
-                                              ValoresDePropiedad valores) {
+                                              ValoresGobernados valores) {
 
         String proponer = captacion.getId() != null
                 ? "oportunidad-form?clienteId=" + idCliente + "&captacionId=" + captacion.getId()

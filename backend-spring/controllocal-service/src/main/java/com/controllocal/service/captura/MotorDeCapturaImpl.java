@@ -19,6 +19,8 @@ import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AtributosDeEncargo;
+import com.controllocal.service.soporte.ConversionDeValores;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.Documentos;
 import com.controllocal.service.soporte.OperacionDelEncargo;
@@ -62,16 +64,19 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
     private final BorradorCapturaRepository borradores;
     private final PropiedadUniversalService propiedades;
     private final AtributosGobernados gobierno;
+    /** El otro sujeto. Nunca se le pregunta por lo fisico, ni al otro por esto. */
+    private final AtributosDeEncargo condiciones;
     private final Documentos documentos;
     private final DistritoRepository distritos;
 
     public MotorDeCapturaImpl(BorradorCapturaRepository borradores,
                               PropiedadUniversalService propiedades,
-                              AtributosGobernados gobierno, Documentos documentos,
-                              DistritoRepository distritos) {
+                              AtributosGobernados gobierno, AtributosDeEncargo condiciones,
+                              Documentos documentos, DistritoRepository distritos) {
         this.borradores = borradores;
         this.propiedades = propiedades;
         this.gobierno = gobierno;
+        this.condiciones = condiciones;
         this.documentos = documentos;
         this.distritos = distritos;
     }
@@ -195,6 +200,20 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                     economicas.add(pregunta.en(Pregunta.SECCION_OPERACION, economicas.size()));
                 }
             }
+            // Y las condiciones GOBERNADAS de esa operacion, dentro del bloque
+            // (V73). Aqui es donde el Corte 0C se ve: `garantia_meses` sale del
+            // catalogo con su exigencia resuelta para ESTE par (tipo, operacion),
+            // asi que en ALQUILER puede bloquear la publicacion y en VENTA ni
+            // siquiera aparecer.
+            //
+            // Nunca un saco comun de condiciones comerciales. Con VENTA+ALQUILER
+            // declaradas hay dos bloques y cada uno trae lo suyo: una lista
+            // compartida obligaria al cliente a decidir a que encargo pertenece
+            // cada respuesta, que es precisamente lo que no puede decidir.
+            for (CatalogoAtributo atributo : condiciones.aplicablesA(
+                    actor.idOrganizacion(), codigoTipo, op.codigo())) {
+                economicas.add(delCatalogoDeEncargo(atributo, codigoTipo, op.codigo()));
+            }
             deLaOperacion.add(new MotorDeCaptura.BloqueOperacion(op.name(),
                     op.rotuloDeLaCondicion(), List.copyOf(economicas)));
         }
@@ -272,6 +291,36 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                         atributo.exigenciaPara(codigoTipo).codigo(),
                         opciones.isEmpty() ? null : opciones)
                 .en(Pregunta.SECCION_TIPO, atributo.getOrden());
+    }
+
+    /**
+     * Lo mismo para una clave del ENCARGO, con una diferencia que importa: la
+     * exigencia se resuelve con <b>las dos</b> coordenadas.
+     *
+     * <p>Es un metodo aparte y no un parametro anulable en el de arriba porque
+     * ese parametro se olvidaria: la llamada seguiria compilando y devolveria
+     * OPC --«no bloquea»-- para una condicion que si bloquea. Un dato deja de
+     * exigirse y nadie se entera hasta que se publica algo incompleto.
+     */
+    private static Pregunta delCatalogoDeEncargo(CatalogoAtributo atributo, String codigoTipo,
+                                                 String codigoOperacion) {
+        List<MotorDeCaptura.Opcion> opciones = atributo.opcionesVigentes().stream()
+                .map(opcion -> new MotorDeCaptura.Opcion(opcion.getValor(), opcion.getRotulo()))
+                .toList();
+        // La clave viaja CALIFICADA -- `garantia_meses:ALQUILER` --, igual que
+        // el importe y la exclusividad. No es cosmetica: con la venta y el
+        // alquiler declarados a la vez, la respuesta tiene que decir a cual de
+        // los dos encargos pertenece, y la clave desnuda no lo dice. El
+        // separador `:` no colisiona porque ninguna clave del catalogo lo lleva.
+        String calificada = GuionRegistroPropiedad.para(atributo.getClave(),
+                OperacionInmobiliaria.desde(codigoOperacion));
+        Pregunta base = new Pregunta(calificada, atributo.getRotulo(),
+                atributo.getTipoDato(), atributo.getUnidad(), null, false, null);
+        return conRestricciones(base, atributo)
+                .conCatalogo(atributo.getFamilia(), atributo.getAyuda(),
+                        atributo.exigenciaPara(codigoTipo, codigoOperacion).codigo(),
+                        opciones.isEmpty() ? null : opciones)
+                .en(Pregunta.SECCION_OPERACION, atributo.getOrden());
     }
 
     private static List<OperacionInmobiliaria> operacionesDeclaradas(String valores) {
@@ -534,6 +583,15 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
 
     private Object validarAtributo(Actor actor, Map<String, Object> conocido, String clave,
                                    String valor) {
+        // Una clave calificada es una condicion de SU encargo, y se valida
+        // contra el otro sujeto: otro catalogo de aplicabilidad, otro trigger,
+        // otra tabla. Preguntarle a `gobierno` por ella contestaria "es una
+        // condicion del ENCARGO" -- correcto, pero aqui ya se sabe.
+        OperacionInmobiliaria operacion = GuionRegistroPropiedad.operacionDe(clave);
+        if (operacion != null) {
+            return validarCondicion(actor, conocido, GuionRegistroPropiedad.claveBase(clave),
+                    operacion, valor);
+        }
         CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
         String tipo = codigoDelTipoConocido(conocido);
         if (tipo != null && !definicion.aplicaA(tipo)) {
@@ -546,7 +604,31 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         // dictar "tres dormitorios" antes de decir que es un departamento, y
         // rechazarlo entonces seria mentir sobre un dato correcto. Al guardar
         // se comprueba otra vez, ya con el tipo definitivo.
-        gobierno.exigirValorCompatible(actor.idOrganizacion(), clave, valor);
+        ConversionDeValores.exigirCompatible(definicion, valor);
+        return valor;
+    }
+
+    /**
+     * Una condicion del ENCARGO dictada durante la captura.
+     *
+     * <p>La aplicabilidad necesita las dos coordenadas y solo una se conoce
+     * siempre: la operacion viene en la propia clave, el tipo puede no haberse
+     * dicho todavia. Mientras no se sepa, se comprueba lo que si se puede -- que
+     * la clave existe, que es del ENCARGO y que el valor encaja con su tipo --
+     * y la aplicabilidad se mira al guardar, que es cuando el tipo ya es firme.
+     * Rechazar antes seria mentir sobre un dato correcto.
+     */
+    private Object validarCondicion(Actor actor, Map<String, Object> conocido, String clave,
+                                    OperacionInmobiliaria operacion, String valor) {
+        CatalogoAtributo definicion = condiciones.definicionDe(actor.idOrganizacion(), clave);
+        String tipo = codigoDelTipoConocido(conocido);
+        if (tipo != null && !definicion.aplicaA(tipo, operacion.codigo())) {
+            throw new ReglaNegocioException(
+                    "El atributo \"" + clave + "\" no aplica a "
+                            + AtributosGobernados.nombreDelTipo(tipo) + " en "
+                            + operacion.name() + ".");
+        }
+        ConversionDeValores.exigirCompatible(definicion, valor);
         return valor;
     }
 
@@ -701,7 +783,12 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                             GuionRegistroPropiedad.MONEDA, operacion)),
                     null, null, null, null,
                     booleano(conocido, GuionRegistroPropiedad.para(
-                            GuionRegistroPropiedad.EXCLUSIVIDAD, operacion)), null, null));
+                            GuionRegistroPropiedad.EXCLUSIVIDAD, operacion)), null, null,
+                    // Y las condiciones gobernadas que se dictaron para ESTA
+                    // operacion. Viajan dentro de ella porque en el alta el
+                    // encargo todavia no tiene id: la operacion declarada es lo
+                    // unico que puede decir a cual pertenece cada respuesta.
+                    condicionesDictadas(actor, conocido, operacion)));
         }
 
         Ubicacion ubicacion = new Ubicacion(
@@ -723,7 +810,12 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
         // lo reconocio.
         List<ValorAtributo> atributos = new ArrayList<>();
         conocido.forEach((clave, valor) -> {
-            if (!GuionRegistroPropiedad.esEstructural(clave) && valor != null) {
+            // Una clave CALIFICADA no es de la propiedad: ya se repartio arriba,
+            // dentro de su operacion. Meterla aqui la mandaria a
+            // `atributo_propiedad` y el enrutador la rechazaria -- con razon,
+            // porque una condicion negociada no es un hecho del inmueble.
+            if (!GuionRegistroPropiedad.esEstructural(clave) && valor != null
+                    && GuionRegistroPropiedad.operacionDe(clave) == null) {
                 atributos.add(new ValorAtributo(clave, valor.toString()));
             }
         });
@@ -734,6 +826,34 @@ public class MotorDeCapturaImpl implements MotorDeCaptura {
                 texto(conocido, GuionRegistroPropiedad.DESCRIPCION), ubicacion,
                 titularesDe(texto(conocido, GuionRegistroPropiedad.TITULARES)), atributos,
                 List.copyOf(operaciones), borrador.getId());
+    }
+
+    /**
+     * Lo que se dicto para UNA operacion y es una condicion gobernada del
+     * encargo.
+     *
+     * <p>Se reconoce por dos cosas juntas: la clave viene calificada con esa
+     * operacion, y su base <b>no</b> es una clave del guion economico. Lo
+     * segundo importa: {@code importe:VENTA} tambien viene calificado y no es
+     * una condicion gobernada -- vive en {@code condicion_economica}, que es
+     * una columna del encargo y no un atributo suyo.
+     */
+    private List<ValorAtributo> condicionesDictadas(Actor actor, Map<String, Object> conocido,
+                                                    OperacionInmobiliaria operacion) {
+        List<ValorAtributo> pactadas = new ArrayList<>();
+        conocido.forEach((clave, valor) -> {
+            if (valor == null || !operacion.equals(GuionRegistroPropiedad.operacionDe(clave))) {
+                return;
+            }
+            if (GuionRegistroPropiedad.esEstructural(clave)) {
+                return;
+            }
+            String base = GuionRegistroPropiedad.claveBase(clave);
+            // Que exista y sea del ENCARGO ya lo comprobo `validarCondicion` al
+            // entrar; volver a preguntarlo aqui seria una consulta por respuesta.
+            pactadas.add(new ValorAtributo(base, valor.toString()));
+        });
+        return pactadas.isEmpty() ? null : List.copyOf(pactadas);
     }
 
     /**

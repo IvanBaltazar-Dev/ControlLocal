@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValorLogico;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -91,7 +91,7 @@ class LocalComercialServiceImplTest {
     /**
      * El lector devuelve "no se sabe nada" en vez de null.
      *
-     * <p>No es una comodidad del mock: {@link ValoresDePropiedad#vacio()} es un
+     * <p>No es una comodidad del mock: {@link ValoresGobernados#vacio()} es un
      * valor legitimo del dominio -- una propiedad sin ningun gobernado escrito --
      * y este test comprueba precisamente que ese caso no rompe el mapeo. Stubbearlo
      * con valores concretos convertiria este test unitario en una prueba del
@@ -99,7 +99,7 @@ class LocalComercialServiceImplTest {
      */
     @BeforeEach
     void elLectorNoDevuelveNull() {
-        when(lector.de(anyLong(), any())).thenReturn(ValoresDePropiedad.vacio());
+        when(lector.de(anyLong(), any())).thenReturn(ValoresGobernados.vacio());
     }
 
     /** Organizacion de legado: el tenant que el backend resuelve para la sesion (V6). */

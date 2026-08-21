@@ -63,6 +63,8 @@ $integracion = @(
     'PropiedadUniversalIntegrationTest',
     'RepositorioEstadosIntegrationTest',
     'SimulacroRecuperacionIntegrationTest',
+    # Corte 0C: el sujeto del dato, y que ningun encargo contamine a otro.
+    'SujetoDelDatoIntegrationTest',
     'VocabularioPersistidoIntegrationTest'
 )
 

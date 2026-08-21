@@ -50,13 +50,13 @@ public final class CoincidenciaCartera {
      *
      * <p><b>{@code valores} no es opcional aunque el parametro admita vacio.</b>
      * `frente` es un atributo gobernado (D-E4-3) y su columna espejo desaparece
-     * en el paso 9. Pasar {@link ValoresDePropiedad#vacio()} no rompe nada
+     * en el paso 9. Pasar {@link ValoresGobernados#vacio()} no rompe nada
      * visible: simplemente convierte el criterio del frente en NO APLICA, y con
      * ello altera el puntaje sin avisar. Ese es el fallo silencioso que este
      * parametro obliga a resolver en cada llamada.
      */
     public static Evaluacion evaluar(RequerimientoCliente r, Propiedad propiedad,
-                                     ValoresDePropiedad valores) {
+                                     ValoresGobernados valores) {
         if (r == null || propiedad == null) {
             return new Evaluacion(0, List.of(), List.of());
         }
@@ -105,7 +105,7 @@ public final class CoincidenciaCartera {
     }
 
     /** El rubro coincide por inclusion en CUALQUIER direccion ("Cafeteria" ~ "Cafeteria y panaderia"). */
-    private static Criterio evalRubro(RequerimientoCliente r, ValoresDePropiedad valores) {
+    private static Criterio evalRubro(RequerimientoCliente r, ValoresGobernados valores) {
         String req = r.getRubro();
         if (req == null || req.isBlank()) {
             return NA;
@@ -170,7 +170,7 @@ public final class CoincidenciaCartera {
     }
 
     /** El frente sale de su autoridad, no de la columna espejo (D-E4-3). */
-    private static Criterio evalFrente(RequerimientoCliente r, ValoresDePropiedad valores) {
+    private static Criterio evalFrente(RequerimientoCliente r, ValoresGobernados valores) {
         BigDecimal fmin = r.getFrenteMinimo();
         BigDecimal f = valores.decimal(CatalogoAtributo.CLAVE_FRENTE);
         if (fmin == null || f == null) {

@@ -17,7 +17,7 @@ import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.ReasignacionCaptacionRepository;
 import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.Actor;
 import com.controllocal.service.AlertaService;
 import com.controllocal.service.CaptacionService.DatosCaptacion;
@@ -430,14 +430,14 @@ class CaptacionServiceImplTest {
      *
      * <p>Estas pruebas no afirman nada sobre el rubro; solo necesitan que el
      * servicio pueda construir su ficha. Devolver lotes vacios —y no un mock
-     * sin respuestas— es lo correcto: {@code ValoresDePropiedad.vacio()}
+     * sin respuestas— es lo correcto: {@code ValoresGobernados.vacio()}
      * significa "no se sabe nada de esta propiedad", que es un estado legitimo
      * del dominio, mientras que un null seria un fallo del andamiaje
      * disfrazado de dato.
      */
     private static LectorPorAutoridad lectorSinGobernados() {
         LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
-        lenient().when(lector.de(anyLong(), any())).thenReturn(ValoresDePropiedad.vacio());
+        lenient().when(lector.de(anyLong(), any())).thenReturn(ValoresGobernados.vacio());
         lenient().when(lector.deVarias(anyLong(), any())).thenReturn(Map.of());
         lenient().when(lector.gobernadosDeVarias(any())).thenReturn(Map.of());
         return lector;

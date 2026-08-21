@@ -129,7 +129,8 @@ public final class PropiedadUniversalDtos {
     public record EdicionRequest(String descripcion, UbicacionRequest ubicacion,
                                  List<TitularRequest> titulares, List<AtributoRequest> atributos,
                                  List<OperacionRequest> operaciones,
-                                 List<String> atributosABorrar) {
+                                 List<String> atributosABorrar,
+                                 List<CondicionesEncargoRequest> condiciones) {
 
         public PropiedadUniversalService.ComandoEdicion aDatos(String claveIdempotencia,
                                                                Procedencia procedencia) {
@@ -138,6 +139,32 @@ public final class PropiedadUniversalDtos {
                     titulares == null ? null : titulares.stream().map(TitularRequest::aDatos).toList(),
                     atributos == null ? null : atributos.stream().map(AtributoRequest::aDatos).toList(),
                     operaciones == null ? null : operaciones.stream().map(OperacionRequest::aDatos).toList(),
+                    atributosABorrar,
+                    condiciones == null ? null
+                            : condiciones.stream().map(CondicionesEncargoRequest::aDatos).toList());
+        }
+    }
+
+    /**
+     * <b>Las condiciones pactadas en UN encargo.</b>
+     *
+     * <p>Un bloque por {@code idEncargo}, nunca una lista comun. Una propiedad
+     * con la venta y el alquiler abiertos a la vez manda dos bloques, y el que
+     * no manda queda intacto: la regla de bloques dice lo mismo aqui dentro que
+     * fuera.
+     *
+     * <p>El cliente manda el <b>id del encargo</b> y no su operacion. No es
+     * pedanteria: dos alquileres sucesivos de la misma propiedad son dos
+     * episodios, y decir «bloque ALQUILER» haria que editar el de este ano
+     * pisara el del anterior.
+     */
+    public record CondicionesEncargoRequest(Long idEncargo, List<AtributoRequest> atributos,
+                                            List<String> atributosABorrar) {
+
+        PropiedadUniversalService.CondicionesDeEncargo aDatos() {
+            return new PropiedadUniversalService.CondicionesDeEncargo(idEncargo,
+                    atributos == null ? null
+                            : atributos.stream().map(AtributoRequest::aDatos).toList(),
                     atributosABorrar);
         }
     }
@@ -206,6 +233,8 @@ public final class PropiedadUniversalDtos {
                                   Long idAgente, String agenteNombre,
                                   LocalDate inicio, LocalDate fin,
                                   List<HitoResponse> historico,
+                                  List<AtributoResponse> condiciones,
+                                  List<AtributoQueFaltaResponse> faltanParaPublicar,
                                   List<PublicacionResponse> publicaciones,
                                   GestionPublicacionResponse publicacionGestionable) {
         static EncargoResponse desde(EncargoFicha f) {
@@ -214,6 +243,10 @@ public final class PropiedadUniversalDtos {
                     f.importe(), f.moneda(), f.importeRotulo(), f.exclusividad(),
                     f.idAgente(), f.agenteNombre(), f.inicio(), f.fin(),
                     f.historico().stream().map(HitoResponse::desde).toList(),
+                    // Las condiciones viajan DENTRO del encargo, no en la ficha:
+                    // es donde se pactaron y es donde se editan (Corte 0C).
+                    f.condiciones().stream().map(AtributoResponse::desde).toList(),
+                    f.faltanParaPublicar().stream().map(AtributoQueFaltaResponse::desde).toList(),
                     f.publicaciones().stream().map(PublicacionResponse::desde).toList(),
                     GestionPublicacionResponse.desde(f.publicacionGestionable()));
         }

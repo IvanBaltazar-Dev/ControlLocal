@@ -31,7 +31,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.LectorPorAutoridad;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Transiciones;
 import org.springframework.data.domain.Page;
@@ -176,7 +176,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         // las seis claves gobernadas ya no viajan en la proyeccion porque su
         // autoridad dejo de ser la columna (D-E4-3). Se piden para los ids de
         // ESTA pagina, nunca dentro del bucle.
-        Map<Long, ValoresDePropiedad> gobernados = lector.gobernadosDeVarias(ids);
+        Map<Long, ValoresGobernados> gobernados = lector.gobernadosDeVarias(ids);
 
         return new Pagina<>(filas.stream()
                 .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
@@ -281,7 +281,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         Map<Long, String> portadas = ids.isEmpty() ? Map.of() : fotos.portadas(ids).stream()
                 .collect(Collectors.toMap(f -> f.getIdPropiedad(), f -> f.getClave()));
         Map<Long, String> estadosPublicacion = publicaciones.codigosEstadoPublicacion(ids);
-        Map<Long, ValoresDePropiedad> valores =
+        Map<Long, ValoresGobernados> valores =
                 lector.deVarias(actor.idOrganizacion(), pagina.getContent());
         List<FichaLocal> items = pagina.stream()
                 .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
@@ -477,7 +477,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      * {@code ambientes} se promoviera a estructural, aqui no cambia una linea.
      */
     private FichaLocal ficha(Propiedad p, String estadoPublicacion, String fotoPortadaClave,
-                             String propietarioNombre, ValoresDePropiedad valores) {
+                             String propietarioNombre, ValoresGobernados valores) {
 
         return new FichaLocal(
                 p.getId(), p.getCodigo(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
@@ -509,7 +509,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      * trae lo gobernado, ya hidratado en lote para los ids de la pagina.
      */
     private FichaLocal ficha(LocalListado p, String estadoPublicacion, String fotoPortadaClave,
-                             ValoresDePropiedad valores) {
+                             ValoresGobernados valores) {
         return new FichaLocal(
                 p.getId(), p.getCodigoLocal(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
                 p.getPrecioReferencial(), p.getMonedaReferencial(),

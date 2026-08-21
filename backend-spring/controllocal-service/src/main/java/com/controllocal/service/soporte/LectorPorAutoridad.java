@@ -1,10 +1,14 @@
 package com.controllocal.service.soporte;
 
+import com.controllocal.domain.comercial.AtributoEncargo;
+import com.controllocal.domain.comun.FilaDeValorGobernado;
 import com.controllocal.domain.inmueble.AtributoPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Propiedad;
+import com.controllocal.persistence.repositorio.AtributoEncargoRepository;
 import com.controllocal.persistence.repositorio.AtributoPropiedadRepository;
 import com.controllocal.persistence.repositorio.ValorMultipleAtributoRepository;
+import com.controllocal.persistence.repositorio.ValorMultipleEncargoRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
@@ -52,12 +56,31 @@ public class LectorPorAutoridad {
     private final AtributosGobernados gobierno;
     private final AtributoPropiedadRepository valores;
     private final ValorMultipleAtributoRepository multiples;
+    private final AtributoEncargoRepository valoresDeEncargo;
+    private final ValorMultipleEncargoRepository multiplesDeEncargo;
 
     public LectorPorAutoridad(AtributosGobernados gobierno, AtributoPropiedadRepository valores,
-                              ValorMultipleAtributoRepository multiples) {
+                              ValorMultipleAtributoRepository multiples,
+                              AtributoEncargoRepository valoresDeEncargo,
+                              ValorMultipleEncargoRepository multiplesDeEncargo) {
         this.gobierno = gobierno;
         this.valores = valores;
         this.multiples = multiples;
+        this.valoresDeEncargo = valoresDeEncargo;
+        this.multiplesDeEncargo = multiplesDeEncargo;
+    }
+
+    /**
+     * Las filas ancla de un lote: las que no llevan escalar porque sus valores
+     * viven en la tabla hija. Vale para los dos sujetos, y por eso esta escrito
+     * una vez.
+     */
+    private static List<Long> anclasDe(List<? extends FilaDeValorGobernado> filas) {
+        return filas.stream()
+                .filter(fila -> fila.valor() == null)
+                .map(FilaDeValorGobernado::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     /**
@@ -69,11 +92,7 @@ public class LectorPorAutoridad {
      * este caso".
      */
     private Map<Long, List<String>> multivaloresDe(List<AtributoPropiedad> filas) {
-        List<Long> anclas = filas.stream()
-                .filter(fila -> fila.valor() == null)
-                .map(AtributoPropiedad::getId)
-                .filter(java.util.Objects::nonNull)
-                .toList();
+        List<Long> anclas = anclasDe(filas);
         if (anclas.isEmpty()) {
             return Map.of();
         }
@@ -84,11 +103,77 @@ public class LectorPorAutoridad {
         return porAncla;
     }
 
+    /** Lo mismo para el ENCARGO. Otra tabla, misma forma, mismo coste. */
+    private Map<Long, List<String>> multivaloresDeEncargo(List<AtributoEncargo> filas) {
+        List<Long> anclas = anclasDe(filas);
+        if (anclas.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<String>> porAncla = new LinkedHashMap<>();
+        multiplesDeEncargo.deVarios(anclas).forEach(valor -> porAncla
+                .computeIfAbsent(valor.getIdAtributoEncargo(), id -> new java.util.ArrayList<>())
+                .add(valor.getValor()));
+        return porAncla;
+    }
+
+    /**
+     * <b>Las condiciones pactadas en UN encargo</b> (V73).
+     *
+     * <p>Vive aqui, y no en un lector propio, para que siga habiendo <b>un solo
+     * sitio</b> que sepa por que columna se lee un valor gobernado. Un segundo
+     * lector es como se perdio la moneda de un importe en el Corte 0B: nadie lo
+     * escribio para hacer algo distinto, simplemente dejo de enterarse de los
+     * cambios del primero.
+     *
+     * <p>No hay rama estructural: los campos canonicos declarados son conceptos
+     * del inmueble. Y no hace falta el catalogo para leer -- la clave ya esta en
+     * la fila--, asi que esto es <b>una consulta y una de multivalores</b>.
+     */
+    public ValoresGobernados deEncargo(long idCaptacion) {
+        List<AtributoEncargo> filas =
+                valoresDeEncargo.findByIdCaptacionOrderByClaveAsc(idCaptacion);
+        return armarDeEncargo(filas, multivaloresDeEncargo(filas));
+    }
+
+    /**
+     * Lo mismo para varios encargos: un expediente con tres cuesta dos
+     * consultas, no seis. Cada uno recibe SUS condiciones y nada mas -- que es
+     * la razon de ser de este corte.
+     */
+    public Map<Long, ValoresGobernados> deEncargos(Collection<Long> idsCaptacion) {
+        if (idsCaptacion.isEmpty()) {
+            return Map.of();
+        }
+        List<AtributoEncargo> todas = valoresDeEncargo.deVarios(idsCaptacion);
+        Map<Long, List<String>> multivalores = multivaloresDeEncargo(todas);
+
+        Map<Long, List<AtributoEncargo>> porEncargo = new LinkedHashMap<>();
+        for (AtributoEncargo fila : todas) {
+            porEncargo.computeIfAbsent(fila.getIdCaptacion(), id -> new java.util.ArrayList<>())
+                    .add(fila);
+        }
+        Map<Long, ValoresGobernados> resultado = new LinkedHashMap<>();
+        for (Long idCaptacion : idsCaptacion) {
+            resultado.put(idCaptacion, armarDeEncargo(
+                    porEncargo.getOrDefault(idCaptacion, List.of()), multivalores));
+        }
+        return resultado;
+    }
+
+    private static ValoresGobernados armarDeEncargo(List<AtributoEncargo> filas,
+                                                    Map<Long, List<String>> multivalores) {
+        ValoresGobernados.Constructor constructor = new ValoresGobernados.Constructor();
+        for (AtributoEncargo fila : filas) {
+            constructor.con(fila.getClave(), comoValor(fila, multivalores.get(fila.getId())));
+        }
+        return constructor.construir();
+    }
+
     /**
      * Todo lo que se sabe de una propiedad, por clave logica y por las DOS
      * autoridades. Una consulta de atributos y una de catalogo.
      */
-    public ValoresDePropiedad de(long idOrganizacion, Propiedad propiedad) {
+    public ValoresGobernados de(long idOrganizacion, Propiedad propiedad) {
         List<AtributoPropiedad> filas =
                 valores.findByIdPropiedadOrderByClaveAsc(propiedad.getId());
         return armar(propiedad, filas, gobierno.definicionesDe(idOrganizacion,
@@ -100,7 +185,7 @@ public class LectorPorAutoridad {
      * por TIPO distinto que haya en la pagina —a lo sumo siete—, no una por
      * fila.
      */
-    public Map<Long, ValoresDePropiedad> deVarias(long idOrganizacion,
+    public Map<Long, ValoresGobernados> deVarias(long idOrganizacion,
                                                   Collection<Propiedad> propiedades) {
         if (propiedades.isEmpty()) {
             return Map.of();
@@ -111,7 +196,7 @@ public class LectorPorAutoridad {
                 porPropiedad.values().stream().flatMap(List::stream).toList());
 
         Map<String, Map<String, CatalogoAtributo>> definicionesPorTipo = new HashMap<>();
-        Map<Long, ValoresDePropiedad> resultado = new LinkedHashMap<>();
+        Map<Long, ValoresGobernados> resultado = new LinkedHashMap<>();
         for (Propiedad propiedad : propiedades) {
             Map<String, CatalogoAtributo> definiciones = definicionesPorTipo.computeIfAbsent(
                     propiedad.getTipoInmueble(),
@@ -133,17 +218,17 @@ public class LectorPorAutoridad {
      * estructural, y eso solo se hace en SQL antes de paginar. Pedirlo aqui
      * seria traerlo dos veces.
      */
-    public Map<Long, ValoresDePropiedad> gobernadosDeVarias(Collection<Long> idsPropiedad) {
+    public Map<Long, ValoresGobernados> gobernadosDeVarias(Collection<Long> idsPropiedad) {
         if (idsPropiedad.isEmpty()) {
             return Map.of();
         }
-        Map<Long, ValoresDePropiedad> porPropiedad = new LinkedHashMap<>();
+        Map<Long, ValoresGobernados> porPropiedad = new LinkedHashMap<>();
         Map<Long, List<AtributoPropiedad>> filasPorPropiedad = agrupar(idsPropiedad);
         Map<Long, List<String>> multivalores = multivaloresDe(
                 filasPorPropiedad.values().stream().flatMap(List::stream).toList());
-        Map<Long, ValoresDePropiedad> resultado = porPropiedad;
+        Map<Long, ValoresGobernados> resultado = porPropiedad;
         filasPorPropiedad.forEach((id, filas) -> {
-            ValoresDePropiedad.Constructor constructor = new ValoresDePropiedad.Constructor();
+            ValoresGobernados.Constructor constructor = new ValoresGobernados.Constructor();
             filas.forEach(fila -> constructor.con(fila.getClave(),
                     comoValor(fila, multivalores.get(fila.getId()))));
             resultado.put(id, constructor.construir());
@@ -162,9 +247,9 @@ public class LectorPorAutoridad {
      * revienta justo en el caso menos probado: cartera sin atributos y una
      * captacion sin propiedad.
      */
-    public static ValoresDePropiedad de(Map<Long, ValoresDePropiedad> lote, Long idPropiedad) {
-        ValoresDePropiedad valores = idPropiedad == null ? null : lote.get(idPropiedad);
-        return valores == null ? ValoresDePropiedad.vacio() : valores;
+    public static ValoresGobernados de(Map<Long, ValoresGobernados> lote, Long idPropiedad) {
+        ValoresGobernados valores = idPropiedad == null ? null : lote.get(idPropiedad);
+        return valores == null ? ValoresGobernados.vacio() : valores;
     }
 
     // ------------------------------------------------------------------
@@ -187,10 +272,10 @@ public class LectorPorAutoridad {
      * huerfana de antes de la consolidacion, gana la autoridad declarada — que
      * es exactamente lo que significa declararla.
      */
-    private static ValoresDePropiedad armar(Propiedad propiedad, List<AtributoPropiedad> filas,
+    private static ValoresGobernados armar(Propiedad propiedad, List<AtributoPropiedad> filas,
                                             Map<String, CatalogoAtributo> definiciones,
                                             Map<Long, List<String>> multivalores) {
-        ValoresDePropiedad.Constructor constructor = new ValoresDePropiedad.Constructor();
+        ValoresGobernados.Constructor constructor = new ValoresGobernados.Constructor();
         for (AtributoPropiedad fila : filas) {
             CatalogoAtributo definicion = definiciones.get(fila.getClave());
             if (definicion != null && definicion.esEstructural()) {
@@ -215,7 +300,7 @@ public class LectorPorAutoridad {
      * lleva escalar, y preguntar aqui por sus valores seria una consulta por
      * fila -- el N+1 que RC-003 retiro del repositorio.
      */
-    private static ValorLogico comoValor(AtributoPropiedad fila, List<String> multivalor) {
+    private static ValorLogico comoValor(FilaDeValorGobernado fila, List<String> multivalor) {
         if (multivalor != null && !multivalor.isEmpty()) {
             return ValorLogico.deValores(multivalor);
         }

@@ -102,7 +102,7 @@ class CoincidenciaCarteraTest {
     void sinCriteriosAplicablesElPuntajeEsCero() {
         RequerimientoCliente r = new RequerimientoCliente();
         r.setRubro(null);
-        Evaluacion e = CoincidenciaCartera.evaluar(r, new Propiedad(), ValoresDePropiedad.vacio());
+        Evaluacion e = CoincidenciaCartera.evaluar(r, new Propiedad(), ValoresGobernados.vacio());
 
         assertEquals(0, e.puntaje());
         assertTrue(e.cumple().isEmpty());
@@ -153,8 +153,8 @@ class CoincidenciaCarteraTest {
      * conserva un valor que no cumple, para que este test falle si alguien
      * devuelve el scoring a leerla.
      */
-    private static ValoresDePropiedad valoresCompletos() {
-        return ValoresDePropiedad.constructor()
+    private static ValoresGobernados valoresCompletos() {
+        return ValoresGobernados.constructor()
                 .con(CatalogoAtributo.CLAVE_FRENTE, ValorLogico.deNumero(new BigDecimal("8.00")))
                 // El rubro dejo de ser columna en V71 y pasa por la misma
                 // puerta que el frente. El puntaje que afirman los casos de

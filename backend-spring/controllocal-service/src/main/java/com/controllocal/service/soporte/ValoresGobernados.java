@@ -25,14 +25,19 @@ import java.util.Set;
  * hay otra forma de pedirlo—, y eso sigue siendo legitimo. Lo que D-E4-3
  * prohibe es lo otro: que el consumidor decida, a partir de la clave, en que
  * tabla buscarla. Aqui pide y recibe; quien enruta es {@link LectorPorAutoridad}.
+ *
+ * <p><b>Se llamaba `ValoresDePropiedad` hasta el Corte 0C.</b> Dejo de ser
+ * cierto cuando aparecio el segundo sujeto: esta misma forma la devuelve ahora
+ * la lectura de un encargo, y un contenedor que dijera «de propiedad» llevando
+ * condiciones comerciales seria la primera pieza en volver a mezclarlos.
  */
-public final class ValoresDePropiedad {
+public final class ValoresGobernados {
 
-    private static final ValoresDePropiedad VACIO = new ValoresDePropiedad(Map.of());
+    private static final ValoresGobernados VACIO = new ValoresGobernados(Map.of());
 
     private final Map<String, ValorLogico> porClave;
 
-    ValoresDePropiedad(Map<String, ValorLogico> porClave) {
+    ValoresGobernados(Map<String, ValorLogico> porClave) {
         this.porClave = porClave;
     }
 
@@ -46,7 +51,7 @@ public final class ValoresDePropiedad {
      * devuelve cuando de verdad no se leyo nada, y cada clave sigue diciendo
      * que falta cuando se le pregunta.
      */
-    public static ValoresDePropiedad vacio() {
+    public static ValoresGobernados vacio() {
         return VACIO;
     }
 
@@ -100,8 +105,8 @@ public final class ValoresDePropiedad {
             return this;
         }
 
-        public ValoresDePropiedad construir() {
-            return acumulado.isEmpty() ? VACIO : new ValoresDePropiedad(acumulado);
+        public ValoresGobernados construir() {
+            return acumulado.isEmpty() ? VACIO : new ValoresGobernados(acumulado);
         }
     }
 }

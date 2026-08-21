@@ -35,10 +35,16 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.domain.inmueble.ValorMultipleAtributo;
 import com.controllocal.persistence.repositorio.ValorMultipleAtributoRepository;
-import com.controllocal.service.soporte.ValoresDePropiedad;
+import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ActividadDeLaPropiedad;
 import com.controllocal.service.soporte.AnunciosDeLosEncargos;
+import com.controllocal.domain.comercial.AtributoEncargo;
+import com.controllocal.domain.comercial.ValorMultipleEncargo;
+import com.controllocal.persistence.repositorio.AtributoEncargoRepository;
+import com.controllocal.persistence.repositorio.ValorMultipleEncargoRepository;
+import com.controllocal.service.soporte.AtributosDeEncargo;
+import com.controllocal.service.soporte.Comercializacion;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.ComandosIdempotentes;
 import com.controllocal.service.soporte.CondicionesEconomicas;
@@ -124,6 +130,10 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final EventoDominioRepository eventos;
     private final BorradorCapturaRepository borradores;
     private final AtributosGobernados gobierno;
+    /** El enrutador del OTRO sujeto. Nunca se le pide nada de la propiedad. */
+    private final AtributosDeEncargo condiciones;
+    private final AtributoEncargoRepository condicionesEscritas;
+    private final ValorMultipleEncargoRepository multivaloresDeEncargo;
     private final LectorPorAutoridad lector;
     private final ValorMultipleAtributoRepository multivalores;
     private final ComandosIdempotentes comandos;
@@ -140,7 +150,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          PrecioPropiedadRepository precios,
                                          EventoDominioRepository eventos,
                                          BorradorCapturaRepository borradores,
-                                         AtributosGobernados gobierno, LectorPorAutoridad lector,
+                                         AtributosGobernados gobierno,
+                                         AtributosDeEncargo condiciones,
+                                         AtributoEncargoRepository condicionesEscritas,
+                                         ValorMultipleEncargoRepository multivaloresDeEncargo,
+                                         LectorPorAutoridad lector,
                                        ValorMultipleAtributoRepository multivalores,
                                          ComandosIdempotentes comandos, Documentos documentos,
                                          Transiciones transiciones,
@@ -157,6 +171,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.eventos = eventos;
         this.borradores = borradores;
         this.gobierno = gobierno;
+        this.condiciones = condiciones;
+        this.condicionesEscritas = condicionesEscritas;
+        this.multivaloresDeEncargo = multivaloresDeEncargo;
         this.lector = lector;
         this.multivalores = multivalores;
         this.comandos = comandos;
@@ -405,7 +422,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 "titulares", titularesEnHuella(comando.titulares()),
                 "atributos", atributosEnHuella(comando.atributos()),
                 "borrados", String.join(",", aBorrar),
-                "operaciones", operacionesEnHuella(comando.operaciones()))));
+                "operaciones", operacionesEnHuella(comando.operaciones()),
+                // Sin esto, dos ediciones que solo se diferencian en las
+                // condiciones de un encargo tendrian la misma huella y la
+                // segunda se descartaria como repetida (V73).
+                "condiciones", condicionesEnHuella(comando.condiciones()))));
         Optional<ComandoIdempotente> yaHecho =
                 comandos.buscar(actor, comando.claveIdempotencia(), COMANDO_EDICION, huella);
         if (yaHecho.isPresent()) {
@@ -432,6 +453,10 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 actualizarEncargo(actor, propiedad, solicitada, procedencia);
             }
         }
+        // Y las condiciones de cada encargo, en su bloque (Corte 0C). Van
+        // despues de las operaciones porque una operacion recien declarada abre
+        // el encargo al que estas condiciones pueden pertenecer.
+        aplicarCondiciones(actor, propiedad, comando.condiciones());
         propiedades.save(propiedad);
 
         anotarEvento(actor, EVENTO_EDITADA, Propiedad.ENTIDAD_TIPO, propiedad.getId(), procedencia,
@@ -446,6 +471,109 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     // ==================================================================
     // Escritura, pieza a pieza
     // ==================================================================
+
+    /**
+     * <b>Las condiciones de cada encargo, cada una en el suyo</b> (Corte 0C).
+     *
+     * <p>La regla de bloques de 0A, un nivel mas adentro y sin excepciones:
+     *
+     * <pre>
+     *   condiciones == null            -> no se toca NINGUN encargo
+     *   bloque de un encargo ausente   -> ese encargo queda como estaba
+     *   bloque presente                -> solo toca a SU idEncargo
+     * </pre>
+     *
+     * <p>Lo tercero es lo que hace falta vigilar. Guardar el bloque de la venta
+     * no puede vaciar la garantia del alquiler, ni completarla por defecto, ni
+     * copiar en el nuevo alquiler lo que se pacto en el anterior. Como el valor
+     * cuelga de {@code id_captacion} y no de la operacion, aqui basta con no
+     * salirse del encargo que el bloque nombra -- y eso es exactamente lo que
+     * comprueba {@code SujetoDelDatoIntegrationTest}.
+     */
+    private void aplicarCondiciones(Actor actor, Propiedad propiedad,
+                                    List<CondicionesDeEncargo> bloques) {
+        if (bloques == null || bloques.isEmpty()) {
+            return;
+        }
+        Set<Long> repetidos = new java.util.HashSet<>();
+        for (CondicionesDeEncargo bloque : bloques) {
+            if (bloque == null || bloque.idEncargo() == null) {
+                throw new ReglaNegocioException(
+                        "Unas condiciones comerciales llegaron sin decir de que encargo son. "
+                                + "Con una venta y un alquiler abiertos a la vez no hay forma de "
+                                + "adivinarlo, y adivinarlo seria escribir en el equivocado.");
+            }
+            if (!repetidos.add(bloque.idEncargo())) {
+                throw new ReglaNegocioException(
+                        "El encargo " + bloque.idEncargo() + " llego dos veces en la misma "
+                                + "peticion. Cual de los dos bloques gana no lo puede decidir el "
+                                + "Core: seria una regla inventada que el cliente no sabe.");
+            }
+            aplicarCondicionesDe(actor, propiedad, bloque);
+        }
+    }
+
+    private void aplicarCondicionesDe(Actor actor, Propiedad propiedad,
+                                      CondicionesDeEncargo bloque) {
+        // El encargo tiene que ser de ESTA propiedad y de ESTE tenant. Sin la
+        // comprobacion, un id ajeno escribiria condiciones en la cartera de otra
+        // corredora -- y la FK compuesta lo dejaria pasar, porque la organizacion
+        // que viaja es la del actor.
+        Captacion encargo = captaciones.findById(bloque.idEncargo())
+                .filter(c -> c.getOrganizacionId() == actor.idOrganizacion())
+                .filter(c -> c.getPropiedad() != null
+                        && Objects.equals(c.getPropiedad().getId(), propiedad.getId()))
+                .orElseThrow(() -> new NoEncontradoException("Encargo"));
+
+        Comercializacion donde = Comercializacion.de(encargo, propiedad);
+        Map<String, ValorAtributo> valores = atributosDeEdicion(bloque.atributos());
+        List<String> aBorrar = clavesABorrar(bloque.atributosABorrar(), valores);
+
+        if (bloque.atributos() != null) {
+            valores.forEach((clave, valor) -> {
+                if (valor.valores() != null) {
+                    escribirMultivalorDeEncargo(actor, donde, clave, valor.valores());
+                    return;
+                }
+                AtributoEncargo existente = condicionesEscritas
+                        .findByIdCaptacionAndClave(donde.idCaptacion(), clave)
+                        .orElse(null);
+                condicionesEscritas.save(condiciones.enrutarEdicion(actor.idOrganizacion(), donde,
+                        clave, valor.valor(), existente, valor.moneda()));
+            });
+        }
+        // Despues de los valores, igual que en la propiedad: si la misma
+        // peticion cambia unas claves y retira otras, el resultado no puede
+        // depender de como se recorra el mapa.
+        for (String clave : aBorrar) {
+            if (!condiciones.retirar(actor.idOrganizacion(), donde, clave)) {
+                throw new ReglaNegocioException(
+                        "El atributo \"" + clave + "\" no esta en el catalogo, asi que no hay "
+                                + "nada que retirar del encargo " + encargo.getCodigoCaptacion()
+                                + ".");
+            }
+        }
+    }
+
+    /**
+     * Un multivalor del encargo: su ancla y sus valores, <b>sustituyendo</b>.
+     *
+     * <p>Mismo gesto que en la propiedad y por la misma razon: sin borrar antes
+     * no habria forma de QUITAR una opcion, y quitar es la mitad de lo que
+     * significa editar una lista.
+     */
+    private void escribirMultivalorDeEncargo(Actor actor, Comercializacion donde, String clave,
+                                             List<String> seleccionados) {
+        AtributoEncargo ancla = condicionesEscritas
+                .findByIdCaptacionAndClave(donde.idCaptacion(), clave)
+                .orElseGet(() -> condicionesEscritas.save(
+                        condiciones.convertirMultivalor(actor.idOrganizacion(), donde, clave)));
+        multivaloresDeEncargo.borrarDe(ancla.getId());
+        for (String valor : seleccionados) {
+            multivaloresDeEncargo.save(new ValorMultipleEncargo(
+                    actor.idOrganizacion(), ancla.getId(), valor));
+        }
+    }
 
     private void escribirTitularidades(Actor actor, Long idPropiedad, List<Titular> titulares,
                                        List<PersonaRol> rolesTitulares) {
@@ -770,6 +898,23 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                         LocalDate.now())
                 .delEncargo(encargo.getId()));
 
+        // Y las condiciones que se pactaron al abrirlo, si vinieron (V73). Van
+        // aqui y no en el bloque de atributos de la propiedad: en el alta el
+        // encargo todavia no tiene id, asi que la unica forma de decir a cual
+        // pertenece cada condicion es que viajen DENTRO de su operacion.
+        if (solicitada.condiciones() != null) {
+            Comercializacion donde = new Comercializacion(encargo.getId(),
+                    propiedad.getTipoInmueble(), operacion.codigo());
+            for (ValorAtributo valor : atributosValidados(solicitada.condiciones()).values()) {
+                if (valor.valores() != null) {
+                    escribirMultivalorDeEncargo(actor, donde, valor.clave(), valor.valores());
+                } else {
+                    condicionesEscritas.save(condiciones.convertir(actor.idOrganizacion(), donde,
+                            valor.clave(), valor.valor(), valor.moneda()));
+                }
+            }
+        }
+
         anotarEvento(actor, EVENTO_ENCARGO, "CAPTACION", encargo.getId(), procedencia,
                 Map.of("idPropiedad", propiedad.getId(), "idCaptacion", encargo.getId(),
                         "operacion", operacion.name(), "importe", solicitada.importe(),
@@ -864,7 +1009,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // Dos lectores del mismo dato divergen, exactamente igual que dos
         // escritores.
         Map<String, CatalogoAtributo> definiciones = gobierno.definicionesDe(idOrganizacion, tipo);
-        ValoresDePropiedad leidos = lector.de(idOrganizacion, propiedad);
+        ValoresGobernados leidos = lector.de(idOrganizacion, propiedad);
         List<AtributoFicha> valores = new ArrayList<>();
 
         for (String clave : leidos.claves()) {
@@ -899,9 +1044,17 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         Map<Long, List<PublicacionService.FichaPublicacion>> anuncios =
                 publicaciones.deEncargos(idOrganizacion, todos);
 
+        // Las condiciones de TODOS los encargos en una consulta, igual que los
+        // anuncios. Preguntarlas dentro del bucle serian N consultas por ficha
+        // -- el N+1 que RC-003 retiro, reapareciendo con un sujeto nuevo.
+        Map<Long, ValoresGobernados> pactadas = lector.deEncargos(
+                todos.stream().map(Captacion::getId).toList());
+
         List<EncargoFicha> encargos = todos.stream()
                 .map(encargo -> fichaDeEncargo(encargo, serie,
-                        anuncios.getOrDefault(encargo.getId(), List.of())))
+                        anuncios.getOrDefault(encargo.getId(), List.of()),
+                        idOrganizacion, tipo,
+                        pactadas.getOrDefault(encargo.getId(), ValoresGobernados.vacio())))
                 .toList();
 
         // Con la clave desnuda, decir "no se puede publicar sin el metraje"
@@ -1066,7 +1219,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * ({@code precio_propiedad.id_captacion}) justo para esto.
      */
     private EncargoFicha fichaDeEncargo(Captacion encargo, List<PrecioPropiedad> serie,
-                                        List<PublicacionService.FichaPublicacion> anuncios) {
+                                        List<PublicacionService.FichaPublicacion> anuncios,
+                                        long idOrganizacion, String tipoPropiedad,
+                                        ValoresGobernados pactadas) {
         CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
         List<HitoFicha> historico = serie.stream()
                 .filter(precio -> Objects.equals(precio.getIdCaptacion(), encargo.getId()))
@@ -1093,7 +1248,71 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 encargo.getAgente() == null ? null : encargo.getAgente().getId(),
                 encargo.getAgente() == null ? null : nombreDe(encargo.getAgente().getRol()),
                 encargo.getFechaInicioVigencia(), encargo.getFechaFinVigencia(), historico,
+                // Las condiciones pactadas EN ESTE encargo (V73). Van dentro del
+                // bloque y no en la ficha porque no son del inmueble: la venta y
+                // el alquiler abiertos a la vez ensenan aqui numeros distintos, y
+                // el alquiler cerrado de 2024 sigue ensenando los suyos.
+                condicionesDe(idOrganizacion, encargo, tipoPropiedad, pactadas),
+                faltanEnElEncargo(idOrganizacion, encargo, tipoPropiedad),
                 anuncios, gestionDePublicacion(encargo));
+    }
+
+    /**
+     * Las condiciones de un encargo, con su rotulo y su tipo, en el orden del
+     * catalogo.
+     *
+     * <p>Los valores llegan ya leidos por el lote --{@code pactadas}--; lo unico
+     * que se pide aqui son las DEFINICIONES, y eso cuesta una consulta por
+     * {@code (tipo, operacion)} distinto, no una por encargo. Con dos encargos
+     * de la misma operacion es una sola.
+     */
+    private List<AtributoFicha> condicionesDe(long idOrganizacion, Captacion encargo,
+                                              String tipoPropiedad, ValoresGobernados pactadas) {
+        if (pactadas.claves().isEmpty()) {
+            return List.of();
+        }
+        Comercializacion donde = new Comercializacion(encargo.getId(), tipoPropiedad,
+                encargo.getMotivoOperacion());
+        Map<String, CatalogoAtributo> definiciones =
+                condiciones.definicionesDe(idOrganizacion, donde);
+        List<AtributoFicha> valores = new ArrayList<>();
+        for (String clave : pactadas.claves()) {
+            CatalogoAtributo definicion = definiciones.get(clave);
+            valores.add(new AtributoFicha(clave,
+                    definicion == null ? clave : definicion.getRotulo(),
+                    definicion == null ? null : definicion.getTipoDato(),
+                    definicion == null ? null : definicion.getUnidad(),
+                    pactadas.texto(clave)));
+        }
+        valores.sort(java.util.Comparator
+                .<AtributoFicha>comparingInt(a -> definiciones.containsKey(a.clave())
+                        ? definiciones.get(a.clave()).getOrden() : Integer.MAX_VALUE)
+                .thenComparing(AtributoFicha::clave));
+        return List.copyOf(valores);
+    }
+
+    /**
+     * Lo que le falta a ESTE encargo para poder anunciarse, con su nombre.
+     *
+     * <p>Va por encargo y no en la ficha, y esa colocacion es la respuesta
+     * entera del corte: la misma propiedad puede estar lista para alquilarse y
+     * no para venderse, asi que una unica lista de faltantes no podria decir
+     * cual de los dos bloques hay que completar.
+     */
+    private List<AtributoQueFalta> faltanEnElEncargo(long idOrganizacion, Captacion encargo,
+                                                     String tipoPropiedad) {
+        Comercializacion donde = new Comercializacion(encargo.getId(), tipoPropiedad,
+                encargo.getMotivoOperacion());
+        List<String> claves = condiciones.faltantesDeEncargoParaPublicar(idOrganizacion, donde);
+        if (claves.isEmpty()) {
+            return List.of();
+        }
+        List<String> rotulos = condiciones.rotulosDe(idOrganizacion, donde, claves);
+        List<AtributoQueFalta> faltan = new ArrayList<>();
+        for (int i = 0; i < claves.size(); i++) {
+            faltan.add(new AtributoQueFalta(claves.get(i), rotulos.get(i)));
+        }
+        return List.copyOf(faltan);
     }
 
     /**
@@ -1314,7 +1533,13 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             normalizadas.add(new OperacionSolicitada(operacion.name(), solicitada.importe(), moneda,
                     solicitada.tipoComision(), solicitada.baseCalculo(), solicitada.valorComision(),
                     solicitada.tratamientoIgv(), solicitada.exclusividad(),
-                    solicitada.inicioEncargo(), solicitada.finEncargo()));
+                    solicitada.inicioEncargo(), solicitada.finEncargo(),
+                    // Un normalizador que RECONSTRUYE el record tiene que copiar
+                    // todos los campos, y este se dejo las condiciones la primera
+                    // vez: el alta se guardaba en verde y la garantia dictada
+                    // desaparecia sin un solo error. Es la misma perdida callada
+                    // que persigue el Corte 0A, en una linea que parecia inocente.
+                    solicitada.condiciones()));
         }
         return normalizadas;
     }
@@ -1510,6 +1735,27 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .map(valor -> valor.clave() + "=" + valor.valor())
                 .sorted()
                 .reduce((a, b) -> a + "," + b)
+                .orElse("");
+    }
+
+    /**
+     * Las condiciones de cada encargo en la huella de idempotencia.
+     *
+     * <p>Lleva el {@code idEncargo} delante, y por eso mismo: sin el, cambiar la
+     * garantia de la venta y luego la del alquiler produciria la misma huella y
+     * la segunda edicion se descartaria como repetida.
+     */
+    private static String condicionesEnHuella(List<CondicionesDeEncargo> bloques) {
+        if (bloques == null) {
+            return "";
+        }
+        return bloques.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(bloque -> bloque.idEncargo() + ":" + atributosEnHuella(bloque.atributos())
+                        + ":" + (bloque.atributosABorrar() == null ? ""
+                                : String.join("|", bloque.atributosABorrar())))
+                .sorted()
+                .reduce((a, b) -> a + ";" + b)
                 .orElse("");
     }
 

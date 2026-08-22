@@ -212,9 +212,10 @@ function opcionesDe(
   clave: string,
 ): { valor: string; etiqueta: string }[] {
   const pregunta = apertura.find((candidata) => candidata.clave === clave);
+  // El rótulo lo pone el Core («Local comercial», «Venta»); aquí no se compone.
   return (pregunta?.opciones ?? []).map((opcion) => ({
-    valor: opcion,
-    etiqueta: enFrase(opcion),
+    valor: opcion.valor,
+    etiqueta: opcion.rotulo,
   }));
 }
 

@@ -1,0 +1,75 @@
+@let p = pregunta();
+@switch (p.control) {
+  @case ('SELECTOR_MULTIPLE') {
+    <fieldset class="campo opciones" [disabled]="soloLectura()">
+      <legend>{{ p.rotulo }} @if (p.obligatoria) {<b>*</b>}</legend>
+      @for (opcion of p.opciones ?? []; track opcion.valor) {
+        <label class="opcion">
+          <input
+            type="checkbox"
+            [checked]="marcadas().has(opcion.valor)"
+            (change)="alternar(opcion.valor, $event)"
+          />
+          <span>{{ opcion.rotulo }}</span>
+        </label>
+      }
+      @if (p.ayuda) {
+        <small>{{ p.ayuda }}</small>
+      }
+    </fieldset>
+  }
+  @case ('SELECTOR') {
+    <label class="campo">
+      <span>{{ p.rotulo }} @if (p.obligatoria) {<b>*</b>}</span>
+      <select [value]="valor()" [disabled]="soloLectura()" (change)="responder($event)">
+        <!-- Sin elegir es '': nunca la primera opción. Un defecto que nadie
+             eligió es un dato inventado. -->
+        <option value="">Elegir…</option>
+        @for (opcion of p.opciones ?? []; track opcion.valor) {
+          <option [value]="opcion.valor">{{ opcion.rotulo }}</option>
+        }
+      </select>
+      @if (p.ayuda) {
+        <small>{{ p.ayuda }}</small>
+      }
+    </label>
+  }
+  @case ('INTERRUPTOR') {
+    <label class="campo interruptor">
+      <input
+        type="checkbox"
+        [checked]="valor() === 'true'"
+        [disabled]="soloLectura()"
+        (change)="interruptor($event)"
+      />
+      <span>{{ p.rotulo }}</span>
+      @if (p.ayuda) {
+        <small>{{ p.ayuda }}</small>
+      }
+    </label>
+  }
+  @default {
+    <label class="campo">
+      <span>
+        {{ p.rotulo }}
+        @if (p.obligatoria) {<b>*</b>}
+        @if (p.unidad && p.unidad !== 'moneda') {
+          <em>({{ p.unidad }})</em>
+        }
+      </span>
+      <input
+        [type]="tipoEntrada()"
+        [value]="valor()"
+        [readOnly]="soloLectura()"
+        [attr.min]="p.restricciones?.minimo"
+        [attr.max]="p.restricciones?.maximo"
+        [attr.maxlength]="p.restricciones?.longitudMaxima"
+        [attr.step]="p.restricciones?.decimales === 0 ? 1 : 'any'"
+        (input)="responder($event)"
+      />
+      @if (p.ayuda) {
+        <small>{{ p.ayuda }}</small>
+      }
+    </label>
+  }
+}

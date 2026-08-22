@@ -7,6 +7,7 @@ import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.AtributoFicha;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
+import com.controllocal.service.PropiedadUniversalService.CondicionesDeEncargo;
 import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
 import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
 import com.controllocal.service.PropiedadUniversalService.HitoFicha;
@@ -325,6 +326,79 @@ class ConservacionDeLaEdicionIntegrationTest {
         }
         exigirIdentico(retrato(antes), retrato(despues), permitidos,
                 "Cambiar el importe de la venta movio algo del alquiler.");
+
+        // Y lo permitido no es "cualquier cosa": el historico de la venta tiene
+        // que haber CRECIDO en exactamente un hito autorizado con el importe
+        // nuevo, con todo lo anterior intacto delante. Sin esta afirmacion, un
+        // guardado que sobrescribiera el ultimo hito seguiria pasando en verde.
+        EncargoFicha ventaAntes = encargoDe(antes, "VENTA");
+        EncargoFicha ventaDespues = encargoDe(despues, "VENTA");
+        assertEquals(ventaAntes.historico().size() + 1, ventaDespues.historico().size(),
+                "cambiar el importe ANADE un hito; no sustituye el anterior");
+        for (int i = 0; i < ventaAntes.historico().size(); i++) {
+            assertEquals(ventaAntes.historico().get(i), ventaDespues.historico().get(i),
+                    "el hito " + i + " de la venta cambio al anadir uno nuevo");
+        }
+        HitoFicha nuevo = ventaDespues.historico().get(ventaDespues.historico().size() - 1);
+        assertEquals("U", nuevo.hito(), "el importe editado es un hito AUTORIZADO");
+        assertEquals(0, new BigDecimal("330000").compareTo(nuevo.monto()));
+    }
+
+    /**
+     * <b>Lo pactado en un encargo se edita por su id y no toca nada mas</b>
+     * (Corte 0C, visto desde el editor).
+     *
+     * <p>Es el bloque que el gate de aislamiento no recorria: {@code condiciones}
+     * entro en {@code ComandoEdicion} despues de escribirse aquel, y ningun caso
+     * lo mandaba solo. La clave se toma del catalogo y no se escribe a mano:
+     * este test afirma la MECANICA de la edicion por encargo, no que exista una
+     * condicion concreta.
+     */
+    @Test
+    @DisplayName("editar lo pactado en el alquiler no toca la venta ni la propiedad")
+    void editarLoPactadoDeUnEncargoNoTocaNadaMas() {
+        long id = registrar(casoDe("LOCAL"), List.of(venta("250000"), alquiler("3500")));
+        FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
+        EncargoFicha alquiler = encargoDe(antes, "ALQUILER");
+        String clave = jdbc.queryForObject("""
+                select c.clave
+                  from catalogo_atributo c
+                  join catalogo_atributo_operacion o on o.id_catalogo_atributo = c.id_catalogo_atributo
+                 where c.sujeto = 'ENCARGO' and c.del_sistema and c.tipo_dato = 'ENTERO'
+                   and o.tipo_propiedad = 'L' and o.tipo_operacion = 'A'
+                 order by c.clave
+                 limit 1
+                """, String.class);
+
+        propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null, null, null,
+                List.of(new CondicionesDeEncargo(alquiler.idEncargo(),
+                        List.of(new ValorAtributo(clave, "3")), null))), actor());
+
+        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        // Lo pactado no esta en el retrato a proposito: con cero permitidos, TODO
+        // lo demas -- ubicacion, atributos, titulares, los dos encargos con sus
+        // importes e historicos -- tiene que volver identico.
+        exigirIdentico(retrato(antes), retrato(despues), Set.of(),
+                "Editar lo pactado en el alquiler movio algo fuera de su bloque.");
+        assertEquals("3", condicionDe(encargoDe(despues, "ALQUILER"), clave),
+                "lo pactado quedo escrito en SU encargo");
+        assertNull(condicionDe(encargoDe(despues, "VENTA"), clave),
+                "y no aparecio en el otro");
+    }
+
+    private static EncargoFicha encargoDe(FichaPropiedadUniversal ficha, String operacion) {
+        return ficha.encargos().stream()
+                .filter(encargo -> operacion.equals(encargo.operacion()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("la propiedad no tiene encargo de " + operacion));
+    }
+
+    private static String condicionDe(EncargoFicha encargo, String clave) {
+        return encargo.condiciones().stream()
+                .filter(condicion -> clave.equals(condicion.clave()))
+                .map(AtributoFicha::valor)
+                .findFirst()
+                .orElse(null);
     }
 
     // ==================================================================

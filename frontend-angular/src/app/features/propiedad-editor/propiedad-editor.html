@@ -1,0 +1,335 @@
+<cl-estado-listado
+  [cargando]="cargando()"
+  [error]="errorCarga()"
+  mensajeCarga="Cargando la propiedad…"
+/>
+
+@if (errorCarga()) {
+  <p class="reintento">
+    <button type="button" class="cl-btn" (click)="reintentar()">Reintentar</button>
+  </p>
+}
+
+@if (ficha(); as p) {
+  <header class="cabecera">
+    <div>
+      <p class="miga">
+        <a routerLink="/propiedades">Propiedades</a>
+        <span aria-hidden="true">›</span>
+        <a [routerLink]="['/propiedades', p.id]">{{ p.codigo }}</a>
+        <span aria-hidden="true">›</span>
+        Editar
+      </p>
+      <h1>Editar {{ p.tipoRotulo | lowercase }}</h1>
+      <p class="direccion">{{ valor(p.ubicacion?.direccion) }}</p>
+      <!-- La regla, dicha donde se lee: es lo que distingue a este editor del
+           que inventaba un rubro y convertía el uso en 'C'. -->
+      <p class="regla">
+        Sólo se guarda lo que cambies. Lo que no toques queda exactamente como
+        está; para retirar un dato, usa <strong>Quitar</strong>.
+      </p>
+    </div>
+    <div class="acciones">
+      <a class="cl-btn" [routerLink]="['/propiedades', p.id]">Cancelar</a>
+      <button
+        type="button"
+        class="cl-btn primario"
+        [disabled]="!hayCambios() || guardando()"
+        (click)="guardar()"
+      >
+        {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
+      </button>
+    </div>
+  </header>
+
+  <div class="distribucion">
+    <main>
+      <!-- 1 · La cosa física: dónde está -->
+      <section class="seccion">
+        <div class="seccion-titulo">
+          <span class="numero">1</span>
+          <div>
+            <h2>Propiedad y ubicación</h2>
+            <p>La dirección, el distrito y lo que identifica al inmueble.</p>
+          </div>
+        </div>
+        <div class="campos">
+          @for (campo of camposComunes(); track campo.pregunta.clave) {
+            <div class="celda" [class.retirada]="estaRetirado(campo.pregunta.clave)">
+              <cl-campo-gobernado
+                [pregunta]="campo.pregunta"
+                [valor]="valorDe(campo.pregunta.clave)"
+                [soloLectura]="!campo.editable"
+                (cambio)="anotar(campo.pregunta.clave, $event)"
+              />
+              @if (!campo.editable) {
+                <small class="motivo">{{ campo.motivo }}</small>
+              } @else if (tieneValorOriginal(campo.pregunta.clave)) {
+                <button type="button" class="quitar" (click)="alternarRetiro(campo.pregunta.clave)">
+                  {{ estaRetirado(campo.pregunta.clave) ? 'Conservar' : 'Quitar' }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- 2 · Lo que aplica a este tipo: sale del catálogo, no de aquí -->
+      <section class="seccion">
+        <div class="seccion-titulo">
+          <span class="numero">2</span>
+          <div>
+            <h2>Características</h2>
+            <p>
+              Lo que aplica a {{ p.tipoRotulo | lowercase }}. Sale del catálogo de BROX, no de
+              una lista escrita en esta pantalla.
+            </p>
+          </div>
+        </div>
+        @if (camposDelTipo().length === 0) {
+          <p class="ayuda">Este tipo no tiene todavía características en el catálogo.</p>
+        }
+        <div class="campos">
+          @for (campo of camposDelTipo(); track campo.pregunta.clave) {
+            <div class="celda" [class.retirada]="estaRetirado(campo.pregunta.clave)">
+              <cl-campo-gobernado
+                [pregunta]="campo.pregunta"
+                [valor]="valorDe(campo.pregunta.clave)"
+                [soloLectura]="!campo.editable"
+                (cambio)="anotar(campo.pregunta.clave, $event)"
+              />
+              @if (!campo.editable) {
+                <small class="motivo">{{ campo.motivo }}</small>
+              } @else if (tieneValorOriginal(campo.pregunta.clave)) {
+                <button type="button" class="quitar" (click)="alternarRetiro(campo.pregunta.clave)">
+                  {{ estaRetirado(campo.pregunta.clave) ? 'Conservar' : 'Quitar' }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- 3 · De quién es -->
+      <section class="seccion titularidad">
+        <div class="seccion-titulo">
+          <span class="numero">3</span>
+          <div>
+            <h2>Titulares</h2>
+            <p>
+              Cuotas, representante y quiénes son. Si tocas este bloque viaja entero: es el
+              conjunto de titulares vigentes, no un cambio suelto.
+            </p>
+          </div>
+        </div>
+
+        @if (titulares().length > 0) {
+          <ul class="titulares">
+            @for (titular of titulares(); track titular.id) {
+              <li>
+                <div class="quien">
+                  <strong>{{ titular.nombre }}</strong>
+                  @if (titular.documento) {
+                    <small>{{ titular.documento }}</small>
+                  }
+                </div>
+                <label class="cuota">
+                  <span>Cuota</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    [value]="titular.cuota ?? ''"
+                    (input)="cambiarCuota(titular.id, $event)"
+                    [attr.aria-label]="'Cuota de ' + titular.nombre"
+                  />
+                  <b>%</b>
+                </label>
+                <label class="representante">
+                  <input
+                    type="radio"
+                    name="representante"
+                    [checked]="titular.representante"
+                    (change)="marcarRepresentante(titular.id)"
+                  />
+                  <span>Representante</span>
+                </label>
+                <button type="button" class="quitar" (click)="quitarTitular(titular.id)">
+                  Quitar
+                </button>
+              </li>
+            }
+          </ul>
+          @if (titulares().length === 1) {
+            <p class="ayuda">Un titular único es el 100 % sin tener que declararlo.</p>
+          }
+          @if (avisoDeCuotas()) {
+            <p class="aviso">{{ avisoDeCuotas() }}</p>
+          }
+        } @else {
+          <p class="ayuda">
+            Sin titular conocido. Se puede conocer un inmueble sin saber de quién es; lo que no
+            se puede es encargarlo.
+          </p>
+        }
+
+        <label class="campo">
+          <span>Añadir titular</span>
+          <input
+            type="search"
+            placeholder="Nombre, razón social o documento"
+            [value]="busquedaPropietario()"
+            (input)="buscarPropietario($event)"
+          />
+        </label>
+        @if (propietariosVisibles().length > 0 && busquedaPropietario()) {
+          <ul class="candidatos">
+            @for (propietario of propietariosVisibles().slice(0, 6); track propietario.id) {
+              <li>
+                <button type="button" (click)="elegirTitular(propietario)">
+                  <strong>{{ propietario.nombre }}</strong>
+                  <small>{{ propietario.numeroDocumento }}</small>
+                </button>
+              </li>
+            }
+          </ul>
+        } @else if (busquedaPropietario() && !cargandoPropietarios()) {
+          <p class="ayuda">Ningún propietario registrado coincide con esa búsqueda.</p>
+        }
+        @if (hayMasPropietarios()) {
+          <button
+            type="button"
+            class="enlace"
+            [disabled]="cargandoPropietarios()"
+            (click)="cargarMasPropietarios()"
+          >
+            Cargar más propietarios
+          </button>
+        }
+        @if (errorPropietario()) {
+          <p class="aviso">{{ errorPropietario() }}</p>
+        }
+      </section>
+
+      <!-- 4 · Un bloque por ENCARGO -->
+      <section class="seccion">
+        <div class="seccion-titulo">
+          <span class="numero">4</span>
+          <div>
+            <h2>Gestión comercial</h2>
+            <p>
+              Un bloque por encargo. Cambiar un importe <strong>añade</strong> un hito a su
+              histórico; el anterior se conserva. La operación no se cambia: para pasar de
+              alquiler a venta se cierra este encargo y se abre otro.
+            </p>
+          </div>
+        </div>
+
+        @if (encargosVivos().length === 0) {
+          <p class="ayuda">
+            Sin encargo vivo. Esta propiedad está registrada y no ofrecida; el encargo nace al
+            captar.
+          </p>
+        }
+
+        @for (bloque of encargosVivos(); track bloque.encargo.idEncargo) {
+          <article class="encargo" [attr.data-encargo]="bloque.encargo.idEncargo">
+            <h3>
+              {{ bloque.encargo.codigo }} · {{ bloque.encargo.operacionRotulo }}
+              <span class="estado">{{ bloque.encargo.estadoRotulo }}</span>
+            </h3>
+            <div class="campos">
+              @for (pregunta of bloque.economicos; track pregunta.clave) {
+                <cl-campo-gobernado
+                  [pregunta]="pregunta"
+                  [valor]="valorEconomico(bloque.encargo, pregunta.clave)"
+                  (cambio)="anotarEconomico(bloque.encargo, pregunta.clave, $event)"
+                />
+              }
+              <label class="campo">
+                <span>Inicio del encargo</span>
+                <input
+                  type="date"
+                  [value]="valorEconomico(bloque.encargo, 'inicio')"
+                  (input)="anotarEconomicoDesdeEvento(bloque.encargo, 'inicio', $event)"
+                />
+              </label>
+              <label class="campo">
+                <span>Fin del encargo</span>
+                <input
+                  type="date"
+                  [value]="valorEconomico(bloque.encargo, 'fin')"
+                  (input)="anotarEconomicoDesdeEvento(bloque.encargo, 'fin', $event)"
+                />
+              </label>
+            </div>
+
+            @if (bloque.pactables.length > 0) {
+              <h4>Lo pactado en este encargo</h4>
+              <div class="campos">
+                @for (pregunta of bloque.pactables; track pregunta.clave) {
+                  <div
+                    class="celda"
+                    [class.retirada]="estaPactadoRetirado(bloque.encargo, pregunta.clave)"
+                  >
+                    <cl-campo-gobernado
+                      [pregunta]="pregunta"
+                      [valor]="valorPactado(bloque.encargo, pregunta.clave)"
+                      (cambio)="anotarPactado(bloque.encargo, pregunta.clave, $event)"
+                    />
+                    @if (tienePactadoOriginal(bloque.encargo, pregunta.clave)) {
+                      <button
+                        type="button"
+                        class="quitar"
+                        (click)="alternarRetiroPactado(bloque.encargo, pregunta.clave)"
+                      >
+                        {{ estaPactadoRetirado(bloque.encargo, pregunta.clave) ? 'Conservar' : 'Quitar' }}
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+
+        @for (encargo of encargosCerrados(); track encargo.idEncargo) {
+          <details class="encargo cerrado" [attr.data-encargo]="encargo.idEncargo">
+            <summary>
+              {{ encargo.codigo }} · {{ encargo.operacionRotulo }}
+              <span class="estado">{{ encargo.estadoRotulo }}</span>
+            </summary>
+            <p class="ayuda">
+              Cerrado. Su historia económica se conserva tal cual y no se edita desde aquí.
+            </p>
+          </details>
+        }
+      </section>
+    </main>
+
+    <aside>
+      <h2>Lo que va a cambiar</h2>
+      @if (resumenDeCambios().length === 0) {
+        <p class="ayuda">Nada todavía. Lo que no toques no viaja.</p>
+      } @else {
+        <ul class="resumen">
+          @for (linea of resumenDeCambios(); track linea) {
+            <li>{{ linea }}</li>
+          }
+        </ul>
+      }
+      @if (errorGuardado()) {
+        <p class="aviso">{{ errorGuardado() }}</p>
+      }
+      <button
+        type="button"
+        class="cl-btn primario ancho"
+        [disabled]="!hayCambios() || guardando()"
+        (click)="guardar()"
+      >
+        {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
+      </button>
+    </aside>
+  </div>
+}

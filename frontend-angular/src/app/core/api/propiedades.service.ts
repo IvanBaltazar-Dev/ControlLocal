@@ -164,6 +164,140 @@ export interface EncargoPropiedad {
    * backend la vuelve a imponer al escribir.
    */
   publicacionGestionable?: GestionDePublicacion | null;
+  /**
+   * **Lo pactado en ESTE encargo** (Corte 0C): garantía, adelanto, si acepta
+   * mascotas… Son del encargo y no de la propiedad: dos alquileres sucesivos
+   * del mismo inmueble pueden pactar cosas distintas. Mismo formato que los
+   * atributos de la propiedad, clave **sin calificar**.
+   */
+  condiciones?: AtributoPropiedad[];
+  /** Lo obligatorio para publicar este encargo que todavía no tiene valor. */
+  faltanParaPublicar?: AtributoQueFalta[];
+}
+
+// ====================================================================
+// La edición: `PUT /propiedades/{id}`
+// ====================================================================
+
+/**
+ * **Lo que se manda a `PUT /propiedades/{id}`, y sólo lo que cambió.**
+ *
+ * La semántica entera, que es la invariante del Corte 0A:
+ *
+ * ```
+ *   bloque ausente             = no tocar
+ *   campo ausente              = no tocar
+ *   campo con valor            = cambiar a ese valor
+ *   clave en atributosABorrar  = retirar el valor
+ * ```
+ *
+ * Por eso **todo es opcional**: el editor construye este objeto con lo que la
+ * persona tocó y nada más. Mandar un bloque «para completar» es como se pierden
+ * datos que nadie quería cambiar; y `''` no es una forma de borrar — el Core lo
+ * rechaza, porque entre «no lo sé» y «quítalo» no se adivina.
+ *
+ * Lo que este cable **no** transporta, y el editor no ofrece: el tipo, el
+ * código, el uso, el estado del registro, cerrar un encargo o cambiarle la
+ * operación. Cada una de esas cosas es otro caso de uso con su propio endpoint
+ * y su propio rol; reescribirlas desde aquí reescribiría historia.
+ */
+export interface EdicionPropiedad {
+  descripcion?: string;
+  /** Fusión campo a campo: dentro del bloque, lo que no viene tampoco se toca. */
+  ubicacion?: UbicacionEnEdicion;
+  /**
+   * **El conjunto completo**, no un delta. Si viaja, el Core concilia la
+   * titularidad entera contra él: cierra las vigencias que falten y abre las
+   * nuevas. Una lista vacía deja la propiedad **sin titular** —legítimo desde
+   * V76, pero es una intención, no un descuido—. Por eso sólo se manda cuando
+   * la persona tocó el bloque.
+   */
+  titulares?: TitularEnEdicion[];
+  atributos?: AtributoEnEdicion[];
+  /**
+   * Uno por **operación** del encargo vivo. Se dirige por operación y no por
+   * id porque la base garantiza un solo encargo vivo por operación
+   * (`uq_captacion_viva_por_operacion`); si no hay ninguno vivo de esa
+   * operación, el Core rechaza en vez de crear. El importe y la moneda son
+   * obligatorios en el bloque; si no cambiaron, no producen hito.
+   */
+  operaciones?: OperacionEnEdicion[];
+  /**
+   * Claves **lógicas** a retirar: `piso`, `descripcion`, `interiorUnidad`…
+   * Quien pide retirar dice el nombre y el Core enruta por la autoridad del
+   * dato. Una clave con valor y en esta lista a la vez es un error.
+   */
+  atributosABorrar?: string[];
+  /** Un bloque por `idEncargo`: lo pactado en ese encargo y sólo en ese. */
+  condiciones?: CondicionesDeEncargoEnEdicion[];
+}
+
+export interface UbicacionEnEdicion {
+  direccion?: string;
+  distrito?: string;
+  zonaUrbanizacion?: string;
+  latitud?: number;
+  longitud?: number;
+  interiorUnidad?: string;
+  piso?: string;
+  referenciaInterna?: string;
+  nombreEdificioGaleria?: string;
+}
+
+/**
+ * Los campos de la ubicación **tal como los nombra el cable**. No es el
+ * catálogo —es la forma del `UbicacionRequest`— y por eso el editor puede
+ * conocerlos: es lo mínimo para saber en qué hueco del cuerpo va cada
+ * respuesta. Lo que no esté aquí ni sea `descripcion` viaja como atributo y
+ * lo enruta el Core.
+ */
+export const CAMPOS_DE_UBICACION: readonly (keyof UbicacionEnEdicion)[] = [
+  'direccion',
+  'distrito',
+  'zonaUrbanizacion',
+  'latitud',
+  'longitud',
+  'interiorUnidad',
+  'piso',
+  'referenciaInterna',
+  'nombreEdificioGaleria',
+];
+
+export interface TitularEnEdicion {
+  idPropietario: number;
+  /** Porcentaje. Un titular único puede no declararla: es el 100 %. */
+  cuota?: number | null;
+  representante: boolean;
+}
+
+export interface AtributoEnEdicion {
+  clave: string;
+  valor: string;
+}
+
+export interface OperacionEnEdicion {
+  /** VENTA o ALQUILER, con palabras. Nunca un valor combinado. */
+  operacion: string;
+  importe: number;
+  moneda: string;
+  exclusividad?: boolean;
+  inicioEncargo?: string;
+  finEncargo?: string;
+}
+
+/**
+ * Lo que el cable del encargo transporta **además** de sus condiciones
+ * gobernadas, con el nombre con que el motor de captura lo pregunta. Igual que
+ * `CAMPOS_DE_UBICACION`: es la forma del `OperacionRequest`, no el catálogo.
+ * El editor lo usa para separar, dentro del bloque de una operación, lo que va
+ * en `operaciones[]` de lo que va en `condiciones[]`.
+ */
+export const CAMPOS_ECONOMICOS_DEL_ENCARGO: readonly string[] = ['importe', 'moneda', 'exclusividad'];
+
+export interface CondicionesDeEncargoEnEdicion {
+  idEncargo: number;
+  atributos?: AtributoEnEdicion[];
+  atributosABorrar?: string[];
 }
 
 /** Si se puede publicar este encargo, y el hecho —no el tono— de por qué no. */
@@ -366,5 +500,21 @@ export class PropiedadesService {
    */
   consultar(id: number): Promise<FichaPropiedad> {
     return this.api.get<FichaPropiedad>(`propiedades/${id}`);
+  }
+
+  /**
+   * Edición parcial: lo que no va en `cambios` no se toca. Devuelve la ficha
+   * completa ya releída, la misma que `consultar`.
+   *
+   * @param claveIdempotencia la misma en cada reintento del mismo guardado:
+   *        un cambio de importe añade un hito, y un reintento no debe añadir
+   *        dos.
+   */
+  editar(id: number, cambios: EdicionPropiedad, claveIdempotencia?: string): Promise<FichaPropiedad> {
+    return this.api.put<FichaPropiedad>(
+      `propiedades/${id}`,
+      cambios,
+      claveIdempotencia ? { 'Idempotency-Key': claveIdempotencia } : undefined,
+    );
   }
 }

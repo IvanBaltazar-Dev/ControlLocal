@@ -6,7 +6,7 @@ import {
   OnInit,
   signal,
 } from '@angular/core';
-import { LowerCasePipe, NgTemplateOutlet } from '@angular/common';
+import { LowerCasePipe } from '@angular/common';
 import { Router } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
@@ -23,6 +23,7 @@ import {
   Propietario,
   PropietariosService,
 } from '../../core/api/propietarios.service';
+import { CampoGobernado } from '../../shared/campo-gobernado/campo-gobernado';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 
 const PROPIETARIOS_POR_PAGINA = 50;
@@ -78,7 +79,7 @@ interface TitularElegido {
  */
 @Component({
   selector: 'app-propiedad-form',
-  imports: [EstadoListado, LowerCasePipe, NgTemplateOutlet],
+  imports: [CampoGobernado, EstadoListado, LowerCasePipe],
   templateUrl: './propiedad-form.html',
   styleUrl: './propiedad-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -274,51 +275,21 @@ export class PropiedadForm implements OnInit {
   // Responder
   // ------------------------------------------------------------------
 
-  /** Un campo de texto, número o selector. */
-  protected responder(clave: string, evento: Event): void {
-    const destino = evento.target as HTMLInputElement | HTMLSelectElement;
-    this.anotar(clave, destino.value ?? '');
-  }
-
-  protected responderInterruptor(clave: string, evento: Event): void {
-    const destino = evento.target as HTMLInputElement;
-    this.anotar(clave, destino.checked ? 'true' : 'false');
-  }
-
-  /**
-   * Una opción de un selector múltiple. El valor viaja como lista separada por
-   * comas —`VENTA,ALQUILER`— porque cada elemento es una operación de verdad;
-   * lo que nunca viaja es un valor combinado.
-   */
-  protected alternarOpcion(clave: string, opcion: string, evento: Event): void {
-    const marcada = (evento.target as HTMLInputElement).checked;
-    const actuales = (this.valores()[clave] ?? '').split(',').filter((parte) => parte.length > 0);
-    const siguientes = marcada
-      ? [...actuales.filter((valor) => valor !== opcion), opcion]
-      : actuales.filter((valor) => valor !== opcion);
-    this.anotar(clave, siguientes.join(','));
-  }
-
-  protected estaMarcada(clave: string, opcion: string): boolean {
-    return (this.valores()[clave] ?? '').split(',').includes(opcion);
-  }
-
   protected valorDe(clave: string): string {
     return this.valores()[clave] ?? '';
-  }
-
-  protected estaEncendido(clave: string): boolean {
-    return this.valores()[clave] === 'true';
   }
 
   /**
    * Anota una respuesta y, si cambió una de las dos que deciden el plan, vuelve
    * a pedir la definición.
    *
+   * El campo lo dibuja `cl-campo-gobernado` y ya entrega el valor como texto
+   * —`'true'`, `'VENTA,ALQUILER'`, la fecha ISO—; aquí sólo se anota.
+   *
    * Al cambiar el tipo, **lo que ya no aplica se descarta**: dejarlo oculto con
    * su valor guardaría el rubro de un terreno.
    */
-  private anotar(clave: string, valor: string): void {
+  protected anotar(clave: string, valor: string): void {
     this.valores.update((actuales) => ({ ...actuales, [clave]: valor }));
     this.errorGuardado.set(null);
     this.revisando.set(false);

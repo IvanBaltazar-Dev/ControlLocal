@@ -468,6 +468,16 @@ export const routes: Routes = [
           import('./features/captacion-detail/captacion-detail').then((m) => m.CaptacionDetail),
       },
       {
+        // El editor universal: UNA ruta para los siete tipos, sobre
+        // `PUT /propiedades/{id}`. No revive `local-form` ni `/locales`: aquel
+        // editor rechazaba cinco tipos, inventaba el rubro y aplastaba el uso.
+        path: 'propiedades/:id/editar',
+        canActivate: [rolGuard],
+        data: { roles: ['AGENTE'] },
+        loadComponent: () =>
+          import('./features/propiedad-editor/propiedad-editor').then((m) => m.PropiedadEditor),
+      },
+      {
         // La ficha universal. Después de `propiedades/nueva`: el router
         // resuelve por orden y `:id` capturaría también ese literal.
         //

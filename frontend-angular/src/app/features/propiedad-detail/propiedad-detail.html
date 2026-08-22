@@ -33,6 +33,9 @@
       @if (p.estadoRegistro !== "A" && p.estadoRegistroRotulo) {
         <span class="estado" data-estado="I">{{ p.estadoRegistroRotulo }}</span>
       }
+      @if (puedeEditar()) {
+        <a class="primario" [routerLink]="['/propiedades', p.id, 'editar']">Editar</a>
+      }
     </div>
   </header>
 

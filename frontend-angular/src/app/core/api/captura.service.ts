@@ -26,16 +26,42 @@ export interface RestriccionesCampo {
  * la matriz «tipo → campos» no se habría eliminado, se habría mudado — y hay un
  * gate que rompe el build por eso (`FronteraDeAutoridadEnElSpaTest`).
  */
+/**
+ * Un valor admitido con su nombre. La pantalla pinta `rotulo` y devuelve
+ * `valor`; decidir que `CZ` se lee «Comercio zonal» es del catálogo.
+ *
+ * Llegan como objetos desde el Corte 0B. Hasta entonces eran `string[]` y
+ * este tipo se quedó atrás: el selector del alta pintaba el objeto entero.
+ */
+export interface OpcionCaptura {
+  valor: string;
+  rotulo: string;
+}
+
 export interface PreguntaCaptura {
   clave: string;
   rotulo: string;
-  /** APERTURA, COMUN, TIPO u OPERACION. */
-  familia: string;
-  /** SELECTOR, SELECTOR_MULTIPLE, TITULARES, INTERRUPTOR, MONEDA, ENTERO, DECIMAL, TEXTO. */
+  /**
+   * A qué sección del guion pertenece: APERTURA, COMUN, TIPO u OPERACION. Es
+   * lo que decide qué se conserva al cambiar la selección.
+   */
+  seccion?: string | null;
+  /**
+   * La agrupación temática que declara el **catálogo** («edificio»,
+   * «instalaciones»). Se llamó así también la sección hasta el Corte 0B; ahora
+   * son dos cosas y esta es la del catálogo. Puede venir vacía.
+   */
+  familia?: string | null;
+  /**
+   * SELECTOR, SELECTOR_MULTIPLE, TITULARES, INTERRUPTOR, MONEDA, FECHA,
+   * IMPORTE, ENTERO, DECIMAL, TEXTO. Lo único que se mira para dibujar.
+   */
   control: string;
   tipoDato: string;
   unidad?: string | null;
-  opciones?: string[] | null;
+  opciones?: OpcionCaptura[] | null;
+  /** ALT bloquea el alta, PUB bloquea publicar, OPC no bloquea nada. */
+  exigencia?: string | null;
   obligatoria: boolean;
   ayuda?: string | null;
   orden: number;

@@ -13,7 +13,9 @@ const APERTURA: PreguntaCaptura[] = [
     familia: 'APERTURA',
     control: 'SELECTOR',
     tipoDato: 'LISTA',
-    opciones: ['LOCAL', 'OFICINA', 'DEPARTAMENTO', 'CASA', 'TERRENO', 'ALMACEN', 'OTRO'],
+    opciones: ['LOCAL', 'OFICINA', 'DEPARTAMENTO', 'CASA', 'TERRENO', 'ALMACEN', 'OTRO'].map(
+      (valor) => ({ valor, rotulo: valor.charAt(0) + valor.slice(1).toLowerCase() }),
+    ),
     obligatoria: true,
     orden: 0,
   },
@@ -23,7 +25,10 @@ const APERTURA: PreguntaCaptura[] = [
     familia: 'APERTURA',
     control: 'SELECTOR_MULTIPLE',
     tipoDato: 'LISTA_MULTIPLE',
-    opciones: ['VENTA', 'ALQUILER'],
+    opciones: [
+      { valor: 'VENTA', rotulo: 'Venta' },
+      { valor: 'ALQUILER', rotulo: 'Alquiler' },
+    ],
     obligatoria: true,
     orden: 1,
   },

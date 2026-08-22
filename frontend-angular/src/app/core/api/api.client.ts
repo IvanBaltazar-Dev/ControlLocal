@@ -67,8 +67,9 @@ export class ApiClient {
     );
   }
 
-  put<T>(ruta: string, cuerpo?: unknown): Promise<T> {
-    return this.pedir(this.http.put<T>(this.url(ruta), cuerpo ?? {}));
+  /** `cabeceras` por la misma razón que en `post`: la `Idempotency-Key` de la edición. */
+  put<T>(ruta: string, cuerpo?: unknown, cabeceras?: Record<string, string>): Promise<T> {
+    return this.pedir(this.http.put<T>(this.url(ruta), cuerpo ?? {}, { headers: cabeceras }));
   }
 
   patch<T>(ruta: string, cuerpo?: unknown): Promise<T> {

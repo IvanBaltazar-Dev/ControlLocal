@@ -20,7 +20,7 @@ param(
         'v6', 'f3-demanda', 'f4-solicitud',
         'f6-f7-alertas-tareas', 'personas', 'reportes-propietario',
         'ficha-comercial', 'e4-dashboard', 'estabilizacion-alquiler', 'comision-movimientos',
-        'disponibilidad-contrato',
+        'disponibilidad-contrato', 'editor-universal',
         'v6-dos-organizaciones',
         's0-sesiones', 's0-bloqueo', 's0-contrasenas', 's0-roles', 's0-mfa',
         's0-emergencia'

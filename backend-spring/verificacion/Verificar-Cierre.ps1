@@ -20,8 +20,11 @@ param(
     [string] $Clave = 'controllocal',
     # Suites E2E del cierre, en orden. Las economicas van despues de la de
     # movimientos porque comparten el ciclo de comision.
+    # `editor-universal` entra en el cierre por defecto desde el bloque 3f: es
+    # el gate de conservacion POR EL CABLE para los siete tipos, y un corte de
+    # profundidad que rompa la edicion tiene que caer aqui, no en produccion.
     [string[]] $Suites = @('comision-movimientos', 'disponibilidad-contrato', 'f4-solicitud',
-                          'estabilizacion-alquiler')
+                          'estabilizacion-alquiler', 'editor-universal')
 )
 
 $ErrorActionPreference = 'Stop'

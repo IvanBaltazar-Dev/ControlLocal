@@ -1,4 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { convertToParamMap } from '@angular/router';
@@ -11,6 +12,7 @@ import {
   PropiedadesService,
 } from '../../core/api/propiedades.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { Sesion } from '../../core/auth/sesion.model';
 import { LocalesService } from '../../core/api/locales.service';
 import { PropiedadDetail } from './propiedad-detail';
 
@@ -241,12 +243,35 @@ describe('PropiedadDetail', () => {
   let fixture: ComponentFixture<PropiedadDetail>;
   let api: jasmine.SpyObj<PropiedadesService>;
 
-  async function montar(datos: FichaPropiedad): Promise<void> {
+  async function montar(datos: FichaPropiedad, rol?: string): Promise<void> {
     api.consultar.and.resolveTo(datos);
+    // Con rol, una sesion de verdad detras de `AuthService.sesion`: el
+    // `computed` que decide quien edita lee un signal, y un spyOn puesto
+    // despues de montar no lo hace reaccionar.
+    const conSesion = rol
+      ? [
+          {
+            provide: AuthService,
+            useValue: {
+              sesion: signal<Sesion | null>({
+                token: 't',
+                expiraEnSegundos: 3600,
+                rol: rol as Sesion['rol'],
+                idUsuario: 1,
+                idDominio: 30,
+                nombre: 'Prueba',
+                usuario: 'prueba',
+                expiraEn: '2099-01-01T00:00:00',
+              }),
+            },
+          },
+        ]
+      : [];
     await TestBed.configureTestingModule({
       imports: [PropiedadDetail],
       providers: [
         { provide: PropiedadesService, useValue: api },
+        ...conSesion,
         provideRouter([]),
         provideHttpClient(),
         // DESPUES de provideRouter: el router trae su propio ActivatedRoute y,
@@ -673,5 +698,15 @@ describe('PropiedadDetail', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('.acciones .primario'),
     ).toBeNull();
+  });
+
+  it('el AGENTE entra al editor universal, nunca a /locales', async () => {
+    await montar(PROP_0022, 'AGENTE');
+
+    const editar = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>(
+      '.acciones .primario',
+    );
+    expect(editar).not.toBeNull();
+    expect(editar!.getAttribute('href')).toBe('/propiedades/3259/editar');
   });
 });

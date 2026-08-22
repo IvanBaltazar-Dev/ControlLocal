@@ -36,10 +36,11 @@
 
         <div class="campos">
           @for (pregunta of apertura(); track pregunta.clave) {
-            <ng-container
-              [ngTemplateOutlet]="campo"
-              [ngTemplateOutletContext]="{ $implicit: pregunta }"
-            />
+            <cl-campo-gobernado
+                [pregunta]="pregunta"
+                [valor]="valorDe(pregunta.clave)"
+                (cambio)="anotar(pregunta.clave, $event)"
+              />
           }
         </div>
 
@@ -214,9 +215,10 @@
           </div>
           <div class="campos">
             @for (pregunta of preguntasDeUbicacion(); track pregunta.clave) {
-              <ng-container
-                [ngTemplateOutlet]="campo"
-                [ngTemplateOutletContext]="{ $implicit: pregunta }"
+              <cl-campo-gobernado
+                [pregunta]="pregunta"
+                [valor]="valorDe(pregunta.clave)"
+                (cambio)="anotar(pregunta.clave, $event)"
               />
             }
           </div>
@@ -237,10 +239,11 @@
             </div>
             <div class="campos">
               @for (pregunta of preguntasDelTipo(); track pregunta.clave) {
-                <ng-container
-                  [ngTemplateOutlet]="campo"
-                  [ngTemplateOutletContext]="{ $implicit: pregunta }"
-                />
+                <cl-campo-gobernado
+                [pregunta]="pregunta"
+                [valor]="valorDe(pregunta.clave)"
+                (cambio)="anotar(pregunta.clave, $event)"
+              />
               }
             </div>
           </section>
@@ -267,10 +270,11 @@
               <h3>{{ bloque.rotulo }}</h3>
               <div class="campos">
                 @for (pregunta of bloque.preguntas; track pregunta.clave) {
-                  <ng-container
-                    [ngTemplateOutlet]="campo"
-                    [ngTemplateOutletContext]="{ $implicit: pregunta }"
-                  />
+                  <cl-campo-gobernado
+                [pregunta]="pregunta"
+                [valor]="valorDe(pregunta.clave)"
+                (cambio)="anotar(pregunta.clave, $event)"
+              />
                 }
               </div>
             </div>
@@ -355,86 +359,3 @@
   </div>
 }
 
-<!--
-  UN campo, sea cual sea. La plantilla mira `control` y nunca la clave: es lo que
-  impide que esta pantalla acabe con su propia matriz «tipo → campos», que es la
-  forma concreta en que se pierde el modelo universal (D-A-1 §6).
--->
-<ng-template #campo let-pregunta>
-  @switch (pregunta.control) {
-    @case ('SELECTOR_MULTIPLE') {
-      <fieldset class="campo opciones">
-        <legend>{{ pregunta.rotulo }} @if (pregunta.obligatoria) {<b>*</b>}</legend>
-        @for (opcion of pregunta.opciones ?? []; track opcion) {
-          <label class="opcion">
-            <input
-              type="checkbox"
-              [checked]="estaMarcada(pregunta.clave, opcion)"
-              (change)="alternarOpcion(pregunta.clave, opcion, $event)"
-            />
-            <span>{{ opcion | lowercase }}</span>
-          </label>
-        }
-        @if (pregunta.ayuda) {
-          <small>{{ pregunta.ayuda }}</small>
-        }
-      </fieldset>
-    }
-    @case ('SELECTOR') {
-      <label class="campo">
-        <span>{{ pregunta.rotulo }} @if (pregunta.obligatoria) {<b>*</b>}</span>
-        <select [value]="valorDe(pregunta.clave)" (change)="responder(pregunta.clave, $event)">
-          <option value="">Elegir…</option>
-          @for (opcion of pregunta.opciones ?? []; track opcion) {
-            <option [value]="opcion">{{ opcion }}</option>
-          }
-        </select>
-        @if (pregunta.ayuda) {
-          <small>{{ pregunta.ayuda }}</small>
-        }
-      </label>
-    }
-    @case ('INTERRUPTOR') {
-      <label class="campo interruptor">
-        <input
-          type="checkbox"
-          [checked]="estaEncendido(pregunta.clave)"
-          (change)="responderInterruptor(pregunta.clave, $event)"
-        />
-        <span>{{ pregunta.rotulo }}</span>
-        @if (pregunta.ayuda) {
-          <small>{{ pregunta.ayuda }}</small>
-        }
-      </label>
-    }
-    @default {
-      <label class="campo">
-        <span>
-          {{ pregunta.rotulo }}
-          @if (pregunta.obligatoria) {<b>*</b>}
-          @if (pregunta.unidad && pregunta.unidad !== 'moneda') {
-            <em>({{ pregunta.unidad }})</em>
-          }
-        </span>
-        <input
-          [type]="
-            pregunta.control === 'MONEDA' ||
-            pregunta.control === 'ENTERO' ||
-            pregunta.control === 'DECIMAL'
-              ? 'number'
-              : 'text'
-          "
-          [value]="valorDe(pregunta.clave)"
-          [attr.min]="pregunta.restricciones?.minimo"
-          [attr.max]="pregunta.restricciones?.maximo"
-          [attr.maxlength]="pregunta.restricciones?.longitudMaxima"
-          [attr.step]="pregunta.restricciones?.decimales === 0 ? 1 : 'any'"
-          (input)="responder(pregunta.clave, $event)"
-        />
-        @if (pregunta.ayuda) {
-          <small>{{ pregunta.ayuda }}</small>
-        }
-      </label>
-    }
-  }
-</ng-template>

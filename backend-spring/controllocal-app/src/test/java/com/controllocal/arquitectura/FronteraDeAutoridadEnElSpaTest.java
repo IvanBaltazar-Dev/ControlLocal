@@ -168,7 +168,7 @@ class FronteraDeAutoridadEnElSpaTest {
      * Core igual que esta, y entonces estas comprobaciones la cubriran sola.
      */
     private static final List<String> TIPOS_DE_PROPIEDAD = List.of(
-            "LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN");
+            "LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO");
 
     /**
      * {@code if (tipo === 'CASA') { mostrarDormitorios(); }} — la linea con la
@@ -187,9 +187,13 @@ class FronteraDeAutoridadEnElSpaTest {
     @Test
     @DisplayName("el SPA no ramifica por tipo de propiedad")
     void elSpaNoDecideQueSePreguntaSegunElTipo() {
+        // Las dos direcciones y el `@case ('CASA')` del control flow de Angular:
+        // `tipo === 'CASA'`, `'CASA' === tipo` y `@case ('CASA')` son la misma
+        // rama escrita de tres formas, y el gate las ve igual (V76).
+        String tipos = "(" + String.join("|", TIPOS_DE_PROPIEDAD) + ")";
         java.util.regex.Pattern comparacion = java.util.regex.Pattern.compile(
-                "(===|!==|==|!=|\\bcase)\\s*['\"](" + String.join("|", TIPOS_DE_PROPIEDAD)
-                        + ")['\"]");
+                "(===|!==|==|!=|\\bcase)\\s*\\(?\\s*['\"]" + tipos + "['\"]"
+                        + "|['\"]" + tipos + "['\"]\\s*(===|!==|==|!=)");
         List<String> hallazgos = new ArrayList<>();
 
         for (Path fuente : fuentesDelSpa()) {
@@ -248,7 +252,8 @@ class FronteraDeAutoridadEnElSpaTest {
             String contenido = String.join("\n", leer(fuente));
             List<String> nombrados = TIPOS_DE_PROPIEDAD.stream()
                     .filter(tipo -> contenido.contains("'" + tipo + "'")
-                            || contenido.contains("\"" + tipo + "\""))
+                            || contenido.contains("\"" + tipo + "\"")
+                            || esClaveDeObjeto(contenido, tipo))
                     .toList();
             if (nombrados.size() >= 3) {
                 hallazgos.add("  %s  nombra %s".formatted(relativa(fuente), nombrados));
@@ -267,6 +272,20 @@ class FronteraDeAutoridadEnElSpaTest {
                     un cambio en dos repositorios (D-A-1 §4).
                     """.formatted(String.join("\n", hallazgos)));
         }
+    }
+
+    /**
+     * <b>La matriz incondicional</b>: {@code { LOCAL: [...], CASA: [...],
+     * TERRENO: [...] }}. No compara nada y no lleva comillas, asi que ni la
+     * comprobacion de ramas ni la de literales la veian -- y es exactamente la
+     * tabla «tipo → campos» que el modelo universal existe para no tener. Un
+     * tipo escrito como clave de objeto cuenta igual que uno entre comillas.
+     */
+    private static boolean esClaveDeObjeto(String contenido, String tipo) {
+        return java.util.regex.Pattern
+                .compile("(?m)(?:^|[{,;])\\s*" + tipo + "\\s*:")
+                .matcher(contenido)
+                .find();
     }
 
     // ------------------------------------------------------------------

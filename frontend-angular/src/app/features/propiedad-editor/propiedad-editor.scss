@@ -1,0 +1,373 @@
+// El editor universal. Misma disposicion que el alta; los colores salen de los
+// tokens de `styles.scss` y los campos los pinta `cl-campo-gobernado`.
+
+:host {
+  display: block;
+}
+
+.reintento {
+  margin: 0 0 14px;
+}
+
+.cabecera {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.cabecera h1 {
+  color: var(--ink);
+  font-size: 25px;
+  margin: 3px 0 5px;
+}
+
+.direccion {
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+
+.regla {
+  color: var(--ink-2);
+  font-size: 13px;
+  margin: 0;
+  max-width: 62ch;
+}
+
+.miga {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.miga a {
+  color: inherit;
+}
+
+.acciones {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 10px;
+}
+
+.distribucion {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+main {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.seccion,
+aside {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  padding: 20px;
+}
+
+aside {
+  position: sticky;
+  top: 16px;
+}
+
+.seccion-titulo {
+  align-items: flex-start;
+  display: flex;
+  gap: 11px;
+  margin-bottom: 18px;
+}
+
+.seccion-titulo h2 {
+  color: var(--ink);
+  font-size: 16px;
+  margin: 0 0 3px;
+}
+
+.seccion-titulo p {
+  color: var(--ink-2);
+  font-size: 13px;
+  margin: 0;
+  max-width: 60ch;
+}
+
+.numero {
+  align-items: center;
+  background: var(--accion-p);
+  border: 1px solid var(--accion-b);
+  border-radius: 999px;
+  color: var(--accion-fuerte);
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+// ------------------------------------------------------------------
+// Campos: cada celda es un campo y su "Quitar"
+// ------------------------------------------------------------------
+
+.campos {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.celda {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.celda.retirada cl-campo-gobernado {
+  opacity: 0.55;
+}
+
+.motivo {
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+
+.quitar,
+.enlace {
+  background: none;
+  border: 0;
+  color: var(--ink-3);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  justify-self: start;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.quitar:hover,
+.enlace:hover {
+  color: var(--riesgo-voz);
+}
+
+.enlace {
+  margin-top: 8px;
+}
+
+.campo {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.campo > span {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.campo input {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.campo input:focus {
+  border-color: var(--accion);
+  outline: 2px solid var(--accion-b);
+  outline-offset: 1px;
+}
+
+.ayuda {
+  color: var(--ink-3);
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+
+.aviso {
+  background: var(--atencion-p);
+  border-radius: var(--r-chico);
+  color: var(--riesgo-voz);
+  font-size: 13px;
+  margin: 10px 0;
+  padding: 9px 11px;
+}
+
+// ------------------------------------------------------------------
+// Titulares
+// ------------------------------------------------------------------
+
+.titulares,
+.candidatos {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.titulares li {
+  align-items: center;
+  background: var(--hueco);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  padding: 10px 12px;
+}
+
+.quien {
+  display: grid;
+  min-width: 0;
+}
+
+.quien strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.quien small,
+.candidatos small {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.cuota {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.cuota span {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.cuota input {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+  font: inherit;
+  padding: 6px 8px;
+  width: 76px;
+}
+
+.representante {
+  align-items: center;
+  color: var(--ink-2);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+}
+
+.candidatos button {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-chico);
+  cursor: pointer;
+  display: grid;
+  padding: 9px 11px;
+  text-align: left;
+  width: 100%;
+}
+
+.candidatos button:hover {
+  border-color: var(--accion-b);
+}
+
+.candidatos strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+// ------------------------------------------------------------------
+// Un bloque por encargo
+// ------------------------------------------------------------------
+
+.encargo + .encargo {
+  border-top: 1px solid var(--hairline);
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.encargo h3,
+.encargo summary {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 10px;
+  letter-spacing: 0.02em;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+.encargo h4 {
+  color: var(--ink-2);
+  font-size: 12px;
+  margin: 16px 0 10px;
+}
+
+.estado {
+  background: var(--hueco);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 11px;
+  letter-spacing: 0;
+  padding: 2px 8px;
+  text-transform: none;
+}
+
+.cerrado summary {
+  cursor: pointer;
+}
+
+// ------------------------------------------------------------------
+// Resumen
+// ------------------------------------------------------------------
+
+aside h2 {
+  color: var(--ink);
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+
+.resumen {
+  color: var(--ink);
+  font-size: 13.5px;
+  margin: 0 0 14px;
+  padding-left: 18px;
+}
+
+.ancho {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .distribucion {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  aside {
+    position: static;
+  }
+
+  .cabecera {
+    flex-direction: column;
+  }
+}

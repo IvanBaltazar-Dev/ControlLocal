@@ -142,6 +142,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3b** | **El alta universal, visible** | `/propiedades/nueva` sirve a los siete tipos y a las dos operaciones; el listado deja de ser una tabla de locales | ✅ **CERRADO** 2026-08-20 |
 | **3c** | **La ficha universal** | `/propiedades/:id` deja de leer el modelo heredado: la cosa física, un bloque **por encargo** con su histórico, la actividad con su procedencia y la **historia del inmueble** | ✅ **CERRADO** 2026-08-20 |
 | **3d** | **La publicación por encargo** | `Propiedad → Encargo → Publicación`: API canónica, editor fuera del detalle heredado, y `features/local-detail/` borrado | ✅ **CERRADO** 2026-08-20 |
+| **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
 | **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — los tres cortes técnicos cerrados (0A `V71`, 0B `V72`, 0C `V73`+`V74`); queda la siembra por tipo, cortes 1–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
@@ -168,13 +169,13 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    fixtures declaran ahora la operación, que es exactamente el contrato que el
    esquema pasó a exigir. Hasta este arreglo, el «cierre verde» del reactor no
    era baseline suficiente: había suites que ni arrancaban.
-2. **El editor universal** — el hueco funcional más grave. `PUT /propiedades/{id}`
-   existe y la SPA no lo llama desde ninguna pantalla: se puede capturar en
-   universal pero no corregir. El editor **representa el contrato del Core**, no
+2. ~~**El editor universal**~~ ✅ 2026-08-22 — bloque **3f**. Era el hueco
+   funcional más grave: `PUT /propiedades/{id}` existía y la SPA no lo llamaba
+   desde ninguna pantalla. El editor **representa el contrato del Core**, no
    reconstruye la matriz tipo→campos; edita la propiedad como cosa física y
    **cada encargo por separado** (venta y alquiler simultáneos son dos encargos,
    jamás `AMBAS`); y conserva la regla del 0A: **bloque ausente = no tocar ese
-   dominio**.
+   dominio**. Evidencia: `verificacion/evidencia/2026-08-22-editor-universal.md`.
 3. **V77 / profundidad por tipo** — con el preflight del Corte 1 ya medido.
    Primero el editor y después las claves nuevas, porque sembrar decenas de
    atributos sin una forma segura de corregirlos convierte cada error de captura

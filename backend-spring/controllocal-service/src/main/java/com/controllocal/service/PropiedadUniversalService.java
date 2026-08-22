@@ -1,5 +1,6 @@
 package com.controllocal.service;
 
+import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Procedencia;
 
 import java.math.BigDecimal;
@@ -88,6 +89,32 @@ public interface PropiedadUniversalService {
      * </ul>
      */
     record ValorAtributo(String clave, String valor, String moneda, List<String> valores) {
+
+        /**
+         * <b>Un multivalor no llega ademas como escalar</b> (V77).
+         *
+         * <p>La lista es la representacion canonica de un LISTA_MULTIPLE, y
+         * mandar tambien {@code valor} son <b>dos formas del mismo dato</b>:
+         * el escritor tomaba la lista y descartaba el escalar <b>en silencio</b>,
+         * que es la clase de eleccion que este proyecto no hace. Es la misma
+         * regla que ya rige para una clave que llega con valor y en
+         * {@code atributosABorrar}: entre dos intenciones contrarias no se
+         * elige, se avisa.
+         *
+         * <p>Se comprueba en el constructor y no en cada escritor porque hay
+         * cuatro -- propiedad y encargo, alta y edicion --, y con la regla
+         * repetida cuatro veces bastaria olvidarla en una. Aqui el estado
+         * ambiguo <b>no se puede construir</b>.
+         */
+        public ValorAtributo {
+            if (valores != null && (valor != null || moneda != null)) {
+                throw new ReglaNegocioException(
+                        "El atributo \"" + clave + "\" llego como lista y ademas como valor suelto. "
+                                + "Un multivalor se manda con su lista y nada mas: son dos formas "
+                                + "del mismo dato y elegir una por ti seria descartar la otra sin "
+                                + "decirlo.");
+            }
+        }
 
         /** El caso normal: una clave y su valor. */
         public ValorAtributo(String clave, String valor) {

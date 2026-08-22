@@ -87,6 +87,7 @@ excepción artesanal. El par es el patrón, y V77 lo recorre entero:
 | `nivel_implementacion` *(falta, Corte 4)* | `se_entrega_implementado` |
 | `estado_ocupacion` *(falta, Corte 5)* | `entrega_desocupado` |
 | `lote_minimo_normativo` *(falta, Corte 5)* | `acepta_venta_fraccionada` |
+| `uso` *(columna, no clave del catálogo)* | `uso_admitido_por_titular` |
 
 Que falte el lado PROPIEDAD **no impide sembrar el del ENCARGO**: la condición
 es cierta por sí sola —el propietario acepta o no acepta vender por partes— y
@@ -152,6 +153,9 @@ comas; el trigger del Core rechaza eso —«sus valores van en su tabla, no en l
 fila»—. Ahora la lista es la única salida de un `SELECTOR_MULTIPLE`, y quien
 necesite la cadena la compone.
 
+Eso arregló al **emisor**. El gate de cierre encontró después que el
+**receptor** tampoco lo comprobaba: ver «Lo que el gate encontró», punto 3.
+
 ---
 
 ## Verificación
@@ -163,16 +167,17 @@ build     producción sin errores
 E2E       cierre por defecto, con editor-universal ampliado a VENTA
 ```
 
-`SujetoDelDatoIntegrationTest` pasa de 21 a **27**, con seis casos nuevos:
+`SujetoDelDatoIntegrationTest` pasa de 21 a **28**, con siete casos nuevos:
 
 | Caso | Qué demuestra |
 |---|---|
 | la VENTA tiene vocabulario propio | ≥ 6 condiciones aplicables a `V`, y ninguna lista sin opciones |
-| ningún par comparte sujeto | los ocho pares, contra el catálogo real |
+| ningún par comparte sujeto | los **nueve** pares, contra el catálogo real |
 | el par no se puede cruzar | el hecho rechazado como condición, la condición rechazada como atributo, y **ninguno de los dos escrito** |
 | **dos encargos conservan condiciones distintas** | ver abajo |
 | lo que nadie declaró no es un «no» | bloque vacío, declarar una no rellena las vecinas, y cero `DEFAULT` en la base |
 | un IMPORTE y un multivalor se pactan | la moneda y los elementos viajan crudos |
+| el enrutamiento no se cruza en ninguna dirección | cada sujeto declara su aplicabilidad en **su** tabla, y sólo en ella |
 
 ### La prueba que da sentido al sujeto entero
 
@@ -192,6 +197,68 @@ siendo **una** con sus dos episodios.
 
 Con un solo sujeto esto era irrepresentable: el segundo valor sobrescribía al
 primero y nadie se enteraba.
+
+---
+
+---
+
+## El gate de cierre, corrido contra PostgreSQL real
+
+Los cinco conteos, exactos:
+
+```
+condiciones ENCARGO       26 = 26
+aplicables a VENTA          7 =  7
+aplicables a ALQUILER      20 = 20
+filas tipo x operacion    112 = 112
+opciones sembradas         22 = 22
+```
+
+Los cuatro ceros, en cero: ninguna clave del ENCARGO con aplicabilidad de
+PROPIEDAD, **ninguna de PROPIEDAD con aplicabilidad de ENCARGO**, ningún
+`DEFAULT` sobre los valores de `atributo_encargo`, ninguna `LISTA` o
+`LISTA_MULTIPLE` sin vocabulario.
+
+Y los **nueve** pares, todos con la condición en ENCARGO y el hecho —cuando
+existe— en PROPIEDAD.
+
+### Lo que el gate encontró, y no era poco
+
+**1 · La comprobación de enrutamiento sólo miraba una dirección.** La guarda de
+la migración exigía que ninguna clave del ENCARGO declarara aplicabilidad en la
+tabla de la PROPIEDAD, y **la contraria faltaba**: una clave física con una fila
+en `catalogo_atributo_operacion` pasaría a preguntarse dentro del bloque de un
+encargo — el mismo desorden visto del otro lado. Hoy no ocurre en ninguna de las
+dos, y ahora las dos se comprueban.
+
+**2 · El par `uso ↔ uso_admitido_por_titular` no estaba en la lista.** `uso` vive
+como **columna** de `propiedad`, no como clave del catálogo, así que el par no
+puede colisionar por construcción — pero eso es una propiedad del esquema de hoy,
+no una garantía. Entra en la lista: el día que alguien lo gobierne, la
+comprobación ya está puesta.
+
+**3 · Un multivalor se podía mandar como lista Y como escalar, y se aceptaba en
+silencio.** El escritor hacía `if (valores != null) escribirMultivalor(...)` y
+**descartaba el escalar sin decir nada** — la clase exacta de elección que este
+proyecto no hace. Es la misma regla que ya regía para una clave que llega con
+valor y en `atributosABorrar`: *entre dos intenciones contrarias no se elige, se
+avisa*.
+
+El arreglo va en el **constructor de `ValorAtributo`**, y no en cada escritor,
+porque hay cuatro —propiedad y encargo, alta y edición— y con la regla repetida
+cuatro veces bastaría olvidarla en una. Ahí el estado ambiguo **no se puede
+construir**, ni desde el cable, ni desde un test, ni desde KAIROS.
+
+**4 · Y una que resultó ser mía, no del código.** La E2E exigía que un multivalor
+volviera en el **orden de envío**. El Core lo devuelve en orden estable
+(`order by valor`), que es lo correcto: un multivalor es un **conjunto**, el
+orden no es semántico, y que el mismo conjunto se lea siempre igual es lo que
+hace comparables dos retratos. La prueba pasó a comparar como conjunto.
+
+> Nota para quien lea el cable: al **leer**, `valor` trae el texto ya compuesto
+> —«Cocina, Lavadora»— y `valores` la lista cruda. No es contradicción con la
+> regla de arriba: la misma verdad, una vez para pintar y otra para poder
+> corregirla. La regla «lista o escalar, nunca ambos» es del **request**.
 
 ---
 

@@ -715,6 +715,12 @@ class SujetoDelDatoIntegrationTest {
                 new String[] {"cuota_mantenimiento", "mantenimiento_a_cargo_de"},
                 new String[] {"estacionamientos", "estacionamientos_incluidos"},
                 new String[] {"rubro_permitido", "rubros_excluidos_por_titular"},
+                // `uso` vive como COLUMNA de propiedad, no como clave del
+                // catalogo, asi que este par no puede colisionar por
+                // construccion. Se comprueba igual: el dia que alguien lo
+                // gobierne, la comprobacion ya esta puesta y dira si lo mando
+                // al sujeto equivocado.
+                new String[] {"uso", "uso_admitido_por_titular"},
                 new String[] {"mascotas_reglamento", "mascotas_aceptadas"},
                 new String[] {"nivel_implementacion", "se_entrega_implementado"},
                 new String[] {"estado_ocupacion", "entrega_desocupado"},
@@ -741,6 +747,41 @@ class SujetoDelDatoIntegrationTest {
         }
         assertEquals(List.of(), juntos,
                 "un hecho y su condicion acabaron en el mismo sujeto: el pacto vuelve a pisar al hecho");
+    }
+
+    /**
+     * <b>El enrutamiento del catalogo, en las DOS direcciones.</b>
+     *
+     * <p>La guarda de la migracion comprobaba una sola: que ninguna clave del
+     * ENCARGO declarara su aplicabilidad en la tabla de la PROPIEDAD. La
+     * contraria faltaba, y es igual de rompible -- una clave fisica con una
+     * fila en {@code catalogo_atributo_operacion} pasaria a preguntarse dentro
+     * del bloque de un encargo, que es el mismo desorden visto del otro lado.
+     *
+     * <p>Cada sujeto declara su aplicabilidad en SU tabla, y en ninguna otra.
+     */
+    @Test
+    @DisplayName("V77: cada sujeto declara su aplicabilidad en su propia tabla, y solo en ella")
+    void elEnrutamientoNoSeCruzaEnNingunaDireccion() {
+        String encargoConTipo = jdbc.queryForObject("""
+                select string_agg(c.clave, ', ')
+                  from catalogo_atributo c
+                 where c.sujeto = 'ENCARGO' and c.activo and c.del_sistema
+                   and exists (select 1 from catalogo_atributo_tipo t
+                                where t.id_catalogo_atributo = c.id_catalogo_atributo)
+                """, String.class);
+        assertNull(encargoConTipo,
+                "condiciones del encargo con aplicabilidad por tipo: " + encargoConTipo);
+
+        String propiedadConOperacion = jdbc.queryForObject("""
+                select string_agg(c.clave, ', ')
+                  from catalogo_atributo c
+                 where c.sujeto = 'PROPIEDAD' and c.activo and c.del_sistema
+                   and exists (select 1 from catalogo_atributo_operacion o
+                                where o.id_catalogo_atributo = c.id_catalogo_atributo)
+                """, String.class);
+        assertNull(propiedadConOperacion,
+                "hechos de la propiedad con aplicabilidad por operacion: " + propiedadConOperacion);
     }
 
     /**

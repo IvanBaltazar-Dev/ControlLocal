@@ -347,6 +347,62 @@ foreach ($tipo in $tipos) {
         Write-Host "  --   $tipo no declara condiciones pactables de venta: f bis no aplica" -ForegroundColor Yellow
     }
 
+    # --- f ter) los dos tipos por los que se ensancho el cable en V77.
+    #
+    # `AtributoRequest` llevaba (clave, valor) y no sabia transportar una moneda
+    # ni una lista, asi que un IMPORTE y un LISTA_MULTIPLE eran inescribibles.
+    # Se ejercitan POR EL CABLE porque es ahi donde estaba el estrechamiento: la
+    # prueba de integracion llama al servicio, que siempre supo hacerlo.
+    if ($bloqueAlquiler) {
+        $kimp = @($bloqueAlquiler.preguntas | Where-Object { $_.control -eq 'IMPORTE' }) | Select-Object -First 1
+        if ($kimp) {
+            $claveI = ClaveBase $kimp.clave
+            $despues = Editar $id $agente.token @{ condiciones = @(@{ idEncargo = $alquiler.idEncargo; atributos = @(@{ clave = $claveI; valor = '250'; moneda = 'PEN' }) }) }
+            $condI = @((Encargo $despues 'ALQUILER').condiciones | Where-Object { $_.clave -eq $claveI }) | Select-Object -First 1
+            Check "$tipo un IMPORTE viaja con su moneda y vuelve cruda" `
+                (($condI.moneda -eq 'PEN') -and ("$($condI.valor)" -match '250')) `
+                "moneda=$($condI.moneda) valor=$($condI.valor)"
+            $dif = Diferencias (Retrato $antes) (Retrato $despues) @("encargo.$($alquiler.idEncargo).cond.$claveI")
+            Check "$tipo y no toco nada mas" ($dif.Count -eq 0) ($dif -join '; ')
+            $antes = $despues
+        }
+
+        $kmul = @($bloqueAlquiler.preguntas | Where-Object { $_.control -eq 'SELECTOR_MULTIPLE' }) | Select-Object -First 1
+        if ($kmul) {
+            $claveM = ClaveBase $kmul.clave
+            $elegidos = @(@($kmul.opciones)[0].valor)
+            if (@($kmul.opciones).Count -gt 1) { $elegidos += @($kmul.opciones)[1].valor }
+            # `valores` y NUNCA `valor`: un multivalor que llegue tambien como
+            # escalar lo rechaza el Core -- sus valores van en su tabla.
+            $despues = Editar $id $agente.token @{ condiciones = @(@{ idEncargo = $alquiler.idEncargo; atributos = @(@{ clave = $claveM; valores = $elegidos }) }) }
+            $condM = @((Encargo $despues 'ALQUILER').condiciones | Where-Object { $_.clave -eq $claveM }) | Select-Object -First 1
+            # Se compara como CONJUNTO, no como secuencia. Un multivalor es un
+            # conjunto -- quien lo recibe sustituye -- y el Core lo devuelve en
+            # orden estable (`order by valor`), no en el orden en que llego. Que
+            # el mismo conjunto se lea siempre igual es lo que hace comparables
+            # dos retratos; exigir el orden de envio seria afirmar una semantica
+            # que la lista no tiene.
+            Check "$tipo un multivalor vuelve como lista cruda, no como texto con comas" `
+                (((@($condM.valores) | Sort-Object) -join '|') -eq (($elegidos | Sort-Object) -join '|')) `
+                "valores=$(@($condM.valores) -join '|') esperado=$($elegidos -join '|')"
+            # Al LEER, `valor` trae el texto ya compuesto -- "Cocina, Lavadora" --
+            # y `valores` la lista cruda: la misma verdad, una vez para pintar y
+            # otra para poder corregirla. Lo que se comprueba aqui es que la
+            # cruda esta, que es la que el editor necesita.
+            Check "$tipo y ademas del texto compuesto vienen los valores crudos" `
+                (@($condM.valores).Count -eq $elegidos.Count) `
+                "crudos=$(@($condM.valores).Count) esperados=$($elegidos.Count)"
+
+            # Y al ESCRIBIR, la regla es la contraria: un multivalor NO puede
+            # llegar tambien como escalar. Ahi si son dos formas del mismo dato
+            # y el Core no elige entre ellas -- avisa.
+            $ambos = EditarError $id $agente.token @{ condiciones = @(@{ idEncargo = $alquiler.idEncargo; atributos = @(@{ clave = $claveM; valor = 'COCINA'; valores = $elegidos }) }) }
+            Check "$tipo mandar un multivalor como lista Y como escalar se rechaza" `
+                ($ambos.codigo -eq 400) "codigo=$($ambos.codigo) $($ambos.error)"
+            $antes = $despues
+        }
+    }
+
     # --- g) un bloque de una operacion que NO esta viva se rechaza: no se crea nada
     if ($tipo -eq 'OTRO') {
         $rechazo = EditarError $id $agente.token @{ operaciones = @(@{ operacion = 'VENTA'; importe = 1; moneda = 'USD'; exclusividad = $true }, @{ operacion = 'VENTA'; importe = 2; moneda = 'USD' }) }

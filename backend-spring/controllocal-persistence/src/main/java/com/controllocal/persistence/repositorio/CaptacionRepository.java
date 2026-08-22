@@ -478,8 +478,8 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
                    p.metraje as metraje
               from Captacion c
               join c.propiedad p
-              join p.rolPropietario rp
-              join rp.persona per
+              left join p.rolPropietario rp
+              left join rp.persona per
              where c.organizacionId = :idOrganizacion
                and p.id in :idsPropiedad
              order by p.id, c.id desc

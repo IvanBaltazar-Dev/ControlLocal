@@ -31,6 +31,7 @@ import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.OperacionDelEncargo;
 import com.controllocal.service.soporte.PoliticaComercial;
+import com.controllocal.service.soporte.TitularParaEncargar;
 import com.controllocal.service.soporte.Transiciones;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import org.springframework.data.domain.Page;
@@ -72,12 +73,15 @@ public class CaptacionServiceImpl implements CaptacionService {
     private final Transiciones transiciones;
     private final AlertaService alertas;
     private final LectorPorAutoridad lector;
+    /** Conocer un inmueble no es poder venderlo: el ENCARGO si exige titular (V76). */
+    private final TitularParaEncargar titularParaEncargar;
 
     public CaptacionServiceImpl(CaptacionRepository captaciones, ReasignacionCaptacionRepository reasignaciones,
                                 PropiedadRepository propiedades, DetalleAgenteRepository agentes,
                                 DetalleBrokerRepository brokers, FotoPropiedadRepository fotos,
                                 Alcances alcances, Transiciones transiciones,
-                                AlertaService alertas, LectorPorAutoridad lector) {
+                                AlertaService alertas, LectorPorAutoridad lector,
+                                TitularParaEncargar titularParaEncargar) {
         this.captaciones = captaciones;
         this.reasignaciones = reasignaciones;
         this.propiedades = propiedades;
@@ -88,6 +92,7 @@ public class CaptacionServiceImpl implements CaptacionService {
         this.transiciones = transiciones;
         this.alertas = alertas;
         this.lector = lector;
+        this.titularParaEncargar = titularParaEncargar;
     }
 
     @Override
@@ -228,6 +233,10 @@ public class CaptacionServiceImpl implements CaptacionService {
         Propiedad propiedad = propiedades
                 .findByOrganizacionIdAndId(actor.idOrganizacion(), datos.idLocal())
                 .orElseThrow(() -> new ReglaNegocioException("El local de la captacion no existe."));
+        // Abrir un encargo es empezar una relacion comercial, y esa nace de
+        // alguien que puede encargarla (V76). Va ANTES de la condicion economica
+        // para que el mensaje hable de titularidad y no de un importe invalido.
+        titularParaEncargar.exigirParaEncargo(propiedad);
         validarEncargo(datos.fechaInicioVigencia(), datos.fechaFinVigencia());
         CondicionEconomicaCaptacion condicion = condicion(datos, propiedad, actor.idOrganizacion());
         exigirEncargoLibre(actor.idOrganizacion(), propiedad.getId(),
@@ -271,6 +280,7 @@ public class CaptacionServiceImpl implements CaptacionService {
         cap.setFechaInicioVigencia(datos.fechaInicioVigencia());
         cap.setFechaFinVigencia(datos.fechaFinVigencia());
         validarEncargo(datos.fechaInicioVigencia(), datos.fechaFinVigencia());
+        exigirMismaOperacion(cap, datos);
         cap.setCondicionEconomica(condicion(datos, cap.getPropiedad(), actor.idOrganizacion()));
         cap.setObservaciones(datos.observaciones());
         cap.setMotivoOperacion(datos.motivoOperacion());
@@ -557,6 +567,35 @@ public class CaptacionServiceImpl implements CaptacionService {
         }
     }
 
+    /**
+     * <b>La operacion de un encargo no se edita</b> (V76).
+     *
+     * <p>Es su identidad, no uno de sus campos: cambiarla convierte el encargo
+     * de venta de un inmueble en el encargo de alquiler del mismo inmueble
+     * <b>conservando su historico</b>, con lo que los 350 000 USD que se
+     * pidieron por venderlo pasan a leerse como rentas mensuales. Es la misma
+     * clase de reinterpretacion que el Corte 0C cerro por el otro lado: dos
+     * alquileres sucesivos de la misma propiedad son dos episodios.
+     *
+     * <p>Ademas era un error tardio y feo: si el inmueble ya tenia un encargo
+     * vivo de la operacion de destino, esto salia como un 409 de indice unico
+     * -- y si no lo tenia, salia bien y corrompia la serie en silencio.
+     */
+    private static void exigirMismaOperacion(Captacion cap, DatosCaptacion datos) {
+        String pedida = textoO(datos.tipoOperacion(), datos.motivoOperacion(), null);
+        if (pedida == null || pedida.isBlank()) {
+            return;
+        }
+        String actual = cap.getMotivoOperacion();
+        if (actual != null && !actual.equals(OperacionDelEncargo.deTexto(pedida).codigo())) {
+            throw new ReglaNegocioException(
+                    "Este encargo es de " + OperacionInmobiliaria.deCodigo(actual).name().toLowerCase(Locale.ROOT)
+                            + " y su operacion no se edita: es lo que decide si su importe es una "
+                            + "renta o un precio de venta, y cambiarla reinterpretaria todo su "
+                            + "historico. Cierra este encargo y abre el de la otra operacion.");
+        }
+    }
+
     private static void validarActivacion(Captacion cap) {
         validarEncargo(cap.getFechaInicioVigencia(), cap.getFechaFinVigencia());
         if (cap.getCondicionEconomica() == null || cap.getPropiedad() == null || cap.getAgente() == null
@@ -585,7 +624,9 @@ public class CaptacionServiceImpl implements CaptacionService {
         String tipo = textoO(datos.tipoComision(),
                 datos.comisionPactada() == null ? null : CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES,
                 null);
-        String base = textoO(datos.baseCalculo(), CondicionEconomicaCaptacion.RENTA_MENSUAL, null);
+        // El defecto de la base lo dicta la OPERACION (V76): una venta no tiene
+        // renta mensual sobre la que calcular nada.
+        String base = textoO(datos.baseCalculo(), CondicionesEconomicas.basePorDefecto(operacion), null);
         BigDecimal valor = datos.valorComision();
         if (valor == null && datos.comisionPactada() != null) {
             valor = CondicionesEconomicas.comisionPactada(datos.comisionPactada())
@@ -604,6 +645,7 @@ public class CaptacionServiceImpl implements CaptacionService {
         if (!combinacionValida) {
             throw new ReglaNegocioException("La combinacion de tipo y base de comision es invalida.");
         }
+        CondicionesEconomicas.exigirBaseCoherente(operacion, tipo, base);
         if (!"F".equals(tipo) && !monedaReferencia.equals(monedaComision)) {
             throw new ReglaNegocioException("La comision derivada debe usar la moneda de su base.");
         }

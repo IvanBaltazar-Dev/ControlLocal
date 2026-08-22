@@ -10,6 +10,9 @@ import com.controllocal.web.dto.PropiedadUniversalDtos.FilaPropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.PropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroResponse;
+import com.controllocal.service.ObservacionMercadoService;
+import com.controllocal.web.dto.ObservacionMercadoDtos.ObservacionRequest;
+import com.controllocal.web.dto.ObservacionMercadoDtos.ObservacionResponse;
 import com.controllocal.web.seguridad.SesionActual;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -54,12 +58,16 @@ import java.util.List;
 public class PropiedadesUniversalesController {
 
     private final PropiedadUniversalService propiedades;
+    /** Lo que se VIO del mercado. Serie propia: observar no es un hecho comercial (V76). */
+    private final ObservacionMercadoService observaciones;
     private final ProcedenciaDeCabeceras procedencias;
 
     public PropiedadesUniversalesController(PropiedadUniversalService propiedades,
-                                            ProcedenciaDeCabeceras procedencias) {
+                                            ProcedenciaDeCabeceras procedencias,
+                                            ObservacionMercadoService observaciones) {
         this.propiedades = propiedades;
         this.procedencias = procedencias;
+        this.observaciones = observaciones;
     }
 
     /**
@@ -81,6 +89,38 @@ public class PropiedadesUniversalesController {
         // decirle 201 al cliente le haria contar dos altas donde hubo una.
         return ResponseEntity.status(creada.reintento() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(creada);
+    }
+
+    /**
+     * <b>Lo que se vio del mercado sobre este inmueble</b> (V76).
+     *
+     * <p>No es un hecho comercial de BROX: no lo autorizo, no lo publico y no lo
+     * negocio. Vive en su propia serie y no toca ni el historico del encargo ni
+     * el precio de la propiedad — «lo vi anunciado a 190 000» no es un precio
+     * autorizado.
+     *
+     * <p><b>Append-only.</b> No hay PUT ni DELETE, y su ausencia es la regla: una
+     * observacion es un hecho fechado y corregirla borraria la muestra. Si el
+     * precio cambio, se observa otra vez.
+     */
+    @PostMapping("{id}/observaciones")
+    @PreAuthorize("hasRole('AGENTE')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ObservacionResponse observar(@PathVariable long id,
+                                        @RequestBody ObservacionRequest dto) {
+        if (dto == null) {
+            throw new ReglaNegocioException("Los datos de la observacion son obligatorios.");
+        }
+        return ObservacionResponse.desde(
+                observaciones.registrar(dto.aDatos(id), SesionActual.actor()));
+    }
+
+    /** Lo observado de una propiedad, de lo mas reciente a lo mas antiguo. */
+    @GetMapping("{id}/observaciones")
+    public List<ObservacionResponse> observaciones(@PathVariable long id) {
+        return observaciones.listarDe(id, SesionActual.actor()).stream()
+                .map(ObservacionResponse::desde)
+                .toList();
     }
 
     /**

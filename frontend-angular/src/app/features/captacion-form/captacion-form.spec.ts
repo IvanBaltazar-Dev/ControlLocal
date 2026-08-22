@@ -56,6 +56,7 @@ describe('CaptacionForm', () => {
     const fixture = await montar(null, { prospeccion: '7' });
     const acceso = fixture.componentInstance as unknown as AccesoFormulario;
     acceso.formulario.patchValue({
+      operacion: 'A',
       comisionConfirmada: true,
       observaciones: '  Exclusiva  ',
     });
@@ -81,6 +82,7 @@ describe('CaptacionForm', () => {
     captaciones.obtenerPorCodigo.and.resolveTo({
       ...CREADA, estado: 'O', fechaCaptacion: '2026-07-01',
       fechaInicioVigencia: '2026-07-01', fechaFinVigencia: '2027-01-01',
+      tipoOperacion: 'A',
       comisionPactada: 80, urgencia: 4, exclusividad: true,
       observacionRevision: 'Precisar vigencia',
     });
@@ -89,6 +91,7 @@ describe('CaptacionForm', () => {
     expect(texto(fixture)).toContain('Observación del broker');
     expect(texto(fixture)).toContain('Guardar y reenviar a revisión');
     acceso.formulario.patchValue({ comisionConfirmada: true });
+    expect(acceso.formulario.get('operacion')?.value).toBe('A');
 
     await acceso.guardar();
 
@@ -103,6 +106,7 @@ describe('CaptacionForm', () => {
     const fixture = await montar(null, { prospeccion: '7' });
     const acceso = fixture.componentInstance as unknown as AccesoFormulario;
     acceso.formulario.patchValue({
+      operacion: 'A',
       comisionConfirmada: true,
       fechaInicioVigencia: '2026-09-01',
       fechaFinVigencia: '2026-08-01',
@@ -118,6 +122,7 @@ describe('CaptacionForm', () => {
     const fixture = await montar(null, { prospeccion: '7' });
     const acceso = fixture.componentInstance as unknown as AccesoFormulario;
     acceso.formulario.patchValue({
+      operacion: 'A',
       comisionConfirmada: true,
       fechaInicioVigencia: '2026-09-01',
       fechaFinVigencia: '2026-09-01',
@@ -130,6 +135,9 @@ describe('CaptacionForm', () => {
   it('propone un mes como modalidad habitual pero exige confirmarlo expresamente', async () => {
     const fixture = await montar(null, { prospeccion: '7' });
     const acceso = fixture.componentInstance as unknown as AccesoFormulario;
+    acceso.formulario.patchValue({ operacion: 'A' });
+    (fixture.componentInstance as unknown as { elegirOperacion(): void }).elegirOperacion();
+    fixture.detectChanges();
 
     expect(acceso.formulario.get('modalidadComision')?.value).toBe('E1');
     expect(texto(fixture)).toContain('Un mes de alquiler');
@@ -146,6 +154,7 @@ describe('CaptacionForm', () => {
     const fixture = await montar(null, { prospeccion: '7' });
     const acceso = fixture.componentInstance as unknown as AccesoFormulario;
     acceso.formulario.patchValue({
+      operacion: 'A',
       modalidadComision: 'S', motivoSinComision: '', comisionConfirmada: true,
     });
     fixture.detectChanges();
@@ -160,6 +169,46 @@ describe('CaptacionForm', () => {
     expect(datos).toEqual(jasmine.objectContaining({
       tipoComision: 'F', baseCalculo: 'N', valorComision: 0,
       motivoSinComision: 'Acuerdo institucional',
+    }));
+  });
+
+  // La constante `motivoOperacion: 'A'` que esta pantalla enviaba pase lo que
+  // pase convertia cualquier encargo de venta en un alquiler, con el precio de
+  // venta metido en la casilla de la renta y la comision calculada sobre el.
+  it('no envía nada mientras no se declare si el encargo es alquiler o venta', async () => {
+    const fixture = await montar(null, { prospeccion: '7' });
+    const acceso = fixture.componentInstance as unknown as AccesoFormulario;
+    acceso.formulario.patchValue({ comisionConfirmada: true });
+
+    await acceso.guardar();
+
+    expect(captaciones.registrar).not.toHaveBeenCalled();
+    expect(texto(fixture)).toContain('Importe del encargo');
+  });
+
+  it('una venta rotula el importe, cambia la base y no ofrece mensualidades', async () => {
+    const fixture = await montar(null, { prospeccion: '7' });
+    const acceso = fixture.componentInstance as unknown as AccesoFormulario;
+    acceso.formulario.patchValue({ operacion: 'V' });
+    (fixture.componentInstance as unknown as { elegirOperacion(): void }).elegirOperacion();
+    fixture.detectChanges();
+
+    // «Un mes de alquiler» no es una comisión que exista en una venta.
+    expect(acceso.formulario.get('modalidadComision')?.value).toBe('P');
+    expect(texto(fixture)).toContain('Precio de venta');
+    expect(texto(fixture)).not.toContain('Un mes de alquiler');
+
+    acceso.formulario.patchValue({
+      importeReferencia: 420000, monedaReferencia: 'USD',
+      valorComision: 3, comisionConfirmada: true,
+    });
+    await acceso.guardar();
+
+    const datos = captaciones.registrar.calls.mostRecent().args[0] as CaptacionRequest;
+    expect(datos).toEqual(jasmine.objectContaining({
+      motivoOperacion: 'V', tipoOperacion: 'V',
+      importeReferencia: 420000, monedaReferencia: 'USD',
+      tipoComision: 'P', baseCalculo: 'V', valorComision: 3, monedaComision: 'USD',
     }));
   });
 

@@ -147,7 +147,22 @@ public interface PropiedadUniversalService {
                            String tipoPropiedad, String uso, String descripcion,
                            Ubicacion ubicacion, List<Titular> titulares,
                            List<ValorAtributo> atributos, List<OperacionSolicitada> operaciones,
-                           Long idBorrador) {
+                           Long idBorrador, String origen) {
+
+        /**
+         * El alta sin declarar procedencia. No hay defecto silencioso: el Core
+         * la lee de lo que el comando <b>esta haciendo</b> —un alta que abre
+         * encargos es trabajo operativo; una que no abre ninguno es
+         * conocimiento de mercado— y el cliente puede corregirla declarandola.
+         */
+        public ComandoRegistro(String claveIdempotencia, Procedencia procedencia, String codigo,
+                               String tipoPropiedad, String uso, String descripcion,
+                               Ubicacion ubicacion, List<Titular> titulares,
+                               List<ValorAtributo> atributos,
+                               List<OperacionSolicitada> operaciones, Long idBorrador) {
+            this(claveIdempotencia, procedencia, codigo, tipoPropiedad, uso, descripcion,
+                    ubicacion, titulares, atributos, operaciones, idBorrador, null);
+        }
     }
 
     /**

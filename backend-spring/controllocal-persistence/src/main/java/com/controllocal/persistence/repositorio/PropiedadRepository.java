@@ -24,8 +24,8 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
      */
     @Query("""
             select p from Propiedad p
-            join fetch p.rolPropietario rp
-            join fetch rp.persona
+            left join fetch p.rolPropietario rp
+            left join fetch rp.persona
             where p.organizacionId = :idOrganizacion and p.id = :id
             """)
     Optional<Propiedad> buscarFicha(@Param("idOrganizacion") long idOrganizacion, @Param("id") long id);
@@ -47,8 +47,8 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
      */
     String ASOCIACIONES_LISTADO = """
             from Propiedad p
-              join p.rolPropietario rp
-              join rp.persona per
+              left join p.rolPropietario rp
+              left join rp.persona per
             """;
 
     String FILTRO_TEXTO_LISTADO = """
@@ -320,8 +320,8 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             union
             select p.id_propiedad as id
               from propiedad p
-              join persona_rol rp on rp.id_persona_rol = p.id_rol_propietario
-              join persona per on per.id_persona = rp.id_persona
+              left join persona_rol rp on rp.id_persona_rol = p.id_rol_propietario
+              left join persona per on per.id_persona = rp.id_persona
              where p.organizacion_id = :idOrganizacion
             """ + FILTRO_ESTADO_NATIVO + """
                and lower(per.nombres_o_razon_social)""" + PATRON_TEXTO + """

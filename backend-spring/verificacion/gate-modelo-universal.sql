@@ -40,10 +40,21 @@ END $$;
 -- las filas de `resultado`, y las tres pruebas que se pierden asi son
 -- justamente las tres que deciden el modelo. Se capturan con \gset -- que vive
 -- en el cliente y sobrevive al rollback -- y se anotan despues.
+-- Un `UPDATE` que no encuentra ninguna fila no dispara ningun trigger y
+-- termina sin error: leido como "lo acepto" acusa a una invariante que nadie
+-- llego a probar, y leido al reves seria peor -- daria por buena una guarda
+-- inexistente. Se distingue (V76): cero filas afectadas es un defecto DE LA
+-- PRUEBA, y lo dice con esas palabras.
 CREATE OR REPLACE FUNCTION pg_temp.rechaza(p_sql text)
 RETURNS text LANGUAGE plpgsql AS $$
+DECLARE
+    tocadas bigint;
 BEGIN
     EXECUTE p_sql;
+    GET DIAGNOSTICS tocadas = ROW_COUNT;
+    IF tocadas = 0 THEN
+        RETURN 'FALLO - la prueba no toco ninguna fila: no probo nada';
+    END IF;
     RETURN 'FALLO - lo acepto';
 EXCEPTION WHEN others THEN
     RETURN 'OK';
@@ -56,9 +67,16 @@ RETURNS text LANGUAGE sql AS $$ SELECT CASE WHEN $1 THEN 'OK' ELSE 'FALLO' END $
 \o /dev/null
 
 -- Datos de apoyo: una organizacion, un propietario y una propiedad reales.
+--
+-- La propiedad de apoyo se elige CON TITULAR a proposito (V76). Desde que
+-- `id_rol_propietario` admite NULL -- una propiedad puede conocerse sin saber
+-- de quien es --, `min(id_propiedad)` podia devolver una sin titular y las
+-- pruebas de titularidad que vienen despues fallarian por el dato elegido y no
+-- por la invariante. `min(id_rol_propietario)` ya ignora los NULL de suyo.
 CREATE TEMP TABLE ctx AS
 SELECT (SELECT min(organizacion_id) FROM propiedad)                              AS org,
-       (SELECT min(id_propiedad)    FROM propiedad)                              AS prop,
+       (SELECT min(id_propiedad)    FROM propiedad
+         WHERE id_rol_propietario IS NOT NULL)                                   AS prop,
        (SELECT min(id_rol_propietario) FROM propiedad)                           AS titular,
        (SELECT min(pr.id_persona_rol) FROM persona_rol pr
          WHERE pr.tipo_rol = 'PROPIETARIO'
@@ -109,17 +127,30 @@ SELECT pg_temp.comprobar('M0 se puede buscar por cercania en metros',
 -- =====================================================================
 -- M1 - Titularidad
 -- =====================================================================
-SELECT pg_temp.comprobar('M1 toda propiedad tiene titular vigente',
-    NOT EXISTS (SELECT 1 FROM propiedad p
-                 WHERE NOT EXISTS (SELECT 1 FROM titularidad_propiedad t
-                                    WHERE t.id_propiedad = p.id_propiedad AND t.vigente_hasta IS NULL)));
+-- DEROGADA EN V76, y no por comodidad: era falsa como invariante del REGISTRO.
+-- Se puede conocer un inmueble sin saber de quien es -- BROX conoce inmuebles
+-- que no gestiona --, y obligar a declararlo obligaria a inventarlo. De hecho ya
+-- no describia la base: 67 de 1465 propiedades no tenian titularidad vigente y
+-- esta comprobacion llevaba tiempo en fallo sin que nadie la mirara.
+--
+-- La exigencia no desaparece: se muda al ENCARGO, que es donde sigue siendo
+-- cierta. Aqui se comprueba en su forma nueva.
+SELECT pg_temp.comprobar('M1 ningun encargo vivo cuelga de una propiedad sin titular',
+    NOT EXISTS (SELECT 1 FROM captacion c
+                 WHERE c.estado IN ('P', 'O', 'A')
+                   AND NOT EXISTS (SELECT 1 FROM titularidad_propiedad t
+                                    WHERE t.id_propiedad = c.id_propiedad
+                                      AND t.vigente_hasta IS NULL)));
 
 SELECT pg_temp.comprobar('M1 las cuotas vigentes suman 100 en todas',
     NOT EXISTS (SELECT 1 FROM titularidad_propiedad
                  WHERE vigente_hasta IS NULL
                  GROUP BY id_propiedad HAVING sum(cuota) <> 100));
 
-SELECT pg_temp.comprobar('M1 hay exactamente un representante por propiedad',
+-- «Exactamente uno» se comprueba sobre las propiedades QUE TIENEN titularidad:
+-- el GROUP BY ya las acota, asi que una propiedad sin ninguna no entra y no
+-- falsea el resultado.
+SELECT pg_temp.comprobar('M1 hay exactamente un representante por propiedad con titular',
     NOT EXISTS (SELECT 1 FROM titularidad_propiedad
                  WHERE vigente_hasta IS NULL AND es_representante
                  GROUP BY id_propiedad HAVING count(*) <> 1));
@@ -162,8 +193,12 @@ $f$, (SELECT org FROM ctx), (SELECT prop FROM ctx), (SELECT COALESCE(otro_titula
 -- =====================================================================
 -- M2 - Atributos gobernados
 -- =====================================================================
-SELECT pg_temp.comprobar('M2 el catalogo del sistema tiene 19 atributos',
-    (SELECT count(*) = 19 FROM catalogo_atributo WHERE del_sistema));
+-- 19 en V52; 25 desde V74, que anadio las seis primeras condiciones del
+-- encargo (garantia, adelanto, plazo minimo, disponible desde, mascotas y
+-- amoblado). Aqui la cifra exacta SI vale: el catalogo del sistema es una
+-- constante del producto, no cartera que crece con el uso.
+SELECT pg_temp.comprobar('M2 el catalogo del sistema tiene 25 atributos',
+    (SELECT count(*) = 25 FROM catalogo_atributo WHERE del_sistema));
 
 SELECT pg_temp.comprobar('M2 los atributos del sistema no tienen organizacion',
     NOT EXISTS (SELECT 1 FROM catalogo_atributo WHERE del_sistema AND organizacion_id IS NOT NULL));
@@ -180,10 +215,19 @@ SELECT pg_temp.comprobar('M2 metraje_total es obligatorio en los siete tipos',
 SELECT pg_temp.comprobar('M2 se migraron los valores que ya existian',
     (SELECT count(*) > 0 FROM atributo_propiedad));
 
+-- Reescrita en V76, porque comprobaba justo lo contrario de lo que decidio
+-- D-E4-3. Pedia que cada propiedad tuviera una COPIA del metraje en
+-- `atributo_propiedad`, y V61 borro todas esas copias a proposito: la
+-- autoridad del metraje es la columna canonica. El gate llevaba en rojo desde
+-- entonces contra la decision que lo superaba.
+--
+-- Lo que hoy significa "ninguna propiedad perdio su metraje" son dos cosas:
+-- que el dato esta en su unico sitio, y que la copia no ha vuelto.
 SELECT pg_temp.comprobar('M2 ninguna propiedad perdio su metraje',
-    NOT EXISTS (SELECT 1 FROM propiedad p
-                 WHERE NOT EXISTS (SELECT 1 FROM atributo_propiedad a
-                                    WHERE a.id_propiedad = p.id_propiedad AND a.clave = 'metraje_total')));
+    NOT EXISTS (SELECT 1 FROM propiedad p WHERE p.metraje IS NULL));
+
+SELECT pg_temp.comprobar('M2 el metraje no volvio a duplicarse como atributo',
+    (SELECT count(*) = 0 FROM atributo_propiedad WHERE clave = 'metraje_total'));
 
 SELECT pg_temp.debe_rechazar('M2 rechaza una clave que no esta en el catalogo', format($f$
     INSERT INTO atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
@@ -243,7 +287,19 @@ DECLARE
     c   captacion%ROWTYPE;
     ce  bigint;
 BEGIN
-    SELECT * INTO c FROM captacion WHERE estado IN ('P','O','A') LIMIT 1;
+    -- Una captacion viva cuya propiedad NO tenga ya la otra operacion abierta.
+    -- Sin esa condicion el gate elegia cualquiera y, en cuanto la cartera tuvo
+    -- una propiedad en venta y alquiler a la vez -- justo lo que este bloque
+    -- existe para demostrar que se puede --, el INSERT chocaba contra
+    -- `uq_captacion_viva_por_operacion` y el gate moria antes del informe.
+    SELECT * INTO c FROM captacion cap
+     WHERE cap.estado IN ('P','O','A')
+       AND NOT EXISTS (SELECT 1 FROM captacion otra
+                        WHERE otra.id_propiedad = cap.id_propiedad
+                          AND otra.estado IN ('P','O','A')
+                          AND otra.motivo_operacion <> cap.motivo_operacion)
+     ORDER BY cap.id_captacion
+     LIMIT 1;
 
     INSERT INTO condicion_economica_captacion
         (organizacion_id, tipo_operacion, importe_referencia, moneda_referencia,
@@ -324,8 +380,19 @@ $f$);
 SELECT pg_temp.comprobar('OUT existe el outbox de eventos',
     EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'evento_dominio'));
 
-SELECT pg_temp.comprobar('OUT el outbox distingue el origen KAIROS',
-    (SELECT pg_get_constraintdef(oid) LIKE '%KAIROS%' FROM pg_constraint WHERE conname = 'ck_evento_origen'));
+-- Corregida en V76. Preguntaba por `ck_evento_origen`, una restriccion que no
+-- existe con ese nombre: la subconsulta devolvia NULL y el gate lo contaba
+-- como FALLO. La que existe es `ck_evento_canal`, y lo que de verdad hay que
+-- comprobar es que el outbox pueda decir POR DONDE entro el hecho -- un evento
+-- que llega por WhatsApp no es lo mismo que uno tecleado en la SPA.
+SELECT pg_temp.comprobar('OUT el outbox distingue el canal por el que entro el hecho',
+    (SELECT pg_get_constraintdef(oid) LIKE '%WHATSAPP%'
+       FROM pg_constraint WHERE conname = 'ck_evento_canal'));
+
+SELECT pg_temp.comprobar('OUT el outbox sabe que agente y que modelo lo produjo',
+    (SELECT count(*) = 3 FROM information_schema.columns
+      WHERE table_name = 'evento_dominio'
+        AND column_name IN ('agente', 'agente_modelo', 'agente_modelo_version')));
 
 SELECT pg_temp.comprobar('OUT hay indice parcial de lo no proyectado',
     EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ix_evento_dominio_pendiente'));
@@ -366,6 +433,74 @@ SELECT pg_temp.comprobar('IDEM un comando no se puede repetir dentro de una orga
     EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_comando_idempotente'));
 
 -- =====================================================================
+-- V76 - La propiedad como activo de dato
+-- =====================================================================
+-- Una Propiedad representa un inmueble CONOCIDO por BROX, no necesariamente
+-- una oferta gestionada por BROX. Lo que sigue comprueba las dos mitades de
+-- esa frase: que se puede conocer sin relacion comercial, y que ningun hecho
+-- comercial nace sin la relacion que lo autoriza.
+
+SELECT pg_temp.comprobar('V76 una propiedad puede no tener titular conocido',
+    (SELECT is_nullable = 'YES' FROM information_schema.columns
+      WHERE table_name = 'propiedad' AND column_name = 'id_rol_propietario'));
+
+SELECT pg_temp.comprobar('V76 pero no puede tener media titularidad',
+    EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_propiedad_titular_completo'));
+
+-- El par se mantiene coherente por trigger, no a mano: quitar el titular
+-- limpia tambien su tipo de rol, y ponerlo lo rellena. No se prueba con un
+-- `debe_rechazar` porque quitar los dos a la vez es LEGITIMO -- es justamente
+-- lo que hace una propiedad sin dueno conocido.
+SELECT pg_temp.comprobar('V76 el tipo de rol lo mantiene coherente un trigger',
+    EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_propiedad_tipo_rol'));
+
+SELECT pg_temp.comprobar('V76 ninguna propiedad tiene media titularidad',
+    NOT EXISTS (SELECT 1 FROM propiedad
+                 WHERE (id_rol_propietario IS NULL) <> (tipo_rol_propietario IS NULL)));
+
+SELECT pg_temp.comprobar('V76 toda propiedad declara como llego a conocerse',
+    NOT EXISTS (SELECT 1 FROM propiedad WHERE origen_incorporacion IS NULL));
+
+SELECT pg_temp.comprobar('V76 la procedencia solo admite el vocabulario cerrado',
+    (SELECT pg_get_constraintdef(oid) LIKE '%OBSERVACION%'
+       FROM pg_constraint WHERE conname = 'ck_propiedad_origen_incorporacion'));
+
+SELECT pg_temp.comprobar('V76 existe la serie de lo observado en el mercado',
+    EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'observacion_mercado'));
+
+-- Lo que se vio no se corrige ni se borra: si el dato estaba mal, se anota otro.
+-- Se siembra una observacion dentro del savepoint: sin fila que tocar, el
+-- UPDATE no dispara el trigger y la prueba no probaria nada.
+SAVEPOINT observada;
+
+INSERT INTO observacion_mercado
+    (organizacion_id, id_propiedad, fecha_observada, operacion, importe, moneda,
+     fuente, detalle, id_rol_actor)
+SELECT org, prop, CURRENT_DATE, 'V', 190000, 'USD', 'GATE', 'sembrada por el gate', titular
+  FROM ctx;
+
+SELECT pg_temp.rechaza($f$
+    UPDATE observacion_mercado SET importe = 1 WHERE fuente = 'GATE'
+$f$) AS v_obs_upd \gset
+
+SELECT pg_temp.rechaza($f$
+    DELETE FROM observacion_mercado WHERE fuente = 'GATE'
+$f$) AS v_obs_del \gset
+
+ROLLBACK TO SAVEPOINT observada;
+INSERT INTO resultado (prueba, veredicto) VALUES
+    ('V76 una observacion de mercado no se puede editar', :'v_obs_upd'),
+    ('V76 una observacion de mercado no se puede borrar', :'v_obs_del');
+
+-- La frontera, dicha desde la base: un precio es un hecho comercial y exige el
+-- encargo que lo autorizo. Sin el, lo que hay es una observacion.
+SELECT pg_temp.debe_rechazar('V76 un hito de precio exige el encargo que lo autoriza', format($f$
+    INSERT INTO precio_propiedad
+        (organizacion_id, id_propiedad, id_captacion, hito, importe, moneda, vigente_desde)
+    VALUES (%s, %s, NULL, 'I', 1000, 'PEN', CURRENT_DATE)
+$f$, (SELECT org FROM ctx), (SELECT prop FROM ctx)));
+
+-- =====================================================================
 -- Lo que NO se ha roto
 -- =====================================================================
 SELECT pg_temp.comprobar('SIN ROMPER las columnas del cable siguen existiendo',
@@ -377,19 +512,25 @@ SELECT pg_temp.comprobar('SIN ROMPER las columnas del cable siguen existiendo',
 -- ya no vigila que el espejo siga ahi, vigila que al retirarlo no se perdiera
 -- ningun rubro. Los 21 que tenia la cartera tienen que estar, ahora como valor
 -- gobernado.
+--
+-- Las dos cifras son SUELOS, no censos (corregido en V76). Escritas como
+-- `= 21` median el tamano de la cartera y no la invariante: en cuanto alguien
+-- registraba una propiedad -- que es el uso normal del sistema -- el gate se
+-- ponia rojo sin que nada se hubiera roto. Un gate que se rompe al usar el
+-- producto deja de leerse, y ese es el modo de fallo que importa.
 SELECT pg_temp.comprobar('SIN ROMPER detalle_local_comercial ya no existe',
     (SELECT count(*) = 0 FROM information_schema.tables
       WHERE table_name = 'detalle_local_comercial'));
 
 SELECT pg_temp.comprobar('SIN ROMPER los 21 rubros sobrevivieron a la retirada',
-    (SELECT count(*) = 21 FROM atributo_propiedad WHERE clave = 'rubro_permitido'));
+    (SELECT count(*) >= 21 FROM atributo_propiedad WHERE clave = 'rubro_permitido'));
 
 SELECT pg_temp.comprobar('SIN ROMPER la busqueda por rubro conserva su indice',
     (SELECT count(*) = 1 FROM pg_indexes
       WHERE indexname = 'ix_atributo_rubro_trgm'));
 
 SELECT pg_temp.comprobar('SIN ROMPER no se perdio ninguna propiedad',
-    (SELECT count(*) = 21 FROM propiedad));
+    (SELECT count(*) >= 21 FROM propiedad));
 
 -- =====================================================================
 -- Veredicto

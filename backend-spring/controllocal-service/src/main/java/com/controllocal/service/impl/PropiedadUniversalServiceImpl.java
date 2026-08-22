@@ -11,6 +11,7 @@ import com.controllocal.domain.inmueble.AtributoPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
+import com.controllocal.domain.inmueble.OrigenIncorporacion;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.inmueble.TitularidadPropiedad;
@@ -53,6 +54,7 @@ import com.controllocal.service.soporte.EscritorEstructural;
 import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.TitularParaEncargar;
 import com.controllocal.service.soporte.Transiciones;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -132,6 +134,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final AtributosGobernados gobierno;
     /** El enrutador del OTRO sujeto. Nunca se le pide nada de la propiedad. */
     private final AtributosDeEncargo condiciones;
+    /** Conocer un inmueble no es poder venderlo: el ENCARGO si exige titular (V76). */
+    private final TitularParaEncargar titularParaEncargar;
     private final AtributoEncargoRepository condicionesEscritas;
     private final ValorMultipleEncargoRepository multivaloresDeEncargo;
     private final LectorPorAutoridad lector;
@@ -152,6 +156,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          BorradorCapturaRepository borradores,
                                          AtributosGobernados gobierno,
                                          AtributosDeEncargo condiciones,
+                                         TitularParaEncargar titularParaEncargar,
                                          AtributoEncargoRepository condicionesEscritas,
                                          ValorMultipleEncargoRepository multivaloresDeEncargo,
                                          LectorPorAutoridad lector,
@@ -172,6 +177,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.borradores = borradores;
         this.gobierno = gobierno;
         this.condiciones = condiciones;
+        this.titularParaEncargar = titularParaEncargar;
         this.condicionesEscritas = condicionesEscritas;
         this.multivaloresDeEncargo = multivaloresDeEncargo;
         this.lector = lector;
@@ -257,7 +263,17 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         });
 
         List<PersonaRol> rolesTitulares = rolesDeTitulares(actor.idOrganizacion(), titulares);
-        propiedad.setRolPropietario(rolesTitulares.get(indiceDelRepresentante(titulares)));
+        // La proyeccion heredada solo se escribe si hay a quien proyectar. Con
+        // cero titulares esto era un `get(0)` sobre una lista vacia: la puerta
+        // que quedaba detras de la validacion (V76).
+        if (!titulares.isEmpty()) {
+            propiedad.setRolPropietario(rolesTitulares.get(indiceDelRepresentante(titulares)));
+        }
+        // Como llego BROX a conocer este inmueble. Se declara al nacer y no
+        // cambia despues: una propiedad observada que luego se capta siguio
+        // conociendose observando el mercado.
+        propiedad.incorporadaPor(origenDeclarado(comando.origen(), operaciones),
+                actor.idRolOperativo());
         // Registrada y activa. La OFERTA la abre el encargo, no el alta: con
         // cero operaciones la propiedad queda en el registro maestro sin decir
         // que esta disponible, que es lo que seria falso (V75).
@@ -268,6 +284,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         escribirAtributos(actor, propiedad, valores);
 
         List<Long> idsEncargos = new ArrayList<>();
+        if (!operaciones.isEmpty()) {
+            // Abrir un encargo es empezar una relacion comercial, y esa si
+            // necesita saber de quien es el inmueble (V76).
+            titularParaEncargar.exigirParaEncargo(propiedad);
+        }
         for (OperacionSolicitada solicitada : operaciones) {
             idsEncargos.add(abrirEncargo(actor, propiedad, agente, solicitada, procedencia));
         }
@@ -668,7 +689,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
 
         List<PersonaRol> rolesTitulares = rolesDeTitulares(actor.idOrganizacion(), titulares);
         escribirTitularidades(actor, propiedad.getId(), titulares, rolesTitulares);
-        propiedad.setRolPropietario(rolesTitulares.get(indiceDelRepresentante(titulares)));
+        if (!titulares.isEmpty()) {
+            propiedad.setRolPropietario(rolesTitulares.get(indiceDelRepresentante(titulares)));
+        }
     }
 
     /**
@@ -1461,9 +1484,12 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      */
     private static List<Titular> titularesValidados(List<Titular> titulares) {
         if (titulares == null || titulares.isEmpty()) {
-            throw new ReglaNegocioException(
-                    "Una propiedad sin titular no se puede registrar: no se sabe con quien se "
-                            + "negocia ni quien autoriza el precio.");
+            // CERO titulares es legitimo desde V76: se puede conocer un inmueble
+            // sin saber de quien es. La exigencia no desaparece, se MUDA al
+            // ENCARGO -- el mensaje que estaba aqui hablaba de "con quien se
+            // negocia" y "quien autoriza el precio", que son cosas del encargo,
+            // no del registro. Ver `exigirTitularidadConocida`.
+            return List.of();
         }
         Set<Long> vistos = new HashSet<>();
         BigDecimal suma = BigDecimal.ZERO;
@@ -1609,13 +1635,24 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .orElseGet(() -> operaciones.get(0)));
     }
 
+    /**
+     * Que operacion proyectan hoy las columnas espejo de la propiedad, o
+     * {@code null} si no proyecta ninguna.
+     *
+     * <p>El {@code null} es la parte que importa (V76). Antes devolvia ALQUILER
+     * cuando no habia ningun encargo vivo, y esa suposicion habria escrito una
+     * <b>renta mensual</b> en {@code precio_referencial} de una propiedad que
+     * nadie ha encargado: un precio que ningun propietario autorizo, indistinguible
+     * en el listado de uno pactado. Sin encargo no hay oferta, y sin oferta no
+     * hay precio que proyectar.
+     */
     private OperacionInmobiliaria operacionProyectada(Actor actor, Propiedad propiedad) {
         List<Captacion> vivos = captaciones.encargosVivosDe(actor.idOrganizacion(), propiedad.getId());
         return vivos.stream()
                 .map(Captacion::operacion)
                 .filter(operacion -> operacion == OperacionInmobiliaria.ALQUILER)
                 .findFirst()
-                .orElse(vivos.isEmpty() ? OperacionInmobiliaria.ALQUILER : vivos.get(0).operacion());
+                .orElseGet(() -> vivos.isEmpty() ? null : vivos.get(0).operacion());
     }
 
     private void exigirObligatorios(long idOrganizacion, String tipoPropiedad, Set<String> conocidas) {
@@ -1637,6 +1674,29 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                     + "organizacion o no tiene el rol PROPIETARIO vigente.")));
         }
         return resueltos;
+    }
+
+    /**
+     * La procedencia declarada, o la que el propio comando demuestra.
+     *
+     * <p>No se adivina y no hay defecto silencioso: si el cliente no la declara,
+     * se lee de lo que el alta ESTA HACIENDO. Un alta que abre encargos es
+     * trabajo operativo por definicion; una que no abre ninguno es, hasta que
+     * alguien diga otra cosa, conocimiento de mercado. Es la unica lectura que
+     * no inventa nada, y el cliente puede corregirla declarandola.
+     */
+    private static OrigenIncorporacion origenDeclarado(String declarado,
+                                                       List<OperacionSolicitada> operaciones) {
+        if (declarado != null && !declarado.isBlank()) {
+            try {
+                return OrigenIncorporacion.desde(declarado);
+            } catch (IllegalArgumentException e) {
+                throw new ReglaNegocioException(e.getMessage());
+            }
+        }
+        return operaciones.isEmpty()
+                ? OrigenIncorporacion.OBSERVACION
+                : OrigenIncorporacion.OPERACION;
     }
 
     private DetalleAgente agenteDe(Actor actor) {

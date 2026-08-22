@@ -4,13 +4,17 @@
 alquiler de locales y pasa a ser un sistema inmobiliario — venta y alquiler,
 siete tipos de propiedad, varios titulares — **sin excepciones especiales**.
 
-**Estado:** propuesta congelable. El gate está **en verde**:
+**Estado:** propuesta congelable, **corregida el 2026-08-21 (V76)**: la
+titularidad dejó de ser condición del registro y pasó a serlo del encargo. Ver
+§3.2 bis.
+
+El gate está **en verde**:
 
 ```bash
 node docs/ai/modelo/gate-modelo-universal.js
 ```
 
-> 160 comprobaciones, todas verdes.
+> 165 comprobaciones, todas verdes.
 > Los ocho casos se representan sin excepciones: el modelo se puede congelar.
 
 **Nada de E3 antes de esto.** La negociación depende de que el importe tenga
@@ -134,6 +138,46 @@ exactamente el dato que un sistema inmobiliario no puede perder.
 
 **Invariantes** (comprobadas en `B.3`): las cuotas vigentes suman 100 y hay
 exactamente un representante.
+
+### 3.2 bis · Una Propiedad puede no tener titular, ni encargo, ni prospección
+
+**Añadido el 2026-08-21 (V76).**
+
+> Una Propiedad representa un inmueble **conocido por BROX**, no necesariamente
+> una oferta gestionada por BROX. Su existencia, procedencia e historia
+> observada son independientes de Prospecciones y Encargos. Los hechos
+> comerciales solo nacen cuando existe la relación comercial que los autoriza.
+
+Este documento decía «toda propiedad tiene al menos un titular vigente» y lo
+comprobaba el gate. Era cierto mientras registrar y encargar fueran el mismo
+acto, y dejó de serlo en V75, cuando el alta admitió cero operaciones. La
+consecuencia práctica de mantenerlo era mala: para poder anotar un inmueble
+visto en un portal había que **inventar un propietario**, y esa persona falsa
+queda dentro de la cartera, cuenta en los listados y no se puede distinguir de
+una real.
+
+Qué cambia, exactamente:
+
+| Antes | Desde V76 |
+|---|---|
+| `propiedad.id_rol_propietario` `NOT NULL` | nullable, con `ck_propiedad_titular_completo`: o van los dos campos o ninguno |
+| El alta exige ≥ 1 titular | El alta lo **pregunta** y no bloquea |
+| — | **Encargar** exige ≥ 1 titularidad vigente, en `TitularParaEncargar`, por los tres caminos que abren captación |
+| Invariante M1 «toda propiedad tiene titular vigente» | «ningún encargo vivo cuelga de una propiedad sin titular» |
+| — | `propiedad.origen_incorporacion`: `OPERACION`, `OBSERVACION` o `SEMILLA` |
+| — | `observacion_mercado`: serie append-only de precios **vistos**, separada del histórico del encargo |
+
+Y la frontera que no se cruza:
+
+> BROX nunca convierte una observación de mercado en un hecho comercial ni
+> inventa una relación para poder conservar conocimiento.
+
+Por eso `observacion_mercado` **no** escribe `precio_propiedad`, no toca
+`propiedad.precio_referencial`, no cambia la disponibilidad y no abre nada: un
+precio observado no lo autorizó ningún propietario, y proyectarlo sobre la
+propiedad lo haría indistinguible de uno pactado. El gate de la base lo sostiene
+además desde el otro lado — `tg_precio_exige_encargo` rechaza un hito de precio
+sin encargo y el mensaje remite a esta tabla.
 
 ### 3.3 Por qué atributos gobernados y no EAV libre
 

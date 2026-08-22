@@ -30,6 +30,38 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 const LOCALES_POR_BUSQUEDA = 20;
 type ModalidadComision = 'E05' | 'E1' | 'E15' | 'E2' | 'P' | 'F' | 'S';
 
+/** `''` es «todavia no se ha dicho», y no vale para guardar. */
+type Operacion = '' | 'A' | 'V';
+
+/**
+ * Las modalidades que caben en cada operacion.
+ *
+ * <p>Una venta no se comisiona en mensualidades: no hay renta que contar, y
+ * «un mes de alquiler» sobre un precio de venta multiplicaria el precio entero
+ * por uno. El backend lo rechaza desde V76 (`CondicionesEconomicas.exigirBaseCoherente`);
+ * la lista de aqui existe para que no se pueda ni elegir, no para sustituir a
+ * esa validacion.
+ */
+const MODALIDADES: Readonly<Record<'A' | 'V', readonly { valor: ModalidadComision; rotulo: string }[]>> = {
+  A: [
+    { valor: 'E05', rotulo: 'Medio mes de alquiler' },
+    { valor: 'E1', rotulo: 'Un mes de alquiler' },
+    { valor: 'E15', rotulo: 'Un mes y medio de alquiler' },
+    { valor: 'E2', rotulo: 'Dos meses de alquiler' },
+    { valor: 'P', rotulo: 'Porcentaje sobre la renta mensual' },
+    { valor: 'F', rotulo: 'Monto fijo' },
+    { valor: 'S', rotulo: 'Sin comisión' },
+  ],
+  V: [
+    { valor: 'P', rotulo: 'Porcentaje sobre el precio de venta' },
+    { valor: 'F', rotulo: 'Monto fijo' },
+    { valor: 'S', rotulo: 'Sin comisión' },
+  ],
+};
+
+/** Lo que la pantalla PROPONE al declarar la operacion; se confirma aparte. */
+const MODALIDAD_HABITUAL: Readonly<Record<'A' | 'V', ModalidadComision>> = { A: 'E1', V: 'P' };
+
 @Component({
   selector: 'app-captacion-form',
   imports: [EstadoListado, ReactiveFormsModule],
@@ -85,9 +117,29 @@ export class CaptacionForm implements OnInit {
     return 'Crear y enviar a revisión';
   });
 
+  /**
+   * Espejo en signal de lo que dice el control `operacion`.
+   *
+   * <p>El rotulo del importe, las modalidades ofrecidas y la base de calculo
+   * dependen de ella, y con OnPush una lectura directa del FormControl no
+   * repinta. Se actualiza en los dos unicos sitios donde la operacion cambia:
+   * cuando el agente la elige y cuando se carga un encargo existente.
+   */
+  protected readonly operacionSel = signal<Operacion>('');
+
+  protected readonly modalidades = computed(() => {
+    const operacion = this.operacionSel();
+    return operacion === '' ? [] : MODALIDADES[operacion];
+  });
+
   protected readonly formulario = this.fb.group(
     {
       idLocal: this.fb.nonNullable.control(0, Validators.min(1)),
+      // Sin defecto. Antes iba fija a alquiler --`motivoOperacion: 'A'`-- y esa
+      // constante convertia cualquier encargo de venta en un alquiler con el
+      // precio de venta metido en la casilla de la renta. El mismo importe es
+      // una cosa u otra segun esta letra, asi que no se supone: se declara.
+      operacion: this.fb.nonNullable.control<Operacion>('', Validators.required),
       fechaCaptacion: this.fb.nonNullable.control(hoyIso(), Validators.required),
       fechaInicioVigencia: this.fb.nonNullable.control(hoyIso(), Validators.required),
       fechaFinVigencia: this.fb.nonNullable.control(fechaEnMeses(POLITICA_COMERCIAL.encargoMesesPorDefecto), Validators.required),
@@ -134,6 +186,23 @@ export class CaptacionForm implements OnInit {
     if (!this.localFijo()) await this.cargarLocales(this.busquedaLocal.value.trim());
   }
 
+  /**
+   * La operacion la elige quien capta, y arrastra la modalidad.
+   *
+   * <p>Si la modalidad que estaba puesta no cabe en la nueva operacion se
+   * sustituye por la habitual de esa operacion; dejarla seria ofrecer «dos
+   * meses de alquiler» como comision de una venta.
+   */
+  protected elegirOperacion(): void {
+    const operacion = this.formulario.controls.operacion.value;
+    this.operacionSel.set(operacion);
+    if (operacion === '') return;
+    const admitidas = MODALIDADES[operacion].map((modalidad) => modalidad.valor);
+    if (!admitidas.includes(this.formulario.controls.modalidadComision.value)) {
+      this.formulario.controls.modalidadComision.setValue(MODALIDAD_HABITUAL[operacion]);
+    }
+  }
+
   protected seleccionarLocal(): void {
     const id = this.formulario.controls.idLocal.value;
     this.localActual.set(this.locales().find((local) => local.id === id) ?? null);
@@ -156,16 +225,23 @@ export class CaptacionForm implements OnInit {
   }
 
   /**
-   * El rótulo del importe dice **qué** número es.
+   * El rótulo del importe dice **qué** número es, y lo dice la OPERACIÓN.
    *
-   * <p>Hoy esta pantalla solo abre encargos de ALQUILER —`motivoOperacion` va
-   * fijo a `'A'` al enviar—, así que el rótulo es «Renta mensual» y no una
-   * ambigüedad. Cuando la pantalla sepa declarar la operación, este método es
-   * el sitio donde el rótulo la seguirá: un precio de venta rotulado «renta»
-   * es un error de bulto.
+   * <p>Un precio de venta rotulado «renta mensual» es un error de bulto: son
+   * dos órdenes de magnitud de diferencia y la comisión se calcula sobre él.
+   * Mientras no se haya declarado la operación el rótulo no adivina ninguna de
+   * las dos.
    */
   protected rotuloDelImporte(): string {
-    return 'Renta mensual';
+    const operacion = this.operacionSel();
+    if (operacion === 'A') return 'Renta mensual';
+    if (operacion === 'V') return 'Precio de venta';
+    return 'Importe del encargo';
+  }
+
+  /** «renta» / «precio de venta», para los textos que hablan de la base. */
+  protected baseEnPalabras(): string {
+    return this.operacionSel() === 'V' ? 'el precio de venta' : 'la renta mensual';
   }
 
   protected requiereValorComision(): boolean {
@@ -193,7 +269,7 @@ export class CaptacionForm implements OnInit {
   }
 
   protected pasoCondiciones(): boolean {
-    return this.formulario.controls.urgencia.valid;
+    return this.formulario.controls.operacion.valid && this.formulario.controls.urgencia.valid;
   }
 
   protected pasoVigencia(): boolean {
@@ -284,7 +360,14 @@ export class CaptacionForm implements OnInit {
     this.captacionOriginal = captacion;
     this.idCaptacion.set(captacion.id);
     await this.fijarLocal(await this.localesApi.obtener(captacion.idLocal));
+    // La operacion del encargo que se edita, tal como la guardo el backend. El
+    // espejo heredado `motivoOperacion` solo se consulta si el tipado no vino.
+    const operacion = operacionValida(captacion.tipoOperacion)
+      ?? operacionValida(captacion.motivoOperacion)
+      ?? '';
+    this.operacionSel.set(operacion);
     this.formulario.patchValue({
+      operacion,
       fechaCaptacion: captacion.fechaCaptacion ?? hoyIso(),
       fechaInicioVigencia: captacion.fechaInicioVigencia ?? hoyIso(),
       fechaFinVigencia: captacion.fechaFinVigencia ?? fechaEnMeses(POLITICA_COMERCIAL.encargoMesesPorDefecto),
@@ -364,6 +447,8 @@ export class CaptacionForm implements OnInit {
     const valor = this.formulario.getRawValue();
     const sesion = this.auth.sesion();
     if (!sesion) throw new Error('La sesión ya no está disponible.');
+    const operacion = valor.operacion;
+    if (operacion === '') throw new Error('Declara si el encargo es de alquiler o de venta.');
     const condicion = this.condicionFormulario();
     if (!condicion.tipoComision || !condicion.baseCalculo
         || condicion.valorComision === null || !condicion.monedaComision
@@ -382,10 +467,12 @@ export class CaptacionForm implements OnInit {
       observaciones: textoOpcional(valor.observaciones),
       idLocal: valor.idLocal,
       idAgente: this.captacionOriginal?.idAgente ?? sesion.idDominio,
-      motivoOperacion: 'A',
+      // Las dos columnas dicen lo mismo porque el backend exige que coincidan;
+      // lo que ya no hacen es decir 'A' pase lo que pase.
+      motivoOperacion: operacion,
       urgencia: valor.urgencia,
       exclusividad: valor.exclusividad,
-      tipoOperacion: 'A',
+      tipoOperacion: operacion,
       importeReferencia: condicion.importeReferencia,
       monedaReferencia: condicion.monedaReferencia,
       tipoComision: condicion.tipoComision,
@@ -399,7 +486,7 @@ export class CaptacionForm implements OnInit {
 
   private condicionFormulario(): {
     tipoComision: 'E' | 'P' | 'F' | null;
-    baseCalculo: 'R' | 'N' | null;
+    baseCalculo: 'R' | 'V' | 'N' | null;
     valorComision: number | null;
     monedaComision: 'PEN' | 'USD' | null;
     importeReferencia: number | null;
@@ -412,6 +499,10 @@ export class CaptacionForm implements OnInit {
     const monedaReferencia = monedaValida(valor.monedaReferencia);
     const importeReferencia = valor.importeReferencia;
     const modalidad = valor.modalidadComision;
+    // La base la DERIVA la operación, no se elige por separado: un porcentaje
+    // sobre «renta mensual» en un encargo de venta apuntaría a un importe que
+    // ese encargo no pactó. Espeja `CondicionesEconomicas.basePorDefecto`.
+    const base = valor.operacion === 'V' ? 'V' : 'R';
     if (modalidad.startsWith('E')) {
       return {
         tipoComision: 'E', baseCalculo: 'R',
@@ -422,7 +513,7 @@ export class CaptacionForm implements OnInit {
     }
     if (modalidad === 'P') {
       return {
-        tipoComision: 'P', baseCalculo: 'R', valorComision: valor.valorComision,
+        tipoComision: 'P', baseCalculo: base, valorComision: valor.valorComision,
         monedaComision: monedaReferencia, importeReferencia, monedaReferencia,
         motivoSinComision: null,
       };
@@ -493,6 +584,7 @@ function vigenciaValida(control: AbstractControl): ValidationErrors | null {
 
 function condicionComisionValida(control: AbstractControl): ValidationErrors | null {
   const modalidad = control.get('modalidadComision')?.value as ModalidadComision | undefined;
+  const operacion = control.get('operacion')?.value as Operacion | undefined;
   const valor = control.get('valorComision')?.value as number | null | undefined;
   const motivo = control.get('motivoSinComision')?.value as string | undefined;
   if ((modalidad === 'P' || modalidad === 'F')
@@ -500,6 +592,10 @@ function condicionComisionValida(control: AbstractControl): ValidationErrors | n
     return { comision: true };
   }
   if (modalidad === 'S' && !motivo?.trim()) return { comision: true };
+  // Una venta no se comisiona en mensualidades. La lista de opciones ya no la
+  // ofrece, pero un formulario cargado desde un encargo antiguo si puede traer
+  // la combinacion: se detiene aqui y no en el 400 del servidor.
+  if (operacion === 'V' && modalidad?.startsWith('E')) return { comision: true };
   return null;
 }
 
@@ -528,6 +624,11 @@ function valorEditableDesde(captacion: Captacion): number | null {
 
 function monedaValida(valor: string | null | undefined): 'PEN' | 'USD' | null {
   return valor === 'PEN' || valor === 'USD' ? valor : null;
+}
+
+/** `null` cuando no dice nada reconocible; nunca «pues alquiler». */
+function operacionValida(valor: string | null | undefined): 'A' | 'V' | null {
+  return valor === 'A' || valor === 'V' ? valor : null;
 }
 
 function tratamientoIgvValido(valor: string | null | undefined): 'I' | 'A' | 'N' {

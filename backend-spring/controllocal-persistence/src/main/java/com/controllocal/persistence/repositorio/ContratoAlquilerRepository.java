@@ -141,8 +141,8 @@ public interface ContratoAlquilerRepository extends JpaRepository<ContratoAlquil
               join fetch cliRol.persona cliPer
               join fetch op.captacion cap
               join fetch cap.propiedad prop
-              join fetch prop.rolPropietario propRol
-              join fetch propRol.persona
+              left join fetch prop.rolPropietario propRol
+              left join fetch propRol.persona
               join fetch cap.agente capAg
               join fetch c.solicitud s
               join fetch s.agente ag

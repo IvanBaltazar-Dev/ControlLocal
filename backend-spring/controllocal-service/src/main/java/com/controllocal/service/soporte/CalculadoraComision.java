@@ -46,6 +46,16 @@ public final class CalculadoraComision {
         if (!combinacionValida) {
             throw new ReglaNegocioException("La combinacion de tipo y base de comision es invalida.");
         }
+        // Y la combinacion tiene que caber en la operacion del encargo (V76).
+        // La operacion es obligatoria en la tabla, asi que una condicion sin
+        // ella esta a medio construir: se dice, en vez de dejar pasar el
+        // calculo sin comprobar sobre que importe se apoya.
+        if (condicion.getTipoOperacion() == null) {
+            throw new ReglaNegocioException(
+                    "La condicion economica no dice de que operacion es: sin eso no se sabe si "
+                            + "la comision se calcula sobre una renta o sobre un precio de venta.");
+        }
+        CondicionesEconomicas.exigirBaseCoherente(condicion.getTipoOperacion(), tipo, base);
         if (CondicionEconomicaCaptacion.MONTO_FIJO.equals(tipo)) {
             CondicionesEconomicas.moneda(condicion.getMonedaComision(), "de la comision fija");
         } else if (condicion.getMonedaReferencia() == null

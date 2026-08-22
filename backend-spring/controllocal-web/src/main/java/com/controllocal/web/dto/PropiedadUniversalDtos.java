@@ -92,7 +92,22 @@ public final class PropiedadUniversalDtos {
     public record RegistroRequest(String codigo, String tipoPropiedad, String uso,
                                   String descripcion, UbicacionRequest ubicacion,
                                   List<TitularRequest> titulares, List<AtributoRequest> atributos,
-                                  List<OperacionRequest> operaciones, Long idBorrador) {
+                                  List<OperacionRequest> operaciones, Long idBorrador,
+                                  String origen) {
+
+        /**
+         * El alta sin declarar procedencia. No hay defecto silencioso: el Core la
+         * lee de lo que el comando esta HACIENDO —un alta que abre encargos es
+         * trabajo operativo; una que no abre ninguno es conocimiento de mercado—
+         * y el cliente puede corregirla declarandola (V76).
+         */
+        public RegistroRequest(String codigo, String tipoPropiedad, String uso,
+                               String descripcion, UbicacionRequest ubicacion,
+                               List<TitularRequest> titulares, List<AtributoRequest> atributos,
+                               List<OperacionRequest> operaciones, Long idBorrador) {
+            this(codigo, tipoPropiedad, uso, descripcion, ubicacion, titulares, atributos,
+                    operaciones, idBorrador, null);
+        }
 
         public PropiedadUniversalService.ComandoRegistro aDatos(String claveIdempotencia,
                                                                 Procedencia procedencia) {
@@ -102,7 +117,7 @@ public final class PropiedadUniversalDtos {
                     titulares == null ? null : titulares.stream().map(TitularRequest::aDatos).toList(),
                     atributos == null ? null : atributos.stream().map(AtributoRequest::aDatos).toList(),
                     operaciones == null ? null : operaciones.stream().map(OperacionRequest::aDatos).toList(),
-                    idBorrador);
+                    idBorrador, origen);
         }
     }
 

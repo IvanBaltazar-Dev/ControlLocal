@@ -18,6 +18,14 @@ el código.
 `PRODUCIDO` con evidencia vacía rompe el build: sin eso el catálogo solo
 diría que alguien afirmó que existe.
 
+**Y el nombre tiene que existir en el código (V76).** El gate resuelve contra
+`src/main` cada clase, método y migración que la evidencia cite: una fila que
+nombraba `SolicitudServiceImpl.reenviar` —el método se llama
+`reenviarAEvaluacion`— pasaba porque la comprobación solo miraba la longitud
+del texto. Además, un `PRODUCIDO` que no nombre **ningún** símbolo tampoco
+pasa: «Baja de organizacion» tiene prosa de sobra y describía una operación que
+el sistema nunca implementó.
+
 ## Alcance, declarado y no adivinado
 
 El gate **no intenta parsear PostgreSQL de forma inteligente**. Se limita a
@@ -34,6 +42,12 @@ consecuencias deliberadas:
   máquinas de estado: no tienen transiciones ni productor único, y meterlas
   aquí diluiría la pregunta que este catálogo responde. `comision_movimiento.tipo`
   **sí** entra, porque ahí `A` fue una decisión de dominio.
+- **`propiedad.origen_incorporacion` queda fuera (V76)**, y por el mismo
+  criterio: es una **procedencia**, no un estado. Se sella al registrar el
+  inmueble y no vuelve a cambiar, así que no tiene transiciones que auditar. Su
+  vocabulario lo cierra `OrigenIncorporacion` —sin valor por defecto— y lo
+  comprueba `PropiedadComoActivoDeDatoIntegrationTest`. Se anota aquí para que
+  el siguiente no lo lea como un olvido.
 
 ## Las cuatro vías de producción
 
@@ -51,8 +65,8 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 
 | tabla.columna | codigo | CLASE | evidencia |
 |---|---|---|---|
-| alerta.estado | A | PRODUCIDO | Alerta.java: `estado = ACTIVA` al emitir |
-| alerta.estado | T | PRODUCIDO | Alerta.java: `estado = ATENDIDA` al atender |
+| alerta.estado | A | PRODUCIDO | `Alerta.nacer`: estado inicial al emitir el aviso |
+| alerta.estado | T | PRODUCIDO | `Alerta.atender`, que ademas sella `fecha_resolucion` |
 | alerta.estado | D | RESERVADO_FUTURO | No existe definicion de en que difiere descartar de atender |
 | captacion.estado | P | PRODUCIDO | CaptacionServiceImpl: alta de captacion |
 | captacion.estado | O | PRODUCIDO | CaptacionServiceImpl: decision del broker (observar) |
@@ -81,7 +95,7 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | contrato_alquiler.estado_contrato | S | PRODUCIDO | ContratoServiceImpl.rescindir |
 | contrato_alquiler.estado_contrato | A | PRODUCIDO | ContratoServiceImpl.anular |
 | credencial_usuario.estado_administrativo | A | PRODUCIDO | UsuariosInternos.registrar y activacion de cuenta |
-| credencial_usuario.estado_administrativo | I | PRODUCIDO | Desactivacion de cuenta |
+| credencial_usuario.estado_administrativo | I | PRODUCIDO | `AgenteServiceImpl` y `BrokerServiceImpl` al actualizar, via `UsuariosInternos.estadoAdministrativoO` |
 | detalle_agente.estado_operativo | D | PRODUCIDO | UsuariosInternos.estadoOperativoO: alta y edicion de agente |
 | detalle_agente.estado_operativo | L | PRODUCIDO | AgenteServiceImpl: edicion de agente |
 | detalle_agente.estado_operativo | N | PRODUCIDO | AgenteServiceImpl: edicion de agente |
@@ -100,15 +114,15 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | factor_autenticacion.estado | P | PRODUCIDO | MfaServiceImpl.iniciar |
 | factor_autenticacion.estado | A | PRODUCIDO | MfaServiceImpl.confirmar |
 | factor_autenticacion.estado | R | PRODUCIDO | MfaServiceImpl: revocacion propia y ajena |
-| finalidad_tratamiento.estado | A | PRODUCIDO | Seed de finalidades y alta |
-| finalidad_tratamiento.estado | I | PRODUCIDO | Baja de finalidad |
+| finalidad_tratamiento.estado | A | PRODUCIDO | `V28__autorizacion_datos_personales.sql` deja OPERACION_SERVICIO activa (via SQL/Flyway; no hay servicio de finalidades) |
+| finalidad_tratamiento.estado | I | PRODUCIDO | `V28__autorizacion_datos_personales.sql` inactiva las cuatro finalidades opcionales que ninguna pantalla ofrece |
 | oportunidad_comercial.estado | A | PRODUCIDO | OportunidadServiceImpl: alta |
 | oportunidad_comercial.estado | S | PRODUCIDO | SolicitudServiceImpl: al crear la solicitud |
 | oportunidad_comercial.estado | N | PRODUCIDO | OportunidadServiceImpl y VisitaServiceImpl: cierre no continua |
 | oportunidad_comercial.estado | F | PRODUCIDO | ContratoServiceImpl: cierre exitoso |
 | oportunidad_comercial.estado | X | RESERVADO_FUTURO | Sin productor. Se implementa en 7.3.3 como consecuencia de solicitud R o D |
-| organizacion.estado | A | PRODUCIDO | Alta de organizacion |
-| organizacion.estado | I | PRODUCIDO | Baja de organizacion |
+| organizacion.estado | A | PRODUCIDO | `V6__nucleo_multitenant.sql` siembra BROX_LEGACY, y `Organizacion` nace ACTIVA por valor inicial del campo |
+| organizacion.estado | I | RESERVADO_FUTURO | **Sin productor.** Nadie llama a `Organizacion.setEstado` y ninguna migracion actualiza la columna: dar de baja una organizacion es una operacion de plataforma que todavia no existe. La fila decia "Baja de organizacion", que describia algo que nunca se implemento (V76) |
 | persona.estado | A | PRODUCIDO | Personas.nueva: alta de cliente y propietario |
 | persona.estado | I | PRODUCIDO | ClienteServiceImpl y PropietarioServiceImpl: desactivacion |
 | propiedad.disponibilidad_comercial | D | PRODUCIDO | `ContratoServiceImpl.revisarDisponibilidad` VOLVER_AL_MERCADO y **la apertura del encargo** — `PropiedadUniversalServiceImpl.entrarEnOferta` (alta con operaciones) y `ProspeccionServiceImpl.captar`. Desde V75 el alta NO la produce: una propiedad registrada sin encargo queda con la columna NULL, porque no hay oferta que declarar |
@@ -127,7 +141,7 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | prospeccion.resultado_propuesta | P | PRODUCIDO | Prospeccion.marcarPropuesta |
 | prospeccion.resultado_propuesta | A | PRODUCIDO | Prospeccion.marcarAceptada |
 | prospeccion.resultado_propuesta | R | PRODUCIDO | Prospeccion.marcarRechazoDelPropietario |
-| prospeccion.resultado_propuesta | S | DEPRECADO | Nunca tuvo productor ni constante. La continuidad la cubre EstadoProspeccion.SEGUIMIENTO |
+| prospeccion.resultado_propuesta | S | DEPRECADO | Nunca tuvo productor ni constante. La continuidad la cubre `Prospeccion.EN_SEGUIMIENTO` |
 | publicacion.estado | B | PRODUCIDO | PublicacionServiceImpl: borrador por defecto |
 | publicacion.estado | P | PRODUCIDO | PublicacionServiceImpl: publicar |
 | publicacion.estado | S | PRODUCIDO | PublicacionServiceImpl.cambiarEstado (setter generico) |
@@ -141,13 +155,13 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | revision_disponibilidad.disponibilidad_nueva | D | PRODUCIDO | ContratoServiceImpl.revisarDisponibilidad VOLVER_AL_MERCADO |
 | revision_disponibilidad.disponibilidad_nueva | T | PRODUCIDO | ContratoServiceImpl.revisarDisponibilidad RETIRAR_DEL_MERCADO |
 | solicitud_alquiler.estado | G | PRODUCIDO | SolicitudServiceImpl: alta |
-| solicitud_alquiler.estado | E | PRODUCIDO | SolicitudServiceImpl.reenviar |
+| solicitud_alquiler.estado | E | PRODUCIDO | `SolicitudServiceImpl.reenviarAEvaluacion` |
 | solicitud_alquiler.estado | O | PRODUCIDO | EvaluacionServiceImpl: DESTINO_SOLICITUD observada |
 | solicitud_alquiler.estado | A | PRODUCIDO | EvaluacionServiceImpl: DESTINO_SOLICITUD aprobada |
 | solicitud_alquiler.estado | R | PRODUCIDO | EvaluacionServiceImpl: DESTINO_SOLICITUD rechazada |
 | solicitud_alquiler.estado | C | PRODUCIDO | ContratoServiceImpl: cascada del cierre |
 | solicitud_alquiler.estado | D | RESERVADO_FUTURO | Sin productor. Se implementa en 7.3.3 con POST /solicitudes/{id}/desistir |
-| tarea.estado | P | PRODUCIDO | Tarea: estado inicial al derivar la tarea |
+| tarea.estado | P | PRODUCIDO | `Tarea.nacer`: estado inicial al derivar la tarea. No hay alta manual |
 | tarea.estado | C | PRODUCIDO | Tarea.completar |
 | tarea.estado | A | PRODUCIDO | Tarea.cancelar, desde TareaServiceImpl |
 | tarea.estado | E | RESERVADO_FUTURO | Falta una accion funcional iniciar tarea. No se inventa endpoint para llenar el enum |
@@ -157,7 +171,7 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | token_acceso.estado | R | PRODUCIDO | TokenAccesoRepository.invalidarVivosDe (@Modifying JPQL) |
 | token_acceso.estado | A | PRODUCIDO | TokenAcceso y TokenAccesoRepository.sumarIntentoFallido |
 | usuario_organizacion.estado | A | PRODUCIDO | UsuariosInternos.registrar: alta de membresia |
-| usuario_organizacion.estado | I | PRODUCIDO | Baja de membresia |
+| usuario_organizacion.estado | I | RESERVADO_FUTURO | **Sin productor.** Nadie llama a `UsuarioOrganizacion.setEstado`: hoy se retira a alguien cerrando su rol operativo en `persona_rol`, no desactivando la membresia. La fila decia "Baja de membresia" y esa baja no existe (V76) |
 | visita.estado | P | PRODUCIDO | VisitaServiceImpl: programar |
 | visita.estado | G | PRODUCIDO | VisitaServiceImpl: reprogramar |
 | visita.estado | C | PRODUCIDO | VisitaServiceImpl: cancelar |

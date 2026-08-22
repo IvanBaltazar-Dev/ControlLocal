@@ -464,8 +464,16 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 lector.de(idOrganizacion, p));
     }
 
+    /**
+     * El nombre del titular, o nada. Desde V76 una propiedad puede no tenerlo:
+     * BROX conoce inmuebles que no gestiona. Era el unico lector de la columna
+     * sin guarda —los otros ocho ya preguntaban por null—, asi que era el unico
+     * que habria devuelto un 500 en vez de una ficha sin propietario.
+     */
     private String nombrePropietario(Propiedad p) {
-        return p.getRolPropietario().getPersona().getNombresORazonSocial();
+        return p.getRolPropietario() == null || p.getRolPropietario().getPersona() == null
+                ? null
+                : p.getRolPropietario().getPersona().getNombresORazonSocial();
     }
 
     /**

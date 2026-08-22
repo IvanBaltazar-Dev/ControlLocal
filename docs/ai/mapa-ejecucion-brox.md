@@ -3,7 +3,7 @@
 **Esta es la portada del avance.** Si quieres saber dónde estamos, qué cerramos y
 qué sigue, se responde aquí y en ninguna otra parte.
 
-**Actualizado:** 2026-08-19
+**Actualizado:** 2026-08-21
 
 ---
 
@@ -233,7 +233,7 @@ que decide qué preguntar a partir del catálogo.
 
 | | |
 |---|---|
-| 2.1 | `RegistrarPropiedad`: **una transacción**. Con operaciones declaradas, nueve efectos (propiedad, ubicación, titulares, titularidad, atributos, encargo por operación, condición económica, primer hito `U`, evento). **Con cero operaciones, cinco**: la propiedad queda registrada y no ofrecida, y el encargo nace al captar (V75). Todo o nada. |
+| 2.1 | `RegistrarPropiedad`: **una transacción**. Con operaciones declaradas, nueve efectos (propiedad, ubicación, titulares, titularidad, atributos, encargo por operación, condición económica, primer hito `U`, evento). **Con cero operaciones, cinco**; y **sin titular conocido, cuatro** (V76): la propiedad queda registrada, no ofrecida y declarando cómo llegó a conocerse. Todo o nada. |
 | 2.2 | El ciclo cerrado: `POST /propiedades` → `GET` → `PUT` → `GET`. La misma información escrita por el modelo universal regresa por el modelo universal. |
 | 2.3 | Gobierno del catálogo (V55): una organización **no puede** borrar, retipar ni **sombrear** un atributo común de BROX; lo suyo sí puede crearlo. |
 | 2.4 | Idempotencia de comandos (V57): el mismo `Idempotency-Key` no crea una segunda propiedad — devuelve la del primer intento. |
@@ -421,7 +421,8 @@ este orden**:
 0B  el catálogo aprende a hablar        ✅ CERRADO 2026-08-21 · V72
 0C  declarar el sujeto del dato         ✅ CERRADO 2026-08-21 · V73 + V74
     └ convergencia: registrar no es encargar   ✅ 2026-08-21 · V75
-1…7 profundidad por tipo                ⬜ siguiente, arranca en V76
+0D  la propiedad como activo de dato    ✅ CERRADO 2026-08-21 · V76
+1…7 profundidad por tipo                ⬜ siguiente, arranca en V77
 ```
 
 **V75 no estaba en el plan y salió de la corrida de cierre de 0C.** El alta
@@ -429,6 +430,24 @@ exigía al menos una operación, así que toda propiedad nacía con un encargo v
 — y el embudo dice `propietario → prospección → encargo`, de modo que el encargo
 no puede tener que existir antes de prospectar. `POST /propiedades` acepta ahora
 cero operaciones y el Encargo nace al captar, con su operación declarada.
+
+**V76 termina esa misma frase.** Quitada la operación obligatoria quedaba la
+otra atadura del alta: el titular. Se podía registrar un inmueble sin encargo,
+pero no sin dueño conocido — y BROX conoce legítimamente inmuebles que no
+gestiona, así que la única forma de anotar uno era **inventar un propietario**.
+La exigencia se mudó del registro al encargo (`TitularParaEncargar`, por el que
+pasan los tres caminos que abren captación), la propiedad declara **cómo llegó a
+conocerse** (`origen_incorporacion`) y lo que se ve del mercado vive en
+`observacion_mercado`: una serie *append-only*, separada del histórico del
+encargo, que no escribe precio, ni disponibilidad, ni publicación.
+
+> Una Propiedad representa un inmueble conocido por BROX, no necesariamente una
+> oferta gestionada por BROX. Su existencia, procedencia e historia observada
+> son independientes de Prospecciones y Encargos. Los hechos comerciales solo
+> nacen cuando existe la relación comercial que los autoriza.
+>
+> BROX nunca convierte una observación de mercado en un hecho comercial ni
+> inventa una relación para poder conservar conocimiento.
 
 Los tres cortes técnicos están cerrados, cada uno con su gate y su evidencia en
 `backend-spring/verificacion/evidencia/`. Lo que queda es siembra: filas de
@@ -442,7 +461,7 @@ de lo que se puede perder. El gate de 0A es el de D-E4-3 un paso más allá —
 por los siete tipos, no por un departamento feliz.
 
 La cadena de migraciones arrancó en **V71** —V70 ya era la publicación por
-encargo— y va por **V75**. El Corte 1 empieza en V76.
+encargo— y va por **V76**. El Corte 1 empieza en V77.
 
 ---
 

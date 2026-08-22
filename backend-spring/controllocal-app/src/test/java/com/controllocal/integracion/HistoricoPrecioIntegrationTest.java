@@ -111,15 +111,13 @@ class HistoricoPrecioIntegrationTest {
     @Test
     @Transactional
     void elUltimoHitoSeResuelvePorIdCuandoLaFechaEmpata() {
-        Long idPropiedad = jdbc.queryForObject(
-                "select id_propiedad from propiedad order by id_propiedad limit 1", Long.class);
-        Long idOrganizacion = jdbc.queryForObject(
-                "select organizacion_id from propiedad where id_propiedad = ?", Long.class, idPropiedad);
+        Encargo encargo = unEncargoVivo();
+        Long idPropiedad = encargo.idPropiedad();
 
         LocalDate hoy = LocalDate.now();
-        guardar(idOrganizacion, idPropiedad, new BigDecimal("5200.00"), hoy);
-        guardar(idOrganizacion, idPropiedad, new BigDecimal("4900.00"), hoy);
-        PrecioPropiedad esperado = guardar(idOrganizacion, idPropiedad, new BigDecimal("4700.00"), hoy);
+        guardar(encargo, new BigDecimal("5200.00"), hoy);
+        guardar(encargo, new BigDecimal("4900.00"), hoy);
+        PrecioPropiedad esperado = guardar(encargo, new BigDecimal("4700.00"), hoy);
         releerDesdeLaBase();
 
         PrecioPropiedad ultimo = precios
@@ -141,18 +139,15 @@ class HistoricoPrecioIntegrationTest {
     @Test
     @Transactional
     void laEscalaDelImporteNoConvierteElMismoPrecioEnUnoDistinto() {
-        Long idPropiedad = jdbc.queryForObject(
-                "select id_propiedad from propiedad order by id_propiedad limit 1", Long.class);
-        Long idOrganizacion = jdbc.queryForObject(
-                "select organizacion_id from propiedad where id_propiedad = ?", Long.class, idPropiedad);
+        Encargo encargo = unEncargoVivo();
 
         // Se escribe SIN decimales; la columna es numeric(12,2).
-        guardar(idOrganizacion, idPropiedad, new BigDecimal("5200"), LocalDate.now());
+        guardar(encargo, new BigDecimal("5200"), LocalDate.now());
         releerDesdeLaBase();
 
         BigDecimal leido = precios
                 .findFirstByIdPropiedadAndHitoOrderByFechaDescIdDesc(
-                        idPropiedad, PrecioPropiedad.HITO_PUBLICADO)
+                        encargo.idPropiedad(), PrecioPropiedad.HITO_PUBLICADO)
                 .orElseThrow()
                 .getMonto();
 
@@ -163,17 +158,44 @@ class HistoricoPrecioIntegrationTest {
                 "la columna normaliza a dos decimales: por eso equals no sirve para deduplicar");
     }
 
+    /** La propiedad y el encargo del que cuelgan los hitos de esta prueba. */
+    private record Encargo(Long idOrganizacion, Long idPropiedad, Long idCaptacion) { }
+
+    /**
+     * Un encargo vivo de verdad, y no la primera propiedad que aparezca.
+     *
+     * <p>Hasta V76 bastaba con `min(id_propiedad)`: un hito de precio podia
+     * colgar de una propiedad sin encargo. Ya no, y con razon — un precio es un
+     * hecho comercial y alguien tuvo que autorizarlo. Lo que se conoce del
+     * mercado sin encargo detras va a `observacion_mercado`, que es una serie
+     * distinta a proposito.
+     */
+    private Encargo unEncargoVivo() {
+        return jdbc.queryForObject("""
+                select c.organizacion_id, c.id_propiedad, c.id_captacion
+                  from captacion c
+                 where c.estado in ('P', 'O', 'A')
+                 order by c.id_captacion
+                 limit 1
+                """,
+                (fila, i) -> new Encargo(fila.getLong("organizacion_id"),
+                        fila.getLong("id_propiedad"), fila.getLong("id_captacion")));
+    }
+
     /**
      * <b>La operacion se declara.</b> Antes no hacia falta porque la entidad la
      * rellenaba con ALQUILER, y ese defecto se retiro en D-E4-1: la columna es
      * NOT NULL sin DEFAULT y ahora Java sostiene la misma exigencia. Estas
      * pruebas son de la serie de una renta, asi que dicen ALQUILER — que es
      * distinto de que alguien lo suponga por ellas.
+     *
+     * <p>Y desde V76 declara tambien <b>de que encargo</b> es el hito: sin eso
+     * `tg_precio_exige_encargo` lo rechaza.
      */
-    private PrecioPropiedad guardar(Long idOrganizacion, Long idPropiedad,
-                                    BigDecimal monto, LocalDate fecha) {
-        return precios.saveAndFlush(PrecioPropiedad.hito(idOrganizacion, idPropiedad,
-                OperacionInmobiliaria.ALQUILER, PrecioPropiedad.HITO_PUBLICADO,
-                PrecioPropiedad.MONEDA_PEN, monto, fecha));
+    private PrecioPropiedad guardar(Encargo encargo, BigDecimal monto, LocalDate fecha) {
+        return precios.saveAndFlush(PrecioPropiedad.hito(encargo.idOrganizacion(),
+                        encargo.idPropiedad(), OperacionInmobiliaria.ALQUILER,
+                        PrecioPropiedad.HITO_PUBLICADO, PrecioPropiedad.MONEDA_PEN, monto, fecha)
+                .delEncargo(encargo.idCaptacion()));
     }
 }

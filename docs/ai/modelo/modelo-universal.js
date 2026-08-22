@@ -151,9 +151,16 @@ const ENTIDADES = {
       detalle_local_comercial: "a AtributoPropiedad — una tabla por subtipo no escala a siete tipos",
     },
     invariantes: [
-      "toda propiedad tiene al menos un titular vigente",
+      // "toda propiedad tiene al menos un titular vigente" — DEROGADA EN V76.
+      // Una Propiedad representa un inmueble CONOCIDO por BROX, no
+      // necesariamente una oferta GESTIONADA por BROX: se puede conocer un
+      // departamento anunciado a 180 000 USD sin saber quién es el dueño, y
+      // obligar a declararlo obligaría a inventarlo. La exigencia se mudó al
+      // ENCARGO, que es donde sigue siendo cierta.
+      "un encargo vivo exige al menos un titular vigente de su propiedad",
       "la propiedad no declara operación",
       "la propiedad no declara precio",
+      "la propiedad declara cómo llegó a conocerse",
     ],
   },
 

@@ -76,7 +76,18 @@ class ProspeccionServiceImplTest {
 
     private final ProspeccionServiceImpl service = new ProspeccionServiceImpl(
             prospecciones, captaciones, propiedades, agentes, alcances, new Transiciones(historial),
-            supervisiones, alertas, lectorSinGobernados(), precios);
+            supervisiones, alertas, lectorSinGobernados(), precios, titularConocido());
+
+    /** Un inmueble con titular conocido: aqui se blindan las reglas de `captar`. */
+    private static com.controllocal.service.soporte.TitularParaEncargar titularConocido() {
+        var repositorio = mock(
+                com.controllocal.persistence.repositorio.TitularidadPropiedadRepository.class);
+        org.mockito.Mockito.lenient()
+                .when(repositorio.vigentesDe(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.List.of(
+                        new com.controllocal.domain.inmueble.TitularidadPropiedad()));
+        return new com.controllocal.service.soporte.TitularParaEncargar(repositorio);
+    }
 
     /**
      * Lo que se pacta al captar, con la operacion DICHA. Desde V75 no hay

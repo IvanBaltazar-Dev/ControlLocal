@@ -73,11 +73,21 @@ La maqueta lo demuestra sin trampa:
    … y a partir de ahí, solo lo que aplica.
 ```
 
-**Dos pasos fijos, y un tercero que ordena si se responde.** `tipo` y `titular`
-son fijos: sin el tipo el motor no sabe qué preguntar, y sin titular no hay de
-quién es. La `operación` **ordena pero no bloquea**: decide si el importe que
-viene detrás es un precio de venta o una renta mensual, y por eso se pregunta
-antes que él — pero puede quedarse sin responder.
+**Un paso fijo, y dos que ordenan si se responden.** `tipo` es el único fijo:
+sin él el motor no sabe qué preguntar. La `operación` **ordena pero no
+bloquea**: decide si el importe que viene detrás es un precio de venta o una
+renta mensual, y por eso se pregunta antes que él — pero puede quedarse sin
+responder. El `titular` **se pregunta siempre y tampoco bloquea** desde V76:
+sin él no se puede encargar nada, pero sí se puede conocer el inmueble.
+
+> **Corregido el 2026-08-21 (V76).** Esta sección decía «`tipo` y `titular` son
+> fijos … sin titular no hay de quién es». Es verdad para un encargo y falso
+> para un registro: BROX puede conocer legítimamente un departamento anunciado
+> en un portal sin saber quién es el dueño, y exigir el titular en el alta
+> obliga a **inventarlo** —un «Propietario por confirmar»— que es una persona
+> falsa dentro de la cartera. La exigencia no desaparece: se muda del alta al
+> encargo, y vive en un solo sitio (`TitularParaEncargar`) por el que pasan los
+> tres caminos que abren una captación. Ver D-E4-1 §3.2 bis.
 
 > **Corregido el 2026-08-21 (V75).** Esta sección decía «tres pasos fijos» y
 > pintaba tres respuestas, todas comerciales. Describía un alta **comercial** y

@@ -150,9 +150,30 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
      * con DEFAULT+CHECK+FK compuesta vive solo en la BD y garantiza que el
      * rol referenciado sea de ese tipo). Se navega desde este lado, LAZY.
      */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "id_rol_propietario", nullable = false)
+    /**
+     * <b>Opcional desde V76.</b> Se puede conocer un inmueble sin saber de quien
+     * es: obligar a declararlo obligaria a inventarlo. La titularidad de verdad
+     * vive en {@code titularidad_propiedad}; esto es su proyeccion para el cable
+     * heredado, y solo se escribe cuando hay representante.
+     *
+     * <p>La obligacion no desaparece: se muda al ENCARGO, que es donde sigue
+     * siendo cierta -- una relacion comercial nace de alguien que puede
+     * encargarla.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_rol_propietario")
     private PersonaRol rolPropietario;
+
+    /**
+     * <b>Como llego BROX a conocer este inmueble</b> (V76). Procedencia, no
+     * estado: no cambia porque despues se capte. Ver {@link OrigenIncorporacion}.
+     */
+    @Column(name = "origen_incorporacion", nullable = false, length = 12)
+    private String origenIncorporacion = OrigenIncorporacion.OPERACION.codigo();
+
+    /** Quien la incorporo. NULL en las filas anteriores a V76, que no lo saben. */
+    @Column(name = "id_rol_incorporo")
+    private Long idRolIncorporo;
 
     @Column(name = "fecha_registro", insertable = false, updatable = false)
     private OffsetDateTime fechaRegistro;
@@ -286,6 +307,29 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
             throw new IllegalArgumentException("La disponibilidad comercial es obligatoria.");
         }
         disponibilidadComercial = nuevaDisponibilidad.codigo();
+    }
+
+    /** Como se conocio este inmueble. Ver {@link OrigenIncorporacion}. */
+    @Transient
+    public OrigenIncorporacion origen() {
+        return OrigenIncorporacion.desde(origenIncorporacion);
+    }
+
+    /**
+     * Declara la procedencia al incorporarla. Se escribe UNA vez, al nacer: una
+     * propiedad observada que despues se capta siguio conociendose observando.
+     */
+    public void incorporadaPor(OrigenIncorporacion origen, Long idRolActor) {
+        this.origenIncorporacion = origen.codigo();
+        this.idRolIncorporo = idRolActor;
+    }
+
+    public String getOrigenIncorporacion() {
+        return origenIncorporacion;
+    }
+
+    public Long getIdRolIncorporo() {
+        return idRolIncorporo;
     }
 
     public String getEstadoRegistro() { return estadoActual(); }

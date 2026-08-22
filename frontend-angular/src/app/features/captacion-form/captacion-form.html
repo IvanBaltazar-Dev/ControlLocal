@@ -60,9 +60,12 @@
         </section>
 
         <section class="seccion">
-          <div class="seccion-titulo"><span>2</span><div><h2>Condiciones del encargo</h2><p>Alquiler comercial, prioridad y exclusividad.</p></div></div>
+          <div class="seccion-titulo"><span>2</span><div><h2>Condiciones del encargo</h2><p>Qué se encarga, con qué prioridad y en exclusiva o no.</p></div></div>
           <div class="grid tres">
-            <label class="campo"><span>Operación</span><input value="Alquiler comercial" disabled /></label>
+            <!-- La operación no viene puesta: decide si el importe es una renta
+                 mensual o un precio de venta, y sobre cuál de los dos se
+                 calcula la comisión. -->
+            <label class="campo"><span>Operación <b>*</b></span><select formControlName="operacion" (change)="elegirOperacion()"><option value="" disabled>Elige la operación…</option><option value="A">Alquiler</option><option value="V">Venta</option></select>@if (invalido('operacion')) { <small class="mensaje-error">Declara si el encargo es de alquiler o de venta.</small> }</label>
             <label class="campo"><span>Urgencia</span><select formControlName="urgencia">@for (nivel of [1, 2, 3, 4, 5]; track nivel) { <option [ngValue]="nivel">{{ nivel }}</option> }</select></label>
             <label class="campo checkbox"><input type="checkbox" formControlName="exclusividad" /><span>Encargo exclusivo</span></label>
           </div>
@@ -77,11 +80,13 @@
                  propiedad que solo se prospectaba no tiene ninguna que heredar. -->
             <label class="campo"><span>{{ rotuloDelImporte() }} <b>*</b></span><input type="number" min="0" step="0.01" formControlName="importeReferencia" /><small class="ayuda">Es lo que el propietario acepta para este encargo.</small></label>
             <label class="campo"><span>Moneda <b>*</b></span><select formControlName="monedaReferencia"><option value="PEN">PEN</option><option value="USD">USD</option></select></label>
-            <label class="campo"><span>Modalidad de comisión <b>*</b></span><select formControlName="modalidadComision"><option value="E05">Medio mes de alquiler</option><option value="E1">Un mes de alquiler</option><option value="E15">Un mes y medio de alquiler</option><option value="E2">Dos meses de alquiler</option><option value="P">Porcentaje sobre la renta mensual</option><option value="F">Monto fijo</option><option value="S">Sin comisión</option></select><small>{{ descripcionComision() }}</small></label>
+            <!-- Las modalidades salen de la operación: en una venta no existe
+                 "un mes de alquiler" que cobrar. -->
+            <label class="campo"><span>Modalidad de comisión <b>*</b></span><select formControlName="modalidadComision">@if (!modalidades().length) { <option [value]="formulario.controls.modalidadComision.value">Elige antes la operación…</option> } @for (modalidad of modalidades(); track modalidad.valor) { <option [value]="modalidad.valor">{{ modalidad.rotulo }}</option> }</select>@if (modalidades().length) { <small>{{ descripcionComision() }}</small> }</label>
             <label class="campo"><span>Fecha de inicio del encargo <b>*</b></span><input type="date" formControlName="fechaInicioVigencia" /></label>
             <label class="campo"><span>Fecha final del encargo <b>*</b></span><input type="date" formControlName="fechaFinVigencia" /></label>
             @if (requiereValorComision()) {
-              <label class="campo"><span>{{ formulario.controls.modalidadComision.value === 'P' ? 'Porcentaje sobre la renta (%)' : 'Monto fijo' }} <b>*</b></span><input type="number" min="0" step="0.01" formControlName="valorComision" />@if (formulario.hasError('comision')) { <small class="mensaje-error">Ingresa un valor mayor que cero.</small> } @else if (formulario.controls.modalidadComision.value === 'P') { <!-- La convención del negocio: la comisión habitual es "un mes", y eso aquí se escribe 100. Sin decirlo, se teclea 1. --><small class="ayuda">Un mes de alquiler se escribe <strong>100</strong>: es el % sobre la renta mensual.</small> }</label>
+              <label class="campo"><span>{{ formulario.controls.modalidadComision.value === 'P' ? 'Porcentaje sobre ' + baseEnPalabras() + ' (%)' : 'Monto fijo' }} <b>*</b></span><input type="number" min="0" step="0.01" formControlName="valorComision" />@if (formulario.hasError('comision')) { <small class="mensaje-error">Ingresa un valor mayor que cero.</small> } @else if (formulario.controls.modalidadComision.value === 'P' && operacionSel() === 'A') { <!-- La convención del negocio: la comisión habitual es "un mes", y eso aquí se escribe 100. Sin decirlo, se teclea 1. --><small class="ayuda">Un mes de alquiler se escribe <strong>100</strong>: es el % sobre la renta mensual.</small> }</label>
             }
             @if (formulario.controls.modalidadComision.value === 'F') {
               <label class="campo"><span>Moneda de la comisión fija <b>*</b></span><select formControlName="monedaComision"><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select></label>
@@ -90,7 +95,7 @@
               <label class="campo"><span>Motivo para no cobrar comisión <b>*</b></span><textarea rows="2" maxlength="300" formControlName="motivoSinComision"></textarea>@if (formulario.hasError('comision')) { <small class="mensaje-error">Registra el motivo expreso.</small> }</label>
             }
             <label class="campo"><span>Tratamiento del IGV <b>*</b></span><select formControlName="tratamientoIgv"><option value="N">No aplica</option><option value="I">Incluido en la comisión</option><option value="A">Se agrega a la comisión</option></select></label>
-            <label class="campo"><span>Comisión calculada</span><input [value]="importeComision()" disabled /><small>Se calcula con la renta y moneda registradas en el local.</small></label>
+            <label class="campo"><span>Comisión calculada</span><input [value]="importeComision()" disabled /><small>Se calcula sobre {{ baseEnPalabras() }} y la moneda pactadas arriba.</small></label>
             <label class="campo checkbox"><input type="checkbox" formControlName="comisionConfirmada" /><span>Confirmo que estas condiciones fueron pactadas con el propietario <b>*</b></span>@if (invalido('comisionConfirmada')) { <small class="mensaje-error">Confirma las condiciones antes de enviar.</small> }</label>
           </div>
           @if (formulario.hasError('vigencia') && (formulario.dirty || formulario.touched)) { <p class="mensaje-error">La fecha final del encargo debe ser posterior a la fecha inicial.</p> }

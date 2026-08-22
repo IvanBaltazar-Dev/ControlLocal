@@ -29,6 +29,7 @@ import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.PoliticaComercial;
+import com.controllocal.service.soporte.TitularParaEncargar;
 import com.controllocal.service.soporte.Transiciones;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import org.springframework.data.domain.Page;
@@ -77,13 +78,16 @@ public class ProspeccionServiceImpl implements ProspeccionService {
      * autorizado se declara aqui, asi que aqui empieza su historico.
      */
     private final PrecioPropiedadRepository precios;
+    /** Conocer un inmueble no es poder venderlo: el ENCARGO si exige titular (V76). */
+    private final TitularParaEncargar titularParaEncargar;
 
     public ProspeccionServiceImpl(ProspeccionRepository prospecciones, CaptacionRepository captaciones,
                                   PropiedadRepository propiedades, DetalleAgenteRepository agentes,
                                   Alcances alcances, Transiciones transiciones,
                                   SupervisionAgenteRepository supervisiones,
                                   AlertaService alertas, LectorPorAutoridad lector,
-                                  PrecioPropiedadRepository precios) {
+                                  PrecioPropiedadRepository precios,
+                                  TitularParaEncargar titularParaEncargar) {
         this.prospecciones = prospecciones;
         this.captaciones = captaciones;
         this.propiedades = propiedades;
@@ -94,6 +98,7 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         this.alertas = alertas;
         this.lector = lector;
         this.precios = precios;
+        this.titularParaEncargar = titularParaEncargar;
     }
 
     @Override
@@ -253,6 +258,9 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         // esto llegaba como violacion de integridad de PostgreSQL, que no le
         // explica a nadie que la OTRA operacion si se puede abrir.
         exigirEncargoLibre(actor.idOrganizacion(), propiedad, operacion);
+        // Y aqui NACE la relacion comercial, asi que aqui tiene que saberse de
+        // quien es el inmueble (V76). El registro admite no saberlo; el encargo no.
+        titularParaEncargar.exigirParaEncargo(propiedad);
 
         Captacion captacion = new Captacion();
         captacion.setOrganizacionId(actor.idOrganizacion());
@@ -289,6 +297,8 @@ public class ProspeccionServiceImpl implements ProspeccionService {
                 ? datos.tipoComision() : tipoComisionDe(operacion));
         condicion.setBaseCalculo(datos.baseCalculo() != null
                 ? datos.baseCalculo() : baseDe(operacion));
+        CondicionesEconomicas.exigirBaseCoherente(operacion.codigo(),
+                condicion.getTipoComision(), condicion.getBaseCalculo());
         condicion.setValorComision(valorDeComision(datos.comisionPactada(),
                 condicion.getTipoComision()));
         condicion.setMonedaComision(moneda);
@@ -391,10 +401,9 @@ public class ProspeccionServiceImpl implements ProspeccionService {
                 : CondicionEconomicaCaptacion.EQUIVALENTE_MENSUALIDADES;
     }
 
+    /** Un solo sitio decide la base por defecto; aqui solo se consulta (V76). */
     private static String baseDe(OperacionInmobiliaria operacion) {
-        return operacion == OperacionInmobiliaria.VENTA
-                ? CondicionEconomicaCaptacion.PRECIO_VENTA
-                : CondicionEconomicaCaptacion.RENTA_MENSUAL;
+        return CondicionesEconomicas.basePorDefecto(operacion.codigo());
     }
 
     /**

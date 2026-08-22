@@ -81,7 +81,21 @@ class CaptacionServiceImplTest {
     private final CaptacionServiceImpl service = new CaptacionServiceImpl(
             captaciones, reasignaciones, propiedades, agentes, brokers, fotos,
             alcances, new Transiciones(historial), mock(AlertaService.class),
-            lectorSinGobernados());
+            lectorSinGobernados(), titularConocido());
+
+    /**
+     * Un inmueble con titular conocido. Estas pruebas blindan las reglas del
+     * ENCARGO, no la de titularidad, que tiene la suya contra PostgreSQL.
+     */
+    private static com.controllocal.service.soporte.TitularParaEncargar titularConocido() {
+        var repositorio = mock(
+                com.controllocal.persistence.repositorio.TitularidadPropiedadRepository.class);
+        org.mockito.Mockito.lenient()
+                .when(repositorio.vigentesDe(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.List.of(
+                        new com.controllocal.domain.inmueble.TitularidadPropiedad()));
+        return new com.controllocal.service.soporte.TitularParaEncargar(repositorio);
+    }
 
     /** Organizacion de legado: el tenant que el backend resuelve para la sesion (V6). */
     private static final long ORG = 1L;
@@ -245,6 +259,25 @@ class CaptacionServiceImplTest {
         assertEquals("O", evento.getEstadoAnterior());
         assertEquals("P", evento.getEstadoNuevo());
         assertEquals("Reenvio a revision tras corregir observaciones.", evento.getMotivo());
+    }
+
+    /**
+     * <b>La operacion es la identidad del encargo</b>, no uno de sus campos
+     * (V76). Cambiarla convertiria el encargo de venta de un inmueble en el de
+     * alquiler del mismo inmueble conservando su historico, con lo que un
+     * precio de venta pasaria a leerse como renta mensual.
+     */
+    @Test
+    void laOperacionDeUnEncargoNoSeEdita() {
+        Captacion cap = captacionEnEstado(Captacion.OBSERVADA, agente);
+        cap.setMotivoOperacion("V");
+
+        DatosCaptacion aAlquiler = datos("CAP-0009");
+
+        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
+                () -> service.actualizar(9L, aAlquiler, agente));
+        assertTrue(error.getMessage().contains("no se edita"), error.getMessage());
+        assertEquals("V", cap.getMotivoOperacion());
     }
 
     @Test

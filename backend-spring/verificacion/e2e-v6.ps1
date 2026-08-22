@@ -190,12 +190,37 @@ try {
 $decidida = Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'O'; observacion = 'Falta el plano del local' }
 Check 'observar -> O' ($decidida.estado -eq 'O') $decidida.estado
 
+# Este encargo es de VENTA -lo abrio `captar` unas lineas mas arriba-, asi que
+# la subsanacion lo edita COMO VENTA. El cuerpo decia `motivoOperacion = 'A'` y
+# eso convertia el encargo de venta en uno de alquiler conservando su historico:
+# los 350 000 USD del precio de venta pasaban a leerse como renta mensual. Aqui
+# chocaba ademas contra `uq_captacion_viva_por_operacion` -la propiedad ya tenia
+# su alquiler vivo- y salia como un 409; sin ese choque habria pasado en
+# silencio. Desde V76 el backend lo rechaza de frente.
 $reenviada = Api PUT "/captaciones/$idCaptacion" $agente.token @{
     fechaCaptacion = $hoy; fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
-    comisionPactada = 100; observaciones = 'Plano adjunto'; idLocal = $idLocal
-    motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
+    observaciones = 'Plano adjunto'; idLocal = $idLocal
+    motivoOperacion = 'V'; tipoOperacion = 'V'; urgencia = 3; exclusividad = $true
+    importeReferencia = 350000; monedaReferencia = 'USD'
+    tipoComision = 'P'; baseCalculo = 'V'; valorComision = 3; monedaComision = 'USD'
+    tratamientoIgv = 'N'
 }
 Check 'editar una observada la reenvia a P' ($reenviada.estado -eq 'P') $reenviada.estado
+Check 'y no cambia la operacion del encargo' ($reenviada.tipoOperacion -eq 'V') $reenviada.tipoOperacion
+
+# Y cambiarla se rechaza diciendo por que: la operacion es la identidad del
+# encargo, no uno de sus campos.
+$cambioDeOperacion = $false
+try {
+    Api PUT "/captaciones/$idCaptacion" $agente.token @{
+        fechaCaptacion = $hoy; fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
+        comisionPactada = 100; observaciones = 'Plano adjunto'; idLocal = $idLocal
+        motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
+    } | Out-Null
+} catch {
+    $cambioDeOperacion = $true
+}
+Check 'la operacion de un encargo no se edita' $cambioDeOperacion 'rechazado'
 
 $aprobada = Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'A'; observacion = 'Conforme' }
 Check 'aprobar -> A (activa)' ($aprobada.estado -eq 'A') $aprobada.estado

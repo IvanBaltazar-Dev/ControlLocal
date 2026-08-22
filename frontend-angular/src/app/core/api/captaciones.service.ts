@@ -105,8 +105,12 @@ export interface CaptacionRequest {
   observaciones: string | null;
   idLocal: number;
   idAgente: number;
-  /** La primera ola solo admite alquiler comercial. */
-  motivoOperacion: 'A';
+  /**
+   * Espejo heredado de `tipoOperacion`; el backend exige que coincidan
+   * (`tg_captacion_operacion_coherente`). Deja de ir fijo a `'A'` en V76: la
+   * pantalla declara la operacion, no la supone.
+   */
+  motivoOperacion: 'A' | 'V';
   urgencia: number;
   exclusividad: boolean;
   tipoOperacion: 'A' | 'V';

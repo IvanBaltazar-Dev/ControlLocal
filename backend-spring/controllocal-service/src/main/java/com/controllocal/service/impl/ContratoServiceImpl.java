@@ -450,7 +450,7 @@ public class ContratoServiceImpl implements ContratoService {
 
         // 6) El local alquilado sale del mercado: NO DISPONIBLE, precio con
         //    hito 'C' (cerrado real) y publicaciones dadas de baja.
-        cerrarLocal(captacion.getPropiedad(), renta, moneda, actor, motivo);
+        cerrarLocal(captacion, renta, moneda, actor, motivo);
 
         // 7) Cerrado con F6/F7: se dan por hechas las tareas abiertas de las
         //    cuatro entidades de la operacion y se avisa al broker.
@@ -669,7 +669,7 @@ public class ContratoServiceImpl implements ContratoService {
         transiciones.aplicar(captacion, captacion.getId(), Captacion.CERRADA, actor, motivo, fecha);
         captacion.cerrar(fecha, "A", motivo);
         captaciones.save(captacion);
-        cerrarLocal(captacion.getPropiedad(), contrato.getRentaContractual(), contrato.getMoneda(), actor, motivo);
+        cerrarLocal(captacion, contrato.getRentaContractual(), contrato.getMoneda(), actor, motivo);
         tareas.resolverDeEntidad("OPORTUNIDAD", oportunidad.getId(), actor);
         tareas.resolverDeEntidad("SOLICITUD_ALQUILER", solicitud.getId(), actor);
         tareas.resolverDeEntidad("CAPTACION", captacion.getId(), actor);
@@ -762,8 +762,9 @@ public class ContratoServiceImpl implements ContratoService {
      * Efecto 6 de la cascada. El precio de cierre conserva la moneda de la
      * renta final y usa la fecha de HOY —no la de cierre—, como la v1.
      */
-    private void cerrarLocal(Propiedad propiedad, BigDecimal renta, String moneda,
+    private void cerrarLocal(Captacion captacion, BigDecimal renta, String moneda,
                              Actor actor, String motivo) {
+        Propiedad propiedad = captacion == null ? null : captacion.getPropiedad();
         if (propiedad == null || propiedad.getId() == null) {
             return;
         }
@@ -782,6 +783,11 @@ public class ContratoServiceImpl implements ContratoService {
         precio.setMoneda(moneda);
         precio.setMonto(renta);
         precio.setFecha(LocalDate.now());
+        // De QUE encargo es este cierre (V76). Es el ultimo hito de su serie, y
+        // sin el id la fila quedaba colgando de la propiedad: dos alquileres
+        // sucesivos del mismo inmueble mezclaban sus cierres en una sola linea.
+        // Lo detecto `tg_precio_exige_encargo`, que es exactamente su trabajo.
+        precio.delEncargo(captacion.getId());
         precios.save(precio);
 
         for (Publicacion publicacion

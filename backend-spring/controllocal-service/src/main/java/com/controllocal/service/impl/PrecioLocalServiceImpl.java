@@ -1,5 +1,6 @@
 package com.controllocal.service.impl;
 
+import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Reglas heredadas del PrecioLocalBusinessLogicImpl v1 (moneda PEN y fecha
@@ -72,10 +74,21 @@ public class PrecioLocalServiceImpl implements PrecioLocalService {
         PrecioPropiedad precio = PrecioPropiedad.hito(actor.idOrganizacion(), idPropiedad, operacion,
                 datos.hito(), moneda, datos.monto(),
                 datos.fecha() != null ? datos.fecha() : LocalDate.now());
-        // Atado a su encargo cuando lo hay: es lo que permite que una venta y un
-        // alquiler de la misma propiedad tengan series separadas de verdad.
-        operaciones.encargoDe(actor.idOrganizacion(), idPropiedad, operacion)
-                .ifPresent(encargo -> precio.delEncargo(encargo.getId()));
+        // Atado a su encargo, y SIN encargo no hay hito (V76). Es lo que permite
+        // que una venta y un alquiler de la misma propiedad tengan series
+        // separadas de verdad -- y, sobre todo, lo que impide que un importe que
+        // nadie autorizo entre en la serie economica de la propiedad. La base lo
+        // rechazaria igual (`tg_precio_exige_encargo`); se dice aqui para que el
+        // mensaje explique la alternativa en vez de llegar como error de
+        // integridad.
+        Captacion encargo = operaciones.encargoDe(actor.idOrganizacion(), idPropiedad, operacion)
+                .orElseThrow(() -> new ReglaNegocioException(
+                        "Esta propiedad no tiene un encargo vivo de "
+                                + operacion.name().toLowerCase(Locale.ROOT)
+                                + ": un hito economico nace del encargo que lo autorizo. Si lo que "
+                                + "quieres guardar es lo que se VIO en el mercado, va en las "
+                                + "observaciones de la propiedad."));
+        precio.delEncargo(encargo.getId());
         precios.save(precio);
         return ficha(precio);
     }

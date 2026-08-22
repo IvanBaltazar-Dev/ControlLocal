@@ -99,7 +99,7 @@ public final class GuionRegistroPropiedad {
      * da {@link #obligatorias(List)}.
      */
     private static final List<String> OBLIGATORIAS_SIN_OPERACION = List.of(
-            TIPO_PROPIEDAD, TITULARES, DIRECCION, DISTRITO);
+            TIPO_PROPIEDAD, DIRECCION, DISTRITO);
 
     /** Lo obligatorio de <b>cada</b> encargo. Una copia por operacion declarada. */
     private static final List<String> OBLIGATORIAS_DE_CADA_ENCARGO = List.of(IMPORTE, MONEDA);
@@ -129,6 +129,14 @@ public final class GuionRegistroPropiedad {
      * <p>Lo que no se afloja: en cuanto se declara una operacion, su importe y
      * su moneda vuelven a ser obligatorios. Cero operaciones es una respuesta;
      * una operacion a medias no.
+     *
+     * <h2>Y el TITULAR salio de la misma lista en V76</h2>
+     * Por la misma razon y con el mismo gesto: se puede conocer un inmueble sin
+     * saber de quien es, y obligar a declararlo obligaria a inventarlo. Sigue
+     * preguntandose —y en este orden—, pero ya no impide ejecutar el alta.
+     *
+     * <p>La exigencia no desaparece: se muda al ENCARGO, que es donde sigue
+     * siendo cierta. Conocer un inmueble no es poder venderlo.
      */
     public static List<String> obligatorias(List<OperacionInmobiliaria> operaciones) {
         List<String> ordenadas = new java.util.ArrayList<>();

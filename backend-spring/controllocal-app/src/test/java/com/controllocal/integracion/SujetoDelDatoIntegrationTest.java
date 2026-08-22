@@ -655,6 +655,274 @@ class SujetoDelDatoIntegrationTest {
                 .toList();
     }
 
+    // ==================================================================
+    // V77 - El lenguaje completo del ENCARGO
+    // ==================================================================
+
+    /**
+     * <b>VENTA deja de estar muda.</b>
+     *
+     * <p>Hasta V77 el catalogo tenia seis condiciones y todas eran de alquiler
+     * menos una: un encargo de venta no podia decir si se entrega desocupado ni
+     * si el propietario acepta credito hipotecario, que son dos de las tres
+     * preguntas que deciden si la operacion avanza. El mecanismo estaba entero
+     * desde 0C; lo que faltaba era el vocabulario.
+     */
+    @Test
+    @DisplayName("V77: la VENTA tiene vocabulario propio en el catalogo")
+    void laVentaTieneVocabulario() {
+        Integer condiciones = jdbc.queryForObject("""
+                select count(distinct c.id_catalogo_atributo)
+                  from catalogo_atributo c
+                  join catalogo_atributo_operacion o on o.id_catalogo_atributo = c.id_catalogo_atributo
+                 where c.sujeto = 'ENCARGO' and c.del_sistema and c.activo
+                   and o.tipo_operacion = 'V'
+                """, Integer.class);
+        assertTrue(condiciones != null && condiciones >= 6,
+                "la venta sigue sin condiciones que declarar: " + condiciones);
+
+        // Y las cuatro LISTA tienen vocabulario: una lista sin opciones se
+        // degrada a TEXTO y deja de ser una lista sin que nadie avise.
+        String sinOpciones = jdbc.queryForObject("""
+                select string_agg(c.clave, ', ')
+                  from catalogo_atributo c
+                 where c.sujeto = 'ENCARGO' and c.activo
+                   and c.tipo_dato in ('LISTA', 'LISTA_MULTIPLE')
+                   and not exists (select 1 from catalogo_atributo_opcion o
+                                    where o.id_catalogo_atributo = c.id_catalogo_atributo)
+                """, String.class);
+        assertNull(sinOpciones, "listas del encargo sin vocabulario: " + sinOpciones);
+    }
+
+    /**
+     * <b>Los pares semanticos, TODOS.</b>
+     *
+     * <p>El guard de V74 nombraba uno solo -- {@code amoblado} -- y eso lo
+     * dejaba como una excepcion artesanal. El par es el patron: un hecho del
+     * inmueble y la condicion que se pacta sobre el son dos claves y viven en
+     * dos sujetos. Que esten relacionadas <b>no permite sustituir una por
+     * otra</b>: que el inmueble tenga muebles no dice si este alquiler los
+     * incluye.
+     *
+     * <p>Se comprueba sobre el catalogo real, no sobre claves de prueba: lo que
+     * puede romperse es la siembra.
+     */
+    @Test
+    @DisplayName("V77: ningun par hecho/condicion comparte sujeto")
+    void losParesSemanticosVivenEnSujetosDistintos() {
+        List<String[]> pares = List.of(
+                new String[] {"amoblado", "se_ofrece_amoblado"},
+                new String[] {"cuota_mantenimiento", "mantenimiento_a_cargo_de"},
+                new String[] {"estacionamientos", "estacionamientos_incluidos"},
+                new String[] {"rubro_permitido", "rubros_excluidos_por_titular"},
+                new String[] {"mascotas_reglamento", "mascotas_aceptadas"},
+                new String[] {"nivel_implementacion", "se_entrega_implementado"},
+                new String[] {"estado_ocupacion", "entrega_desocupado"},
+                new String[] {"lote_minimo_normativo", "acepta_venta_fraccionada"});
+
+        List<String> juntos = new ArrayList<>();
+        for (String[] par : pares) {
+            String sujetoHecho = sujetoDe(par[0]);
+            String sujetoCondicion = sujetoDe(par[1]);
+            // El lado PROPIEDAD de varios pares todavia no existe -- llega en
+            // cortes posteriores --, y eso no invalida la comprobacion: lo que
+            // se afirma es que si existen los dos, NO comparten sujeto.
+            if (sujetoHecho != null && sujetoHecho.equals(sujetoCondicion)) {
+                juntos.add(par[0] + " y " + par[1] + " -> " + sujetoHecho);
+            }
+            if (sujetoCondicion != null) {
+                assertEquals("ENCARGO", sujetoCondicion,
+                        par[1] + " es una condicion negociada y tiene que ser del ENCARGO");
+            }
+            if (sujetoHecho != null) {
+                assertEquals("PROPIEDAD", sujetoHecho,
+                        par[0] + " es un hecho del inmueble y tiene que ser de la PROPIEDAD");
+            }
+        }
+        assertEquals(List.of(), juntos,
+                "un hecho y su condicion acabaron en el mismo sujeto: el pacto vuelve a pisar al hecho");
+    }
+
+    /**
+     * <b>Que dos claves esten emparejadas no permite sustituir una por otra.</b>
+     *
+     * <p>Es la otra mitad del par, y la que de verdad protege el dato: el
+     * enrutamiento tiene que rechazar el cruce en las dos direcciones, no solo
+     * clasificar bien en el catalogo.
+     */
+    @Test
+    @DisplayName("V77: el hecho no se puede pactar y la condicion no se puede escribir en la propiedad")
+    void elParNoSePuedeCruzar() {
+        long id = registrarConVentaYAlquiler();
+        long alquiler = encargo(id, "A");
+
+        // El hecho, enviado como condicion de un encargo.
+        ReglaNegocioException hechoComoPacto = assertThrows(ReglaNegocioException.class,
+                () -> pactar(id, alquiler, new ValorAtributo("amoblado", "true")));
+        assertTrue(hechoComoPacto.getMessage().toLowerCase().contains("amoblado"),
+                hechoComoPacto.getMessage());
+
+        // Y la condicion, enviada como atributo de la propiedad.
+        ReglaNegocioException pactoComoHecho = assertThrows(ReglaNegocioException.class,
+                () -> propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
+                        List.of(new ValorAtributo("se_ofrece_amoblado", "true")),
+                        null, null), actor()));
+        assertTrue(pactoComoHecho.getMessage().toLowerCase().contains("se_ofrece_amoblado"),
+                pactoComoHecho.getMessage());
+
+        // Y despues del doble rechazo, ninguno de los dos existe: un rechazo
+        // que dejara escrito la mitad seria peor que aceptar.
+        assertNull(atributoDeLaPropiedad(id, "amoblado"));
+        assertNull(pactado(id, alquiler, "se_ofrece_amoblado"));
+    }
+
+    /**
+     * <b>La condicion negociada muere con su encargo, pero su historia no.</b>
+     *
+     * <p>Es la prueba que da sentido al sujeto entero. La misma propiedad, dos
+     * alquileres sucesivos, condiciones opuestas:
+     *
+     * <pre>
+     *   Encargo 2026:  se_ofrece_amoblado = true    mascotas = false
+     *   Encargo 2027:  se_ofrece_amoblado = false   mascotas = true
+     * </pre>
+     *
+     * Las dos versiones sobreviven, ninguna pisa a la otra, la propiedad sigue
+     * siendo una sola y el hecho fisico no se movio. Con un solo sujeto esto era
+     * irrepresentable: el segundo valor sobrescribia al primero y nadie se
+     * enteraba.
+     */
+    @Test
+    @DisplayName("V77: dos encargos de la misma propiedad conservan condiciones distintas")
+    void dosEpisodiosConservanSusPropiasCondiciones() {
+        long id = registrarConVentaYAlquiler();
+        long primero = encargo(id, "A");
+
+        // El hecho fisico, aparte y una sola vez: el inmueble TIENE muebles.
+        propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
+                List.of(new ValorAtributo("amoblado", "true")), null, null), actor());
+
+        pactar(id, primero, new ValorAtributo("se_ofrece_amoblado", "true"));
+        pactar(id, primero, new ValorAtributo("mascotas_aceptadas", "false"));
+        Map<String, String> retratoPrimero = retratoDe(id, primero);
+
+        // Pasa el tiempo: el alquiler termina y se abre otro sobre el MISMO
+        // inmueble, con lo contrario pactado.
+        cerrar(primero);
+        long segundo = abrirOtroEncargo(primero);
+        assertEquals(Map.of(), retratoDe(id, segundo),
+                "un episodio nuevo nace SIN condiciones: no hereda lo que se pacto en el anterior");
+
+        pactar(id, segundo, new ValorAtributo("se_ofrece_amoblado", "false"));
+        pactar(id, segundo, new ValorAtributo("mascotas_aceptadas", "true"));
+
+        // Las dos versiones, vivas a la vez y contrarias.
+        assertEquals("true", pactado(id, primero, "se_ofrece_amoblado"));
+        assertEquals("false", pactado(id, segundo, "se_ofrece_amoblado"));
+        assertEquals("false", pactado(id, primero, "mascotas_aceptadas"));
+        assertEquals("true", pactado(id, segundo, "mascotas_aceptadas"));
+
+        // El primero no se movio ni un campo al escribir el segundo.
+        assertEquals(retratoPrimero, retratoDe(id, primero),
+                "pactar en el encargo nuevo reescribio el historico del anterior");
+
+        // Y el hecho del inmueble sobrevivio a los dos: los muebles siguen ahi
+        // aunque el segundo alquiler no los ofrezca.
+        assertEquals("true", atributoDeLaPropiedad(id, "amoblado"),
+                "el hecho fisico se movio al pactar sobre el");
+
+        // La propiedad sigue siendo UNA, con sus dos episodios.
+        assertEquals(1, (int) jdbc.queryForObject(
+                "select count(*) from propiedad where id_propiedad = ?", Integer.class, id));
+        assertEquals(2, (int) jdbc.queryForObject("""
+                select count(*) from captacion
+                 where id_propiedad = ? and motivo_operacion = 'A'
+                """, Integer.class, id),
+                "los dos episodios de alquiler tienen que seguir existiendo");
+    }
+
+    /**
+     * <b>La ausencia no es un «no».</b>
+     *
+     * <p>Una condicion que nadie declaro <b>no esta</b>: no viaja como
+     * {@code false}, no se rellena y no aparece en el bloque. Es lo que
+     * permitira a KAIROS preguntar solo lo que falta en vez de heredar un
+     * supuesto que nadie dijo -- y lo que impide que «no sabemos si acepta
+     * mascotas» se lea como «no acepta mascotas».
+     */
+    @Test
+    @DisplayName("V77: una condicion sin declarar no existe; no viaja como falso")
+    void loQueNadieDeclaroNoEsUnNo() {
+        long id = registrarConVentaYAlquiler();
+        long alquiler = encargo(id, "A");
+
+        assertEquals(Map.of(), retratoDe(id, alquiler),
+                "un encargo recien abierto no tiene ninguna condicion supuesta");
+        assertNull(pactado(id, alquiler, "mascotas_aceptadas"),
+                "lo que nadie declaro no puede leerse como una respuesta");
+
+        // Declarar una NO inventa las demas.
+        pactar(id, alquiler, new ValorAtributo("mascotas_aceptadas", "false"));
+        assertEquals("false", pactado(id, alquiler, "mascotas_aceptadas"));
+        assertNull(pactado(id, alquiler, "se_ofrece_amoblado"),
+                "declarar una condicion no puede rellenar las vecinas");
+        assertEquals(1, retratoDe(id, alquiler).size(),
+                "el bloque solo tiene lo que alguien dijo");
+
+        // Y ninguna columna de valor lleva DEFAULT: el defecto no puede
+        // colarse desde la base tampoco.
+        String conDefecto = jdbc.queryForObject("""
+                select string_agg(column_name, ', ')
+                  from information_schema.columns
+                 where table_name = 'atributo_encargo' and column_name like 'valor%'
+                   and column_default is not null
+                """, String.class);
+        assertNull(conDefecto, "columnas de valor con DEFAULT: " + conDefecto);
+    }
+
+    /**
+     * <b>Un IMPORTE y un multivalor tambien se pactan</b> (V77).
+     *
+     * <p>Son las dos condiciones que obligaron a ensanchar el cable: un importe
+     * lleva cifra <b>y</b> moneda, y un multivalor lleva varios elementos. El
+     * DTO web llevaba un solo texto por clave, asi que
+     * {@code precio_estacionamiento_adicional} y {@code equipamiento_incluido}
+     * habrian quedado sembradas y mudas.
+     */
+    @Test
+    @DisplayName("V77: una condicion IMPORTE y una multivalor se escriben y se releen")
+    void elImporteYElMultivalorSePactan() {
+        long id = registrarConVentaYAlquiler();
+        long alquiler = encargo(id, "A");
+
+        pactar(id, alquiler,
+                ValorAtributo.importe("precio_estacionamiento_adicional", "250", "PEN"));
+        pactar(id, alquiler, ValorAtributo.multiple("equipamiento_incluido",
+                List.of("COCINA", "LAVADORA")));
+
+        EncargoFicha bloque = bloque(propiedades.consultar(id, actor()), alquiler);
+        PropiedadUniversalService.AtributoFicha precio = bloque.condiciones().stream()
+                .filter(c -> "precio_estacionamiento_adicional".equals(c.clave()))
+                .findFirst().orElseThrow();
+        // El texto compuesto para leer, y los huecos crudos para poder corregir.
+        assertEquals("PEN", precio.moneda(), "la moneda tiene que viajar cruda");
+        assertTrue(precio.valor().contains("250"), precio.valor());
+
+        PropiedadUniversalService.AtributoFicha equipamiento = bloque.condiciones().stream()
+                .filter(c -> "equipamiento_incluido".equals(c.clave()))
+                .findFirst().orElseThrow();
+        assertEquals(List.of("COCINA", "LAVADORA"), equipamiento.valores(),
+                "los elementos tienen que viajar crudos, no pegados por comas");
+    }
+
+    /** El sujeto que el catalogo declara para una clave, o null si no existe. */
+    private String sujetoDe(String clave) {
+        List<String> sujetos = jdbc.queryForList("""
+                select sujeto from catalogo_atributo where clave = ? and activo
+                """, String.class, clave);
+        return sujetos.isEmpty() ? null : sujetos.get(0);
+    }
+
     private long unPropietario() {
         return jdbc.queryForObject("""
                 select min(r.id_persona_rol) from persona_rol r

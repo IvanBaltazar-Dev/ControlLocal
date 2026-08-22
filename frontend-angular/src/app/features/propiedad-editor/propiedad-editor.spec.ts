@@ -83,6 +83,16 @@ const DEFINICION: DefinicionCaptura = {
         pregunta('exclusividad:ALQUILER', 'Exclusividad', { seccion: 'OPERACION', control: 'INTERRUPTOR', tipoDato: 'BOOLEANO' }),
         pregunta('garantia_meses:ALQUILER', 'Garantía', { seccion: 'OPERACION', control: 'ENTERO', tipoDato: 'ENTERO', unidad: 'meses' }),
         pregunta('mascotas_aceptadas:ALQUILER', 'Acepta mascotas', { seccion: 'OPERACION', control: 'INTERRUPTOR', tipoDato: 'BOOLEANO' }),
+        pregunta('precio_estacionamiento_adicional:ALQUILER', 'Precio por cochera adicional', {
+          seccion: 'OPERACION', control: 'IMPORTE', tipoDato: 'IMPORTE',
+        }),
+        pregunta('equipamiento_incluido:ALQUILER', 'Equipamiento incluido', {
+          seccion: 'OPERACION', control: 'SELECTOR_MULTIPLE', tipoDato: 'LISTA_MULTIPLE',
+          opciones: [
+            { valor: 'COCINA', rotulo: 'Cocina' },
+            { valor: 'LAVADORA', rotulo: 'Lavadora' },
+          ],
+        }),
       ],
     },
   ],
@@ -334,6 +344,72 @@ describe('PropiedadEditor', () => {
     const zonificacion = control('Zonificación') as HTMLSelectElement;
     expect(zonificacion.value).toBe('');
     expect(botonGuardar().disabled).toBeTrue();
+  });
+
+  // Una casilla sin marcar se lee igual que un «no», y «todavía no se sabe» no
+  // es «no». Con dos estados, «acepta mascotas» sin declarar y «no acepta
+  // mascotas» eran píxeles idénticos: el dato no se perdía, pero la persona
+  // leía una respuesta que nadie dio.
+  it('un booleano sin declarar se ve como tal, y no como un «no»', async () => {
+    await montar();
+    const alquiler = raiz().querySelector('[data-encargo="32"]')!;
+
+    const mascotas = control('Acepta mascotas', alquiler) as HTMLSelectElement;
+    expect(mascotas.tagName).toBe('SELECT');
+    expect(mascotas.value).toBe('');
+    expect(Array.from(mascotas.options).map((o) => o.textContent?.trim())).toEqual([
+      'Sin declarar',
+      'Sí',
+      'No',
+    ]);
+
+    // Y declarar «No» sí viaja: es una respuesta, no una ausencia.
+    escribir(mascotas, 'false');
+    await guardar();
+    expect(enviado()).toEqual({
+      condiciones: [{ idEncargo: 32, atributos: [{ clave: 'mascotas_aceptadas', valor: 'false' }] }],
+    });
+  });
+
+  it('un IMPORTE viaja con su moneda, no pegada al número', async () => {
+    await montar();
+    const alquiler = raiz().querySelector('[data-encargo="32"]')!;
+    const campo = Array.from(alquiler.querySelectorAll('cl-campo-gobernado')).find((c) =>
+      (c.textContent ?? '').includes('Precio por cochera'),
+    )!;
+
+    escribir(campo.querySelector('select')!, 'PEN');
+    escribir(campo.querySelector('input')!, '250');
+    await guardar();
+
+    expect(enviado()).toEqual({
+      condiciones: [
+        {
+          idEncargo: 32,
+          atributos: [{ clave: 'precio_estacionamiento_adicional', valor: '250', moneda: 'PEN' }],
+        },
+      ],
+    });
+  });
+
+  it('un multivalor viaja como lista, no como texto con comas', async () => {
+    await montar();
+    const alquiler = raiz().querySelector('[data-encargo="32"]')!;
+    const campo = Array.from(alquiler.querySelectorAll('cl-campo-gobernado')).find((c) =>
+      (c.textContent ?? '').includes('Equipamiento'),
+    )!;
+    const casillas = Array.from(campo.querySelectorAll<HTMLInputElement>('input[type=checkbox]'));
+
+    casillas[0].checked = true;
+    casillas[0].dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await guardar();
+
+    expect(enviado()).toEqual({
+      condiciones: [
+        { idEncargo: 32, atributos: [{ clave: 'equipamiento_incluido', valores: ['COCINA'] }] },
+      ],
+    });
   });
 
   it('lo que el cable no transporta se ve y no se edita', async () => {

@@ -323,6 +323,30 @@ foreach ($tipo in $tipos) {
         Write-Host "  --   $tipo no declara condiciones pactables de alquiler: f no aplica" -ForegroundColor Yellow
     }
 
+    # --- f bis) lo pactado en la VENTA, que hasta V77 no tenia vocabulario.
+    #
+    # Es la mitad del modelo que estaba entera sin sembrar: un encargo de venta
+    # no podia decir si se entrega desocupado ni si acepta credito. Se elige la
+    # condicion desde el CONTRATO, igual que las demas.
+    $bloqueVenta = @($def.deLaOperacion | Where-Object { $_.operacion -eq 'VENTA' }) | Select-Object -First 1
+    $kv = $null
+    if ($bloqueVenta) {
+        $kv = @($bloqueVenta.preguntas | Where-Object { (ClaveBase $_.clave) -notin @('importe', 'moneda', 'exclusividad') -and $_.control -in @('ENTERO', 'DECIMAL', 'INTERRUPTOR', 'TEXTO', 'SELECTOR') }) | Select-Object -First 1
+    }
+    if ($kv) {
+        $claveV = ClaveBase $kv.clave
+        $valorV = ValorPara $kv 3
+        $despues = Editar $id $agente.token @{ condiciones = @(@{ idEncargo = $venta.idEncargo; atributos = @(@{ clave = $claveV; valor = $valorV }) }) }
+        $dif = Diferencias (Retrato $antes) (Retrato $despues) @("encargo.$($venta.idEncargo).cond.$claveV")
+        Check "$tipo pactar '$claveV' en la VENTA no toca el alquiler ni la propiedad" ($dif.Count -eq 0) ($dif -join '; ')
+        $condV = @((Encargo $despues 'VENTA').condiciones | Where-Object { $_.clave -eq $claveV }) | Select-Object -First 1
+        Check "$tipo y quedo escrito en el encargo de VENTA" ("$(Norm $condV.valor)" -eq "$(Norm $valorV)") "$($condV.valor) <> $valorV"
+        Check "$tipo y no aparecio en el alquiler" (-not (@((Encargo $despues 'ALQUILER').condiciones | Where-Object { $_.clave -eq $claveV }).Count -gt 0)) 'el alquiler tiene la condicion de la venta'
+        $antes = $despues
+    } else {
+        Write-Host "  --   $tipo no declara condiciones pactables de venta: f bis no aplica" -ForegroundColor Yellow
+    }
+
     # --- g) un bloque de una operacion que NO esta viva se rechaza: no se crea nada
     if ($tipo -eq 'OTRO') {
         $rechazo = EditarError $id $agente.token @{ operaciones = @(@{ operacion = 'VENTA'; importe = 1; moneda = 'USD'; exclusividad = $true }, @{ operacion = 'VENTA'; importe = 2; moneda = 'USD' }) }

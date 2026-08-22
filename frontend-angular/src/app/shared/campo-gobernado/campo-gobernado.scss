@@ -60,13 +60,15 @@
   line-height: 1.4;
 }
 
-.campo.interruptor {
-  align-items: center;
-  grid-template-columns: auto 1fr;
+// Un IMPORTE lleva moneda y cifra en la misma linea: son un solo dato.
+.par {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
 }
 
-.campo.interruptor input {
-  width: auto;
+.par .moneda {
+  min-width: 0;
 }
 
 .opciones {

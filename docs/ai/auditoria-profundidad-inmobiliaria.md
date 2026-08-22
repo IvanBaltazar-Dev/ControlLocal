@@ -241,9 +241,34 @@ Esto es lo más barato del plan: filas en `catalogo_atributo_tipo`, cambios de `
 
 ## 4. Lo que es del ENCARGO y no de la propiedad
 
-Hoy el encargo es `captacion` (con `motivo_operacion` A/V y una `condicion_economica_captacion` que sólo modela importe, moneda y **comisión** — `tratamiento_igv` ahí se refiere a la comisión, no a la renta). Nada de lo de abajo cabe en ninguna parte.
+> ### Estado desde el Corte 0C — 2026-08-21
+>
+> **La infraestructura que esta sección proponía ya está implementada** por
+> `V73__el_sujeto_del_dato.sql` y `V74__las_primeras_condiciones_del_encargo.sql`.
+> Ya existen:
+>
+> - `catalogo_atributo.sujeto`
+> - `catalogo_atributo_operacion` — aplicabilidad por **(tipo × operación)**
+> - `atributo_encargo` — almacenamiento propio, con FK compuesta de tenant
+> - la separación física entre atributos de PROPIEDAD y de ENCARGO
+> - los guards que impiden escribir un atributo en el sujeto equivocado
+>   (`tg_atributo_gobernado` y `tg_atributo_de_encargo`)
+>
+> **Por tanto esta sección ya no propone la arquitectura.** Su contenido
+> vigente es:
+>
+> 1. la clasificación PROPIEDAD / ENCARGO;
+> 2. la lista de condiciones comerciales del encargo;
+> 3. sus tipos, opciones y aplicabilidad;
+> 4. el criterio rector:
+>
+> > **Un hecho del inmueble sobrevive al encargo; una condición negociada
+> > muere con él.**
+>
+> Lo que quedaba pendiente era **la siembra**, y la cierra `V77` — ver
+> «El inventario, condición por condición» al final de esta sección.
 
-**Forma propuesta**, reutilizando el catálogo:
+Antes del Corte 0C el encargo era `captacion` a secas (con `motivo_operacion` A/V y una `condicion_economica_captacion` que sólo modela importe, moneda y **comisión** — `tratamiento_igv` ahí se refiere a la comisión, no a la renta), y nada de lo de abajo cabía en ninguna parte. La forma que se construyó es la que sigue, y se deja escrita porque explica **por qué** es así:
 - `catalogo_atributo.sujeto = 'ENCARGO'` (§2, C-7).
 - Tabla de aplicabilidad propia: **`catalogo_atributo_operacion(id_catalogo_atributo, tipo_propiedad VARCHAR(1), tipo_operacion VARCHAR(1), exigencia VARCHAR(3))`**, con **PK `(id_catalogo_atributo, tipo_propiedad, tipo_operacion)`** y FK `ON DELETE CASCADE` a `catalogo_atributo` — calcada de `catalogo_atributo_tipo` (V48). La aplicabilidad del encargo es por **(tipo, operación)**, no sólo por tipo: `partida_registral` bloquea una VENTA y es irrelevante en un ALQUILER; `garantia_meses` es al revés. Esto cierra el límite de modelo que las auditorías de C y O dejaron a la vista y que hoy obliga a degradar a OPC cosas que en venta son PUB.
 - Valores en **`atributo_encargo(organizacion_id, id_captacion, clave, valor_texto, valor_numero, valor_booleano, valor_fecha, valor_moneda)`**, PK (id_captacion, clave), **FK compuesta** `(organizacion_id, id_captacion)` → `uq_captacion_org` (el gate del discriminador de tenant lo exige).
@@ -296,6 +321,82 @@ Hoy el encargo es `captacion` (con `motivo_operacion` A/V y una `condicion_econo
 | `acepta_permuta` | Acepta permuta | BOOLEANO | — | todos | OPC |
 | `acepta_venta_fraccionada` | Acepta vender por partes | BOOLEANO | — | T | OPC |
 | `acepta_aporte_a_proyecto` | Acepta aportar el terreno a un proyecto | BOOLEANO | — | T | OPC (canje terreno por metros: la salida habitual para lotes bien zonificados) |
+
+### El inventario, condición por condición — V77
+
+Las tablas de arriba son **la lista**, no la implementación. Antes de sembrar,
+cada condición se pasó por la pregunta que decide el sujeto:
+
+> ¿Describe **cómo ES** el inmueble, o **cómo se acordó comercializarlo** en
+> este encargo? Si al abrir otro encargo sobre la misma propiedad el dato puede
+> cambiar sin que la propiedad haya cambiado, es del ENCARGO.
+
+Las 26 la pasan como ENCARGO. Lo que la revisión sí cambió son cuatro cosas, y
+se dicen porque el documento decía otra:
+
+| Qué decía §4 | Qué quedó, y por qué |
+|---|---|
+| `acepta_mascotas` | **`mascotas_aceptadas`** — es la clave que V74 sembró y ya tiene aplicabilidad. Renombrarla sería una migración sin ninguna ganancia; el catálogo es la autoridad y el documento se corrige |
+| `se_ofrece_amoblado` aplica a D,C | **D, C y O** — una oficina amoblada es un producto real y se anuncia como tal. Lo decidió V74 con esa razón escrita |
+| `igv_arrendamiento` con opción `POR_DEFINIR` | **Sin `POR_DEFINIR`.** La ausencia del valor ya significa «todavía no se sabe». Con la opción habría **dos formas de decir lo mismo**, que es la clase de duplicidad que este plan lleva cortes enteros retirando. Quedan `GRAVADO_18` y `NO_GRAVADO` |
+| `precio_estacionamiento_adicional` (IMPORTE) y `equipamiento_incluido` (LISTA_MULTIPLE) | Se siembran, **y obligan a ensanchar el cable**: `AtributoRequest` llevaba `(clave, valor)` y no sabía transportar una moneda ni una lista. El servicio ya lo modelaba (`ValorAtributo(clave, valor, moneda, valores)`); era el DTO web el que iba estrecho. Sin eso, dos condiciones quedarían sembradas y mudas |
+
+**Ninguna entra como obligatoria.** Las 26 son `OPC`, por la misma razón que
+V74 escribió: que una garantía sea imprescindible para publicar un alquiler
+puede ser cierto, pero **es una decisión del negocio que nadie ha tomado**, y
+tomarla dentro de la migración que introduce la clave dejaría fichas ya
+publicadas incompletas de golpe. Subir una a PUB es una línea de SQL el día que
+se decida. Los niveles que las tablas de arriba proponen quedan como **lo que se
+propuso**, no como lo que se sembró.
+
+#### Los pares semánticos, todos
+
+El par no es una curiosidad de `amoblado`: es el patrón. Un guard de V77 los
+recorre **todos** y rompe la migración si dos de un par acaban en el mismo
+sujeto.
+
+| Hecho de la PROPIEDAD | Condición del ENCARGO | Estado del lado PROPIEDAD |
+|---|---|---|
+| `amoblado` | `se_ofrece_amoblado` | existe |
+| `cuota_mantenimiento` | `mantenimiento_a_cargo_de` | existe |
+| `estacionamientos` | `estacionamientos_incluidos` | existe |
+| `rubro_permitido` | `rubros_excluidos_por_titular` | existe |
+| `uso` *(columna, no atributo)* | `uso_admitido_por_titular` | existe |
+| `mascotas_reglamento` | `mascotas_aceptadas` | **falta** — Corte 3 |
+| `nivel_implementacion` | `se_entrega_implementado` | **falta** — Corte 4 |
+| `estado_ocupacion` | `entrega_desocupado` | **falta** — Corte 5 |
+| `lote_minimo_normativo` | `acepta_venta_fraccionada` | **falta** — Corte 5 |
+
+Que falte el lado PROPIEDAD **no impide sembrar el lado ENCARGO**: la condición
+es cierta por sí sola —el propietario acepta o no acepta vender por partes— y
+esperar al hecho estructural dejaría el encargo mudo por algo que no le
+pertenece. Lo que el guard impide es lo contrario: que cuando llegue el hecho,
+alguien lo meta en el sujeto de su condición.
+
+**Y la existencia de un dato de PROPIEDAD nunca responde por su condición.** Que
+el inmueble tenga muebles no dice si este alquiler los incluye; que la junta
+cobre mantenimiento no dice quién lo paga aquí. Son preguntas distintas con
+respuestas distintas, y por eso son claves distintas.
+
+#### La ausencia no es un «no»
+
+Ninguna de las 26 tiene valor por defecto, y eso se sostiene en los tres sitios:
+
+- **la base** no pone `DEFAULT` en ninguna;
+- **el Core** no rellena: una condición que nadie declaró simplemente no está en
+  `condiciones[{idEncargo}]`;
+- **la pantalla** tampoco: un `BOOLEANO` sin declarar se pinta **«Sin declarar»**
+  y no como una casilla vacía, que se lee igual que un «no».
+
+```
+ausencia de se_ofrece_amoblado      ≠  se ofrece sin muebles
+ausencia de mascotas_aceptadas      ≠  no acepta mascotas
+ausencia de mantenimiento_a_cargo_de ≠  lo paga el propietario
+ausencia de entrega_desocupado      ≠  se entrega ocupado
+```
+
+Es lo que permitirá a KAIROS **preguntar sólo lo que falta** en lugar de heredar
+supuestos que nadie dijo.
 
 ---
 

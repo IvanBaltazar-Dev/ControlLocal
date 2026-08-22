@@ -142,6 +142,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3b** | **El alta universal, visible** | `/propiedades/nueva` sirve a los siete tipos y a las dos operaciones; el listado deja de ser una tabla de locales | ✅ **CERRADO** 2026-08-20 |
 | **3c** | **La ficha universal** | `/propiedades/:id` deja de leer el modelo heredado: la cosa física, un bloque **por encargo** con su histórico, la actividad con su procedencia y la **historia del inmueble** | ✅ **CERRADO** 2026-08-20 |
 | **3d** | **La publicación por encargo** | `Propiedad → Encargo → Publicación`: API canónica, editor fuera del detalle heredado, y `features/local-detail/` borrado | ✅ **CERRADO** 2026-08-20 |
+| **3g** | **El lenguaje del ENCARGO** | `V77`: el catálogo pasa de 6 a **26** condiciones comerciales y VENTA deja de estar muda (0 → 7). Aplicabilidad por **tipo × operación**, vocabularios sembrados, y el guard de pares hecho/condición ampliado a los ocho. Ninguna con valor por defecto: la ausencia sigue significando «todavía no se sabe» | ✅ **CERRADO** 2026-08-22 |
 | **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
 | **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — los tres cortes técnicos cerrados (0A `V71`, 0B `V72`, 0C `V73`+`V74`); queda la siembra por tipo, cortes 1–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
@@ -176,10 +177,20 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    **cada encargo por separado** (venta y alquiler simultáneos son dos encargos,
    jamás `AMBAS`); y conserva la regla del 0A: **bloque ausente = no tocar ese
    dominio**. Evidencia: `verificacion/evidencia/2026-08-22-editor-universal.md`.
-3. **V77 / profundidad por tipo** — con el preflight del Corte 1 ya medido.
-   Primero el editor y después las claves nuevas, porque sembrar decenas de
-   atributos sin una forma segura de corregirlos convierte cada error de captura
-   en dato congelado.
+3. ~~**V77 — el lenguaje completo del ENCARGO**~~ ✅ 2026-08-22. El catálogo
+   conocía 6 de 26 condiciones y **VENTA no tenía ninguna propia**: un encargo
+   de venta no podía decir si se entrega desocupado ni si el propietario acepta
+   crédito. El mecanismo estaba entero desde 0C; faltaba el idioma. 26
+   condiciones, 22 opciones de vocabulario, 112 filas de aplicabilidad por
+   **tipo × operación**, el guard de pares semánticos ampliado a los ocho, y la
+   prueba que da sentido al sujeto: dos alquileres sucesivos de la misma
+   propiedad con condiciones contrarias, ninguna pisando a la otra. Evidencia:
+   `verificacion/evidencia/2026-08-22-lenguaje-completo-del-encargo.md`.
+4. **Corte 1 / profundidad de la PROPIEDAD** — con el preflight ya medido, y
+   ahora con una pregunta más que hacerle a cada una de las 19 claves
+   bloqueadas: *¿sigue bloqueada porque falta modelar el inmueble, o lo estaba
+   porque confundíamos un hecho de la propiedad con una condición del encargo?*
+   No se altera la clasificación para hacer pasar el corte.
 
 **ANTES DE PRODUCCIÓN** (en paralelo, es trabajo de otra naturaleza y no debe
 contaminar el modelo inmobiliario): separar seeds de desarrollo, bootstrap

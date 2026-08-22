@@ -64,7 +64,20 @@ interface BloqueDeEncargo {
   readonly pactables: readonly PreguntaCaptura[];
 }
 
-type Tocado = Readonly<Record<string, string>>;
+/**
+ * Lo que se escribió en un campo. `valor` es el hueco principal; `moneda` y
+ * `valores` son los otros dos huecos que el cable transporta, y sólo aparecen
+ * cuando el control los tiene. Se guardan **separados** porque componer
+ * «PEN 350» y volver a partirlo es exactamente lo que no se puede hacer sin
+ * inferir (V77).
+ */
+interface Escrito {
+  readonly valor?: string;
+  readonly moneda?: string;
+  readonly valores?: readonly string[];
+}
+
+type Tocado = Readonly<Record<string, Escrito>>;
 type TocadoPorEncargo = Readonly<Record<number, Tocado>>;
 type RetiradoPorEncargo = Readonly<Record<number, ReadonlySet<string>>>;
 
@@ -317,8 +330,34 @@ export class PropiedadEditor implements OnInit {
     if (this.retirados().has(clave)) {
       return '';
     }
-    const tocado = this.fisico()[clave];
+    const tocado = this.fisico()[clave]?.valor;
     return tocado !== undefined ? tocado : this.valorOriginalDe(clave);
+  }
+
+  /** La moneda de un IMPORTE: la tocada, o la que la ficha trae cruda. */
+  protected monedaDe(clave: string): string {
+    if (this.retirados().has(clave)) {
+      return '';
+    }
+    const tocada = this.fisico()[clave]?.moneda;
+    return tocada !== undefined ? tocada : this.atributoDe(clave)?.moneda ?? '';
+  }
+
+  /** Los elementos de un multivalor, crudos: nunca partidos de un texto. */
+  protected valoresDe(clave: string): readonly string[] | null {
+    if (this.retirados().has(clave)) {
+      return [];
+    }
+    const tocados = this.fisico()[clave]?.valores;
+    return tocados !== undefined ? tocados : this.atributoDe(clave)?.valores ?? null;
+  }
+
+  protected anotarMoneda(clave: string, moneda: string): void {
+    this.escribir(clave, { moneda });
+  }
+
+  protected anotarValores(clave: string, valores: readonly string[]): void {
+    this.escribir(clave, { valores });
   }
 
   protected tieneValorOriginal(clave: string): boolean {
@@ -334,17 +373,37 @@ export class PropiedadEditor implements OnInit {
    * como valor ni como borrado. Retirar un valor es otra acción, con nombre.
    */
   protected anotar(clave: string, valor: string): void {
+    this.escribir(clave, { valor });
+  }
+
+  /**
+   * Anota uno de los huecos y deja los otros como estaban.
+   *
+   * **Un hueco vaciado vuelve a «no tocado»**, y si con eso el campo entero
+   * queda sin nada escrito, desaparece de lo tocado: no viaja ni como valor ni
+   * como borrado. Retirar es otra acción, con su botón.
+   */
+  private escribir(clave: string, cambio: Escrito): void {
     this.fisico.update((actuales) => {
       const siguientes = { ...actuales };
-      if (valor === '') {
+      const fundido: Escrito = { ...siguientes[clave], ...cambio };
+      const vacio =
+        (fundido.valor ?? '') === '' &&
+        (fundido.moneda ?? '') === '' &&
+        (fundido.valores?.length ?? 0) === 0;
+      if (vacio) {
         delete siguientes[clave];
       } else {
-        siguientes[clave] = valor;
+        siguientes[clave] = fundido;
       }
       return siguientes;
     });
     this.retirados.update((actuales) => sin(actuales, clave));
     this.tocado();
+  }
+
+  private atributoDe(clave: string) {
+    return this.ficha()?.atributos.find((candidato) => candidato.clave === clave);
   }
 
   /** «Quitar» y «Conservar»: la intención de retirar, declarada y reversible. */
@@ -361,6 +420,10 @@ export class PropiedadEditor implements OnInit {
     this.tocado();
   }
 
+  protected esImporte(campo: CampoDeLaPropiedad): boolean {
+    return campo.pregunta.control === 'IMPORTE';
+  }
+
   private valorOriginalDe(clave: string): string {
     const ficha = this.ficha();
     if (!ficha) {
@@ -373,8 +436,14 @@ export class PropiedadEditor implements OnInit {
       const valor = ficha.ubicacion?.[clave];
       return valor == null ? '' : String(valor);
     }
-    const atributo = ficha.atributos.find((candidato) => candidato.clave === clave);
+    const atributo = this.atributoDe(clave);
     if (atributo) {
+      // De un IMPORTE, la CIFRA sola: la moneda va por su hueco. `valor` trae
+      // «PEN 350» compuesto para leer, y meterlo en el campo numerico lo
+      // dejaria en blanco sin decir por que.
+      if (atributo.moneda) {
+        return (atributo.valor ?? '').replace(atributo.moneda, '').trim();
+      }
       return atributo.valor ?? '';
     }
     // Lo que el cable no edita (el código, el uso) se enseña tal como la ficha
@@ -394,16 +463,14 @@ export class PropiedadEditor implements OnInit {
     };
   }
 
+  /**
+   * Toda característica del catálogo se edita. Hasta V77 el `IMPORTE` y el
+   * `SELECTOR_MULTIPLE` se pintaban en sólo lectura porque `AtributoRequest`
+   * llevaba un único texto por clave y no sabía transportar una moneda ni una
+   * lista; el cable se ensanchó, así que ya no hay excusa.
+   */
   private comoCaracteristica(pregunta: PreguntaCaptura): CampoDeLaPropiedad {
-    // Un IMPORTE lleva cifra y moneda, y una lista múltiple lleva varios
-    // valores: `PUT /propiedades/{id}` todavía transporta un solo texto por
-    // clave. Se ven, para que nadie crea que el dato no existe, y no se tocan.
-    const editable = pregunta.control !== 'IMPORTE' && pregunta.control !== 'SELECTOR_MULTIPLE';
-    return {
-      pregunta,
-      editable,
-      motivo: editable ? null : 'Este dato todavía no se edita desde la ficha.',
-    };
+    return { pregunta, editable: true, motivo: null };
   }
 
   // ------------------------------------------------------------------
@@ -501,7 +568,7 @@ export class PropiedadEditor implements OnInit {
   // ------------------------------------------------------------------
 
   protected valorEconomico(encargo: EncargoPropiedad, clave: string): string {
-    const tocado = this.economico()[encargo.idEncargo]?.[clave];
+    const tocado = this.economico()[encargo.idEncargo]?.[clave]?.valor;
     if (tocado !== undefined) {
       return tocado;
     }
@@ -512,7 +579,8 @@ export class PropiedadEditor implements OnInit {
   }
 
   protected anotarEconomico(encargo: EncargoPropiedad, clave: string, valor: string): void {
-    this.economico.update((actuales) => anotadoEn(actuales, encargo.idEncargo, clave, valor));
+    this.economico.update((actuales) =>
+      anotadoEn(actuales, encargo.idEncargo, clave, { valor }));
     this.tocado();
   }
 
@@ -524,11 +592,45 @@ export class PropiedadEditor implements OnInit {
     if (this.pactadoRetirado()[encargo.idEncargo]?.has(clave)) {
       return '';
     }
-    const tocado = this.pactado()[encargo.idEncargo]?.[clave];
+    const tocado = this.pactado()[encargo.idEncargo]?.[clave]?.valor;
     if (tocado !== undefined) {
       return tocado;
     }
     return this.valorPactadoOriginal(encargo, clave);
+  }
+
+  /** La moneda de una condición IMPORTE — `precio_estacionamiento_adicional`. */
+  protected monedaPactada(encargo: EncargoPropiedad, clave: string): string {
+    if (this.estaPactadoRetirado(encargo, clave)) {
+      return '';
+    }
+    const tocada = this.pactado()[encargo.idEncargo]?.[clave]?.moneda;
+    return tocada !== undefined ? tocada : this.condicionDe(encargo, clave)?.moneda ?? '';
+  }
+
+  /** Los elementos de una condición multivalor — `equipamiento_incluido`. */
+  protected valoresPactados(encargo: EncargoPropiedad, clave: string): readonly string[] | null {
+    if (this.estaPactadoRetirado(encargo, clave)) {
+      return [];
+    }
+    const tocados = this.pactado()[encargo.idEncargo]?.[clave]?.valores;
+    return tocados !== undefined ? tocados : this.condicionDe(encargo, clave)?.valores ?? null;
+  }
+
+  protected anotarMonedaPactada(encargo: EncargoPropiedad, clave: string, moneda: string): void {
+    this.escribirPactado(encargo, clave, { moneda });
+  }
+
+  protected anotarValoresPactados(
+    encargo: EncargoPropiedad,
+    clave: string,
+    valores: readonly string[],
+  ): void {
+    this.escribirPactado(encargo, clave, { valores });
+  }
+
+  protected esImportePactado(pregunta: PreguntaCaptura): boolean {
+    return pregunta.control === 'IMPORTE';
   }
 
   protected tienePactadoOriginal(encargo: EncargoPropiedad, clave: string): boolean {
@@ -540,7 +642,11 @@ export class PropiedadEditor implements OnInit {
   }
 
   protected anotarPactado(encargo: EncargoPropiedad, clave: string, valor: string): void {
-    this.pactado.update((actuales) => anotadoEn(actuales, encargo.idEncargo, clave, valor));
+    this.escribirPactado(encargo, clave, { valor });
+  }
+
+  private escribirPactado(encargo: EncargoPropiedad, clave: string, cambio: Escrito): void {
+    this.pactado.update((actuales) => anotadoEn(actuales, encargo.idEncargo, clave, cambio));
     this.pactadoRetirado.update((actuales) => ({
       ...actuales,
       [encargo.idEncargo]: sin(actuales[encargo.idEncargo] ?? new Set(), clave),
@@ -556,13 +662,24 @@ export class PropiedadEditor implements OnInit {
       [id]: retirado ? sin(actuales[id] ?? new Set(), clave) : con(actuales[id] ?? new Set(), clave),
     }));
     if (!retirado) {
-      this.pactado.update((actuales) => anotadoEn(actuales, id, clave, ''));
+      this.pactado.update((actuales) => anotadoEn(actuales, id, clave, {}));
     }
     this.tocado();
   }
 
+  private condicionDe(encargo: EncargoPropiedad, clave: string) {
+    return encargo.condiciones?.find((condicion) => condicion.clave === clave);
+  }
+
   private valorPactadoOriginal(encargo: EncargoPropiedad, clave: string): string {
-    return encargo.condiciones?.find((condicion) => condicion.clave === clave)?.valor ?? '';
+    const condicion = this.condicionDe(encargo, clave);
+    if (!condicion) {
+      return '';
+    }
+    // De un IMPORTE, la cifra sola: la moneda va por su hueco.
+    return condicion.moneda
+      ? (condicion.valor ?? '').replace(condicion.moneda, '').trim()
+      : condicion.valor ?? '';
   }
 
   /**
@@ -601,20 +718,29 @@ export class PropiedadEditor implements OnInit {
     const cuerpo: EdicionPropiedad = {};
     const fisico = this.fisico();
 
-    if (fisico[PropiedadEditor.CLAVE_DESCRIPCION] !== undefined) {
-      cuerpo.descripcion = fisico[PropiedadEditor.CLAVE_DESCRIPCION];
+    const descripcion = fisico[PropiedadEditor.CLAVE_DESCRIPCION]?.valor;
+    if (descripcion !== undefined) {
+      cuerpo.descripcion = descripcion;
     }
 
     const ubicacion: UbicacionEnEdicion = {};
     const atributos: AtributoEnEdicion[] = [];
-    for (const [clave, valor] of Object.entries(fisico)) {
+    for (const [clave, escrito] of Object.entries(fisico)) {
       if (clave === PropiedadEditor.CLAVE_DESCRIPCION) {
         continue;
       }
       if (esCampoDeUbicacion(clave)) {
-        asignarUbicacion(ubicacion, clave, valor);
+        // La ubicación es de un solo hueco: no hay importes ni multivalores.
+        if (escrito.valor !== undefined) {
+          asignarUbicacion(ubicacion, clave, escrito.valor);
+        }
       } else {
-        atributos.push({ clave, valor });
+        atributos.push({
+          clave,
+          ...(escrito.valor === undefined ? {} : { valor: escrito.valor }),
+          ...(escrito.moneda === undefined ? {} : { moneda: escrito.moneda }),
+          ...(escrito.valores === undefined ? {} : { valores: [...escrito.valores] }),
+        });
       }
     }
     if (Object.keys(ubicacion).length > 0) {
@@ -646,8 +772,13 @@ export class PropiedadEditor implements OnInit {
       const pactado = this.pactado()[encargo.idEncargo] ?? {};
       const pactadoRetirado = [...(this.pactadoRetirado()[encargo.idEncargo] ?? [])].sort();
       const valores = Object.entries(pactado)
-        .filter(([, valor]) => valor !== '')
-        .map(([clave, valor]) => ({ clave, valor }));
+        .filter(([, escrito]) => !estaVacio(escrito))
+        .map(([clave, escrito]) => ({
+          clave,
+          ...(escrito.valor === undefined ? {} : { valor: escrito.valor }),
+          ...(escrito.moneda === undefined ? {} : { moneda: escrito.moneda }),
+          ...(escrito.valores === undefined ? {} : { valores: [...escrito.valores] }),
+        }));
       if (valores.length > 0 || pactadoRetirado.length > 0) {
         condiciones.push({
           idEncargo: encargo.idEncargo,
@@ -672,20 +803,23 @@ export class PropiedadEditor implements OnInit {
    * se tocó. La operación es la del encargo: no se elige, no se cambia.
    */
   private operacionDe(encargo: EncargoPropiedad, tocado: Tocado): OperacionEnEdicion {
-    const importe = tocado['importe'] !== undefined ? Number(tocado['importe']) : encargo.importe;
+    const escrito = (clave: string) => tocado[clave]?.valor;
+    const importe = escrito('importe') !== undefined ? Number(escrito('importe')) : encargo.importe;
     const operacion: OperacionEnEdicion = {
       operacion: encargo.operacion,
       importe: importe ?? Number.NaN,
-      moneda: tocado['moneda'] ?? encargo.moneda ?? '',
+      moneda: escrito('moneda') ?? encargo.moneda ?? '',
     };
-    if (tocado['exclusividad'] !== undefined) {
-      operacion.exclusividad = tocado['exclusividad'] === 'true';
+    // La exclusividad tiene tres estados como cualquier booleano: sin declarar
+    // no viaja, y por eso se mira `=== 'true'` sólo cuando hay algo escrito.
+    if (escrito('exclusividad') !== undefined) {
+      operacion.exclusividad = escrito('exclusividad') === 'true';
     }
-    if (tocado['inicio'] !== undefined) {
-      operacion.inicioEncargo = tocado['inicio'];
+    if (escrito('inicio') !== undefined) {
+      operacion.inicioEncargo = escrito('inicio');
     }
-    if (tocado['fin'] !== undefined) {
-      operacion.finEncargo = tocado['fin'];
+    if (escrito('fin') !== undefined) {
+      operacion.finEncargo = escrito('fin');
     }
     return operacion;
   }
@@ -752,17 +886,27 @@ function sinCalificar(clave: string): string {
   return corte < 0 ? clave : clave.slice(0, corte);
 }
 
+/** Sin nada escrito en ninguno de sus tres huecos. */
+function estaVacio(escrito: Escrito): boolean {
+  return (
+    (escrito.valor ?? '') === '' &&
+    (escrito.moneda ?? '') === '' &&
+    (escrito.valores?.length ?? 0) === 0
+  );
+}
+
 function anotadoEn(
   actuales: TocadoPorEncargo,
   idEncargo: number,
   clave: string,
-  valor: string,
+  cambio: Escrito,
 ): TocadoPorEncargo {
   const bloque = { ...(actuales[idEncargo] ?? {}) };
-  if (valor === '') {
+  const fundido: Escrito = { ...bloque[clave], ...cambio };
+  if (estaVacio(fundido)) {
     delete bloque[clave];
   } else {
-    bloque[clave] = valor;
+    bloque[clave] = fundido;
   }
   return { ...actuales, [idEncargo]: bloque };
 }

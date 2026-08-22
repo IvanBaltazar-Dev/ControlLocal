@@ -95,8 +95,12 @@
               <cl-campo-gobernado
                 [pregunta]="campo.pregunta"
                 [valor]="valorDe(campo.pregunta.clave)"
+                [moneda]="monedaDe(campo.pregunta.clave)"
+                [valores]="valoresDe(campo.pregunta.clave)"
                 [soloLectura]="!campo.editable"
                 (cambio)="anotar(campo.pregunta.clave, $event)"
+                (cambioMoneda)="anotarMoneda(campo.pregunta.clave, $event)"
+                (cambioValores)="anotarValores(campo.pregunta.clave, $event)"
               />
               @if (!campo.editable) {
                 <small class="motivo">{{ campo.motivo }}</small>
@@ -276,7 +280,11 @@
                     <cl-campo-gobernado
                       [pregunta]="pregunta"
                       [valor]="valorPactado(bloque.encargo, pregunta.clave)"
+                      [moneda]="monedaPactada(bloque.encargo, pregunta.clave)"
+                      [valores]="valoresPactados(bloque.encargo, pregunta.clave)"
                       (cambio)="anotarPactado(bloque.encargo, pregunta.clave, $event)"
+                      (cambioMoneda)="anotarMonedaPactada(bloque.encargo, pregunta.clave, $event)"
+                      (cambioValores)="anotarValoresPactados(bloque.encargo, pregunta.clave, $event)"
                     />
                     @if (tienePactadoOriginal(bloque.encargo, pregunta.clave)) {
                       <button

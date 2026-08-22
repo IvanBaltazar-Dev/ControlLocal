@@ -36,6 +36,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.domain.inmueble.ValorMultipleAtributo;
 import com.controllocal.persistence.repositorio.ValorMultipleAtributoRepository;
+import com.controllocal.service.soporte.ValorLogico;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ActividadDeLaPropiedad;
@@ -1070,11 +1071,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
 
         for (String clave : leidos.claves()) {
             CatalogoAtributo definicion = definiciones.get(clave);
-            valores.add(new AtributoFicha(clave,
-                    definicion == null ? clave : definicion.getRotulo(),
-                    definicion == null ? null : definicion.getTipoDato(),
-                    definicion == null ? null : definicion.getUnidad(),
-                    leidos.texto(clave)));
+            valores.add(fichaDeAtributo(clave, definicion, leidos));
         }
         // Por el ORDEN del catalogo, no alfabetico por clave: la colocacion la
         // gobierna el catalogo desde 0B, y ordenar por clave aqui la tiraba.
@@ -1338,6 +1335,30 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * {@code (tipo, operacion)} distinto, no una por encargo. Con dos encargos
      * de la misma operacion es una sola.
      */
+    /**
+     * <b>Un atributo, con su texto para leer y sus huecos crudos para
+     * corregir</b> (V77).
+     *
+     * <p>El texto compuesto —«PEN 350», «COCINA, LAVADORA»— no se puede partir
+     * de vuelta sin inferir, y un elemento con una coma dentro lo haria
+     * imposible. Asi que la moneda y los elementos viajan aparte, tal como los
+     * guarda el lector. Se construye aqui y no en cada sitio porque los dos
+     * sujetos —propiedad y encargo— tienen que decir esto igual: dos
+     * constructores del mismo dato divergen, exactamente igual que dos
+     * lectores.
+     */
+    private static AtributoFicha fichaDeAtributo(String clave, CatalogoAtributo definicion,
+                                                 ValoresGobernados leidos) {
+        ValorLogico crudo = leidos.valor(clave);
+        return new AtributoFicha(clave,
+                definicion == null ? clave : definicion.getRotulo(),
+                definicion == null ? null : definicion.getTipoDato(),
+                definicion == null ? null : definicion.getUnidad(),
+                leidos.texto(clave),
+                crudo == null ? null : crudo.moneda(),
+                crudo == null ? null : crudo.valores());
+    }
+
     private List<AtributoFicha> condicionesDe(long idOrganizacion, Captacion encargo,
                                               String tipoPropiedad, ValoresGobernados pactadas) {
         if (pactadas.claves().isEmpty()) {
@@ -1350,11 +1371,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         List<AtributoFicha> valores = new ArrayList<>();
         for (String clave : pactadas.claves()) {
             CatalogoAtributo definicion = definiciones.get(clave);
-            valores.add(new AtributoFicha(clave,
-                    definicion == null ? clave : definicion.getRotulo(),
-                    definicion == null ? null : definicion.getTipoDato(),
-                    definicion == null ? null : definicion.getUnidad(),
-                    pactadas.texto(clave)));
+            valores.add(fichaDeAtributo(clave, definicion, pactadas));
         }
         valores.sort(java.util.Comparator
                 .<AtributoFicha>comparingInt(a -> definiciones.containsKey(a.clave())

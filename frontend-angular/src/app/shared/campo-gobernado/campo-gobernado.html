@@ -24,7 +24,7 @@
       <select [value]="valor()" [disabled]="soloLectura()" (change)="responder($event)">
         <!-- Sin elegir es '': nunca la primera opción. Un defecto que nadie
              eligió es un dato inventado. -->
-        <option value="">Elegir…</option>
+        <option value="">Sin declarar</option>
         @for (opcion of p.opciones ?? []; track opcion.valor) {
           <option [value]="opcion.valor">{{ opcion.rotulo }}</option>
         }
@@ -35,14 +35,49 @@
     </label>
   }
   @case ('INTERRUPTOR') {
-    <label class="campo interruptor">
-      <input
-        type="checkbox"
-        [checked]="valor() === 'true'"
-        [disabled]="soloLectura()"
-        (change)="interruptor($event)"
-      />
-      <span>{{ p.rotulo }}</span>
+    <!-- Tres estados, no dos. Una casilla sin marcar se lee igual que un «no»,
+         y «todavía no se sabe» no es «no». -->
+    <label class="campo">
+      <span>{{ p.rotulo }} @if (p.obligatoria) {<b>*</b>}</span>
+      <select [value]="valor()" [disabled]="soloLectura()" (change)="responder($event)">
+        <option value="">Sin declarar</option>
+        <option value="true">Sí</option>
+        <option value="false">No</option>
+      </select>
+      @if (p.ayuda) {
+        <small>{{ p.ayuda }}</small>
+      }
+    </label>
+  }
+  @case ('IMPORTE') {
+    <!-- Cifra Y moneda: un importe sin moneda no es un importe, y el Core lo
+         rechaza. Van juntos porque separarlos sería pedirle al cliente que los
+         una. -->
+    <label class="campo importe">
+      <span>{{ p.rotulo }} @if (p.obligatoria) {<b>*</b>}</span>
+      <span class="par">
+        <select
+          class="moneda"
+          [value]="moneda()"
+          [disabled]="soloLectura()"
+          (change)="responderMoneda($event)"
+          [attr.aria-label]="'Moneda de ' + p.rotulo"
+        >
+          <option value="">—</option>
+          @for (m of MONEDAS; track m.valor) {
+            <option [value]="m.valor">{{ m.rotulo }}</option>
+          }
+        </select>
+        <input
+          type="number"
+          [value]="valor()"
+          [readOnly]="soloLectura()"
+          [attr.min]="p.restricciones?.minimo"
+          [attr.max]="p.restricciones?.maximo"
+          step="any"
+          (input)="responder($event)"
+        />
+      </span>
       @if (p.ayuda) {
         <small>{{ p.ayuda }}</small>
       }

@@ -95,7 +95,15 @@ export interface AtributoPropiedad {
   rotulo: string;
   tipoDato?: string | null;
   unidad?: string | null;
+  /**
+   * El texto **ya compuesto**: «PEN 350», «Cocina, Lavadora». Es lo que una
+   * ficha pinta, y lo que un editor **no** puede partir de vuelta sin inferir.
+   */
   valor?: string | null;
+  /** La moneda de un IMPORTE, cruda. Para poder corregirlo (V77). */
+  moneda?: string | null;
+  /** Los elementos de un LISTA_MULTIPLE, crudos. Misma razón. */
+  valores?: string[] | null;
 }
 
 /** Un hito de la serie económica de un encargo. */
@@ -272,7 +280,11 @@ export interface TitularEnEdicion {
 
 export interface AtributoEnEdicion {
   clave: string;
-  valor: string;
+  valor?: string;
+  /** Obligatoria cuando la clave es un IMPORTE: el Core la exige. */
+  moneda?: string;
+  /** Los elementos de un multivalor. **Sustituyen** a los que hubiera. */
+  valores?: string[];
 }
 
 export interface OperacionEnEdicion {

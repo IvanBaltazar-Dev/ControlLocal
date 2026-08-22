@@ -53,9 +53,30 @@ public final class PropiedadUniversalDtos {
         }
     }
 
-    public record AtributoRequest(String clave, String valor) {
+    /**
+     * <b>Un valor que se escribe.</b>
+     *
+     * <p>Llevaba solo {@code (clave, valor)} hasta V77, y con eso un IMPORTE
+     * no podia decir su moneda ni un LISTA_MULTIPLE sus elementos: el servicio
+     * ya los modelaba y era este DTO el que iba estrecho, asi que dos
+     * condiciones del encargo —el precio de la cochera adicional y el
+     * equipamiento incluido— habrian quedado sembradas y mudas.
+     *
+     * @param moneda  obligatoria cuando la clave es un IMPORTE; el trigger la
+     *                exige y el mensaje lo dice
+     * @param valores los elementos de un multivalor. <b>Sustituyen</b> a los
+     *                que hubiera: una lista es un conjunto, no un delta
+     */
+    public record AtributoRequest(String clave, String valor, String moneda,
+                                  List<String> valores) {
+
+        /** El valor de un solo hueco, que es el caso corriente. */
+        public AtributoRequest(String clave, String valor) {
+            this(clave, valor, null, null);
+        }
+
         PropiedadUniversalService.ValorAtributo aDatos() {
-            return new PropiedadUniversalService.ValorAtributo(clave, valor);
+            return new PropiedadUniversalService.ValorAtributo(clave, valor, moneda, valores);
         }
     }
 
@@ -196,10 +217,17 @@ public final class PropiedadUniversalDtos {
         }
     }
 
+    /**
+     * {@code valor} es el texto ya compuesto, para leer. {@code moneda} y
+     * {@code valores} van crudos al lado, para poder <b>corregir</b>: partir
+     * «PEN 350» o «COCINA, LAVADORA» de vuelta seria inferir, y un elemento
+     * con una coma dentro lo haria imposible (V77).
+     */
     public record AtributoResponse(String clave, String rotulo, String tipoDato, String unidad,
-                                   String valor) {
+                                   String valor, String moneda, List<String> valores) {
         static AtributoResponse desde(AtributoFicha f) {
-            return new AtributoResponse(f.clave(), f.rotulo(), f.tipoDato(), f.unidad(), f.valor());
+            return new AtributoResponse(f.clave(), f.rotulo(), f.tipoDato(), f.unidad(),
+                    f.valor(), f.moneda(), f.valores());
         }
     }
 

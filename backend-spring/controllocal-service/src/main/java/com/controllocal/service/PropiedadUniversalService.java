@@ -265,9 +265,32 @@ public interface PropiedadUniversalService {
      * Un atributo con su valor y su etiqueta. {@code rotulo}, {@code unidad} y
      * {@code tipoDato} vienen del catalogo para que la pantalla no tenga que
      * saberse la tabla de memoria.
+     *
+     * <h2>Por que el valor viaja DOS veces</h2>
+     * {@code valor} es el texto ya compuesto —{@code "PEN 350"},
+     * {@code "COCINA, LAVADORA"}— y es lo que una ficha pinta. Pero un editor
+     * no puede partirlo de vuelta: un multivalor cuyo elemento contenga una
+     * coma seria imposible de separar, y adivinar donde acaba la moneda es
+     * inferir. Asi que {@code moneda} y {@code valores} viajan <b>crudos</b> al
+     * lado, y quien escribe usa esos.
+     *
+     * <p>No es duplicar la verdad: es la misma, una vez para leer y otra para
+     * poder corregirla. Lo que estaba mal era tener solo la primera y pedirle
+     * al cliente que dedujera la segunda.
+     *
+     * @param moneda  la del IMPORTE, aparte de la cifra. {@code null} si la
+     *                clave no es un importe
+     * @param valores los elementos de un LISTA_MULTIPLE, uno por elemento.
+     *                {@code null} si la clave no es multivalor
      */
     record AtributoFicha(String clave, String rotulo, String tipoDato, String unidad,
-                         String valor) {
+                         String valor, String moneda, List<String> valores) {
+
+        /** El atributo de un solo hueco: ni importe ni multivalor. */
+        public AtributoFicha(String clave, String rotulo, String tipoDato, String unidad,
+                             String valor) {
+            this(clave, rotulo, tipoDato, unidad, valor, null, null);
+        }
     }
 
     /** Un hito de la serie economica de una operacion. */

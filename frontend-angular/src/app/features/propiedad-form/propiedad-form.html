@@ -37,10 +37,11 @@
         <div class="campos">
           @for (pregunta of apertura(); track pregunta.clave) {
             <cl-campo-gobernado
-                [pregunta]="pregunta"
-                [valor]="valorDe(pregunta.clave)"
-                (cambio)="anotar(pregunta.clave, $event)"
-              />
+              [pregunta]="pregunta"
+              [valor]="valorDe(pregunta.clave)"
+              (cambio)="anotar(pregunta.clave, $event)"
+              (cambioValores)="anotar(pregunta.clave, $event.join(','))"
+            />
           }
         </div>
 
@@ -219,6 +220,7 @@
                 [pregunta]="pregunta"
                 [valor]="valorDe(pregunta.clave)"
                 (cambio)="anotar(pregunta.clave, $event)"
+                (cambioValores)="anotar(pregunta.clave, $event.join(','))"
               />
             }
           </div>
@@ -243,6 +245,7 @@
                 [pregunta]="pregunta"
                 [valor]="valorDe(pregunta.clave)"
                 (cambio)="anotar(pregunta.clave, $event)"
+                (cambioValores)="anotar(pregunta.clave, $event.join(','))"
               />
               }
             </div>
@@ -274,6 +277,7 @@
                 [pregunta]="pregunta"
                 [valor]="valorDe(pregunta.clave)"
                 (cambio)="anotar(pregunta.clave, $event)"
+                (cambioValores)="anotar(pregunta.clave, $event.join(','))"
               />
                 }
               </div>

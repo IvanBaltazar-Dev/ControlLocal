@@ -150,6 +150,66 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **8** | **Migración del resto de pantallas** | las 57 al sistema normalizado | ⬜ |
 | **9** | **Certificación 1.0** | venta/alquiler, tipos, roles, móvil, multi-tenant, seguridad, rendimiento, E2E | ⬜ |
 
+### El orden de ejecución, decidido el 2026-08-22
+
+La numeración de los bloques dice **qué existe**, no en qué orden se avanza. Tras
+la auditoría de avance del 2026-08-22 (26 recursos, 187 operaciones, 60 rutas —
+y aun así tres suites E2E que no podían ni cargar su fixture), el orden es este,
+y sale de una distinción que no hay que perder: hay diferencia entre *motor
+técnicamente amplio*, *producto operable todos los días* y *plataforma lista
+para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
+
+**AHORA — en este orden:**
+
+1. ~~**Las 3 suites E2E que no cargaban su fixture**~~ ✅ 2026-08-22 —
+   `demanda-busqueda`, `solicitudes-busqueda` y `v6-dos-organizaciones`
+   insertaban en `captacion` sin `motivo_operacion` (V50 retiró el DEFAULT) y en
+   `solicitud_alquiler` sin `tipo` (V51). No se cambió ninguna expectativa: los
+   fixtures declaran ahora la operación, que es exactamente el contrato que el
+   esquema pasó a exigir. Hasta este arreglo, el «cierre verde» del reactor no
+   era baseline suficiente: había suites que ni arrancaban.
+2. **El editor universal** — el hueco funcional más grave. `PUT /propiedades/{id}`
+   existe y la SPA no lo llama desde ninguna pantalla: se puede capturar en
+   universal pero no corregir. El editor **representa el contrato del Core**, no
+   reconstruye la matriz tipo→campos; edita la propiedad como cosa física y
+   **cada encargo por separado** (venta y alquiler simultáneos son dos encargos,
+   jamás `AMBAS`); y conserva la regla del 0A: **bloque ausente = no tocar ese
+   dominio**.
+3. **V77 / profundidad por tipo** — con el preflight del Corte 1 ya medido.
+   Primero el editor y después las claves nuevas, porque sembrar decenas de
+   atributos sin una forma segura de corregirlos convierte cada error de captura
+   en dato congelado.
+
+**ANTES DE PRODUCCIÓN** (en paralelo, es trabajo de otra naturaleza y no debe
+contaminar el modelo inmobiliario): separar seeds de desarrollo, bootstrap
+inicial de una organización real, **rotar el JWT y las credenciales publicadas**
+(siguen pendientes desde `2832a9b`), configuración fuera de `localhost`, imagen
+productiva, TLS/proxy y restauración automatizada. Nada se despliega en público
+antes de esto.
+
+**ANTES DE ABRIR A VARIAS INMOBILIARIAS:** multi-tenancy real. Para un piloto
+interno de una organización puede esperar semanas; para decir «en el mercado»,
+no puede esperar meses. Una organización codificada `BROX_LEGACY` contradice la
+North Star —comunidades progresivamente más densas— y la propia matriz, que fija
+el tenant como frontera anterior incluso al rol.
+
+**DESPUÉS:** demanda/matcher/colaboración, y KAIROS **sobre contratos ya
+estables**.
+
+**Dos correcciones al roadmap que esta decisión deja escritas:**
+
+- **KAIROS no se adelanta por ser el bloque 4.** Es otro cliente de BROX Core y
+  todas sus herramientas corresponden a casos de uso reales existentes (D-K-1).
+  Hoy su primera llamada depende de rutas que no existen o no encajan —el
+  handshake de `/capacidades` incluido—, así que lo primero es **reconciliar el
+  adaptador con el Core**, no construir WhatsApp, LLM, voz ni memoria alrededor
+  de una integración que no completa el primer saludo.
+- **BROX Network deja de ser «algún día».** No una red social completa: las
+  **primitivas de la primera etapa** del North Star — organización real,
+  profesional real, requerimiento vigente, oferta vigente, coincidencia
+  explicable, colaboración atribuible. Son exactamente las condiciones que el
+  documento estratégico define como lo que la primera etapa debe demostrar.
+
 ### Lo que cerró el bloque 1a
 
 | Documento | Qué congela |

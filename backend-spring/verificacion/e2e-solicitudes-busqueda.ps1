@@ -184,10 +184,12 @@ select 1, p.id_propiedad, 'apto_licencia_funcionamiento', true
 # V17) y el estado de la captacion NO participa en el conjunto de candidatos de
 # esta bandeja. Igual criterio que en el gate de F3.
 Sql @"
+-- `motivo_operacion` se declara (V50 le quito el DEFAULT). Alquiler, que es la
+-- operacion de la bandeja de solicitudes.
 insert into captacion (codigo_captacion, fecha_captacion, fecha_inicio_encargo, fecha_fin_encargo,
-                       estado, id_propiedad, id_rol_agente, organizacion_id)
+                       estado, motivo_operacion, id_propiedad, id_rol_agente, organizacion_id)
 select 'CAPS-' || lpad(row_number() over (order by p.id_propiedad)::text, 7, '0'),
-       current_date, current_date, current_date + 180, 'V', p.id_propiedad, $agente, 1
+       current_date, current_date, current_date + 180, 'V', 'A', p.id_propiedad, $agente, 1
   from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFS-%'
 "@ | Out-Null
 
@@ -233,9 +235,14 @@ select 1,
 #
 # El codigo cabe justo en VARCHAR(20): 'SOLS-' + 7 digitos + '-HITOSOL'.
 Sql @"
+-- `tipo` es NOT NULL sin default desde V51: el expediente dice de que operacion
+-- es, porque un alquiler y una compraventa no piden los mismos documentos ni se
+-- cierran igual. El trigger `tg_expediente_tipo_del_encargo` solo VALIDA que
+-- coincida con el encargo -- no rellena --, asi que el banco lo declara: 'A',
+-- que es la operacion de todos sus encargos.
 insert into solicitud_alquiler (organizacion_id, codigo_solicitud, fecha_registro, monto_propuesto,
-                                moneda, estado, id_oportunidad, id_rol_agente, plazo_contrato_meses,
-                                observaciones)
+                                moneda, estado, tipo, id_oportunidad, id_rol_agente,
+                                plazo_contrato_meses, observaciones)
 select 1,
        'SOLS-' || lpad(n::text, 7, '0') || case when n % $PASO_TESTIGO = 0 then '-HITOSOL' else '' end,
        -- El cast a int es obligatorio: n viene de row_number() y es bigint, y
@@ -243,6 +250,7 @@ select 1,
        -- falla y el banco queda vacio.
        current_date - (n % 300)::int, 2000 + (n % 8000), 'PEN',
        (array['G','E','O','A','R','D','C'])[1 + n % 7],
+       'A',
        o.id_oportunidad,
        case when n % 500 = 0 then $agenteTestigo else $agente end,
        12 + (n % 24), 'Carga solicitudes ' || n

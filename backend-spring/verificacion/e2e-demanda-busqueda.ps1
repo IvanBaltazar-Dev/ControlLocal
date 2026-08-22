@@ -180,11 +180,15 @@ select 1, p.id_propiedad, 'apto_licencia_funcionamiento', true
 # el conjunto de candidatos, asi que el banco es igual de exigente y no inventa
 # datos economicos falsos.
 Sql @"
+-- `motivo_operacion` se declara. V50 (2026-08-18) le quito el DEFAULT 'A' que
+-- traia de V5: con venta en el modelo, suponer alquiler archiva un precio de
+-- venta en la serie equivocada. Este banco es de ALQUILER a proposito -- lo que
+-- las tres busquedas miden es la demanda de renta.
 insert into captacion (codigo_captacion, fecha_captacion, fecha_inicio_encargo, fecha_fin_encargo,
-                       estado, id_propiedad, id_rol_agente, organizacion_id)
+                       estado, motivo_operacion, id_propiedad, id_rol_agente, organizacion_id)
 select 'CAPD-' || lpad(row_number() over (order by p.id_propiedad)::text, 7, '0')
        || case when row_number() over (order by p.id_propiedad) % 4999 = 0 then '-HITOCAP' else '' end,
-       current_date, current_date, current_date + 180, 'V', p.id_propiedad, $agente, 1
+       current_date, current_date, current_date + 180, 'V', 'A', p.id_propiedad, $agente, 1
   from propiedad p where p.organizacion_id = 1 and p.codigo like 'PERFD-%'
 "@ | Out-Null
 

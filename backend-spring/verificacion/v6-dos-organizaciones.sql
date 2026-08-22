@@ -75,11 +75,12 @@ FROM persona_rol pr JOIN persona p ON p.id_persona = pr.id_persona
 WHERE p.numero_documento = '80808080' AND pr.tipo_rol = 'PROPIETARIO';
 
 -- Mismo CAP-0001 y mismo PRO-0001 en ambas corredoras.
+-- `motivo_operacion` se declara: V50 le quito el DEFAULT 'A' que traia de V5.
 INSERT INTO captacion (organizacion_id, codigo_captacion, fecha_captacion,
                        fecha_inicio_encargo, fecha_fin_encargo,
-                       estado, id_propiedad, id_rol_agente)
+                       estado, motivo_operacion, id_propiedad, id_rol_agente)
 SELECT prop.organizacion_id, 'CAP-0001', current_date,
-       current_date, current_date + 180, 'P', prop.id_propiedad, ag.id_persona_rol
+       current_date, current_date + 180, 'P', 'A', prop.id_propiedad, ag.id_persona_rol
 FROM propiedad prop
 JOIN detalle_agente ag ON ag.organizacion_id = prop.organizacion_id
 WHERE prop.codigo = 'LOC-0001' AND prop.organizacion_id IN (SELECT a FROM t UNION ALL SELECT b FROM t);
@@ -203,12 +204,18 @@ BEGIN
     BEGIN
         -- El periodo del encargo viaja completo a proposito: desde V21 es NOT
         -- NULL, y sin el la insercion moriria por not_null_violation antes de
-        -- llegar a la FK compuesta, que es lo que este gate mide.
+        -- llegar a la FK compuesta, que es lo que este gate mide. Por la misma
+        -- razon viaja `motivo_operacion` (V50 le retiro el DEFAULT), y viaja
+        -- como VENTA a proposito: el local de B ya tiene su CAP-0001 viva de
+        -- alquiler, y cruzar con 'A' moriria en `uq_captacion_viva_por_operacion`
+        -- --que dispara antes que la FK-- por un choque que no es el que este
+        -- gate mide. Con 'V' lo unico que puede rechazar el INSERT es la
+        -- frontera de organizacion.
         INSERT INTO captacion (organizacion_id, codigo_captacion, fecha_captacion,
                                fecha_inicio_encargo, fecha_fin_encargo,
-                               estado, id_propiedad, id_rol_agente)
+                               estado, motivo_operacion, id_propiedad, id_rol_agente)
         SELECT (SELECT a FROM t), 'CAP-CRUCE', current_date,
-               current_date, current_date + 180, 'P',
+               current_date, current_date + 180, 'P', 'V',
                (SELECT id_propiedad FROM propiedad
                  WHERE codigo = 'LOC-0001' AND organizacion_id = (SELECT b FROM t)),
                (SELECT id_persona_rol FROM detalle_agente

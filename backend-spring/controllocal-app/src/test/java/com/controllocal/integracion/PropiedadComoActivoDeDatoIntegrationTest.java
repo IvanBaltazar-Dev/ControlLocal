@@ -177,6 +177,43 @@ class PropiedadComoActivoDeDatoIntegrationTest {
      * conservar historia <b>sin producir</b> ni prospeccion, ni encargo, ni
      * hito, ni publicacion, ni KPI comercial.
      */
+    /**
+     * <b>Sin encargo vivo, la ficha no dice estar disponible.</b>
+     *
+     * <p>La situacion comercial se <b>deriva</b> de los encargos —V76 se nego a
+     * crear un estado NO_OFRECIDA porque serian dos autoridades para la misma
+     * verdad—, pero el lector copiaba la columna tal cual. Sobre una propiedad
+     * cuyo encargo se cerro, la misma pantalla decia «Disponibilidad comercial:
+     * Disponible» arriba y «Ningun encargo vigente: hoy no esta ni en venta ni
+     * en alquiler» debajo.
+     */
+    @Test
+    @DisplayName("cerrado el encargo, la ficha deja de afirmar que la propiedad se ofrece")
+    void sinEncargoVivoLaFichaNoDiceEstarDisponible() {
+        long id = registrarGestionada(List.of(
+                new OperacionSolicitada("ALQUILER", new BigDecimal("2800"), "PEN",
+                        null, null, null, null, null, null, null)));
+        assertEquals("Disponible", propiedades.consultar(id, actor()).disponibilidadRotulo(),
+                "con su encargo vivo si se ofrece");
+
+        // Se cierra el encargo por la via del negocio, sin tocar la columna.
+        jdbc.update("""
+                update captacion set estado = 'C', fecha_cierre = current_date,
+                       motivo_cierre = 'M', detalle_motivo_cierre = 'cierre de prueba'
+                 where id_propiedad = ? and estado in ('P','O','A')
+                """, id);
+
+        var ficha = propiedades.consultar(id, actor());
+        assertNull(ficha.disponibilidadRotulo(),
+                "sin encargo vivo no hay oferta que declarar");
+        assertNull(ficha.disponibilidadComercial(),
+                "y tampoco su codigo: la pantalla no puede pintar lo que no se afirma");
+        assertEquals("D", jdbc.queryForObject(
+                "select disponibilidad_comercial from propiedad where id_propiedad = ?",
+                String.class, id),
+                "la columna conserva el ultimo estado comercial conocido: es historia, no se borra");
+    }
+
     @Test
     @DisplayName("una propiedad de conocimiento se crea, se lee, se edita y se observa sin producir nada comercial")
     void elCicloCompletoNoProduceNadaComercial() {

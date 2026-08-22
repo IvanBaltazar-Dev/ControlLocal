@@ -1122,13 +1122,29 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                         ? definiciones.get(clave).getRotulo() : clave))
                 .toList();
 
+        boolean seOfrece = encargos.stream().anyMatch(EncargoFicha::vivo);
+
         return new FichaPropiedadUniversal(idPropiedad, propiedad.getCodigo(),
                 AtributosGobernados.nombreDelTipo(tipo), AtributosGobernados.rotuloDelTipo(tipo),
                 propiedad.getUso(), AtributosGobernados.rotuloDelUso(propiedad.getUso()),
                 propiedad.getDescripcion(),
                 propiedad.getEstadoRegistro(), rotuloDe(propiedad.estadoRegistroTipado()),
-                propiedad.getDisponibilidadComercial(),
-                rotuloDe(propiedad.disponibilidadComercialTipada()),
+                // La situacion comercial se DERIVA de los encargos vivos, no se
+                // copia de la columna (V76 §2: "no se crea NO_OFRECIDA... crearia
+                // dos autoridades para la misma verdad").
+                //
+                // Sin esto la ficha se contradecia a si misma en la misma
+                // pantalla: "DISPONIBILIDAD COMERCIAL: Disponible" arriba y
+                // "Ningun encargo vigente: hoy no esta ni en venta ni en
+                // alquiler" tres bloques mas abajo. La columna conserva el
+                // ultimo estado comercial conocido --es historia y no se borra--
+                // pero cerrar un encargo no la devuelve a "no ofrecida": NULL no
+                // es un codigo del vocabulario y no hay transicion de vuelta.
+                // Medido el 2026-08-22: 10 propiedades de la cartera de
+                // desarrollo y 68 de la de pruebas decian estar disponibles sin
+                // que nadie las hubiera encargado.
+                seOfrece ? propiedad.getDisponibilidadComercial() : null,
+                seOfrece ? rotuloDe(propiedad.disponibilidadComercialTipada()) : null,
                 ubicacionDe(propiedad), titulares, valores, encargos, faltan,
                 // La misma materia prima, leida como continuidad del inmueble en
                 // vez de como episodios sueltos. Sin consultas de mas.

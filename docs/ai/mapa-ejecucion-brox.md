@@ -3,6 +3,11 @@
 **Esta es la portada del avance.** Si quieres saber dónde estamos, qué cerramos y
 qué sigue, se responde aquí y en ninguna otra parte.
 
+**Y si lo que quieres saber es _hacia dónde_**, eso está en
+[`north-star-brox.md`](north-star-brox.md): la North Star, las tres capacidades,
+la métrica de dirección y los seis principios. Este mapa dice el siguiente paso;
+aquél dice contra qué se mide si el paso fue un avance.
+
 **Actualizado:** 2026-08-21
 
 ---

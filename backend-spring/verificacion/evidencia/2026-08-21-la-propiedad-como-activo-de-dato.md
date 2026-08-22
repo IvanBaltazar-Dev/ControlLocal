@@ -295,6 +295,50 @@ correcta hoy y una deuda mañana: cuando haya volumen real habrá que mirar qué
 escribe la gente y decidir si se cierra.
 
 **Sigue abierto lo que V75 dejó dicho**: la alerta «Modificación comercial
-sensible» sin emisor, la propiedad sólo registrada sin agente dueño
-(`exigirPertenencia`) y su propietario fuera del alcance del broker. V76 no las
-toca — y las agranda un poco, porque ahora también puede no tener titular.
+sensible» sin emisor y el propietario de una propiedad sólo registrada fuera del
+alcance del broker.
+
+---
+
+## Addendum · 2026-08-22: el sexto verbo
+
+Al preparar V77 se midió `exigirPertenencia` contra el ciclo canónico de este
+corte, y **sí lo contradecía**. El criterio de aceptación medía cinco verbos
+—crear, leer, editar, observar, conservar— y los cinco pasan por servicios que
+sólo aplican frontera de tenant. **La baja era el sexto**, y pasaba por
+`exigirPertenencia`, que reconoce exactamente dos hechos: «tengo una captación
+viva» y «yo la prospecté». Ninguno es «yo la registré».
+
+Consecuencia: el agente que acaba de registrar una propiedad de conocimiento
+recibía **403 al intentar darla de baja**, y no había otra puerta —`ComandoEdicion`
+no lleva estado y el `DELETE` está cerrado a broker y admin—. El registro quedaba
+**atrapado**: se podía crear, leer, editar y observar, pero no retirar. En la base
+de pruebas eran 219 propiedades irretirables por cualquier actor.
+
+La tercera rama no inventa ningún concepto: pregunta por `id_rol_incorporo`, el
+hecho que **esta misma migración** empezó a registrar, y lo lee de la entidad que
+el caso de uso ya tiene cargada. Deja fuera a propósito las filas anteriores a
+V76, que no saben quién las incorporó.
+
+**Y salió un segundo defecto, peor.** `desactivar` escribía
+`disponibilidad_comercial = 'T'` (RETIRADO) **sin mirar**: sobre una propiedad que
+nunca se ofreció partía de NULL —la máquina de estados se salta la validación
+cuando el origen es nulo— y dejaba dicho, en la columna y en el expediente, que
+se retiró del mercado algo que jamás estuvo en él. Justo la columna con dos
+autoridades que V75 y V76 se negaron a crear, y sin vuelta atrás porque NULL no
+es un código del vocabulario. Ahora la segunda transición sólo ocurre si
+`propiedad.estaOfrecida()`.
+
+Tres casos nuevos en `PropiedadComoActivoDeDatoIntegrationTest` (**18/18**): quien
+la incorporó puede retirarla; retirar lo que nunca se ofreció no toca la
+disponibilidad ni escribe en el expediente; y la baja de lo que **sí** se ofrecía
+lo sigue retirando del mercado.
+
+**Lo que queda dicho y sin resolver:** los dos servicios aplican controles
+distintos sobre el mismo sujeto. `PropiedadUniversalServiceImpl` no tiene ninguna
+regla de pertenencia —sólo tenant—, así que cualquier agente de la organización
+puede **editar entera** una propiedad que no tocó jamás, mientras que darla de
+baja exige haberla prospectado, captado o incorporado. La operación permisiva es
+la que cambia el dato y la restrictiva la que sólo apaga el registro. Decidir una
+sola regla para el sujeto Propiedad es trabajo aparte, y el hecho del que puede
+salir ya existe.

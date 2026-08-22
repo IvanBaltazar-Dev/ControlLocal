@@ -3,6 +3,7 @@ package com.controllocal.integracion;
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.Actor;
+import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.ObservacionMercadoService;
 import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PropiedadUniversalService;
@@ -80,6 +81,7 @@ class PropiedadComoActivoDeDatoIntegrationTest {
     @Autowired PropiedadUniversalService propiedades;
     @Autowired ProspeccionService prospecciones;
     @Autowired ObservacionMercadoService observaciones;
+    @Autowired LocalComercialService locales;
 
     // ==================================================================
     // 1. Un inmueble conocido, sin dueno conocido
@@ -200,6 +202,79 @@ class PropiedadComoActivoDeDatoIntegrationTest {
         assertEquals(2, contar(
                 "select count(*) from observacion_mercado where id_propiedad = ?", id),
                 "y las dos observaciones, que si son suyas");
+    }
+
+    /**
+     * <b>El sexto verbo: se puede retirar del registro.</b>
+     *
+     * <p>El criterio de aceptacion original media cinco —crear, leer, editar,
+     * observar y conservar— y los cinco pasan por servicios que solo aplican
+     * frontera de tenant. La baja pasaba por {@code exigirPertenencia}, que
+     * pregunta por una relacion comercial, asi que <b>el propio autor de la
+     * propiedad recibia un 403</b> y no habia otra puerta: el registro quedaba
+     * atrapado para siempre. Es una dependencia de Prospeccion y Encargo justo
+     * donde V76 declaro que no la hay.
+     */
+    @Test
+    @DisplayName("quien registro una propiedad de conocimiento puede darla de baja")
+    void quienLaIncorporoPuedeRetirarla() {
+        long id = registrarConocida();
+
+        assertTrue(locales.desactivar(id, actor()),
+                "el agente que la incorporo tiene que poder retirar su propio registro");
+
+        assertEquals("I", jdbc.queryForObject(
+                "select estado_registro from propiedad where id_propiedad = ?", String.class, id));
+    }
+
+    /**
+     * <b>Y esa baja no inventa un retiro del mercado.</b>
+     *
+     * <p>La desactivacion escribia {@code disponibilidad_comercial = 'T'}
+     * (RETIRADO) sin mirar: sobre una propiedad que nunca se ofrecio partia de
+     * NULL —la maquina de estados se salta la validacion cuando el origen es
+     * nulo— y dejaba dicho, en la columna y en el expediente, que se retiro del
+     * mercado algo que jamas estuvo en el. Ademas sin vuelta atras, porque NULL
+     * no es un codigo del vocabulario.
+     */
+    @Test
+    @DisplayName("retirar del registro algo que nunca se ofrecio no declara un retiro comercial")
+    void laBajaDeLoNoOfrecidoNoTocaLaDisponibilidad() {
+        long id = registrarConocida();
+
+        locales.desactivar(id, actor());
+
+        assertNull(jdbc.queryForObject(
+                "select disponibilidad_comercial from propiedad where id_propiedad = ?",
+                String.class, id),
+                "nunca estuvo en oferta: no hay nada que retirar del mercado");
+        assertEquals(0, contar("""
+                select count(*) from historial_estado
+                 where entidad_tipo = 'DISPONIBILIDAD_PROPIEDAD' and id_entidad = ?
+                """, id),
+                "y el expediente no cuenta un hecho comercial que no ocurrio");
+    }
+
+    /**
+     * <b>Y la de lo que SI se ofrecio sigue retirandose.</b> El arreglo anterior
+     * no puede convertirse en "la baja ya no retira nada": una propiedad con
+     * encargo vivo que se da de baja sale del mercado, como siempre.
+     */
+    @Test
+    @DisplayName("la baja de una propiedad ofrecida si la retira del mercado")
+    void laBajaDeLoOfrecidoSiRetiraDelMercado() {
+        long id = registrarGestionada(List.of(
+                new OperacionSolicitada("ALQUILER", new BigDecimal("2800"), "PEN",
+                        null, null, null, null, null, null, null)));
+        assertEquals("D", jdbc.queryForObject(
+                "select disponibilidad_comercial from propiedad where id_propiedad = ?",
+                String.class, id));
+
+        locales.desactivar(id, actor());
+
+        assertEquals("T", jdbc.queryForObject(
+                "select disponibilidad_comercial from propiedad where id_propiedad = ?",
+                String.class, id));
     }
 
     /**

@@ -89,7 +89,7 @@ dar de alta y editar agentes pasó a ser gobierno (filas 17 y 18). La tabla list
 | GET | `/locales/{id}` | TODOS | Cartera de la organización. | F2 |
 | GET | `/locales/mis-locales` | AGENTE | Los locales de **sus captaciones** (RF-004), no los que registró. | F2 |
 | POST | `/locales/posibles-duplicados` | AGENTE | Advertencia no bloqueante dentro del tenant: compara inmuebles del mismo propietario por dirección técnica, unidad/piso compatibles y metraje aproximado. | F2 |
-| DELETE | `/locales/{id}` | AGENTE | Baja lógica (estado I); solo locales que el agente **prospectó o captó**. | F2 |
+| DELETE | `/locales/{id}` | AGENTE | Baja lógica (estado I); solo propiedades que el agente **prospectó, captó o incorporó** — la tercera la añadió V76: una propiedad puede existir sin relación comercial, y sin ella su propio autor no podía retirarla. Si nunca estuvo en oferta, la baja **no** declara un retiro comercial. | F2 |
 | GET | `/locales/{id}/precios` | TODOS | Colección hija: se alcanza por el id del padre, que sí va filtrado por tenant. | F2 |
 | POST | `/locales/{id}/precios` | AGENTE | Hito del histórico sobre un local de sus captaciones. | F2 |
 | GET | `/locales/{id}/fotos` | TODOS | Colección hija del local. | F2 |

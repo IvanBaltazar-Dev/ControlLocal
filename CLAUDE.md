@@ -20,6 +20,15 @@ The domain vocabulary (entity, enum, and method names) is Spanish; keep it Spani
   1. **`docs/ai/mapa-ejecucion-brox.md` — the cover page. Open this first, always.** Answers "where are we, what did we close, what's next" in one table: stages E0…E9, each ✅ CERRADA / 🟡 EN CURSO / ⬜, with what you can go and verify. It is updated when a stage closes; if it says a stage is closed, the repository is coherent.
   2. `docs/ai/checklist-captura-moat-e-inteligencia-inmobiliaria.md` — what is still missing to close the current stage. A stage closes with **gate + tests + evidence**, and not before.
   3. `docs/ai/decision-*.md` (D-E…) — specific functional decisions, each one self-contained.
+
+  Above those three sits `docs/ai/north-star-brox.md` — the **strategic frame**
+  (SIVAN's North Star document, plus how it already binds the code). It does not
+  say what to do next; it says **what counts as an advance**. Read it when a
+  decision has two reasonable answers. Its non-negotiables show up as rules you
+  will hit anyway: data accumulates (never retire a datum before its replacement
+  exists), an unknown value is declared FALTANTE and never guessed, Web and
+  KAIROS receive the *same* Core definition, and every datum carries its
+  procedencia.
 - **The migration-era docs no longer govern.** `plan-maestro-ruta-a-produccion.md`, `checklist-migracion.md`, `plan-migracion-*`, `estado-actual-control-local.md`, `mapa-estado-y-pendientes.md`, `arquitectura-objetivo-java-fullstack.md`, `inventario-backend-java.md`, `inventario-frontend-blazor.md`, `informe-tecnologias-…-e5.md`, `plan-s0-*` and `uat-rc1-guion-manual.md` all carry a `HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL` banner. Keep them for the *why*, never for the *what next*. **Careful with the lettering**: those docs use the migration's E1…E5 (personas, reportes, ficha, dashboard, corte), which is **not** the current E0…E9 of the execution map. Same letters, different plan.
 - Still authoritative reference: `docs/ai/matriz-operacion-rol.md` is the source of truth for **who can call what and where scope is decided** — read it before building any role-aware screen; it is enforced by a test. The `contrato-congelado-*.md` family still **describes** current wire behaviour and is kept up to date, but the freeze is gone and the authority is the tests plus OpenAPI. `docs/ai/seguridad-no-leer.md` is named "do not read" by convention — leave it alone.
 

@@ -256,7 +256,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         Propiedad propiedad = propiedades.findByOrganizacionIdAndId(actor.idOrganizacion(), id)
                 .orElseThrow(() -> new ReglaNegocioException("Local no encontrado"));
 
-        exigirPertenencia(id, actor);
+        exigirPertenencia(propiedad, actor);
 
         // EstadoRegistroPropiedad, no Propiedad.LEGADO_INACTIVO: el destino de
         // esta transicion es la COLUMNA `estado_registro`, y aquella constante
@@ -266,8 +266,19 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         // vocabularios cambiara una letra, esto romperia en silencio.
         transiciones.aplicar(propiedad, id, EstadoRegistroPropiedad.INACTIVO.codigo(), actor,
                 "Desactivación de local por el agente");
-        transiciones.aplicarDisponibilidad(propiedad, id, DisponibilidadComercial.RETIRADO,
-                actor, "Retiro comercial por desactivacion del registro");
+        // Y se retira del mercado SOLO lo que estuvo en el mercado (V76).
+        //
+        // Esta segunda transicion era incondicional, y sobre una propiedad que
+        // nunca se ofrecio escribia `disponibilidad_comercial = 'T'` (RETIRADO)
+        // partiendo de NULL —`MaquinasEstado` se salta la validacion cuando el
+        // origen es nulo—, dejando ademas su fila en `historial_estado`.
+        // Afirmaba un hecho comercial que no ocurrio: no se puede retirar del
+        // mercado algo que nunca estuvo en el. Y es irreversible, porque NULL
+        // no es un codigo del vocabulario y no hay transicion de vuelta.
+        if (propiedad.estaOfrecida()) {
+            transiciones.aplicarDisponibilidad(propiedad, id, DisponibilidadComercial.RETIRADO,
+                    actor, "Retiro comercial por desactivacion del registro");
+        }
         return true;
     }
 
@@ -297,14 +308,33 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      * local recien creado — que solo tiene su prospeccion inicial — no se podia
      * editar hasta captarlo. En v2 el agente es dueno si PROSPECTO o CAPTO el
      * local (misma intencion, sin el hueco). Mensaje del cable v1.
+     *
+     * <h2>La tercera rama, y por que V76 la hacia obligatoria</h2>
+     * Las dos primeras preguntan por una <b>relacion comercial</b>, y desde V76
+     * una Propiedad puede existir legitimamente sin ninguna: se registra un
+     * inmueble que BROX conoce y no gestiona. El resultado era que su propio
+     * autor recibia un 403 al intentar darla de baja —y no habia otra puerta,
+     * porque {@code ComandoEdicion} no lleva estado y el DELETE esta cerrado a
+     * broker y admin—, de modo que la propiedad quedaba <b>atrapada</b>: se
+     * podia crear, leer, editar y observar, pero no retirar. El criterio de
+     * aceptacion de V76 medía cinco verbos y ese era el sexto.
+     *
+     * <p>La rama nueva no inventa ningun concepto: pregunta por un hecho que la
+     * propia V76 empezo a registrar, {@code propiedad.id_rol_incorporo} —quien
+     * la incorporo—, y lo lee de la entidad que el caso de uso ya tiene
+     * cargada, sin una consulta mas. Deja fuera a proposito las filas
+     * anteriores a V76, que no saben quien las incorporo: eso no se rellena con
+     * el caso frecuente.
      */
-    private void exigirPertenencia(long idPropiedad, Actor actor) {
+    private void exigirPertenencia(Propiedad propiedad, Actor actor) {
         long idOrganizacion = actor.idOrganizacion();
         long idRolAgente = actor.idRolOperativo();
+        long idPropiedad = propiedad.getId();
         boolean dueno = captaciones.existsByOrganizacionIdAndPropiedadIdAndAgenteIdAndEstadoNot(
                         idOrganizacion, idPropiedad, idRolAgente, Captacion.CERRADA)
                 || prospeccionesRepo.existsByOrganizacionIdAndPropiedadIdAndAgenteId(
-                        idOrganizacion, idPropiedad, idRolAgente);
+                        idOrganizacion, idPropiedad, idRolAgente)
+                || Objects.equals(propiedad.getIdRolIncorporo(), idRolAgente);
         if (!dueno) {
             throw new ReglaNegocioException("Operación denegada. Este local no pertenece a tus captaciones.");
         }

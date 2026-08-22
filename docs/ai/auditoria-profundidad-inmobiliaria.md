@@ -91,7 +91,7 @@ Esto es lo más barato del plan: filas en `catalogo_atributo_tipo`, cambios de `
 | `area_terreno` | Subir en C y T. Una casa se tasa por el PAR (terreno, construida). | A,C,T | **ALT** en C · **PUB** en T |
 | `antiguedad_anios` | **Quitar `aplica_todos`**. Un terreno eriazo no tiene antigüedad; preguntarlo hace dudar de si el sistema entiende lo que se registra. | L,O,D,C,A | PUB en C, L, O |
 | `estacionamientos` | **Quitar `aplica_todos`** (fuera de T). Valor mínimo 0 ya está bien: 0 = no tiene, nulo = no se sabe. | L,O,D,C,A | PUB en C, L, O, D |
-| `banos` | **Añadir L, O, A** (hoy sólo C,D: un local se registra sin decir si tiene SS.HH., y sin ellos no hay ITSE ni licencia). Estrechar **DECIMAL → ENTERO** y sacar el medio baño a `medios_banos`: hoy `2.5` es una convención no publicada en ninguna parte y un agente escribe 2.5 donde otro escribe 3. | L,O,D,C,A | **PUB** en L,O,D,C,A |
+| `banos` | **Añadir L, O, A** (hoy sólo C,D: un local se registra sin decir si tiene SS.HH., y sin ellos no hay ITSE ni licencia). ⚠️ **El estrechamiento DECIMAL → ENTERO + `medios_banos` NO va en el Corte 1**: `medios_banos` es una clave **nueva** y este corte declara «cero claves nuevas». Entra en el **Corte 3** con el bloque de baños/servicio, que es donde ya estaba previsto. Hasta entonces `banos` sigue DECIMAL y la ambigüedad del `2.5` se documenta en la ayuda del campo, no se resuelve a medias. | L,O,D,C,A | **PUB** en L,O,D,C,A |
 | `cuota_mantenimiento` | **Añadir C y A** (condominios y parques logísticos). Cambiar a **IMPORTE** (con moneda). | D,L,O,C,A | PUB |
 | `zonificacion` | **Añadir O** (una oficina en casa de zona residencial no obtiene licencia; es la omisión más cara del tipo). **TEXTO → LISTA** con el vocabulario de los planos de Lima. Hoy `C-2`, `c2` y `Comercio Zonal` son tres valores distintos y no agrupan nada. | A,C,L,T,O | ALT en T (ya) · **PUB** en L,O,A |
 | `rubro_permitido` | **TEXTO → LISTA_MULTIPLE** cerrada. Y **una sola autoridad**: el matcher lo lee hoy de `detalle_local_comercial`, tabla que el alta universal no escribe nunca (§5, corte 1). | A,L,O | PUB |
@@ -101,7 +101,7 @@ Esto es lo más barato del plan: filas en `catalogo_atributo_tipo`, cambios de `
 | `piso` | Subir en D y O: sin piso, «Av. Larco 1234» y «Javier Prado 476» nombran un edificio, no una unidad. Rótulo → **«Piso de ingreso»** (en un dúplex nadie sabe hoy si escribir 8 o «8-9»). | D,L,O | **ALT** en D,O |
 | `interiorUnidad` *(estructural)* | **Habilitar para A** (el stock logístico moderno se identifica por módulo). Exigir en D. | D,L,O,A | **ALT** en D · PUB en A |
 | `nombreEdificioGaleria` *(estructural)* | **Habilitar para A** (condominio o parque logístico: es como se busca el activo y hoy acaba dentro de `direccion`). | D,L,O,A | PUB en A |
-| `servicios_disponibles` | **Retirar.** Para un terreno el estado no es sí/no: se sustituye por `agua_desague`, `energia_electrica` y `gas`, cada uno con su tercer estado «con factibilidad aprobada», que es justo el que decide si el lote es desarrollable. | — | — |
+| `servicios_disponibles` | **Se retira en el Corte 5, no antes.** Para un terreno el estado no es sí/no: lo sustituyen `agua_desague`, `energia_electrica` y `gas`, cada uno con su tercer estado «con factibilidad aprobada», que es justo el que decide si el lote es desarrollable. ⚠️ **Esas tres claves nacen en el Corte 5** (Terreno). Retirarla antes deja varias migraciones durante las cuales BROX **deja de capturar un hecho que antes capturaba** — un agujero temporal en la profundidad del dato, que es exactamente lo que la North Star prohíbe. Se retira **en la misma tanda que introduce sus reemplazos**, migrando lo que sea recuperable y declarando FALTANTE lo que no. | A,C,L,O,T,D,X (sin cambio hasta el Corte 5) | OPC |
 | `apto_licencia_funcionamiento` | Se conserva como declaración, pero deja de estar solo: se acompaña de `certificado_itse`. | A,L,O | OPC |
 | `dormitorios` | Sin cambios (ALT en C,D, correcto). | C,D | ALT |
 | `amoblado` | Sin cambios como **hecho físico**. Su mitad comercial sale a `se_ofrece_amoblado` (§4). | C,D | OPC |
@@ -399,12 +399,156 @@ Sólo cuando 0A esté verde.
 
 ---
 
-### **Corte 1 — Filas gratis: las 19 claves que ya existen** · el mejor coste/valor del plan
+### **Corte 1 — Las 19 claves que ya existen** · migración **V77**
 
-- **Migración V77**: todo el §3.1. Filas en `catalogo_atributo_tipo` (`banos` en L,O,A; `cuota_mantenimiento` en C,A; `zonificacion` en O; `pisos_edificacion` en D,O; `frente` en C), flips de exigencia, cambios de `tipo_dato` (`zonificacion` y `rubro_permitido` a LISTA/LISTA_MULTIPLE con sus opciones, `cuota_mantenimiento` a IMPORTE, `banos` a ENTERO), quitar `aplica_todos` de `antiguedad_anios` y `estacionamientos`, rótulo de `metraje_total`, habilitar `interiorUnidad`/`nombreEdificioGaleria` para A, retirar `servicios_disponibles`, retirar `metraje_construido` de D.
-- **Código**: `GuionRegistroPropiedad` deja de restringir `interiorUnidad`/`nombreEdificioGaleria` a L,O,D. Migrar el dato existente de `banos` DECIMAL a `banos` ENTERO + `medios_banos` **sin inferir**: `2.5` → 2 completos + 1 medio es la única lectura documentada, y lo que no encaje se declara FALTANTE.
-- **Prueba**: E2E que comprueba que un TERRENO ya no pregunta antigüedad ni estacionamientos, y que un LOCAL pregunta baños.
-- **Valor**: sin una sola clave nueva desaparecen dos preguntas sin sentido, la zonificación pasa a filtrable, el mantenimiento deja de ser un número sin moneda y el local deja de registrarse sin SS.HH.
+> **Preflight ejecutado el 2026-08-22.** Antes de escribir una línea de la
+> migración se midieron todos los valores existentes de las 19 claves en las dos
+> bases —`controllocal_dev` (26 propiedades, cartera de uso real) y
+> `controllocal_repositorios` (1 915, la de los tests de integración)— y cada
+> transformación se clasificó **reversible / reconciliable / bloqueada**. Lo que
+> sigue ya no es un plan: es lo que el dato permite.
+>
+> El resultado corrige el encabezado que este corte tenía. **No es «filas
+> gratis»**: cuatro de sus cambios están bloqueados por un trigger que el
+> documento no mencionaba, dos más por el dato, y uno por una contradicción
+> interna del propio plan.
+
+#### Lo que V77 SÍ hace: ampliar aplicabilidad, y **como OPC**
+
+Insertar filas en `catalogo_atributo_tipo` es lo único del corte que no toca ni
+reinterpreta ningún valor: esa tabla no tiene trigger, y en los cinco casos **no
+existe hoy un solo valor de esa clave en el tipo que se añade**.
+
+| Cambio | Medido |
+|---|---|
+| **`banos` a L, O, A** | Sus 406 valores están en C y D. Cero en L, O y A. |
+| **`cuota_mantenimiento` a C, A** | Sus 625 valores están en D, L y O. Cero en C y A. |
+| **`zonificacion` a O** | Sus 584 valores están en A, C, L y T. Las 72 oficinas no tienen ninguno. |
+| **`pisos_edificacion` a D, O** | Es la clave más estrecha del catálogo: hoy tiene **una sola fila**, C. Ningún departamento ni oficina tiene valor. |
+| **`frente` a C** | Sus 475 valores están en A, L y T. Ninguna casa tiene. |
+| **`interiorUnidad` / `nombreEdificioGaleria` habilitados para A** | **No son claves de catálogo**: son columnas estructurales y su restricción a L,O,D vive en `GuionRegistroPropiedad.ESTRUCTURALES_POR_TIPO`. Habilitarlas son dos `Set.of` — sin migración. Y el escritor ya las acepta sin mirar el tipo: los 83 almacenes de la base de pruebas **ya las tienen rellenas** aunque el guion no se las pregunte nunca. |
+
+**«Como OPC» no es un detalle de redacción.** `exigencia` es `NOT NULL` sin
+defecto: hay que elegirla en el mismo INSERT. Insertadas como OPC son inertes;
+insertadas como PUB —que es lo que §3.1 declara como estado resultante— dejan
+**139 casas y 83 almacenes sin poder publicarse de golpe**, ninguno con valor. Y
+hay que escribir también `requerido`, que es su columna espejo y hoy es coherente
+al 100 %.
+
+**Dos de esas preguntas nacen sin su referente**, y conviene saberlo al
+formularlas: la cuota de mantenimiento de una casa necesita `en_condominio` (§3.4
+lo dice con estas palabras: «sin él, la cuota de mantenimiento de una casa no
+tiene a qué referirse») y la de un almacén necesita `base_mantenimiento` (§4).
+Las dos son claves **nuevas**, así que en V77 la pregunta existe y su referente
+no. Es aceptable —un número sin referente sigue siendo mejor que ningún número—
+pero se declara, no se descubre después.
+
+#### El rótulo de `metraje_total`: el cambio que parecía gratis y no lo es
+
+Renombrar a «Área techada» **no toca ninguna fila a nivel SQL, y reinterpreta
+todas**. Tres cosas que la primera lectura no vio:
+
+1. **El rótulo es la instrucción al agente sobre qué número teclear**
+   (`propiedad-form.html`), y ese número va a `propiedad.metraje`, columna
+   `NOT NULL` que desde V61 es **la autoridad única** —V61 borró la copia de
+   `atributo_propiedad` y dejó una guarda que revienta si vuelve—. Todo lo
+   capturado después de V77 entra bajo la convención nueva y **queda mezclado en
+   la misma columna** con lo anterior, sin ninguna marca que los separe. Revertir
+   el rótulo más tarde no re-anota esas filas: ahí está la irreversibilidad.
+2. **KAIROS usa el rótulo como desambiguador.** `InterpreteDeterminista` arma su
+   índice de palabras con el rótulo **vivo**, y su propio javadoc dice por qué no
+   usa la unidad: «tres atributos comparten m², y "120 m²" no dice cuál de los
+   tres es». Esos tres son `metraje_total`, `metraje_construido` y `area_terreno`
+   — y el renombrado hace que el primero colisione justo con aquello de lo que
+   tiene que distinguirse.
+3. **`BandaDeMetraje`** trocea la cartera en bandas comerciales sobre
+   `propiedad.metraje`, y los cortes se calibraron sobre «total».
+
+El precedente que se citaba **no aplica**: V68 arregló tildes y V69 unidades;
+ninguna cambió el *significado* de un rótulo. El precedente real apunta al revés
+— V61, ante metrajes divergentes, **abortó** con «elegir cuál gana es una
+decisión de negocio: resuélvelas antes de migrar».
+
+**Sigue siendo reconciliable, y la reconciliación no inventa nada**: donde hay
+`metraje_construido` el metraje se autodesambigua (es el total); donde no lo hay
+—1 129 de 1 932 filas medidas— la convención es **desconocida y se declara así**,
+no se asume techada. Pero hoy no existe ninguna columna que registre bajo qué
+convención se capturó cada metraje, **así que esa marca viaja en V77 junto al
+rótulo o el rótulo no viaja**. Con el rótulo solo, la mezcla es irrecuperable.
+
+#### Lo que V77 NO hace, y dónde va
+
+| Cambio | Por qué se detiene | Dónde entra |
+|---|---|---|
+| **`banos` DECIMAL → ENTERO + `medios_banos`** | `medios_banos` es una **clave nueva**, y este corte declara cero claves nuevas: es una contradicción interna. Además `tg_catalogo_sistema_inmutable` **prohíbe cambiar el `tipo_dato` de una clave del sistema** («los valores ya escritos dejarían de significar lo mismo»), y 379 de 406 valores son `.5`. | **Corte 3**, con el bloque de baños/servicio, donde `medios_banos` ya estaba previsto. |
+| **`servicios_disponibles` retirada** | Sus reemplazos (`agua_desague`, `energia_electrica`, `gas`, cada uno con «con factibilidad aprobada») **nacen en el Corte 5**. Retirarla ahora deja cuatro cortes en los que BROX **deja de capturar un hecho que hoy captura**. Y mecánicamente tampoco se puede: el trigger bloquea el DELETE de una clave del sistema — la única salida legal es `activo = false`. | **Corte 5**, en la misma tanda que introduce los reemplazos, migrando lo recuperable y declarando FALTANTE lo que no. |
+| **`cuota_mantenimiento` → IMPORTE** | **625 filas, `valor_moneda` NULL en el 100 %.** Y no hay de dónde sacarla: `propiedad.moneda_referencial` es la moneda de una renta o de un precio de venta, no la de un gasto mensual de junta — el mismo importe 350 aparece bajo PEN (237 veces) y bajo USD (56), y 280 sólo bajo USD. La tercera fuente, el encargo vivo, tiene **74 casos con monedas en conflicto** y 115 sin encargo. Rellenarla sería inventar. | Cuando la moneda se **declare**. Hasta entonces el importe sigue viajando como número: retirar el número perdería el único dato que sí existe. |
+| **`rubro_permitido` → LISTA_MULTIPLE** | Es la conversión con más **dato real de uso** detrás: 22 valores libres distintos tecleados en `dev` («Restaurante / cafetería», «Bar restaurante», «Bodega» vs «Depósito comercial» vs «Logística»…), varios **no mapeables con certeza** — decidirlos es normalizar por parecido. Y cambia el **almacén**, no sólo el vocabulario: LISTA_MULTIPLE exige que los valores vivan en `atributo_propiedad_opcion`, y las 488 filas actuales tienen `valor_texto`. | Cuando exista el vocabulario reconciliado **con su tabla de opciones sembrada** y la migración mueva los 488 valores. Los que no mapeen se declaran FALTANTES, no se aproximan. |
+| **`zonificacion` → LISTA** | Los 584 valores mapearían al 100 % (`CZ`, `RDM`, `RDA`, `I2`), así que el dato viejo no es el problema: **el nuevo sí**. Un vocabulario derivado de lo observado tendría 4 opciones, y la zonificación real de Lima tiene decenas (CV, CM, CE, RDB, I1-I4, OU, ZRP, ZTE…). Con la lista cerrada a lo medido, el agente que está delante de un local en CV **no tiene dónde poner lo que ve**. | Cuando el vocabulario salga de **los planos de zonificación**, no de estas 584 filas. La conversión es fácil; la lista es el trabajo. |
+| **`metraje_construido` fuera de D** | La premisa —«para un departamento nombra el mismo hecho que `metraje_total`»— **no se sostiene con este mismo documento**: §3.1 renombra `metraje_total` a «Área techada» en los **siete** tipos, así que si en D nombra lo mismo, también en A, C, L y O — y ahí el plan lo conserva y lo **sube** a PUB. No hay criterio que separe D. (El cruce de datos no decide nada: los 803 valores son cinco constantes de fixture repetidas.) | Cuando el plan diga qué hecho es cada uno **en cada tipo**. Retirarlo antes huérfana 267 filas sin reemplazo. |
+| **Exigencia declarada de `interiorUnidad` / `nombreEdificioGaleria`** | «ALT en D» y «PUB en A» **no tienen dónde escribirse**: son estructurales, la `Pregunta` del guion no lleva campo de exigencia y las dos están en la lista de opcionales. | Cuando el guion sepa declarar exigencia sobre un campo estructural. |
+
+#### Lo que hay que decidir a propósito antes de escribir la migración
+
+1. **Quitar `aplica_todos` no basta, y por sí solo no hace nada.** V72 materializó las 7 filas de tipo de `antiguedad_anios` y `estacionamientos`, y tanto Java como el trigger evalúan `aplica_todos OR EXISTS(fila de tipo)`: bajar la bandera sin borrar la fila deja TERRENO preguntándolo igual. **Es un no-op.**
+2. **Y al borrarlas quedan huérfanas 166 filas de cada una** (83 en T y 83 en X). No se borran solas: la ficha las sigue pintando pero **con la clave cruda** —`antiguedad_anios` sin unidad en vez de «Antigüedad»— y **cualquier re-guardado de esa propiedad revienta**. Hay que decidir si se borran, se archivan o se dejan.
+3. **El tipo X (OTRO) se queda con una sola pregunta.** Hoy tiene exactamente tres claves aplicables y son las tres de `aplica_todos`. Quitando dos, a X le queda `metraje_total`. §7.8 dice «no abrir X, auditarlo antes de decidir si sigue existiendo» — y este corte lo reduce de refilón. Que sea una decisión, no un efecto colateral.
+4. **Los flips a PUB son el cambio de mayor impacto operativo del corte, y no estaba cuantificado.** Hoy **ninguna** de las 19 claves del sistema tiene exigencia PUB. Medido lo que faltaría: `pisos_edificacion` en 1 048 de 1 048 departamentos y 72 de 72 oficinas; `banos` en 781 D, 407 L, 72 O, 83 A; `cuota_mantenimiento` en 806 D, 139 C, 97 L, 83 A. En `dev`, **prácticamente ningún local volvería a ser publicable**. Lo ya publicado no se retira —el gate es de entrada— pero republicar sí se bloquea. O se escalona, o se acepta y se dice.
+5. **`requerido` es columna espejo de `exigencia`** y hoy son coherentes al 100 % (0 filas divergentes). V77 tiene que escribir las dos, o rompe la coherencia que V72 dejó establecida.
+6. **El gate del Corte 0A cae con esto.** `ConservacionDeLaEdicionIntegrationTest` usa literalmente lo que este corte invalida: DEPARTAMENTO con `banos = 2.5`, cuotas sin moneda, TERRENO con `servicios_disponibles` y con antigüedad y estacionamientos, y el caso OTRO compuesto de las tres claves `aplica_todos`. Reescribir esos fixtures es parte del corte, y hay que reconocer que el gate deja de cubrir los siete tipos con los mismos datos con que se cerró 0A.
+
+#### Qué tan verificado está esto
+
+Cada medición pasó por un segundo agente con la carga de la prueba invertida
+—«encuentra una fila, un valor o un consumidor que se pierda»—, y **tres
+veredictos cambiaron la conclusión de partida**: el rótulo de `metraje_total`
+dejó de ser el cambio inocuo (§ arriba), añadir `cuota_mantenimiento` a C y A
+dejó de ser inerte (la exigencia hay que elegirla, y el referente no existe), y
+la justificación de retirar `metraje_construido` de D resultó estar apoyada en un
+fixture, no en la cartera. Ocho verificaciones no llegaron a correr; las que
+quedaron sin segundo par de ojos son las de menor riesgo —`frente`,
+`pisos_edificacion`, `interiorUnidad`, `nombreEdificioGaleria`, `zonificacion` a
+O— y su clasificación descansa en **una sola medición**. Se dice para que quien
+ejecute V77 sepa cuáles volver a mirar.
+
+#### El gate de V77
+
+No basta con comprobar filas del catálogo. **Una corrección del catálogo que no llegue idéntica a los consumidores no está cerrada.** El gate recorre los **siete tipos** y demuestra, para cada uno:
+
+- **qué pregunta el alta** y **qué exige** para poder registrar (ALT);
+- **qué exige para publicar** (PUB) y qué mensaje da cuando falta;
+- **qué dejó de preguntar**, y que lo que dejó de preguntarse **sigue siendo legible** donde ya estaba escrito;
+- que un valor existente sobrevive a **`GET` → `PUT` de otra cosa → `GET`** — el gate de conservación del 0A, ahora con el catálogo nuevo;
+- que **BROX Web y KAIROS reciben la misma definición del Core**: mismo guion, mismos rótulos, misma exigencia, mismo vocabulario. Es la frontera D-A-1 y el principio del North Star de que los dos consumen el mismo núcleo.
+
+#### La instrucción, para quien entre a V77
+
+> Antes de modificar el catálogo, **mide** todos los valores existentes de las 19
+> claves y clasifica cada transformación como reversible, reconciliable o
+> bloqueada. **No inventes moneda, no normalices texto por aproximación, no
+> retires un dato antes de que exista su reemplazo y no introduzcas claves nuevas
+> en este corte.** El objetivo de V77 es mejorar la semántica de las 19 claves
+> existentes **conservando íntegramente el conocimiento ya acumulado**. Después
+> verifica los siete tipos, alta/edición/publicación, Web y KAIROS, y cierre
+> completo.
+
+La medición ya está hecha y es lo que hay arriba; lo que queda es volver a
+correrla contra la cartera del momento —habrá crecido— y comprobar que ninguna
+clasificación empeoró.
+
+#### Valor
+
+Sigue siendo de los mejores coste/valor del plan, pero por lo que de verdad
+hace: **cinco tipos ganan preguntas que hoy no tienen** —baños en local, oficina
+y almacén; mantenimiento en casa y almacén; zonificación en oficina; pisos de
+edificación en departamento y oficina; frente en casa— y el almacén pasa a poder
+identificarse por módulo y por nombre de parque. Sin una sola clave nueva y **sin
+perder un solo dato**.
+
+Lo que **no** entrega, y conviene no prometerlo: el metraje no deja de ser
+ambiguo por renombrarlo. Deja de serlo el día que cada fila diga bajo qué
+convención se capturó — y ese día empieza en V77 sólo si la marca viaja con el
+rótulo.
 
 ---
 
@@ -419,11 +563,24 @@ Sólo cuando 0A esté verde.
 ### **Corte 3 — Vivienda: D y C** · §3.3, §3.6, §3.4 (parte)
 Siembra + opciones + E2E de alta/edición/publicación por tipo. Aquí entran `tipologia`, `estado_conservacion`, `ascensores`, `vigilancia`, `areas_comunes`, `vista`, el bloque de baños/servicio y las áreas exteriores.
 
+**Hereda del Corte 1:** `medios_banos` nace aquí, y sólo entonces `banos` puede
+estrecharse a ENTERO — con su migración de datos, que es determinista (los 379
+valores fraccionarios medidos son `.5` exactos, sin un solo caso raro) pero
+descansa en una **convención no publicada**: hay que escribirla en la ayuda del
+campo antes de aplicarla, no después.
+
 ### **Corte 4 — Comercial: L, O, A** · §3.7, §3.5
 `tipo_acceso` (el único ALT nuevo de L), `clase_edificio`, `nivel_implementacion`, `metraje_arrendable`, `aforo_itse`, `certificado_itse`, el bloque logístico completo y las instalaciones.
 
 ### **Corte 5 — Terreno: T** · §3.8
 Parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. Cierra la duplicidad `metraje_total`/`area_terreno` para T.
+
+**Hereda del Corte 1:** aquí nacen `agua_desague`, `energia_electrica` y `gas`,
+y **sólo entonces** `servicios_disponibles` pasa a `activo = false` (no se
+borra: el trigger del catálogo del sistema no lo permite, y además borrarla
+perdería lo escrito). La migración reparte el literal de cada fila entre las tres
+claves nuevas cuando sea recuperable y declara FALTANTE lo que no lo sea. El
+orden importa: primero existen los reemplazos, después se retira el reemplazado.
 
 ### **Corte 6 — Unidades relacionadas** · §5
 Una unidad con partida propia **es una Propiedad relacionada**, con identidad, titularidad, partida, histórico y eventualmente encargo propios — no un escalar dentro de un EAV. Migración con `unidad_relacionada`, códigos `'E'` y `'B'`, `unidadesRelacionadas[]` en el DTO, paso en el guion, y la resignificación deliberada de `numeroEstacionamientos` en `FronteraDeAutoridadEnElSpaTest`.

@@ -1,5 +1,20 @@
 # Encargo · Sesión paralela: KAIROS funcional (bloque 4)
 
+> **NO EJECUTADO, Y A PROPÓSITO.** (anotado 2026-08-22) La sesión paralela nunca
+> arrancó y el bloque 4 sigue ⬜. La prioridad fijada el 2026-08-22 dice
+> explícitamente **no adelantar KAIROS**: primero hay que reconciliar su
+> adaptador con el Core, porque el *handshake* `/capacidades` que este encargo
+> da por hecho **no existe en BROX**.
+>
+> Además el encargo quedó desfasado en su inventario: da por vigente el estado
+> del bloque 3 (2026-08-18) y desde entonces entraron los cortes 0A–0E y el
+> Corte 1 (V71…V78), que cambian el catálogo, el sujeto del dato y la
+> publicación por encargo. **Reescribir el encargo antes de usarlo**; leerlo
+> como está haría construir contra un contrato viejo.
+>
+> Lo vigente sobre la frontera: `decision-kairos-contrato-de-acciones.md` y
+> `decision-frontera-brox-core-web-kairos.md`.
+
 **Para:** una sesión de Claude Code trabajando **en paralelo** sobre este mismo
 repositorio, mientras otra sesión hace el SPA.
 

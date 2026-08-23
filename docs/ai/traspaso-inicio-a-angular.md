@@ -1,5 +1,10 @@
 # Traspaso a Angular — pantalla de Inicio
 
+> **CUMPLIDO.** (anotado 2026-08-22) El Inicio se construyó y **E2 cerró el
+> 2026-08-19**. Este documento era el encargo de traspaso; ya no describe
+> trabajo pendiente sino lo que se hizo y con qué datos. Lo vigente es el
+> diseño congelado (`decision-inicio-foco-y-resolucion.md`) y el código.
+
 **Qué responde:** qué hay que construir, con qué datos, y qué falta en el
 backend para que el Inicio diseñado en D-E2-1 exista de verdad.
 

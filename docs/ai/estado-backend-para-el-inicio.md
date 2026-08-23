@@ -1,5 +1,19 @@
 # Backend del Inicio: qué hay, qué falta y en qué orden hacerlo
 
+> **CUMPLIDO — ya no dice qué falta.** (anotado 2026-08-22) La etapa **E2 cerró
+> el 2026-08-19** con sus seis subtandas: la pelota (`DEPENDE_DE_MI`), el
+> hallazgo, la capa de interpretación, el Radar del broker, y contraste/pie/metas
+> con `estadoRitmo` bajado al dominio. Lo que este documento pedía construir está
+> construido, y su checklist ya no es una lista de trabajo.
+>
+> **Sigue siendo útil como el *porqué*** de por qué cada pieza del Inicio está
+> donde está. Lo vigente: `mapa-ejecucion-brox.md` (dónde estamos) y
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta de verdad).
+>
+> **Único hueco de este documento que sigue abierto:** el `GET /inicio`
+> compuesto no existe — el Inicio se arma en el SPA con varias llamadas. Está
+> recogido en `pendientes-brox.md`.
+
 **Qué responde:** cuánto del Inicio diseñado en D-E2-1 se puede construir con
 el backend de hoy, qué falta de verdad, y el orden de desarrollo con su
 checklist.

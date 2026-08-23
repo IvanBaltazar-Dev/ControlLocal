@@ -1,5 +1,20 @@
 # Auditoría transversal de la interfaz de BROX
 
+> **MEDICIÓN DE 2026-08-17 — parcialmente superada.** (revisada 2026-08-22)
+> Sus veredictos siguen siendo la agenda de UI, pero tres de sus cinco
+> `BACKEND_FALTANTE` **ya se construyeron**: `estadoRitmo` y la clasificación por
+> asunto (E2.6), `DEPENDE_DE_MI` (E2.2) y la cola del broker (E2.5). Siguen sin
+> existir **capacidades por sesión** y **`GET /inicio` compuesto**.
+>
+> Del resto: `Panel` y la pantalla de Catálogos se retiraron, y el menú se
+> renombró. Siguen abiertos `BroxPageHeader` (50 pantallas se pintan su propia
+> miga), «ControlLocal» visible en 6 pantallas más el `<title>`, y «Cierres
+> exitosos». Todo eso, con su medición de hoy, está en `pendientes-brox.md` §4.
+>
+> ⚠️ **Ojo con la numeración.** Los «Corte 1 / Corte 2» de §10 son los de **UI**
+> y **no** son los `Corte 0A…7` del catálogo
+> (`auditoria-profundidad-inmobiliaria.md`). Mismas palabras, dos planes.
+
 **Qué responde:** qué hay hoy en el SPA, qué se repite, qué se contradice y qué
 hay que hacer con cada cosa — antes de rediseñar ningún componente.
 

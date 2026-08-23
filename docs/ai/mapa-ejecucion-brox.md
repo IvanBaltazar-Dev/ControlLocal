@@ -8,7 +8,13 @@ qué sigue, se responde aquí y en ninguna otra parte.
 la métrica de dirección y los seis principios. Este mapa dice el siguiente paso;
 aquél dice contra qué se mide si el paso fue un avance.
 
-**Actualizado:** 2026-08-21
+**Y si lo que quieres es la lista completa de lo que falta** —incluido lo que no
+pertenece a ninguna etapa: producción, multi-tenancy, UI, verificación y estado
+documental—, está en [`pendientes-brox.md`](pendientes-brox.md), medido contra
+el repositorio y la base el 2026-08-22. Este mapa dice **el siguiente paso**;
+aquél dice **todo lo que queda**.
+
+**Actualizado:** 2026-08-22
 
 ---
 

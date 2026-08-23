@@ -7,6 +7,11 @@
 > Este documento **describe el comportamiento vigente** y se sigue actualizando
 > —no es historia—, pero la autoridad son **las pruebas y OpenAPI**, no este
 > texto. Si discrepan, manda la suite.
+>
+> **Y las rutas `backend-java/...` que este documento cita ya no existen.** El
+> stack legado se borró del árbol el 2026-08-08; esos nombres se conservan
+> porque explican de dónde salió cada campo, no porque se puedan abrir. Lo
+> vigente vive en `backend-spring/.../web/controlador/` y en su suite.
 
 **Estado:** CONGELADO, CORTADO Y VERIFICADO (2026-07-29)  
 **Fuente de verdad:** `backend-java/controllocal-rest/.../ClientesRest.java`,

@@ -724,7 +724,10 @@ rótulo.
 
 ### **Corte 2 — Identidad registral** · §3.2
 
-- **Migración V78**: `propiedad.partida_registral`, `propiedad.oficina_registral` (destino ESTRUCTURAL, gracias a C-8) + las claves `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. `condicion_compraventa.partida_registral` pasa a ser lo que debió ser siempre: **la partida vigente en esa venta, copia fechada de la del activo**, no su único domicilio.
+> **La migración libre es `V79`**, no la V78 que dice la línea de abajo: V78 la
+> ocupó el Corte 1 (`el_hecho_llega_donde_llega_su_condicion`).
+
+- **Migración V79**: `propiedad.partida_registral`, `propiedad.oficina_registral` (destino ESTRUCTURAL, gracias a C-8) + las claves `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. `condicion_compraventa.partida_registral` pasa a ser lo que debió ser siempre: **la partida vigente en esa venta, copia fechada de la del activo**, no su único domicilio.
 - **Prueba**: E2E que verifica que una captación de **alquiler** puede registrar la partida (hoy es imposible) y que la solicitud de venta la hereda.
 - **Valor**: el broker verifica titular y cargas en SUNARP **antes** de firmar el encargo, no al cerrar.
 
@@ -762,6 +765,9 @@ Unificar el vocabulario de tipo (hoy la demanda usa `LOCAL_COMERCIAL, OFICINA, D
 
 ### La cadena de migraciones, de un vistazo
 
+**Lo que se planificó** (se deja como se escribió, para que se vea cuánto se
+desvió la ejecución de la previsión):
+
 ```
 V70  ✅ APLICADA   la publicacion pertenece al encargo
 V71     0A         retirar detalle_local_comercial (puerta unica de edicion)
@@ -769,6 +775,23 @@ V72     0B         capacidades del catalogo: opciones, multivalor, fecha, import
 V73     0C         sujeto del dato: atributo_encargo
 V74     1          las 19 claves que ya existen, bien declaradas
 V75     2          identidad registral
+```
+
+**Lo que realmente se aplicó** (2026-08-22). Cada corte costó más de una
+migración, y aparecieron dos que el plan no tenía:
+
+```
+V70  ✅  la publicacion pertenece al encargo
+V71  ✅  0A  retirar detalle_local_comercial
+V72  ✅  0B  el catalogo aprende a hablar
+V73  ✅  0C  el sujeto del dato
+V74  ✅  0C  las primeras condiciones del encargo (6, para probar el mecanismo)
+V75  ✅      convergencia: una propiedad puede no estar encargada
+V76  ✅  0D  la propiedad como activo de dato       <- no estaba en el plan
+V77  ✅  0E  el lenguaje completo del ENCARGO (26)  <- no estaba en el plan
+V78  ✅  1   el hecho llega donde llega su condicion (mitad de SUJETO)
+V79      1   mitad de PROFUNDIDAD  ⬜  <- la siguiente libre
+V80+     2   identidad registral   ⬜
 ```
 
 ## 7. Lo que NO haría ahora

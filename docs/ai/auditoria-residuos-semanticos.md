@@ -1,5 +1,17 @@
 # Auditoría de residuos semánticos del SPA
 
+> **PARCIALMENTE RESUELTA.** (revisada 2026-08-22) De su §4:
+>
+> | | Estado |
+> |---|---|
+> | **4.1 El alta** (`local-form`, 49 ocurrencias) | ✅ `local-form` **borrado**; `/propiedades/nueva` pregunta por operación y tipo y saca los campos de `GET /captura/definicion` |
+> | **4.2 Ficha y detalle** | ⚠️ **a medias**: `local-detail` borrado y `/propiedades/:id` reconstruida, pero `ficha-propiedad` (la de `captaciones/:codigo/ficha`) sigue leyendo el modelo plano de L/O |
+> | **4.3 Identificadores** | ⚠️ `propiedades.service.ts` existe, pero `locales.service.ts` **sigue vivo** y lo usan 4 pantallas |
+> | **4.4 Las dos uniones** | ⬜ Interacciones dentro del expediente · Reportes como pestaña de Indicadores |
+> | **4.5 Deuda menor** | ⬜ subtítulo del login y patrón de progreso por pasos |
+>
+> Lo que sigue abierto está recogido en `pendientes-brox.md` §4.
+
 **Abierta:** 2026-08-18, durante la corrección del Corte 2.
 **Por qué existe:** el menú pasó a decir «Propiedades» y al entrar el producto
 seguía diciendo «LOCALES COMERCIALES / NUEVO», «Registrar local comercial»,

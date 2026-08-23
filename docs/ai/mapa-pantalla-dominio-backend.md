@@ -1,5 +1,14 @@
 # Mapa pantalla ↔ dominio ↔ backend
 
+> **MEDIDO EL 2026-08-17 Y NO RE-MEDIDO DESDE ENTONCES.** (anotado 2026-08-22)
+> Después de esta foto entraron E2.2–E2.6 y los cortes 0A–0E y 1 (V71…V78), que
+> movieron datos de Angular al dominio (`estadoRitmo`, `dependeDeMi`, `senales[]`,
+> el catálogo gobernado y el sujeto del dato). **Varias filas
+> `DERIVADO_FRONTEND` ya no lo están**, y este documento no lo refleja.
+>
+> Úsalo como método —la pregunta «¿hecho, interpretación o presentación?»— y no
+> como inventario. Antes de apoyarte en una fila concreta, compruébala.
+
 **Qué responde:** de dónde sale cada cosa que BROX enseña. Qué es un **hecho**
 del backend, qué es una **interpretación** que ya hace el dominio, qué es
 **presentación** — y qué está hoy **derivado en Angular** y no debería.

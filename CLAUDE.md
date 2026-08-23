@@ -21,6 +21,13 @@ The domain vocabulary (entity, enum, and method names) is Spanish; keep it Spani
   2. `docs/ai/checklist-captura-moat-e-inteligencia-inmobiliaria.md` — what is still missing to close the current stage. A stage closes with **gate + tests + evidence**, and not before.
   3. `docs/ai/decision-*.md` (D-E…) — specific functional decisions, each one self-contained.
 
+  Next to those, `docs/ai/pendientes-brox.md` is the **transversal inventory of
+  everything still open** — measured against the repo and the live databases on
+  2026-08-22, not copied from the other docs. It does not say what to do next
+  (the map does); it says what remains, including the parts that belong to no
+  stage: production, multi-tenancy, UI, E2E coverage, and which documents have
+  gone stale. Read it when you need the whole picture rather than the next step.
+
   Above those three sits `docs/ai/north-star-brox.md` — the **strategic frame**
   (SIVAN's North Star document, plus how it already binds the code). It does not
   say what to do next; it says **what counts as an advance**. Read it when a

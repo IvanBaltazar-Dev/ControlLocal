@@ -1,5 +1,17 @@
 # Modelo de dominio: herencia, generalización y subtipado (análisis para rediseño de BD)
 
+> **HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL.** (banner añadido 2026-08-22)
+> Es anexo de `estado-actual-control-local.md`, que ya es histórico, y su
+> evidencia sale de dos cosas que **ya no existen**: las clases de
+> `backend-java/` y el esquema MySQL `01_create_schema_controllocal.sql`, ambos
+> borrados del árbol el 2026-08-08.
+>
+> **Se conserva por su punto B**, que resultó ser el acierto del documento: la
+> generalización `Propiedad` sobre `LocalComercial` es exactamente lo que
+> D-E4-1 (`decision-modelo-universal-propiedad-operacion.md`) construyó después.
+> Lo vigente sobre el modelo está ahí y en `decision-autoridad-de-cada-dato.md`;
+> aquí sólo está el **porqué** original.
+
 > Anexo del Doc 1 (`estado-actual-control-local.md`). Alimenta el inventario backend (Doc 3), la arquitectura objetivo (Doc 5) y los riesgos (Doc 6).
 > Foco: los tres puntos de modelado pedidos — (A) línea de herencia desde `Persona`, (B) generalización `Propiedad`/`Inmueble` sobre `LocalComercial`, (C) subtipado/partición de `InteraccionComercial`.
 > Evidencia obtenida en solo-lectura con Serena (LSP java) + esquema `01_create_schema_controllocal.sql`. Se citan clases y tablas reales.

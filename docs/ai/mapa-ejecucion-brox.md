@@ -144,7 +144,8 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3d** | **La publicación por encargo** | `Propiedad → Encargo → Publicación`: API canónica, editor fuera del detalle heredado, y `features/local-detail/` borrado | ✅ **CERRADO** 2026-08-20 |
 | **3g** | **El lenguaje del ENCARGO** | `V77`: el catálogo pasa de 6 a **26** condiciones comerciales y VENTA deja de estar muda (0 → 7). Aplicabilidad por **tipo × operación**, vocabularios sembrados, y el guard de pares hecho/condición ampliado a los ocho. Ninguna con valor por defecto: la ausencia sigue significando «todavía no se sabe» | ✅ **CERRADO** 2026-08-22 |
 | **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
-| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — los tres cortes técnicos cerrados (0A `V71`, 0B `V72`, 0C `V73`+`V74`); queda la siembra por tipo, cortes 1–7. Ver `auditoria-profundidad-inmobiliaria.md` |
+| **3h** | **El hecho llega donde llega su condición** | `V78`: las 19 claves de PROPIEDAD clasificadas una por una —14 hecho puro, 2 mitad de un par ya separado, 3 con problema de modelo, **ninguna condición disfrazada**—. Lo que sí apareció es la **cobertura del par**: `se_ofrece_amoblado` llegaba a OFICINA y `amoblado` no, y `mantenimiento_a_cargo_de` a ALMACÉN y CASA sin `cuota_mantenimiento`. Tres filas OPC lo cierran, y la invariante queda puesta | ✅ **CERRADO** 2026-08-22 |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`) y el **Corte 1** en su mitad de sujeto (`V78`); queda la profundidad por tipo, cortes 1(resto)–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
@@ -186,11 +187,26 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    prueba que da sentido al sujeto: dos alquileres sucesivos de la misma
    propiedad con condiciones contrarias, ninguna pisando a la otra. Evidencia:
    `verificacion/evidencia/2026-08-22-lenguaje-completo-del-encargo.md`.
-4. **Corte 1 / profundidad de la PROPIEDAD** — con el preflight ya medido, y
-   ahora con una pregunta más que hacerle a cada una de las 19 claves
-   bloqueadas: *¿sigue bloqueada porque falta modelar el inmueble, o lo estaba
-   porque confundíamos un hecho de la propiedad con una condición del encargo?*
-   No se altera la clasificación para hacer pasar el corte.
+4. ~~**Corte 1 / la pregunta del sujeto sobre las 19 claves**~~ ✅ 2026-08-22 —
+   bloque **3h**, migración `V78`. La respuesta, medida y no opinada:
+   **ninguna de las 19 era una condición disfrazada** — 0C, `V74` y `V77` ya
+   habían sacado del sujeto PROPIEDAD todo lo que se negocia. Lo que sí seguía
+   abierto era la mitad de la regla del par que nadie miraba: **un hecho puede
+   llegar menos lejos que su condición**, y donde eso pasa el pacto es la única
+   casilla donde cabe el hecho. Tres huecos exactos, tres filas OPC, cero
+   valores afectados, y la comprobación puesta para que no vuelva. Las
+   conversiones de tipo (`cuota_mantenimiento`→IMPORTE, `rubro_permitido`→
+   LISTA_MULTIPLE, `zonificacion`→LISTA, `banos`→ENTERO) **siguen bloqueadas
+   por `tg_catalogo_sistema_inmutable`**, que es una invariante deliberada y no
+   un obstáculo a rodear. Evidencia:
+   `verificacion/evidencia/2026-08-22-corte-1-el-hecho-y-su-condicion.md`.
+
+5. **Corte 1 (resto) / profundidad de la PROPIEDAD** — lo que queda del corte no
+   es sujeto, es **profundidad**: ampliar aplicabilidad por tipo (`banos` a
+   L,O,A · `zonificacion` a O · `pisos_edificacion` a D,O · `frente` a C) y
+   darle vocabulario a `servicios_disponibles`, que hoy es una LISTA muda. Ya
+   está medido en `auditoria-profundidad-inmobiliaria.md`; lo que falta es
+   decidir la exigencia y los vocabularios, que son decisiones de negocio.
 
 **ANTES DE PRODUCCIÓN** (en paralelo, es trabajo de otra naturaleza y no debe
 contaminar el modelo inmobiliario): separar seeds de desarrollo, bootstrap
@@ -499,8 +515,18 @@ este orden**:
 0C  declarar el sujeto del dato         ✅ CERRADO 2026-08-21 · V73 + V74
     └ convergencia: registrar no es encargar   ✅ 2026-08-21 · V75
 0D  la propiedad como activo de dato    ✅ CERRADO 2026-08-21 · V76
-1…7 profundidad por tipo                ⬜ siguiente, arranca en V77
+0E  el lenguaje completo del ENCARGO    ✅ CERRADO 2026-08-22 · V77
+1   las 19 claves — mitad de SUJETO     ✅ CERRADO 2026-08-22 · V78
+1   las 19 claves — mitad de PROFUNDIDAD ⬜ siguiente
+2…7 profundidad por tipo                ⬜
 ```
+
+> **El Corte 1 se partió en dos, y no por comodidad.** Su mitad de **sujeto**
+> —¿cada clave describe al inmueble o al encargo?— se puede contestar con
+> evidencia y cerrarse; su mitad de **profundidad** —¿a qué tipos aplica y con
+> qué exigencia?— depende de decisiones de negocio que nadie ha tomado y de
+> vocabularios que no existen. Mezclarlas habría hecho imposible decir qué
+> corrigió qué.
 
 **V75 no estaba en el plan y salió de la corrida de cierre de 0C.** El alta
 exigía al menos una operación, así que toda propiedad nacía con un encargo vivo

@@ -92,6 +92,30 @@ class SujetoDelDatoIntegrationTest {
     @Autowired PublicacionService publicaciones;
     @Autowired MotorDeCaptura captura;
 
+    /**
+     * <b>Los pares hecho/condicion, declarados una sola vez.</b>
+     *
+     * <p>Dos pruebas los recorren y afirman cosas distintas sobre ellos —que no
+     * comparten sujeto (V77) y que el hecho no llega menos lejos que su
+     * condicion (V78)—, y con dos copias de la lista bastaria anadir un par a
+     * una para que la otra dejara de mirarlo sin que nada fallara.
+     *
+     * <p>{@code uso} vive como COLUMNA de propiedad, no como clave del
+     * catalogo, asi que ese par no puede colisionar por construccion. Esta
+     * igual: el dia que alguien lo gobierne, las dos comprobaciones ya estan
+     * puestas.
+     */
+    private static final List<String[]> PARES_DELIBERADOS = List.of(
+            new String[] {"amoblado", "se_ofrece_amoblado"},
+            new String[] {"cuota_mantenimiento", "mantenimiento_a_cargo_de"},
+            new String[] {"estacionamientos", "estacionamientos_incluidos"},
+            new String[] {"rubro_permitido", "rubros_excluidos_por_titular"},
+            new String[] {"uso", "uso_admitido_por_titular"},
+            new String[] {"mascotas_reglamento", "mascotas_aceptadas"},
+            new String[] {"nivel_implementacion", "se_entrega_implementado"},
+            new String[] {"estado_ocupacion", "entrega_desocupado"},
+            new String[] {"lote_minimo_normativo", "acepta_venta_fraccionada"});
+
     // ==================================================================
     // La estructura que sostiene la regla
     // ==================================================================
@@ -710,24 +734,8 @@ class SujetoDelDatoIntegrationTest {
     @Test
     @DisplayName("V77: ningun par hecho/condicion comparte sujeto")
     void losParesSemanticosVivenEnSujetosDistintos() {
-        List<String[]> pares = List.of(
-                new String[] {"amoblado", "se_ofrece_amoblado"},
-                new String[] {"cuota_mantenimiento", "mantenimiento_a_cargo_de"},
-                new String[] {"estacionamientos", "estacionamientos_incluidos"},
-                new String[] {"rubro_permitido", "rubros_excluidos_por_titular"},
-                // `uso` vive como COLUMNA de propiedad, no como clave del
-                // catalogo, asi que este par no puede colisionar por
-                // construccion. Se comprueba igual: el dia que alguien lo
-                // gobierne, la comprobacion ya esta puesta y dira si lo mando
-                // al sujeto equivocado.
-                new String[] {"uso", "uso_admitido_por_titular"},
-                new String[] {"mascotas_reglamento", "mascotas_aceptadas"},
-                new String[] {"nivel_implementacion", "se_entrega_implementado"},
-                new String[] {"estado_ocupacion", "entrega_desocupado"},
-                new String[] {"lote_minimo_normativo", "acepta_venta_fraccionada"});
-
         List<String> juntos = new ArrayList<>();
-        for (String[] par : pares) {
+        for (String[] par : PARES_DELIBERADOS) {
             String sujetoHecho = sujetoDe(par[0]);
             String sujetoCondicion = sujetoDe(par[1]);
             // El lado PROPIEDAD de varios pares todavia no existe -- llega en
@@ -954,6 +962,175 @@ class SujetoDelDatoIntegrationTest {
                 .findFirst().orElseThrow();
         assertEquals(List.of("COCINA", "LAVADORA"), equipamiento.valores(),
                 "los elementos tienen que viajar crudos, no pegados por comas");
+    }
+
+    // ==================================================================
+    // V78 - El hecho llega donde llega su condicion
+    // ==================================================================
+
+    /**
+     * <b>Los tres huecos que V78 cerro, probados por el caso de uso.</b>
+     *
+     * <p>Separar los sujetos no basta si el hecho no cabe en ningun sitio. Con
+     * {@code se_ofrece_amoblado} aplicable a una OFICINA y {@code amoblado}
+     * no, «esta oficina tiene muebles» solo se podia escribir como pacto — y
+     * entonces el pacto vuelve a hacer de hecho, que es justo lo que el Corte
+     * 0C vino a impedir. Lo mismo con la cuota de mantenimiento en un ALMACEN
+     * y en una CASA, donde se podia pactar quien la paga y no cuanto es.
+     *
+     * <p>Los tres casos van juntos y no en tres pruebas porque demuestran una
+     * sola regla. Cada uno recorre el ciclo entero:
+     *
+     * <ol>
+     *   <li><b>alta</b> con el hecho — antes de V78 el alta lo rechazaba;</li>
+     *   <li>se pacta su condicion gemela en el encargo;</li>
+     *   <li>los dos se leen a la vez, en sitios distintos y con valores
+     *       distintos: <b>ninguno sustituye al otro</b>;</li>
+     *   <li><b>edicion</b> del hecho — no mueve la condicion;</li>
+     *   <li>edicion de la condicion — no mueve el hecho.</li>
+     * </ol>
+     *
+     * <p>Que el cruce se RECHACE en las dos direcciones ya lo prueba
+     * {@code elParNoSePuedeCruzar}; aqui se prueba lo contrario, que es lo que
+     * V78 anade: que los dos <b>convivan</b>.
+     */
+    @Test
+    @DisplayName("V78: en oficina, almacen y casa el hecho y su condicion conviven sin sustituirse")
+    void elHechoCabeDondeSePactaSuCondicion() {
+        record Caso(String tipo, List<ValorAtributo> obligatorios,
+                    String hecho, String valorInicial, String valorEditado,
+                    String condicion, String pactoInicial, String pactoEditado) {
+        }
+        List<Caso> casos = List.of(
+                // El que abrio V74 al ampliar la condicion a O sin ampliar el hecho.
+                new Caso("OFICINA", List.of(new ValorAtributo("metraje_total", "120")),
+                        "amoblado", "true", "false",
+                        "se_ofrece_amoblado", "false", "true"),
+                // Parque logistico: la administracion cobra una cuota.
+                new Caso("ALMACEN", List.of(new ValorAtributo("metraje_total", "2000")),
+                        "cuota_mantenimiento", "1200", "1350",
+                        "mantenimiento_a_cargo_de", "INQUILINO", "PROPIETARIO"),
+                // Casa en condominio: la junta tambien la cobra.
+                new Caso("CASA", List.of(new ValorAtributo("metraje_total", "180"),
+                                new ValorAtributo("dormitorios", "4")),
+                        "cuota_mantenimiento", "450", "500",
+                        "mantenimiento_a_cargo_de", "PROPIETARIO", "INQUILINO"));
+
+        for (Caso caso : casos) {
+            List<ValorAtributo> atributos = new ArrayList<>(caso.obligatorios());
+            atributos.add(new ValorAtributo(caso.hecho(), caso.valorInicial()));
+            long id = registrarDeTipo(caso.tipo(), atributos);
+            long alquiler = encargo(id, "A");
+
+            // 1 y 2. El hecho entro por el alta; la condicion se pacta aparte.
+            assertMismoValor(caso.valorInicial(), atributoDeLaPropiedad(id, caso.hecho()),
+                    caso.tipo() + ": el alta tiene que aceptar " + caso.hecho());
+            pactar(id, alquiler, new ValorAtributo(caso.condicion(), caso.pactoInicial()));
+
+            // 3. Los dos a la vez, cada uno en su sitio.
+            assertMismoValor(caso.valorInicial(), atributoDeLaPropiedad(id, caso.hecho()),
+                    caso.tipo() + ": pactar la condicion no puede tocar el hecho");
+            assertEquals(caso.pactoInicial(), pactado(id, alquiler, caso.condicion()),
+                    caso.tipo() + ": la condicion tiene que quedar en el encargo");
+
+            // 4. Editar el hecho: el alta y la edicion significan lo mismo.
+            propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
+                    List.of(new ValorAtributo(caso.hecho(), caso.valorEditado())),
+                    null, null), actor());
+            assertMismoValor(caso.valorEditado(), atributoDeLaPropiedad(id, caso.hecho()),
+                    caso.tipo() + ": la edicion tiene que corregir " + caso.hecho());
+            assertEquals(caso.pactoInicial(), pactado(id, alquiler, caso.condicion()),
+                    caso.tipo() + ": corregir el hecho no puede mover lo pactado");
+
+            // 5. Y editar la condicion no reescribe el hecho.
+            pactar(id, alquiler, new ValorAtributo(caso.condicion(), caso.pactoEditado()));
+            assertEquals(caso.pactoEditado(), pactado(id, alquiler, caso.condicion()),
+                    caso.tipo() + ": la condicion tiene que poder cambiar");
+            assertMismoValor(caso.valorEditado(), atributoDeLaPropiedad(id, caso.hecho()),
+                    caso.tipo() + ": cambiar lo pactado no puede reescribir el hecho");
+        }
+    }
+
+    /**
+     * <b>La invariante que impide que el hueco vuelva.</b>
+     *
+     * <p>V77 vigilaba que un hecho y su condicion no compartieran sujeto. Eso
+     * no basta: estando en sujetos distintos, si la condicion aplica a un tipo
+     * donde el hecho no aplica, en ese tipo el pacto es <b>la unica casilla</b>
+     * donde cabe el hecho. La separacion queda escrita en el catalogo y
+     * deshecha en la practica.
+     *
+     * <p>Asi nacieron los tres huecos que V78 cerro: V74 amplio
+     * {@code se_ofrece_amoblado} a OFICINA y V77 llevo
+     * {@code mantenimiento_a_cargo_de} a ALMACEN y CASA, las dos veces sin
+     * mover el hecho. Ninguna de las dos migraciones hizo nada raro — es que
+     * nadie estaba mirando este lado.
+     *
+     * <p>Se comprueba en SQL y sobre el catalogo real: lo que puede romperse
+     * es una siembra futura, no el codigo.
+     */
+    @Test
+    @DisplayName("V78: ningun hecho existente llega menos lejos que su condicion")
+    void ningunHechoLlegaMenosLejosQueSuCondicion() {
+        List<String> huecos = new ArrayList<>();
+        for (String[] par : PARES_DELIBERADOS) {
+            // Los pares cuyo lado PROPIEDAD todavia no existe no participan: no
+            // se le exige cobertura a un hecho que no ha nacido. Lo que se
+            // prohibe es que un hecho EXISTENTE se quede corto.
+            List<String> tipos = jdbc.queryForList("""
+                    select distinct o.tipo_propiedad
+                      from catalogo_atributo h
+                      join catalogo_atributo c on c.clave = ? and c.activo
+                      join catalogo_atributo_operacion o
+                        on o.id_catalogo_atributo = c.id_catalogo_atributo
+                     where h.clave = ? and h.activo and not h.aplica_todos
+                       and not exists (select 1 from catalogo_atributo_tipo t
+                                        where t.id_catalogo_atributo = h.id_catalogo_atributo
+                                          and t.tipo_propiedad = o.tipo_propiedad)
+                     order by 1
+                    """, String.class, par[1], par[0]);
+            tipos.forEach(tipo -> huecos.add(par[0] + " no llega a " + tipo
+                    + " y " + par[1] + " si"));
+        }
+        assertEquals(List.of(), huecos,
+                "hay tipos donde la condicion se pacta y el hecho no se puede escribir: "
+                        + "ahi el pacto es el unico sitio donde cabe el hecho");
+    }
+
+    /**
+     * Una propiedad del tipo que se pida, con un solo encargo de ALQUILER.
+     *
+     * <p>Aparte de {@link #registrarConVentaYAlquiler()} porque aquel fija
+     * DEPARTAMENTO, y lo que V78 prueba es justamente lo que pasa en los otros
+     * tipos.
+     */
+    private long registrarDeTipo(String tipoPropiedad, List<ValorAtributo> atributos) {
+        return propiedades.registrar(new ComandoRegistro(null, null, null, tipoPropiedad, null,
+                "Caso V78",
+                new Ubicacion("Av. Cobertura " + java.util.UUID.randomUUID().toString().substring(0, 8),
+                        "Miraflores", null, null, null, null, null, null, null),
+                List.of(new Titular(unPropietario(), null, Boolean.TRUE)),
+                atributos,
+                List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("3000"), "PEN",
+                        null, null, null, null, null, null, null)),
+                null), actor()).idPropiedad();
+    }
+
+    /**
+     * Compara lo leido con lo enviado sin depender de la escala de la columna.
+     *
+     * <p>{@code valor_numero} es {@code NUMERIC(14,4)}, asi que un «1200»
+     * enviado vuelve como «1200.0000». Comparar las cadenas obligaria a
+     * escribir la escala en la prueba, y entonces cambiarla romperia una prueba
+     * que no habla de eso.
+     */
+    private static void assertMismoValor(String esperado, String leido, String mensaje) {
+        assertNotNull(leido, mensaje);
+        try {
+            assertEquals(0, new BigDecimal(esperado).compareTo(new BigDecimal(leido)), mensaje);
+        } catch (NumberFormatException noEsNumero) {
+            assertEquals(esperado, leido, mensaje);
+        }
     }
 
     /** El sujeto que el catalogo declara para una clave, o null si no existe. */

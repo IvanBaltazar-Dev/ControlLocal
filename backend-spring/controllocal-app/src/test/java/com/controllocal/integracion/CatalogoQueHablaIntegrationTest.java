@@ -251,6 +251,32 @@ class CatalogoQueHablaIntegrationTest {
         }
     }
 
+    /**
+     * <b>{@code requerido} es el espejo de {@code exigencia}, no un segundo
+     * dato.</b>
+     *
+     * <p>V72 partio el booleano en tres niveles y dejo la columna vieja
+     * viviendo al lado, coherente al 100 %. Nada en el esquema las ata: una
+     * fila que escriba solo una de las dos las separa en silencio, y a partir
+     * de ahi dos lectores del mismo hecho contestan distinto —el trigger mira
+     * una y el motor de captura la otra—. V78 anadio tres filas a esta tabla y
+     * es la primera migracion que lo hace desde entonces, asi que la coherencia
+     * deja de ser una costumbre y pasa a estar vigilada.
+     */
+    @Test
+    @DisplayName("gate: requerido sigue siendo espejo exacto de exigencia")
+    void requeridoEsEspejoDeExigencia() {
+        List<String> divergentes = jdbc.queryForList("""
+                select c.clave || '/' || t.tipo_propiedad
+                  from catalogo_atributo_tipo t
+                  join catalogo_atributo c on c.id_catalogo_atributo = t.id_catalogo_atributo
+                 where t.requerido <> (t.exigencia = 'ALT')
+                 order by 1
+                """, String.class);
+        assertEquals(List.of(), divergentes,
+                "requerido y exigencia dicen cosas distintas sobre la misma fila");
+    }
+
     // ==================================================================
     // El contrato: la definicion sale del Core y nadie mas la produce
     // ==================================================================

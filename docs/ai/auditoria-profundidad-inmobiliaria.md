@@ -378,6 +378,31 @@ el inmueble tenga muebles no dice si este alquiler los incluye; que la junta
 cobre mantenimiento no dice quién lo paga aquí. Son preguntas distintas con
 respuestas distintas, y por eso son claves distintas.
 
+#### La segunda mitad de la regla del par — `V78`, 2026-08-22
+
+Vivir en sujetos distintos **no basta**. Falta una condición que nadie estaba
+mirando:
+
+> **El hecho tiene que llegar donde llega su condición.** Si la condición aplica
+> a un tipo de propiedad donde el hecho no aplica, en ese tipo el pacto es *la
+> única casilla* donde cabe el hecho — y la separación queda escrita en el
+> catálogo y deshecha en la práctica.
+
+Así se abrieron tres huecos sin que ninguna migración hiciera nada raro: `V74`
+amplió `se_ofrece_amoblado` a **OFICINA** («una oficina amoblada es un producto
+real») sin ampliar `amoblado`, y `V77` llevó `mantenimiento_a_cargo_de` a
+**ALMACÉN** y **CASA** sin ampliar `cuota_mantenimiento`. `V78` los cierra y deja
+la comprobación puesta: `SujetoDelDatoIntegrationTest` la recorre sobre el
+catálogo real, y los pares se declaran **una sola vez** en la constante
+`PARES_DELIBERADOS` para que las dos comprobaciones —misma-jaula-no y
+llega-igual-de-lejos— no puedan mirar listas distintas.
+
+La regla **no** se le exige a un par cuyo lado PROPIEDAD todavía no existe: a un
+hecho que no ha nacido no se le pide cobertura. Los cuatro que faltan
+(`mascotas_reglamento`, `nivel_implementacion`, `estado_ocupacion`,
+`lote_minimo_normativo`) siguen con su corte asignado arriba, y el día que
+lleguen tendrán que nacer cubriendo a su condición o el gate lo dirá.
+
 #### La ausencia no es un «no»
 
 Ninguna de las 26 tiene valor por defecto, y eso se sostiene en los tres sitios:
@@ -501,7 +526,50 @@ Sólo cuando 0A esté verde.
 
 ---
 
-### **Corte 1 — Las 19 claves que ya existen** · migración **V77**
+### **Corte 1 — Las 19 claves que ya existen** · migración **V78**
+
+> **La numeración cambió, y conviene saber por qué.** Este corte se planificó
+> para `V77`; ese número lo ocupó el **lenguaje completo del ENCARGO** (26
+> condiciones, 3g del mapa), que tenía que ir delante para no empujar a resolver
+> condiciones comerciales metiendo campos en `atributo_propiedad`. El Corte 1
+> arranca en **`V78`**.
+
+> **Ejecutado el 2026-08-22 · `V78__el_hecho_llega_donde_llega_su_condicion.sql`.**
+> El corte se abrió con una pregunta distinta a la que este documento traía —
+> *¿cada una de las 19 describe un hecho del inmueble, o estaba bloqueada
+> porque confundíamos un hecho con una condición del encargo?*— y la respuesta
+> se midió, no se opinó:
+>
+> - **14 son hecho puro** y estaban bien colocadas; **2 son mitad de un par**
+>   (`estacionamientos`, `rubro_permitido`) con su gemela comercial ya
+>   separada y del mismo alcance; **3 tenían un problema de modelo**
+>   (`amoblado`, `cuota_mantenimiento`, `servicios_disponibles`).
+>   **Ninguna era una condición disfrazada**: 0C, `V74` y `V77` ya habían
+>   sacado todas las condiciones del sujeto PROPIEDAD.
+> - Lo que sí apareció, y este documento no había mirado, es la **cobertura del
+>   par**: un hecho y su condición pueden vivir en sujetos distintos y aun así
+>   el hecho llegar **menos lejos**. Donde eso pasa, en ese tipo el pacto es la
+>   única casilla donde cabe el hecho. La consulta sobre los ocho pares dio
+>   **tres huecos** — `amoblado`/O, `cuota_mantenimiento`/A y /C — y `V78` los
+>   cierra con tres filas OPC (cero valores afectados en las dos bases).
+> - Las **conversiones de tipo siguen bloqueadas**, y ahora se sabe por qué
+>   invariante: `tg_catalogo_sistema_inmutable` prohíbe cambiar el `tipo_dato`
+>   de una clave del sistema. Eso afecta a `cuota_mantenimiento`→IMPORTE,
+>   `rubro_permitido`→LISTA_MULTIPLE, `zonificacion`→LISTA y `banos`→ENTERO,
+>   además de los motivos de dato que este documento ya medía.
+> - **`servicios_disponibles` es un hecho de la PROPIEDAD y está bien
+>   colocado**; lo que le falta es vocabulario. Declarada LISTA y sin una sola
+>   opción sembrada, el trigger no valida nada y `MotorDeCaptura.controlDe` la
+>   degrada a TEXTO. Es deuda de catálogo, no de sujeto, y se resuelve en el
+>   corte que evolucione el catálogo — no antes, y sin inventarle un
+>   vocabulario.
+> - **Las ampliaciones de aplicabilidad por profundidad** que este corte
+>   planificaba (`banos`→L,O,A · `zonificacion`→O · `pisos_edificacion`→D,O ·
+>   `frente`→C · `interiorUnidad`/`nombreEdificioGaleria`→A) **no entraron en
+>   `V78`**: no las justifica la pregunta del sujeto, y mezclarlas habría hecho
+>   imposible decir qué corrigió qué. Siguen medidas e inertes aquí.
+>
+> Evidencia: `verificacion/evidencia/2026-08-22-corte-1-el-hecho-y-su-condicion.md`.
 
 > **Preflight ejecutado el 2026-08-22.** Antes de escribir una línea de la
 > migración se midieron todos los valores existentes de las 19 claves en las dos

@@ -174,3 +174,24 @@ volverá a subir — y con el suelo, ya no hace falta tocarlo.
    contrastar cada aplicabilidad contra la base.
 4. Decidir si `en_esquina` (L,O,A) y `via_de_acceso` (A,T) entran aquí o esperan
    al Corte 5 por su lado `T`.
+
+---
+
+## 9. Deuda heredada que este corte recoge
+
+Medida por el AUDITOR el 2026-08-24 sobre `BASE_SHA`, fuera del alcance
+congelado del Corte 3 (evidencia completa en
+`backend-spring/verificacion/evidencia/2026-08-24-corte-3-estado-base-medido.md`):
+
+- **`area_minima_arrendable.unidad = 'm2'`, sin acento.** Las otras cuatro claves
+  de área llevan `m²`; a `V77` se le olvidó reponerlo en el `UPDATE` posterior.
+  Es una clave del ENCARGO y comercial, así que este corte es su sitio.
+  `proteger_catalogo_del_sistema()` no bloquea el `UPDATE` de `unidad`.
+- **`ConservacionDeLaEdicionIntegrationTest` no crece con el catálogo**: sus
+  casos por tipo son listas escritas a mano. El Corte 3 extiende las de D y C;
+  este corte tiene que extender las de **L, O y A** o volverá a quedar fuera del
+  gate lo que siembre.
+- **`e2e-editor-universal.ps1` excluye `SELECTOR_MULTIPLE` del fixture**
+  (`:162`), así que ninguna suite E2E toca una LISTA_MULTIPLE. El Corte 4 siembra
+  varias. O se levanta la exclusión, o se demuestra a mano — pero no se cierra
+  sin que nadie lo haya comprobado.

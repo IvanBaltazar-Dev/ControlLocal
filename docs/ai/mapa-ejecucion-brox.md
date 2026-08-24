@@ -151,7 +151,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3g** | **El lenguaje del ENCARGO** | `V77`: el catálogo pasa de 6 a **26** condiciones comerciales y VENTA deja de estar muda (0 → 7). Aplicabilidad por **tipo × operación**, vocabularios sembrados, y el guard de pares hecho/condición ampliado a los ocho. Ninguna con valor por defecto: la ausencia sigue significando «todavía no se sabe» | ✅ **CERRADO** 2026-08-22 |
 | **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
 | **3h** | **El hecho llega donde llega su condición** | `V78`: las 19 claves de PROPIEDAD clasificadas una por una —14 hecho puro, 2 mitad de un par ya separado, 3 con problema de modelo, **ninguna condición disfrazada**—. Lo que sí apareció es la **cobertura del par**: `se_ofrece_amoblado` llegaba a OFICINA y `amoblado` no, y `mantenimiento_a_cargo_de` a ALMACÉN y CASA sin `cuota_mantenimiento`. Tres filas OPC lo cierran, y la invariante queda puesta | ✅ **CERRADO** 2026-08-22 |
-| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23) el **Corte 3 · vivienda D y C** (`V80`, 2026-08-24, con `3.a` sin migración arreglando el gate `.sql`) y el **Corte 4 · comercial L, O y A** (`V81`, 2026-08-24), que estrena la **primera exigencia `ALT` que obliga a salir a mirar** y con ella deja **21 de 26 propiedades fuera del mercado hasta que se visiten**. El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 5–7. Ver `auditoria-profundidad-inmobiliaria.md` |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23) el **Corte 3 · vivienda D y C** (`V80`, 2026-08-24, con `3.a` sin migración arreglando el gate `.sql`) y el **Corte 4 · comercial L, O y A** (`V81`, 2026-08-24), que estrena la **primera exigencia que obliga a salir a mirar** y con ella deja **21 de 26 propiedades fuera del mercado hasta que se visiten**; corregido acto seguido por **`V82`**, que baja `tipo_acceso` de `ALT` a `PUB` para que un local **se pueda registrar sin el dato aunque siga sin poder anunciarse**. El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 5–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
@@ -305,6 +305,27 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    con una consulta que **no filtra por ninguna clave** y agrega todas las
    bloqueantes. La inyección de pérdida se repitió en el test nuevo: muerde y
    nombra la clave que falta.
+
+   > **Corregido acto seguido por `V82`, y por decisión del titular.** `tipo_acceso`
+   > baja de **`ALT` a `PUB`**: un local sin ese dato **se registra, se edita, se
+   > conserva y sirve para inteligencia — pero no se publica**. No forzó el
+   > modelo: `V72` ya había construido ese nivel exacto
+   > (`Exigencia.bloqueaAlta()` mira sólo `ALT`; `bloqueaPublicacion()` mira
+   > `ALT` y `PUB`), y el Corte 4 usó `ALT` porque CONTROL describió mal su
+   > efecto. **Una fila, dos columnas, cero líneas de Java.**
+   >
+   > **La publicabilidad no se movió: sigue en 5 de 26, las mismas 21 bloqueadas
+   > y la misma causa única.** Eso es la prueba de que el cambio hizo lo suyo y
+   > sólo eso. Evidencia:
+   > `verificacion/evidencia/2026-08-24-correccion-tipo-acceso-pub.md`.
+   >
+   > **Consecuencia medida que corrige al propio encargo:** éste predecía que los
+   > 7 locales con encargo vivo seguirían avisando del faltante. **No avisa
+   > ninguno.** `atributosQueFaltan` sólo lleva `ALT`, y `faltanParaPublicar` es
+   > del sujeto ENCARGO — el guard 2.5 de `V78` garantiza que **ninguna clave de
+   > PROPIEDAD puede aparecer ahí**. De **21 avisando** se pasa a **0**, con la
+   > barrera intacta. Construir esa superficie es **un corte propio**; el hueco
+   > queda fijado en un test que se pondrá rojo el día que se construya.
 
 8. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
    insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
@@ -630,7 +651,8 @@ este orden**:
 1   las 19 claves — mitad de SUJETO     ✅ CERRADO 2026-08-22 · V78
 2   identidad registral                 ✅ CERRADO 2026-08-23 · V79
 3   vivienda (D, C)                     ✅ CERRADO 2026-08-24 · 3.a sin migración + 3.b = V80
-4   comercial (L, O, A)                 ✅ CERRADO 2026-08-24 · V81 — la primera ALT que exige salir a mirar
+4   comercial (L, O, A)                 ✅ CERRADO 2026-08-24 · V81
+    └ correccion: tipo_acceso ALT → PUB    ✅ 2026-08-24 · V82
 1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
 5…7 profundidad por tipo                ⬜
 ```

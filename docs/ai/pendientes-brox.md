@@ -168,7 +168,7 @@ física:
 |---|---|---|
 | ~~**2 · Identidad registral**~~ ✅ **HECHO 2026-08-23** | `partida_registral` y `oficina_registral` como **estructurales**, más `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica` — **las seis OPC**, ninguna PUB. Se adelantó al resto del Corte 1 porque era un hueco estructural que se podía modelar **sin inferir nada del corpus contaminado**. Lo que queda fuera y sigue abierto: la promoción OPC→PUB, y el *snapshot* fechado de `condicion_compraventa.partida_registral`, que nace con el expediente de compraventa (bloque 6) | **V79** ✅ |
 | ~~**3 · Vivienda (D, C)**~~ ✅ **HECHO 2026-08-24** | **30 claves** OPC —tipología, conservación, etapa de entrega, ascensores, vigilancia, áreas comunes, vista, bloque de baños/servicio, áreas exteriores, depósitos, torre— con 9 vocabularios (49 opciones) y 68 filas de aplicabilidad. Ninguna ALT, ninguna PUB. **Heredado a medias a propósito**: `medios_banos` nació y la convención de `banos` ya está publicada, pero **el estrechamiento sigue pendiente** (§2.2). Fuera: la promoción OPC→PUB, `familia` para agrupar un formulario que pasa de 25 a 55 campos (va con el corte del SPA), y `estacionamiento_independizado`, que el Corte 6 sustituye con `unidad_relacionada`. Un commit previo sin migración (`3.a`) arregló el gate `.sql`, **rojo desde `V77` y nunca ejecutado** | **V80** ✅ |
-| ~~**4 · Comercial (L, O, A)**~~ ✅ **HECHO 2026-08-24** | **39 claves** con 18 vocabularios (83 opciones) y 71 filas de aplicabilidad. **`tipo_acceso` entró `ALT` en `L`** —decisión del titular— y con ella **las publicables pasaron de 26 a 5**: los 21 locales salen del mercado hasta que se visiten, y **no se rellenó el dato en ninguno**. Las otras 38, `OPC`; el catálogo sigue con **cero `PUB`**. Termina además **las instalaciones de la vivienda** (`gas`, `agua_caliente`) que §3.5 mezclaba y el Corte 3 excluyó. Fuera: la retirada de `apto_licencia_funcionamiento`, que necesita migración de datos | **V81** ✅ |
+| ~~**4 · Comercial (L, O, A)**~~ ✅ **HECHO 2026-08-24** | **39 claves** con 18 vocabularios (83 opciones) y 71 filas de aplicabilidad. **`tipo_acceso` entró `ALT` en `L`** —decisión del titular— y con ella **las publicables pasaron de 26 a 5**: los 21 locales salen del mercado hasta que se visiten, y **no se rellenó el dato en ninguno**. **`V82` la corrigió a `PUB` el mismo día** para que un local se pueda **registrar** sin el dato, sin mover la publicabilidad (§2.5 ter). Las otras 38, `OPC`. Termina además **las instalaciones de la vivienda** (`gas`, `agua_caliente`) que §3.5 mezclaba y el Corte 3 excluyó. Fuera: la retirada de `apto_licencia_funcionamiento`, que necesita migración de datos | **V81** ✅ |
 | **5 · Terreno (T)** | parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. **Hereda**: los tres reemplazos de `servicios_disponibles` | — |
 | **6 · Unidades relacionadas** | una unidad con partida propia **es una Propiedad relacionada**, no un escalar dentro de un EAV: `unidad_relacionada`, códigos `E`/`B`, `unidadesRelacionadas[]` | — |
 | **7 · Demanda y matcher** | unificar el vocabulario de tipo (hoy ALMACÉN y `DEPOSITO_ALMACEN` —el mismo concepto— se declaran no comparables), permitir que un requerimiento pida atributos gobernados, y **arreglar el sesgo**: un dato faltante hace que el criterio NO APLIQUE sin castigar el puntaje, así que **la propiedad peor capturada obtiene mejor puntaje** | — |
@@ -189,10 +189,18 @@ física:
   (L 40 · O 47 · A 50 · D 46 · C 35 · T 14) y **un test nuevo lo comprueba contra
   el catálogo**, así que la promesa dejó de depender de que alguien se acordara.
 
-### 2.5 ter Lo que el Corte 4 dejó abierto — una decisión y dos deudas nuevas
+### 2.5 ter Lo que el Corte 4 dejó abierto — la decisión ya está tomada, quedan dos deudas
 
-- **DECISIÓN PENDIENTE DEL TITULAR · `ALT` tampoco deja registrar, no sólo
-  publicar.** `exigirObligatorios` corre en
+- ~~**DECISIÓN PENDIENTE DEL TITULAR · `ALT` tampoco deja registrar**~~ ✅
+  **RESUELTA 2026-08-24 · `V82`.** El titular decidió que `tipo_acceso` quede en
+  **`PUB`**: un local sin ese dato **se registra, se edita, se conserva y sirve
+  para inteligencia — pero no se publica**. No hizo falta tocar Java: `V72` ya
+  había construido ese nivel (`Exigencia.bloqueaAlta()` mira sólo `ALT`). **La
+  publicabilidad no se movió** —siguen 5 de 26 y las mismas 21 bloqueadas—, que
+  es la prueba de que el cambio hizo lo suyo y sólo eso. Evidencia:
+  `verificacion/evidencia/2026-08-24-correccion-tipo-acceso-pub.md`.
+
+  El diagnóstico que llevó a la decisión, tal como se midió: `exigirObligatorios` corre en
   `PropiedadUniversalServiceImpl.registrar:231` y **`editar:437` no lo llama**:
   las 21 propiedades ya existentes se siguen editando y **ninguna se ve
   afectada**, pero **desde el 2026-08-24 no se da de alta un local nuevo sin
@@ -215,6 +223,16 @@ física:
   Cuando el catálogo se acerque a 200 claves habrá que decidir si sigue a mano o
   **se deriva de `/captura/definicion`**, como ya hace `e2e-editor-universal`.
   Anotarlo ahora es más barato que descubrirlo en el Corte 7.
+- **DEUDA NUEVA DE `V82` · el bloqueo es real y NADIE lo anuncia.** Al pasar a
+  `PUB`, `tipo_acceso` **desapareció de `atributosQueFaltan`** (que sólo lleva
+  `ALT`) y **no aparece en `faltanParaPublicar`**, que es del sujeto ENCARGO y
+  por el guard 2.5 de `V78` **no puede llevar una clave de la PROPIEDAD**. El
+  encargo de la corrección predijo «7 avisan / 14 no»; **lo medido es 21 → 0**.
+  La barrera sigue en pie —publicar devuelve 400— pero **ninguna superficie de
+  lectura lo dice**. Hoy **no existe ningún sitio donde una clave `PUB` de la
+  PROPIEDAD se reporte**: construirlo es **un corte propio**. El hueco queda
+  fijado en `CatalogoQueHablaIntegrationTest.elBloqueoNoSeAnunciaEnNingunaSuperficie`,
+  que se pondrá **rojo** el día que alguien lo construya — y esa es la señal.
 - **El suelo del gate `.sql` sigue en 51 con 120 claves sembradas.** Es el
   límite honesto que su propio comentario declara desde `e8cfaa4`, y no es
   defecto de este corte — pero el margen ya es de **69 retiradas** antes de que

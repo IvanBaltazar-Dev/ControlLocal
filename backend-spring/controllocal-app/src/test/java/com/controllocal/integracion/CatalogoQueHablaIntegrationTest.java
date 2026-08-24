@@ -856,6 +856,145 @@ class CatalogoQueHablaIntegrationTest {
         jdbc.update("update catalogo_atributo set activo = false where clave = ?", clave);
     }
 
+    // ==================================================================
+    // V82 - `tipo_acceso` impide PUBLICAR, no REGISTRAR
+    // ==================================================================
+
+    /**
+     * <b>Los cuatro escenarios de la correccion, sobre la clave real.</b>
+     *
+     * <p>V81 la sembro `ALT`, y `ALT` en este modelo significa DOS cosas:
+     * {@code bloqueaAlta()} y {@code bloqueaPublicacion()}. Eso impedia
+     * <b>registrar</b> un local sin el dato, que choca con lo que V75 y V76
+     * establecieron -- registrar no es encargar, y BROX conoce inmuebles que
+     * todavia no gestiona. V82 la baja a `PUB`, el nivel que V72 tenia previsto
+     * para exactamente este caso.
+     *
+     * <p>Va sobre {@code tipo_acceso} de verdad y no sobre una clave marcada al
+     * vuelo: lo que hay que proteger es que <b>esta</b> clave conserve <b>este</b>
+     * nivel, y una prueba que se lo asigna ella misma no lo protegeria.
+     */
+    @Test
+    @DisplayName("V82: un LOCAL sin tipo_acceso se registra, se edita y NO se publica")
+    void tipoAccesoImpidePublicarNoRegistrar() {
+        Map<String, Object> nivel = jdbc.queryForMap("""
+                select t.exigencia, t.requerido
+                  from catalogo_atributo_tipo t
+                  join catalogo_atributo c on c.id_catalogo_atributo = t.id_catalogo_atributo
+                 where c.clave = 'tipo_acceso' and c.organizacion_id is null
+                   and t.tipo_propiedad = 'L'
+                """);
+        assertEquals("PUB", nivel.get("exigencia"),
+                "tipo_acceso tiene que impedir publicar, no registrar");
+        assertEquals(Boolean.FALSE, nivel.get("requerido"),
+                "`requerido` es espejo exacto de `exigencia = ALT` desde V72");
+
+        // 1. Se REGISTRA sin el dato. Con ALT esto lanzaba.
+        long id = registrarLocalSinTipoAcceso();
+        assertNull(valorDe(id, "tipo_acceso"), "el alta no debe inventar el dato");
+
+        // 2. Se lee, se edita OTRA cosa y se relee: sigue ausente y no se movio nada.
+        FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
+        editar(id, new ValorAtributo("aforo_itse", "40"));
+        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        assertNull(valorDe(id, "tipo_acceso"),
+                "editar otro dato no puede rellenar el que falta");
+        assertEquals("40", valorDe(id, "aforo_itse"), "el dato editado si tiene que estar");
+        assertEquals(antes.ubicacion().direccion(), despues.ubicacion().direccion(),
+                "editar un atributo no puede mover la ubicacion");
+        assertEquals(antes.titulares().size(), despues.titulares().size(),
+                "editar un atributo no puede mover la titularidad");
+
+        // 3. NO se publica. La causa se averigua agregando TODAS las claves
+        //    ALT/PUB que faltan -- sin nombrar ninguna. Filtrar por la clave y
+        //    luego "descubrir" que la causa es esa clave no demuestra nada.
+        List<String> bloqueantes = jdbc.queryForList("""
+                select c.clave
+                  from propiedad p
+                  join catalogo_atributo c
+                    on c.activo and c.destino = 'ATRIBUTO'
+                   and (c.organizacion_id is null or c.organizacion_id = p.organizacion_id)
+                  join catalogo_atributo_tipo t
+                    on t.id_catalogo_atributo = c.id_catalogo_atributo
+                   and t.tipo_propiedad = p.tipo_inmueble
+                 where p.id_propiedad = ?
+                   and t.exigencia in ('ALT', 'PUB')
+                   and not exists (select 1 from atributo_propiedad a
+                                    where a.id_propiedad = p.id_propiedad and a.clave = c.clave)
+                 order by c.orden
+                """, String.class, id);
+        assertEquals(List.of("tipo_acceso"), bloqueantes,
+                "la unica causa de bloqueo tiene que ser tipo_acceso, y se comprueba agregando "
+                        + "todas las claves ALT/PUB faltantes, no preguntando por una");
+
+        ReglaNegocioException rechazo = assertThrows(ReglaNegocioException.class,
+                () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+                "un local sin tipo_acceso no se puede anunciar");
+        assertTrue(rechazo.getMessage().contains("Tipo de acceso"),
+                "el rechazo tiene que decir QUE falta, con su rotulo: " + rechazo.getMessage());
+
+        // 4. Declarado el dato, ese bloqueo desaparece y se publica.
+        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+        assertEquals("A_PIE_DE_CALLE", valorDe(id, "tipo_acceso"));
+        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+                "con el dato declarado, el unico bloqueo que habia deja de estar");
+    }
+
+    /**
+     * <b>La consecuencia de visibilidad, medida y no arreglada.</b>
+     *
+     * <p>{@code atributosQueFaltan} se alimenta de `ALT` solamente, asi que al
+     * bajar a `PUB` la clave <b>deja de nombrarse ahi</b>. Y tampoco aparece en
+     * {@code faltanParaPublicar} del encargo, que es del sujeto ENCARGO y por
+     * tanto <b>estructuralmente incapaz</b> de llevar una clave de la PROPIEDAD:
+     * el guard 2.5 de V78 garantiza que ninguna clave de PROPIEDAD tiene fila en
+     * {@code catalogo_atributo_operacion}.
+     *
+     * <p>Resultado medido: el bloqueo es real pero <b>ninguna superficie de
+     * lectura lo anuncia</b>. Queda escrito en una prueba para que el hueco no se
+     * pierda -- <b>construir esa superficie es un corte propio</b>, no parte de
+     * esta correccion. Si alguien la construye, este test se pondra rojo y sera
+     * la senal de que ya se puede afirmar lo contrario.
+     */
+    @Test
+    @DisplayName("V82: el bloqueo es real, y hoy ninguna superficie de lectura lo anuncia")
+    void elBloqueoNoSeAnunciaEnNingunaSuperficie() {
+        long id = registrarLocalSinTipoAcceso();
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
+        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "tipo_acceso".equals(a.clave())),
+                "al ser PUB ya no se nombra en atributosQueFaltan, que solo lleva ALT");
+
+        assertTrue(ficha.encargos().stream()
+                        .flatMap(e -> e.faltanParaPublicar().stream())
+                        .noneMatch(a -> "tipo_acceso".equals(a.clave())),
+                "faltanParaPublicar es del sujeto ENCARGO y no puede llevar una clave de PROPIEDAD");
+
+        // Y sin embargo publicar se sigue rechazando: el hueco es de AVISO, no de barrera.
+        assertThrows(ReglaNegocioException.class,
+                () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+                "la barrera sigue en pie aunque nadie la anuncie");
+    }
+
+    /** Un LOCAL con lo minimo del alta y SIN `tipo_acceso`. Es el sujeto de V82. */
+    private long registrarLocalSinTipoAcceso() {
+        Actor actor = actor();
+        Long idPropietario = jdbc.queryForObject("""
+                select min(r.id_persona_rol) from persona_rol r
+                 where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
+                   and r.organizacion_id = ?
+                """, Long.class, actor.idOrganizacion());
+        return propiedades.registrar(new ComandoRegistro(null, null, null, "LOCAL", null,
+                "Local conocido, todavia sin visitar (V82)",
+                new Ubicacion("Av. Sin Visitar " + java.util.UUID.randomUUID(), "Miraflores",
+                        null, null, null, null, null, null, null),
+                List.of(new Titular(idPropietario, null, Boolean.TRUE)),
+                List.of(new ValorAtributo("metraje_total", "70")),
+                List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
+                        null, null, null, null, null, null, null)),
+                null), actor).idPropiedad();
+    }
+
     private void marcar(String clave, String exigencia) {
         jdbc.update("""
                 update catalogo_atributo_tipo set exigencia = ?

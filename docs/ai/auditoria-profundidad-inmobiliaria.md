@@ -205,7 +205,7 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 
 | clave | rótulo | tipo | opciones | aplica_a | nivel |
 |---|---|---|---|---|---|
-| `tipo_acceso` | Tipo de acceso | LISTA | A_PIE_DE_CALLE, ESQUINA_A_CALLE, GALERIA_INTERIOR, PASAJE_COMERCIAL, CENTRO_COMERCIAL, INTERIOR_DE_EDIFICIO, MERCADO | L | **ALT**. Único obligatorio nuevo de L: sin él, 40 m² a S/ 3 000 son caros a pie de calle en Miraflores y absurdos en el interior de Mesa Redonda. El agente está delante del local |
+| `tipo_acceso` | Tipo de acceso | LISTA | A_PIE_DE_CALLE, ESQUINA_A_CALLE, GALERIA_INTERIOR, PASAJE_COMERCIAL, CENTRO_COMERCIAL, INTERIOR_DE_EDIFICIO, MERCADO | L | **`PUB`** (corregido). Se sembró `ALT` en `V81` y **`V82` lo bajó a `PUB` el mismo día**, por decisión del titular: en este modelo `ALT` bloquea **también el alta**, y un local se tiene que poder **registrar** sin haberlo visitado. Sigue **impidiendo publicar**, que es lo que se quería: sin él, 40 m² a S/ 3 000 son caros a pie de calle en Miraflores y absurdos en el interior de Mesa Redonda |
 | `en_esquina` | Está en esquina | BOOLEANO | — | L,O,A | OPC (ortogonal a `tipo_acceso`) |
 | `clase_edificio` | Clase de edificio | LISTA | A_PLUS, A, B, C, NO_APLICA | O | **PUB**. Es como el mercado de oficinas de Lima se segmenta a sí mismo; sin ella, un precio por m² mezcla dos mercados |
 | `metraje_arrendable` | Metraje arrendable | DECIMAL m² | — | O,L,A | **PUB** en O. La renta se cotiza en USD/m²/mes sobre área arrendable; hoy ni el denominador es homogéneo entre fichas |
@@ -805,7 +805,7 @@ vieja. Es un corte propio.
 
 - **39 claves**, 18 vocabularios con 83 opciones, 71 filas de aplicabilidad
   (A 28 · L 16 · O 19 · C 2 · D 3 · T 3). `orden` 560…940.
-- **`tipo_acceso` entró `ALT` en `L`, y es la única del corte.** Decisión del
+- **`tipo_acceso` entró `ALT` en `L` y `V82` lo corrigió a `PUB` el mismo día** — ver la nota al final de este bloque. Fue la única exigencia no-OPC del corte. Decisión del
   titular con el efecto medido: **`ALT` impide publicar igual que `PUB`**
   (`clavesQueImpidenPublicar` filtra `exigencia in ('ALT','PUB')`), así que al
   aplicar `V81` **las 26 propiedades publicables pasaron a 5** y los 21 locales
@@ -878,6 +878,7 @@ V78  ✅  1   el hecho llega donde llega su condicion (mitad de SUJETO)
 V79  ✅  2   la identidad registral de la propiedad  <- se adelanto al resto del 1
 V80  ✅  3   la vivienda descrita de verdad (30 claves D y C)
 V81  ✅  4   el activo comercial descrito (39 claves L, O, A + gas y agua caliente)
+V82  ✅  4   tipo_acceso impide publicar, no registrar (ALT -> PUB)
          1   mitad de PROFUNDIDAD  ⬜  <- sigue APLAZADA, sin migracion asignada
 V82      5   terreno: T  ⬜  <- la siguiente libre
 ```
@@ -887,6 +888,14 @@ V82      5   terreno: T  ⬜  <- la siguiente libre
 > escritorio; `tipo_acceso` exige estar de pie en el local. Su precio, medido y
 > aceptado antes de decidirlo: **21 de 26 propiedades dejan de ser publicables**
 > hasta que alguien las visite.
+
+> **Y `V82` la corrigió el mismo día, sin tocar esa consecuencia.** El cierre del
+> Corte 4 midió que `ALT` **no sólo impide publicar: impide registrar**
+> (`Exigencia.bloqueaAlta()`). Eso chocaba con `V75`/`V76` —registrar no es
+> encargar, y BROX conoce inmuebles que no gestiona—, así que el titular bajó la
+> clave a **`PUB`**, el nivel que `V72` ya tenía previsto. **La publicabilidad no
+> se movió: siguen 5 de 26 y las mismas 21 bloqueadas.** Lo que se recuperó es
+> poder **registrar** un local sin haberlo visitado.
 
 > **El Corte 3 costó dos commits y una sola migración.** El primero (`3.a`) no
 > toca el esquema: arregla el gate `.sql` que llevaba rojo desde `V77` y lo mete

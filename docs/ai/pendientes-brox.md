@@ -189,6 +189,37 @@ física:
   (L 40 · O 47 · A 50 · D 46 · C 35 · T 14) y **un test nuevo lo comprueba contra
   el catálogo**, así que la promesa dejó de depender de que alguien se acordara.
 
+### 2.5 ter Lo que el Corte 4 dejó abierto — una decisión y dos deudas nuevas
+
+- **DECISIÓN PENDIENTE DEL TITULAR · `ALT` tampoco deja registrar, no sólo
+  publicar.** `exigirObligatorios` corre en
+  `PropiedadUniversalServiceImpl.registrar:231` y **`editar:437` no lo llama**:
+  las 21 propiedades ya existentes se siguen editando y **ninguna se ve
+  afectada**, pero **desde el 2026-08-24 no se da de alta un local nuevo sin
+  `tipo_acceso`**. No es un comportamiento nuevo —`metraje_total`, `dormitorios`
+  y `zonificacion` ya lo tenían— y el Corte 4 **no relajó nada** para esquivarlo.
+  El titular consintió sobre «no se puede anunciar»; sobre esto **no se le
+  preguntó**. Roza `V75`/`V76` (registrar no es encargar; BROX conoce inmuebles
+  que no gestiona), pero **el hueco es más estrecho de lo que parece**: hoy hay
+  **cero** propiedades con `origen_incorporacion = OBSERVACION`, y `tipo_acceso`
+  —a pie de calle, esquina, galería, pasaje— es justo lo que se ve desde la
+  calle. Lo bloqueado no es el inmueble avistado, sino **el reportado por
+  teléfono o desde un anuncio, sin nadie delante**. Separar «obligatorio para
+  publicar» de «obligatorio para registrar» es **un corte propio**; rebajar la
+  exigencia, no. Medido en §9 de
+  `verificacion/evidencia/2026-08-24-corte-4-comercial.md`.
+- **El test de completitud es ahora una obligación permanente, y crece.** Desde
+  `V81`, **todo** corte de profundidad debe extender los siete casos de
+  `ConservacionDeLaEdicionIntegrationTest` o el build rompe. Es exactamente lo
+  que se quería, pero el fixture lleva ya **220** valores escritos a mano.
+  Cuando el catálogo se acerque a 200 claves habrá que decidir si sigue a mano o
+  **se deriva de `/captura/definicion`**, como ya hace `e2e-editor-universal`.
+  Anotarlo ahora es más barato que descubrirlo en el Corte 7.
+- **El suelo del gate `.sql` sigue en 51 con 120 claves sembradas.** Es el
+  límite honesto que su propio comentario declara desde `e8cfaa4`, y no es
+  defecto de este corte — pero el margen ya es de **69 retiradas** antes de que
+  salte. Quien vigila de verdad es la invariante de aplicabilidad, no el número.
+
 ### 2.6 Y una decisión que el Corte 1 dejó explícitamente sin tomar
 
 **El tipo `X` (OTRO) se está quedando sin preguntas.** Hoy tiene exactamente

@@ -252,7 +252,7 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > **`torre_bloque` se ejecuta aquí** pese a estar redactada en §3.8 (Terreno):
    > su `aplica_a` es `D` y un corte se define por tipo, no por número de sección.
 
-7. **Corte 4 / comercial (L, O, A)** — 🟡 **EN CURSO 2026-08-24, `V81`.**
+7. **Corte 4 / comercial (L, O, A)** — ✅ **CERRADO 2026-08-24, `V81`.**
    **39 claves** para local, oficina y almacén: nivel de implementación, edificio
    y servicios comunes que el Corte 3 dejó fuera, instalaciones completas y el
    bloque logístico entero (muelles, puertas, piso, pallets, patio de maniobras).
@@ -282,7 +282,29 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > **comprueba contra el catálogo** que siga siendo así, para que la promesa del
    > record deje de depender de que alguien se acuerde.
 
+   > **Y destapa una decisión que el titular todavía no ha tomado: `ALT` tampoco
+   > deja registrar.** No sólo impide publicar — `exigirObligatorios` corre en
+   > `PropiedadUniversalServiceImpl.registrar:231`, y **`editar:437` no lo
+   > llama**. Así que las 21 propiedades existentes se siguen editando con
+   > normalidad y ninguna se ve afectada; pero **desde hoy no se da de alta un
+   > local nuevo sin `tipo_acceso`**. No es nuevo —ya pasaba con `metraje_total`,
+   > `dormitorios` y `zonificacion`— y **no se relajó nada para esquivarlo**.
+   > Roza lo que fijaron `V75`/`V76` (registrar no es encargar, BROX conoce
+   > inmuebles que no gestiona), aunque **más estrecho de lo que parece**: hoy
+   > hay **cero** propiedades con `origen_incorporacion = OBSERVACION`, y
+   > `tipo_acceso` es justo lo que se ve desde la calle. Lo que queda bloqueado
+   > no es el inmueble avistado, sino **el reportado por teléfono o desde un
+   > anuncio, sin nadie delante**. Separar «obligatorio para publicar» de
+   > «obligatorio para registrar» sería un corte propio; rebajar la exigencia,
+   > no. Medido en §9 de la evidencia.
+
    Evidencia: `verificacion/evidencia/2026-08-24-corte-4-comercial.md`.
+   Auditoría: **aprobada sin defectos** — las trece cifras remedidas contra la
+   base viva, las 21 bloqueadas contrastadas código a código contra una lista
+   tomada **antes** de que existiera el candidato, y la causa única comprobada
+   con una consulta que **no filtra por ninguna clave** y agrega todas las
+   bloqueantes. La inyección de pérdida se repitió en el test nuevo: muerde y
+   nombra la clave que falta.
 
 8. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
    insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
@@ -608,7 +630,7 @@ este orden**:
 1   las 19 claves — mitad de SUJETO     ✅ CERRADO 2026-08-22 · V78
 2   identidad registral                 ✅ CERRADO 2026-08-23 · V79
 3   vivienda (D, C)                     ✅ CERRADO 2026-08-24 · 3.a sin migración + 3.b = V80
-4   comercial (L, O, A)                 🟡 EN CURSO 2026-08-24 · V81 — la primera ALT que exige salir a mirar
+4   comercial (L, O, A)                 ✅ CERRADO 2026-08-24 · V81 — la primera ALT que exige salir a mirar
 1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
 5…7 profundidad por tipo                ⬜
 ```

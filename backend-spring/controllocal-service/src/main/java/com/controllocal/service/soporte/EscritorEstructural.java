@@ -38,6 +38,20 @@ import java.math.BigDecimal;
  */
 public final class EscritorEstructural {
 
+    /**
+     * El motivo que da {@link #vaciar} cuando el concepto <b>no esta cableado
+     * aqui</b>, y no cuando alguien decidio que ese dato no se puede quitar.
+     *
+     * <p>Es una constante y no un texto suelto porque
+     * {@code CadenaEstructuralCompletaTest} la usa para distinguir las dos
+     * cosas: «METRAJE no se vacia porque toda propiedad tiene metraje» es una
+     * decision, y «este concepto no tiene escritor de vaciado» es un agujero.
+     * Comparar contra una frase copiada haria que el gate dejara de morder en
+     * cuanto alguien retocara el mensaje.
+     */
+    static final String SIN_VACIADO_DEFINIDO =
+            "todavia no esta definido que significa dejarlo vacio";
+
     private EscritorEstructural() {
     }
 
@@ -56,6 +70,15 @@ public final class EscritorEstructural {
         switch (concepto) {
             case CatalogoAtributo.CAMPO_METRAJE -> propiedad.setMetraje(decimal(valor, clave));
             case CatalogoAtributo.CAMPO_PISO -> propiedad.setPiso(texto(valor));
+            case CatalogoAtributo.CAMPO_PARTIDA_REGISTRAL ->
+                    propiedad.setPartidaRegistral(texto(valor));
+            // La pertenencia al vocabulario NO se comprueba aqui: esta clase
+            // recibe el concepto y no la definicion, asi que no tiene de donde
+            // leer las opciones. La comprueba `AtributosGobernados` antes de
+            // llamar --contra `catalogo_atributo_opcion`, la unica autoridad-- y
+            // otra vez el trigger `tg_vocabulario_estructural`.
+            case CatalogoAtributo.CAMPO_OFICINA_REGISTRAL ->
+                    propiedad.setOficinaRegistral(texto(valor));
             default -> throw new IllegalStateException(
                     "Concepto estructural sin escritor: \"" + concepto + "\". Anadirlo al catalogo "
                             + "sin anadirlo aqui deja el valor sin guardar en ninguna parte, que es "
@@ -82,20 +105,27 @@ public final class EscritorEstructural {
     public static void vaciar(Propiedad propiedad, String concepto, String clave) {
         switch (concepto == null ? "" : concepto) {
             case CatalogoAtributo.CAMPO_PISO -> propiedad.setPiso(null);
+            // Las dos registrales SI se pueden retirar, y tiene que poder
+            // hacerse: una partida se teclea mal, y la unica forma de decir
+            // "esto que puse no es cierto" sin inventar otra es quitarla. Es lo
+            // contrario de METRAJE, que es NOT NULL en el agregado.
+            case CatalogoAtributo.CAMPO_PARTIDA_REGISTRAL -> propiedad.setPartidaRegistral(null);
+            case CatalogoAtributo.CAMPO_OFICINA_REGISTRAL -> propiedad.setOficinaRegistral(null);
             case CatalogoAtributo.CAMPO_METRAJE -> throw new ReglaNegocioException(
                     "El atributo \"" + clave + "\" no se puede retirar: toda propiedad tiene "
                             + "metraje. Corrigelo mandando el valor nuevo.");
             default -> throw new ReglaNegocioException(
                     "El atributo \"" + clave + "\" no se puede retirar: su autoridad es el campo "
-                            + "canonico \"" + concepto + "\" y todavia no esta definido que "
-                            + "significa dejarlo vacio.");
+                            + "canonico \"" + concepto + "\" y " + SIN_VACIADO_DEFINIDO + ".");
         }
     }
 
     /** ¿Hay escritor para este concepto? Lo usa el gate antes de que sea tarde. */
     public static boolean sabeEscribir(String concepto) {
         return CatalogoAtributo.CAMPO_METRAJE.equals(concepto)
-                || CatalogoAtributo.CAMPO_PISO.equals(concepto);
+                || CatalogoAtributo.CAMPO_PISO.equals(concepto)
+                || CatalogoAtributo.CAMPO_PARTIDA_REGISTRAL.equals(concepto)
+                || CatalogoAtributo.CAMPO_OFICINA_REGISTRAL.equals(concepto);
     }
 
     /**
@@ -140,9 +170,18 @@ public final class EscritorEstructural {
      * puede tenerlo escrito y el caso de uso no.
      */
     public static ValorLogico leerValor(Propiedad propiedad, String concepto) {
+        // OJO AL `default`: devuelve null, y `ValoresGobernados.Constructor.con`
+        // descarta un null EN SILENCIO. Un concepto con `case` de escritura y
+        // sin el de lectura guarda el dato donde nadie lo lee y no falla nada.
+        // Por eso `CadenaEstructuralCompletaTest` recorre los conceptos
+        // declarados y exige la ida y la vuelta de cada uno.
         return switch (concepto == null ? "" : concepto) {
             case CatalogoAtributo.CAMPO_METRAJE -> ValorLogico.deNumero(propiedad.getMetraje());
             case CatalogoAtributo.CAMPO_PISO -> ValorLogico.deTexto(propiedad.getPiso());
+            case CatalogoAtributo.CAMPO_PARTIDA_REGISTRAL ->
+                    ValorLogico.deTexto(propiedad.getPartidaRegistral());
+            case CatalogoAtributo.CAMPO_OFICINA_REGISTRAL ->
+                    ValorLogico.deTexto(propiedad.getOficinaRegistral());
             default -> null;
         };
     }

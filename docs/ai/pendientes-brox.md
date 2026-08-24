@@ -7,6 +7,12 @@ base de datos reales, no contra lo que los documentos dicen que falta.
 Estado del árbol: rama `feat/modelo-universal-y-autoridad-del-dato`, commit
 `48e8ede`, migraciones hasta **V78**.
 
+> **Corregido el 2026-08-23 con el Corte 2 (`V79`)**, y sólo en lo que dejó de
+> ser cierto: la rama **ya está publicada** (§0.1 y §10), la identidad registral
+> **ya existe** (§2.5), las suites de integración son **20** y no 22, y las
+> cifras de impacto de §2.1 **salían de `TEST_DB_URL`**, no del mercado. Lo
+> demás se deja como se midió.
+
 **Cómo se hizo:** recorriendo `docs/ai/` (66 documentos), `backend-spring/`,
 `frontend-angular/src/`, `backend-spring/verificacion/` y las dos bases
 PostgreSQL vivas. Cada fila que dice «abierto» se comprobó; las que los
@@ -25,7 +31,7 @@ los dos recoge entero porque está repartido en quince documentos.
 
 | # | Pendiente | Medido | Por qué importa |
 |---|---|---|---|
-| **0.1** | **43 commits sin publicar.** La rama no tiene *upstream* y `origin/main` sigue en `2832a9b` | `git rev-parse @{u}` → *no upstream*; `git log main..HEAD` → 43 | Todo el trabajo desde la migración vive **sólo en este disco**. Un fallo de la máquina lo pierde entero — incluidos V71…V78 y las 22 suites de integración |
+| **0.1** | ~~**43 commits sin publicar.**~~ ✅ **RESUELTO el 2026-08-23**: la rama está publicada | `git rev-parse @{u}` → `origin/feat/modelo-universal-y-autoridad-del-dato`; `git ls-remote` → la rama existe en el remoto y `origin/main..origin/<rama>` = **48** | Eran **48** contra lo que existe en GitHub, no 43: las 43 se contaron contra `main` **local**, que está 4 commits por delante de `origin/main`. Y las suites de integración son **20**, no 22 — `GateDeCierreTest` las inventaría y `Verificar-Cierre.ps1` comprueba que se ejecutaron |
 | **0.2** | **Rotar el secreto JWT y las credenciales RDS publicadas** en `2832a9b` | `origin/main` = `2832a9b` | El commit que las publicó **es la cabeza de `main` en GitHub**. Y `backend-spring` reutiliza ese mismo secreto de firma. Sin GlassFish al que preservar compatibilidad, rotarlo es un cambio de configuración |
 | **0.3** | **Decidir qué pasa con `origin/main`** | — | La historia pública se quedó en la v1. O se fusiona lo nuevo, o se declara que `main` no representa el producto |
 
@@ -59,9 +65,9 @@ que faltaban de verdad, y sigue abierto.
 ## 2. Profundidad inmobiliaria — lo que queda de los cortes de catálogo
 
 Fuente: `auditoria-profundidad-inmobiliaria.md`. La cadena real de migraciones y
-lo que ocupó cada una está en su §6. **La siguiente libre es `V79`.**
+lo que ocupó cada una está en su §6. **La siguiente libre es `V80`**: `V79` la ocupo el Corte 2 el 2026-08-23.
 
-### 2.1 Corte 1 · mitad de PROFUNDIDAD ⬜ — lo inmediato
+### 2.1 Corte 1 · mitad de PROFUNDIDAD ⬜ — APLAZADO
 
 V78 cerró la mitad de **sujeto** (¿de quién es cada clave?). Queda la mitad de
 **profundidad** (¿a qué tipos aplica y con qué exigencia?), que está medida e
@@ -75,12 +81,27 @@ inerte y sólo espera decisiones de negocio:
 | `frente` → C | 475 valores en A, L, T; ninguna casa | ídem |
 | `interiorUnidad` / `nombreEdificioGaleria` → A | no son claves de catálogo: dos `Set.of` en `GuionRegistroPropiedad`, sin migración | ídem |
 
-> **El flip a PUB es el cambio de mayor impacto operativo del corte, y está
-> cuantificado**: `pisos_edificacion` faltaría en 1 048 de 1 048 departamentos,
-> `banos` en 781 D / 407 L / 72 O / 83 A, `cuota_mantenimiento` en 806 D / 139 C
-> / 97 L / 83 A. En `dev` prácticamente ningún local volvería a ser publicable.
-> **O se escalona, o se acepta y se dice.** Hoy **ninguna** de las 19 claves
-> tiene exigencia PUB.
+> **El flip a PUB es el cambio de mayor impacto operativo del corte** — y las
+> dos frases con que se describía estaban mal las dos. Corregidas el
+> 2026-08-23:
+>
+> 1. **Las cifras no eran del mercado.** «1 048 departamentos», «781 D / 407 L»
+>    y «806 D / 139 C» salen de `controllocal_repositorios`, que **es
+>    `TEST_DB_URL`**: la base donde cometen las 20 suites de integración, con
+>    **2 871 propiedades** y **757 claves `zz_*`** de residuo. El corpus real es
+>    `controllocal_dev`: **26 propiedades** —1 C, 1 D, 21 L, 2 O, 1 T— y 74
+>    valores escritos. En `dev` no hay 1 048 departamentos: hay **uno**.
+> 2. **«Prácticamente ningún local volvería a ser publicable» se queda corto, y
+>    no es una figura**: `PUB` cuelga de `exigirPublicable`, que **lanza** y sale
+>    como **HTTP 400** (`PublicacionServiceImpl:186`, `ManejadorErroresApi:45`).
+>    Hoy las 26 propiedades reales pasan el gate; con esas claves en PUB
+>    dejarían de poder anunciarse las 26. Y **PUB no informa de nada**: no
+>    existe ninguna superficie del cable que reporte una PUB de la PROPIEDAD.
+>    Detalle y evidencia en `auditoria-profundidad-inmobiliaria.md` §6 bis.
+>
+> **O se escalona, o se acepta y se dice.** Hoy **ninguna** clave del sistema
+> tiene exigencia PUB — tampoco las seis que sembró `V79`, que entraron OPC a
+> propósito.
 
 ### 2.2 Las conversiones de tipo, bloqueadas por una invariante deliberada
 
@@ -138,7 +159,7 @@ la verdad física:
 
 | Corte | Qué trae | Migración |
 |---|---|---|
-| **2 · Identidad registral** | `partida_registral` y `oficina_registral` como **estructurales**, más `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. Hoy la partida existe **una sola vez** en toda la base: `condicion_compraventa.partida_registral`, colgada de una solicitud de venta — un inmueble que nunca se puso en venta no tiene partida en ningún sitio | **V79+** |
+| ~~**2 · Identidad registral**~~ ✅ **HECHO 2026-08-23** | `partida_registral` y `oficina_registral` como **estructurales**, más `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica` — **las seis OPC**, ninguna PUB. Se adelantó al resto del Corte 1 porque era un hueco estructural que se podía modelar **sin inferir nada del corpus contaminado**. Lo que queda fuera y sigue abierto: la promoción OPC→PUB, y el *snapshot* fechado de `condicion_compraventa.partida_registral`, que nace con el expediente de compraventa (bloque 6) | **V79** ✅ |
 | **3 · Vivienda (D, C)** | tipología, conservación, ascensores, vigilancia, áreas comunes, vista, bloque de baños/servicio, áreas exteriores. **Hereda**: `medios_banos` y el estrechamiento de `banos` | — |
 | **4 · Comercial (L, O, A)** | `tipo_acceso`, `clase_edificio`, `nivel_implementacion`, `metraje_arrendable`, `aforo_itse`, `certificado_itse`, bloque logístico | — |
 | **5 · Terreno (T)** | parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. **Hereda**: los tres reemplazos de `servicios_disponibles` | — |
@@ -349,7 +370,11 @@ explican el **porqué**, y CLAUDE.md ya avisa de que no gobiernan.
 
 ## 10. Si sólo se puede hacer una cosa
 
-**Publicar la rama.** 43 commits —el modelo universal, el sujeto del dato, el
-catálogo gobernado, el editor universal y las 22 suites de integración— existen
-en un único disco. Todo lo demás de este documento se puede planificar; eso no
-se puede recuperar.
+~~**Publicar la rama.**~~ ✅ **Hecho el 2026-08-23.** Eran **48** commits contra
+lo que existía en GitHub —el modelo universal, el sujeto del dato, el catálogo
+gobernado, el editor universal y las **20** suites de integración— y vivían en
+un único disco. Ya no.
+
+**Lo siguiente que no se puede planificar, se ejecuta:** rotar el secreto JWT
+(§0.2). Sigue publicado en `2832a9b`, que es la cabeza de `main` en GitHub, y
+`backend-spring` firma con él.

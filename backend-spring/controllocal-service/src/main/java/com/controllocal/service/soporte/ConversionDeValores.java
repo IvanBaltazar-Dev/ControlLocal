@@ -181,6 +181,47 @@ public final class ConversionDeValores {
     }
 
     /**
+     * <b>Un valor de LISTA pertenece al vocabulario que declara su clave</b>
+     * (V79).
+     *
+     * <h2>Por que hizo falta, y por que solo lo llama el camino estructural</h2>
+     * La comprobacion de pertenencia existia en un solo sitio: dentro de
+     * {@code exigir_atributo_gobernado}, el trigger de {@code atributo_propiedad}
+     * (V72). Un valor cuya autoridad es un campo canonico <b>no pasa por esa
+     * tabla</b>, asi que {@code oficina_registral} —la primera LISTA
+     * ESTRUCTURAL— habria aceptado cualquier cadena. Esta capa no lo comprobaba:
+     * acota tipo, rango y longitud, y nunca pertenencia.
+     *
+     * <p><b>No hay vocabulario escrito aqui.</b> Las opciones salen de
+     * {@code catalogo_atributo_opcion} a traves de
+     * {@link CatalogoAtributo#opcionesVigentes()}, que es la unica autoridad.
+     * Un {@code Set.of("LIMA", "CALLAO", ...)} en este archivo seria la segunda
+     * lista de oficinas, y anadir Ica pasaria a ser un despliegue.
+     *
+     * <p><b>Sin vocabulario sembrado no comprueba nada</b>, y es la misma
+     * tolerancia que V72 dejo puesta en el trigger. Es lo que permite que
+     * {@code servicios_disponibles} —LISTA de la PROPIEDAD, sin una sola opcion,
+     * y cuyos reemplazos son del Corte 5— siga comportandose exactamente igual
+     * que antes de este corte.
+     *
+     * <p>Lo que rechaza lo rechazaria igualmente {@code tg_vocabulario_estructural}.
+     * La diferencia es la de siempre: aqui sale con el nombre del atributo
+     * delante y antes de abrir la transaccion.
+     */
+    public static String exigirDelVocabulario(CatalogoAtributo definicion, String valor) {
+        List<String> admitidos = definicion.opcionesVigentes().stream()
+                .map(opcion -> opcion.getValor())
+                .toList();
+        if (admitidos.isEmpty() || admitidos.contains(valor)) {
+            return valor;
+        }
+        throw new ReglaNegocioException(
+                "El atributo \"" + definicion.getClave() + "\" no admite el valor \"" + valor
+                        + "\". Los valores posibles son " + String.join(", ", admitidos)
+                        + ", y salen del catalogo.");
+    }
+
+    /**
      * El techo de longitud que declara la clave.
      *
      * <p>Es la garantia que se perdio en V71 al retirar el {@code VARCHAR(120)}

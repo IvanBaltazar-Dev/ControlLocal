@@ -74,6 +74,29 @@ public class CatalogoAtributo {
      */
     public static final String CAMPO_PISO = "PISO";
 
+    /**
+     * <b>El numero de partida en el registro de predios</b>. Estructural desde
+     * V79 (Corte 2).
+     *
+     * <p>Es identidad, no descripcion: no depende del tipo de inmueble --toda
+     * propiedad inscribible tiene partida--, sobrevive a cualquier encargo y es
+     * lo que permite afirmar que dos fichas hablan del mismo activo. Ese es el
+     * criterio ESTRUCTURAL de D-E4-3, el mismo por el que {@code metraje} lo es
+     * y {@code zonificacion} no.
+     */
+    public static final String CAMPO_PARTIDA_REGISTRAL = "PARTIDA_REGISTRAL";
+
+    /**
+     * <b>La oficina registral donde esta inscrita esa partida</b> (V79).
+     *
+     * <p>Viaja con la partida porque la numeracion se repite entre oficinas: el
+     * numero solo no identifica nada. Es la primera clave ESTRUCTURAL de tipo
+     * LISTA, y por eso V79 anadio la comprobacion de vocabulario del lado
+     * estructural -- la de V72 vive dentro del trigger de
+     * {@code atributo_propiedad}, por donde un valor estructural no pasa.
+     */
+    public static final String CAMPO_OFICINA_REGISTRAL = "OFICINA_REGISTRAL";
+
     // ------------------------------------------------------------------
     // Las claves del sistema que D-E4-3 clasifico, con nombre.
     //
@@ -96,6 +119,15 @@ public class CatalogoAtributo {
     public static final String CLAVE_RUBRO_PERMITIDO = "rubro_permitido";
     public static final String CLAVE_APTO_LICENCIA = "apto_licencia_funcionamiento";
     public static final String CLAVE_CARGA_ELECTRICA_KW = "carga_electrica_kw";
+    // Las seis de la identidad registral (V79). Las dos primeras declaran su
+    // autoridad en un campo canonico del agregado; las otras cuatro son
+    // atributos gobernados, porque describen SITUACION y no identidad.
+    public static final String CLAVE_PARTIDA_REGISTRAL = "partida_registral";
+    public static final String CLAVE_OFICINA_REGISTRAL = "oficina_registral";
+    public static final String CLAVE_INDEPENDIZADO = "independizado";
+    public static final String CLAVE_CARGAS_GRAVAMENES = "cargas_gravamenes";
+    public static final String CLAVE_AREA_SEGUN_PARTIDA = "area_segun_partida";
+    public static final String CLAVE_DECLARATORIA_FABRICA = "declaratoria_fabrica";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

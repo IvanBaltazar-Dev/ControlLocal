@@ -70,7 +70,7 @@ Sin esto, la mitad de la sección 3 no se puede representar y la otra mitad acab
 | C-3 | Fechas | `tipo_dato='FECHA'` + `atributo_propiedad.valor_fecha DATE`. |
 | C-4 | Importes con moneda | `tipo_dato='IMPORTE'` + `atributo_propiedad.valor_moneda VARCHAR(3)` CHECK (PEN,USD), obligatoria cuando el tipo es IMPORTE. Cierra `cuota_mantenimiento`, hoy DECIMAL sin unidad ni moneda: un `350` guardado no se sabe si es soles o dólares. |
 | C-5 | Techo numérico | `catalogo_atributo.valor_maximo NUMERIC(14,4)` + CHECK `valor_minimo <= valor_maximo`. |
-| C-6 | **Tres niveles de exigencia, no dos** | `catalogo_atributo_tipo.requerido` (booleano) sólo sabe "bloquea el alta". Sustituir por `exigencia VARCHAR(3)` CHECK `('ALT','PUB','OPC')`: **ALT** bloquea el alta, **PUB** bloquea publicar/`disponibilidad_comercial='D'`, **OPC** no bloquea. Sin este campo, toda la columna «nivel» de este plan no tiene dónde vivir. |
+| C-6 | **Tres niveles de exigencia, no dos** | `catalogo_atributo_tipo.requerido` (booleano) sólo sabe "bloquea el alta". Sustituir por `exigencia VARCHAR(3)` CHECK `('ALT','PUB','OPC')`: **ALT** bloquea el alta, **PUB** bloquea publicar, **OPC** no bloquea. *(Se implementó así en V72, con una precisión: `PUB` bloquea el caso de uso de publicación —crear el anuncio y pasarlo a `PUBLICADO`— y **no** toca `disponibilidad_comercial`. Ver §6 bis.)* Sin este campo, toda la columna «nivel» de este plan no tiene dónde vivir. |
 | C-7 | Sujeto del atributo | `catalogo_atributo.sujeto VARCHAR(10)` CHECK `('PROPIEDAD','ENCARGO')`, default PROPIEDAD. Reutiliza opciones, rangos, DTO y motor de captura para el encargo (ver §3). |
 | C-8 | Campos estructurales nuevos | Ensanchar `ck_catalogo_campo_estructural` de `(METRAJE, PISO)` a `(METRAJE, PISO, PARTIDA, OFICINA_REGISTRAL, INTERIOR, EDIFICIO)`. La partida **no** puede ser un ATRIBUTO: meter la identidad registral en `atributo_propiedad.valor_texto` es exactamente la degradación que la invariante prohíbe. |
 | C-9 | El contrato tiene que publicarlo | `PreguntaCatalogoResponse` (`PropiedadesUniversalesController:164`) devuelve seis campos y ninguno es `opciones`. Añadir `opciones[{valor,rotulo}]`, `valorMinimo`, `valorMaximo`, `exigencia`, `ayuda`. Y `/captura/apertura` debe publicar las opciones **con rótulo**, no como lista de cadenas: hoy el SPA se inventa el texto en tres sitios distintos (`Local` / `Local comercial` / `LOCAL`). |
@@ -80,6 +80,10 @@ Sin esto, la mitad de la sección 3 no se puede representar y la otra mitad acab
 ## 3. Lista consolidada de atributos — una clave, muchos tipos
 
 Notación: **aplica_a** y **requerido_para** con los códigos de una letra. Nivel: **ALT** = bloquea el alta · **PUB** = bloquea publicar · **OPC** = recomendado. Autoridad **P** = propiedad, **E** = encargo (§4).
+
+> **Antes de subir cualquier fila a `PUB`, leer §6 bis.** Bloquea de verdad: un
+> 400 en el momento de anunciar, sobre toda propiedad que no tenga el dato. Las
+> columnas «nivel» de aquí abajo son **propuestas**, no estado.
 
 ### 3.1 Correcciones sobre las 19 claves que YA existen (cero claves nuevas)
 
@@ -108,16 +112,33 @@ Esto es lo más barato del plan: filas en `catalogo_atributo_tipo`, cambios de `
 | `amoblado` | Sin cambios como **hecho físico**. Su mitad comercial sale a `se_ofrece_amoblado` (§4). | C,D | OPC |
 | `ambientes` | Sin cambios. Para oficina no describe nada (cuenta divisiones sin decir para qué sirven): se complementa con `salas_reunion`. | A,C,D,L,O | OPC |
 
-### 3.2 Identidad y situación registral (autoridad PROPIEDAD, destino ESTRUCTURAL)
+### 3.2 Identidad y situación registral (autoridad PROPIEDAD)
 
-| clave | rótulo | tipo | opciones | aplica_a | requerido | nivel |
-|---|---|---|---|---|---|---|
-| `partida_registral` | Partida registral | TEXTO | — | L,O,D,C,T,A | — | **PUB** en todos |
-| `oficina_registral` | Oficina registral | LISTA | LIMA, CALLAO, HUAURA, CANETE, HUARAL, BARRANCA | L,O,D,C,T,A | — | PUB (el número de partida se repite entre oficinas) |
-| `area_segun_partida` | Área según partida | DECIMAL m² | — | C,T,A | — | OPC (permite avisar de la discrepancia antes de pactar precio) |
-| `independizado` | Unidad independizada | BOOLEANO | — | D,O,L,A | — | **PUB** (sin independizar no hay crédito hipotecario ni contrato inscribible) |
-| `cargas_gravamenes` | Cargas y gravámenes | LISTA_MULTIPLE | NINGUNA, HIPOTECA, EMBARGO, SERVIDUMBRE, COPROPIEDAD_SIN_DIVIDIR, SUCESION_PENDIENTE, LITIGIO | L,O,D,C,T,A | — | PUB |
-| `declaratoria_fabrica` | Fábrica declarada e inscrita | BOOLEANO | — | C,D | — | **PUB** en C (el tercer piso sin declarar es el problema nº 1 de la casa limeña: el banco no financia) |
+**Sembradas el 2026-08-23 por `V79`.** Sólo las dos primeras son ESTRUCTURAL
+—son identidad, no dependen del tipo—; las otras cuatro describen **situación**
+y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
+
+> **La columna «nivel» de esta tabla es lo que se PROPUSO, no lo que se aplicó.**
+> Las seis entraron **`OPC`**, sin excepción. `PUB` bloquea publicar (§6 bis), y
+> estrenarlo con claves que acaban de nacer deja sin poder anunciarse a toda la
+> cartera. La promoción está pendiente y es de otro corte; se conserva la
+> propuesta porque es el destino previsto, no un error.
+
+| clave | rótulo | tipo | opciones | aplica_a | destino | en V79 | nivel propuesto |
+|---|---|---|---|---|---|---|---|
+| `partida_registral` | Partida registral | TEXTO | — | L,O,D,C,T,A | ESTRUCTURAL | **OPC** | PUB en todos |
+| `oficina_registral` | Oficina registral | LISTA | LIMA, CALLAO, HUAURA, CANETE, HUARAL, BARRANCA | L,O,D,C,T,A | ESTRUCTURAL | **OPC** | PUB (el número de partida se repite entre oficinas) |
+| `area_segun_partida` | Área según partida | DECIMAL m² | — | C,T,A | ATRIBUTO | **OPC** | OPC (permite avisar de la discrepancia antes de pactar precio) |
+| `independizado` | Unidad independizada | BOOLEANO | — | D,O,L,A | ATRIBUTO | **OPC** | PUB (sin independizar no hay crédito hipotecario ni contrato inscribible) |
+| `cargas_gravamenes` | Cargas y gravámenes | LISTA_MULTIPLE | NINGUNA, HIPOTECA, EMBARGO, SERVIDUMBRE, COPROPIEDAD_SIN_DIVIDIR, SUCESION_PENDIENTE, LITIGIO | L,O,D,C,T,A | ATRIBUTO | **OPC** | PUB |
+| `declaratoria_fabrica` | Fábrica declarada e inscrita | BOOLEANO | — | C,D | ATRIBUTO | **OPC** | PUB en C · OPC en D (el tercer piso sin declarar es el problema nº 1 de la casa limeña: el banco no financia) |
+
+> **Y una pregunta que la promoción tendrá que contestar y hoy no se puede:**
+> una partida bloquea publicar una **venta** y es mucho menos relevante en un
+> **alquiler**. La aplicabilidad de una clave de la PROPIEDAD se declara por
+> tipo (`catalogo_atributo_tipo`) y **no por operación** — expresar esa
+> diferencia exige algo que el sujeto PROPIEDAD no tiene. Registrado, sin
+> resolver.
 
 ### 3.3 Estado y condición del activo
 
@@ -722,14 +743,21 @@ rótulo.
 
 ---
 
-### **Corte 2 — Identidad registral** · §3.2
+### **Corte 2 — Identidad registral** · §3.2 — ✅ **EJECUTADO 2026-08-23 · `V79`**
 
-> **La migración libre es `V79`**, no la V78 que dice la línea de abajo: V78 la
-> ocupó el Corte 1 (`el_hecho_llega_donde_llega_su_condicion`).
+> **Se adelantó al resto del Corte 1**, y la razón es medida: la identidad
+> registral es un **hueco estructural demostrado** —la partida existía en un
+> único sitio de toda la base, `condicion_compraventa.partida_registral`, con
+> **0 filas**— y se puede modelar sin inferir nada. El resto del Corte 1 pide
+> exigencias y vocabularios, y su evidencia sale de `controllocal_repositorios`,
+> que **es `TEST_DB_URL`**: infraestructura sintética de integración, no corpus
+> de mercado. Ver §6 bis.
 
 - **Migración V79**: `propiedad.partida_registral`, `propiedad.oficina_registral` (destino ESTRUCTURAL, gracias a C-8) + las claves `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica`. `condicion_compraventa.partida_registral` pasa a ser lo que debió ser siempre: **la partida vigente en esa venta, copia fechada de la del activo**, no su único domicilio.
-- **Prueba**: E2E que verifica que una captación de **alquiler** puede registrar la partida (hoy es imposible) y que la solicitud de venta la hereda.
-- **Valor**: el broker verifica titular y cargas en SUNARP **antes** de firmar el encargo, no al cerrar.
+- **Las seis entraron `OPC`, ninguna `PUB`**, y eso corrige lo que decía la tabla de §3.2. La razón está en §6 bis: `PUB` **bloquea publicar** con un 400, así que estrenarlo aquí habría dejado sin poder anunciarse a las 26 propiedades reales de `controllocal_dev` —las 26 pasan hoy el gate— y habría tumbado dos de las cinco suites del cierre. La promoción es una línea de SQL el día que el negocio la decida.
+- **Prueba**: `AutoridadDelDatoIntegrationTest` (la cadena estructural entera: escritor, vaciado, lector, conservación y edición explícita) y `CatalogoQueHablaIntegrationTest` (vocabulario de la oficina por las dos puertas, multivalor de cargas, ausencia ≠ respuesta, y que publicar sigue funcionando). Más `CadenaEstructuralCompletaTest`, el gate genérico que rompe el build si un concepto estructural se puede escribir y no leer.
+- **Lo que NO entró**: la E2E del *snapshot* A→B de compraventa. `condicion_compraventa.partida_registral` tiene 0 filas y su escritor nace con el expediente de compraventa (bloque 6); V79 sólo deja escrito, en el comentario de la columna y aquí, que dejó de ser la autoridad. Simularlo con SQL para tener una prueba verde habría sido probar la simulación.
+- **Valor**: el broker verifica titular y cargas **antes** de firmar el encargo, no al cerrar — y también en un encargo de **alquiler**, donde antes la partida no tenía dónde vivir.
 
 ---
 
@@ -790,9 +818,51 @@ V75  ✅      convergencia: una propiedad puede no estar encargada
 V76  ✅  0D  la propiedad como activo de dato       <- no estaba en el plan
 V77  ✅  0E  el lenguaje completo del ENCARGO (26)  <- no estaba en el plan
 V78  ✅  1   el hecho llega donde llega su condicion (mitad de SUJETO)
-V79      1   mitad de PROFUNDIDAD  ⬜  <- la siguiente libre
-V80+     2   identidad registral   ⬜
+V79  ✅  2   la identidad registral de la propiedad  <- se adelanto al resto del 1
+V80      1   mitad de PROFUNDIDAD  ⬜  <- la siguiente libre, y sigue APLAZADA
 ```
+
+---
+
+## 6 bis. Dos cosas que este plan daba por ciertas y no lo eran
+
+**Medidas el 2026-08-23, antes de escribir `V79`.** No se corrigen los apartados
+de arriba uno a uno —se dejan como se escribieron— pero nada de lo que sigue se
+puede volver a suponer.
+
+### `PUB` **sí** bloquea publicar, y con un 400
+
+La columna «nivel» de §3 reparte `PUB` con generosidad porque se leyó como un
+aviso. No lo es:
+
+| Hecho | Dónde |
+|---|---|
+| `exigirPublicable(...)` termina en `throw new ReglaNegocioException("Todavia no se puede publicar: …")` | `PublicacionServiceImpl.java:186-214` |
+| Se alcanza al crear el anuncio de un encargo **y** al pasarlo a `PUBLICADO` | `PublicacionServiceImpl.java:94` y `:326` |
+| La lista que lo alimenta filtra por ALT **y** PUB | `AtributosGobernados.faltantesDePropiedadParaPublicar` |
+| `ReglaNegocioException` → **HTTP 400** | `ManejadorErroresApi.java:45` |
+
+Y hay una segunda mitad que importa igual: **no existe ninguna superficie del
+cable que reporte una PUB de la PROPIEDAD**. `PropiedadResponse.atributosQueFaltan`
+lleva sólo ALT; `EncargoFicha.faltanParaPublicar` lleva ALT+PUB pero sólo del
+ENCARGO. Hoy, marcar PUB una clave de la propiedad hace **exactamente una cosa**:
+rechazar la publicación.
+
+**Consecuencia práctica para los cortes 3 a 7:** cada `PUB` de las tablas de §3
+es una decisión que retira del mercado a toda propiedad que no tenga ese dato.
+Se toma por corte, con su medición, o no se toma.
+
+### Los números de impacto de §1 salen de la base de pruebas
+
+`controllocal_repositorios` **es `TEST_DB_URL`**: la base que las 20 suites de
+integración usan y en la que cometen. El 2026-08-22 tenía **2 871 propiedades**
+y **802 claves de catálogo, de las cuales 757 son `zz_*`** sembradas por los
+propios tests. Sus cifras describen el residuo de las corridas, no el mercado.
+
+El **corpus real** es `controllocal_dev`: **26 propiedades** (1 C, 1 D, 21 L,
+2 O, 1 T), 45 claves del sistema y 74 valores escritos. Cualquier frase de este
+documento del tipo «406 baños» o «1 048 departamentos» hay que leerla contra
+esa distinción antes de usarla para decidir una exigencia.
 
 ## 7. Lo que NO haría ahora
 

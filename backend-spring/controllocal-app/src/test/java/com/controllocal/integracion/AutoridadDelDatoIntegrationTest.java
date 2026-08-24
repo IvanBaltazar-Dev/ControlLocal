@@ -10,6 +10,7 @@ import com.controllocal.service.captura.MotorDeCaptura.DefinicionCaptura;
 import com.controllocal.service.captura.MotorDeCaptura.Pregunta;
 import com.controllocal.service.captura.MotorDeCaptura;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.EscritorEstructural;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -29,7 +30,9 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -513,6 +516,285 @@ class AutoridadDelDatoIntegrationTest {
                 "el mensaje tiene que decir QUE atributo: " + error.getMessage());
         assertTrue(error.getMessage().contains("1"),
                 "y cual era el minimo, para que se pueda corregir: " + error.getMessage());
+    }
+
+    // ==================================================================
+    // V79 - La identidad registral, y la cadena estructural entera
+    // ==================================================================
+
+    /**
+     * <b>La partida y la oficina viven en el agregado, no en un EAV.</b>
+     *
+     * <p>Es la mitad que define el corte. Escritas por el caso de uso real y por
+     * su clave logica —el cliente no sabe donde caen— tienen que aparecer en las
+     * columnas de {@code propiedad} y <b>no dejar ni una fila</b> en
+     * {@code atributo_propiedad}: dos sitios para el mismo hecho es la doble
+     * verdad que D-E4-3 cerro.
+     */
+    @Test
+    @DisplayName("V79: la identidad registral cae en el agregado y no duplica fila EAV")
+    void laIdentidadRegistralEsAutoridadEstructural() {
+        long id = registrarConIdentidadRegistral("11223344", "LIMA");
+
+        Map<String, Object> fila = jdbc.queryForMap("""
+                select partida_registral, oficina_registral from propiedad where id_propiedad = ?
+                """, id);
+        assertEquals("11223344", fila.get("partida_registral"),
+                "la partida tiene que quedar en su campo canonico");
+        assertEquals("LIMA", fila.get("oficina_registral"),
+                "y la oficina en el suyo");
+
+        assertEquals(0L, jdbc.queryForObject("""
+                select count(*) from atributo_propiedad
+                 where id_propiedad = ? and clave in ('partida_registral', 'oficina_registral')
+                """, Long.class, id),
+                "una clave ESTRUCTURAL no deja fila en atributo_propiedad: si la dejara habria "
+                        + "dos verdades y divergirian en la primera edicion");
+    }
+
+    /**
+     * <b>Y aun asi el cliente las ve entre los atributos.</b>
+     *
+     * <p>La promesa de D-E4-3 dicha al reves: la autoridad fisica es nueva y el
+     * contrato logico no se movio. Quien consume la ficha pide
+     * {@code partida_registral} y la recibe, sin enterarse de que salio de una
+     * columna.
+     */
+    @Test
+    @DisplayName("V79: la ficha publica la identidad registral como un atributo mas")
+    void laIdentidadRegistralVuelvePorElContratoLogico() {
+        long id = registrarConIdentidadRegistral("11223344", "CALLAO");
+        FichaPropiedadUniversal ficha = propiedades.consultar(id, actorAgente());
+
+        assertEquals("11223344", atributoDeLaFicha(ficha, "partida_registral"));
+        assertEquals("CALLAO", atributoDeLaFicha(ficha, "oficina_registral"));
+    }
+
+    /**
+     * <b>Editar otra cosa no toca la identidad</b> — el gate del Corte 0A
+     * aplicado a lo que este corte introduce.
+     *
+     * <pre>
+     *   leer -> editar OTRO dato -> releer = identidad identica
+     * </pre>
+     *
+     * <p>Es la comprobacion que encuentra el fallo mas caro de un cambio de
+     * autoridad: un editor que reconstruye el agregado desde el cuerpo recibido
+     * pone a null lo que el cuerpo no traia, y borra en silencio un dato que
+     * nadie pidio borrar.
+     */
+    @Test
+    @DisplayName("V79: editar otro atributo deja la identidad registral intacta")
+    void editarOtraCosaConservaLaIdentidad() {
+        long id = registrarConIdentidadRegistral("11223344", "HUAURA");
+
+        propiedades.editar(id, new PropiedadUniversalService.ComandoEdicion(
+                null, null, null, null, null,
+                List.of(new PropiedadUniversalService.ValorAtributo("ambientes", "7")),
+                null, null), actorAgente());
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(id, actorAgente());
+        assertEquals("11223344", atributoDeLaFicha(ficha, "partida_registral"),
+                "la partida se perdio al editar un dato que no tiene nada que ver");
+        assertEquals("HUAURA", atributoDeLaFicha(ficha, "oficina_registral"),
+                "y la oficina igual");
+        assertEquals("7", atributoDeLaFicha(ficha, "ambientes"),
+                "y lo que si se pidio cambiar, cambio");
+    }
+
+    /**
+     * <b>Cambiar la identidad cambia solo lo declarado.</b>
+     *
+     * <p>La otra mitad de la anterior: se manda la partida nueva y la oficina
+     * —que no viajaba— tiene que quedarse donde estaba. Un editor que tratara
+     * las dos columnas como un bloque las pisaria juntas.
+     */
+    @Test
+    @DisplayName("V79: cambiar la partida no arrastra la oficina")
+    void laEdicionExplicitaCambiaSoloLoDeclarado() {
+        long id = registrarConIdentidadRegistral("11223344", "HUARAL");
+
+        propiedades.editar(id, new PropiedadUniversalService.ComandoEdicion(
+                null, null, null, null, null,
+                List.of(new PropiedadUniversalService.ValorAtributo("partida_registral", "99887766")),
+                null, null), actorAgente());
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(id, actorAgente());
+        assertEquals("99887766", atributoDeLaFicha(ficha, "partida_registral"));
+        assertEquals("HUARAL", atributoDeLaFicha(ficha, "oficina_registral"),
+                "la oficina no viajaba en la edicion, asi que no se toca");
+    }
+
+    /**
+     * <b>Retirar tambien enruta por autoridad.</b>
+     *
+     * <p>Quien pide quitar la partida dice la clave logica y nada mas. Sin este
+     * camino, {@code atributosABorrar} buscaria una fila en
+     * {@code atributo_propiedad} que no existe y la peticion se perderia sin
+     * error: la regla «clave -> autoridad» valdria para escribir y leer, y no
+     * para borrar.
+     *
+     * <p>Y tiene que poder hacerse: una partida se teclea mal, y la unica forma
+     * de decir «esto que puse no es cierto» sin inventar otra es quitarla.
+     */
+    @Test
+    @DisplayName("V79: retirar la partida la deja vacia, no en un valor inventado")
+    void retirarLaPartidaLaDejaVacia() {
+        long id = registrarConIdentidadRegistral("11223344", "BARRANCA");
+
+        propiedades.editar(id, new PropiedadUniversalService.ComandoEdicion(
+                null, null, null, null, null, null, null,
+                List.of("partida_registral")), actorAgente());
+
+        assertNull(jdbc.queryForMap(
+                "select partida_registral from propiedad where id_propiedad = ?", id)
+                .get("partida_registral"),
+                "retirar tiene que dejarla NULL --que significa 'no se sabe'-- y no en cadena vacia");
+        assertNull(atributoDeLaFicha(propiedades.consultar(id, actorAgente()), "partida_registral"),
+                "y la ficha deja de publicarla, en vez de publicar un hueco");
+        assertEquals("BARRANCA", atributoDeLaFicha(propiedades.consultar(id, actorAgente()),
+                "oficina_registral"),
+                "retirar una no retira la otra");
+    }
+
+    /**
+     * <b>Ningun concepto declarado en el CATALOGO se queda sin escritor ni sin
+     * lector</b> — la mitad de la simetria que necesita la base.
+     *
+     * <p>{@code CadenaEstructuralCompletaTest} recorre los conceptos declarados
+     * en el codigo. Este recorre los que declara el catalogo, que es <b>dato</b>:
+     * una fila con {@code destino = 'ESTRUCTURAL'} y un {@code campo_estructural}
+     * que el codigo no conoce se pediria en el alta y no se guardaria en ninguna
+     * parte, y el CHECK de la columna no puede verlo porque el CHECK solo
+     * enumera nombres.
+     */
+    @Test
+    @DisplayName("V79: todo concepto estructural del catalogo tiene escritor y lector")
+    void elCatalogoNoDeclaraConceptosQueElCodigoNoSabeEscribir() {
+        List<Map<String, Object>> declarados = jdbc.queryForList("""
+                select clave, campo_estructural from catalogo_atributo
+                 where destino = 'ESTRUCTURAL' and activo
+                """);
+        assertFalse(declarados.isEmpty(),
+                "sin ninguna clave estructural este gate no vigila nada");
+
+        List<String> huerfanos = new ArrayList<>();
+        for (Map<String, Object> fila : declarados) {
+            String concepto = (String) fila.get("campo_estructural");
+            if (!EscritorEstructural.sabeEscribir(concepto)) {
+                huerfanos.add(fila.get("clave") + " -> " + concepto);
+            }
+        }
+
+        assertTrue(huerfanos.isEmpty(),
+                "el catalogo declara conceptos estructurales que el codigo no sabe escribir: "
+                        + huerfanos + ". Se pediran en el alta y su valor no se guardara en "
+                        + "ninguna parte.");
+    }
+
+    /**
+     * <b>La identidad registral es de la PROPIEDAD, y no del encargo.</b>
+     *
+     * <p>Dos encargos sucesivos sobre el mismo inmueble comparten partida
+     * porque el inmueble es el mismo: no es un dato que se pacte. Se comprueba
+     * por donde se declara —el sujeto del catalogo— porque es lo que decide en
+     * que tabla vive el valor y que trigger lo vigila (V73).
+     */
+    @Test
+    @DisplayName("V79: las seis claves registrales son del sujeto PROPIEDAD")
+    void laIdentidadRegistralNoEsUnaCondicionDelEncargo() {
+        List<String> claves = List.of("partida_registral", "oficina_registral", "independizado",
+                "cargas_gravamenes", "area_segun_partida", "declaratoria_fabrica");
+
+        for (String clave : claves) {
+            Map<String, Object> fila = jdbc.queryForMap("""
+                    select sujeto, aplica_todos from catalogo_atributo
+                     where clave = ? and organizacion_id is null
+                    """, clave);
+            assertEquals("PROPIEDAD", fila.get("sujeto"),
+                    clave + " se declaro del ENCARGO: una partida no se negocia, y si fuera del "
+                            + "encargo el segundo alquiler no la heredaria");
+            assertEquals(0L, jdbc.queryForObject("""
+                    select count(*) from catalogo_atributo_operacion o
+                      join catalogo_atributo c on c.id_catalogo_atributo = o.id_catalogo_atributo
+                     where c.clave = ? and c.organizacion_id is null
+                    """, Long.class, clave),
+                    clave + " declara aplicabilidad en la tabla del ENCARGO");
+        }
+    }
+
+    /**
+     * <b>Las seis llegan al alta y al editor solas, por el motor universal.</b>
+     *
+     * <p>Es la prueba de D-A-1 dicha por el lado del Core: no se comprueba que
+     * Angular las pinte —eso seria pedirle al backend que lea el frontend— sino
+     * que <b>la definicion que Angular consume ya las trae</b>, con su tipo, su
+     * exigencia y, donde toca, su vocabulario. Si el Core las publica y el mismo
+     * renderizador que ya existe pinta lo que recibe, no hay nada que anadir en
+     * el SPA; y el gate {@code FronteraDeAutoridadEnElSpaTest} impide que
+     * alguien lo intente.
+     *
+     * <p>Cada clave se pregunta contra un tipo <b>al que aplica</b>: una que no
+     * aparece donde no aplica no es un fallo, es el catalogo funcionando.
+     */
+    @Test
+    @DisplayName("V79: las seis capacidades llegan a la definicion de captura por si solas")
+    void lasSeisLleganAlAltaSinTocarNingunaInterfaz() {
+        Map<String, String> dondeAplica = new LinkedHashMap<>();
+        dondeAplica.put("partida_registral", "DEPARTAMENTO");
+        dondeAplica.put("oficina_registral", "DEPARTAMENTO");
+        dondeAplica.put("independizado", "DEPARTAMENTO");
+        dondeAplica.put("declaratoria_fabrica", "CASA");
+        dondeAplica.put("area_segun_partida", "TERRENO");
+        dondeAplica.put("cargas_gravamenes", "DEPARTAMENTO");
+
+        List<String> ausentes = new ArrayList<>();
+        dondeAplica.forEach((clave, tipo) -> {
+            DefinicionCaptura definicion = motor.definicion(
+                    MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, "VENTA", actor());
+            boolean publicada = definicion.todas().stream()
+                    .map(Pregunta::clave)
+                    .anyMatch(clave::equals);
+            if (!publicada) {
+                ausentes.add(clave + " en " + tipo);
+            }
+        });
+
+        assertTrue(ausentes.isEmpty(), """
+                El motor de captura no publica: %s
+
+                Las seis son filas de catalogo. Si no salen aqui, la unica forma de que
+                aparezcan en una pantalla seria escribirlas en Angular -- y eso es la
+                matriz «tipo -> campos» que D-A-1 prohibe y que rompe el build.
+                """.formatted(ausentes));
+    }
+
+    // ------------------------------------------------------------------
+
+    /** Un departamento registrado con su identidad registral, por el caso de uso real. */
+    private long registrarConIdentidadRegistral(String partida, String oficina) {
+        Actor actor = actorAgente();
+        Long idPropietario = jdbc.queryForObject("""
+                select min(r.id_persona_rol) from persona_rol r
+                 where r.tipo_rol = 'PROPIETARIO' and r.vigencia_hasta is null
+                   and r.organizacion_id = ?
+                """, Long.class, actor.idOrganizacion());
+
+        return propiedades.registrar(new PropiedadUniversalService.ComandoRegistro(
+                null, null, codigoIrrepetible(), "DEPARTAMENTO", null, "Identidad registral V79",
+                new PropiedadUniversalService.Ubicacion(
+                        "Av. Registral " + java.util.UUID.randomUUID(), "Miraflores",
+                        null, null, null, null, null, null, null),
+                List.of(new PropiedadUniversalService.Titular(idPropietario, null, Boolean.TRUE)),
+                List.of(new PropiedadUniversalService.ValorAtributo("metraje_total", "90"),
+                        new PropiedadUniversalService.ValorAtributo("dormitorios", "2"),
+                        new PropiedadUniversalService.ValorAtributo("ambientes", "5"),
+                        new PropiedadUniversalService.ValorAtributo("partida_registral", partida),
+                        new PropiedadUniversalService.ValorAtributo("oficina_registral", oficina)),
+                List.of(new PropiedadUniversalService.OperacionSolicitada(
+                        "ALQUILER", new java.math.BigDecimal("2500"), "PEN",
+                        null, null, null, null, null, null, null)),
+                null), actor).idPropiedad();
     }
 
     // ------------------------------------------------------------------

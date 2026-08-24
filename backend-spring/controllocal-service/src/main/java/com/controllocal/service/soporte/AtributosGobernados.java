@@ -251,6 +251,30 @@ public class AtributosGobernados {
     }
 
     /**
+     * <b>Lo que se le exige a un valor ANTES de escribirlo en su campo
+     * canonico</b> (V79).
+     *
+     * <p>Hasta este corte el camino estructural solo comprobaba que el valor no
+     * llegara vacio, y la conversion la hacia {@code EscritorEstructural} al
+     * asignarlo. Con dos conceptos estructurales numericos y de texto libre eso
+     * bastaba; con el primero de tipo LISTA deja de bastar, porque la
+     * pertenencia al vocabulario vivia <b>solo</b> dentro del trigger de
+     * {@code atributo_propiedad}, por donde un valor estructural no pasa.
+     *
+     * <p>Se apoya en {@link ConversionDeValores}, que es exactamente la mitad
+     * que <b>no depende del sujeto</b>: un entero es un entero y un vocabulario
+     * es un vocabulario, lo lleve una fila o una columna. Asi el camino
+     * estructural y el gobernado exigen lo mismo, que es lo unico que hace
+     * cierta la promesa de D-E4-3 — <i>la autoridad fisica cambia, el contrato
+     * logico no</i>.
+     */
+    private static String valorEstructural(CatalogoAtributo definicion, String valor) {
+        String limpio = exigirValor(definicion.getClave(), valor);
+        ConversionDeValores.exigirCompatible(definicion, limpio);
+        return ConversionDeValores.exigirDelVocabulario(definicion, limpio);
+    }
+
+    /**
      * Cambia el valor de un atributo que ya existe, respetando su tipo. Se
      * separa de {@link #convertir} porque actualizar y crear no son lo mismo
      * para JPA: reemplazar la fila perderia {@code fecha_creacion}, que es el
@@ -308,7 +332,7 @@ public class AtributosGobernados {
 
         if (definicion.esEstructural()) {
             EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
-                    exigirValor(clave, valor), clave);
+                    valorEstructural(definicion, valor), clave);
             // Y NO se guarda como atributo: su autoridad es el campo canonico.
             return Optional.empty();
         }
@@ -333,7 +357,7 @@ public class AtributosGobernados {
 
         if (definicion.esEstructural()) {
             EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
-                    exigirValor(clave, valor), clave);
+                    valorEstructural(definicion, valor), clave);
             return Optional.empty();
         }
         if (existente != null) {

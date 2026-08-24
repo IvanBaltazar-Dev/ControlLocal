@@ -136,6 +136,38 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     // `metraje` sigue arriba, y es correcto: es el unico estructural.
     // ------------------------------------------------------------------
 
+    /**
+     * <b>La identidad registral del inmueble</b> (V79, Corte 2).
+     *
+     * <p>Los dos campos son la autoridad de los conceptos
+     * {@code PARTIDA_REGISTRAL} y {@code OFICINA_REGISTRAL}, y se escriben
+     * <b>solo</b> por sus claves de catalogo a traves de
+     * {@code EscritorEstructural}. Nadie los toca por su nombre desde un caso de
+     * uso: eso seria la matriz «clave -> campo» otra vez (D-E4-3).
+     *
+     * <p>Anulables las dos, y es la regla del 3g: un inmueble puede conocerse
+     * antes de tener su partida a la vista. NULL significa <b>todavia no se
+     * sabe</b>, nunca «no tiene».
+     *
+     * <p>Estan aqui y no en {@code atributo_propiedad} porque son identidad y no
+     * descripcion: no dependen del tipo de inmueble y sobreviven a cualquier
+     * encargo. Hasta V79 la partida existia en un unico sitio de toda la base
+     * --{@code condicion_compraventa.partida_registral}, colgada de una
+     * solicitud de venta-- asi que un inmueble que solo se alquilaba no tenia
+     * donde llevarla.
+     */
+    @Column(name = "partida_registral", length = 40)
+    private String partidaRegistral;
+
+    /**
+     * La oficina donde esta inscrita esa partida. Su vocabulario vive en el
+     * catalogo ({@code catalogo_atributo_opcion}) y lo comprueban la capa de
+     * servicio y el trigger {@code tg_vocabulario_estructural}; aqui no hay
+     * ninguna lista de oficinas, y no debe haberla.
+     */
+    @Column(name = "oficina_registral", length = 40)
+    private String oficinaRegistral;
+
     @Column(name = "zona_urbanizacion", length = 150)
     private String zonaUrbanizacion;
 
@@ -455,6 +487,16 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     public void setInteriorUnidad(String interiorUnidad) { this.interiorUnidad = interiorUnidad; }
     public String getPiso() { return piso; }
     public void setPiso(String piso) { this.piso = piso; }
+
+    public String getPartidaRegistral() { return partidaRegistral; }
+    public void setPartidaRegistral(String partidaRegistral) {
+        this.partidaRegistral = partidaRegistral;
+    }
+
+    public String getOficinaRegistral() { return oficinaRegistral; }
+    public void setOficinaRegistral(String oficinaRegistral) {
+        this.oficinaRegistral = oficinaRegistral;
+    }
     public String getReferenciaInterna() { return referenciaInterna; }
     public void setReferenciaInterna(String referenciaInterna) { this.referenciaInterna = referenciaInterna; }
     public String getNombreEdificioGaleria() { return nombreEdificioGaleria; }

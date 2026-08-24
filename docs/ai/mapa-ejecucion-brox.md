@@ -151,7 +151,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3g** | **El lenguaje del ENCARGO** | `V77`: el catálogo pasa de 6 a **26** condiciones comerciales y VENTA deja de estar muda (0 → 7). Aplicabilidad por **tipo × operación**, vocabularios sembrados, y el guard de pares hecho/condición ampliado a los ocho. Ninguna con valor por defecto: la ausencia sigue significando «todavía no se sabe» | ✅ **CERRADO** 2026-08-22 |
 | **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
 | **3h** | **El hecho llega donde llega su condición** | `V78`: las 19 claves de PROPIEDAD clasificadas una por una —14 hecho puro, 2 mitad de un par ya separado, 3 con problema de modelo, **ninguna condición disfrazada**—. Lo que sí apareció es la **cobertura del par**: `se_ofrece_amoblado` llegaba a OFICINA y `amoblado` no, y `mantenimiento_a_cargo_de` a ALMACÉN y CASA sin `cuota_mantenimiento`. Tres filas OPC lo cierran, y la invariante queda puesta | ✅ **CERRADO** 2026-08-22 |
-| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`) y el **Corte 1** en su mitad de sujeto (`V78`); queda la profundidad por tipo, cortes 1(resto)–7. Ver `auditoria-profundidad-inmobiliaria.md` |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23). El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 3–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
@@ -207,12 +207,37 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    un obstáculo a rodear. Evidencia:
    `verificacion/evidencia/2026-08-22-corte-1-el-hecho-y-su-condicion.md`.
 
-5. **Corte 1 (resto) / profundidad de la PROPIEDAD** — lo que queda del corte no
-   es sujeto, es **profundidad**: ampliar aplicabilidad por tipo (`banos` a
-   L,O,A · `zonificacion` a O · `pisos_edificacion` a D,O · `frente` a C) y
-   darle vocabulario a `servicios_disponibles`, que hoy es una LISTA muda. Ya
-   está medido en `auditoria-profundidad-inmobiliaria.md`; lo que falta es
-   decidir la exigencia y los vocabularios, que son decisiones de negocio.
+5. ~~**Corte 2 / identidad registral**~~ ✅ 2026-08-23, migración `V79`. **Se
+   adelantó al resto del Corte 1**, y la razón es medida: la partida registral
+   existía en **un solo sitio de toda la base** —`condicion_compraventa.partida_registral`,
+   colgada de una solicitud de venta, con **0 filas**—, así que un inmueble que
+   nunca se puso en venta no la tenía en ninguna parte y el broker no podía
+   verificar titular y cargas antes de firmar un encargo de alquiler. Es un
+   hueco **estructural** y se puede modelar **sin inferir nada**; el resto del
+   Corte 1 no. Dos columnas de identidad en el agregado, cuatro claves
+   gobernadas de situación, dos vocabularios, y un gate genérico que rompe el
+   build si un concepto estructural se puede escribir y no leer. Evidencia:
+   `verificacion/evidencia/2026-08-23-corte-2-identidad-registral.md`.
+
+   > **Las seis entraron `OPC`, ninguna `PUB`.** El encargo del corte las quería
+   > PUB creyendo que PUB sólo informaba; lo medido es lo contrario — `PUB`
+   > **bloquea publicar** con un 400 (`PublicacionServiceImpl:186`) y no aparece
+   > en ningún faltante de la propiedad. Sembrarlas PUB habría dejado sin poder
+   > anunciarse a las 26 propiedades reales. Está en
+   > `auditoria-profundidad-inmobiliaria.md` §6 bis, con su evidencia.
+
+6. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
+   insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
+   **profundidad**: ampliar aplicabilidad por tipo (`banos` a L,O,A ·
+   `zonificacion` a O · `pisos_edificacion` a D,O · `frente` a C) y darle
+   vocabulario a `servicios_disponibles`, que hoy es una LISTA muda. Lo que
+   falta es decidir la exigencia y los vocabularios, que son **decisiones de
+   negocio** — y la evidencia para calibrarlas está contaminada: los números de
+   impacto de `auditoria-profundidad-inmobiliaria.md` («406 baños», «1 048
+   departamentos») salen de `controllocal_repositorios`, que **es
+   `TEST_DB_URL`**, con 757 claves `zz_*` de residuo de las suites. El corpus
+   real son **26 propiedades**. No es falta de trabajo: es falta de mercado que
+   medir.
 
 **ANTES DE PRODUCCIÓN** (en paralelo, es trabajo de otra naturaleza y no debe
 contaminar el modelo inmobiliario): separar seeds de desarrollo, bootstrap
@@ -523,8 +548,9 @@ este orden**:
 0D  la propiedad como activo de dato    ✅ CERRADO 2026-08-21 · V76
 0E  el lenguaje completo del ENCARGO    ✅ CERRADO 2026-08-22 · V77
 1   las 19 claves — mitad de SUJETO     ✅ CERRADO 2026-08-22 · V78
-1   las 19 claves — mitad de PROFUNDIDAD ⬜ siguiente
-2…7 profundidad por tipo                ⬜
+2   identidad registral                 ✅ CERRADO 2026-08-23 · V79
+1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
+3…7 profundidad por tipo                ⬜
 ```
 
 > **El Corte 1 se partió en dos, y no por comodidad.** Su mitad de **sujeto**

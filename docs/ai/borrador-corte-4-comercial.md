@@ -1,3 +1,19 @@
+> # ⛔ SUPERADO — no gobierna
+>
+> Este borrador se convirtio en encargo congelado el 2026-08-24:
+> **[`encargo-corte-4-comercial.md`](encargo-corte-4-comercial.md)**.
+>
+> Su §6 planteaba la decision de exigencias con tres salidas. **El titular
+> eligio `tipo_acceso` ALT en L, con el efecto medido delante**: 21 de las 26
+> propiedades dejan de poder anunciarse hasta que se visiten. Ojo, porque este
+> borrador lo decia mal: **ALT tambien bloquea publicar**
+> (`AtributoPropiedadRepository:100`, `exigencia in ('ALT','PUB')`), no solo
+> avisa. La correccion esta en el encargo §3.
+>
+> Se conserva por su §5 -- el fallo que el Corte 5 trae escrito -- y por su §9.
+
+---
+
 # Borrador — Corte 4 · Comercial (L, O, A)
 
 > **ESTO NO ESTÁ CONGELADO.** Es trabajo adelantado por CONTROL mientras el

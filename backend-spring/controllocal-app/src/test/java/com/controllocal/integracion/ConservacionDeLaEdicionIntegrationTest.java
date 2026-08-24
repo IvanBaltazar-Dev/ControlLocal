@@ -351,9 +351,10 @@ class ConservacionDeLaEdicionIntegrationTest {
 
         // El resto de atributos se reenvia por el espejo y no rehecho a mano:
         // desde V80 la casa lleva dos LISTA_MULTIPLE, y un `new ValorAtributo(
-        // clave, valor)` sobre una de ellas manda NULL como escalar y el Core lo
-        // rechaza -- con razon. Aqui lo que se prueba es que cambiar UN dato
-        // fisico no toca los encargos, no como se serializa un multivalor.
+        // clave, valor)` sobre una de ellas manda como escalar el TEXTO DE
+        // PRESENTACION pegado por comas --`valores` es lo que queda a null-- y
+        // el Core lo rechaza, con razon. Aqui lo que se prueba es que cambiar UN
+        // dato fisico no toca los encargos, no como se serializa un multivalor.
         ComandoEdicion espejo = comandoEspejo(antes);
         List<ValorAtributo> atributos = espejo.atributos().stream()
                 .map(a -> "banos".equals(a.clave()) ? new ValorAtributo("banos", "4") : a)

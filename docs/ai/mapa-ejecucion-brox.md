@@ -151,7 +151,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3g** | **El lenguaje del ENCARGO** | `V77`: el catálogo pasa de 6 a **26** condiciones comerciales y VENTA deja de estar muda (0 → 7). Aplicabilidad por **tipo × operación**, vocabularios sembrados, y el guard de pares hecho/condición ampliado a los ocho. Ninguna con valor por defecto: la ausencia sigue significando «todavía no se sabe» | ✅ **CERRADO** 2026-08-22 |
 | **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
 | **3h** | **El hecho llega donde llega su condición** | `V78`: las 19 claves de PROPIEDAD clasificadas una por una —14 hecho puro, 2 mitad de un par ya separado, 3 con problema de modelo, **ninguna condición disfrazada**—. Lo que sí apareció es la **cobertura del par**: `se_ofrece_amoblado` llegaba a OFICINA y `amoblado` no, y `mantenimiento_a_cargo_de` a ALMACÉN y CASA sin `cuota_mantenimiento`. Tres filas OPC lo cierran, y la invariante queda puesta | ✅ **CERRADO** 2026-08-22 |
-| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23). El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 3–7. Ver `auditoria-profundidad-inmobiliaria.md` |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23) y el **Corte 3 · vivienda D y C** (`V80`, 2026-08-24, con `3.a` sin migración arreglando el gate `.sql`). El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 4–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
@@ -226,7 +226,33 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > anunciarse a las 26 propiedades reales. Está en
    > `auditoria-profundidad-inmobiliaria.md` §6 bis, con su evidencia.
 
-6. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
+6. **Corte 3 / vivienda (D, C)** — 🟡 **EN CURSO 2026-08-24.** Dos commits, en
+   este orden. **`3.a` no lleva migración**: arregla el censo `M2` de
+   `verificacion/gate-modelo-universal.sql`, que exigía `count(*) = 25` sobre el
+   catálogo del sistema, llevaba **rojo desde `V77`** y **sobrevivió a tres
+   cortes cerrados y auditados** porque `Verificar-Cierre.ps1` no lo ejecutaba.
+   No se arregla escribiendo `= 81`: el bloque 3e entero es un programa cuyo
+   propósito es hacer crecer el catálogo, así que el número medía el avance del
+   roadmap y no una invariante. Se sustituye por un **suelo de claves activas**
+   y por la invariante que faltaba —**ninguna clave del sistema activa sin
+   aplicabilidad**—, y el gate entra en la corrida de cierre. Evidencia:
+   `verificacion/evidencia/2026-08-24-el-censo-que-se-rompia-al-avanzar.md`.
+   **`3.b` = `V80`**: **30 claves de vivienda** (estado del activo, edificio y
+   servicios comunes, distribución interior), 9 vocabularios con 49 opciones y
+   68 filas de aplicabilidad. **Las 30 entran `OPC`; ninguna `ALT`, ninguna
+   `PUB`** — el catálogo del sistema sigue con **cero `PUB`**. Sin defectos, sin
+   relleno retroactivo, y **sin tocar Angular**: las 30 se pintan solas por
+   `cl-campo-gobernado`, que es una **prueba** del corte y no un supuesto.
+   Evidencia: `verificacion/evidencia/2026-08-24-corte-3-vivienda.md`.
+
+   > **`mascotas_reglamento` nace en C y D, no sólo en D.** El plan decía «D»; la
+   > medición dice que su condición `mascotas_aceptadas` se pacta en **C y D**, y
+   > el guard 2.2 de `V78` exige que el hecho no llegue menos lejos que su
+   > condición. Manda la medición: se corrige el documento, nunca el código.
+   > **`torre_bloque` se ejecuta aquí** pese a estar redactada en §3.8 (Terreno):
+   > su `aplica_a` es `D` y un corte se define por tipo, no por número de sección.
+
+7. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
    insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
    **profundidad**: ampliar aplicabilidad por tipo (`banos` a L,O,A ·
    `zonificacion` a O · `pisos_edificacion` a D,O · `frente` a C) y darle
@@ -549,8 +575,9 @@ este orden**:
 0E  el lenguaje completo del ENCARGO    ✅ CERRADO 2026-08-22 · V77
 1   las 19 claves — mitad de SUJETO     ✅ CERRADO 2026-08-22 · V78
 2   identidad registral                 ✅ CERRADO 2026-08-23 · V79
+3   vivienda (D, C)                     🟡 EN CURSO 2026-08-24 · 3.a sin migración + 3.b = V80
 1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
-3…7 profundidad por tipo                ⬜
+4…7 profundidad por tipo                ⬜
 ```
 
 > **El Corte 1 se partió en dos, y no por comodidad.** Su mitad de **sujeto**

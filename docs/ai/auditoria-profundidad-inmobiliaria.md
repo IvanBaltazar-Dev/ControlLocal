@@ -199,7 +199,7 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 | `depositos` / `deposito_area` | Depósitos / Área de depósito | ENTERO / DECIMAL m² | — | D,O | OPC (en Lima suele ir independizado junto con la cochera y forma parte del precio) |
 | `tipo_estacionamiento` | Tipo de estacionamiento | LISTA | SIMPLE, DOBLE_LINEAL, DOBLE_PARALELO, MOTO | D,O,C | OPC (`estacionamientos = 2` no distingue dos cocheras de un doble lineal) |
 | `estacionamiento_independizado` | Estacionamiento independizado | BOOLEANO | — | D,O,L | OPC — **provisional**: lo cierra de verdad §5 |
-| `mascotas_reglamento` | El reglamento permite mascotas | BOOLEANO | — | D | OPC. Hecho del edificio, no del encargo (su gemelo comercial está en §4) |
+| `mascotas_reglamento` | El reglamento permite mascotas | BOOLEANO | — | **C,D** | OPC. Hecho del edificio, no del encargo (su gemelo comercial está en §4). **Corregido por medición al ejecutar `V80` (2026-08-24): aquí decía «D», y su condición `mascotas_aceptadas` se pacta en C y D — el hecho no puede llegar menos lejos que su condición** |
 
 ### 3.7 Comercial y logístico
 
@@ -254,7 +254,7 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 | `zona_de_riesgo` | Zona de riesgo declarada | BOOLEANO | — | T,C | OPC |
 | `manzana_lote` | Manzana y lote | TEXTO (ESTRUCTURAL → `interiorUnidad`) | — | T | **PUB**. Hoy se escribe dentro de `direccion` y dos agentes captan el mismo terreno con dos direcciones distintas |
 | `latitud` / `longitud` *(ya existen, estructurales)* | — | — | — | T | **PUB** en T: un terreno suele no tener dirección útil |
-| `torre_bloque` | Torre o bloque | TEXTO | — | D | OPC (el 501 existe en la Torre A y en la B; la mayoría del stock limeño no tiene torres, por eso no bloquea) |
+| `torre_bloque` | Torre o bloque | TEXTO | — | D | OPC (el 501 existe en la Torre A y en la B; la mayoría del stock limeño no tiene torres, por eso no bloquea). **Se ejecutó en el Corte 3 (`V80`), no en el 5: está redactada en esta sección por arrastre, pero su `aplica_a` es `D` y un corte se define por tipo, no por número de sección** |
 
 **Totales:** ~20 correcciones sin clave nueva, **~85 claves nuevas de PROPIEDAD**, de las cuales **4 en ALT** (`tipo_acceso` en L, `condicion_terreno` en T, `metraje_construido` en A vía §3.1, `area_terreno` en C vía §3.1) más las tres elevaciones de claves existentes (`piso` en D/O, `interiorUnidad` en D). El resto reparte entre PUB y OPC.
 
@@ -383,7 +383,7 @@ sujeto.
 | `estacionamientos` | `estacionamientos_incluidos` | existe |
 | `rubro_permitido` | `rubros_excluidos_por_titular` | existe |
 | `uso` *(columna, no atributo)* | `uso_admitido_por_titular` | existe |
-| `mascotas_reglamento` | `mascotas_aceptadas` | **falta** — Corte 3 |
+| `mascotas_reglamento` | `mascotas_aceptadas` | ✅ **cubierto** — `V80`, en **C y D** |
 | `nivel_implementacion` | `se_entrega_implementado` | **falta** — Corte 4 |
 | `estado_ocupacion` | `entrega_desocupado` | **falta** — Corte 5 |
 | `lote_minimo_normativo` | `acepta_venta_fraccionada` | **falta** — Corte 5 |
@@ -761,14 +761,44 @@ rótulo.
 
 ---
 
-### **Corte 3 — Vivienda: D y C** · §3.3, §3.6, §3.4 (parte)
+### **Corte 3 — Vivienda: D y C** · §3.3, §3.6, §3.4 (parte) — ✅ **EJECUTADO 2026-08-24 · `V80`**
 Siembra + opciones + E2E de alta/edición/publicación por tipo. Aquí entran `tipologia`, `estado_conservacion`, `ascensores`, `vigilancia`, `areas_comunes`, `vista`, el bloque de baños/servicio y las áreas exteriores.
 
-**Hereda del Corte 1:** `medios_banos` nace aquí, y sólo entonces `banos` puede
-estrecharse a ENTERO — con su migración de datos, que es determinista (los 379
-valores fraccionarios medidos son `.5` exactos, sin un solo caso raro) pero
-descansa en una **convención no publicada**: hay que escribirla en la ayuda del
-campo antes de aplicarla, no después.
+- **Dos commits.** `3.a` **sin migración**: arregla el censo `M2` de
+  `verificacion/gate-modelo-universal.sql` —`count(*) = 25` sobre el catálogo del
+  sistema, **rojo desde `V77`**, superviviente de tres cortes cerrados porque
+  `Verificar-Cierre.ps1` no lo ejecutaba— y mete el gate en la corrida de cierre.
+  `3.b` = **`V80`**: **30 claves**, 9 vocabularios con 49 opciones, 68 filas de
+  aplicabilidad.
+- **Las 30 entraron `OPC`, ninguna `ALT`, ninguna `PUB`**, y eso corrige la
+  columna «nivel» de §3.3, §3.4 y §3.6, que era una **propuesta y no un estado**.
+  Misma razón que en el Corte 2 (§6 bis): `PUB` **bloquea publicar** con un 400.
+  El catálogo del sistema sigue con **cero `PUB`**, y se comprueba en la propia
+  migración.
+- **`mascotas_reglamento` entra en `C` y `D`, no sólo en `D`** — **corrección de
+  §3.6 por medición**. Su condición `mascotas_aceptadas` se pacta en
+  `catalogo_atributo_operacion` como `C/A/OPC` y `D/A/OPC`, y el guard 2.2 de
+  `V78` exige que el hecho no llegue menos lejos que su condición. Si hubiera
+  nacido sólo en `D`, `V80` habría fallado en su propia guarda — se comprobó
+  simulándolo. **Manda la medición: se corrige el documento, nunca el código.**
+- **`torre_bloque` se ejecuta en este corte, no en el 5** — **anotación sobre
+  §3.8**. Está redactada dentro de *Terreno y parámetros urbanísticos* por
+  arrastre de redacción, pero su `aplica_a` es `D` y su justificación es de
+  vivienda. Un corte se define **por tipo**, no por número de sección.
+- **Angular no se tocó.** Las 30 claves se pintan solas por `cl-campo-gobernado`,
+  y que aparezcan sin tocar el SPA es una **prueba** del corte.
+- **Evidencia**: `verificacion/evidencia/2026-08-24-el-censo-que-se-rompia-al-avanzar.md`
+  y `verificacion/evidencia/2026-08-24-corte-3-vivienda.md`.
+
+**Heredado del Corte 1, y ejecutado a medias a propósito:** `medios_banos` **nace
+aquí**, y con él la **convención de `banos` queda publicada en su `ayuda`** — un
+baño completo cuenta 1, un medio baño (sin ducha) cuenta 0.5. Era la precondición
+que faltaba: la migración de datos es determinista (los 379 valores fraccionarios
+medidos son `.5` exactos, sin un solo caso raro) pero descansaba en una
+**convención no publicada**, y hay que escribirla antes de aplicarla, no después.
+**El estrechamiento a ENTERO sigue sin hacerse**: `tg_catalogo_sistema_inmutable`
+lo prohíbe por diseño y exige clave nueva + migración de datos + retirada de la
+vieja. Es un corte propio.
 
 ### **Corte 4 — Comercial: L, O, A** · §3.7, §3.5
 `tipo_acceso` (el único ALT nuevo de L), `clase_edificio`, `nivel_implementacion`, `metraje_arrendable`, `aforo_itse`, `certificado_itse`, el bloque logístico completo y las instalaciones.
@@ -819,8 +849,16 @@ V76  ✅  0D  la propiedad como activo de dato       <- no estaba en el plan
 V77  ✅  0E  el lenguaje completo del ENCARGO (26)  <- no estaba en el plan
 V78  ✅  1   el hecho llega donde llega su condicion (mitad de SUJETO)
 V79  ✅  2   la identidad registral de la propiedad  <- se adelanto al resto del 1
-V80      1   mitad de PROFUNDIDAD  ⬜  <- la siguiente libre, y sigue APLAZADA
+V80  ✅  3   la vivienda descrita de verdad (30 claves D y C)
+         1   mitad de PROFUNDIDAD  ⬜  <- sigue APLAZADA, sin migracion asignada
+V81      4   comercial: L, O, A  ⬜  <- la siguiente libre
 ```
+
+> **El Corte 3 costó dos commits y una sola migración.** El primero (`3.a`) no
+> toca el esquema: arregla el gate `.sql` que llevaba rojo desde `V77` y lo mete
+> en la corrida de cierre. Que hiciera falta un commit entero para eso es el dato
+> que importa — **el gate sobrevivió tres cortes cerrados y auditados sin que
+> nadie lo ejecutara**, y `V80` habría cerrado en verde sobre un gate roto.
 
 ---
 

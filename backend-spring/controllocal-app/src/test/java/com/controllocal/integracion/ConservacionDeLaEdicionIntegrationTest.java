@@ -71,16 +71,23 @@ import static org.junit.jupiter.api.Assertions.fail;
  *
  * <h2>Cobertura, y por que no basta un departamento feliz</h2>
  * Los <b>siete</b> codigos {@code L, O, D, C, T, A, X}, propiedad <b>y</b>
- * encargos, y los cinco tipos de valor que el catalogo sabe declarar hoy —
- * TEXTO, ENTERO, DECIMAL, BOOLEANO y LISTA. Mas los dos escenarios que el
- * recorrido por tipo no ve: una propiedad con venta y alquiler a la vez, y una
- * propiedad con un encargo historico ya cerrado.
+ * encargos, y los <b>seis</b> tipos de valor que el catalogo sabe declarar hoy
+ * para la PROPIEDAD — TEXTO, ENTERO, DECIMAL, BOOLEANO, LISTA y LISTA_MULTIPLE.
+ * Mas los dos escenarios que el recorrido por tipo no ve: una propiedad con
+ * venta y alquiler a la vez, y una propiedad con un encargo historico ya
+ * cerrado.
  *
  * <p><b>Este gate no enriquece el catalogo.</b> Si al ejercitarlo se ve que a
- * Departamento le falta {@code tipologia} o que LISTA es pobre, eso es material
- * de los Cortes 0B/0C/1, no de aqui: 0A tiene que poder conservar <b>incluso un
- * modelo incompleto</b>. Si para no corromper hubiera que enriquecer primero, la
- * contencion no seria contencion.
+ * Departamento le falta una clave o que su LISTA es pobre, eso es material de
+ * los cortes de profundidad, no de aqui: 0A tiene que poder conservar
+ * <b>incluso un modelo incompleto</b>. Si para no corromper hubiera que
+ * enriquecer primero, la contencion no seria contencion.
+ *
+ * <p><b>Pero al reves si manda</b>: cuando el catalogo crece, los casos de este
+ * gate crecen con el. Su contrato es "la carga mas ancha que el catalogo le
+ * permite HOY", y un caso congelado en el catalogo de anteayer deja de medir lo
+ * que dice medir sin que nada se ponga rojo. V80 anadio 28 claves a Departamento
+ * y 16 a Casa, y entraron aqui con el.
  *
  * <h2>Una sola puerta, y sus invariantes ancladas en ella</h2>
  * Hubo aqui dos casos que median {@code LocalComercialService} -- la puerta por
@@ -159,13 +166,43 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("rubro_permitido", "Servicios profesionales")),
                         Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO")),
 
+                // V80 ensancho la vivienda de 10 claves a 38. Este caso las
+                // lleva TODAS, que es lo que dice el contrato de este record:
+                // "la carga de atributos mas ancha que el catalogo le permite
+                // HOY". Un corte de profundidad que siembre bien y escriba mal
+                // se ve aqui, en la ida y vuelta, y no en produccion.
                 new CasoDeTipo("DEPARTAMENTO", "VIVIENDA", List.of(
                         v("metraje_total", "95"), v("antiguedad_anios", "12"),
                         v("estacionamientos", "1"), v("metraje_construido", "90"),
                         v("ambientes", "5"), v("piso", "4"),
                         v("cuota_mantenimiento", "280"), v("dormitorios", "3"),
-                        v("banos", "2.5"), v("amoblado", "true")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO")),
+                        v("banos", "2.5"), v("amoblado", "true"),
+                        // V80 - estado del activo y edificio
+                        v("estado_conservacion", "MUY_BUENO"),
+                        v("etapa_entrega", "ENTREGA_INMEDIATA"),
+                        v("ascensores", "2"),
+                        ValorAtributo.multiple("vigilancia",
+                                List.of("CASETA_24H", "CAMARAS_CCTV", "CONTROL_DE_ACCESO")),
+                        ValorAtributo.multiple("areas_comunes",
+                                List.of("GIMNASIO", "SUM", "AZOTEA")),
+                        v("unidades_por_piso", "4"),
+                        v("restriccion_reglamento_interno", "Mudanzas de 9 a 17 h"),
+                        v("accesibilidad_movilidad_reducida", "true"),
+                        // V80 - interior de la unidad
+                        v("tipologia", "DUPLEX"), v("niveles_internos", "2"),
+                        v("medios_banos", "1"), v("cuarto_servicio", "1"),
+                        v("bano_servicio", "true"), v("tipo_cocina", "ABIERTA_A_SALA"),
+                        v("lavanderia", "INDEPENDIENTE"), v("estudio", "true"),
+                        v("vista", "VISTA_A_PARQUE"),
+                        v("terraza", "true"), v("area_terraza", "18.5"),
+                        v("balcon", "false"), v("jardin", "false"), v("patio", "false"),
+                        v("area_jardin_patio", "0"),
+                        v("depositos", "1"), v("deposito_area", "6.25"),
+                        v("tipo_estacionamiento", "DOBLE_PARALELO"),
+                        v("torre_bloque", "Torre B"),
+                        v("mascotas_reglamento", "true")),
+                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO",
+                               "LISTA", "LISTA_MULTIPLE")),
 
                 new CasoDeTipo("CASA", "VIVIENDA", List.of(
                         v("metraje_total", "210"), v("antiguedad_anios", "20"),
@@ -173,8 +210,23 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("ambientes", "7"), v("dormitorios", "4"),
                         v("banos", "3.5"), v("amoblado", "false"),
                         v("pisos_edificacion", "2"), v("zonificacion", "RDM"),
-                        v("area_terreno", "250")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO")),
+                        v("area_terreno", "250"),
+                        // V80 - las dieciseis que aplican a la casa
+                        v("estado_conservacion", "PARA_REMODELAR"),
+                        ValorAtributo.multiple("vigilancia",
+                                List.of("CERCO_PERIMETRICO", "PORTERO_DIURNO")),
+                        ValorAtributo.multiple("areas_comunes",
+                                List.of("PISCINA", "PARRILLAS", "JUEGOS_INFANTILES")),
+                        v("en_condominio", "true"),
+                        v("medios_banos", "1"), v("cuarto_servicio", "2"),
+                        v("bano_servicio", "true"), v("estudio", "false"),
+                        v("terraza", "true"), v("area_terraza", "24"),
+                        v("jardin", "true"), v("patio", "true"),
+                        v("area_jardin_patio", "70.5"), v("piscina", "true"),
+                        v("tipo_estacionamiento", "DOBLE_LINEAL"),
+                        v("mascotas_reglamento", "false")),
+                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO",
+                               "LISTA", "LISTA_MULTIPLE")),
 
                 new CasoDeTipo("TERRENO", "COMERCIAL", List.of(
                         v("metraje_total", "500"), v("antiguedad_anios", "1"),
@@ -202,17 +254,27 @@ class ConservacionDeLaEdicionIntegrationTest {
     }
 
     /**
-     * El conjunto ejercita las cinco familias de valor. Si alguien recorta un
-     * caso y con el se va la unica LISTA o el unico BOOLEANO, el gate deja de
-     * medir lo que dice medir y nadie se entera.
+     * El conjunto ejercita las SEIS familias de valor que el catalogo declara
+     * hoy para el sujeto PROPIEDAD. Si alguien recorta un caso y con el se va la
+     * unica LISTA o el unico BOOLEANO, el gate deja de medir lo que dice medir y
+     * nadie se entera.
+     *
+     * <p>Eran cinco hasta V80. LISTA_MULTIPLE existe en la PROPIEDAD desde V79
+     * ({@code cargas_gravamenes}) y el recorrido no la tocaba: la familia mas
+     * dificil de conservar en una ida y vuelta --N filas y no una-- era
+     * justamente la unica que este gate no probaba. V80 trae dos mas
+     * ({@code vigilancia} y {@code areas_comunes}) y con ellas entra en el
+     * recorrido.
      */
     @Test
-    @DisplayName("los siete tipos cubren las cinco familias de valor que el catalogo declara")
-    void losSieteTiposCubrenLasCincoFamilias() {
+    @DisplayName("los siete tipos cubren las seis familias de valor que el catalogo declara")
+    void losSieteTiposCubrenLasSeisFamilias() {
         Set<String> cubiertas = new TreeSet<>();
         tipos().forEach(caso -> cubiertas.addAll(caso.familias()));
-        assertEquals(Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "TEXTO"), cubiertas,
-                "El recorrido tiene que tocar las cinco familias que sabe declarar el catalogo.");
+        assertEquals(
+                Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO"),
+                cubiertas,
+                "El recorrido tiene que tocar las seis familias que sabe declarar el catalogo.");
     }
 
     // ==================================================================
@@ -287,10 +349,15 @@ class ConservacionDeLaEdicionIntegrationTest {
         FichaPropiedadUniversal antes = propiedades.consultar(id, actor());
         assertEquals(2, antes.encargos().size(), "El caso necesita los dos encargos.");
 
-        List<ValorAtributo> atributos = new ArrayList<>();
-        antes.atributos().forEach(a -> atributos.add(
-                new ValorAtributo(a.clave(), "banos".equals(a.clave()) ? "4" : a.valor())));
+        // El resto de atributos se reenvia por el espejo y no rehecho a mano:
+        // desde V80 la casa lleva dos LISTA_MULTIPLE, y un `new ValorAtributo(
+        // clave, valor)` sobre una de ellas manda NULL como escalar y el Core lo
+        // rechaza -- con razon. Aqui lo que se prueba es que cambiar UN dato
+        // fisico no toca los encargos, no como se serializa un multivalor.
         ComandoEdicion espejo = comandoEspejo(antes);
+        List<ValorAtributo> atributos = espejo.atributos().stream()
+                .map(a -> "banos".equals(a.clave()) ? new ValorAtributo("banos", "4") : a)
+                .toList();
         propiedades.editar(id, new ComandoEdicion(null, null, null, espejo.ubicacion(),
                 espejo.titulares(), atributos, espejo.operaciones(), null), actor());
 
@@ -843,8 +910,15 @@ class ConservacionDeLaEdicionIntegrationTest {
         List<Titular> titulares = ficha.titulares().stream()
                 .map(t -> new Titular(t.idRolPropietario(), t.cuota(), t.representante()))
                 .toList();
+        // Un LISTA_MULTIPLE vuelve del Core en `valores`, no en `valor` -- que
+        // llega NULL. Reenviarlo como escalar no es "casi igual": construye un
+        // comando que dice otra cosa. Si el espejo no sabe distinguirlos, la ida
+        // y vuelta de la familia mas dificil de conservar --N filas y no una--
+        // no se estaria probando. (V80.)
         List<ValorAtributo> atributos = ficha.atributos().stream()
-                .map(a -> new ValorAtributo(a.clave(), a.valor()))
+                .map(a -> a.valores() != null
+                        ? ValorAtributo.multiple(a.clave(), a.valores())
+                        : new ValorAtributo(a.clave(), a.valor()))
                 .toList();
         List<OperacionSolicitada> operaciones = ficha.encargos().stream()
                 .filter(EncargoFicha::vivo)
@@ -888,7 +962,20 @@ class ConservacionDeLaEdicionIntegrationTest {
         r.put("ubicacion.nombreEdificioGaleria", u.nombreEdificioGaleria());
 
         for (AtributoFicha a : f.atributos()) {
-            r.put("atributo." + a.clave(), a.valor());
+            // El multivalor se retrata por su LISTA, y en orden: si el retrato
+            // guardara solo `valor()` -- que en un LISTA_MULTIPLE es NULL --,
+            // perder los tres valores de `vigilancia` saldria como "null igual a
+            // null" y el gate diria que se conservo. Se retrata ademas la
+            // moneda, por la misma razon: es la mitad de un IMPORTE. (V80.)
+            String clave = "atributo." + a.clave();
+            if (a.valores() != null) {
+                r.put(clave, String.join("|", a.valores()));
+            } else {
+                r.put(clave, a.valor());
+            }
+            if (a.moneda() != null) {
+                r.put(clave + ".moneda", a.moneda());
+            }
         }
         for (TitularFicha t : f.titulares()) {
             String prefijo = "titular." + t.idRolPropietario() + ".";

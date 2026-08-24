@@ -116,7 +116,7 @@ propio bloqueo de dato:
 | `cuota_mantenimiento` DECIMAL → **IMPORTE** | 784 filas con `valor_moneda` NULL al 100 %, y **ninguna fuente de la que deducirla**: `moneda_referencial` es la moneda de una renta, no la de un gasto de junta; el mismo importe 350 aparece bajo PEN (237 veces) y USD (56); el encargo vivo tiene 74 casos con monedas en conflicto | cuando la moneda se **declare** |
 | `rubro_permitido` TEXTO → **LISTA_MULTIPLE** | 22 valores libres distintos, varios no mapeables con certeza; y cambia el almacén (los valores pasan a `atributo_propiedad_opcion`) | Corte 3/4, con vocabulario reconciliado |
 | `zonificacion` TEXTO → **LISTA** | los 584 valores mapearían al 100 %; **el problema es el vocabulario nuevo**: derivarlo de lo observado daría 4 opciones y Lima tiene decenas (CV, CM, CE, RDB, I1–I4, OU, ZRP, ZTE…) | cuando salga de los planos de zonificación |
-| `banos` DECIMAL → **ENTERO** + `medios_banos` | `medios_banos` es clave nueva; 379 de 406 valores son `.5` | **Corte 3** |
+| `banos` DECIMAL → **ENTERO** + `medios_banos` | ~~`medios_banos` es clave nueva~~ ✅ **nació en `V80`** (Corte 3, 2026-08-24), y con él **la convención de `banos` ya está publicada en su `ayuda`** — un baño completo cuenta 1, un medio baño sin ducha cuenta 0.5. Era la precondición que faltaba: la migración de datos es determinista (379 de 406 valores son `.5` exactos) pero descansaba en una convención que nadie había escrito. **El estrechamiento en sí sigue pendiente** | corte propio, ya **desbloqueado** |
 
 ### 2.3 `servicios_disponibles` — una LISTA muda
 
@@ -136,16 +136,16 @@ dibuja como **texto libre**. El dato entra y no compara con nada.
   eso esta clave sobrevivió muda. Extenderla exige antes darle vocabulario, así
   que **van en la misma tanda**.
 
-### 2.4 Los cuatro hechos que faltan de un par deliberado
+### 2.4 Los hechos que faltan de un par deliberado — quedan **tres**
 
 El guard de pares vigila que un hecho y su condición no compartan sujeto, y V78
-añadió que el hecho no llegue menos lejos que su condición. **Cuatro pares tienen
-hoy la condición y no el hecho**, así que el pacto es el único sitio donde cabe
-la verdad física:
+añadió que el hecho no llegue menos lejos que su condición. Eran cuatro; **`V80`
+cerró el primero** y quedan tres, donde el pacto sigue siendo el único sitio
+donde cabe la verdad física:
 
 | Hecho que falta | Su condición, que ya existe | Corte |
 |---|---|---|
-| `mascotas_reglamento` (lo que permite el reglamento del edificio) | `mascotas_aceptadas` | 3 |
+| ~~`mascotas_reglamento`~~ ✅ **HECHO 2026-08-24 · `V80`**, y nació en **C y D** | `mascotas_aceptadas` | ~~3~~ |
 | `nivel_implementacion` | `se_entrega_implementado` | 4 |
 | `estado_ocupacion` | `entrega_desocupado` | 5 |
 | `lote_minimo_normativo` | `acepta_venta_fraccionada` | 5 |
@@ -155,12 +155,19 @@ la verdad física:
 > construirlos: **tienen que nacer cubriendo la aplicabilidad de su condición**,
 > o el gate de V78 lo dirá.
 
+> **Y lo dijo.** El plan de la auditoría daba `mascotas_reglamento` como «D».
+> Medido antes de sembrar: su condición se pacta en `C/A` **y** `D/A`, así que
+> nacer sólo en D habría roto `V80` en su propia guarda — se comprobó
+> simulándolo, y la rompe. Nació en **C y D**. La lección para los tres que
+> quedan es literal: **la aplicabilidad del hecho no se elige, se lee de la de su
+> condición.**
+
 ### 2.5 Cortes 2 a 7 ⬜
 
 | Corte | Qué trae | Migración |
 |---|---|---|
 | ~~**2 · Identidad registral**~~ ✅ **HECHO 2026-08-23** | `partida_registral` y `oficina_registral` como **estructurales**, más `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica` — **las seis OPC**, ninguna PUB. Se adelantó al resto del Corte 1 porque era un hueco estructural que se podía modelar **sin inferir nada del corpus contaminado**. Lo que queda fuera y sigue abierto: la promoción OPC→PUB, y el *snapshot* fechado de `condicion_compraventa.partida_registral`, que nace con el expediente de compraventa (bloque 6) | **V79** ✅ |
-| **3 · Vivienda (D, C)** | tipología, conservación, ascensores, vigilancia, áreas comunes, vista, bloque de baños/servicio, áreas exteriores. **Hereda**: `medios_banos` y el estrechamiento de `banos` | — |
+| ~~**3 · Vivienda (D, C)**~~ ✅ **HECHO 2026-08-24** | **30 claves** OPC —tipología, conservación, etapa de entrega, ascensores, vigilancia, áreas comunes, vista, bloque de baños/servicio, áreas exteriores, depósitos, torre— con 9 vocabularios (49 opciones) y 68 filas de aplicabilidad. Ninguna ALT, ninguna PUB. **Heredado a medias a propósito**: `medios_banos` nació y la convención de `banos` ya está publicada, pero **el estrechamiento sigue pendiente** (§2.2). Fuera: la promoción OPC→PUB, `familia` para agrupar un formulario que pasa de 25 a 55 campos (va con el corte del SPA), y `estacionamiento_independizado`, que el Corte 6 sustituye con `unidad_relacionada`. Un commit previo sin migración (`3.a`) arregló el gate `.sql`, **rojo desde `V77` y nunca ejecutado** | **V80** ✅ |
 | **4 · Comercial (L, O, A)** | `tipo_acceso`, `clase_edificio`, `nivel_implementacion`, `metraje_arrendable`, `aforo_itse`, `certificado_itse`, bloque logístico | — |
 | **5 · Terreno (T)** | parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. **Hereda**: los tres reemplazos de `servicios_disponibles` | — |
 | **6 · Unidades relacionadas** | una unidad con partida propia **es una Propiedad relacionada**, no un escalar dentro de un EAV: `unidad_relacionada`, códigos `E`/`B`, `unidadesRelacionadas[]` | — |

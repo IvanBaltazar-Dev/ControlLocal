@@ -65,7 +65,7 @@ que faltaban de verdad, y sigue abierto.
 ## 2. Profundidad inmobiliaria — lo que queda de los cortes de catálogo
 
 Fuente: `auditoria-profundidad-inmobiliaria.md`. La cadena real de migraciones y
-lo que ocupó cada una está en su §6. **La siguiente libre es `V80`**: `V79` la ocupo el Corte 2 el 2026-08-23.
+lo que ocupó cada una está en su §6. **La siguiente libre es `V81`**: `V79` la ocupo el Corte 2 el 2026-08-23 y `V80` el Corte 3 el 2026-08-24.
 
 ### 2.1 Corte 1 · mitad de PROFUNDIDAD ⬜ — APLAZADO
 

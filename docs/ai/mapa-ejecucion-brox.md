@@ -226,7 +226,7 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > anunciarse a las 26 propiedades reales. Está en
    > `auditoria-profundidad-inmobiliaria.md` §6 bis, con su evidencia.
 
-6. **Corte 3 / vivienda (D, C)** — 🟡 **EN CURSO 2026-08-24.** Dos commits, en
+6. **Corte 3 / vivienda (D, C)** — ✅ **CERRADO 2026-08-24**, aprobado por auditoría. Dos commits, en
    este orden. **`3.a` no lleva migración**: arregla el censo `M2` de
    `verificacion/gate-modelo-universal.sql`, que exigía `count(*) = 25` sobre el
    catálogo del sistema, llevaba **rojo desde `V77`** y **sobrevivió a tres
@@ -575,7 +575,7 @@ este orden**:
 0E  el lenguaje completo del ENCARGO    ✅ CERRADO 2026-08-22 · V77
 1   las 19 claves — mitad de SUJETO     ✅ CERRADO 2026-08-22 · V78
 2   identidad registral                 ✅ CERRADO 2026-08-23 · V79
-3   vivienda (D, C)                     🟡 EN CURSO 2026-08-24 · 3.a sin migración + 3.b = V80
+3   vivienda (D, C)                     ✅ CERRADO 2026-08-24 · 3.a sin migración + 3.b = V80
 1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
 4…7 profundidad por tipo                ⬜
 ```

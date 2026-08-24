@@ -238,6 +238,40 @@ física:
   defecto de este corte — pero el margen ya es de **69 retiradas** antes de que
   salte. Quien vigila de verdad es la invariante de aplicabilidad, no el número.
 
+### 2.5 quater Enriquecimiento de Propiedad — capacidad de producto, capa calidad/moat
+
+**Decidido por el titular el 2026-08-24**, al aceptar la consecuencia de `V82`.
+
+**La regla, primero, porque cierra una vía que parecía cómoda:**
+**`atributosQueFaltan` NO debe usarse como mecanismo genérico de
+enriquecimiento.** Es la lista de lo que **bloquea el alta** —sólo `ALT`— y nada
+más. Colgar de ahí «lo que le falta de profundidad a un inmueble» volvería a
+mezclar dos preguntas que `V72` separó a propósito, y acabaría empujando claves a
+`ALT` para que se vean, que es exactamente el movimiento que el Corte 4 tuvo que
+deshacer.
+
+**Lo que queda registrado como capacidad pendiente**, distinta y con su propio
+sitio: **profundidad / enriquecimiento de la Propiedad**, especialmente para
+inmuebles con **`origen_incorporacion = OBSERVACION`**. Pertenece a la capa de
+**calidad / moat**, no al motor de exigencias.
+
+**Sus límites, explícitos:**
+
+- **No cambia `ALT`/`PUB`/`OPC`** de ninguna clave.
+- **No entró en `V82`** ni podía: `V82` fue una fila y dos columnas.
+- No se implementa reutilizando `atributosQueFaltan`.
+
+**Qué la separa de la deuda de `V82` de arriba**, porque se tocan y no son lo
+mismo: aquélla es **deuda de publicación** —una clave `PUB` que bloquea y que
+ninguna superficie reporta, y cuyo arreglo es exponer las `PUB` faltantes junto a
+las `ALT` **sin fundir las dos listas**—. Ésta es **deuda de conocimiento**: qué
+le falta por saber a un inmueble que nadie ha encargado todavía. La primera tiene
+21 casos concretos hoy; la segunda no tiene ninguno todavía —hay **cero**
+propiedades con origen `OBSERVACION`— y nace para cuando los haya.
+
+**Los 14 locales sin encargo vivo no reciben señal artificial**: no tienen deuda
+de publicación, y fabricarles una sería inventar una obligación que nadie pactó.
+
 ### 2.6 Y una decisión que el Corte 1 dejó explícitamente sin tomar
 
 **El tipo `X` (OTRO) se está quedando sin preguntas.** Hoy tiene exactamente

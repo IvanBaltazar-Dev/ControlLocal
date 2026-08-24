@@ -249,6 +249,29 @@ física:
   límite honesto que su propio comentario declara desde `e8cfaa4`, y no es
   defecto de este corte — pero el margen ya es de **69 retiradas** antes de que
   salte. Quien vigila de verdad es la invariante de aplicabilidad, no el número.
+- **DEUDA NUEVA · la cuarta puerta de exposición no pregunta por la deuda de
+  catálogo.** `PublicacionServiceImpl.crear(idPropiedad, datos, actor)`
+  (`:135-147`) **no llama a `exigirPublicable`**: sólo comprueba
+  `exigirAlgunEncargo`. Las otras tres sí lo hacen — `crearEnEncargo:94` y
+  `cambiarEstado:326`, esta última en la transición a `PUBLICADO`, que es la que
+  expone al mercado.
+  **Hoy no es explotable y por eso no fue defecto del corte**: esa ruta **no está
+  expuesta** —el único endpoint de creación es
+  `POST /encargos/{idEncargo}/publicaciones`, que va por `crearEnEncargo`—,
+  verificado en los controladores y en la matriz.
+  Pero la cadena que el corte acaba de establecer —**regla → `faltanParaPublicar`
+  → `permitida` → acción visible**— tiene esa cuarta puerta sin guardar **en el
+  código**. El día que alguien la exponga, `permitida` diría `false` y la
+  publicación funcionaría igual. Se anota **ahora que la coherencia es
+  explícita**, no cuando alguien la abra.
+- **Límite de cobertura, dicho en vez de presentado como total.** El barrido
+  empírico del corte sólo ejercita **la rama de la PROPIEDAD**: las **112** filas
+  de `catalogo_atributo_operacion` son **todas OPC**, así que hoy **ningún
+  encargo puede tener un faltante ALT/PUB propio** y el escenario «el ENCARGO
+  bloquea» **no es reproducible contra la cartera real**. Queda probado por
+  construcción y por el test de integración, no por los datos. Cuando el Corte 5
+  o el 7 siembren la primera condición ALT/PUB del ENCARGO, **ese escenario pasa
+  a ser medible y hay que medirlo**.
 
 ### 2.5 quater Enriquecimiento de Propiedad — capacidad de producto, capa calidad/moat
 

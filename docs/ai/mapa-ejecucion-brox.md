@@ -327,6 +327,24 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > barrera intacta. Construir esa superficie es **un corte propio**; el hueco
    > queda fijado en un test que se pondrá rojo el día que se construya.
 
+   > **Y la deuda que `V82` dejó medida quedó saldada acto seguido, sin
+   > migración.** `V82` hizo el bloqueo correcto pero invisible: la propiedad no
+   > tenía dónde reportar su propia deuda de publicación —`atributosQueFaltan`
+   > sólo lleva `ALT`, y `encargos[].faltanParaPublicar` es del sujeto ENCARGO—,
+   > así que **21 locales bloqueados y 0 con señal**. Ahora la PROPIEDAD reporta la
+   > suya en `faltanParaPublicar`, **bajo el mismo nombre** con que el ENCARGO
+   > reporta la suya, y sale del **mismo método de dominio que decide el rechazo**.
+   >
+   > **Y con ella se cerró la contradicción que quedaba**: `publicacionGestionable.permitida`
+   > decía `true` sobre encargos cuyo `POST` devolvía 400, porque sólo miraba si el
+   > encargo estaba vivo. Ahora **se deriva de las dos listas que la ficha ya
+   > calcula** —ni una consulta más— y su javadoc dice **hasta dónde puede
+   > prometer**: no cubre canal, estado ni moneda, que dependen del payload y no
+   > existen al leer la ficha. Medido sobre las 26: **21 bloqueadas · 21 con causa
+   > visible · 8 encargos vivos con `permitida = false` · las 5 publicables intactas
+   > · CERO casos de `permitida = true` con faltantes conocidos**. Angular ya
+   > obedecía la capacidad, así que sólo se le añadió la prueba.
+
 8. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
    insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
    **profundidad**: ampliar aplicabilidad por tipo (`banos` a L,O,A ·
@@ -653,6 +671,7 @@ este orden**:
 3   vivienda (D, C)                     ✅ CERRADO 2026-08-24 · 3.a sin migración + 3.b = V80
 4   comercial (L, O, A)                 ✅ CERRADO 2026-08-24 · V81
     └ correccion: tipo_acceso ALT → PUB    ✅ 2026-08-24 · V82
+    └ la deuda de publicacion, visible      ✅ 2026-08-24 · sin migracion
 1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
 5…7 profundidad por tipo                ⬜
 ```

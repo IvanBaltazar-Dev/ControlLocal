@@ -420,6 +420,18 @@ public final class PropiedadUniversalDtos {
      * por separado obligaria a la ficha a excluirlo de la lista para no
      * ensenarlo dos veces.
      *
+     * <p><b>Dos listas de faltantes, dos preguntas.</b> {@code atributosQueFaltan}
+     * responde «que impide el ALTA» y lleva las {@code ALT};
+     * {@code faltanParaPublicar} responde «que impide PUBLICAR» y lleva las
+     * {@code ALT} <b>y</b> las {@code PUB}. Una clave {@code ALT} ausente sale en
+     * las dos, porque bloquea las dos cosas -- no es una duplicacion.
+     *
+     * <p>El nombre es el mismo que en {@link EncargoResponse} a proposito:
+     * <b>cada sujeto reporta su propia deuda bajo el mismo nombre</b>, y la ruta
+     * desambigua sin necesidad de repetir el sujeto en el campo --
+     * {@code propiedad.faltanParaPublicar} frente a
+     * {@code propiedad.encargos[i].faltanParaPublicar}.
+     *
      * <p>{@code atributosQueFaltan} no es un error: es lo que permite a la
      * ficha avisar de que no se puede publicar todavia --y decirlo con la
      * palabra del catalogo, no con la clave-- y al motor de captura saber que
@@ -434,6 +446,7 @@ public final class PropiedadUniversalDtos {
                                     List<AtributoResponse> atributos,
                                     List<EncargoResponse> encargos,
                                     List<AtributoQueFaltaResponse> atributosQueFaltan,
+                                    List<AtributoQueFaltaResponse> faltanParaPublicar,
                                     HistoriaResponse historia,
                                     ActividadResponse actividad,
                                     LocalDateTime fechaRegistro) {
@@ -448,6 +461,7 @@ public final class PropiedadUniversalDtos {
                     f.atributos().stream().map(AtributoResponse::desde).toList(),
                     f.encargos().stream().map(EncargoResponse::desde).toList(),
                     f.atributosQueFaltan().stream().map(AtributoQueFaltaResponse::desde).toList(),
+                    f.faltanParaPublicar().stream().map(AtributoQueFaltaResponse::desde).toList(),
                     HistoriaResponse.desde(f.historia()),
                     ActividadResponse.desde(f.actividad()),
                     f.fechaRegistro());

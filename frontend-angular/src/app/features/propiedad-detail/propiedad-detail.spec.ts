@@ -69,6 +69,7 @@ function ficha(parcial: Partial<FichaPropiedad>): FichaPropiedad {
     ],
     encargos: [],
     atributosQueFaltan: [],
+    faltanParaPublicar: [],
     historia: { porOperacion: [], linea: [] },
     actividad: {
       oportunidades: [],
@@ -511,7 +512,7 @@ describe('PropiedadDetail', () => {
   it('lo que falta se dice con la palabra del catalogo, nunca con la clave', async () => {
     await montar(
       ficha({
-        atributosQueFaltan: [{ clave: 'metraje_total', rotulo: 'Metraje total' }],
+        faltanParaPublicar: [{ clave: 'metraje_total', rotulo: 'Metraje total' }],
         encargos: [encargo({})],
       }),
     );
@@ -519,6 +520,37 @@ describe('PropiedadDetail', () => {
     const aviso = (fixture.nativeElement as HTMLElement).querySelector('.aviso');
     expect(aviso?.textContent).toContain('Metraje total');
     expect(aviso?.textContent).not.toContain('metraje_total');
+  });
+
+  // La deuda que midió V82: `tipo_acceso` pasó a PUB, salió de
+  // `atributosQueFaltan` --que sólo lleva ALT-- y no cabía en el bloque del
+  // encargo. La propiedad quedaba bloqueada sin que nada lo dijera.
+  it('una clave PUB que falta se avisa, aunque no esté entre las del alta', async () => {
+    await montar(
+      ficha({
+        atributosQueFaltan: [],
+        faltanParaPublicar: [{ clave: 'tipo_acceso', rotulo: 'Tipo de acceso' }],
+        encargos: [encargo({})],
+      }),
+    );
+
+    const aviso = (fixture.nativeElement as HTMLElement).querySelector('.aviso');
+    expect(aviso?.textContent).toContain('Tipo de acceso');
+    expect(aviso?.textContent).toContain('para poder publicarla');
+  });
+
+  // Y al revés: sin nada que impida publicar, no se inventa un aviso porque el
+  // alta tenga pendientes. Son dos preguntas distintas.
+  it('sin faltantes de publicación no hay aviso, aunque el alta tenga pendientes', async () => {
+    await montar(
+      ficha({
+        atributosQueFaltan: [{ clave: 'dormitorios', rotulo: 'Dormitorios' }],
+        faltanParaPublicar: [],
+        encargos: [encargo({})],
+      }),
+    );
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('.aviso')).toBeNull();
   });
 
   it('un dato ausente es —, y nunca un cero', async () => {
@@ -672,6 +704,36 @@ describe('PropiedadDetail', () => {
     const caja = bloques()[0];
     expect(caja.textContent).not.toContain('Gestionar publicación');
     expect(caja.textContent).toContain('ya no esta vigente');
+  });
+
+  // El caso que V82 dejó incoherente: encargo VIVO, pero la ficha del inmueble
+  // sin un dato que impide publicar. Antes el Core decía `permitida: true` y el
+  // POST devolvía 400; ahora dice `false` y la pantalla lo obedece igual que
+  // obedece el encargo cerrado. La pantalla no cuenta faltantes ni mira
+  // exigencias: sólo lee la capacidad.
+  it('un encargo vivo con la ficha incompleta tampoco ofrece el boton', async () => {
+    await montar(
+      ficha({
+        faltanParaPublicar: [{ clave: 'tipo_acceso', rotulo: 'Tipo de acceso' }],
+        encargos: [
+          encargo({
+            vivo: true, estado: 'A', estadoRotulo: 'Activa',
+            publicacionGestionable: {
+              permitida: false,
+              motivo: 'Faltan datos de la ficha del inmueble.',
+            },
+          }),
+        ],
+      }),
+    );
+
+    const caja = bloques()[0];
+    expect(caja.textContent).not.toContain('Gestionar publicación');
+    expect(caja.textContent).toContain('Faltan datos de la ficha del inmueble');
+
+    // Y la causa concreta se lee arriba, con el rótulo del catálogo.
+    const aviso = (fixture.nativeElement as HTMLElement).querySelector('.aviso');
+    expect(aviso?.textContent).toContain('Tipo de acceso');
   });
 
   it('la disponibilidad no se presenta como verdad de cabecera', async () => {

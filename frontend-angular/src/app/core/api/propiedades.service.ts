@@ -474,7 +474,17 @@ export interface FichaPropiedad {
   atributos: AtributoPropiedad[];
   /** Todos: los vivos y los cerrados. Un cerrado guarda su histórico. */
   encargos: EncargoPropiedad[];
+  /** Lo que impide el ALTA: las claves `ALT` que faltan. */
   atributosQueFaltan: AtributoQueFalta[];
+  /**
+   * Lo que impide PUBLICAR **esta propiedad**: las `ALT` y las `PUB` que
+   * faltan, ya con su rótulo. Sale del mismo criterio de dominio que decide el
+   * rechazo, así que la pantalla no interpreta exigencias: las muestra.
+   *
+   * Es distinto de `encargos[i].faltanParaPublicar`, que es la deuda del
+   * ENCARGO. Cada sujeto reporta la suya bajo el mismo nombre.
+   */
+  faltanParaPublicar: AtributoQueFalta[];
   /** La memoria del inmueble, agregada sobre TODOS sus encargos. */
   historia: HistoriaComercial;
   actividad: ActividadPropiedad;

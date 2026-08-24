@@ -76,6 +76,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * El alta, la lectura y la edicion universales (D-E4-1, D-E4-2).
@@ -1103,20 +1104,51 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         Map<Long, ValoresGobernados> pactadas = lector.deEncargos(
                 todos.stream().map(Captacion::getId).toList());
 
+        // Con la clave desnuda, decir "no se puede publicar sin el metraje"
+        // obligaria al cliente a traducir `metraje_total`. El rotulo esta al
+        // lado, en el mismo catalogo que declaro la obligatoriedad.
+        Function<String, AtributoQueFalta> conRotulo =
+                clave -> new AtributoQueFalta(clave, definiciones.containsKey(clave)
+                        ? definiciones.get(clave).getRotulo() : clave);
+
+        // Lo que impide el ALTA: solo ALT.
+        List<AtributoQueFalta> faltan = gobierno.obligatoriasQueFaltan(idOrganizacion, propiedad)
+                .stream().map(conRotulo).toList();
+
+        // Y lo que impide PUBLICAR: ALT y PUB. Son dos preguntas distintas con
+        // dos respuestas verdaderas, no la misma lista contada dos veces.
+        //
+        // POR QUE SALE DE `faltantesDePropiedadParaPublicar` Y NO SE FILTRA.
+        // Es el MISMO metodo que usa `PublicacionServiceImpl.exigirPublicable`
+        // para decidir el rechazo. Si esta lista se calculara aparte --o se
+        // recortara a solo-PUB para que "no repita" con la de arriba-- habria dos
+        // criterios de publicabilidad: uno que decide y otro que cuenta, y en el
+        // primer corte que los separe la pantalla diria una cosa y el backend
+        // haria otra. Ademas seria falso: una clave ALT ausente TAMBIEN impide
+        // publicar, y omitirla aqui prometeria que basta con completar las PUB.
+        //
+        // Que una ALT salga en las dos listas es la respuesta correcta a dos
+        // preguntas distintas, no una duplicacion.
+        //
+        // Nace por la deuda que midio V82: `tipo_acceso` paso a PUB, dejo de
+        // aparecer en `atributosQueFaltan` --que solo lleva ALT-- y no podia
+        // aparecer en `encargos[].faltanParaPublicar`, que es del sujeto ENCARGO
+        // y por el guard 2.5 de V78 no admite claves de la PROPIEDAD. Resultado
+        // medido: 21 locales bloqueados y CERO con senal visible.
+        List<AtributoQueFalta> faltanParaPublicar =
+                gobierno.faltantesDePropiedadParaPublicar(idOrganizacion, propiedad)
+                        .stream().map(conRotulo).toList();
+
+        // Los encargos se arman DESPUES de esas dos listas y no antes: la
+        // capacidad `publicacionGestionable` de cada bloque necesita la deuda de
+        // la PROPIEDAD --que es una sola para todos-- ademas de la suya. Es la
+        // unica razon del orden.
         List<EncargoFicha> encargos = todos.stream()
                 .map(encargo -> fichaDeEncargo(encargo, serie,
                         anuncios.getOrDefault(encargo.getId(), List.of()),
                         idOrganizacion, tipo,
-                        pactadas.getOrDefault(encargo.getId(), ValoresGobernados.vacio())))
-                .toList();
-
-        // Con la clave desnuda, decir "no se puede publicar sin el metraje"
-        // obligaria al cliente a traducir `metraje_total`. El rotulo esta al
-        // lado, en el mismo catalogo que declaro la obligatoriedad.
-        List<AtributoQueFalta> faltan = gobierno.obligatoriasQueFaltan(idOrganizacion, propiedad)
-                .stream()
-                .map(clave -> new AtributoQueFalta(clave, definiciones.containsKey(clave)
-                        ? definiciones.get(clave).getRotulo() : clave))
+                        pactadas.getOrDefault(encargo.getId(), ValoresGobernados.vacio()),
+                        faltanParaPublicar))
                 .toList();
 
         boolean seOfrece = encargos.stream().anyMatch(EncargoFicha::vivo);
@@ -1142,7 +1174,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 // que nadie las hubiera encargado.
                 seOfrece ? propiedad.getDisponibilidadComercial() : null,
                 seOfrece ? rotuloDe(propiedad.disponibilidadComercialTipada()) : null,
-                ubicacionDe(propiedad), titulares, valores, encargos, faltan,
+                ubicacionDe(propiedad), titulares, valores, encargos, faltan, faltanParaPublicar,
                 // La misma materia prima, leida como continuidad del inmueble en
                 // vez de como episodios sueltos. Sin consultas de mas.
                 historiaDe(todos, serie),
@@ -1290,8 +1322,14 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private EncargoFicha fichaDeEncargo(Captacion encargo, List<PrecioPropiedad> serie,
                                         List<PublicacionService.FichaPublicacion> anuncios,
                                         long idOrganizacion, String tipoPropiedad,
-                                        ValoresGobernados pactadas) {
+                                        ValoresGobernados pactadas,
+                                        List<AtributoQueFalta> faltanDeLaPropiedad) {
         CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
+        // Se calcula UNA vez y se usa dos: para publicarla en el bloque y para
+        // decidir la capacidad. Pedirla dos veces abriria la puerta a que las dos
+        // respuestas se separaran.
+        List<AtributoQueFalta> faltanDelEncargo =
+                faltanEnElEncargo(idOrganizacion, encargo, tipoPropiedad);
         List<HitoFicha> historico = serie.stream()
                 .filter(precio -> Objects.equals(precio.getIdCaptacion(), encargo.getId()))
                 .map(precio -> new HitoFicha(precio.getHito(),
@@ -1322,8 +1360,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 // el alquiler abiertos a la vez ensenan aqui numeros distintos, y
                 // el alquiler cerrado de 2024 sigue ensenando los suyos.
                 condicionesDe(idOrganizacion, encargo, tipoPropiedad, pactadas),
-                faltanEnElEncargo(idOrganizacion, encargo, tipoPropiedad),
-                anuncios, gestionDePublicacion(encargo));
+                faltanDelEncargo,
+                anuncios, gestionDePublicacion(encargo, faltanDeLaPropiedad, faltanDelEncargo));
     }
 
     /**
@@ -1405,18 +1443,82 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     }
 
     /**
-     * Si este encargo admite gestion de publicacion.
+     * <b>Si este encargo admite gestion de publicacion, y por que no.</b>
      *
-     * <p>La regla es del negocio: <b>no se publica lo que ya no se ofrece</b>.
-     * Se publica como capacidad para que la pantalla no la reimplemente con un
-     * {@code estado === 'A'}; el backend la vuelve a imponer al escribir.
+     * <p>Se publica como capacidad para que la pantalla no la reimplemente con un
+     * {@code estado === 'A'} ni contando faltantes: el backend la vuelve a
+     * imponer al escribir, y la pantalla solo obedece.
+     *
+     * <h2>Hasta donde llega esta promesa, y hasta donde NO</h2>
+     *
+     * <p><b>Promete:</b> que no hay impedimento conocido -- el encargo esta vivo y
+     * no falta ningun dato de catalogo que bloquee publicar, ni de la PROPIEDAD ni
+     * de este ENCARGO.
+     *
+     * <p><b>NO promete que publicar vaya a funcionar.</b> {@code crearEnEncargo}
+     * valida ademas tres cosas que dependen del PAYLOAD y que no existen cuando se
+     * lee la ficha, asi que no se pueden plegar aqui:
+     *
+     * <ul>
+     *   <li>el <b>canal</b> es obligatorio ({@code construir});</li>
+     *   <li>el <b>estado</b> tiene que estar en {@code Publicacion.ESTADOS};</li>
+     *   <li>la <b>moneda</b> del importe publicado tiene que ser valida.</li>
+     * </ul>
+     *
+     * <p>Un {@code POST} con el canal vacio seguira devolviendo 400 con
+     * {@code permitida = true}, y <b>eso esta bien</b>: son errores de lo que se
+     * envia, no del estado del inmueble. Queda escrito para no convertir esta
+     * capacidad en una promesa mas amplia de lo que puede demostrar. (Tampoco
+     * cubre la pertenencia al tenant: un encargo ajeno no llega a esta ficha.)
+     *
+     * <h2>De donde sale, y por que no hay una segunda verdad</h2>
+     *
+     * <p>De <b>las dos listas que la ficha ya calculo</b>, no de una consulta
+     * nueva. Y esas listas salen de {@code faltantesDePropiedadParaPublicar} y
+     * {@code faltantesDeEncargoParaPublicar}, que son <b>los mismos metodos que
+     * usa {@code PublicacionServiceImpl.exigirPublicable}</b> para decidir el
+     * rechazo. Es literalmente la misma salida: no puede decir que si donde el
+     * comando dice que no. Una tercera consulta, aunque hoy coincidiera, seria una
+     * verdad que puede divergir manana.
+     *
+     * <p>Antes de este corte esto era {@code static} y solo recibia el encargo, asi
+     * que solo sabia responder "esta vivo?". Con {@code tipo_acceso} en PUB desde
+     * V82, las 21 propiedades bloqueadas decian {@code permitida = true} y el
+     * comando las rechazaba con 400.
+     *
+     * @param faltanDeLaPropiedad la deuda del inmueble, una sola para todos sus
+     *                            encargos
+     * @param faltanDelEncargo    la de este encargo concreto
      */
-    private static GestionDePublicacion gestionDePublicacion(Captacion encargo) {
-        if (Captacion.esVivo(encargo.estadoActual())) {
+    private GestionDePublicacion gestionDePublicacion(Captacion encargo,
+                                                      List<AtributoQueFalta> faltanDeLaPropiedad,
+                                                      List<AtributoQueFalta> faltanDelEncargo) {
+        // No se publica lo que ya no se ofrece. Es la regla que ya estaba, y se
+        // mira primero porque un encargo cerrado no se arregla completando datos.
+        if (!Captacion.esVivo(encargo.estadoActual())) {
+            return new GestionDePublicacion(false,
+                    "El encargo " + encargo.getCodigoCaptacion() + " ya no esta vigente.");
+        }
+
+        boolean faltaFicha = !faltanDeLaPropiedad.isEmpty();
+        boolean faltaPacto = !faltanDelEncargo.isEmpty();
+        if (!faltaFicha && !faltaPacto) {
             return new GestionDePublicacion(true, null);
         }
-        return new GestionDePublicacion(false,
-                "El encargo " + encargo.getCodigoCaptacion() + " ya no esta vigente.");
+
+        // El motivo dice CUAL de los tres impedimentos es, y no repite las listas:
+        // ya viajan en `faltanParaPublicar` --el de la propiedad y el del bloque--
+        // con su rotulo del catalogo. Repetirlas aqui daria dos sitios donde leer
+        // lo mismo, y ninguna clave se nombra a mano.
+        String motivo;
+        if (faltaFicha && faltaPacto) {
+            motivo = "Faltan datos de la ficha del inmueble y condiciones de este encargo.";
+        } else if (faltaFicha) {
+            motivo = "Faltan datos de la ficha del inmueble.";
+        } else {
+            motivo = "Faltan condiciones de este encargo.";
+        }
+        return new GestionDePublicacion(false, motivo);
     }
 
     /** `VENTA` -> `Venta`. El valor viaja en mayusculas; la persona lo lee en frase. */

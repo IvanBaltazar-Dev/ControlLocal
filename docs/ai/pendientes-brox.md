@@ -223,7 +223,19 @@ física:
   Cuando el catálogo se acerque a 200 claves habrá que decidir si sigue a mano o
   **se deriva de `/captura/definicion`**, como ya hace `e2e-editor-universal`.
   Anotarlo ahora es más barato que descubrirlo en el Corte 7.
-- **DEUDA NUEVA DE `V82` · el bloqueo es real y NADIE lo anuncia.** Al pasar a
+- ~~**DEUDA NUEVA DE `V82` · el bloqueo es real y NADIE lo anuncia**~~ ✅
+  **SALDADA 2026-08-24**, en el corte corto que siguió a `V82` y **sin migración**.
+  La PROPIEDAD reporta ahora su propia deuda en
+  `PropiedadResponse.faltanParaPublicar`, con el mismo nombre con que el ENCARGO
+  reporta la suya, y sale del **mismo método de dominio que decide el rechazo**
+  (`faltantesDePropiedadParaPublicar`), no de una segunda matriz. Y la capacidad
+  `publicacionGestionable.permitida` **dejó de contradecirla**: se deriva de las
+  dos listas que la ficha ya calcula. Medido sobre las 26: **21 bloqueadas, 21
+  con causa visible, 8 encargos vivos con `permitida = false`, y cero casos de
+  `permitida = true` con faltantes conocidos**. Evidencia:
+  `verificacion/evidencia/2026-08-24-senal-pub-visible.md`.
+
+  El diagnóstico original, tal como se midió: Al pasar a
   `PUB`, `tipo_acceso` **desapareció de `atributosQueFaltan`** (que sólo lleva
   `ALT`) y **no aparece en `faltanParaPublicar`**, que es del sujeto ENCARGO y
   por el guard 2.5 de `V78` **no puede llevar una clave de la PROPIEDAD**. El

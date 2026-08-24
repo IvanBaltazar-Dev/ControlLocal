@@ -155,6 +155,7 @@ const FICHA: FichaPropiedad = {
     encargo(9, 'ENC-0009', 'ALQUILER', false, 2500, 'PEN'),
   ],
   atributosQueFaltan: [],
+  faltanParaPublicar: [],
   historia: { porOperacion: [], linea: [] },
   actividad: { oportunidades: [], visitas: [], interacciones: [], expedientes: [], contratos: [] },
 };

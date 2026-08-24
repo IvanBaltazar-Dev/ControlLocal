@@ -39,12 +39,19 @@
     </div>
   </header>
 
-  @if (p.atributosQueFaltan.length > 0) {
+  @if (p.faltanParaPublicar.length > 0) {
     <!-- El rótulo lo trae el catálogo. Con la clave desnuda esto diría
-         «falta metraje_total», que no es una frase para nadie. -->
+         «falta metraje_total», que no es una frase para nadie.
+
+         La lista es `faltanParaPublicar`, NO `atributosQueFaltan`: esta frase
+         habla de publicar, y `atributosQueFaltan` sólo lleva las ALT — las que
+         impiden el alta. Con una clave PUB faltante (`tipo_acceso` desde V82)
+         la propiedad quedaba bloqueada y este aviso no aparecía: 21 locales
+         bloqueados y ninguno con señal. La pantalla no decide qué bloquea; lo
+         pregunta al Core y lo muestra. -->
     <p class="aviso">
       Falta
-      @for (falta of p.atributosQueFaltan; track falta.clave) {
+      @for (falta of p.faltanParaPublicar; track falta.clave) {
         <strong>{{ falta.rotulo }}</strong>{{ $last ? '' : ', ' }}
       }
       para poder publicarla.

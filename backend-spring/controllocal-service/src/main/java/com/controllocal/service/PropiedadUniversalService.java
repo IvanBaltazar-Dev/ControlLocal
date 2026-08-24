@@ -530,11 +530,34 @@ public interface PropiedadUniversalService {
      * separado obligaria a la ficha a excluirlo de la lista para no ensenarlo
      * dos veces.
      *
+     * <p><b>Las dos listas de faltantes responden a DOS preguntas distintas</b>,
+     * y por eso son dos campos y no uno filtrado:
+     *
+     * <ul>
+     *   <li>{@code atributosQueFaltan} -- «que impide el ALTA» -- lleva las
+     *       {@code ALT}.</li>
+     *   <li>{@code faltanParaPublicar} -- «que impide PUBLICAR» -- lleva las
+     *       {@code ALT} <b>y</b> las {@code PUB}.</li>
+     * </ul>
+     *
+     * <p>Una clave {@code ALT} ausente sale en las dos, y eso es correcto: bloquea
+     * las dos cosas. Filtrar la segunda a solo-{@code PUB} crearia un segundo
+     * criterio de publicabilidad --uno para decidir y otro para contar-- y ademas
+     * mentiria: diria que solo falta X para publicar cuando tambien falta Y.
+     *
      * @param atributosQueFaltan las claves obligatorias para su tipo que
      *                           todavia no tiene, <b>con su rotulo</b>. No es un
      *                           error: es lo que permite decir «no se puede
      *                           publicar sin el metraje» -- y decirlo con esa
      *                           palabra, no con la clave
+     * @param faltanParaPublicar lo que le falta a la PROPIEDAD para poder
+     *                           anunciarse, con su rotulo. Sale del mismo metodo
+     *                           de dominio que decide la publicabilidad
+     *                           ({@code faltantesDePropiedadParaPublicar}), no de
+     *                           una segunda matriz. Su gemelo por sujeto es
+     *                           {@code EncargoFicha.faltanParaPublicar}: cada
+     *                           sujeto reporta su propia deuda bajo el mismo
+     *                           nombre
      */
     record FichaPropiedadUniversal(Long id, String codigo, String tipoPropiedad, String tipoRotulo,
                                    String uso, String usoRotulo, String descripcion,
@@ -544,6 +567,7 @@ public interface PropiedadUniversalService {
                                    List<TitularFicha> titulares, List<AtributoFicha> atributos,
                                    List<EncargoFicha> encargos,
                                    List<AtributoQueFalta> atributosQueFaltan,
+                                   List<AtributoQueFalta> faltanParaPublicar,
                                    HistoriaComercial historia,
                                    ActividadPropiedad actividad,
                                    LocalDateTime fechaRegistro) {

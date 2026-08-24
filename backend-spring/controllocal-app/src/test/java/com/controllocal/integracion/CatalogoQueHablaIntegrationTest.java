@@ -6,8 +6,10 @@ import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.PropiedadUniversalService.AtributoQueFalta;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
+import com.controllocal.service.PropiedadUniversalService.EncargoFicha;
 import com.controllocal.service.PropiedadUniversalService.FichaPropiedadUniversal;
 import com.controllocal.service.PropiedadUniversalService.OperacionSolicitada;
 import com.controllocal.service.PropiedadUniversalService.Titular;
@@ -941,39 +943,181 @@ class CatalogoQueHablaIntegrationTest {
     }
 
     /**
-     * <b>La consecuencia de visibilidad, medida y no arreglada.</b>
+     * <b>La deuda de visibilidad que midio V82, saldada.</b>
      *
-     * <p>{@code atributosQueFaltan} se alimenta de `ALT` solamente, asi que al
-     * bajar a `PUB` la clave <b>deja de nombrarse ahi</b>. Y tampoco aparece en
-     * {@code faltanParaPublicar} del encargo, que es del sujeto ENCARGO y por
-     * tanto <b>estructuralmente incapaz</b> de llevar una clave de la PROPIEDAD:
-     * el guard 2.5 de V78 garantiza que ninguna clave de PROPIEDAD tiene fila en
-     * {@code catalogo_atributo_operacion}.
+     * <p>V82 dejo el caso medido y sin arreglar: <b>21 locales bloqueados y cero
+     * con senal visible</b>. {@code atributosQueFaltan} se alimenta de {@code ALT}
+     * solamente, asi que al bajar {@code tipo_acceso} a {@code PUB} dejo de
+     * nombrarse ahi; y no cabia en {@code encargos[].faltanParaPublicar}, que es
+     * del sujeto ENCARGO y por el guard 2.5 de V78 <b>no puede llevar una clave de
+     * la PROPIEDAD</b>.
      *
-     * <p>Resultado medido: el bloqueo es real pero <b>ninguna superficie de
-     * lectura lo anuncia</b>. Queda escrito en una prueba para que el hueco no se
-     * pierda -- <b>construir esa superficie es un corte propio</b>, no parte de
-     * esta correccion. Si alguien la construye, este test se pondra rojo y sera
-     * la senal de que ya se puede afirmar lo contrario.
+     * <p>Este test conserva esas dos afirmaciones --siguen siendo ciertas y son la
+     * separacion que hay que no romper-- y anade la tercera superficie, la que
+     * faltaba: <b>la PROPIEDAD reporta su propia deuda de publicacion</b>, bajo el
+     * mismo nombre que el ENCARGO reporta la suya.
      */
     @Test
-    @DisplayName("V82: el bloqueo es real, y hoy ninguna superficie de lectura lo anuncia")
-    void elBloqueoNoSeAnunciaEnNingunaSuperficie() {
+    @DisplayName("la PROPIEDAD reporta su deuda de publicacion, y cada sujeto sigue con la suya")
+    void laPropiedadReportaSuDeudaDePublicacion() {
         long id = registrarLocalSinTipoAcceso();
-
         FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
-        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "tipo_acceso".equals(a.clave())),
-                "al ser PUB ya no se nombra en atributosQueFaltan, que solo lleva ALT");
 
+        // 1. Sigue SIN estar en la lista del alta: `tipo_acceso` es PUB, no ALT.
+        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "tipo_acceso".equals(a.clave())),
+                "atributosQueFaltan responde a que impide el ALTA, y PUB no lo impide");
+
+        // 2. Sigue SIN estar en la del encargo: es una clave de la PROPIEDAD.
         assertTrue(ficha.encargos().stream()
                         .flatMap(e -> e.faltanParaPublicar().stream())
                         .noneMatch(a -> "tipo_acceso".equals(a.clave())),
-                "faltanParaPublicar es del sujeto ENCARGO y no puede llevar una clave de PROPIEDAD");
+                "la deuda del ENCARGO no lleva claves de la PROPIEDAD (guard 2.5 de V78)");
 
-        // Y sin embargo publicar se sigue rechazando: el hueco es de AVISO, no de barrera.
+        // 3. Y AHORA SI esta donde le toca, con su rotulo y no con la clave.
+        AtributoQueFalta falta = ficha.faltanParaPublicar().stream()
+                .filter(a -> "tipo_acceso".equals(a.clave()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "la propiedad tiene que decir que le falta tipo_acceso para publicar; "
+                                + "lleva " + ficha.faltanParaPublicar()));
+        assertEquals("Tipo de acceso", falta.rotulo(),
+                "el rotulo lo trae el catalogo: con la clave desnuda no es una frase para nadie");
+
+        // 4. La barrera no se movio.
         assertThrows(ReglaNegocioException.class,
                 () -> publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
-                "la barrera sigue en pie aunque nadie la anuncie");
+                "este corte anade explicabilidad, no relaja la regla");
+
+        // 5. Y al completar el dato, el faltante desaparece y se publica.
+        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        assertTrue(despues.faltanParaPublicar().stream().noneMatch(a -> "tipo_acceso".equals(a.clave())),
+                "completado el dato, deja de faltar: " + despues.faltanParaPublicar());
+        assertNotNull(publicaciones.crearEnEncargo(encargoDe(id), publicacionDePrueba(), actor()),
+                "y la publicacion deja de estar bloqueada por esa clave");
+    }
+
+    /**
+     * <b>Las dos listas responden a DOS preguntas, y no se mezclan.</b>
+     *
+     * <p>Es el contrato del corte, y la parte que se puede construir mal: filtrar
+     * {@code faltanParaPublicar} a solo-{@code PUB} para que "no repita" con la
+     * otra crearia un segundo criterio de publicabilidad --uno que decide y otro
+     * que cuenta-- y ademas mentiria, porque una {@code ALT} ausente TAMBIEN
+     * impide publicar.
+     *
+     * <p>Se comprueba sobre un TERRENO al que se le quita {@code zonificacion},
+     * que es {@code ALT} en T: tiene que salir <b>en las dos listas</b>.
+     */
+    @Test
+    @DisplayName("una clave ALT ausente sale en las DOS listas, y ninguna OPC sale en ninguna")
+    void lasDosListasNoSeMezclan() {
+        long id = registrarTerreno();
+        // El alta no deja registrar sin lo obligatorio, asi que la unica forma de
+        // observar una ficha incompleta es retirar el valor despues -- que es lo
+        // que pasa de verdad cuando el catalogo declara obligatoria una clave que
+        // las propiedades antiguas no tenian.
+        jdbc.update("delete from atributo_propiedad where id_propiedad = ? and clave = 'zonificacion'", id);
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
+
+        assertTrue(ficha.atributosQueFaltan().stream().anyMatch(a -> "zonificacion".equals(a.clave())),
+                "una ALT ausente impide el alta y tiene que decirlo");
+        assertTrue(ficha.faltanParaPublicar().stream().anyMatch(a -> "zonificacion".equals(a.clave())),
+                "y tambien impide publicar: omitirla aqui prometeria que basta con completar las PUB");
+
+        // Y ninguna OPC se cuela en ninguna de las dos. `area_terreno` aplica a T
+        // y es OPC; el terreno de prueba no la trae.
+        assertNull(valorDe(id, "area_terreno"), "el caso necesita que esa OPC este ausente");
+        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "area_terreno".equals(a.clave()))
+                        && ficha.faltanParaPublicar().stream()
+                                .noneMatch(a -> "area_terreno".equals(a.clave())),
+                "una OPC ausente no bloquea nada y no aparece como faltante en ninguna lista");
+    }
+
+    /**
+     * <b>{@code PUB} no empieza a bloquear el alta.</b>
+     *
+     * <p>El riesgo de este corte es que, al hacer visible la deuda de publicacion,
+     * alguien la "arregle" promoviendo la clave a {@code ALT}. Eso volveria a
+     * impedir registrar un local sin visitarlo, que es justo lo que V82 corrigio.
+     */
+    @Test
+    @DisplayName("PUB sigue sin bloquear el alta: un LOCAL sin tipo_acceso se registra")
+    void pubNoBloqueaElAlta() {
+        long id = registrarLocalSinTipoAcceso();
+        assertNull(valorDe(id, "tipo_acceso"), "el alta no inventa el dato");
+        assertNotNull(propiedades.consultar(id, actor()), "y la propiedad existe");
+    }
+
+
+    /**
+     * <b>La capacidad no puede decir que si donde el comando dice que no.</b>
+     *
+     * <p>Es la incoherencia que V82 dejo medida: {@code faltanParaPublicar} traia
+     * {@code tipo_acceso}, {@code permitida} decia {@code true} y el
+     * {@code POST} devolvia 400. Los tres tienen que contar lo mismo.
+     *
+     * <p>Se comprueba el CICLO COMPLETO sobre un encargo <b>vivo</b>: la lista, la
+     * capacidad y el comando. Y despues de completar el dato, los tres cambian a
+     * la vez.
+     */
+    @Test
+    @DisplayName("permitida sigue a la deuda de la PROPIEDAD, y el comando dice lo mismo")
+    void permitidaSigueALaDeudaDeLaPropiedad() {
+        long id = registrarLocalSinTipoAcceso();
+        FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
+        EncargoFicha bloque = ficha.encargos().get(0);
+        assertTrue(bloque.vivo(), "el caso necesita un encargo vivo: si no, el motivo seria otro");
+
+        assertFalse(ficha.faltanParaPublicar().isEmpty(), "la propiedad tiene deuda de publicacion");
+        assertFalse(bloque.publicacionGestionable().permitida(),
+                "con deuda de la ficha, la capacidad no puede prometer que se puede publicar");
+        assertEquals("Faltan datos de la ficha del inmueble.",
+                bloque.publicacionGestionable().motivo(),
+                "el motivo dice CUAL de los tres impedimentos es, sin repetir la lista");
+        assertThrows(ReglaNegocioException.class,
+                () -> publicaciones.crearEnEncargo(bloque.idEncargo(), publicacionDePrueba(), actor()),
+                "y el comando rechaza por la misma causa");
+
+        // Completado el dato, los tres cambian a la vez.
+        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+        FichaPropiedadUniversal despues = propiedades.consultar(id, actor());
+        EncargoFicha bloqueDespues = despues.encargos().get(0);
+        assertTrue(despues.faltanParaPublicar().isEmpty(), "ya no falta nada de la ficha");
+        assertTrue(bloqueDespues.publicacionGestionable().permitida(),
+                "sin impedimento conocido, la capacidad lo dice");
+        assertNull(bloqueDespues.publicacionGestionable().motivo(),
+                "y sin impedimento no hay motivo que dar");
+        assertNotNull(publicaciones.crearEnEncargo(bloqueDespues.idEncargo(),
+                publicacionDePrueba(), actor()), "y publicar continua");
+    }
+
+    /**
+     * <b>Una OPC ausente no vuelve {@code permitida = false}.</b>
+     *
+     * <p>Es la otra mitad del contrato: hacer visible la deuda de publicacion no
+     * puede convertir el catalogo entero en un bloqueo. Se comprueba sobre una
+     * propiedad a la que le faltan OPC de sobra --acaba de nacer con lo minimo--
+     * y cuyo unico faltante bloqueante se completa.
+     */
+    @Test
+    @DisplayName("una OPC ausente no bloquea ni vuelve permitida = false")
+    void laOpcAusenteNoBloquea() {
+        long id = registrarLocalSinTipoAcceso();
+        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+
+        FichaPropiedadUniversal ficha = propiedades.consultar(id, actor());
+        // A este LOCAL le falta casi todo el catalogo, y todo eso es OPC.
+        assertNull(valorDe(id, "aforo_itse"), "el caso necesita OPC ausentes");
+        assertNull(valorDe(id, "en_esquina"), "y mas de una");
+
+        assertTrue(ficha.faltanParaPublicar().isEmpty(),
+                "ninguna OPC puede aparecer como bloqueante: " + ficha.faltanParaPublicar());
+        assertTrue(ficha.atributosQueFaltan().isEmpty(),
+                "ni como faltante del alta: " + ficha.atributosQueFaltan());
+        assertTrue(ficha.encargos().get(0).publicacionGestionable().permitida(),
+                "y la capacidad no se vuelve false por datos que no bloquean nada");
     }
 
     /** Un LOCAL con lo minimo del alta y SIN `tipo_acceso`. Es el sujeto de V82. */

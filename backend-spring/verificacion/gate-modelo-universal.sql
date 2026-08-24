@@ -193,12 +193,61 @@ $f$, (SELECT org FROM ctx), (SELECT prop FROM ctx), (SELECT COALESCE(otro_titula
 -- =====================================================================
 -- M2 - Atributos gobernados
 -- =====================================================================
--- 19 en V52; 25 desde V74, que anadio las seis primeras condiciones del
--- encargo (garantia, adelanto, plazo minimo, disponible desde, mascotas y
--- amoblado). Aqui la cifra exacta SI vale: el catalogo del sistema es una
--- constante del producto, no cartera que crece con el uso.
-SELECT pg_temp.comprobar('M2 el catalogo del sistema tiene 25 atributos',
-    (SELECT count(*) = 25 FROM catalogo_atributo WHERE del_sistema));
+-- EL CENSO QUE SE ROMPIA AL AVANZAR (corregido en el Corte 3.a).
+--
+-- Aqui habia un censo exacto: `count(*) = 25 FROM catalogo_atributo WHERE
+-- del_sistema`, con este argumento escrito al lado -- "aqui la cifra exacta SI
+-- vale: el catalogo del sistema es una constante del producto, no cartera que
+-- crece con el uso".
+--
+-- DESDE CUANDO ESTABA ROJO. El censo se actualizo por ultima vez en `a07a594`
+-- (V76), de 19 a 25. Despues: V77 sembro veinte condiciones del ENCARGO, V79
+-- anadio seis y V80 anade treinta de vivienda. El 2026-08-24, antes de tocar
+-- nada, la base decia 51 -- 25 de PROPIEDAD y 26 de ENCARGO -- contra un `= 25`
+-- que llevaba rojo desde V77. Sobrevivio a TRES cortes cerrados y auditados
+-- porque nadie ejecutaba este fichero; por eso el Corte 3.a lo mete ademas en
+-- `Verificar-Cierre.ps1`. Que PROPIEDAD valga exactamente 25 es la coincidencia
+-- que hacia que el numero siguiera pareciendo correcto al leerlo.
+--
+-- POR QUE NO SE ARREGLA ESCRIBIENDO `= 81`. El argumento original era cierto
+-- cuando el catalogo estaba congelado y dejo de serlo: el bloque 3e entero es un
+-- programa cuyo proposito explicito es hacerlo crecer, corte a corte
+-- (V74 -> V77 -> V79 -> V80 -> cortes 4-7). Con eso el numero mide el avance del
+-- roadmap y no una invariante: se pone rojo CADA VEZ que el producto avanza
+-- segun lo planeado. Es el mismo modo de fallo que este fichero ya diagnostico
+-- mas abajo al convertir dos cifras hermanas en suelos -- "un gate que se rompe
+-- al usar el producto deja de leerse" --, solo que aqui se rompio al CONSTRUIR
+-- el producto.
+--
+-- POR QUE ESTO NO RELAJA EL GATE. El censo se sustituye por DOS comprobaciones y
+-- el conjunto queda mas fuerte:
+--   * un SUELO, que caza lo unico que un numero puede cazar y que si es una
+--     invariante del producto: que alguien RETIRE una clave del sistema. El
+--     suelo es 51 -- lo medido el 2026-08-24, antes de V80 -- y no se sube con
+--     cada corte, porque su trabajo es detectar retirada, no contar avance.
+--   * la invariante que si importa y que hasta hoy NO existia: ninguna clave del
+--     sistema activa se queda sin aplicabilidad. Esa se rompe cuando alguien
+--     siembra mal -- que es el fallo real que este bloque debia atrapar -- y no
+--     se rompe cuando el producto avanza.
+SELECT pg_temp.comprobar('M2 no se retiro ninguna clave del catalogo del sistema',
+    (SELECT count(*) >= 51 FROM catalogo_atributo WHERE del_sistema));
+
+-- Una clave sembrada sin decir a que aplica es invisible en todos los guiones y
+-- nadie lo nota hasta echarla en falta: el alta no la pinta, el editor no la
+-- ofrece y el dato simplemente no se captura. Se mira en la tabla que le toca
+-- por sujeto -- `catalogo_atributo_tipo` para PROPIEDAD,
+-- `catalogo_atributo_operacion` para ENCARGO --, que es la regla que la guarda
+-- 2.5 de V78 vigila en la otra direccion.
+SELECT pg_temp.comprobar('M2 ninguna clave del sistema se quedo sin aplicabilidad',
+    NOT EXISTS (
+        SELECT 1 FROM catalogo_atributo c
+         WHERE c.del_sistema AND c.activo AND NOT c.aplica_todos
+           AND ((c.sujeto = 'PROPIEDAD'
+                 AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
+                                  WHERE t.id_catalogo_atributo = c.id_catalogo_atributo))
+             OR (c.sujeto = 'ENCARGO'
+                 AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_operacion o
+                                  WHERE o.id_catalogo_atributo = c.id_catalogo_atributo)))));
 
 SELECT pg_temp.comprobar('M2 los atributos del sistema no tienen organizacion',
     NOT EXISTS (SELECT 1 FROM catalogo_atributo WHERE del_sistema AND organizacion_id IS NOT NULL));

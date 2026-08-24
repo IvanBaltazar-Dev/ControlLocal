@@ -12,12 +12,24 @@
 #   2. exporta CONTROLLOCAL_CIERRE=1, que activa GateDeCierreTest dentro del
 #      propio reactor -por si alguien lanza mvn a mano-;
 #   3. comprueba en la salida que los seis tests de integracion se EJECUTARON,
-#      no que "no fallaron".
+#      no que "no fallaron";
+#   4. corre `gate-modelo-universal.sql` contra la base real (Corte 3.a). Ese
+#      fichero comprueba invariantes que ningun test de Java puede ver -- las que
+#      solo se prueban intentando romperlas contra Postgres -- y hasta hoy solo
+#      corria si alguien se acordaba. No se acordo nadie: llevaba en rojo desde
+#      V77 y sobrevivio a tres cortes cerrados y auditados. Un gate que depende
+#      de la memoria no es un gate, y esa es la misma leccion por la que existe
+#      este script.
 [CmdletBinding()]
 param(
     [string] $UrlBaseDatos = $env:TEST_DB_URL,
     [string] $Usuario = 'controllocal',
     [string] $Clave = 'controllocal',
+    # El gate .sql se corre contra la base de desarrollo, que es el corpus real y
+    # es para la que esta escrito (elige propiedad, titular y encargo vivos). No
+    # la ensucia: todo ocurre dentro de una transaccion que termina en ROLLBACK.
+    [string] $ContenedorPostgres = 'controllocal-postgres-v2',
+    [string] $BaseDelGate = 'controllocal_dev',
     # Suites E2E del cierre, en orden. Las economicas van despues de la de
     # movimientos porque comparten el ciclo de comision.
     # `editor-universal` entra en el cierre por defecto desde el bloque 3f: es
@@ -109,7 +121,34 @@ $env:TEST_DB_PASSWORD = $Clave
 # de ser un salto silencioso y pasa a ser un fallo.
 $env:CONTROLLOCAL_CIERRE = '1'
 
-Write-Host "`n== 2. Reactor completo contra PostgreSQL real ==" -ForegroundColor Cyan
+Write-Host "`n== 2. Gate del modelo universal contra la base real ==" -ForegroundColor Cyan
+# Va ANTES del reactor a proposito: es la comprobacion mas barata de la corrida
+# -- segundos contra los minutos de `mvn clean install` -- y la que mas veces ha
+# tenido razon. Si el esquema o la siembra estan mal, saberlo antes de compilar.
+$gate = Join-Path $PSScriptRoot 'gate-modelo-universal.sql'
+if (-not (Test-Path $gate)) {
+    Abortar "no se encuentra el gate del modelo universal en $gate"
+}
+# psql necesita el fichero DENTRO del contenedor: se copia y se ejecuta con -f.
+# Pasarlo por stdin no sirve -- el gate usa \gset y \o, que son del cliente.
+& docker cp $gate "${ContenedorPostgres}:/tmp/gate-modelo-universal.sql"
+if ($LASTEXITCODE -ne 0) {
+    Abortar @"
+no se pudo copiar el gate al contenedor '$ContenedorPostgres'.
+
+El gate del modelo universal es parte del cierre, asi que no correrlo NO es una
+opcion: levanta la base y repite.
+
+  docker compose -f backend-spring/docker-compose.yml up -d
+"@
+}
+& docker exec $ContenedorPostgres psql -U $Usuario -d $BaseDelGate -v ON_ERROR_STOP=1 -f /tmp/gate-modelo-universal.sql
+if ($LASTEXITCODE -ne 0) {
+    Abortar "el gate del modelo universal salio en rojo (codigo $LASTEXITCODE). El detalle esta arriba: cada comprobacion dice OK o FALLO."
+}
+Write-Host "  OK   gate del modelo universal en verde sobre $BaseDelGate"
+
+Write-Host "`n== 3. Reactor completo contra PostgreSQL real ==" -ForegroundColor Cyan
 $salida = Join-Path ([IO.Path]::GetTempPath()) 'controllocal-cierre-reactor.log'
 # Sin 2>&1: en PowerShell 5.1 esa redireccion convierte el stderr de un nativo
 # en error terminante. Se captura con Tee-Object, que respeta los flujos.
@@ -119,7 +158,7 @@ if ($codigoMaven -ne 0) {
     Abortar "el reactor fallo (codigo $codigoMaven). Detalle en $salida"
 }
 
-Write-Host "`n== 3. Los tests de integracion se EJECUTARON, no se saltaron ==" -ForegroundColor Cyan
+Write-Host "`n== 4. Los tests de integracion se EJECUTARON, no se saltaron ==" -ForegroundColor Cyan
 $texto = Get-Content -Raw $salida
 $ausentes = @()
 foreach ($nombre in $integracion) {
@@ -135,7 +174,7 @@ if ($ausentes.Count -gt 0) {
              ". El reactor termino verde sin comprobarlos.")
 }
 
-Write-Host "`n== 4. Suites E2E del cierre ==" -ForegroundColor Cyan
+Write-Host "`n== 5. Suites E2E del cierre ==" -ForegroundColor Cyan
 foreach ($suite in $Suites) {
     Write-Host "`n-- suite $suite --" -ForegroundColor Yellow
     & powershell -File (Join-Path $PSScriptRoot 'Invoke-E2E.ps1') -Suite $suite
@@ -145,6 +184,6 @@ foreach ($suite in $Suites) {
 }
 
 Write-Host "`n== CIERRE VERDE ==" -ForegroundColor Green
-Write-Host "Reactor con PostgreSQL real + $($Suites.Count) suites E2E." -ForegroundColor Green
+Write-Host "Gate del modelo universal + reactor con PostgreSQL real + $($Suites.Count) suites E2E." -ForegroundColor Green
 Write-Host "Log del reactor: $salida"
 exit 0

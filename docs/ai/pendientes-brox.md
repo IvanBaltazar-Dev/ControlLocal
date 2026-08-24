@@ -136,17 +136,17 @@ dibuja como **texto libre**. El dato entra y no compara con nada.
   eso esta clave sobrevivió muda. Extenderla exige antes darle vocabulario, así
   que **van en la misma tanda**.
 
-### 2.4 Los hechos que faltan de un par deliberado — quedan **tres**
+### 2.4 Los hechos que faltan de un par deliberado — quedan **dos**
 
 El guard de pares vigila que un hecho y su condición no compartan sujeto, y V78
-añadió que el hecho no llegue menos lejos que su condición. Eran cuatro; **`V80`
-cerró el primero** y quedan tres, donde el pacto sigue siendo el único sitio
-donde cabe la verdad física:
+añadió que el hecho no llegue menos lejos que su condición. Eran cuatro; **`V80` cerró el primero y `V81` el segundo**, y quedan **dos** —los
+dos del Corte 5—, donde el pacto sigue siendo el único sitio donde cabe la verdad
+física:
 
 | Hecho que falta | Su condición, que ya existe | Corte |
 |---|---|---|
 | ~~`mascotas_reglamento`~~ ✅ **HECHO 2026-08-24 · `V80`**, y nació en **C y D** | `mascotas_aceptadas` | ~~3~~ |
-| `nivel_implementacion` | `se_entrega_implementado` | 4 |
+| ~~`nivel_implementacion`~~ ✅ **HECHO 2026-08-24 · `V81`**, en **A, L y O** | `se_entrega_implementado` | ~~4~~ |
 | `estado_ocupacion` | `entrega_desocupado` | 5 |
 | `lote_minimo_normativo` | `acepta_venta_fraccionada` | 5 |
 
@@ -168,10 +168,26 @@ donde cabe la verdad física:
 |---|---|---|
 | ~~**2 · Identidad registral**~~ ✅ **HECHO 2026-08-23** | `partida_registral` y `oficina_registral` como **estructurales**, más `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica` — **las seis OPC**, ninguna PUB. Se adelantó al resto del Corte 1 porque era un hueco estructural que se podía modelar **sin inferir nada del corpus contaminado**. Lo que queda fuera y sigue abierto: la promoción OPC→PUB, y el *snapshot* fechado de `condicion_compraventa.partida_registral`, que nace con el expediente de compraventa (bloque 6) | **V79** ✅ |
 | ~~**3 · Vivienda (D, C)**~~ ✅ **HECHO 2026-08-24** | **30 claves** OPC —tipología, conservación, etapa de entrega, ascensores, vigilancia, áreas comunes, vista, bloque de baños/servicio, áreas exteriores, depósitos, torre— con 9 vocabularios (49 opciones) y 68 filas de aplicabilidad. Ninguna ALT, ninguna PUB. **Heredado a medias a propósito**: `medios_banos` nació y la convención de `banos` ya está publicada, pero **el estrechamiento sigue pendiente** (§2.2). Fuera: la promoción OPC→PUB, `familia` para agrupar un formulario que pasa de 25 a 55 campos (va con el corte del SPA), y `estacionamiento_independizado`, que el Corte 6 sustituye con `unidad_relacionada`. Un commit previo sin migración (`3.a`) arregló el gate `.sql`, **rojo desde `V77` y nunca ejecutado** | **V80** ✅ |
-| **4 · Comercial (L, O, A)** | `tipo_acceso`, `clase_edificio`, `nivel_implementacion`, `metraje_arrendable`, `aforo_itse`, `certificado_itse`, bloque logístico | — |
+| ~~**4 · Comercial (L, O, A)**~~ ✅ **HECHO 2026-08-24** | **39 claves** con 18 vocabularios (83 opciones) y 71 filas de aplicabilidad. **`tipo_acceso` entró `ALT` en `L`** —decisión del titular— y con ella **las publicables pasaron de 26 a 5**: los 21 locales salen del mercado hasta que se visiten, y **no se rellenó el dato en ninguno**. Las otras 38, `OPC`; el catálogo sigue con **cero `PUB`**. Termina además **las instalaciones de la vivienda** (`gas`, `agua_caliente`) que §3.5 mezclaba y el Corte 3 excluyó. Fuera: la retirada de `apto_licencia_funcionamiento`, que necesita migración de datos | **V81** ✅ |
 | **5 · Terreno (T)** | parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. **Hereda**: los tres reemplazos de `servicios_disponibles` | — |
 | **6 · Unidades relacionadas** | una unidad con partida propia **es una Propiedad relacionada**, no un escalar dentro de un EAV: `unidad_relacionada`, códigos `E`/`B`, `unidadesRelacionadas[]` | — |
 | **7 · Demanda y matcher** | unificar el vocabulario de tipo (hoy ALMACÉN y `DEPOSITO_ALMACEN` —el mismo concepto— se declaran no comparables), permitir que un requerimiento pida atributos gobernados, y **arreglar el sesgo**: un dato faltante hace que el criterio NO APLIQUE sin castigar el puntaje, así que **la propiedad peor capturada obtiene mejor puntaje** | — |
+
+### 2.5 bis Deudas de base que el Corte 4 pagó
+
+- **D-BASE-4 · `area_minima_arrendable.unidad` estaba en `m2`, sin acento.**
+  Olvido de `V77`, que sí aplicó el `UPDATE` de acentos a sus hermanas.
+  **Pagada en `V81`**: era la última clave del catálogo con `unidad = 'm2'` y
+  ahora quedan **cero**. No se tocó ningún valor escrito — es el rótulo de la
+  unidad, no el dato.
+- **D-BASE4-1 · el gate de ida y vuelta no crecía con el catálogo.**
+  `ConservacionDeLaEdicionIntegrationTest` prometía en su javadoc «la carga más
+  ancha que el catálogo permite **hoy**» y llevaba listas escritas a mano.
+  Medido antes de `V81`: **L 13 de 24, O 10 de 28, A 12 de 22** — treinta y una
+  claves sin probar, siete de ellas sembradas por `V80` para el local. **Pagada
+  en `V81`**: los seis casos llevan ahora todo lo que su tipo admite
+  (L 40 · O 47 · A 50 · D 46 · C 35 · T 14) y **un test nuevo lo comprueba contra
+  el catálogo**, así que la promesa dejó de depender de que alguien se acordara.
 
 ### 2.6 Y una decisión que el Corte 1 dejó explícitamente sin tomar
 

@@ -800,8 +800,35 @@ medidos son `.5` exactos, sin un solo caso raro) pero descansaba en una
 lo prohíbe por diseño y exige clave nueva + migración de datos + retirada de la
 vieja. Es un corte propio.
 
-### **Corte 4 — Comercial: L, O, A** · §3.7, §3.5
+### **Corte 4 — Comercial: L, O, A** · §3.7, §3.5 — ✅ **EJECUTADO 2026-08-24 · `V81`**
 `tipo_acceso` (el único ALT nuevo de L), `clase_edificio`, `nivel_implementacion`, `metraje_arrendable`, `aforo_itse`, `certificado_itse`, el bloque logístico completo y las instalaciones.
+
+- **39 claves**, 18 vocabularios con 83 opciones, 71 filas de aplicabilidad
+  (A 28 · L 16 · O 19 · C 2 · D 3 · T 3). `orden` 560…940.
+- **`tipo_acceso` entró `ALT` en `L`, y es la única del corte.** Decisión del
+  titular con el efecto medido: **`ALT` impide publicar igual que `PUB`**
+  (`clavesQueImpidenPublicar` filtra `exigencia in ('ALT','PUB')`), así que al
+  aplicar `V81` **las 26 propiedades publicables pasaron a 5** y los 21 locales
+  quedaron fuera del mercado hasta que se visiten. Es el resultado esperado. Las
+  otras 38 entraron `OPC`, y **las catorce `PUB` que propone esta auditoría
+  siguen siendo propuesta**: el catálogo del sistema conserva **cero `PUB`**.
+- **A diferencia de una `PUB`, esta `ALT` informa**: `atributosQueFaltan` se
+  alimenta de `exigencia = 'ALT'`, y la ficha de cada local bloqueado dice que le
+  falta «Tipo de acceso». El bloqueo viaja con la instrucción de cómo quitarlo.
+- **Este corte termina también las instalaciones de la vivienda** (`gas` en
+  A,C,D,L,O,T y `agua_caliente` en C,D): §3.5 mezcla tipos, el Corte 3 las
+  excluyó y su encargo está congelado. Se acepta como consecuencia y se escribe,
+  en vez de reabrirlo. Igual con `acceso_vehiculo_maximo` y `via_de_acceso`, que
+  alcanzan a T: **un corte se define por el tipo que lo motiva**, no por lo que
+  arrastre su aplicabilidad. Los parámetros urbanísticos siguen en el Corte 5.
+- **`certificado_itse` NO retira `apto_licencia_funcionamiento`.** Conviven: el
+  North Star prohíbe retirar una captura antes de que su reemplazo exista **y esté
+  poblado**, y la retirada exige migración de datos. Es un corte propio.
+- **Códigos `UPPER_SNAKE` que empiezan por letra** — de ahí `H24_7` y no `24_7`,
+  con rótulo «24/7». La migración lo comprueba con un regex sobre las 83 opciones.
+- **`area_minima_arrendable` recuperó el acento de `m²`** (D-BASE-4), olvido de
+  `V77`. Era la última clave del catálogo con `unidad = 'm2'`: ahora quedan cero.
+- **Evidencia**: `verificacion/evidencia/2026-08-24-corte-4-comercial.md`.
 
 ### **Corte 5 — Terreno: T** · §3.8
 Parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. Cierra la duplicidad `metraje_total`/`area_terreno` para T.
@@ -850,9 +877,16 @@ V77  ✅  0E  el lenguaje completo del ENCARGO (26)  <- no estaba en el plan
 V78  ✅  1   el hecho llega donde llega su condicion (mitad de SUJETO)
 V79  ✅  2   la identidad registral de la propiedad  <- se adelanto al resto del 1
 V80  ✅  3   la vivienda descrita de verdad (30 claves D y C)
+V81  ✅  4   el activo comercial descrito (39 claves L, O, A + gas y agua caliente)
          1   mitad de PROFUNDIDAD  ⬜  <- sigue APLAZADA, sin migracion asignada
-V81      4   comercial: L, O, A  ⬜  <- la siguiente libre
+V82      5   terreno: T  ⬜  <- la siguiente libre
 ```
+
+> **El Corte 4 estrena la primera `ALT` de campo del sistema.** Las diez que
+> había (`metraje_total`, `dormitorios`, `zonificacion`) se responden desde el
+> escritorio; `tipo_acceso` exige estar de pie en el local. Su precio, medido y
+> aceptado antes de decidirlo: **21 de 26 propiedades dejan de ser publicables**
+> hasta que alguien las visite.
 
 > **El Corte 3 costó dos commits y una sola migración.** El primero (`3.a`) no
 > toca el esquema: arregla el gate `.sql` que llevaba rojo desde `V77` y lo mete

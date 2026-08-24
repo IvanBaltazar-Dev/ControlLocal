@@ -389,7 +389,11 @@ class PropiedadSinEncargoIntegrationTest {
                         + java.util.UUID.randomUUID().toString().substring(0, 8),
                         "Miraflores", null, null, null, null, null, null, null),
                 List.of(new Titular(idPropietario, null, Boolean.TRUE)),
-                List.of(new ValorAtributo("metraje_total", "90")),
+                // `tipo_acceso` es ALT en LOCAL desde V81, y ALT es obligatorio
+                // en el ALTA: sin el, `registrar` corta antes de llegar a lo que
+                // esta clase prueba. Se registra el dato; no se relaja la regla.
+                List.of(new ValorAtributo("metraje_total", "90"),
+                        new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE")),
                 operaciones, null), actor).idPropiedad();
     }
 

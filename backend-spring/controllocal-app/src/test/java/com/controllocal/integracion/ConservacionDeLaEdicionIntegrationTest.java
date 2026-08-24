@@ -145,26 +145,121 @@ class ConservacionDeLaEdicionIntegrationTest {
         return new ValorAtributo(clave, valor);
     }
 
+    /**
+     * <b>Un caso por tipo, con TODAS las claves que ese tipo admite hoy.</b>
+     *
+     * <p>Estas listas ya no se escriben a mano mirando lo que habia: se derivan
+     * del catalogo y se comprueban contra el en
+     * {@link #cadaCasoLlevaTodoLoQueSuTipoAdmite()}. Antes de V81 eran listas
+     * congeladas, y el resultado medido fue que <b>L cargaba 13 de 24 claves,
+     * O 10 de 28 y A 12 de 22</b>: siete claves que V80 sembro para el local,
+     * trece para la oficina y cuatro para el almacen <b>no las tocaba nadie</b>
+     * en la ida y vuelta, y nada se ponia rojo por ello.
+     *
+     * <p>Ese es el modo de fallo que importa: el javadoc de {@link CasoDeTipo}
+     * prometia "la carga mas ancha que el catalogo le permite HOY" y lo que
+     * habia era la de anteayer. Una promesa que nadie comprueba deja de ser
+     * cierta en el primer corte que siembra algo.
+     */
     private static Stream<CasoDeTipo> tipos() {
         return Stream.of(
                 new CasoDeTipo("LOCAL", "COMERCIAL", List.of(
-                        v("metraje_total", "120.5"), v("antiguedad_anios", "8"),
-                        v("estacionamientos", "2"), v("metraje_construido", "110.25"),
-                        v("ambientes", "4"), v("piso", "3"),
-                        v("cuota_mantenimiento", "350"), v("frente", "7.5"),
-                        v("carga_electrica_kw", "15.5"), v("altura_libre", "3.2"),
+                        v("metraje_total", "120.50"),
+                        v("antiguedad_anios", "8"),
+                        v("estacionamientos", "2"),
+                        v("metraje_construido", "110.25"),
+                        v("ambientes", "4"),
+                        v("piso", "3"),
+                        v("cuota_mantenimiento", "350.00"),
+                        v("frente", "7.50"),
+                        v("carga_electrica_kw", "15.50"),
+                        v("altura_libre", "3.20"),
                         v("apto_licencia_funcionamiento", "true"),
-                        v("rubro_permitido", "Restaurante"), v("zonificacion", "CZ")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO")),
+                        v("rubro_permitido", "Restaurante"),
+                        v("zonificacion", "CZ"),
+                        v("partida_registral", "P-11223344"),
+                        v("oficina_registral", "LIMA"),
+                        v("independizado", "false"),
+                        ValorAtributo.multiple("cargas_gravamenes",
+                                List.of("NINGUNA", "HIPOTECA")),
+                        v("estado_conservacion", "ESTRENO"),
+                        v("etapa_entrega", "EN_PLANOS"),
+                        v("ascensores", "1"),
+                        ValorAtributo.multiple("vigilancia",
+                                List.of("NO_TIENE", "PORTERO_DIURNO")),
+                        v("restriccion_reglamento_interno", "Mudanzas de 9 a 17 h"),
+                        v("accesibilidad_movilidad_reducida", "true"),
+                        v("niveles_internos", "1"),
+                        v("nivel_implementacion", "CASCO_OBRA_GRIS"),
+                        v("horario_acceso_edificio", "H24_7"),
+                        v("fibra_optica", "true"),
+                        v("gas", "SIN_RED_CERCANA"),
+                        v("suministro_electrico", "MONOFASICO_220"),
+                        v("respaldo_electrico", "NO_TIENE"),
+                        v("aire_acondicionado", "NINGUNO"),
+                        v("medidor_servicios", "INDEPENDIENTE"),
+                        v("sistema_contra_incendios", "NINGUNO"),
+                        v("extraccion_humos", "SIN_DUCTO"),
+                        v("tipo_acceso", "A_PIE_DE_CALLE"),
+                        v("en_esquina", "false"),
+                        v("metraje_arrendable", "118.00"),
+                        v("aforo_itse", "40"),
+                        v("certificado_itse", "VIGENTE"),
+                        v("acceso_vehiculo_maximo", "CAMIONETA")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("OFICINA", "COMERCIAL", List.of(
-                        v("metraje_total", "85"), v("antiguedad_anios", "5"),
-                        v("estacionamientos", "1"), v("metraje_construido", "80"),
-                        v("ambientes", "3"), v("piso", "7"),
-                        v("cuota_mantenimiento", "400"), v("carga_electrica_kw", "10"),
+                        v("metraje_total", "85.00"),
+                        v("antiguedad_anios", "5"),
+                        v("estacionamientos", "1"),
+                        v("metraje_construido", "80.00"),
+                        v("ambientes", "3"),
+                        v("piso", "7"),
+                        v("cuota_mantenimiento", "400.00"),
+                        v("amoblado", "false"),
+                        v("carga_electrica_kw", "12.00"),
                         v("apto_licencia_funcionamiento", "false"),
-                        v("rubro_permitido", "Servicios profesionales")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO")),
+                        v("rubro_permitido", "Restaurante"),
+                        v("partida_registral", "P-11223344"),
+                        v("oficina_registral", "LIMA"),
+                        v("independizado", "false"),
+                        ValorAtributo.multiple("cargas_gravamenes",
+                                List.of("NINGUNA", "HIPOTECA")),
+                        v("estado_conservacion", "ESTRENO"),
+                        v("etapa_entrega", "EN_PLANOS"),
+                        v("ascensores", "2"),
+                        ValorAtributo.multiple("vigilancia",
+                                List.of("NO_TIENE", "PORTERO_DIURNO")),
+                        ValorAtributo.multiple("areas_comunes",
+                                List.of("GIMNASIO", "PISCINA")),
+                        v("unidades_por_piso", "4"),
+                        v("restriccion_reglamento_interno", "Mudanzas de 9 a 17 h"),
+                        v("accesibilidad_movilidad_reducida", "true"),
+                        v("niveles_internos", "1"),
+                        v("vista", "INTERIOR"),
+                        v("depositos", "1"),
+                        v("deposito_area", "6.00"),
+                        v("tipo_estacionamiento", "SIMPLE"),
+                        v("nivel_implementacion", "CASCO_OBRA_GRIS"),
+                        v("recepcion_edificio", "false"),
+                        v("horario_acceso_edificio", "H24_7"),
+                        v("fibra_optica", "false"),
+                        v("certificacion_sostenible", "NINGUNA"),
+                        v("gas", "SIN_RED_CERCANA"),
+                        v("suministro_electrico", "MONOFASICO_220"),
+                        v("respaldo_electrico", "NO_TIENE"),
+                        v("aire_acondicionado", "NINGUNO"),
+                        v("medidor_servicios", "INDEPENDIENTE"),
+                        v("sistema_contra_incendios", "NINGUNO"),
+                        v("en_esquina", "false"),
+                        v("clase_edificio", "A_PLUS"),
+                        v("metraje_arrendable", "92.00"),
+                        v("banos_comunes_piso", "true"),
+                        v("posiciones_trabajo", "24"),
+                        v("salas_reunion", "2"),
+                        v("aforo_itse", "30"),
+                        v("certificado_itse", "VIGENTE")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 // V80 ensancho la vivienda de 10 claves a 38. Este caso las
                 // lleva TODAS, que es lo que dice el contrato de este record:
@@ -172,78 +267,170 @@ class ConservacionDeLaEdicionIntegrationTest {
                 // HOY". Un corte de profundidad que siembre bien y escriba mal
                 // se ve aqui, en la ida y vuelta, y no en produccion.
                 new CasoDeTipo("DEPARTAMENTO", "VIVIENDA", List.of(
-                        v("metraje_total", "95"), v("antiguedad_anios", "12"),
-                        v("estacionamientos", "1"), v("metraje_construido", "90"),
-                        v("ambientes", "5"), v("piso", "4"),
-                        v("cuota_mantenimiento", "280"), v("dormitorios", "3"),
-                        v("banos", "2.5"), v("amoblado", "true"),
-                        // V80 - estado del activo y edificio
-                        v("estado_conservacion", "MUY_BUENO"),
-                        v("etapa_entrega", "ENTREGA_INMEDIATA"),
+                        v("metraje_total", "95.00"),
+                        v("antiguedad_anios", "12"),
+                        v("estacionamientos", "1"),
+                        v("metraje_construido", "90.00"),
+                        v("ambientes", "5"),
+                        v("piso", "4"),
+                        v("cuota_mantenimiento", "280.00"),
+                        v("dormitorios", "3"),
+                        v("banos", "2.5"),
+                        v("amoblado", "false"),
+                        v("partida_registral", "P-11223344"),
+                        v("oficina_registral", "LIMA"),
+                        v("independizado", "true"),
+                        v("declaratoria_fabrica", "false"),
+                        ValorAtributo.multiple("cargas_gravamenes",
+                                List.of("NINGUNA", "HIPOTECA")),
+                        v("estado_conservacion", "ESTRENO"),
+                        v("etapa_entrega", "EN_PLANOS"),
                         v("ascensores", "2"),
                         ValorAtributo.multiple("vigilancia",
-                                List.of("CASETA_24H", "CAMARAS_CCTV", "CONTROL_DE_ACCESO")),
+                                List.of("NO_TIENE", "PORTERO_DIURNO")),
                         ValorAtributo.multiple("areas_comunes",
-                                List.of("GIMNASIO", "SUM", "AZOTEA")),
+                                List.of("GIMNASIO", "PISCINA")),
                         v("unidades_por_piso", "4"),
                         v("restriccion_reglamento_interno", "Mudanzas de 9 a 17 h"),
                         v("accesibilidad_movilidad_reducida", "true"),
-                        // V80 - interior de la unidad
-                        v("tipologia", "DUPLEX"), v("niveles_internos", "2"),
-                        v("medios_banos", "1"), v("cuarto_servicio", "1"),
-                        v("bano_servicio", "true"), v("tipo_cocina", "ABIERTA_A_SALA"),
-                        v("lavanderia", "INDEPENDIENTE"), v("estudio", "true"),
-                        v("vista", "VISTA_A_PARQUE"),
-                        v("terraza", "true"), v("area_terraza", "18.5"),
-                        v("balcon", "false"), v("jardin", "false"), v("patio", "false"),
-                        v("area_jardin_patio", "0"),
-                        v("depositos", "1"), v("deposito_area", "6.25"),
-                        v("tipo_estacionamiento", "DOBLE_PARALELO"),
+                        v("tipologia", "MONOAMBIENTE"),
+                        v("niveles_internos", "2"),
+                        v("medios_banos", "1"),
+                        v("cuarto_servicio", "1"),
+                        v("bano_servicio", "false"),
+                        v("tipo_cocina", "CERRADA"),
+                        v("lavanderia", "INDEPENDIENTE"),
+                        v("estudio", "true"),
+                        v("vista", "INTERIOR"),
+                        v("terraza", "true"),
+                        v("area_terraza", "18.50"),
+                        v("balcon", "true"),
+                        v("jardin", "false"),
+                        v("patio", "true"),
+                        v("area_jardin_patio", "0.00"),
+                        v("depositos", "1"),
+                        v("deposito_area", "6.25"),
+                        v("tipo_estacionamiento", "SIMPLE"),
                         v("torre_bloque", "Torre B"),
-                        v("mascotas_reglamento", "true")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO",
-                               "LISTA", "LISTA_MULTIPLE")),
+                        v("mascotas_reglamento", "true"),
+                        v("gas", "SIN_RED_CERCANA"),
+                        v("agua_caliente", "NO_TIENE"),
+                        v("respaldo_electrico", "NO_TIENE")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("CASA", "VIVIENDA", List.of(
-                        v("metraje_total", "210"), v("antiguedad_anios", "20"),
-                        v("estacionamientos", "2"), v("metraje_construido", "180"),
-                        v("ambientes", "7"), v("dormitorios", "4"),
-                        v("banos", "3.5"), v("amoblado", "false"),
-                        v("pisos_edificacion", "2"), v("zonificacion", "RDM"),
-                        v("area_terreno", "250"),
-                        // V80 - las dieciseis que aplican a la casa
-                        v("estado_conservacion", "PARA_REMODELAR"),
+                        v("metraje_total", "210.00"),
+                        v("antiguedad_anios", "20"),
+                        v("estacionamientos", "2"),
+                        v("metraje_construido", "180.00"),
+                        v("ambientes", "7"),
+                        v("cuota_mantenimiento", "150.00"),
+                        v("dormitorios", "4"),
+                        v("banos", "3.5"),
+                        v("amoblado", "true"),
+                        v("pisos_edificacion", "2"),
+                        v("zonificacion", "CZ"),
+                        v("area_terreno", "250.00"),
+                        v("partida_registral", "P-11223344"),
+                        v("oficina_registral", "LIMA"),
+                        v("declaratoria_fabrica", "true"),
+                        v("area_segun_partida", "13.50"),
+                        ValorAtributo.multiple("cargas_gravamenes",
+                                List.of("NINGUNA", "HIPOTECA")),
+                        v("estado_conservacion", "ESTRENO"),
                         ValorAtributo.multiple("vigilancia",
-                                List.of("CERCO_PERIMETRICO", "PORTERO_DIURNO")),
+                                List.of("NO_TIENE", "PORTERO_DIURNO")),
                         ValorAtributo.multiple("areas_comunes",
-                                List.of("PISCINA", "PARRILLAS", "JUEGOS_INFANTILES")),
+                                List.of("GIMNASIO", "PISCINA")),
                         v("en_condominio", "true"),
-                        v("medios_banos", "1"), v("cuarto_servicio", "2"),
-                        v("bano_servicio", "true"), v("estudio", "false"),
-                        v("terraza", "true"), v("area_terraza", "24"),
-                        v("jardin", "true"), v("patio", "true"),
-                        v("area_jardin_patio", "70.5"), v("piscina", "true"),
-                        v("tipo_estacionamiento", "DOBLE_LINEAL"),
-                        v("mascotas_reglamento", "false")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO",
-                               "LISTA", "LISTA_MULTIPLE")),
+                        v("medios_banos", "1"),
+                        v("cuarto_servicio", "2"),
+                        v("bano_servicio", "false"),
+                        v("estudio", "true"),
+                        v("terraza", "false"),
+                        v("area_terraza", "24.00"),
+                        v("jardin", "false"),
+                        v("patio", "true"),
+                        v("area_jardin_patio", "70.50"),
+                        v("piscina", "true"),
+                        v("tipo_estacionamiento", "SIMPLE"),
+                        v("mascotas_reglamento", "true"),
+                        v("gas", "SIN_RED_CERCANA"),
+                        v("agua_caliente", "NO_TIENE")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("TERRENO", "COMERCIAL", List.of(
-                        v("metraje_total", "500"), v("antiguedad_anios", "1"),
-                        v("estacionamientos", "1"), v("frente", "15.5"),
-                        v("zonificacion", "RDA"), v("area_terreno", "500"),
-                        v("servicios_disponibles", "Agua, luz y desague")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "LISTA")),
+                        v("metraje_total", "500.00"),
+                        v("antiguedad_anios", "1"),
+                        v("estacionamientos", "1"),
+                        v("frente", "15.50"),
+                        v("zonificacion", "CZ"),
+                        v("area_terreno", "500.00"),
+                        v("servicios_disponibles", "Agua, luz y desague"),
+                        v("partida_registral", "P-11223344"),
+                        v("oficina_registral", "LIMA"),
+                        v("area_segun_partida", "11.50"),
+                        ValorAtributo.multiple("cargas_gravamenes",
+                                List.of("NINGUNA", "HIPOTECA")),
+                        v("gas", "SIN_RED_CERCANA"),
+                        v("acceso_vehiculo_maximo", "CAMIONETA"),
+                        v("via_de_acceso", "Panamericana Sur km 32")),
+                        Set.of("DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("ALMACEN", "INDUSTRIAL", List.of(
-                        v("metraje_total", "800"), v("antiguedad_anios", "15"),
-                        v("estacionamientos", "4"), v("metraje_construido", "750"),
-                        v("ambientes", "2"), v("frente", "20"),
-                        v("carga_electrica_kw", "45.5"), v("altura_libre", "8.5"),
-                        v("apto_licencia_funcionamiento", "true"),
-                        v("rubro_permitido", "Logistica"), v("zonificacion", "I2"),
-                        v("area_terreno", "900")),
-                        Set.of("TEXTO", "ENTERO", "DECIMAL", "BOOLEANO")),
+                        v("metraje_total", "800.00"),
+                        v("antiguedad_anios", "15"),
+                        v("estacionamientos", "4"),
+                        v("metraje_construido", "750.00"),
+                        v("ambientes", "2"),
+                        v("cuota_mantenimiento", "11.50"),
+                        v("frente", "20.00"),
+                        v("carga_electrica_kw", "45.50"),
+                        v("altura_libre", "8.50"),
+                        v("apto_licencia_funcionamiento", "false"),
+                        v("rubro_permitido", "Restaurante"),
+                        v("zonificacion", "CZ"),
+                        v("area_terreno", "900.00"),
+                        v("partida_registral", "P-11223344"),
+                        v("oficina_registral", "LIMA"),
+                        v("independizado", "false"),
+                        v("area_segun_partida", "10.50"),
+                        ValorAtributo.multiple("cargas_gravamenes",
+                                List.of("NINGUNA", "HIPOTECA")),
+                        v("estado_conservacion", "ESTRENO"),
+                        v("etapa_entrega", "EN_PLANOS"),
+                        ValorAtributo.multiple("vigilancia",
+                                List.of("NO_TIENE", "PORTERO_DIURNO")),
+                        v("en_condominio", "false"),
+                        v("nivel_implementacion", "CASCO_OBRA_GRIS"),
+                        v("horario_acceso_edificio", "H24_7"),
+                        v("gas", "SIN_RED_CERCANA"),
+                        v("suministro_electrico", "MONOFASICO_220"),
+                        v("respaldo_electrico", "NO_TIENE"),
+                        v("medidor_servicios", "INDEPENDIENTE"),
+                        v("sistema_contra_incendios", "NINGUNO"),
+                        v("en_esquina", "false"),
+                        v("metraje_arrendable", "780.00"),
+                        v("aforo_itse", "80"),
+                        v("certificado_itse", "VIGENTE"),
+                        v("area_libre", "320.00"),
+                        v("profundidad_patio_maniobras", "28.00"),
+                        v("acceso_vehiculo_maximo", "CAMIONETA"),
+                        v("muelles_carga", "4"),
+                        v("tipo_muelle", "SIN_MUELLE"),
+                        v("puertas_ingreso", "2"),
+                        v("ancho_puerta_ingreso", "4.50"),
+                        v("alto_puerta_ingreso", "5.20"),
+                        v("capacidad_portante_piso", "6.00"),
+                        v("tipo_piso", "CONCRETO_PULIDO"),
+                        v("luz_entre_columnas", "12 x 24"),
+                        v("posiciones_pallet", "1200"),
+                        v("area_oficinas", "60.00"),
+                        v("condicion_almacenamiento", "SECO"),
+                        v("balanza_camionera", "false"),
+                        v("estacionamientos_camiones", "6"),
+                        v("via_de_acceso", "Panamericana Sur km 32")),
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 // OTRO solo admite tres claves. No se le anaden: 0A tiene que
                 // conservar tambien lo que el modelo todavia no sabe describir.
@@ -266,6 +453,45 @@ class ConservacionDeLaEdicionIntegrationTest {
      * ({@code vigilancia} y {@code areas_comunes}) y con ellas entra en el
      * recorrido.
      */
+    /**
+     * <b>La promesa del record, convertida en gate.</b>
+     *
+     * <p>{@link CasoDeTipo} dice llevar "la carga de atributos mas ancha que el
+     * catalogo le permite HOY". Esto lo COMPRUEBA contra el catalogo real en vez
+     * de confiar en que alguien se acuerde: si un corte siembra una clave para
+     * un tipo y no la anade a su caso, la ida y vuelta de esa clave no se prueba
+     * y <b>este test se pone rojo diciendo cual falta</b>.
+     *
+     * <p>Sin el, la unica senal de que faltaban treinta y una claves fue que
+     * alguien las contara a mano dos cortes despues.
+     */
+    @Test
+    @DisplayName("cada caso lleva TODAS las claves que su tipo admite en el catalogo")
+    void cadaCasoLlevaTodoLoQueSuTipoAdmite() {
+        Map<String, String> codigoDe = Map.of(
+                "LOCAL", "L", "OFICINA", "O", "DEPARTAMENTO", "D", "CASA", "C",
+                "TERRENO", "T", "ALMACEN", "A", "OTRO", "X");
+        List<String> incompletos = new ArrayList<>();
+        tipos().forEach(caso -> {
+            Set<String> enElCaso = caso.atributos().stream()
+                    .map(ValorAtributo::clave).collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+            List<String> admitidas = jdbc.queryForList("""
+                    select c.clave
+                      from catalogo_atributo c
+                      join catalogo_atributo_tipo t on t.id_catalogo_atributo = c.id_catalogo_atributo
+                     where c.del_sistema and c.activo and t.tipo_propiedad = ?
+                     order by c.orden
+                    """, String.class, codigoDe.get(caso.tipo()));
+            List<String> faltan = admitidas.stream().filter(k -> !enElCaso.contains(k)).toList();
+            if (!faltan.isEmpty()) {
+                incompletos.add(caso.tipo() + " no ejercita " + faltan.size() + " de "
+                        + admitidas.size() + ": " + String.join(", ", faltan));
+            }
+        });
+        assertEquals(List.of(), incompletos,
+                "Hay claves del catalogo que ningun caso escribe, asi que su ida y vuelta no se prueba.");
+    }
+
     @Test
     @DisplayName("los siete tipos cubren las seis familias de valor que el catalogo declara")
     void losSieteTiposCubrenLasSeisFamilias() {

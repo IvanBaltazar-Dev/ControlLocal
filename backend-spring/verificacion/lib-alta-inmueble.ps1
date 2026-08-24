@@ -45,6 +45,10 @@ function NuevoInmuebleConEncargo {
         # de autoridad. El guion no tiene que saber cual es cual.
         $Metraje = 90,
         [string] $Rubro = 'Retail',
+        # `tipo_acceso` es ALT en LOCAL desde V81, y ALT impide publicar. Vacio
+        # = no se registra, que es lo que necesita una suite que quiera probar
+        # justamente el bloqueo.
+        [string] $TipoAcceso = 'A_PIE_DE_CALLE',
         $Atributos = $null,
         $TipoComision = $null,
         $BaseCalculo = $null,
@@ -62,6 +66,24 @@ function NuevoInmuebleConEncargo {
     if ($null -ne $Metraje) { $listaAtributos += @{ clave = 'metraje_total'; valor = "$Metraje" } }
     if ($Rubro) { $listaAtributos += @{ clave = 'rubro_permitido'; valor = $Rubro } }
     if ($Atributos) { foreach ($extra in $Atributos) { $listaAtributos += $extra } }
+
+    # V81 hizo `tipo_acceso` ALT en LOCAL, y en este proyecto ALT NO es un aviso:
+    # `clavesQueImpidenPublicar` filtra `exigencia in ('ALT','PUB')`, asi que un
+    # local sin este dato queda registrado pero NO publicable, y toda suite que
+    # publique se cae con 400. El fixture registra el dato, que es lo que haria un
+    # agente que ha estado de pie en el local.
+    #
+    # LO QUE NO SE HACE AQUI, y es la parte que importa: no se baja la exigencia a
+    # OPC, y no se cambia el tipo del inmueble a OFICINA para esquivarla. Lo
+    # primero relaja la regla que el titular decidio; lo segundo cambia lo que la
+    # suite dice estar probando. Arreglar el fixture es registrar el dato.
+    $traeAcceso = $false
+    if ($Atributos) {
+        foreach ($extra in $Atributos) { if ($extra.clave -eq 'tipo_acceso') { $traeAcceso = $true } }
+    }
+    if ($TipoPropiedad -eq 'LOCAL' -and $TipoAcceso -and -not $traeAcceso) {
+        $listaAtributos += @{ clave = 'tipo_acceso'; valor = $TipoAcceso }
+    }
 
     $bloque = @{ operacion = $Operacion; importe = $Importe; moneda = $Moneda }
     if ($null -ne $Exclusividad)   { $bloque['exclusividad']   = $Exclusividad }
@@ -120,6 +142,10 @@ function NuevoInmuebleSinEncargo {
         [string] $Descripcion = 'Registrada para prospectar',
         $Metraje = 90,
         [string] $Rubro = 'Retail',
+        # `tipo_acceso` es ALT en LOCAL desde V81, y ALT impide publicar. Vacio
+        # = no se registra, que es lo que necesita una suite que quiera probar
+        # justamente el bloqueo.
+        [string] $TipoAcceso = 'A_PIE_DE_CALLE',
         $Atributos = $null
     )
 
@@ -127,6 +153,24 @@ function NuevoInmuebleSinEncargo {
     if ($null -ne $Metraje) { $listaAtributos += @{ clave = 'metraje_total'; valor = "$Metraje" } }
     if ($Rubro) { $listaAtributos += @{ clave = 'rubro_permitido'; valor = $Rubro } }
     if ($Atributos) { foreach ($extra in $Atributos) { $listaAtributos += $extra } }
+
+    # V81 hizo `tipo_acceso` ALT en LOCAL, y en este proyecto ALT NO es un aviso:
+    # `clavesQueImpidenPublicar` filtra `exigencia in ('ALT','PUB')`, asi que un
+    # local sin este dato queda registrado pero NO publicable, y toda suite que
+    # publique se cae con 400. El fixture registra el dato, que es lo que haria un
+    # agente que ha estado de pie en el local.
+    #
+    # LO QUE NO SE HACE AQUI, y es la parte que importa: no se baja la exigencia a
+    # OPC, y no se cambia el tipo del inmueble a OFICINA para esquivarla. Lo
+    # primero relaja la regla que el titular decidio; lo segundo cambia lo que la
+    # suite dice estar probando. Arreglar el fixture es registrar el dato.
+    $traeAcceso = $false
+    if ($Atributos) {
+        foreach ($extra in $Atributos) { if ($extra.clave -eq 'tipo_acceso') { $traeAcceso = $true } }
+    }
+    if ($TipoPropiedad -eq 'LOCAL' -and $TipoAcceso -and -not $traeAcceso) {
+        $listaAtributos += @{ clave = 'tipo_acceso'; valor = $TipoAcceso }
+    }
 
     $cuerpo = @{
         tipoPropiedad = $TipoPropiedad

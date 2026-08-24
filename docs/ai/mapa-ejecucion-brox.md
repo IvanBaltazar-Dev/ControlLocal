@@ -151,7 +151,7 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3g** | **El lenguaje del ENCARGO** | `V77`: el catálogo pasa de 6 a **26** condiciones comerciales y VENTA deja de estar muda (0 → 7). Aplicabilidad por **tipo × operación**, vocabularios sembrados, y el guard de pares hecho/condición ampliado a los ocho. Ninguna con valor por defecto: la ausencia sigue significando «todavía no se sabe» | ✅ **CERRADO** 2026-08-22 |
 | **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
 | **3h** | **El hecho llega donde llega su condición** | `V78`: las 19 claves de PROPIEDAD clasificadas una por una —14 hecho puro, 2 mitad de un par ya separado, 3 con problema de modelo, **ninguna condición disfrazada**—. Lo que sí apareció es la **cobertura del par**: `se_ofrece_amoblado` llegaba a OFICINA y `amoblado` no, y `mantenimiento_a_cargo_de` a ALMACÉN y CASA sin `cuota_mantenimiento`. Tres filas OPC lo cierran, y la invariante queda puesta | ✅ **CERRADO** 2026-08-22 |
-| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23) y el **Corte 3 · vivienda D y C** (`V80`, 2026-08-24, con `3.a` sin migración arreglando el gate `.sql`). El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 4–7. Ver `auditoria-profundidad-inmobiliaria.md` |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23) el **Corte 3 · vivienda D y C** (`V80`, 2026-08-24, con `3.a` sin migración arreglando el gate `.sql`) y el **Corte 4 · comercial L, O y A** (`V81`, 2026-08-24), que estrena la **primera exigencia `ALT` que obliga a salir a mirar** y con ella deja **21 de 26 propiedades fuera del mercado hasta que se visiten**. El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 5–7. Ver `auditoria-profundidad-inmobiliaria.md` |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
@@ -252,7 +252,39 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > **`torre_bloque` se ejecuta aquí** pese a estar redactada en §3.8 (Terreno):
    > su `aplica_a` es `D` y un corte se define por tipo, no por número de sección.
 
-7. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
+7. **Corte 4 / comercial (L, O, A)** — 🟡 **EN CURSO 2026-08-24, `V81`.**
+   **39 claves** para local, oficina y almacén: nivel de implementación, edificio
+   y servicios comunes que el Corte 3 dejó fuera, instalaciones completas y el
+   bloque logístico entero (muelles, puertas, piso, pallets, patio de maniobras).
+   18 vocabularios con 83 opciones y 71 filas de aplicabilidad. Termina también
+   **las instalaciones de la vivienda** —`gas` y `agua_caliente`, que §3.5 mezcla
+   y el Corte 3 excluyó—: se acepta como consecuencia y se escribe, en vez de
+   reabrir un encargo congelado.
+
+   > **Estrena la primera `ALT` que obliga a salir a mirar, y saca 21 propiedades
+   > del mercado.** `tipo_acceso` nace **ALT en `L`** — decisión del titular, con
+   > el efecto medido delante. **`ALT` no avisa: impide publicar**, igual que
+   > `PUB` (`clavesQueImpidenPublicar` filtra `exigencia in ('ALT','PUB')`). Los
+   > 21 locales de la cartera no tienen el dato, así que **las 26 propiedades
+   > publicables pasan a 5** y se desbloquean **una a una, visitándolas**. Es el
+   > resultado esperado, no un fallo. **No se rellenó el dato en ninguna**, no se
+   > tocó `exigirPublicable` y no se bajó la exigencia cuando las suites se
+   > pusieron rojas: lo que se corrigió fue el *fixture*. La evidencia lleva **la
+   > lista de los 21 con su código**, y aparte los **7 que tienen encargo vivo**,
+   > que son los urgentes. Las diez `ALT` anteriores del sistema
+   > (`metraje_total`, `dormitorios`, `zonificacion`) no exigían ver nada.
+
+   > **Y paga la deuda de verificación del Corte 3.** `ConservacionDeLaEdicionIntegrationTest`
+   > llevaba sus casos por tipo escritos a mano y medía **L 13 de 24, O 10 de 28,
+   > A 12 de 22**: treinta y una claves —siete de ellas sembradas por `V80`— cuyo
+   > viaje de ida y vuelta no probaba nadie. Ahora los seis casos llevan **todo lo
+   > que su tipo admite** (L 40 · O 47 · A 50 · D 46 · C 35 · T 14) y un test nuevo
+   > **comprueba contra el catálogo** que siga siendo así, para que la promesa del
+   > record deje de depender de que alguien se acuerde.
+
+   Evidencia: `verificacion/evidencia/2026-08-24-corte-4-comercial.md`.
+
+8. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
    insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
    **profundidad**: ampliar aplicabilidad por tipo (`banos` a L,O,A ·
    `zonificacion` a O · `pisos_edificacion` a D,O · `frente` a C) y darle
@@ -576,8 +608,9 @@ este orden**:
 1   las 19 claves — mitad de SUJETO     ✅ CERRADO 2026-08-22 · V78
 2   identidad registral                 ✅ CERRADO 2026-08-23 · V79
 3   vivienda (D, C)                     ✅ CERRADO 2026-08-24 · 3.a sin migración + 3.b = V80
+4   comercial (L, O, A)                 🟡 EN CURSO 2026-08-24 · V81 — la primera ALT que exige salir a mirar
 1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
-4…7 profundidad por tipo                ⬜
+5…7 profundidad por tipo                ⬜
 ```
 
 > **El Corte 1 se partió en dos, y no por comodidad.** Su mitad de **sujeto**

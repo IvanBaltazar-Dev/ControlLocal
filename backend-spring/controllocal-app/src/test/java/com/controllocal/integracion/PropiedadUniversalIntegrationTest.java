@@ -38,6 +38,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -856,7 +857,9 @@ class PropiedadUniversalIntegrationTest {
         ComandoRegistro comando = new ComandoRegistro(null, PANTALLA, null, "LOCAL", null, null,
                 new Ubicacion("Jr. Union 100", "Lima", null, null, null, null, null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "80")),
+                // `tipo_acceso` es ALT en LOCAL desde V81: obligatorio en el alta.
+                List.of(new ValorAtributo("metraje_total", "80"),
+                        new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE")),
                 List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("2000"), "PEN",
                                 null, null, null, null, null, null, null),
                         new OperacionSolicitada("ALQUILER", new BigDecimal("2500"), "PEN",
@@ -1009,7 +1012,9 @@ class PropiedadUniversalIntegrationTest {
         ComandoRegistro comando = new ComandoRegistro(clave, CONVERSANDO, null, "LOCAL", null, null,
                 new Ubicacion("Av. Arequipa 500", "Lince", null, null, null, null, null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "80")),
+                // `tipo_acceso` es ALT en LOCAL desde V81: obligatorio en el alta.
+                List.of(new ValorAtributo("metraje_total", "80"),
+                        new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE")),
                 List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("2000"), "PEN",
                         null, null, null, null, null, null, null)),
                 null);
@@ -1645,7 +1650,9 @@ class PropiedadUniversalIntegrationTest {
                 null, null,
                 new Ubicacion("Av. La Marina 2450", "San Miguel", null, null, null, null, null, null, null),
                 List.of(new Titular(propietarioAna, null, null)),
-                List.of(new ValorAtributo("metraje_total", "160")),
+                // `tipo_acceso` es ALT en LOCAL desde V81: obligatorio en el alta.
+                List.of(new ValorAtributo("metraje_total", "160"),
+                        new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE")),
                 List.of(new OperacionSolicitada("VENTA", new BigDecimal("320000"), "USD",
                                 null, null, null, null, null, null, null),
                         new OperacionSolicitada("ALQUILER", new BigDecimal("4800"), "USD",
@@ -1755,8 +1762,31 @@ class PropiedadUniversalIntegrationTest {
     // Utilidades del fixture
     // ==================================================================
 
+    /**
+     * <b>`tipo_acceso` se anade solo cuando el tipo es LOCAL</b> (V81).
+     *
+     * <p>Desde V81 es `ALT` en `L`, y en este proyecto `ALT` significa
+     * <b>obligatorio en el ALTA</b>: `exigirObligatorios` corta el registro, no
+     * solo la publicacion. Sin esto, treinta casos de esta clase y de
+     * {@code PropiedadSinEncargoIntegrationTest} fallaban con "Faltan atributos
+     * obligatorios de LOCAL: tipo_acceso" antes de llegar a lo que probaban.
+     *
+     * <p>Se registra el dato, que es lo que haria un agente que ha estado en el
+     * local. Lo que NO se hace es bajar la exigencia a OPC ni cambiar el tipo a
+     * OFICINA para esquivarla: lo primero relaja la regla que decidio el
+     * titular, lo segundo cambia lo que el caso dice probar.
+     *
+     * <p>Solo se anade si el caso no lo trae ya, para que un test que quiera
+     * ejercitar la ausencia pueda seguir haciendolo pasando su propia lista.
+     */
     private ComandoRegistro comando(String tipo, String operacion, BigDecimal importe, String moneda,
                                     List<Titular> titulares, List<ValorAtributo> atributos) {
+        if ("LOCAL".equals(tipo)
+                && atributos.stream().noneMatch(a -> "tipo_acceso".equals(a.clave()))) {
+            List<ValorAtributo> conAcceso = new ArrayList<>(atributos);
+            conAcceso.add(new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+            atributos = List.copyOf(conAcceso);
+        }
         return new ComandoRegistro(null, PANTALLA, null, tipo, null, null,
                 new Ubicacion("Av. de prueba 123", "Miraflores", null, null, null, null, null, null, null),
                 titulares, atributos,

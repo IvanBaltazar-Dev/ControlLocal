@@ -110,8 +110,8 @@ inatribuible, y habría repetido la trampa en los cortes 4 a 7.
 En su lugar, **dos** comprobaciones:
 
 ```sql
-SELECT pg_temp.comprobar('M2 no se retiro ninguna clave del catalogo del sistema',
-    (SELECT count(*) >= 51 FROM catalogo_atributo WHERE del_sistema));
+SELECT pg_temp.comprobar('M2 no se retiraron claves del catalogo del sistema',
+    (SELECT count(*) FILTER (WHERE activo) >= 51 FROM catalogo_atributo WHERE del_sistema));
 
 SELECT pg_temp.comprobar('M2 ninguna clave del sistema se quedo sin aplicabilidad',
     NOT EXISTS (
@@ -152,15 +152,44 @@ intacta):
 | Clave del sistema `ENCARGO` sin fila en `catalogo_atributo_operacion` | `f` | `f` ✅ |
 | Retirar una clave del catálogo del sistema (51 → 50) | `f` | `f` ✅ |
 
+### 3.3 bis · El suelo, tal como se escribió primero, **no cazaba nada** (enmienda)
+
+Lo detectó el AUDITOR al medir `BASE_SHA`, y tenía razón. La primera redacción era:
+
+```sql
+(SELECT count(*) >= 51 FROM catalogo_atributo WHERE del_sistema)
+```
+
+Medido: **la retirada por `DELETE` ya está prohibida** por
+`proteger_catalogo_del_sistema()`, así que por esa vía el suelo no aporta nada:
+
+```
+NOTICE:  DELETE rechazado por el trigger: El atributo "tipologia" es del catalogo
+         comun y no se puede borrar. Para retirarlo de las preguntas, ponlo activo = false.
+```
+
+Y **la retirada que el sistema sí permite es exactamente la que ese mensaje
+recomienda** — `activo = false` — que **no baja el `count(*)`**, porque
+`WHERE del_sistema` no filtra `activo`. Con las 81 claves desactivadas, el suelo
+original seguía en verde:
+
+| Rotura simulada (dentro de `ROLLBACK`) | suelo original | suelo corregido |
+|---|---|---|
+| `UPDATE catalogo_atributo SET activo = false WHERE del_sistema` (las 81) | `t` — **no caza** | `f` — caza ✅ |
+| Desactivar 31 claves (quedan 50 activas) | — | `f` — caza ✅ |
+
+Corregido a `count(*) FILTER (WHERE activo) >= 51`. Hoy son **81 activas y 0
+inactivas**, así que el valor no cambia y el gate sigue verde: la corrección
+añade capacidad de detección sin mover el veredicto.
+
 **Límite honesto del suelo, escrito para que nadie lo dé por más de lo que es:**
-`>= 51` es el valor congelado por el encargo, medido antes de V80. Con 51 claves
-detecta la retirada de una sola. Con 81 —después de V80— sólo detectaría la
-retirada de treinta y una de golpe. **El suelo no es el guardián de la retirada a
-partir de aquí; es un piso que impide el vaciado.** Quien de verdad vigila la
-salud de cada clave es la invariante de aplicabilidad, que no depende del tamaño.
-Subir el suelo corte a corte reintroduciría exactamente el problema que este
-commit arregla, así que **no se sube**. Queda registrado como consecuencia
-aceptada, no como hueco silencioso.
+`>= 51` es el valor congelado por el encargo, medido antes de V80. **Con las 81
+claves sembradas, un suelo de 51 tolera treinta retiradas antes de ponerse
+rojo.** No se esconde y no se sube: subirlo corte a corte reintroduciría
+exactamente el censo que este commit viene a quitar. **El suelo no es el guardián
+de cada clave; es un piso que impide el vaciado.** Quien vigila la salud de cada
+clave es la invariante de aplicabilidad, que no depende del tamaño del catálogo.
+Queda registrado como consecuencia aceptada, no como hueco silencioso.
 
 ### 3.4 · `Verificar-Cierre.ps1` — el gate entra en la corrida
 

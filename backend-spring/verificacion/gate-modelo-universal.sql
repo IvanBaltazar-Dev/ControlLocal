@@ -221,16 +221,31 @@ $f$, (SELECT org FROM ctx), (SELECT prop FROM ctx), (SELECT COALESCE(otro_titula
 --
 -- POR QUE ESTO NO RELAJA EL GATE. El censo se sustituye por DOS comprobaciones y
 -- el conjunto queda mas fuerte:
---   * un SUELO, que caza lo unico que un numero puede cazar y que si es una
---     invariante del producto: que alguien RETIRE una clave del sistema. El
---     suelo es 51 -- lo medido el 2026-08-24, antes de V80 -- y no se sube con
---     cada corte, porque su trabajo es detectar retirada, no contar avance.
+--   * un SUELO de claves ACTIVAS, que caza lo unico que un numero puede cazar y
+--     que si es una invariante del producto: que alguien RETIRE claves del
+--     sistema. El suelo es 51 -- lo medido el 2026-08-24, antes de V80 -- y no
+--     se sube con cada corte, porque su trabajo es detectar retirada, no contar
+--     avance.
 --   * la invariante que si importa y que hasta hoy NO existia: ninguna clave del
 --     sistema activa se queda sin aplicabilidad. Esa se rompe cuando alguien
 --     siembra mal -- que es el fallo real que este bloque debia atrapar -- y no
 --     se rompe cuando el producto avanza.
-SELECT pg_temp.comprobar('M2 no se retiro ninguna clave del catalogo del sistema',
-    (SELECT count(*) >= 51 FROM catalogo_atributo WHERE del_sistema));
+--
+-- EL `FILTER (WHERE activo)` NO ES DECORACION, Y SIN EL ESTA COMPROBACION NO
+-- CAZA NADA (enmienda del Corte 3.a). Borrar una clave del sistema ya lo impide
+-- `proteger_catalogo_del_sistema()` con un `restrict_violation`, asi que por esa
+-- via el suelo no aporta. La retirada que el sistema SI permite es la que el
+-- propio mensaje de ese trigger recomienda -- "para retirarlo de las preguntas,
+-- ponlo activo = false" -- y esa NO baja el `count(*)`: se podrian desactivar las
+-- 81 y un suelo sin filtro seguiria en verde.
+--
+-- LIMITE HONESTO, dicho y no escondido: con 81 claves sembradas, un suelo de 51
+-- tolera 30 retiradas antes de ponerse rojo. No se sube corte a corte porque eso
+-- reintroduce exactamente el censo que esta enmienda viene a quitar. Quien
+-- vigila la salud de cada clave es la comprobacion siguiente, que no depende del
+-- tamaño del catalogo.
+SELECT pg_temp.comprobar('M2 no se retiraron claves del catalogo del sistema',
+    (SELECT count(*) FILTER (WHERE activo) >= 51 FROM catalogo_atributo WHERE del_sistema));
 
 -- Una clave sembrada sin decir a que aplica es invisible en todos los guiones y
 -- nadie lo nota hasta echarla en falta: el alta no la pinta, el editor no la

@@ -910,11 +910,18 @@ class ConservacionDeLaEdicionIntegrationTest {
         List<Titular> titulares = ficha.titulares().stream()
                 .map(t -> new Titular(t.idRolPropietario(), t.cuota(), t.representante()))
                 .toList();
-        // Un LISTA_MULTIPLE vuelve del Core en `valores`, no en `valor` -- que
-        // llega NULL. Reenviarlo como escalar no es "casi igual": construye un
-        // comando que dice otra cosa. Si el espejo no sabe distinguirlos, la ida
-        // y vuelta de la familia mas dificil de conservar --N filas y no una--
-        // no se estaria probando. (V80.)
+        // Un LISTA_MULTIPLE vuelve del Core por DOS caminos a la vez: `valores`
+        // con la lista, y `valor` con su TEXTO DE PRESENTACION -- los elementos
+        // pegados por comas, que es lo que hace `ValorLogico.comoTexto()`. NO
+        // llega null: `deValores` deja texto, numero, fecha y booleano a null, y
+        // `comoTexto()` cae en `String.join(", ", valores)`. Comprobado.
+        //
+        // Reenviar ese `valor` como escalar no es "casi igual": construye un
+        // comando que dice otra cosa, y el Core lo rechaza con razon -- "el
+        // atributo admite varios valores: se edita con la via de multivalor, no
+        // con un valor suelto". Si el espejo no distingue, la ida y vuelta de la
+        // familia mas dificil de conservar --N filas y no una-- ni siquiera
+        // llega a ejecutarse. (V80.)
         List<ValorAtributo> atributos = ficha.atributos().stream()
                 .map(a -> a.valores() != null
                         ? ValorAtributo.multiple(a.clave(), a.valores())
@@ -962,11 +969,17 @@ class ConservacionDeLaEdicionIntegrationTest {
         r.put("ubicacion.nombreEdificioGaleria", u.nombreEdificioGaleria());
 
         for (AtributoFicha a : f.atributos()) {
-            // El multivalor se retrata por su LISTA, y en orden: si el retrato
-            // guardara solo `valor()` -- que en un LISTA_MULTIPLE es NULL --,
-            // perder los tres valores de `vigilancia` saldria como "null igual a
-            // null" y el gate diria que se conservo. Se retrata ademas la
-            // moneda, por la misma razon: es la mitad de un IMPORTE. (V80.)
+            // El multivalor se retrata por su LISTA, y en orden. NO es que
+            // `valor()` fuera ciego: en un LISTA_MULTIPLE trae los elementos
+            // pegados por comas, asi que una perdida real ya cambiaba la cadena y
+            // se habria visto. Es PRECISION: esa cadena es presentacion
+            // --`ValorLogico.comoTexto()` decide como se pega-- y un retrato que
+            // dependa de ella confunde "cambio el formato" con "cambio el dato".
+            // Se compara la estructura que el Core publica, no como la escribe.
+            //
+            // La moneda se retrata aparte por lo mismo: en un IMPORTE viaja
+            // dentro del texto --"USD 120.5"-- y tampoco queremos que ver un
+            // cambio de moneda dependa de como se formatee. (V80.)
             String clave = "atributo." + a.clave();
             if (a.valores() != null) {
                 r.put(clave, String.join("|", a.valores()));

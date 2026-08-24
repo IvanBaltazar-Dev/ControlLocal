@@ -181,20 +181,42 @@ catálogo de anteayer deja de medir lo que dice medir sin que nada se ponga rojo
 integración**, así que `GateDeCierreTest` y `Verificar-Cierre.ps1` siguen
 coincidiendo sin tocarlos.
 
-Con ello hubo que arreglar **dos defectos reales del propio gate**, que sólo se
-ven cuando hay un multivalor en el recorrido:
+Con ello salió **un defecto latente real** del propio gate, y se hizo **una
+mejora de precisión**. Son dos cosas distintas y conviene no confundirlas:
 
-1. **`comandoEspejo` reenviaba un `LISTA_MULTIPLE` como escalar.** Un multivalor
-   vuelve del Core en `valores`, con `valor` a `NULL`. El Core lo rechaza, y con
-   razón: *«El atributo "vigilancia" admite varios valores: se edita con la vía
-   de multivalor, no con un valor suelto.»* Ahora el espejo distingue.
-2. **`retrato` guardaba sólo `valor()`**, que en un `LISTA_MULTIPLE` es `NULL`.
-   Perder los tres valores de `vigilancia` habría salido como *«null igual a
-   null»* y el gate habría dicho que se conservó. Ahora retrata la lista (y la
-   moneda de un IMPORTE, por la misma razón).
+1. **DEFECTO: `comandoEspejo` reenviaba un `LISTA_MULTIPLE` como escalar.** Un
+   multivalor vuelve del Core por **dos caminos a la vez**: `valores` con la
+   lista, y `valor` con su **texto de presentación** —los elementos pegados por
+   comas—. El espejo tomaba ese texto y lo mandaba como valor suelto. El Core lo
+   rechaza, y con razón: *«El atributo "vigilancia" admite varios valores: se
+   edita con la vía de multivalor, no con un valor suelto.»* Sin arreglarlo, la
+   ida y vuelta **ni siquiera llegaba a ejecutarse**. Ahora el espejo distingue.
+2. **MEJORA: `retrato` guardaba sólo `valor()`.** Y esto **no era ceguera**:
+   `valor()` **no es `NULL` en un multivalor** —`ValorLogico.deValores` deja
+   texto, número, fecha y booleano a `null`, y `comoTexto()` cae en
+   `String.join(", ", valores)`—, así que una pérdida real ya cambiaba la cadena
+   y se habría visto. Lo que se gana es **precisión**: esa cadena es
+   *presentación*, y un retrato que dependa de ella confunde «cambió el formato»
+   con «cambió el dato». Ahora se compara la estructura que el Core publica (y la
+   moneda de un IMPORTE aparte, por lo mismo).
 
-**Y se comprobó que el retrato corregido muerde**, inyectando una pérdida
-deliberada (`valores().subList(0,1)`) en el espejo:
+> **Corregido tras la auditoría.** Aquí se afirmó primero que `valor()` era
+> `NULL` en un multivalor y que perderlo salía como «null igual a null». **Es
+> falso**, y lo verifiqué contra la clase real (`jshell` sobre
+> `controllocal-service`): `deValores(["CASETA_24H","CAMARAS_CCTV","CONTROL_DE_ACCESO"]).comoTexto()`
+> devuelve `"CASETA_24H, CAMARAS_CCTV, CONTROL_DE_ACCESO"`, nunca `null`. La
+> mejora del retrato es legítima por sí sola y **no necesitaba un defecto
+> inventado que la justificara**. Se deja escrito porque el comentario falso
+> invitaba a un `== null` que nunca dispara —el mismo patrón que ya costó caro
+> aquí dos veces (Jackson `NON_NULL` con `x === null`, y el `@keyframes` de
+> `radar.scss`)—, y en un corte cuyo propósito es que nada se pierda en silencio
+> eso no puede quedar en el código.
+
+**El gate muerde hoy**, comprobado inyectando una pérdida deliberada
+(`valores().subList(0,1)`) en el espejo. Lo que esto demuestra es que **el
+recorrido actual detecta una pérdida de multivalor**; no dice nada sobre qué
+habría hecho el retrato anterior, que nunca tuvo un caso con multivalor que
+recorrer:
 
 ```
 [ERROR] Tests run: 47, Failures: 10

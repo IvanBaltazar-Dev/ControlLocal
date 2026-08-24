@@ -175,16 +175,151 @@ es esa clave no demuestra nada.
 
 ---
 
-## 8. Observación medida, y **fuera de alcance**
+## 8. AMPLIACIÓN DEL 2026-08-24 — `permitida` entra al corte
 
-`publicacionGestionable.permitida` vale **`true`** en las 21 bloqueadas: sólo
-mira si el encargo está vivo. Es **preexistente** —el Auditor ya lo dejó dicho en
-`V82`, para que no se le atribuyera a esa migración— y **no se toca aquí**.
+**Decisión del titular.** Lo que §8 declaraba fuera de alcance **entra**: no se
+acepta cerrar con una capacidad que se contradice a sí misma.
 
-Se anota porque tiene efecto en pantalla: si el SPA habilita el botón con ese
-campo, seguirá habilitado y seguirá dando 400. **Que la lista nueva se muestre
-igualmente**, con independencia de `permitida`. Si el titular quiere que el botón
-refleje el bloqueo, es **decisión suya y corte propio**.
+```
+PropiedadResponse.faltanParaPublicar = [tipo_acceso]
+publicacionGestionable.permitida     = true          ← incoherente
+POST publicar                        = HTTP 400 por tipo_acceso
+```
+
+Deben quedar coherentes **en este mismo corte**: lo que falta para publicar → si
+publicar está permitido → lo que el comando valida al final.
+
+### 8.1 Cómo se calcula HOY — medido
+
+`PropiedadUniversalServiceImpl.gestionDePublicacion:1443`:
+
+```java
+private static GestionDePublicacion gestionDePublicacion(Captacion encargo) {
+    if (Captacion.esVivo(encargo.estadoActual())) return new GestionDePublicacion(true, null);
+    return new GestionDePublicacion(false, "El encargo " + ... + " ya no esta vigente.");
+}
+```
+
+**Es `static` y recibe sólo el encargo.** No ve la propiedad ni el catálogo — por
+eso dice `true`. No es un descuido: es una capacidad que nació respondiendo a
+*«¿el encargo sigue vivo?»* y nunca se amplió.
+
+### 8.2 EL INVENTARIO QUE EL TITULAR EXIGIÓ ANTES DE AUTORIZAR
+
+Todo lo que `PublicacionServiceImpl.crearEnEncargo:85-99` valida, en orden, y si
+pertenece o no a `permitida`:
+
+| # | validación | de qué depende | ¿en `permitida`? |
+|---|---|---|---|
+| 1 | `encargoDelTenant` → 404 | tenant / existencia | **No** — un encargo ajeno no aparece en la ficha |
+| 2 | `!Captacion.esVivo(estadoActual())` → «no está vigente» | **estado del encargo** | **Sí — ya está** |
+| 3 | `exigirPublicable` · `gobierno.faltantesDePropiedadParaPublicar` (ALT+PUB de PROPIEDAD) | **estado del dato** | **Sí — HUECO** |
+| 4 | `exigirPublicable` · `condiciones.faltantesDeEncargoParaPublicar` (ENCARGO) | **estado del dato** | **Sí — HUECO** |
+| 5 | `construir:261` · canal obligatorio | **el payload** | **No** |
+| 6 | `construir:264` · estado ∈ `Publicacion.ESTADOS` | **el payload** | **No** |
+| 7 | `construir:265` · moneda válida | **el payload** | **No** |
+| 8 | `registrarImportePublicado:417` | no valida — escribe hito o retorna | **No** |
+
+**Son exactamente dos huecos: el 3 y el 4.** Y **tres validaciones de payload**
+—5, 6 y 7— que **no se pueden plegar** dentro de `permitida`, porque dependen de
+datos que **no existen cuando se lee la ficha**.
+
+### 8.3 Qué puede prometer `permitida`, y qué no
+
+**Puede** prometer: *no hay impedimento conocido — el encargo está vivo y no
+falta ningún dato de catálogo que bloquee la publicación.*
+
+**No puede** prometer que publicar vaya a funcionar: un `POST` con canal vacío,
+estado inválido o moneda mala seguirá siendo rechazado, y eso **está bien**.
+
+> El titular lo pidió con estas palabras: *«No convertir `permitida` en una
+> promesa más amplia de lo que realmente puede demostrar.»* El inventario dice
+> exactamente hasta dónde llega. **Escríbelo en el javadoc del método**, con las
+> tres que quedan fuera nombradas.
+
+### 8.4 Cómo se implementa — sin segunda verdad
+
+**`permitida` se deriva de las DOS listas que la ficha YA calcula**, no de una
+tercera consulta:
+
+```
+permitida = esVivo(encargo)
+         && faltanParaPublicar(PROPIEDAD).isEmpty()
+         && faltanParaPublicar(ESTE encargo).isEmpty()
+```
+
+Esas listas salen de `faltantesDePropiedadParaPublicar` y
+`faltantesDeEncargoParaPublicar` — **los mismos métodos que usa
+`exigirPublicable`**. Por eso no puede haber dos verdades: es literalmente la
+misma salida.
+
+`gestionDePublicacion` **deja de ser `static`** o pasa a recibir las dos listas.
+La de la PROPIEDAD es una sola para todos los encargos; la del ENCARGO es de cada
+uno.
+
+**Prohibido, y cada uno es rechazo:**
+
+- `if (clave == "tipo_acceso")` en cualquier capa.
+- `if (exigencia == "PUB")` en Angular.
+- Contar faltantes en el frontend.
+- Una segunda consulta con otra interpretación de ALT/PUB.
+- Duplicar matrices de claves.
+
+### 8.5 `motivo` debe decir cuál de los tres
+
+Ya existe y hoy sólo lleva «el encargo ya no está vigente». Debe distinguir
+**encargo cerrado**, **falta dato de la ficha** y **falta condición del encargo**,
+**sin repetir las listas** —que ya viajan— y **sin nombrar claves a mano**: los
+rótulos salen del catálogo, como en `exigirPublicable:203-207`.
+
+### 8.6 Las cinco pruebas de la ampliación
+
+| # | escenario | esperado |
+|---|---|---|
+| **1** | encargo vivo · falta `tipo_acceso` | `faltanParaPublicar` de la **propiedad** lo contiene · `permitida = false` · el comando rechaza **por la misma causa** |
+| **2** | propiedad completa · falta una condición ALT/PUB del **encargo** | está en `encargos[].faltanParaPublicar` · `permitida = false` · el comando rechaza |
+| **3** | ambos sujetos completos | las dos listas vacías · `permitida = true` salvo impedimento canónico ya existente · publicar continúa |
+| **4** | una clave **OPC** ausente | **no** aparece como bloqueante · **no** vuelve `permitida = false` |
+| **5** | una clave **ALT** ausente | sigue en `atributosQueFaltan` (bloquea alta) **y** en `faltanParaPublicar` (bloquea publicar). Dos preguntas, **un solo criterio** |
+
+### 8.7 Regresión real sobre las 26
+
+Repetir el censo **después** del cambio. Las mismas **21 `L`** deben: seguir
+bloqueadas · mostrar `tipo_acceso` como causa · tener **`permitida = false`** en
+la acción sobre su encargo vivo. **Las 5 que pasan no pueden volverse `false` por
+accidente.**
+
+### 8.8 Angular — medido, y sí entra
+
+`propiedad-detail.spec.ts:42` monta hoy `publicacionGestionable: { permitida:
+true, motivo: null }`. **Mide si la pantalla obedece ese campo** para habilitar
+la acción de publicar:
+
+- **Si ya lo obedece**: no añadas lógica de dominio; comprueba con un test que
+  refleja el `false` del Core.
+- **Si lo ignora o habilita el botón por otra regla** —un `estado === 'A'`, un
+  encargo vivo mirado a mano—: **eso entra en este corte**, porque si no, el
+  contrato corregido no llega al usuario.
+
+La interfaz **explica la causa con los faltantes que publica el Core**; nunca los
+reinterpreta.
+
+### 8.9 Sigue prohibido
+
+No modificar exigencias · no backfill · no `V81`/`V82` · no Corte 5 · no ampliar
+a enriquecimiento OPC · **este corte sigue sin migración**.
+
+### 8.10 El cierre se mueve
+
+**Sólo se congela `CANDIDATE_SHA` cuando queden coherentes:**
+
+```
+regla de publicación → faltanParaPublicar → permitida → acción visible de Publicar
+```
+
+Y el Auditor intentará **demostrar que existe alguna propiedad con
+`permitida = true` cuyo comando es rechazado exclusivamente por faltantes ALT/PUB
+conocidos**. **Si encuentra una, el corte no cierra.**
 
 ---
 

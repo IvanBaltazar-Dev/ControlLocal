@@ -1,5 +1,8 @@
 # Encargo — Corte 4 · Comercial (L, O, A) — `V81`
 
+> **HISTÓRICO — CERRADO DEFINITIVAMENTE.** El encargo se ejecutó con `V81` y
+> `V82`; el bloque completo, incluido 4.P, quedó cerrado en `795ffbf`.
+
 **Congelado por CONTROL el 2026-08-24**, con decisión de producto tomada por el
 titular (§3).
 

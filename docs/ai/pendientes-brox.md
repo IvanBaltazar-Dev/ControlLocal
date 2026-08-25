@@ -3,15 +3,24 @@
 **Qué responde:** todo lo que queda por hacer, medido contra el repositorio y la
 base de datos reales, no contra lo que los documentos dicen que falta.
 
-**Hecho el 2026-08-22**, justo después de cerrar V78 (Corte 1, mitad de sujeto).
+**Actualizado el 2026-08-25**, después de publicar el cierre definitivo del
+Corte 4.
 Estado del árbol: rama `feat/modelo-universal-y-autoridad-del-dato`, commit
-`48e8ede`, migraciones hasta **V78**.
+`795ffbf16384853b3e2c220895d4ac5ff6d01d06`, migraciones hasta **V83**.
 
 > **Corregido el 2026-08-23 con el Corte 2 (`V79`)**, y sólo en lo que dejó de
 > ser cierto: la rama **ya está publicada** (§0.1 y §10), la identidad registral
 > **ya existe** (§2.5), las suites de integración son **20** y no 22, y las
 > cifras de impacto de §2.1 **salían de `TEST_DB_URL`**, no del mercado. Lo
 > demás se deja como se midió.
+
+> **Estado actual del cierre:** Corte 4 cerrado definitivamente, auditoría final
+> limpia. Cartera **medida el 2026-08-25, antes de `V84`: 7 publicables y 19
+> bloqueadas de 26** — es un **registro fechado**; la cifra con autoridad
+> después de la subtanda 5A sale de **su evidencia de cierre**, y no se sustituye
+> aquí por una medición que nadie ha hecho. I0 está en curso y **el Corte 5 está
+> ABIERTO**: el titular lo congeló el 2026-08-25 con D-1…D-7 y la **subtanda 5A**
+> está en ejecución (`encargo-corte-5-terreno.md`).
 
 **Cómo se hizo:** recorriendo `docs/ai/` (66 documentos), `backend-spring/`,
 `frontend-angular/src/`, `backend-spring/verificacion/` y las dos bases
@@ -31,7 +40,7 @@ los dos recoge entero porque está repartido en quince documentos.
 
 | # | Pendiente | Medido | Por qué importa |
 |---|---|---|---|
-| **0.1** | ~~**43 commits sin publicar.**~~ ✅ **RESUELTO el 2026-08-23**: la rama está publicada | `git rev-parse @{u}` → `origin/feat/modelo-universal-y-autoridad-del-dato`; `git ls-remote` → la rama existe en el remoto y `origin/main..origin/<rama>` = **48** | Eran **48** contra lo que existe en GitHub, no 43: las 43 se contaron contra `main` **local**, que está 4 commits por delante de `origin/main`. Y las suites de integración son **20**, no 22 — `GateDeCierreTest` las inventaría y `Verificar-Cierre.ps1` comprueba que se ejecutaron |
+| **0.1** | ~~**43 commits sin publicar.**~~ ✅ **RESUELTO el 2026-08-25**: la rama está publicada con el SHA final de Corte 4 | `git rev-parse @{u}` y `git ls-remote` → `795ffbf16384853b3e2c220895d4ac5ff6d01d06`; `origin/main..origin/<rama>` = **90** | La medición anterior era de 48 commits contra el remoto anterior. La rama actual está sincronizada; el cierre final añadió los dos commits documentales de la auditoría. |
 | **0.2** | **Rotar el secreto JWT y las credenciales RDS publicadas** en `2832a9b` | `origin/main` = `2832a9b` | El commit que las publicó **es la cabeza de `main` en GitHub**. Y `backend-spring` reutiliza ese mismo secreto de firma. Sin GlassFish al que preservar compatibilidad, rotarlo es un cambio de configuración |
 | **0.3** | **Decidir qué pasa con `origin/main`** | — | La historia pública se quedó en la v1. O se fusiona lo nuevo, o se declara que `main` no representa el producto |
 
@@ -65,7 +74,9 @@ que faltaban de verdad, y sigue abierto.
 ## 2. Profundidad inmobiliaria — lo que queda de los cortes de catálogo
 
 Fuente: `auditoria-profundidad-inmobiliaria.md`. La cadena real de migraciones y
-lo que ocupó cada una está en su §6. **La siguiente libre es `V81`**: `V79` la ocupo el Corte 2 el 2026-08-23 y `V80` el Corte 3 el 2026-08-24.
+lo que ocupó cada una está en su §6. **La siguiente migración de catálogo será
+`V84`**, cuando se congele el encargo del Corte 5; `V83` corresponde al microcorte
+4.P de procedencia.
 
 ### 2.1 Corte 1 · mitad de PROFUNDIDAD ⬜ — APLAZADO
 
@@ -95,13 +106,22 @@ inerte y sólo espera decisiones de negocio:
 >    no es una figura**: `PUB` cuelga de `exigirPublicable`, que **lanza** y sale
 >    como **HTTP 400** (`PublicacionServiceImpl:186`, `ManejadorErroresApi:45`).
 >    Hoy las 26 propiedades reales pasan el gate; con esas claves en PUB
->    dejarían de poder anunciarse las 26. Y **PUB no informa de nada**: no
->    existe ninguna superficie del cable que reporte una PUB de la PROPIEDAD.
->    Detalle y evidencia en `auditoria-profundidad-inmobiliaria.md` §6 bis.
+>    dejarían de poder anunciarse las 26. ~~Y **PUB no informa de nada**: no
+>    existe ninguna superficie del cable que reporte una PUB de la
+>    PROPIEDAD.~~ **Esa segunda frase caducó el mismo 2026-08-24**, en el commit
+>    `35cf09c` (16:51): `PropiedadResponse.faltanParaPublicar` sale de
+>    `clavesQueImpidenPublicar`, que filtra `exigencia in ('ALT','PUB')` sobre
+>    sujeto **PROPIEDAD**, y Angular lo pinta en `propiedad-detail.html`. **PUB
+>    sí informa.** Lo que sigue en pie de la advertencia es lo primero: el flip
+>    **bloquea**, y ése es el coste que hay que escalonar o aceptar. La deuda
+>    está marcada SALDADA más abajo en §2.5 bis; ésta era su otra mitad y decía
+>    lo contrario. Corregido en el preflight del Corte 5, **2026-08-25**.
 >
-> **O se escalona, o se acepta y se dice.** Hoy **ninguna** clave del sistema
-> tiene exigencia PUB — tampoco las seis que sembró `V79`, que entraron OPC a
-> propósito.
+> **O se escalona, o se acepta y se dice.** ~~Hoy **ninguna** clave del sistema
+> tiene exigencia PUB~~ — cierto hasta `V82` (2026-08-24), que subió
+> **`tipo_acceso` a `PUB` en `L`**. Hoy el catálogo del sistema tiene **una**
+> `PUB`; las seis que sembró `V79` sí entraron OPC a propósito. Corregido el
+> **2026-08-25**.
 
 ### 2.2 Las conversiones de tipo, bloqueadas por una invariante deliberada
 
@@ -127,14 +147,82 @@ dibuja como **texto libre**. El dato entra y no compara con nada.
 
 - **No se le inventa vocabulario** ni se le cambia el tipo: es hecho de la
   PROPIEDAD y está bien colocado.
-- Sus reemplazos (`agua_desague`, `energia_electrica`, `gas`, cada uno con su
-  tercer estado «con factibilidad aprobada») **nacen en el Corte 5**, y sólo
+- Sus reemplazos se cierran en la **subtanda 5A del Corte 5** (`V84`), y sólo
   entonces pasa a `activo = false`. Retirarla antes dejaría varios cortes en los
-  que BROX deja de capturar un hecho que hoy captura.
+  que BROX deja de capturar un hecho que hoy captura. **Destino fijado por el
+  titular el 2026-08-25** (D-1 y D-2 del encargo del Corte 5):
+  - `agua_desague` nace LISTA con `CONECTADO` / `CON_FACTIBILIDAD_APROBADA` /
+    `SIN_SERVICIO`, **`PUB` en `T`** y `OPC` en `A`;
+  - `energia_electrica` nace con el mismo vocabulario, **`PUB` en `T`**;
+  - `gas` **conserva su concepto, su clave, su tipo y su aplicabilidad** —no se
+    migra ni se reinterpreta— y sólo **gana** la opción
+    `CON_FACTIBILIDAD_APROBADA` junto a la que ya tenía, `RED_EN_LA_VIA`. Son
+    cosas distintas: red en la vía es infraestructura física; factibilidad
+    aprobada es un documento de la concesionaria. **No se extiende `gas` a `X`**
+    en este corte.
+  - El reparto del legado va **después** de que existan los reemplazos, con
+    linaje de procedencia (`V83`); lo ambiguo queda **FALTANTE** y se cuenta.
+    `SIN_SERVICIO` **no** es la traducción de «no lo mencionó».
 - **Y falta su guarda gemela**: la comprobación «ninguna LISTA sin vocabulario»
   que V77 escribió sólo mira `sujeto = 'ENCARGO'`. La PROPIEDAD no la tiene — por
   eso esta clave sobrevivió muda. Extenderla exige antes darle vocabulario, así
-  que **van en la misma tanda**.
+  que **van en la misma tanda**: `V84` la extiende, y **sólo después** de retirar
+  `servicios_disponibles`, o abortaría contra su propia clave.
+
+### 2.3 bis DEUDA ESTRUCTURAL · **doble autoridad de aplicabilidad** — bloquea declarar el Core estable
+
+**Anotada el 2026-08-25** por exigencia de **D-5** (el titular decidió *no*
+tocarlo en el Corte 5 · 5A, y a cambio dejarlo escrito). **Debe resolverse antes
+de declarar CORE FOUNDATION STABLE**, es decir, antes de que el catálogo del Core
+se dé por estable para Web y KAIROS.
+
+**El hecho.** Tres claves —no dos, como se venía diciendo— tienen **las dos
+autoridades a la vez**: `aplica_todos = true` **y** filas por tipo en
+`catalogo_atributo_tipo`.
+
+| clave | `aplica_todos` | filas por tipo | exigencia de esas filas |
+|---|---|---|---|
+| `antiguedad_anios` | `true` | los 7 | OPC en los 7 |
+| `estacionamientos` | `true` | los 7 | OPC en los 7 |
+| `metraje_total` | `true` | los 7 | **ALT** en los 7 |
+
+**Quién gana, medido en el código, y por qué importa que no sea el mismo:**
+
+| pregunta | quién responde | autoridad efectiva |
+|---|---|---|
+| ¿se **pregunta** en este tipo? | `CatalogoAtributoRepository.aplicablesA` | **el booleano** (`c.aplicaTodos = true OR exists(fila)`) |
+| ¿se puede **escribir**? | el mismo camino, vía `exigir_atributo_gobernado` | **el booleano** |
+| ¿con qué **exigencia**? | `AtributoPropiedadRepository.clavesObligatoriasQueFaltan` | **las filas** — `join c.aplicaciones a`, INNER |
+| ¿**bloquea publicar**? | `clavesQueImpidenPublicar` | **las filas** — mismo INNER JOIN |
+
+**La consecuencia, escrita sin rodeos:** una clave con `aplica_todos = true` y
+**sin fila** para un tipo se pregunta en ese tipo y acepta valor, pero **su
+exigencia es inalcanzable ahí**: ninguna de las dos consultas de bloqueo la ve,
+porque las dos entran por INNER JOIN sobre las filas. Sería una `ALT` que no
+obliga y una `PUB` que no impide — un bloqueo declarado que no existe.
+
+**Y el guard de pares de `V78` (2.2) las excluye por predicado**: su condición
+lleva `AND NOT h.aplica_todos`, así que ninguna de las tres participa nunca en la
+comprobación «el hecho no llega menos lejos que su condición». `estacionamientos`
+es una de las tres **y** es lado-hecho de un par deliberado
+(`estacionamientos_incluidos`, pactado en `A,C,D,L,O` de alquiler): **ese par
+nunca entra en el bucle**. Hoy pasaría igual —el hecho tiene fila en los siete—,
+pero **está exento, no verificado**: el día que se le quite una fila, el guard
+callará.
+
+**Por qué hoy no se ve ninguna incoherencia, y por qué eso no es tranquilizador:**
+las tres tienen fila para **los siete** tipos, así que las dos autoridades
+coinciden. Y donde podrían discrepar, el defecto de la columna `exigencia`
+también sería el mismo valor. **Coinciden por casualidad, no por construcción.**
+El día que alguien añada un tipo, retire una fila o siembre una clave nueva con
+`aplica_todos = true` y filas parciales, la incoherencia aparece **y no hay gate
+que la vea**.
+
+**Lo que la resolución tiene que decidir** (no se decide aquí): o el booleano
+desaparece y la aplicabilidad es siempre explícita, o el booleano pasa a ser la
+única autoridad y las filas se derivan, o se prohíbe por gate la combinación de
+ambos. Las tres son cambios de contrato del Core, y por eso no caben dentro de un
+corte de profundidad.
 
 ### 2.4 Los hechos que faltan de un par deliberado — quedan **dos**
 
@@ -168,8 +256,8 @@ física:
 |---|---|---|
 | ~~**2 · Identidad registral**~~ ✅ **HECHO 2026-08-23** | `partida_registral` y `oficina_registral` como **estructurales**, más `independizado`, `cargas_gravamenes`, `area_segun_partida`, `declaratoria_fabrica` — **las seis OPC**, ninguna PUB. Se adelantó al resto del Corte 1 porque era un hueco estructural que se podía modelar **sin inferir nada del corpus contaminado**. Lo que queda fuera y sigue abierto: la promoción OPC→PUB, y el *snapshot* fechado de `condicion_compraventa.partida_registral`, que nace con el expediente de compraventa (bloque 6) | **V79** ✅ |
 | ~~**3 · Vivienda (D, C)**~~ ✅ **HECHO 2026-08-24** | **30 claves** OPC —tipología, conservación, etapa de entrega, ascensores, vigilancia, áreas comunes, vista, bloque de baños/servicio, áreas exteriores, depósitos, torre— con 9 vocabularios (49 opciones) y 68 filas de aplicabilidad. Ninguna ALT, ninguna PUB. **Heredado a medias a propósito**: `medios_banos` nació y la convención de `banos` ya está publicada, pero **el estrechamiento sigue pendiente** (§2.2). Fuera: la promoción OPC→PUB, `familia` para agrupar un formulario que pasa de 25 a 55 campos (va con el corte del SPA), y `estacionamiento_independizado`, que el Corte 6 sustituye con `unidad_relacionada`. Un commit previo sin migración (`3.a`) arregló el gate `.sql`, **rojo desde `V77` y nunca ejecutado** | **V80** ✅ |
-| ~~**4 · Comercial (L, O, A)**~~ ✅ **HECHO 2026-08-24** | **39 claves** con 18 vocabularios (83 opciones) y 71 filas de aplicabilidad. **`tipo_acceso` entró `ALT` en `L`** —decisión del titular— y con ella **las publicables pasaron de 26 a 5**: los 21 locales salen del mercado hasta que se visiten, y **no se rellenó el dato en ninguno**. **`V82` la corrigió a `PUB` el mismo día** para que un local se pueda **registrar** sin el dato, sin mover la publicabilidad (§2.5 ter). Las otras 38, `OPC`. Termina además **las instalaciones de la vivienda** (`gas`, `agua_caliente`) que §3.5 mezclaba y el Corte 3 excluyó. Fuera: la retirada de `apto_licencia_funcionamiento`, que necesita migración de datos | **V81** ✅ |
-| **5 · Terreno (T)** | parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. **Hereda**: los tres reemplazos de `servicios_disponibles` | — |
+| ~~**4 · Comercial (L, O, A)**~~ ✅ **HECHO DEFINITIVAMENTE 2026-08-25** | **39 claves** con 18 vocabularios (83 opciones) y 71 filas de aplicabilidad. `V81`/`V82`, los siete pasos de conciliación y 4.P quedaron cerrados con auditoría final limpia en `795ffbf`. Cartera **medida el 2026-08-25, antes de `V84`: 7 publicables y 19 bloqueadas de 26** — también esto es un registro fechado, no un estado permanente: 5A estrena dos `PUB` en `T` y la cifra con autoridad sale de **su evidencia de cierre**. Las cifras `5/26` y `21 bloqueadas` son registros fechados de los pasos anteriores. | **V81/V82/V83** ✅ |
+| **5 · Terreno y ocupación transversal** — 🟡 **ABIERTO 2026-08-25 · subtanda 5A en ejecución** | Congelado por el titular con **D-1…D-7**. **5A (`V84`)**: `estado_ocupacion` LISTA · **OPC en los siete**; `agua_desague` (**PUB en T**, OPC en A) y `energia_electrica` (**PUB en T**) nacen **con** vocabulario; `gas` gana `CON_FACTIBILIDAD_APROBADA` sin cambiar de concepto; `servicios_disponibles` → `activo = false` (**nunca `DELETE`**) tras repartir lo recuperable; y se extiende la guarda «ninguna LISTA activa de PROPIEDAD sin vocabulario». **5B** (no se abre hasta auditar 5A, D-4): parámetros urbanísticos, `condicion_terreno` —**`PUB`, no `ALT`**, por **D-3**—, `situacion_registral`, `fondo`, `tipo_via_acceso`, `lote_minimo_normativo`, `edificacion_existente` y la retirada de `area_terreno` en `T` (D-7). `manzana_lote` queda fuera del corte (D-6) | **V84** 🟡 |
 | **6 · Unidades relacionadas** | una unidad con partida propia **es una Propiedad relacionada**, no un escalar dentro de un EAV: `unidad_relacionada`, códigos `E`/`B`, `unidadesRelacionadas[]` | — |
 | **7 · Demanda y matcher** | unificar el vocabulario de tipo (hoy ALMACÉN y `DEPOSITO_ALMACEN` —el mismo concepto— se declaran no comparables), permitir que un requerimiento pida atributos gobernados, y **arreglar el sesgo**: un dato faltante hace que el criterio NO APLIQUE sin castigar el puntaje, así que **la propiedad peor capturada obtiene mejor puntaje** | — |
 
@@ -336,6 +424,12 @@ locales: 21 total · 2 con acceso · 19 bloqueados
 > bloqueadas» **en éste y en otros documentos** es un registro fechado de su
 > microcorte, no el estado de hoy — incluidas **las dos que están más arriba en
 > esta misma sección**, ya tachadas y con su evidencia.
+>
+> **Y `7 de 26` es, a su vez, un registro fechado del 2026-08-25 anterior a
+> `V84`.** La subtanda 5A estrena dos `PUB` en `T`; el único terreno de la
+> cartera, `PROP-0024`, pasa de publicable a bloqueado, que es el efecto buscado
+> de `PUB`. La cifra con autoridad después de 5A la fija **su evidencia de
+> cierre**, y ninguna cifra nueva se escribe aquí sin haberla medido.
 
 El análisis que llevó a la decisión, que se conserva porque fija el listón:
 
@@ -377,9 +471,10 @@ inmuebles con **`origen_incorporacion = OBSERVACION`**. Pertenece a la capa de
 - No se implementa reutilizando `atributosQueFaltan`.
 
 **Qué la separa de la deuda de `V82` de arriba**, porque se tocan y no son lo
-mismo: aquélla es **deuda de publicación** —una clave `PUB` que bloquea y que
-ninguna superficie reporta, y cuyo arreglo es exponer las `PUB` faltantes junto a
-las `ALT` **sin fundir las dos listas**—. Ésta es **deuda de conocimiento**: qué
+mismo: aquélla era **deuda de publicación** —una clave `PUB` que bloqueaba y que
+ninguna superficie reportaba; **su arreglo ya se hizo** el 2026-08-24 (`35cf09c`,
+§2.5 bis): las `PUB` faltantes se exponen junto a las `ALT` **sin fundir las dos
+listas**, en `PropiedadResponse.faltanParaPublicar`—. Ésta es **deuda de conocimiento**: qué
 le falta por saber a un inmueble que nadie ha encargado todavía. La primera tiene
 21 casos concretos hoy; la segunda no tiene ninguno todavía —hay **cero**
 propiedades con origen `OBSERVACION`— y nace para cuando los haya.
@@ -583,7 +678,9 @@ Gobiernan: `north-star-brox.md` (contra qué se mide un avance),
 `mapa-ejecucion-brox.md` (dónde estamos),
 `checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar),
 `auditoria-profundidad-inmobiliaria.md` (los cortes), las `decision-*` y
-`matriz-operacion-rol.md` (que además está vigilada por un test). Los once
+`matriz-operacion-rol.md` (que además está vigilada por un test), e
+`i0-industrializacion-brox.md` mientras dure la ordenación documental. El
+`encargo-corte-5-terreno.md` prepara el siguiente corte, pero no lo abre. Los
 documentos con banner HISTÓRICO de la era de la migración se conservan tal cual:
 explican el **porqué**, y CLAUDE.md ya avisa de que no gobiernan.
 
@@ -591,11 +688,12 @@ explican el **porqué**, y CLAUDE.md ya avisa de que no gobiernan.
 
 ## 10. Si sólo se puede hacer una cosa
 
-~~**Publicar la rama.**~~ ✅ **Hecho el 2026-08-23.** Eran **48** commits contra
-lo que existía en GitHub —el modelo universal, el sujeto del dato, el catálogo
-gobernado, el editor universal y las **20** suites de integración— y vivían en
-un único disco. Ya no.
+~~**Publicar la rama.**~~ ✅ **Hecho el 2026-08-25.** La rama
+`feat/modelo-universal-y-autoridad-del-dato` y su remoto coinciden en
+`795ffbf`. El árbol está limpio y el cierre definitivo de Corte 4 ya está
+publicado.
 
-**Lo siguiente que no se puede planificar, se ejecuta:** rotar el secreto JWT
-(§0.2). Sigue publicado en `2832a9b`, que es la cabeza de `main` en GitHub, y
-`backend-spring` firma con él.
+**La siguiente acción de la ruta es I0:** terminar la ordenación documental y
+dejar congelado el encargo de Corte 5 antes de abrir una migración `V84`.
+La rotación del secreto JWT (§0.2) sigue siendo una prioridad de producción,
+pero no es el siguiente corte de catálogo ni se mezcla con esta preparación.

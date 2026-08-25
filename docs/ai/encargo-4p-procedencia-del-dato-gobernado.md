@@ -1,5 +1,9 @@
 # Encargo — Microcorte **4.P · Procedencia granular del dato gobernado**
 
+> **HISTÓRICO — CERRADO.** Este encargo se ejecutó y quedó cerrado con V83.
+> El cierre definitivo de Corte 4 se publicó en `795ffbf`. El estado vigente y
+> el siguiente trabajo están en `mapa-ejecucion-brox.md` e I0.
+
 **Congelado por CONTROL el 2026-08-25**, por decisión del titular.
 
 **BASE_SHA:** `6196aad6419188b79c0039c07ea1d03fa8b6e227` — que **deja de ser

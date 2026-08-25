@@ -1,5 +1,8 @@
 # Encargo — Corte corto · la deuda de publicación de la PROPIEDAD, visible
 
+> **HISTÓRICO — CERRADO.** Este corte dejó visible la deuda de publicación y
+> quedó incluido en el cierre definitivo de Corte 4 publicado en `795ffbf`.
+
 **Congelado por CONTROL el 2026-08-24**, por decisión del titular tras cerrar
 `V82`.
 

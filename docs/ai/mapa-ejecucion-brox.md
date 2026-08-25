@@ -11,10 +11,10 @@ aquél dice contra qué se mide si el paso fue un avance.
 **Y si lo que quieres es la lista completa de lo que falta** —incluido lo que no
 pertenece a ninguna etapa: producción, multi-tenancy, UI, verificación y estado
 documental—, está en [`pendientes-brox.md`](pendientes-brox.md), medido contra
-el repositorio y la base el 2026-08-22. Este mapa dice **el siguiente paso**;
+el repositorio y la base el 2026-08-25. Este mapa dice **el siguiente paso**;
 aquél dice **todo lo que queda**.
 
-**Actualizado:** 2026-08-22
+**Actualizado:** 2026-08-25
 
 ---
 
@@ -151,13 +151,29 @@ con «renta mensual» cocinada en el modelo, E3 nace torcida.
 | **3g** | **El lenguaje del ENCARGO** | `V77`: el catálogo pasa de 6 a **26** condiciones comerciales y VENTA deja de estar muda (0 → 7). Aplicabilidad por **tipo × operación**, vocabularios sembrados, y el guard de pares hecho/condición ampliado a los ocho. Ninguna con valor por defecto: la ausencia sigue significando «todavía no se sabe» | ✅ **CERRADO** 2026-08-22 |
 | **3f** | **El editor universal** | `/propiedades/:id/editar`: **una** ruta para los siete tipos sobre `PUT /propiedades/{id}`. Cuatro bloques —propiedad y ubicación, características del catálogo, titulares, un bloque **por encargo**— y un cuerpo que lleva **sólo lo tocado**: vaciar no viaja, borrar es «Quitar», la operación de un encargo no se cambia. El renderizador de campos pasa a ser compartido con el alta (`cl-campo-gobernado`) | ✅ **CERRADO** 2026-08-22 |
 | **3h** | **El hecho llega donde llega su condición** | `V78`: las 19 claves de PROPIEDAD clasificadas una por una —14 hecho puro, 2 mitad de un par ya separado, 3 con problema de modelo, **ninguna condición disfrazada**—. Lo que sí apareció es la **cobertura del par**: `se_ofrece_amoblado` llegaba a OFICINA y `amoblado` no, y `mantenimiento_a_cargo_de` a ALMACÉN y CASA sin `cuota_mantenimiento`. Tres filas OPC lo cierran, y la invariante queda puesta | ✅ **CERRADO** 2026-08-22 |
-| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`) y el **Corte 2 · identidad registral** (`V79`, 2026-08-23) el **Corte 3 · vivienda D y C** (`V80`, 2026-08-24, con `3.a` sin migración arreglando el gate `.sql`) y el **Corte 4 · comercial L, O y A** (`V81`, 2026-08-24), que estrena la **primera exigencia que obliga a salir a mirar** y con ella deja **21 de 26 propiedades fuera del mercado hasta que se visiten**; corregido acto seguido por **`V82`**, que baja `tipo_acceso` de `ALT` a `PUB` para que un local **se pueda registrar sin el dato aunque siga sin poder anunciarse**. El **Corte 1 (resto)** queda **aplazado**: pide exigencias y vocabularios, y la evidencia para calibrarlos sale de la base de pruebas. Quedan los cortes 5–7. Ver `auditoria-profundidad-inmobiliaria.md` |
+| **3e** | **Profundidad inmobiliaria** | que el catálogo describa de verdad los siete tipos: vocabularios gobernados, atributos del encargo, identidad registral, unidades relacionadas | 🟡 **EN CURSO** — cerrados los tres cortes técnicos (0A `V71`, 0B `V72`, 0C `V73`+`V74`+`V77`), el **Corte 1** en su mitad de sujeto (`V78`), el **Corte 2 · identidad registral** (`V79`), el **Corte 3 · vivienda D y C** (`V80`) y el **Corte 4 · comercial L, O y A** (`V81` + `V82`), cuyo cierre definitivo quedó publicado en `795ffbf` tras 4.P y su auditoría final limpia. **Corte 5 · terreno y ocupación transversal: 🟡 EN CURSO (subtanda 5A) desde el 2026-08-25**, congelado por el titular con D-1…D-7 (`encargo-corte-5-terreno.md`); 5B no se abre hasta que 5A esté auditado (D-4). Cartera **medida el 2026-08-25, antes de `V84`: 7 publicables y 19 bloqueadas de 26** — es un **registro fechado**, no un estado permanente: la cifra con autoridad después de 5A sale de su evidencia de cierre. El **Corte 1 (resto)** queda **aplazado** por falta de corpus real. |
 | **4** | **KAIROS funcional** | alta conversacional sobre el mismo motor | ⬜ |
 | **5** | **Demanda + Matcher + E3** | requerimiento universal, criterios, negociación inmobiliaria | ⬜ |
 | **6** | **Cierre de venta** | expediente de compraventa junto al de alquiler | ⬜ |
 | **7** | **Inteligencia** | Foco, Radar, metas, ritmo (= E2.2–E2.6) + KAIROS ejecutor | 🟡 **la mitad de E2**: falta KAIROS ejecutor |
 | **8** | **Migración del resto de pantallas** | las 57 al sistema normalizado | ⬜ |
 | **9** | **Certificación 1.0** | venta/alquiler, tipos, roles, móvil, multi-tenant, seguridad, rendimiento, E2E | ⬜ |
+
+### I0 · Industrialización BROX — 🟡 EN CURSO
+
+I0 se abrió después de publicar el cierre definitivo de Corte 4. Es una fase de
+orden documental y de protocolo: alinea el mapa, el inventario transversal, la
+checklist y las decisiones para que el siguiente corte pueda reanudarse sin
+depender de una sesión concreta. Su encargo está en
+`i0-industrializacion-brox.md`.
+
+~~I0 no abre el Corte 5, no toca `V81`/`V82`/`V83` y no implementa producto.~~
+
+> **Fechado y superado el 2026-08-25.** Las dos últimas mitades siguen vigentes
+> —I0 no toca `V81`/`V82`/`V83` y no implementa producto—, pero la primera dejó
+> de describir la realidad el mismo día: **el titular congeló el Corte 5 e I0
+> dejó de bloquearlo**. I0 y el **Corte 5 · subtanda 5A** avanzan en paralelo. Se
+> deja escrita y no borrada porque durante un día fue la condición vigente.
 
 ### El orden de ejecución, decidido el 2026-08-22
 
@@ -240,7 +256,9 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    **`3.b` = `V80`**: **30 claves de vivienda** (estado del activo, edificio y
    servicios comunes, distribución interior), 9 vocabularios con 49 opciones y
    68 filas de aplicabilidad. **Las 30 entran `OPC`; ninguna `ALT`, ninguna
-   `PUB`** — el catálogo del sistema sigue con **cero `PUB`**. Sin defectos, sin
+   `PUB`** — el catálogo del sistema sigue con **cero `PUB`** *(cierto al
+   aplicarse `V80`; **`V82`, del mismo 2026-08-24, subió `tipo_acceso` a `PUB` en
+   `L`** y desde entonces hay una — anotado el 2026-08-25)*. Sin defectos, sin
    relleno retroactivo, y **sin tocar Angular**: las 30 se pintan solas por
    `cl-campo-gobernado`, que es una **prueba** del corte y no un supuesto.
    Evidencia: `verificacion/evidencia/2026-08-24-corte-3-vivienda.md`.
@@ -252,9 +270,10 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > **`torre_bloque` se ejecuta aquí** pese a estar redactada en §3.8 (Terreno):
    > su `aplica_a` es `D` y un corte se define por tipo, no por número de sección.
 
-7. **Corte 4 / comercial (L, O, A)** — ✅ **CERRADO 2026-08-24, `V81`** — pero
-   **su cierre DEFINITIVO está pendiente**: ver el recuadro «4.P» al final de
-   este punto.
+7. **Corte 4 / comercial (L, O, A)** — ✅ **CERRADO DEFINITIVAMENTE 2026-08-25**.
+    `V81`/`V82` y 4.P quedaron publicados en
+    `795ffbf16384853b3e2c220895d4ac5ff6d01d06`; la auditoría final fue limpia y
+    no apareció un noveno contraejemplo.
 
    > **⚠ EL CIERRE DEFINITIVO DE CORTE 4 ESTUVO CANCELADO (2026-08-25).** El
    > commit `6196aad` se anunció como `SHA_FINAL_CORTE_4` y **dejó de serlo**:
@@ -277,11 +296,18 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > | 6 | **los dos accesos documentados** (`df05903`) | `LOC-D001` y `LOC-0002` conservados → **7 publicables · 19 bloqueadas** |
    > | 7 | **4.P · procedencia del dato gobernado** (`V83`) | linaje append-only por valor, cinco superficies |
    >
-   > **Estado de hoy: `7 publicables · 19 bloqueadas` de 26.** Las cifras de «5 de
-   > 26» y «21 bloqueadas» que aparecen más abajo son **registros fechados de los
-   > pasos 2 y 3**, correctos en su momento y **superados por el paso 6**.
+   > **Medido el 2026-08-25, antes de `V84`: `7 publicables · 19 bloqueadas` de
+   > 26.** Las cifras de «5 de 26» y «21 bloqueadas» que aparecen más abajo son
+   > **registros fechados de los pasos 2 y 3**, correctos en su momento y
+   > **superados por el paso 6**.
+   >
+   > **Y `7 · 19` es también un registro fechado, no un estado permanente.** El
+   > Corte 5 · 5A estrena dos `PUB` en `T` (`agua_desague` y `energia_electrica`),
+   > y el único terreno de la cartera —`PROP-0024`— pasa de publicable a
+   > bloqueado: **es el efecto buscado de `PUB`**. La cifra con autoridad después
+   > de 5A sale de **su evidencia de cierre**, no de reescribir ésta.
 
-   > **4.P · CERRADO 2026-08-25 · `V83` · aprobado en la CUARTA vuelta
+   > **4.P · CERRADO TÉCNICAMENTE 2026-08-25 · `V83` · aprobado en la CUARTA vuelta
    > (`9a7afb3`).** Tabla propia **append-only** (`rastro_valor_gobernado` +
    > `rastro_valor_opcion`), direccionada por
    > **`(organizacion, sujeto, id_agregado, clave)`** y **nunca** por el `id` de la
@@ -318,6 +344,10 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > lección de método que más se repitió: **barrer donde esperas encontrarlo en
    > vez de preguntar dónde puede vivir esa clase de cosa**, y que **el control
    > positivo no protege de eso: pasa trivialmente sobre el universo equivocado**.
+
+    > **Cierre final del bloque:** la auditoría posterior a la cuarta vuelta fue
+    > limpia, sin noveno contraejemplo. El SHA final publicado es
+    > `795ffbf16384853b3e2c220895d4ac5ff6d01d06`.
 
    **39 claves** para local, oficina y almacén: nivel de implementación, edificio
    y servicios comunes que el Corte 3 dejó fuera, instalaciones completas y el
@@ -431,11 +461,34 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > comprobó reintroduciendo la vía retirada: **tres de sus cuatro pruebas la
    > cazan por separado**.
 
-8. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
+8. **Corte 5 / terreno y ocupación transversal** — 🟡 **EN CURSO (subtanda 5A)
+   desde el 2026-08-25.** Congelado por el titular con las decisiones **D-1…D-7**
+   de `encargo-corte-5-terreno.md` §2 — incluida **D-3**, que baja
+   `condicion_terreno` de `ALT` a `PUB` y con ello la manda a **5B**.
+
+   **5A** (`V84`) es lo transversal y lo que cierra la última LISTA muda del
+   catálogo: `estado_ocupacion` nace **LISTA · OPC en los siete tipos** —su
+   condición `entrega_desocupado` ya se pacta en los siete desde `V77`—;
+   `agua_desague` (**PUB en `T`**, OPC en `A`) y `energia_electrica` (**PUB en
+   `T`**) nacen **con** su vocabulario; `gas` gana `CON_FACTIBILIDAD_APROBADA`
+   sin cambiar de concepto (D-2); y `servicios_disponibles` pasa a
+   **`activo = false`** — nunca `DELETE`— sólo **después** de que existan sus
+   reemplazos y de repartir lo recuperable. La guarda «ninguna LISTA/LISTA_MULTIPLE
+   **activa** de sujeto PROPIEDAD sin vocabulario» se extiende en el mismo paso.
+
+   **5B no se abre hasta que 5A esté auditado** (D-4): parámetros urbanísticos,
+   `condicion_terreno`, `situacion_registral`, `fondo`, `tipo_via_acceso`,
+   `lote_minimo_normativo`, `edificacion_existente` y la retirada de
+   `area_terreno` en `T` (D-7). `manzana_lote` queda **fuera del Corte 5** (D-6).
+
+9. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
    insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
    **profundidad**: ampliar aplicabilidad por tipo (`banos` a L,O,A ·
-   `zonificacion` a O · `pisos_edificacion` a D,O · `frente` a C) y darle
-   vocabulario a `servicios_disponibles`, que hoy es una LISTA muda. Lo que
+   `zonificacion` a O · `pisos_edificacion` a D,O · `frente` a C). ~~y darle
+   vocabulario a `servicios_disponibles`, que hoy es una LISTA muda~~ — **esa
+   mitad dejó de pertenecer a este corte el 2026-08-25**: D-1/D-2 la asignaron a
+   la subtanda **5A**, y allí la clave **no recibe vocabulario, se retira**
+   (`activo = false`) sustituida por `agua_desague` y `energia_electrica`. Lo que
    falta es decidir la exigencia y los vocabularios, que son **decisiones de
    negocio** — y la evidencia para calibrarlas está contaminada: los números de
    impacto de `auditoria-profundidad-inmobiliaria.md` («406 baños», «1 048
@@ -845,13 +898,16 @@ comparaciones de estado dentro de Angular y 51 migas de pan escritas a mano.
 
 ## Qué gobierna, y qué no
 
-El orden vigente sale **solo** de tres sitios:
+El orden vigente sale de estas fuentes, cada una con un papel distinto:
 
 | Documento | Responde |
 |---|---|
 | `mapa-ejecucion-brox.md` (este) | dónde estamos |
 | `checklist-captura-moat-e-inteligencia-inmobiliaria.md` | qué falta para cerrar la etapa |
+| `pendientes-brox.md` | inventario transversal de lo que queda |
+| `auditoria-profundidad-inmobiliaria.md` | cortes y profundidad del catálogo |
 | `decision-*.md` (D-E…) | decisiones funcionales concretas |
+| `i0-industrializacion-brox.md` | protocolo documental y de ejecución vigente |
 
 Todo lo demás es **historia**. Los documentos del mundo legado —GlassFish,
 Blazor, "contrato congelado", corte de la v1— llevan una marca

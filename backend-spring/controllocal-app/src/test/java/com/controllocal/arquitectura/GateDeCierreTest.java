@@ -92,6 +92,11 @@ class GateDeCierreTest {
                         // PostgreSQL: titularidad, atributos gobernados y outbox.
                         "NucleoUniversalIntegrationTest",
                         "OcupacionInmuebleIntegrationTest",
+                        // Corte 5 · 5A (V84) - quien ocupa el inmueble y que
+                        // servicios llegan: el par hecho/condicion en los siete,
+                        // las dos PUB del terreno y la retirada de la ultima
+                        // LISTA muda del catalogo.
+                        "OcupacionYServiciosIntegrationTest",
                         "PadronDeGobiernoIntegrationTest",
                         // 4.P - la procedencia del DATO, no la del acto: los
                         // ocho casos de reconstruccion de una historia real.

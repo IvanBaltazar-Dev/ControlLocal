@@ -746,6 +746,129 @@ SELECT pg_temp.comprobar('4P las transcripciones documentadas nombran su fuente'
     'una transcripcion documentada perdio su fuente, o gano una naturaleza inventada');
 
 -- =====================================================================
+-- CORTE 5 · 5A - la ocupacion y los servicios, con vocabulario (V84)
+--
+-- Lo que se comprueba aqui es lo que ningun test de Java mira con esta forma:
+-- que la CARTERA REAL esta del lado correcto del catalogo, y que la ultima LISTA
+-- muda no puede volver por otra puerta.
+-- =====================================================================
+
+-- EL PAR, EN LOS DOS SENTIDOS. Que la clave exista no basta: el hecho tiene que
+-- llegar a TODOS los tipos donde su condicion se pacta, o quedaria un tipo en el
+-- que el pacto es el unico sitio donde cabe el hecho -- y un pacto muere con su
+-- encargo. Se mide el hueco Y la cobertura, porque solo con el hueco esto
+-- saldria verde el dia que `entrega_desocupado` desapareciera del catalogo: cero
+-- descubiertos sobre un universo vacio.
+SELECT pg_temp.comprobar('5A el hecho de la ocupacion llega donde se pacta su condicion',
+    NOT EXISTS (
+        SELECT 1
+          FROM catalogo_atributo cond
+          JOIN catalogo_atributo_operacion o ON o.id_catalogo_atributo = cond.id_catalogo_atributo
+          JOIN catalogo_atributo hecho ON hecho.clave = 'estado_ocupacion' AND hecho.activo
+         WHERE cond.clave = 'entrega_desocupado' AND cond.activo
+           AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
+                            WHERE t.id_catalogo_atributo = hecho.id_catalogo_atributo
+                              AND t.tipo_propiedad = o.tipo_propiedad)));
+
+SELECT pg_temp.comprobar('5A y el par esta cubierto en los SIETE tipos, no en cero',
+    (SELECT count(DISTINCT o.tipo_propiedad) = 7
+       FROM catalogo_atributo cond
+       JOIN catalogo_atributo_operacion o ON o.id_catalogo_atributo = cond.id_catalogo_atributo
+       JOIN catalogo_atributo hecho ON hecho.clave = 'estado_ocupacion' AND hecho.activo
+       JOIN catalogo_atributo_tipo t ON t.id_catalogo_atributo = hecho.id_catalogo_atributo
+                                    AND t.tipo_propiedad = o.tipo_propiedad
+      WHERE cond.clave = 'entrega_desocupado' AND cond.activo));
+
+SELECT pg_temp.comprobar('5A estado_ocupacion aplica EXACTAMENTE a los siete tipos',
+    (SELECT array_agg(t.tipo_propiedad ORDER BY t.tipo_propiedad)
+            = ARRAY['A','C','D','L','O','T','X']::varchar[]
+       FROM catalogo_atributo c JOIN catalogo_atributo_tipo t USING (id_catalogo_atributo)
+      WHERE c.clave = 'estado_ocupacion' AND c.organizacion_id IS NULL));
+
+-- LA RETIRADA, POR SUS DOS MITADES. Ninguna sirve sin la otra: la clave sin
+-- reemplazo deja un agujero de captura, y el reemplazo sin la retirada deja dos
+-- sitios para el mismo hecho.
+SELECT pg_temp.comprobar('5A servicios_disponibles esta retirada y NO borrada',
+    EXISTS (SELECT 1 FROM catalogo_atributo
+             WHERE clave = 'servicios_disponibles' AND organizacion_id IS NULL
+               AND del_sistema AND NOT activo));
+
+SELECT pg_temp.comprobar('5A sus dos reemplazos estan activos y con vocabulario',
+    (SELECT count(*) = 2
+       FROM catalogo_atributo c
+      WHERE c.organizacion_id IS NULL AND c.activo
+        AND c.clave IN ('agua_desague', 'energia_electrica')
+        AND c.tipo_dato = 'LISTA'
+        AND (SELECT count(*) FROM catalogo_atributo_opcion o
+              WHERE o.id_catalogo_atributo = c.id_catalogo_atributo AND o.activo) = 3));
+
+SELECT pg_temp.comprobar('5A los dos servicios impiden PUBLICAR un terreno',
+    (SELECT count(*) = 2
+       FROM catalogo_atributo c JOIN catalogo_atributo_tipo t USING (id_catalogo_atributo)
+      WHERE c.organizacion_id IS NULL AND c.clave IN ('agua_desague', 'energia_electrica')
+        AND t.tipo_propiedad = 'T' AND t.exigencia = 'PUB' AND NOT t.requerido));
+
+-- LA GUARDA QUE 5A DEJA PUESTA, y la razon de que la retirada sea una solucion
+-- legitima y no un rodeo: la palabra es ACTIVA. Una clave retirada no se
+-- pregunta, asi que no puede nacer muda. Cubre los dos sujetos y los dos ambitos
+-- --sistema y tenant--, porque una organizacion puede declarar las suyas.
+SELECT pg_temp.comprobar('5A ninguna LISTA activa se quedo sin vocabulario',
+    NOT EXISTS (
+        SELECT 1 FROM catalogo_atributo c
+         WHERE c.activo AND c.tipo_dato IN ('LISTA', 'LISTA_MULTIPLE')
+           AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_opcion o
+                            WHERE o.id_catalogo_atributo = c.id_catalogo_atributo
+                              AND o.activo)),
+    'una LISTA sin opciones se degrada a TEXTO en el motor de captura y el trigger acepta cualquier cadena');
+
+-- `gas` CONSERVA SU CONCEPTO Y GANA UNA OPCION (D-2). Se comprueban las dos
+-- mitades: que la opcion esta, y que la clave no se convirtio en otra cosa por
+-- el camino -- ni de tipo, ni de aplicabilidad, ni extendida a X.
+SELECT pg_temp.comprobar('5A gas distingue la red de la calle del papel de la concesionaria',
+    (SELECT count(*) = 2 FROM catalogo_atributo c
+       JOIN catalogo_atributo_opcion o ON o.id_catalogo_atributo = c.id_catalogo_atributo
+      WHERE c.organizacion_id IS NULL AND c.clave = 'gas'
+        AND o.valor IN ('RED_EN_LA_VIA', 'CON_FACTIBILIDAD_APROBADA') AND o.activo));
+
+SELECT pg_temp.comprobar('5A y gas no cambio de concepto: sigue LISTA y no llego a X',
+    (SELECT c.tipo_dato = 'LISTA'
+            AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
+                             WHERE t.id_catalogo_atributo = c.id_catalogo_atributo
+                               AND t.tipo_propiedad = 'X')
+       FROM catalogo_atributo c
+      WHERE c.organizacion_id IS NULL AND c.clave = 'gas'));
+
+-- EL ESPEJO, sobre TODO el catalogo. Es el guard 2.4 de V78, que hasta hoy solo
+-- corria dentro de las migraciones: se rompe cuando alguien cambia UNA de las
+-- dos columnas, y eso puede pasar por SQL directo sin que ninguna migracion lo
+-- vea.
+SELECT pg_temp.comprobar('5A requerido sigue siendo espejo exacto de exigencia = ALT',
+    NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t WHERE t.requerido <> (t.exigencia = 'ALT')));
+
+-- LO QUE EL LEGADO NO PUEDE HABER GANADO. Un inmueble cuyo unico dato de
+-- servicios era una cadena ambigua no puede aparecer con el hecho ya declarado
+-- por el sistema: eso seria haber traducido "tiene agua" a CONECTADO, que es
+-- inventar por el caso frecuente justo la distincion que el campo viejo no sabia
+-- hacer. Lo ambiguo permanece FALTANTE.
+--
+-- Se escribe como INVARIANTE y NUNCA como la cifra 0 de filas legadas: en
+-- `controllocal_dev` no hay ninguna y en la base de integracion un fixture las
+-- escribe en cada corrida.
+SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio traducido',
+    NOT EXISTS (
+        SELECT 1
+          FROM atributo_propiedad legado
+          JOIN atributo_propiedad nuevo ON nuevo.id_propiedad = legado.id_propiedad
+                                       AND nuevo.clave IN ('agua_desague', 'energia_electrica')
+         WHERE legado.clave = 'servicios_disponibles'
+           AND NOT EXISTS (SELECT 1 FROM rastro_valor_gobernado r
+                            WHERE r.organizacion_id = nuevo.organizacion_id
+                              AND r.sujeto = 'PROPIEDAD'
+                              AND r.id_agregado = nuevo.id_propiedad
+                              AND r.clave = nuevo.clave
+                              AND r.canal <> 'SISTEMA')));
+
+-- =====================================================================
 -- Lo que NO se ha roto
 -- =====================================================================
 SELECT pg_temp.comprobar('SIN ROMPER las columnas del cable siguen existiendo',

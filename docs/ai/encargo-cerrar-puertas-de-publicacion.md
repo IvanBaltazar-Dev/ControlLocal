@@ -1,5 +1,8 @@
 # Encargo — Microcorte · ningún camino de creación elude la publicabilidad
 
+> **HISTÓRICO — CERRADO.** El cierre de puertas forma parte del cierre
+> definitivo de Corte 4 publicado en `795ffbf`.
+
 **Congelado por CONTROL el 2026-08-24**, por decisión del titular tras cerrar el
 corte de la señal `PUB`.
 

@@ -4,7 +4,7 @@
 **Dónde estamos:** `mapa-ejecucion-brox.md`. Este documento no lleva la cuenta;
 lleva los requisitos.
 
-**Actualizado:** 2026-08-18
+**Actualizado:** 2026-08-25
 
 ---
 
@@ -157,6 +157,23 @@ segundo. **V58** lo sustituye por la invariante correcta: un encargo vivo por
 **Lo que NO se construyó, a propósito:** matcher v2, negociación E3, compraventa
 completa, Neo4j, WhatsApp, LLM, voz, embeddings, memoria vectorial, LangGraph y
 automatizaciones autónomas de KAIROS. Todos dependían de este spine.
+
+## Estado actual de la ruta BROX 1.0
+
+- **Corte 4:** cerrado definitivamente en `795ffbf`; auditoría final limpia.
+- **Estado de cartera:** 7 publicables y 19 bloqueadas de 26 — **medido el
+  2026-08-25, antes de `V84`**. Es un registro fechado: 5A estrena dos `PUB` en
+  `T` y el único terreno de la cartera pasa a bloqueado, así que **la cifra con
+  autoridad sale de la evidencia de cierre de 5A**, no de reescribir ésta.
+- **I0:** en curso; ordena el estado documental y el protocolo de ejecución.
+- **Corte 5:** **ABIERTO 🟡 — subtanda 5A en ejecución.** El titular congeló el
+  encargo el 2026-08-25 con las decisiones **D-1…D-7**
+  (`encargo-corte-5-terreno.md`), incluida **D-3**, que baja `condicion_terreno`
+  de `ALT` a `PUB` y la traslada a 5B. **5B no se abre hasta que 5A esté
+  auditado** (D-4).
+
+La cifra actual no sustituye las mediciones históricas de cada microcorte: las
+cifras anteriores deben conservar su fecha y su contexto.
 
 ---
 

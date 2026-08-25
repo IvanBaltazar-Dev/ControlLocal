@@ -714,32 +714,67 @@ class CatalogoQueHablaIntegrationTest {
     }
 
     /**
-     * <b>`servicios_disponibles` sigue comportandose exactamente igual.</b>
+     * <b>`servicios_disponibles`, retirada y sustituida</b> (V84, Corte 5 · 5A).
      *
-     * <p>Es la trampa que este corte tenia que no pisar. La guarda de vocabulario
-     * de V79 mira <b>solo</b> claves ESTRUCTURALES, y ademas exige que la clave
-     * tenga vocabulario sembrado. Generalizarla a «ninguna LISTA de la PROPIEDAD
-     * sin vocabulario» habria roto esta clave, que es LISTA, es de la PROPIEDAD,
-     * esta muda a proposito y cuyos reemplazos son del Corte 5.
+     * <h2>Lo que este caso afirmaba hasta el 2026-08-25, y por que se reescribe
+     * en vez de borrarse</h2>
+     * Se llamaba {@code serviciosDisponiblesNoSeRompio} y afirmaba que la clave
+     * <b>seguia aceptando texto libre</b> y <b>seguia con cero opciones</b>. Era
+     * cierto, era la trampa que V79 no debia pisar —su guarda de vocabulario mira
+     * solo claves ESTRUCTURALES, y generalizarla a «ninguna LISTA de la PROPIEDAD
+     * sin vocabulario» habria roto justo esta— y era <b>deuda declarada</b>: sus
+     * reemplazos eran del Corte 5.
+     *
+     * <p>Tras 5A las dos afirmaciones son falsas <b>por diseno</b>. Borrar el
+     * caso perderia la constancia de por que existio: durante cuatro cortes hubo
+     * en el catalogo una LISTA que aceptaba cualquier cadena, y eso no fue un
+     * descuido sino un aplazamiento con fecha.
+     *
+     * <h2>Lo que afirma ahora</h2>
+     * Que la clave <b>sigue existiendo</b> —{@code activo = false}, nunca
+     * {@code DELETE}—, que ya no se pregunta, que no admite valores nuevos, y que
+     * sus reemplazos estan activos y CON vocabulario. El detalle de la
+     * sustitucion vive en {@link OcupacionYServiciosIntegrationTest}; aqui se
+     * conserva el hilo del Corte 0B.
      */
     @Test
-    @DisplayName("V79: servicios_disponibles sigue aceptando texto libre, como antes del corte")
-    void serviciosDisponiblesNoSeRompio() {
-        // Sobre un TERRENO porque es el unico tipo al que aplica esa clave. Es
-        // parte de lo que se afirma: su aplicabilidad tampoco se toco.
+    @DisplayName("V84: servicios_disponibles ya no acepta texto libre porque esta retirada")
+    void serviciosDisponiblesQuedoRetiradaYSustituida() {
+        // Sobre un TERRENO porque era el unico tipo al que aplicaba esa clave.
         long id = registrarTerreno();
 
-        editar(id, new ValorAtributo("servicios_disponibles", "agua y desague"));
+        assertEquals(Boolean.FALSE, jdbc.queryForObject("""
+                select activo from catalogo_atributo
+                 where clave = 'servicios_disponibles' and organizacion_id is null
+                """, Boolean.class),
+                "la clave se retira del catalogo activo, que es lo que la saca de las preguntas");
+        assertEquals(Boolean.TRUE, jdbc.queryForObject("""
+                select del_sistema from catalogo_atributo
+                 where clave = 'servicios_disponibles' and organizacion_id is null
+                """, Boolean.class),
+                "y sigue existiendo: un DELETE se llevaria por delante el significado de los "
+                        + "valores que quedaron escritos con ella");
 
-        assertEquals("agua y desague", valorDe(id, "servicios_disponibles"),
-                "una LISTA sin vocabulario sembrado sigue admitiendo cualquier cadena: es deuda "
-                        + "declarada del Corte 5, y V79 no la adelanta ni la empeora");
-        assertEquals(0, jdbc.queryForObject("""
+        assertThrows(Exception.class,
+                () -> editar(id, new ValorAtributo("servicios_disponibles", "agua y desague")),
+                "una clave retirada no sigue capturando: `exigir_atributo_gobernado` exige "
+                        + "`activo = true`");
+        assertNull(valorDe(id, "servicios_disponibles"), "y el rechazo no dejo rastro");
+
+        // Sus reemplazos existen, estan activos y NO nacieron mudos: es la
+        // condicion que hacia inaceptable retirarla antes.
+        assertEquals(3, jdbc.queryForObject("""
                 select count(*) from catalogo_atributo_opcion o
                   join catalogo_atributo c on c.id_catalogo_atributo = o.id_catalogo_atributo
-                 where c.clave = 'servicios_disponibles'
+                 where c.clave = 'agua_desague' and c.organizacion_id is null and c.activo
                 """, Integer.class),
-                "y sigue sin vocabulario: inventarselo es del Corte 5, no de este");
+                "el reemplazo del agua nace con su vocabulario, en la misma migracion");
+        assertEquals(3, jdbc.queryForObject("""
+                select count(*) from catalogo_atributo_opcion o
+                  join catalogo_atributo c on c.id_catalogo_atributo = o.id_catalogo_atributo
+                 where c.clave = 'energia_electrica' and c.organizacion_id is null and c.activo
+                """, Integer.class),
+                "y el de la luz tambien: son dos hechos distintos y por eso son dos claves");
     }
 
     /**
@@ -1253,9 +1288,10 @@ class CatalogoQueHablaIntegrationTest {
     }
 
     /**
-     * Un terreno. Hace falta porque {@code servicios_disponibles} y
-     * {@code area_segun_partida} no aplican a un departamento, y probarlas donde
-     * no aplican mediria otra cosa.
+     * Un terreno. Hace falta porque {@code servicios_disponibles} —hoy retirada—,
+     * {@code agua_desague}, {@code energia_electrica} y {@code area_segun_partida}
+     * no aplican a un departamento, y probarlas donde no aplican mediria otra
+     * cosa.
      *
      * <p>Lleva {@code zonificacion} porque en un terreno es ALT: sin ella el
      * alta se rechaza, y ese es justamente el nivel de exigencia que 0B

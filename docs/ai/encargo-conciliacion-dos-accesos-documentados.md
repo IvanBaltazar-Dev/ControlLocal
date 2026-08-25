@@ -1,5 +1,8 @@
 # Encargo — Microcorte final de Corte 4 · los dos accesos que ya constaban
 
+> **HISTÓRICO — CERRADO.** Los dos accesos se conservaron en `df05903` y la
+> auditoría final del bloque quedó publicada en `795ffbf`.
+
 **Congelado por CONTROL el 2026-08-25**, por decisión del titular.
 
 **BASE_SHA:** `4fcffff2507ab6ee6cac6575d391ca24abf53167` — **publicado**

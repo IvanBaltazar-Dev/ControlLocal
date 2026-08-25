@@ -205,7 +205,10 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("metraje_arrendable", "118.00"),
                         v("aforo_itse", "40"),
                         v("certificado_itse", "VIGENTE"),
-                        v("acceso_vehiculo_maximo", "CAMIONETA")),
+                        v("acceso_vehiculo_maximo", "CAMIONETA"),
+                        // V84: el hecho sobre el que se pacta `entrega_desocupado`,
+                        // que llega a los siete tipos.
+                        v("estado_ocupacion", "OCUPADO_POR_INQUILINO")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("OFICINA", "COMERCIAL", List.of(
@@ -258,7 +261,8 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("posiciones_trabajo", "24"),
                         v("salas_reunion", "2"),
                         v("aforo_itse", "30"),
-                        v("certificado_itse", "VIGENTE")),
+                        v("certificado_itse", "VIGENTE"),
+                        v("estado_ocupacion", "DESOCUPADO")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 // V80 ensancho la vivienda de 10 claves a 38. Este caso las
@@ -315,7 +319,8 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("mascotas_reglamento", "true"),
                         v("gas", "SIN_RED_CERCANA"),
                         v("agua_caliente", "NO_TIENE"),
-                        v("respaldo_electrico", "NO_TIENE")),
+                        v("respaldo_electrico", "NO_TIENE"),
+                        v("estado_ocupacion", "OCUPADO_POR_EL_PROPIETARIO")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("CASA", "VIVIENDA", List.of(
@@ -356,7 +361,8 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("tipo_estacionamiento", "SIMPLE"),
                         v("mascotas_reglamento", "true"),
                         v("gas", "SIN_RED_CERCANA"),
-                        v("agua_caliente", "NO_TIENE")),
+                        v("agua_caliente", "NO_TIENE"),
+                        v("estado_ocupacion", "OCUPADO_POR_TERCEROS_SIN_TITULO")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("TERRENO", "COMERCIAL", List.of(
@@ -366,7 +372,19 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("frente", "15.50"),
                         v("zonificacion", "CZ"),
                         v("area_terreno", "500.00"),
-                        v("servicios_disponibles", "Agua, luz y desague"),
+                        // V84 REESCRIBE ESTA LINEA, NO LA BORRA. Hasta el Corte 5
+                        // aqui iba `servicios_disponibles` con el texto libre
+                        // «Agua, luz y desague»: la clave era LISTA sin una sola
+                        // opcion, asi que aceptaba cualquier cadena, y este
+                        // fixture era una de las dos que escribian ese legado --
+                        // 322 filas en `controllocal_repositorios` el 2026-08-25.
+                        // La clave queda retirada (`activo = false`) y la sustituyen
+                        // DOS hechos separados: en la periferia se tiene luz y no
+                        // desague, o al reves, y un solo campo agregado escondia
+                        // justo esa combinacion. Las dos son PUB en T, asi que este
+                        // terreno tambien deja de ser publicable sin ellas.
+                        v("agua_desague", "CON_FACTIBILIDAD_APROBADA"),
+                        v("energia_electrica", "CONECTADO"),
                         v("partida_registral", "P-11223344"),
                         v("oficina_registral", "LIMA"),
                         v("area_segun_partida", "11.50"),
@@ -374,7 +392,8 @@ class ConservacionDeLaEdicionIntegrationTest {
                                 List.of("NINGUNA", "HIPOTECA")),
                         v("gas", "SIN_RED_CERCANA"),
                         v("acceso_vehiculo_maximo", "CAMIONETA"),
-                        v("via_de_acceso", "Panamericana Sur km 32")),
+                        v("via_de_acceso", "Panamericana Sur km 32"),
+                        v("estado_ocupacion", "DESOCUPADO")),
                         Set.of("DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("ALMACEN", "INDUSTRIAL", List.of(
@@ -429,15 +448,22 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("condicion_almacenamiento", "SECO"),
                         v("balanza_camionera", "false"),
                         v("estacionamientos_camiones", "6"),
-                        v("via_de_acceso", "Panamericana Sur km 32")),
+                        v("via_de_acceso", "Panamericana Sur km 32"),
+                        // V84: `agua_desague` llega tambien a la nave, y ahi es OPC.
+                        v("agua_desague", "CONECTADO"),
+                        v("estado_ocupacion", "DESOCUPADO")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
-                // OTRO solo admite tres claves. No se le anaden: 0A tiene que
-                // conservar tambien lo que el modelo todavia no sabe describir.
+                // OTRO admitia tres claves hasta V84 y ahora admite cuatro: el
+                // Corte 5 le da `estado_ocupacion` porque `entrega_desocupado` ya
+                // se pacta tambien sobre un OTRO, y el hecho no puede llegar menos
+                // lejos que su condicion. Sigue siendo el tipo que el modelo casi
+                // no sabe describir, y 0A tiene que conservarlo igual.
                 new CasoDeTipo("OTRO", "MIXTO", List.of(
                         v("metraje_total", "60"), v("antiguedad_anios", "3"),
-                        v("estacionamientos", "1")),
-                        Set.of("ENTERO", "DECIMAL")));
+                        v("estacionamientos", "1"),
+                        v("estado_ocupacion", "DESOCUPADO")),
+                        Set.of("ENTERO", "DECIMAL", "LISTA")));
     }
 
     /**

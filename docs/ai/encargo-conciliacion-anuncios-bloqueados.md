@@ -1,5 +1,8 @@
 # Encargo — Conciliación de los cuatro anuncios vivos sobre propiedades bloqueadas
 
+> **HISTÓRICO — CERRADO.** La conciliación de los cuatro anuncios forma parte
+> del cierre definitivo de Corte 4 publicado en `795ffbf`.
+
 **Congelado por CONTROL el 2026-08-24**, por decisión del titular.
 
 **BASE_SHA:** `93154ca` — árbol limpio, dev en `V82`.

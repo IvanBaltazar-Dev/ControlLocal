@@ -72,6 +72,10 @@ $integracion = @(
     # D-E4-1: las piezas del nucleo universal (titularidad, atributos, outbox).
     'NucleoUniversalIntegrationTest',
     'OcupacionInmuebleIntegrationTest',
+    # Corte 5 / 5A (V84): quien ocupa el inmueble y que servicios llegan. El par
+    # hecho/condicion cubierto en los siete tipos, las dos PUB que estrenan el
+    # bloqueo del terreno, y la retirada de la ultima LISTA muda del catalogo.
+    'OcupacionYServiciosIntegrationTest',
     'PadronDeGobiernoIntegrationTest',
     # 4.P: la procedencia del DATO. Los ocho casos de reconstruccion -- alta,
     # edicion, borrado, multivalor, estructural legado, naturalezas mezcladas,

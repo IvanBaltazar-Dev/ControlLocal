@@ -1,5 +1,11 @@
 # Auditoría de profundidad inmobiliaria — 2026-08-20
 
+> **Estado documental 2026-08-25:** este archivo conserva la medición original
+> y las propuestas de cada corte. No sustituye al encargo vigente. Corte 4 está
+> cerrado definitivamente en `795ffbf`; para Corte 5 gobiernan
+> `decision-estado-ocupacion-en-los-siete.md` y
+> `encargo-corte-5-terreno.md`.
+
 **Qué es:** la medición que pidió el corte adicional, hecha ANTES de tocar el
 catálogo. Diez auditorías en paralelo: una por tipo de propiedad —leyendo
 `catalogo_atributo` en la base viva y el motor de captura— y tres transversales
@@ -93,9 +99,9 @@ Esto es lo más barato del plan: filas en `catalogo_atributo_tipo`, cambios de `
 |---|---|---|---|
 | `metraje_total` | Rótulo → **«Área techada»** + ayuda que fija la convención (área techada, la de la partida; la terraza NO se suma). Es la peor grieta de comparabilidad: un flat de 90 m² techados con 30 de terraza lo carga un agente como 120 y otro como 90, y el precio por m² deja de ser comparable entre dos fichas del propio BROX. | L,O,D,C,T,A,X | ALT (todos, ya) |
 | `metraje_construido` | **Retirar de D** (para un departamento nombra el mismo hecho que `metraje_total`: dos claves, una verdad). Subir en A y C. | A,C,L,O | **PUB** en A, C |
-| `area_terreno` | Subir en C y T. Una casa se tasa por el PAR (terreno, construida). | A,C,T | **ALT** en C · **PUB** en T |
-| `antiguedad_anios` | **Quitar `aplica_todos`**. Un terreno eriazo no tiene antigüedad; preguntarlo hace dudar de si el sistema entiende lo que se registra. | L,O,D,C,A | PUB en C, L, O |
-| `estacionamientos` | **Quitar `aplica_todos`** (fuera de T). Valor mínimo 0 ya está bien: 0 = no tiene, nulo = no se sabe. | L,O,D,C,A | PUB en C, L, O, D |
+| `area_terreno` | Subir en C y T. Una casa se tasa por el PAR (terreno, construida). ⚠️ **La mitad de `T` está DEROGADA por D-7 del titular (2026-08-25)**: en `T` no se sube a `PUB` — **se retira su aplicabilidad**, porque `metraje_total` es la superficie canónica de un terreno y dos claves para la misma verdad no comparan nada. La retirada va en la **subtanda 5B**, con migración de datos, no en 5A. Lo de `C` sigue en pie. | A,C~~,T~~ | **ALT** en C · ~~**PUB** en T~~ |
+| `antiguedad_anios` | ~~**Quitar `aplica_todos`**. Un terreno eriazo no tiene antigüedad; preguntarlo hace dudar de si el sistema entiende lo que se registra.~~ ⚠️ **APLAZADO por D-5 del titular (2026-08-25)**: el Corte 5 **no toca `aplica_todos` de ninguna clave**. No es que la observación sea falsa —un terreno eriazo sigue sin antigüedad—, es que quitar el booleano a una clave que además tiene filas por tipo entra en la **doble autoridad de aplicabilidad**, deuda estructural anotada en §2.3 bis de `pendientes-brox.md` y que se resuelve antes de declarar el Core estable. Queda como **deuda registrada, no como plan vigente**. | L,O,D,C,A | PUB en C, L, O |
+| `estacionamientos` | ~~**Quitar `aplica_todos`** (fuera de T).~~ ⚠️ **APLAZADO por D-5, igual que la fila de arriba** — misma razón y misma deuda (§2.3 bis de `pendientes-brox.md`); y aquí pesa además que `estacionamientos` es lado-hecho de un par deliberado y el guard de pares de `V78` **exime por predicado** a toda clave con `aplica_todos = true`. Valor mínimo 0 ya está bien: 0 = no tiene, nulo = no se sabe. | L,O,D,C,A | PUB en C, L, O, D |
 | `banos` | **Añadir L, O, A** (hoy sólo C,D: un local se registra sin decir si tiene SS.HH., y sin ellos no hay ITSE ni licencia). ⚠️ **El estrechamiento DECIMAL → ENTERO + `medios_banos` NO va en el Corte 1**: `medios_banos` es una clave **nueva** y este corte declara «cero claves nuevas». Entra en el **Corte 3** con el bloque de baños/servicio, que es donde ya estaba previsto. Hasta entonces `banos` sigue DECIMAL y la ambigüedad del `2.5` se documenta en la ayuda del campo, no se resuelve a medias. | L,O,D,C,A | **PUB** en L,O,D,C,A |
 | `cuota_mantenimiento` | **Añadir C y A** (condominios y parques logísticos). Cambiar a **IMPORTE** (con moneda). | D,L,O,C,A | PUB |
 | `zonificacion` | **Añadir O** (una oficina en casa de zona residencial no obtiene licencia; es la omisión más cara del tipo). **TEXTO → LISTA** con el vocabulario de los planos de Lima. Hoy `C-2`, `c2` y `Comercio Zonal` son tres valores distintos y no agrupan nada. | A,C,L,T,O | ALT en T (ya) · **PUB** en L,O,A |
@@ -106,7 +112,7 @@ Esto es lo más barato del plan: filas en `catalogo_atributo_tipo`, cambios de `
 | `piso` | Subir en D y O: sin piso, «Av. Larco 1234» y «Javier Prado 476» nombran un edificio, no una unidad. Rótulo → **«Piso de ingreso»** (en un dúplex nadie sabe hoy si escribir 8 o «8-9»). | D,L,O | **ALT** en D,O |
 | `interiorUnidad` *(estructural)* | **Habilitar para A** (el stock logístico moderno se identifica por módulo). Exigir en D. | D,L,O,A | **ALT** en D · PUB en A |
 | `nombreEdificioGaleria` *(estructural)* | **Habilitar para A** (condominio o parque logístico: es como se busca el activo y hoy acaba dentro de `direccion`). | D,L,O,A | PUB en A |
-| `servicios_disponibles` | **Se retira en el Corte 5, no antes.** Para un terreno el estado no es sí/no: lo sustituyen `agua_desague`, `energia_electrica` y `gas`, cada uno con su tercer estado «con factibilidad aprobada», que es justo el que decide si el lote es desarrollable. ⚠️ **Esas tres claves nacen en el Corte 5** (Terreno). Retirarla antes deja varias migraciones durante las cuales BROX **deja de capturar un hecho que antes capturaba** — un agujero temporal en la profundidad del dato, que es exactamente lo que la North Star prohíbe. Se retira **en la misma tanda que introduce sus reemplazos**, migrando lo que sea recuperable y declarando FALTANTE lo que no. | A,C,L,O,T,D,X (sin cambio hasta el Corte 5) | OPC |
+| `servicios_disponibles` | **Se retira en el Corte 5, no antes.** Para un terreno el estado no es sí/no: lo sustituyen `agua_desague` y `energia_electrica`, y debe resolverse en el encargo cómo se relaciona esa sustitución con `gas`, que ya existe desde `V81`. Cada estado que sobreviva debe distinguir «con factibilidad aprobada». Retirarla antes deja un agujero de captura. Se retira **en la misma tanda que deja operativos sus reemplazos**, migrando lo recuperable y declarando FALTANTE lo que no. **Resuelto por D-1 y D-2 del titular el 2026-08-25**: se ejecuta en la **subtanda 5A** (`V84`) y `gas` conserva su concepto ganando una opción. | ~~A,C,L,O,T,D,X~~ **sólo `T`** — medido el 2026-08-25 contra `controllocal_dev`: `catalogo_atributo_tipo` tiene **una** fila para la clave `19`, `T/OPC`. La enumeración de siete tipos de esta celda **nunca fue cierta**. | OPC |
 | `apto_licencia_funcionamiento` | Se conserva como declaración, pero deja de estar solo: se acompaña de `certificado_itse`. | A,L,O | OPC |
 | `dormitorios` | Sin cambios (ALT en C,D, correcto). | C,D | ALT |
 | `amoblado` | Sin cambios como **hecho físico**. Su mitad comercial sale a `se_ofrece_amoblado` (§4). | C,D | OPC |
@@ -233,7 +239,7 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 
 | clave | rótulo | tipo | opciones | aplica_a | nivel |
 |---|---|---|---|---|---|
-| `condicion_terreno` | Condición del terreno | LISTA | URBANO_HABILITADO, EN_PROCESO_DE_HABILITACION, RUSTICO_ERIAZO, ZONA_INFORMAL_SIN_HABILITAR | T | **ALT**. 500 m² habilitados en Surco y 500 m² rústicos en Pachacámac son hoy la misma fila; el agente lo sabe en la puerta |
+| `condicion_terreno` | Condición del terreno | LISTA | URBANO_HABILITADO, EN_PROCESO_DE_HABILITACION, RUSTICO_ERIAZO, ZONA_INFORMAL_SIN_HABILITAR | T | ~~**ALT**~~ → **`PUB`. DEROGADA EN SU EJE DE EXIGENCIA por D-3 del titular, 2026-08-25** (`encargo-corte-5-terreno.md` §2). El argumento de esta celda —*«500 m² habilitados en Surco y 500 m² rústicos en Pachacámac son hoy la misma fila; el agente lo sabe en la puerta»*— se conserva porque sostiene **que la clave debe existir**, y eso sigue en pie. Lo que el titular rechaza es la segunda mitad: *«BROX debe poder registrar un terreno aunque todavía no se conozca o confirme su condición. No asumir que URBANO_HABILITADO / EN_PROCESO / RUSTICO puede determinarse visualmente.»* `ALT` bloquea **dos** puertas —el alta y la publicación—; `PUB` sólo la segunda. Era la única `ALT` que esta auditoría proponía para el Corte 5. **Va en la subtanda 5B**, no en 5A |
 | `situacion_registral` | Situación registral | LISTA | INSCRITO_EN_SUNARP, EN_SANEAMIENTO, NO_INSCRITO_SOLO_POSESION | T,C | **PUB** |
 | `fondo` | Fondo | DECIMAL m | — | T,C | **PUB** en T. Un aviso de terreno se escribe «10 × 20»; 200 m² de 8×25 y de 20×10 sirven para cosas distintas |
 | `posicion_en_manzana` | Posición en la manzana | LISTA | UN_FRENTE, DOS_FRENTES, TRES_FRENTES, CUATRO_FRENTES, ESQUINA | T,C | **PUB** |
@@ -247,7 +253,8 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 | `lote_minimo_normativo` | Lote mínimo normativo | DECIMAL m² | — | T | OPC |
 | `tipo_via_acceso` | Tipo de vía del frente | LISTA | AVENIDA, CALLE_O_JIRON, PASAJE, CARRETERA, TROCHA_O_SIN_VIA | T,L,A | **PUB** en T. Avenida o pasaje es el doble de precio para el mismo metraje |
 | `estado_via` | Estado de la vía | LISTA | ASFALTADA, AFIRMADA, SIN_AFIRMAR | T,A | OPC |
-| `estado_ocupacion` | Estado de ocupación | LISTA | LIBRE_Y_DESOCUPADO, CON_EDIFICACION_A_DEMOLER, OCUPADO_POR_TERCEROS, EN_USO_POR_EL_PROPIETARIO | T,C | **PUB** en T |
+| ~~`estado_ocupacion`~~ **fila DEROGADA EN LOS CUATRO EJES** — ver debajo | ~~Estado de ocupación~~ | ~~LISTA~~ | ~~LIBRE_Y_DESOCUPADO, CON_EDIFICACION_A_DEMOLER, OCUPADO_POR_TERCEROS, EN_USO_POR_EL_PROPIETARIO~~ | ~~T,C~~ | ~~**PUB** en T~~ |
+| `estado_ocupacion` **(vigente)** | Estado de ocupación | LISTA | DESOCUPADO, OCUPADO_POR_EL_PROPIETARIO, OCUPADO_POR_INQUILINO, OCUPADO_POR_TERCEROS_SIN_TITULO | **A,C,D,L,O,T,X** (`aplica_todos = false`) | **OPC** en los siete |
 | `edificacion_existente` | Edificación existente | DECIMAL m² | — | T | OPC (declarar 0 no es lo mismo que no saberlo) |
 | `cercado` | Cercado o amurallado | BOOLEANO | — | T | OPC |
 | `restriccion_arqueologica` | Restricción arqueológica (CIRA) | LISTA | NO_APLICA, CIRA_OBTENIDO, EN_TRAMITE, REQUERIDO_NO_INICIADO | T | OPC (no se infiere del distrito: depende del polígono) |
@@ -255,6 +262,26 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 | `manzana_lote` | Manzana y lote | TEXTO (ESTRUCTURAL → `interiorUnidad`) | — | T | **PUB**. Hoy se escribe dentro de `direccion` y dos agentes captan el mismo terreno con dos direcciones distintas |
 | `latitud` / `longitud` *(ya existen, estructurales)* | — | — | — | T | **PUB** en T: un terreno suele no tener dirección útil |
 | `torre_bloque` | Torre o bloque | TEXTO | — | D | OPC (el 501 existe en la Torre A y en la B; la mayoría del stock limeño no tiene torres, por eso no bloquea). **Se ejecutó en el Corte 3 (`V80`), no en el 5: está redactada en esta sección por arrastre, pero su `aplica_a` es `D` y un corte se define por tipo, no por número de sección** |
+
+> **Sobre `estado_ocupacion`, la fila tachada:** la **derogó
+> [D-C5-1](decision-estado-ocupacion-en-los-siete.md)**, resuelta por CONTROL el
+> **2026-08-24** por encargo del titular, y lo hizo **en los cuatro ejes** —
+> vocabulario, aplicabilidad, `aplica_todos` y exigencia:
+>
+> 1. **Vocabulario**: `CON_EDIFICACION_A_DEMOLER` no es un estado de ocupación
+>    sino de la edificación, y su sitio es `edificacion_existente`; los otros tres
+>    se renombran para que signifiquen lo mismo en un departamento que en un
+>    terreno.
+> 2. **Aplicabilidad**: **los siete**, no `T,C`. La condición
+>    `entrega_desocupado` ya se pacta en los siete desde `V77`, y el guard 2.2 de
+>    `V78` abortaría la migración si el hecho llegara menos lejos.
+> 3. **`aplica_todos = false`**, con filas explícitas.
+> 4. **Exigencia `OPC`**, no `PUB` en `T`. El argumento original de D-C5-1 §5
+>    caducó por medición el 2026-08-25 (la señal `PUB` de la PROPIEDAD **sí**
+>    existe); la conclusión se mantiene **por D-1 del titular**, no por aquel
+>    argumento.
+>
+> Se ejecuta en la **subtanda 5A** del Corte 5 (`V84`).
 
 **Totales:** ~20 correcciones sin clave nueva, **~85 claves nuevas de PROPIEDAD**, de las cuales **4 en ALT** (`tipo_acceso` en L, `condicion_terreno` en T, `metraje_construido` en A vía §3.1, `area_terreno` en C vía §3.1) más las tres elevaciones de claves existentes (`piso` en D/O, `interiorUnidad` en D). El resto reparte entre PUB y OPC.
 
@@ -384,8 +411,8 @@ sujeto.
 | `rubro_permitido` | `rubros_excluidos_por_titular` | existe |
 | `uso` *(columna, no atributo)* | `uso_admitido_por_titular` | existe |
 | `mascotas_reglamento` | `mascotas_aceptadas` | ✅ **cubierto** — `V80`, en **C y D** |
-| `nivel_implementacion` | `se_entrega_implementado` | **falta** — Corte 4 |
-| `estado_ocupacion` | `entrega_desocupado` | **falta** — Corte 5 |
+| `nivel_implementacion` | `se_entrega_implementado` | ✅ **cubierto** — `V81` (Corte 4, 2026-08-24), en **A, L y O** |
+| `estado_ocupacion` | `entrega_desocupado` | **falta** — Corte 5 · 5A |
 | `lote_minimo_normativo` | `acepta_venta_fraccionada` | **falta** — Corte 5 |
 
 Que falte el lado PROPIEDAD **no impide sembrar el lado ENCARGO**: la condición
@@ -419,10 +446,19 @@ catálogo real, y los pares se declaran **una sola vez** en la constante
 llega-igual-de-lejos— no puedan mirar listas distintas.
 
 La regla **no** se le exige a un par cuyo lado PROPIEDAD todavía no existe: a un
-hecho que no ha nacido no se le pide cobertura. Los cuatro que faltan
+hecho que no ha nacido no se le pide cobertura. ~~Los cuatro que faltan
 (`mascotas_reglamento`, `nivel_implementacion`, `estado_ocupacion`,
-`lote_minimo_normativo`) siguen con su corte asignado arriba, y el día que
-lleguen tendrán que nacer cubriendo a su condición o el gate lo dirá.
+`lote_minimo_normativo`)~~ **Quedan DOS** —`estado_ocupacion` y
+`lote_minimo_normativo`, los dos del Corte 5—: `V80` cerró
+`mascotas_reglamento` (Corte 3) y `V81` cerró `nivel_implementacion` (Corte 4),
+ambos el 2026-08-24. Corregido el **2026-08-25**. Siguen con su corte asignado
+arriba, y el día que lleguen tendrán que nacer cubriendo a su condición o el gate
+lo dirá.
+
+> Y hay una exención que esta sección no menciona: el bucle del guard lleva
+> `AND NOT h.aplica_todos`, así que **ningún par cuyo hecho tenga
+> `aplica_todos = true` se comprueba** — hoy, `estacionamientos`. Está anotado
+> como deuda estructural en §2.3 bis de `pendientes-brox.md`.
 
 #### La ausencia no es un «no»
 
@@ -672,7 +708,7 @@ rótulo o el rótulo no viaja**. Con el rótulo solo, la mezcla es irrecuperable
 | Cambio | Por qué se detiene | Dónde entra |
 |---|---|---|
 | **`banos` DECIMAL → ENTERO + `medios_banos`** | `medios_banos` es una **clave nueva**, y este corte declara cero claves nuevas: es una contradicción interna. Además `tg_catalogo_sistema_inmutable` **prohíbe cambiar el `tipo_dato` de una clave del sistema** («los valores ya escritos dejarían de significar lo mismo»), y 379 de 406 valores son `.5`. | **Corte 3**, con el bloque de baños/servicio, donde `medios_banos` ya estaba previsto. |
-| **`servicios_disponibles` retirada** | Sus reemplazos (`agua_desague`, `energia_electrica`, `gas`, cada uno con «con factibilidad aprobada») **nacen en el Corte 5**. Retirarla ahora deja cuatro cortes en los que BROX **deja de capturar un hecho que hoy captura**. Y mecánicamente tampoco se puede: el trigger bloquea el DELETE de una clave del sistema — la única salida legal es `activo = false`. | **Corte 5**, en la misma tanda que introduce los reemplazos, migrando lo recuperable y declarando FALTANTE lo que no. |
+| **`servicios_disponibles` retirada** | Sus reemplazos (`agua_desague`, `energia_electrica` y la semántica que se resuelva para `gas`) se cierran en el **Corte 5**. `gas` ya existe desde `V81`; no se puede tratar como clave nueva sin decidir cómo se conserva su vocabulario y sus valores. Retirarla ahora deja cuatro cortes en los que BROX **deja de capturar un hecho que hoy captura**. Y mecánicamente tampoco se puede: el trigger bloquea el DELETE de una clave del sistema — la única salida legal es `activo = false`. | **Corte 5**, en la misma tanda que deja operativos los reemplazos, migrando lo recuperable y declarando FALTANTE lo que no. |
 | **`cuota_mantenimiento` → IMPORTE** | **625 filas, `valor_moneda` NULL en el 100 %.** Y no hay de dónde sacarla: `propiedad.moneda_referencial` es la moneda de una renta o de un precio de venta, no la de un gasto mensual de junta — el mismo importe 350 aparece bajo PEN (237 veces) y bajo USD (56), y 280 sólo bajo USD. La tercera fuente, el encargo vivo, tiene **74 casos con monedas en conflicto** y 115 sin encargo. Rellenarla sería inventar. | Cuando la moneda se **declare**. Hasta entonces el importe sigue viajando como número: retirar el número perdería el único dato que sí existe. |
 | **`rubro_permitido` → LISTA_MULTIPLE** | Es la conversión con más **dato real de uso** detrás: 22 valores libres distintos tecleados en `dev` («Restaurante / cafetería», «Bar restaurante», «Bodega» vs «Depósito comercial» vs «Logística»…), varios **no mapeables con certeza** — decidirlos es normalizar por parecido. Y cambia el **almacén**, no sólo el vocabulario: LISTA_MULTIPLE exige que los valores vivan en `atributo_propiedad_opcion`, y las 488 filas actuales tienen `valor_texto`. | Cuando exista el vocabulario reconciliado **con su tabla de opciones sembrada** y la migración mueva los 488 valores. Los que no mapeen se declaran FALTANTES, no se aproximan. |
 | **`zonificacion` → LISTA** | Los 584 valores mapearían al 100 % (`CZ`, `RDM`, `RDA`, `I2`), así que el dato viejo no es el problema: **el nuevo sí**. Un vocabulario derivado de lo observado tendría 4 opciones, y la zonificación real de Lima tiene decenas (CV, CM, CE, RDB, I1-I4, OU, ZRP, ZTE…). Con la lista cerrada a lo medido, el agente que está delante de un local en CV **no tiene dónde poner lo que ve**. | Cuando el vocabulario salga de **los planos de zonificación**, no de estas 584 filas. La conversión es fácil; la lista es el trabajo. |
@@ -774,7 +810,10 @@ Siembra + opciones + E2E de alta/edición/publicación por tipo. Aquí entran `t
   columna «nivel» de §3.3, §3.4 y §3.6, que era una **propuesta y no un estado**.
   Misma razón que en el Corte 2 (§6 bis): `PUB` **bloquea publicar** con un 400.
   El catálogo del sistema sigue con **cero `PUB`**, y se comprueba en la propia
-  migración.
+  migración. *(Cierto al aplicarse `V80`, el 2026-08-24. **`V82`, del mismo día,
+  subió `tipo_acceso` a `PUB` en `L`**: desde entonces el catálogo tiene una.
+  Anotado el 2026-08-25; el párrafo se conserva porque describe lo que `V80`
+  encontró y comprobó.)*
 - **`mascotas_reglamento` entra en `C` y `D`, no sólo en `D`** — **corrección de
   §3.6 por medición**. Su condición `mascotas_aceptadas` se pacta en
   `catalogo_atributo_operacion` como `C/A/OPC` y `D/A/OPC`, y el guard 2.2 de
@@ -811,10 +850,22 @@ vieja. Es un corte propio.
   aplicar `V81` **las 26 propiedades publicables pasaron a 5** y los 21 locales
   quedaron fuera del mercado hasta que se visiten. Es el resultado esperado. Las
   otras 38 entraron `OPC`, y **las catorce `PUB` que propone esta auditoría
-  siguen siendo propuesta**: el catálogo del sistema conserva **cero `PUB`**.
-- **A diferencia de una `PUB`, esta `ALT` informa**: `atributosQueFaltan` se
+  siguen siendo propuesta**. ~~El catálogo del sistema conserva **cero
+  `PUB`**.~~ **FALSO desde `V82`**, del mismo 2026-08-24, que es precisamente el
+  cambio que este párrafo describe dos líneas más arriba: `tipo_acceso` **es
+  `PUB` en `L`**, y es la única. Corregido el **2026-08-25**; medido contra
+  `controllocal_dev`: `catalogo_atributo_tipo` tiene **una** fila con
+  `exigencia = 'PUB'`.
+- ~~**A diferencia de una `PUB`, esta `ALT` informa**: `atributosQueFaltan` se
   alimenta de `exigencia = 'ALT'`, y la ficha de cada local bloqueado dice que le
-  falta «Tipo de acceso». El bloqueo viaja con la instrucción de cómo quitarlo.
+  falta «Tipo de acceso». El bloqueo viaja con la instrucción de cómo
+  quitarlo.~~ **FALSO, y lo era ya al escribirse.** `V82` sacó `tipo_acceso` de
+  `ALT`, y lo que `V82` midió es lo contrario: al pasar a `PUB` la clave
+  **desapareció de `atributosQueFaltan`** —que sólo lleva `ALT`— y la ficha dejó
+  de decir que faltaba «Tipo de acceso». Ese fue el hueco que la señal `PUB`
+  visible vino a tapar el mismo día (`35cf09c`): hoy la clave se reporta, pero en
+  `faltanParaPublicar`, **no** en `atributosQueFaltan`, y no por ser `ALT` sino
+  por ser `PUB`. Corregido el **2026-08-25**.
 - **Este corte termina también las instalaciones de la vivienda** (`gas` en
   A,C,D,L,O,T y `agua_caliente` en C,D): §3.5 mezcla tipos, el Corte 3 las
   excluyó y su encargo está congelado. Se acepta como consecuencia y se escribe,
@@ -830,15 +881,20 @@ vieja. Es un corte propio.
   `V77`. Era la última clave del catálogo con `unidad = 'm2'`: ahora quedan cero.
 - **Evidencia**: `verificacion/evidencia/2026-08-24-corte-4-comercial.md`.
 
-### **Corte 5 — Terreno: T** · §3.8
-Parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. Cierra la duplicidad `metraje_total`/`area_terreno` para T.
+### **Corte 5 — Terreno y ocupación transversal** · §3.8
+Parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. Cierra
+la duplicidad `metraje_total`/`area_terreno` para T. `estado_ocupacion` no queda
+limitado a T y C: su condición `entrega_desocupado` se pacta en los siete tipos,
+por lo que el hecho debe cubrir A, C, D, L, O, T y X.
 
-**Hereda del Corte 1:** aquí nacen `agua_desague`, `energia_electrica` y `gas`,
-y **sólo entonces** `servicios_disponibles` pasa a `activo = false` (no se
-borra: el trigger del catálogo del sistema no lo permite, y además borrarla
-perdería lo escrito). La migración reparte el literal de cada fila entre las tres
-claves nuevas cuando sea recuperable y declara FALTANTE lo que no lo sea. El
-orden importa: primero existen los reemplazos, después se retira el reemplazado.
+**Hereda del Corte 1:** aquí nacen `agua_desague` y `energia_electrica`, y se
+resuelve la semántica de reemplazo de `servicios_disponibles` junto con `gas`,
+que ya existe desde `V81`. **Sólo entonces** `servicios_disponibles` pasa a
+`activo = false` (no se borra: el trigger del catálogo del sistema no lo permite,
+y además borrarla perdería lo escrito). La migración reparte el literal de cada
+fila entre los conceptos vigentes cuando sea recuperable y declara FALTANTE lo
+que no lo sea. El orden importa: primero existen los reemplazos, después se
+retira el reemplazado.
 
 ### **Corte 6 — Unidades relacionadas** · §5
 Una unidad con partida propia **es una Propiedad relacionada**, con identidad, titularidad, partida, histórico y eventualmente encargo propios — no un escalar dentro de un EAV. Migración con `unidad_relacionada`, códigos `'E'` y `'B'`, `unidadesRelacionadas[]` en el DTO, paso en el guion, y la resignificación deliberada de `numeroEstacionamientos` en `FronteraDeAutoridadEnElSpaTest`.
@@ -862,7 +918,7 @@ V74     1          las 19 claves que ya existen, bien declaradas
 V75     2          identidad registral
 ```
 
-**Lo que realmente se aplicó** (2026-08-22). Cada corte costó más de una
+**Lo que realmente se aplicó** (actualizado 2026-08-25). Cada corte costó más de una
 migración, y aparecieron dos que el plan no tenía:
 
 ```
@@ -879,8 +935,9 @@ V79  ✅  2   la identidad registral de la propiedad  <- se adelanto al resto de
 V80  ✅  3   la vivienda descrita de verdad (30 claves D y C)
 V81  ✅  4   el activo comercial descrito (39 claves L, O, A + gas y agua caliente)
 V82  ✅  4   tipo_acceso impide publicar, no registrar (ALT -> PUB)
-         1   mitad de PROFUNDIDAD  ⬜  <- sigue APLAZADA, sin migracion asignada
-V82      5   terreno: T  ⬜  <- la siguiente libre
+V83  ✅  4.P procedencia granular del dato gobernado
+          1   mitad de PROFUNDIDAD  ⬜  <- sigue APLAZADA, sin migracion asignada
+V84      5   terreno y ocupacion transversal  ⬜  <- preparado, no abierto
 ```
 
 > **El Corte 4 estrena la primera `ALT` de campo del sistema.** Las diez que
@@ -923,11 +980,27 @@ aviso. No lo es:
 | La lista que lo alimenta filtra por ALT **y** PUB | `AtributosGobernados.faltantesDePropiedadParaPublicar` |
 | `ReglaNegocioException` → **HTTP 400** | `ManejadorErroresApi.java:45` |
 
-Y hay una segunda mitad que importa igual: **no existe ninguna superficie del
+~~Y hay una segunda mitad que importa igual: **no existe ninguna superficie del
 cable que reporte una PUB de la PROPIEDAD**. `PropiedadResponse.atributosQueFaltan`
 lleva sólo ALT; `EncargoFicha.faltanParaPublicar` lleva ALT+PUB pero sólo del
 ENCARGO. Hoy, marcar PUB una clave de la propiedad hace **exactamente una cosa**:
-rechazar la publicación.
+rechazar la publicación.~~
+
+> **CADUCADO el 2026-08-24 a las 16:51**, en el commit `35cf09c`, y anotado aquí
+> el **2026-08-25**. Esa segunda mitad **era cierta cuando se escribió y dejó de
+> serlo el mismo día**: `PropiedadResponse` ganó su propio
+> `faltanParaPublicar`, alimentado por
+> `AtributoPropiedadRepository.clavesQueImpidenPublicar`, que filtra
+> `exigencia in ('ALT','PUB')` **sobre las aplicaciones por tipo del sujeto
+> PROPIEDAD**; Angular lo pinta en `propiedad-detail.html`, y
+> `CatalogoQueHablaIntegrationTest` lo fija exigiendo que `zonificacion` aparezca
+> ahí. **Hoy, marcar PUB una clave de la propiedad hace dos cosas: rechaza la
+> publicación y lo dice.** Evidencia:
+> `verificacion/evidencia/2026-08-24-senal-pub-visible.md`.
+>
+> Lo que **no** ha cambiado, y es lo que sigue gobernando: `atributosQueFaltan`
+> sigue llevando **sólo ALT**, así que una `PUB` **no** aparece ahí. Las dos
+> listas no se funden.
 
 **Consecuencia práctica para los cortes 3 a 7:** cada `PUB` de las tablas de §3
 es una decisión que retira del mercado a toda propiedad que no tenga ese dato.

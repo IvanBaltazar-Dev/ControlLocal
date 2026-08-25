@@ -1,5 +1,8 @@
 # Encargo — Corrección post-Corte 4 · `tipo_acceso` pasa a `PUB` — `V82`
 
+> **HISTÓRICO — CERRADO.** Esta corrección quedó absorbida por el cierre
+> definitivo de Corte 4 en `795ffbf`; no es una instrucción para abrir Corte 5.
+
 **Congelado por CONTROL el 2026-08-24**, por decisión del titular tomada tras el
 cierre del Corte 4.
 

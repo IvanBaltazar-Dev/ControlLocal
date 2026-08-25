@@ -117,22 +117,47 @@ por su propietario hasta la firma. Colapsarlas perdería una de las dos.
 
 ---
 
-## 5. La exigencia queda en `OPC`, y no es cautela: es lo que acaba de aprenderse
+## 5. La exigencia queda en `OPC` — ⚠️ **el argumento está DEROGADO; la conclusión se mantiene por otra razón**
 
-La auditoría propone `estado_ocupacion` en **PUB** para `T`.
+> **DEROGADO POR MEDICIÓN el 2026-08-25**, en el preflight del Corte 5. Lo que
+> sigue en letra pequeña se escribió el 2026-08-24 sobre un estado del cable que
+> **dejó de ser cierto una hora después**, en el commit `35cf09c` (2026-08-24
+> 16:51), y este documento no se actualizó.
+>
+> **Lo falso:** «hoy ninguna superficie de lectura reporta una clave `PUB` de la
+> PROPIEDAD». Medido contra el árbol:
+> `PropiedadResponse.faltanParaPublicar` (`PropiedadUniversalDtos.java`) se
+> alimenta de `AtributoPropiedadRepository.clavesQueImpidenPublicar`, que filtra
+> `exigencia in ('ALT','PUB')` **sobre sujeto PROPIEDAD**; Angular lo pinta en
+> `propiedad-detail.html`; y `CatalogoQueHablaIntegrationTest` exige que
+> `zonificacion` —clave de la PROPIEDAD— aparezca ahí. La superficie existe, y
+> con ella **la razón que aquí se daba para no sembrar `PUB` ya no existe**.
+>
+> **Lo que se mantiene:** `estado_ocupacion` nace **`OPC` en los siete**. Ya no
+> por cautela ante un bloqueo mudo, sino **por decisión del titular** —D-1 del
+> encargo del Corte 5, subtanda 5A: la exigencia `PUB` de esta tanda se reserva a
+> `agua_desague` y `energia_electrica` en `T`, y no se eleva nada más—. La
+> conclusión sobrevive a su argumento; el argumento no sobrevive a la medición.
+>
+> El texto original se conserva abajo como **registro histórico**, no como
+> estado actual.
 
-**Se siembra `OPC` en los siete**, y la promoción a PUB queda pendiente de que
-exista la superficie que reporta las `PUB` faltantes.
+**Registro histórico — escrito el 2026-08-24, caducado el mismo día:**
 
-Razón, medida hace horas: `V82` dejó demostrado que **hoy ninguna superficie de
-lectura reporta una clave `PUB` de la PROPIEDAD** —`atributosQueFaltan` sólo
-lleva `ALT`, y `faltanParaPublicar` es del sujeto ENCARGO y por el guard 2.5 de
-`V78` no puede llevar una clave de la PROPIEDAD—. Sembrar una `PUB` ahora
-repetiría exactamente el problema que `V82` vino a corregir: un bloqueo real que
-**sólo se descubre chocando contra él**.
-
-Esa promoción va **después** del corte que expone las `PUB` faltantes junto a las
-`ALT` (§2.5 ter de `pendientes-brox.md`), no antes.
+> La auditoría propone `estado_ocupacion` en **PUB** para `T`.
+>
+> **Se siembra `OPC` en los siete**, y la promoción a PUB queda pendiente de que
+> exista la superficie que reporta las `PUB` faltantes.
+>
+> Razón, medida hace horas: `V82` dejó demostrado que **hoy ninguna superficie de
+> lectura reporta una clave `PUB` de la PROPIEDAD** —`atributosQueFaltan` sólo
+> lleva `ALT`, y `faltanParaPublicar` es del sujeto ENCARGO y por el guard 2.5 de
+> `V78` no puede llevar una clave de la PROPIEDAD—. Sembrar una `PUB` ahora
+> repetiría exactamente el problema que `V82` vino a corregir: un bloqueo real que
+> **sólo se descubre chocando contra él**.
+>
+> Esa promoción va **después** del corte que expone las `PUB` faltantes junto a las
+> `ALT` (§2.5 ter de `pendientes-brox.md`), no antes.
 
 ---
 
@@ -141,8 +166,11 @@ Esa promoción va **después** del corte que expone las `PUB` faltantes junto a 
 Nada bloquea el Corte 5 con esta resolución. Pero dos cosas son suyas cuando
 llegue el momento:
 
-1. **Si `estado_ocupacion` debe subir a `PUB`** —y en qué tipos— una vez exista
-   el aviso. La auditoría lo pedía para `T`.
+1. ~~**Si `estado_ocupacion` debe subir a `PUB`** —y en qué tipos— una vez exista
+   el aviso. La auditoría lo pedía para `T`.~~ ✅ **RESUELTO el 2026-08-25 por el
+   titular (D-1 del Corte 5 · 5A)**: el aviso ya existe desde `35cf09c`, y aun
+   así **`estado_ocupacion` se queda `OPC` en los siete**. Las únicas `PUB` de la
+   tanda son `agua_desague` y `energia_electrica` en `T`.
 2. **Si `OCUPADO_POR_INQUILINO` debe abrir un dato más** (fecha de fin de
    contrato). Hoy no se propone: sería inventar una captura que nadie pidió, y el
    dato vive en el contrato.

@@ -252,7 +252,19 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > **`torre_bloque` se ejecuta aquí** pese a estar redactada en §3.8 (Terreno):
    > su `aplica_a` es `D` y un corte se define por tipo, no por número de sección.
 
-7. **Corte 4 / comercial (L, O, A)** — ✅ **CERRADO 2026-08-24, `V81`.**
+7. **Corte 4 / comercial (L, O, A)** — ✅ **CERRADO 2026-08-24, `V81`** — pero
+   **su cierre DEFINITIVO está pendiente**: ver el recuadro «4.P» al final de
+   este punto.
+
+   > **⚠ EL CIERRE DEFINITIVO DE CORTE 4 ESTÁ CANCELADO (2026-08-25).** El
+   > commit `6196aad` se anunció como `SHA_FINAL_CORTE_4` y **deja de serlo**:
+   > pasa a **`CANDIDATO_PRE_PROCEDENCIA`**. El titular abrió el microcorte
+   > **4.P · Procedencia granular del dato gobernado**
+   > (`encargo-4p-procedencia-del-dato-gobernado.md`) al comprobar que la
+   > procedencia se registra **del acto y no del dato**, y que **una edición o un
+   > borrado destruyen el pasado**. Corte 4 cierra —y sólo entonces se abre I0—
+   > con el SHA que produzca 4.P.
+
    **39 claves** para local, oficina y almacén: nivel de implementación, edificio
    y servicios comunes que el Corte 3 dejó fuera, instalaciones completas y el
    bloque logístico entero (muelles, puertas, piso, pallets, patio de maniobras).

@@ -235,16 +235,19 @@ física:
   `permitida = true` con faltantes conocidos**. Evidencia:
   `verificacion/evidencia/2026-08-24-senal-pub-visible.md`.
 
-  El diagnóstico original, tal como se midió: Al pasar a
-  `PUB`, `tipo_acceso` **desapareció de `atributosQueFaltan`** (que sólo lleva
-  `ALT`) y **no aparece en `faltanParaPublicar`**, que es del sujeto ENCARGO y
-  por el guard 2.5 de `V78` **no puede llevar una clave de la PROPIEDAD**. El
-  encargo de la corrección predijo «7 avisan / 14 no»; **lo medido es 21 → 0**.
-  La barrera sigue en pie —publicar devuelve 400— pero **ninguna superficie de
-  lectura lo dice**. Hoy **no existe ningún sitio donde una clave `PUB` de la
-  PROPIEDAD se reporte**: construirlo es **un corte propio**. El hueco queda
-  fijado en `CatalogoQueHablaIntegrationTest.elBloqueoNoSeAnunciaEnNingunaSuperficie`,
-  que se pondrá **rojo** el día que alguien lo construya — y esa es la señal.
+  El diagnóstico original, tal como se midió el 2026-08-24 **y antes de que el
+  corte de la señal lo resolviera** — su presente ya no es el de hoy:
+
+  > Al pasar a `PUB`, `tipo_acceso` **desapareció de `atributosQueFaltan`** (que
+  > sólo lleva `ALT`) y **no aparece en `faltanParaPublicar`**, que es del sujeto
+  > ENCARGO y por el guard 2.5 de `V78` **no puede llevar una clave de la
+  > PROPIEDAD**. El encargo de la corrección predijo «7 avisan / 14 no»; **lo
+  > medido es 21 → 0**. La barrera sigue en pie —publicar devuelve 400— pero
+  > **ninguna superficie de lectura lo dice**. Hoy **no existe ningún sitio donde
+  > una clave `PUB` de la PROPIEDAD se reporte**: construirlo es **un corte
+  > propio**. El hueco queda fijado en
+  > `CatalogoQueHablaIntegrationTest.elBloqueoNoSeAnunciaEnNingunaSuperficie`,
+  > que se pondrá **rojo** el día que alguien lo construya — y esa es la señal.
 - **El suelo del gate `.sql` sigue en 51 con 120 claves sembradas.** Es el
   límite honesto que su propio comentario declara desde `e8cfaa4`, y no es
   defecto de este corte — pero el margen ya es de **69 retiradas** antes de que

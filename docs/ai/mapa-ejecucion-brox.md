@@ -256,14 +256,51 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    **su cierre DEFINITIVO está pendiente**: ver el recuadro «4.P» al final de
    este punto.
 
-   > **⚠ EL CIERRE DEFINITIVO DE CORTE 4 ESTÁ CANCELADO (2026-08-25).** El
-   > commit `6196aad` se anunció como `SHA_FINAL_CORTE_4` y **deja de serlo**:
-   > pasa a **`CANDIDATO_PRE_PROCEDENCIA`**. El titular abrió el microcorte
+   > **⚠ EL CIERRE DEFINITIVO DE CORTE 4 ESTUVO CANCELADO (2026-08-25).** El
+   > commit `6196aad` se anunció como `SHA_FINAL_CORTE_4` y **dejó de serlo**:
+   > pasó a **`CANDIDATO_PRE_PROCEDENCIA`**. El titular abrió el microcorte
    > **4.P · Procedencia granular del dato gobernado**
    > (`encargo-4p-procedencia-del-dato-gobernado.md`) al comprobar que la
    > procedencia se registra **del acto y no del dato**, y que **una edición o un
-   > borrado destruyen el pasado**. Corte 4 cierra —y sólo entonces se abre I0—
-   > con el SHA que produzca 4.P.
+   > borrado destruyen el pasado**.
+
+   > **4.P · CERRADO 2026-08-25 · `V83` · aprobado en la CUARTA vuelta
+   > (`9a7afb3`).** Tabla propia **append-only** (`rastro_valor_gobernado` +
+   > `rastro_valor_opcion`), direccionada por
+   > **`(organizacion, sujeto, id_agregado, clave)`** y **nunca** por el `id` de la
+   > fila vigente — que es lo que mete las **cinco** superficies en un mecanismo,
+   > incluidas las cuatro claves `ESTRUCTURAL`, que **no crean fila**. `naturaleza`
+   > **opcional por valor** (`DECLARADO`/`OBSERVADO`/`INFERIDO`), **independiente**
+   > del canal, y **`NULL` no es un cuarto valor**: es que **no consta cómo se
+   > obtuvo**, frente a `INFERIDO`, que sí lo dice.
+   >
+   > **Frontera de garantía en `V83`**: antes puede haber legado sin linaje;
+   > **después, una escritura gobernada sin linaje es defecto**. El legado **no
+   > recibe procedencia inventada** — las 70 filas de `V48` se quedaron **sin
+   > génesis** porque su **canal** no es demostrable, y sólo se sembraron **6**
+   > con evento correlacionable único.
+   >
+   > **Las tres asimetrías que destapó, todas cerradas y verificadas por el
+   > cable:** `ubicacion.piso` escribía un valor gobernado **sin linaje** por la
+   > única puerta que usa el producto · el mismo dato viajaba **dos veces** por el
+   > cable y el Core resolvía **en silencio por orden de escritura** · y el **alta
+   > aceptaba lo que la edición rechazaba**, dejando un dato que entraba y **ya no
+   > se podía corregir** — esta última **viva desde antes de 4.P**.
+   >
+   > **Y un defecto de pérdida de datos, anterior y silencioso:** reescribir un
+   > `LISTA_MULTIPLE` perdía el elemento que sobrevivía al cambio
+   > (`{CASETA_24H, CAMARAS_CCTV}` → `{CAMARAS_CCTV, CONTROL_DE_ACCESO}` dejaba
+   > **`{CONTROL_DE_ACCESO}`**). Salió por exigir **historias reales** en vez de
+   > tests verdes.
+   >
+   > **Cada gate se vio morder con el defecto exacto que impide** —referencia a
+   > método, llamada normal, quinto concepto canónico, retirada fantasma,
+   > conservación del multivalor, pérdida de una guarda—, porque un gate que no ve
+   > el defecto **es peor que el defecto**. Evidencia:
+   > `verificacion/evidencia/2026-08-25-4p-procedencia.md`; su **§8 bis** lleva la
+   > lección de método que más se repitió: **barrer donde esperas encontrarlo en
+   > vez de preguntar dónde puede vivir esa clase de cosa**, y que **el control
+   > positivo no protege de eso: pasa trivialmente sobre el universo equivocado**.
 
    **39 claves** para local, oficina y almacén: nivel de implementación, edificio
    y servicios comunes que el Corte 3 dejó fuera, instalaciones completas y el

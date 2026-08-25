@@ -487,10 +487,22 @@ demostrar que mis dos commits equivalen al *squash*. Verificado aquí:
 ```
 git cat-file -t dc54931          -> commit
 dc54931 tree                     -> 9a6478ae14a030e19a766d867b1be9b375588cb6
-HEAD^{tree}                      -> 9a6478ae14a030e19a766d867b1be9b375588cb6   IDENTICOS
+46f770c^{tree}                   -> 9a6478ae14a030e19a766d867b1be9b375588cb6   IDENTICOS
 git for-each-ref --contains      -> (ninguna referencia)
 git fsck  ->  34 objetos colgantes, 6 de ellos commits; dc54931 es uno
 ```
+
+> **Corregido por CONTROL al cerrar.** Estas dos líneas decían `HEAD^{tree}`, y
+> era cierto al escribirlas —`HEAD` era entonces `46f770c`—, pero **el propio
+> commit que las introdujo las dejó obsoletas**: la vuelta siguiente cambió dos
+> ficheros y `HEAD^{tree}` pasó a ser otro. `9a6478a` es el árbol de **`46f770c`**,
+> que es el candidato cuya equivalencia con el *squash* se demostraba.
+>
+> Es inerte —habla de un objeto colgante, recogible por `gc`, y todos los hechos
+> sustantivos son correctos—, pero **se fija el commit en vez de la referencia
+> móvil**: es la misma clase de afirmación que envejece sola que este bloque lleva
+> siete rondas corrigiendo, y la misma razón por la que las comprobaciones del
+> gate pasaron a nombrarse en vez de numerarse.
 
 **Sin referencias: lo recoge el `gc` y no hay que hacer nada.** Se anota porque un
 commit colgante con un árbol idéntico al de `HEAD` es justo la clase de cosa que

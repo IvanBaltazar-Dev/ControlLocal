@@ -898,16 +898,27 @@ comparaciones de estado dentro de Angular y 51 migas de pan escritas a mano.
 
 ## Qué gobierna, y qué no
 
-El orden vigente sale de estas fuentes, cada una con un papel distinto:
+El orden vigente sale **solo** de tres sitios:
 
 | Documento | Responde |
 |---|---|
 | `mapa-ejecucion-brox.md` (este) | dónde estamos |
 | `checklist-captura-moat-e-inteligencia-inmobiliaria.md` | qué falta para cerrar la etapa |
-| `pendientes-brox.md` | inventario transversal de lo que queda |
-| `auditoria-profundidad-inmobiliaria.md` | cortes y profundidad del catálogo |
 | `decision-*.md` (D-E…) | decisiones funcionales concretas |
-| `i0-industrializacion-brox.md` | protocolo documental y de ejecución vigente |
+
+> **Esta lista se amplió a cinco el 2026-08-25 y se ha devuelto a tres.** La
+> ampliación —añadir `pendientes-brox.md`, `auditoria-profundidad-inmobiliaria.md`
+> e `i0-industrializacion-brox.md` a la lista de lo que **gobierna**— es un
+> **cambio de autoridad documental**, contradice `CLAUDE.md` («only three
+> documents govern») y **nadie la decidió**: se coló dentro de un corte de
+> catálogo. Queda **como decisión pendiente del titular**, no resuelta por vía de
+> los hechos.
+>
+> Que no gobiernen no significa que no se lean: `pendientes-brox.md` es el
+> inventario transversal de lo que queda, `auditoria-profundidad-inmobiliaria.md`
+> es la fuente de los cortes de catálogo e `i0-industrializacion-brox.md` es el
+> protocolo de ejecución en curso. Los tres están enlazados desde la cabecera de
+> este mapa. Lo que se discute es si **mandan**, y eso lo decide el titular.
 
 Todo lo demás es **historia**. Los documentos del mundo legado —GlassFish,
 Blazor, "contrato congelado", corte de la v1— llevan una marca

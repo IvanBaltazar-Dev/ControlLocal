@@ -11,6 +11,7 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +121,24 @@ public class AtributosDeEncargo {
         for (CatalogoAtributo atributo : aplicablesA(idOrganizacion, donde)) {
             porClave.putIfAbsent(atributo.getClave(), atributo);
         }
+        return porClave;
+    }
+
+    /**
+     * <b>Las definiciones para LEER lo pactado</b> — gemela de
+     * {@code AtributosGobernados.definicionesParaLeer} (Corte 5 · 5A).
+     *
+     * <p>Existe por simetria y no por necesidad de hoy: la clave que 5A retira
+     * es de la PROPIEDAD. Pero retirar una condicion del ENCARGO es la misma
+     * operacion sobre la otra mitad del catalogo, y el defecto seria identico
+     * —lo pactado en un encargo cerrado se leeria como clave desnuda—. Dejar
+     * arreglada una sola mitad es como se fabrica una asimetria.
+     */
+    public Map<String, CatalogoAtributo> definicionesParaLeer(long idOrganizacion,
+                                                              Comercializacion donde,
+                                                              Collection<String> clavesLeidas) {
+        Map<String, CatalogoAtributo> porClave = definicionesDe(idOrganizacion, donde);
+        AtributosGobernados.completarRetiradas(catalogo, idOrganizacion, porClave, clavesLeidas);
         return porClave;
     }
 

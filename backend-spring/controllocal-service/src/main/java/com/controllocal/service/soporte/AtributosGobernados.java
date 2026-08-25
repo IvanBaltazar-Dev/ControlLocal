@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -676,6 +677,67 @@ public class AtributosGobernados {
             porClave.putIfAbsent(atributo.getClave(), atributo);
         }
         return porClave;
+    }
+
+    /**
+     * <b>Las definiciones para LEER lo que ya esta escrito</b> (Corte 5 · 5A).
+     *
+     * <p>Parte de lo aplicable —que es lo que se pregunta— y <b>completa</b> las
+     * claves que tienen valor y ya no se preguntan: las retiradas
+     * ({@code activo = false}) y las que dejaron de aplicar a este tipo.
+     *
+     * <h2>La asimetria es deliberada, y es la que faltaba</h2>
+     * <pre>
+     *   CAPTURA (alta y edicion) -> {@link #aplicablesA}: solo lo ACTIVO
+     *   LECTURA (la ficha)       -> esto: tambien lo RETIRADO
+     * </pre>
+     *
+     * <p>{@code V84} retira {@code servicios_disponibles} conservando sus 322
+     * valores, y hasta 5A la ficha los mostraba con <b>la clave desnuda</b>
+     * —{@code rotulo = "servicios_disponibles"}, {@code tipoDato = null},
+     * colocados al final de la lista— porque la definicion ya no llegaba. El
+     * valor se conservaba y la <b>lectura</b> se degradaba: exactamente el
+     * defecto que este repositorio ya nombra en {@code propiedad-detail.html}
+     * («falta metraje_total», que no es una frase para nadie).
+     *
+     * <p>Retirar la pregunta no puede degradar la respuesta. Y no reabre ninguna
+     * puerta de escritura: {@link #aplicablesA} sigue filtrando por
+     * {@code activo}, y el trigger {@code exigir_atributo_gobernado} tambien.
+     *
+     * @param clavesLeidas las claves que el lector encontro escritas
+     */
+    public Map<String, CatalogoAtributo> definicionesParaLeer(long idOrganizacion,
+                                                              String tipoPropiedad,
+                                                              Collection<String> clavesLeidas) {
+        Map<String, CatalogoAtributo> porClave = definicionesDe(idOrganizacion, tipoPropiedad);
+        completarRetiradas(catalogo, idOrganizacion, porClave, clavesLeidas);
+        return porClave;
+    }
+
+    /**
+     * Rellena las claves que la consulta de captura no resolvio, preguntando al
+     * catalogo <b>sin</b> el filtro de {@code activo}.
+     *
+     * <p>Es {@code static} y recibe el repositorio porque los dos sujetos
+     * —PROPIEDAD y ENCARGO— tienen el mismo problema y no puede resolverse dos
+     * veces: dos lectores del mismo dato divergen, que es la regla que sostiene
+     * {@code UnSoloLectorPorSujetoTest}. Cada enrutador sigue conociendo un solo
+     * sujeto; lo que se comparte es la consulta al catalogo, que no tiene
+     * sujeto.
+     */
+    static void completarRetiradas(CatalogoAtributoRepository catalogo, long idOrganizacion,
+                                   Map<String, CatalogoAtributo> porClave,
+                                   Collection<String> clavesLeidas) {
+        List<String> faltan = clavesLeidas.stream()
+                .filter(clave -> !porClave.containsKey(clave))
+                .distinct()
+                .toList();
+        if (faltan.isEmpty()) {
+            return;
+        }
+        for (CatalogoAtributo definicion : catalogo.paraLeer(idOrganizacion, faltan)) {
+            porClave.putIfAbsent(definicion.getClave(), definicion);
+        }
     }
 
     /** El valor de un atributo tal como se muestra: sin ceros de mas ni "true". */

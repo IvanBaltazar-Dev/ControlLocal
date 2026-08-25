@@ -412,7 +412,7 @@ sujeto.
 | `uso` *(columna, no atributo)* | `uso_admitido_por_titular` | existe |
 | `mascotas_reglamento` | `mascotas_aceptadas` | ✅ **cubierto** — `V80`, en **C y D** |
 | `nivel_implementacion` | `se_entrega_implementado` | ✅ **cubierto** — `V81` (Corte 4, 2026-08-24), en **A, L y O** |
-| `estado_ocupacion` | `entrega_desocupado` | **falta** — Corte 5 · 5A |
+| `estado_ocupacion` | `entrega_desocupado` | ✅ **cubierto** — `V84` (Corte 5 · 5A, 2026-08-25), **OPC en los siete** tipos, que son exactamente aquellos en los que la condición se pacta desde `V77` |
 | `lote_minimo_normativo` | `acepta_venta_fraccionada` | **falta** — Corte 5 |
 
 Que falte el lado PROPIEDAD **no impide sembrar el lado ENCARGO**: la condición
@@ -882,6 +882,15 @@ vieja. Es un corte propio.
 - **Evidencia**: `verificacion/evidencia/2026-08-24-corte-4-comercial.md`.
 
 ### **Corte 5 — Terreno y ocupación transversal** · §3.8
+
+> **🟡 EN CURSO. La subtanda 5A está APLICADA (`V84`, 2026-08-25)**: nacen
+> `estado_ocupacion` (OPC en los siete), `agua_desague` y `energia_electrica`
+> (PUB en `T`), `gas` gana `CON_FACTIBILIDAD_APROBADA` sin cambiar de concepto y
+> `servicios_disponibles` queda `activo = false` conservando sus valores. Lo que
+> sigue abajo es **el plan del corte**, y la parte de 5A ya no es futuro: se lee
+> como lo que se hizo. **5B no está abierta** (D-4). Evidencia:
+> `verificacion/evidencia/2026-08-25-corte-5a-ocupacion-y-servicios.md`.
+
 Parámetros urbanísticos, servicios con su tercer estado, vía y ocupación. Cierra
 la duplicidad `metraje_total`/`area_terreno` para T. `estado_ocupacion` no queda
 limitado a T y C: su condición `entrega_desocupado` se pacta en los siete tipos,
@@ -937,7 +946,7 @@ V81  ✅  4   el activo comercial descrito (39 claves L, O, A + gas y agua calie
 V82  ✅  4   tipo_acceso impide publicar, no registrar (ALT -> PUB)
 V83  ✅  4.P procedencia granular del dato gobernado
           1   mitad de PROFUNDIDAD  ⬜  <- sigue APLAZADA, sin migracion asignada
-V84      5   terreno y ocupacion transversal  ⬜  <- preparado, no abierto
+V84  🟡  5A  la ocupacion y los servicios con vocabulario  <- aplicada; 5B sin abrir
 ```
 
 > **El Corte 4 estrena la primera `ALT` de campo del sistema.** Las diez que

@@ -373,7 +373,11 @@ UPDATE catalogo_atributo_opcion o
 --
 -- Asi que se clasifica cadena a cadena, con una lista explicita y corta, igual
 -- que el `codigo IN (...)` de V14, V76 y V83. Lo que no este en el acta NO se
--- adivina: se cuenta como no inventariado, que es una forma de FALTANTE.
+-- adivina y TAMPOCO se cuenta en silencio: la asercion 8.8 PARA la migracion y
+-- NOMBRA las cadenas. Contarlas como "no inventariadas" y seguir --que es lo
+-- que hacia la primera version de este bloque-- convertia la promesa "ningun
+-- valor sin destino" en una tautologia: el clasificador siempre clasifica el
+-- 100 % porque el veredicto por defecto lo pone el propio `coalesce`.
 --
 -- ---------------------------------------------------------------------
 -- LO QUE SE MIDIO ANTES DE ESCRIBIR ESTO (2026-08-25)
@@ -399,10 +403,13 @@ UPDATE catalogo_atributo_opcion o
 -- => Se conservan integros donde estan --nadie borra una fila-- y se CUENTAN.
 -- Lo ambiguo permanece FALTANTE. El dato se recupera visitando, no traduciendo.
 --
--- LA INVARIANTE SE ESCRIBE COMO INVARIANTE Y **JAMAS COMO `= 0`**: en
+-- EL TAMANO DEL LEGADO SE ESCRIBE COMO INVARIANTE Y **JAMAS COMO `= 0`**: en
 -- `controllocal_dev` hay cero filas y en `controllocal_repositorios` hay 322
--- porque un fixture las escribe en cada corrida. Una asercion `= 0` pasaria en
--- dev y mentiria en pruebas.
+-- porque un fixture las escribe en cada corrida. Una asercion "hay 0 filas de
+-- legado" pasaria en dev y mentiria en pruebas.
+--
+-- Lo que SI se escribe como cifra exacta es otra cosa: que ninguna de esas
+-- filas --sean 0 o 322-- lleve una cadena fuera del acta (asercion 8.8).
 -- ---------------------------------------------------------------------
 CREATE TEMP TABLE v84_reparto AS
 SELECT a.id_atributo_propiedad,
@@ -541,6 +548,7 @@ DECLARE
     recuperables    BIGINT;
     ambiguos        BIGINT;
     no_inventar     BIGINT;
+    sin_inventariar TEXT;
     con_linaje      BIGINT;
     previstos       BIGINT;
     escritos        BIGINT;
@@ -600,11 +608,20 @@ BEGIN
     --     por el universo vacio: primero los tipos DESCUBIERTOS, y despues
     --     cuantos quedan CUBIERTOS -- si `entrega_desocupado` desapareciera del
     --     catalogo, la primera consulta daria cero huecos y la segunda lo caza.
+    --
+    --     LAS DOS MITADES MIRAN EL CATALOGO DEL SISTEMA, y eso es una correccion
+    --     de la primera version de esta migracion: sin `organizacion_id IS NULL`,
+    --     una organizacion que declarase su propia `estado_ocupacion` habria
+    --     tapado el hueco de la del sistema -- el par saldria cubierto para todos
+    --     leyendo una clave que solo existe en un tenant. La asercion 8.2, que ya
+    --     filtraba, quedaba entonces en desacuerdo con esta.
     SELECT string_agg(DISTINCT o.tipo_propiedad, ', ' ORDER BY o.tipo_propiedad) INTO sin_hecho
       FROM catalogo_atributo cond
       JOIN catalogo_atributo_operacion o ON o.id_catalogo_atributo = cond.id_catalogo_atributo
       JOIN catalogo_atributo hecho ON hecho.clave = 'estado_ocupacion' AND hecho.activo
+                                  AND hecho.organizacion_id IS NULL
      WHERE cond.clave = 'entrega_desocupado' AND cond.activo
+       AND cond.organizacion_id IS NULL
        AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
                         WHERE t.id_catalogo_atributo = hecho.id_catalogo_atributo
                           AND t.tipo_propiedad = o.tipo_propiedad);
@@ -619,9 +636,11 @@ BEGIN
       FROM catalogo_atributo cond
       JOIN catalogo_atributo_operacion o ON o.id_catalogo_atributo = cond.id_catalogo_atributo
       JOIN catalogo_atributo hecho ON hecho.clave = 'estado_ocupacion' AND hecho.activo
+                                  AND hecho.organizacion_id IS NULL
       JOIN catalogo_atributo_tipo t ON t.id_catalogo_atributo = hecho.id_catalogo_atributo
                                    AND t.tipo_propiedad = o.tipo_propiedad
-     WHERE cond.clave = 'entrega_desocupado' AND cond.activo;
+     WHERE cond.clave = 'entrega_desocupado' AND cond.activo
+       AND cond.organizacion_id IS NULL;
     IF cubiertos <> 7 THEN
         RAISE EXCEPTION
             'V84: el par estado_ocupacion/entrega_desocupado esta cubierto en % tipos y tienen '
@@ -733,12 +752,30 @@ BEGIN
         RAISE EXCEPTION 'V84: se perdio la aplicabilidad de servicios_disponibles a T.';
     END IF;
 
-    -- 8.8 EL LEGADO: ningun valor sin destino y sin declararse FALTANTE.
-    --     INVARIANTE, nunca `= 0`: en dev hay cero filas y en la base de pruebas
-    --     un fixture escribe 322 en cada corrida. Un `= 0` pasaria en dev y
-    --     mentiria en pruebas.
+    -- 8.8 EL LEGADO: NINGUNA CADENA SE QUEDA SIN INVENTARIAR.
+    --
+    -- LA PRIMERA VERSION DE ESTE BLOQUE ERA VACUA, y la auditoria lo demostro.
+    -- Comparaba `total_legado` con `clasificado`, pero `v84_reparto` se
+    -- construye con un LEFT JOIN sobre ESE MISMO conjunto y un
+    -- `coalesce(veredicto, 'NO_INVENTARIADO')`: clasifica el 100 % de las filas
+    -- por construccion, incluso con el acta vacia. Insertando 'sin agua, con
+    -- luz' --el contraejemplo que cita la cabecera del bloque 5-- la igualdad
+    -- seguia siendo cierta y la migracion pasaba.
+    --
+    -- La invariante de verdad se asevera sobre el UNIVERSO PREVIO --la foto del
+    -- bloque 0-- y sobre lo que el acta NO cubre: toda cadena que exista en la
+    -- base tiene que estar EN EL ACTA. Una que no lo este no se adivina, y
+    -- tampoco se deja pasar contada: la migracion PARA y la NOMBRA, para que
+    -- quien escriba el acta decida si es recuperable o ambigua. Eso, y no un
+    -- recuento, es lo que significa "ningun valor sin destino".
+    --
+    -- `no_inventar = 0` es una cifra legitima y no contradice la regla de no
+    -- escribir `= 0`: lo prohibido era afirmar que hay CERO FILAS DE LEGADO --en
+    -- dev seria cierto y en la base de pruebas, con 322 filas, mentira--. Aqui
+    -- se afirma otra cosa distinta: que ninguna de las que haya, sean 0 o 322,
+    -- cayo fuera del acta.
     SELECT count(*) INTO total_legado
-      FROM atributo_propiedad WHERE clave = 'servicios_disponibles';
+      FROM v84_valores_antes WHERE clave = 'servicios_disponibles';
     SELECT count(*),
            count(*) FILTER (WHERE veredicto = 'RECUPERABLE'),
            count(*) FILTER (WHERE veredicto = 'AMBIGUO'),
@@ -746,10 +783,26 @@ BEGIN
       INTO clasificado, recuperables, ambiguos, no_inventar
       FROM v84_reparto;
 
+    IF no_inventar > 0 THEN
+        SELECT string_agg(x.texto, ' | ' ORDER BY x.texto) INTO sin_inventariar
+          FROM (SELECT DISTINCT coalesce(quote_literal(valor_texto), '(sin texto)') AS texto
+                  FROM v84_reparto WHERE veredicto = 'NO_INVENTARIADO') AS x;
+        RAISE EXCEPTION
+            'V84: % valores de servicios_disponibles llevan cadenas que el acta no inventaria: '
+            '%. No se traducen por parecido ni se cuentan como FALTANTE en silencio: se anaden '
+            'al acta del bloque 5 --con su veredicto y su motivo-- o se explica por que no cabe '
+            'ninguno. Un valor sin destino es un dato que ni se migro ni se declaro.',
+            no_inventar, sin_inventariar;
+    END IF;
+
+    -- Y el acta se pronuncio sobre TODO el universo previo, no sobre una parte.
+    -- Compara dos fuentes distintas --la foto del bloque 0 y el clasificador--,
+    -- asi que ya no es una identidad: caza una fila de legado aparecida o
+    -- desaparecida entre la foto y el reparto.
     IF clasificado <> total_legado THEN
         RAISE EXCEPTION
-            'V84: hay % valores de servicios_disponibles y el acta clasifico %. Un valor sin '
-            'clasificar es un dato que ni se migro ni se declaro FALTANTE.',
+            'V84: la foto previa tiene % valores de servicios_disponibles y el acta se '
+            'pronuncio sobre %. El universo se movio mientras la migracion corria.',
             total_legado, clasificado;
     END IF;
     IF recuperables + ambiguos + no_inventar <> clasificado THEN

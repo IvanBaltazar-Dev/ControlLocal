@@ -1013,8 +1013,18 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // en absoluto: el lector sabia leerlos y este sitio no le preguntaba.
         // Dos lectores del mismo dato divergen, exactamente igual que dos
         // escritores.
-        Map<String, CatalogoAtributo> definiciones = gobierno.definicionesDe(idOrganizacion, tipo);
+        //
+        // Y la LECTURA resuelve tambien las claves RETIRADAS (Corte 5 · 5A). El
+        // catalogo de captura filtra `activo`, asi que en cuanto `V84` retiro
+        // `servicios_disponibles` sus 322 valores se seguian leyendo pero
+        // llegaban con la CLAVE DESNUDA —`rotulo = "servicios_disponibles"`,
+        // `tipoDato = null`, al final de la lista—. Conservar el valor y perder
+        // su nombre es conservar a medias: el broker lee la clave, y un
+        // `tipoDato` nulo ademas cambia lo que se pinta (el SPA decide con el si
+        // un booleano se dice «Si/No»). La CAPTURA sigue sin verla.
         ValoresGobernados leidos = lector.de(idOrganizacion, propiedad);
+        Map<String, CatalogoAtributo> definiciones =
+                gobierno.definicionesParaLeer(idOrganizacion, tipo, leidos.claves());
         List<AtributoFicha> valores = new ArrayList<>();
 
         for (String clave : leidos.claves()) {
@@ -1351,8 +1361,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         }
         Comercializacion donde = new Comercializacion(encargo.getId(), tipoPropiedad,
                 encargo.getMotivoOperacion());
+        // Con las RETIRADAS resueltas, igual que el bloque fisico: lo pactado en
+        // un encargo cerrado se sigue leyendo con su nombre aunque la condicion
+        // ya no se pacte (Corte 5 · 5A).
         Map<String, CatalogoAtributo> definiciones =
-                condiciones.definicionesDe(idOrganizacion, donde);
+                condiciones.definicionesParaLeer(idOrganizacion, donde, pactadas.claves());
         List<AtributoFicha> valores = new ArrayList<>();
         for (String clave : pactadas.claves()) {
             CatalogoAtributo definicion = definiciones.get(clave);

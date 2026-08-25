@@ -74,9 +74,10 @@ que faltaban de verdad, y sigue abierto.
 ## 2. Profundidad inmobiliaria — lo que queda de los cortes de catálogo
 
 Fuente: `auditoria-profundidad-inmobiliaria.md`. La cadena real de migraciones y
-lo que ocupó cada una está en su §6. **La siguiente migración de catálogo será
-`V84`**, cuando se congele el encargo del Corte 5; `V83` corresponde al microcorte
-4.P de procedencia.
+lo que ocupó cada una está en su §6. **`V84` ya está aplicada** — Corte 5 ·
+subtanda 5A, 2026-08-25, pendiente de auditoría de CONTROL —; `V83` corresponde
+al microcorte 4.P de procedencia. La siguiente migración de catálogo será `V85`,
+y no se abre hasta que 5A esté auditada (D-4).
 
 ### 2.1 Corte 1 · mitad de PROFUNDIDAD ⬜ — APLAZADO
 
@@ -138,36 +139,45 @@ propio bloqueo de dato:
 | `zonificacion` TEXTO → **LISTA** | los 584 valores mapearían al 100 %; **el problema es el vocabulario nuevo**: derivarlo de lo observado daría 4 opciones y Lima tiene decenas (CV, CM, CE, RDB, I1–I4, OU, ZRP, ZTE…) | cuando salga de los planos de zonificación |
 | `banos` DECIMAL → **ENTERO** + `medios_banos` | ~~`medios_banos` es clave nueva~~ ✅ **nació en `V80`** (Corte 3, 2026-08-24), y con él **la convención de `banos` ya está publicada en su `ayuda`** — un baño completo cuenta 1, un medio baño sin ducha cuenta 0.5. Era la precondición que faltaba: la migración de datos es determinista (379 de 406 valores son `.5` exactos) pero descansaba en una convención que nadie había escrito. **El estrechamiento en sí sigue pendiente** | corte propio, ya **desbloqueado** |
 
-### 2.3 `servicios_disponibles` — una LISTA muda
+### 2.3 `servicios_disponibles` — la última LISTA muda · ✅ **RETIRADA en `V84`** (2026-08-25)
 
-`tipo_dato='LISTA'` con **cero opciones sembradas**. El trigger sólo valida
-pertenencia *si la clave tiene vocabulario*, así que acepta cualquier cadena; y
-`MotorDeCaptura.controlDe` deriva el control de si hay opciones, así que la
-dibuja como **texto libre**. El dato entra y no compara con nada.
+> **Esta sección estaba escrita en presente y dejó de ser cierta el mismo día en
+> que se implementó 5A.** Se reescribe en pasado y se conserva el diagnóstico,
+> porque explica *por qué* la clave sobrevivió muda durante cuatro cortes.
 
-- **No se le inventa vocabulario** ni se le cambia el tipo: es hecho de la
-  PROPIEDAD y está bien colocado.
-- Sus reemplazos se cierran en la **subtanda 5A del Corte 5** (`V84`), y sólo
-  entonces pasa a `activo = false`. Retirarla antes dejaría varios cortes en los
-  que BROX deja de capturar un hecho que hoy captura. **Destino fijado por el
-  titular el 2026-08-25** (D-1 y D-2 del encargo del Corte 5):
-  - `agua_desague` nace LISTA con `CONECTADO` / `CON_FACTIBILIDAD_APROBADA` /
-    `SIN_SERVICIO`, **`PUB` en `T`** y `OPC` en `A`;
-  - `energia_electrica` nace con el mismo vocabulario, **`PUB` en `T`**;
-  - `gas` **conserva su concepto, su clave, su tipo y su aplicabilidad** —no se
-    migra ni se reinterpreta— y sólo **gana** la opción
-    `CON_FACTIBILIDAD_APROBADA` junto a la que ya tenía, `RED_EN_LA_VIA`. Son
-    cosas distintas: red en la vía es infraestructura física; factibilidad
-    aprobada es un documento de la concesionaria. **No se extiende `gas` a `X`**
-    en este corte.
-  - El reparto del legado va **después** de que existan los reemplazos, con
-    linaje de procedencia (`V83`); lo ambiguo queda **FALTANTE** y se cuenta.
-    `SIN_SERVICIO` **no** es la traducción de «no lo mencionó».
-- **Y falta su guarda gemela**: la comprobación «ninguna LISTA sin vocabulario»
-  que V77 escribió sólo mira `sujeto = 'ENCARGO'`. La PROPIEDAD no la tiene — por
-  eso esta clave sobrevivió muda. Extenderla exige antes darle vocabulario, así
-  que **van en la misma tanda**: `V84` la extiende, y **sólo después** de retirar
-  `servicios_disponibles`, o abortaría contra su propia clave.
+**Lo que era** (hasta `V84`): `tipo_dato='LISTA'` con **cero opciones
+sembradas**. El trigger sólo valida pertenencia *si la clave tiene vocabulario*,
+así que aceptaba cualquier cadena; y `MotorDeCaptura.controlDe` deriva el control
+de si hay opciones, así que la dibujaba como **texto libre**. El dato entraba y no
+comparaba con nada.
+
+**Lo que se hizo** (`V84`, subtanda 5A; D-1 y D-2 del titular, 2026-08-25):
+
+- **No se le inventó vocabulario** ni se le cambió el tipo. Se **retiró**:
+  `activo = false`, nunca `DELETE`. La clave sigue existiendo, su fila de
+  aplicabilidad `T/OPC` también, y **sus valores se conservan y se siguen
+  leyendo** — incluidos rótulo y tipo, que la lectura resuelve aunque la clave
+  esté inactiva. Lo que se cerró es la **escritura**.
+- `agua_desague` nació LISTA con `CONECTADO` / `CON_FACTIBILIDAD_APROBADA` /
+  `SIN_SERVICIO`, **`PUB` en `T`** y `OPC` en `A`.
+- `energia_electrica` nació con el mismo vocabulario, **`PUB` en `T`**.
+- `gas` **conservó su concepto, su clave, su tipo y su aplicabilidad** —no se
+  migró ni se reinterpretó— y sólo **ganó** la opción `CON_FACTIBILIDAD_APROBADA`
+  junto a la que ya tenía, `RED_EN_LA_VIA`. Son cosas distintas: red en la vía es
+  infraestructura física; factibilidad aprobada es un documento de la
+  concesionaria. **No se extendió `gas` a `X`**.
+- El reparto del legado fue **después** de que existieran los reemplazos, con
+  linaje de procedencia (`V83`). **No se tradujo nada**: las dos cadenas medidas
+  —322 filas en la base de pruebas, 0 en `dev`— son **ambiguas**, porque ninguna
+  dice si el servicio está conectado o sólo tiene factibilidad aprobada, que es
+  justo la distinción que las claves nuevas existen para capturar. `SIN_SERVICIO`
+  **no** es la traducción de «no lo mencionó». Y una cadena que el acta no
+  inventaríe **detiene la migración nombrándola**, en vez de contarse en silencio.
+- ✅ **Y su guarda gemela ya está puesta**: la comprobación «ninguna LISTA/
+  LISTA_MULTIPLE **activa** sin vocabulario», que `V77` escribió sólo para
+  `sujeto = 'ENCARGO'` —por eso esta clave sobrevivió muda—, se extendió a la
+  PROPIEDAD en la misma migración y **después** de la retirada, o habría abortado
+  contra su propia clave (comprobado: `EXIT=3` al invertir los bloques 6 y 7).
 
 ### 2.3 bis DEUDA ESTRUCTURAL · **doble autoridad de aplicabilidad** — bloquea declarar el Core estable
 
@@ -224,19 +234,49 @@ desaparece y la aplicabilidad es siempre explícita, o el booleano pasa a ser la
 ambos. Las tres son cambios de contrato del Core, y por eso no caben dentro de un
 corte de profundidad.
 
-### 2.4 Los hechos que faltan de un par deliberado — quedan **dos**
+### 2.3 ter DEUDA · el rechazo de una clave retirada llega al cliente como «duplicado»
+
+**Anotada el 2026-08-25**, encontrada auditando la conservación de 5A. **No entra
+en 5A**: es preexistente y no se arregla en el sitio, sino en el mapeo global de
+errores.
+
+Un `PUT /propiedades/{id}` con una clave **retirada** —o con cualquier otro valor
+que un trigger rechace— muere en `exigir_atributo_gobernado` con `SQLSTATE 23514`.
+Hibernate lo envuelve en `DataIntegrityViolationException` y
+`ManejadorErroresApi.unicidadViolada` lo traduce a **409 «Ya existe un registro
+con esos datos: un dato único está duplicado.»**
+
+Eso no es lo que pasó. No hay nada duplicado: hay una clave que ya no se captura,
+o un valor fuera de vocabulario. El cliente recibe un diagnóstico **falso**, y el
+agente que lo lee corrige lo que no está roto.
+
+- **Ruta**: `backend-spring/controllocal-web/src/main/java/com/controllocal/web/http/ManejadorErroresApi.java`
+  (líneas 102-110 y `mensajeDuplicado`, 152-164).
+- **Por qué no se toca aquí**: el handler está registrado para **toda**
+  `DataIntegrityViolationException` de la API — personas, documentos, correos,
+  comisiones—, así que separar «violación de UNIQUE» de «violación de CHECK o de
+  trigger» cambia el código de estado y el texto de **todos** los recursos, y hay
+  contratos y pruebas colgando de ellos. Es un corte propio, con su medición de
+  qué endpoints devuelven hoy 409 por esta vía.
+- **Lo que sí está probado en 5A**: que el rechazo **existe** —una clave retirada
+  no admite valores nuevos y el valor no se escribe—, en
+  `OcupacionYServiciosIntegrationTest.serviciosDisponiblesQuedoRetiradaYNoBorrada`.
+  Lo que falta es que el cliente sepa **por qué**.
+
+### 2.4 Los hechos que faltan de un par deliberado — queda **uno**
 
 El guard de pares vigila que un hecho y su condición no compartan sujeto, y V78
-añadió que el hecho no llegue menos lejos que su condición. Eran cuatro; **`V80` cerró el primero y `V81` el segundo**, y quedan **dos** —los
-dos del Corte 5—, donde el pacto sigue siendo el único sitio donde cabe la verdad
+añadió que el hecho no llegue menos lejos que su condición. Eran cuatro; **`V80`
+cerró el primero, `V81` el segundo y `V84` el tercero**, y queda **uno** —de la
+subtanda 5B—, donde el pacto sigue siendo el único sitio donde cabe la verdad
 física:
 
 | Hecho que falta | Su condición, que ya existe | Corte |
 |---|---|---|
 | ~~`mascotas_reglamento`~~ ✅ **HECHO 2026-08-24 · `V80`**, y nació en **C y D** | `mascotas_aceptadas` | ~~3~~ |
 | ~~`nivel_implementacion`~~ ✅ **HECHO 2026-08-24 · `V81`**, en **A, L y O** | `se_entrega_implementado` | ~~4~~ |
-| `estado_ocupacion` | `entrega_desocupado` | 5 |
-| `lote_minimo_normativo` | `acepta_venta_fraccionada` | 5 |
+| ~~`estado_ocupacion`~~ ✅ **HECHO 2026-08-25 · `V84`**, en **los siete** — que es exactamente donde se pacta su condición | `entrega_desocupado` | ~~5A~~ |
+| `lote_minimo_normativo` | `acepta_venta_fraccionada` | 5B |
 
 > Que falte el lado PROPIEDAD **no impedía sembrar el lado ENCARGO** —la
 > condición es cierta por sí sola— y por eso se hizo. Lo que hay que recordar al
@@ -621,6 +661,24 @@ para hacerlo.
 Pendiente: decidir un **ciclo largo** (todas las suites, sin nada más corriendo)
 y con qué frecuencia se ejecuta.
 
+### 7.1 DEUDA · nada compara el checksum aplicado con el del classpath
+
+**Anotada el 2026-08-25**, tras el hallazgo H1 de la auditoría de 5A.
+
+Flyway lee las migraciones **del classpath**, no del árbol de fuentes. Si se
+edita una migración y se reinicia el contenedor **sin `clean install`**, el jar
+conserva la versión anterior: la base se queda con el checksum de un fichero que
+ya no existe, y **nada avisa** — hasta el siguiente arranque con el jar bueno,
+que muere con `Migration checksum mismatch for migration version N`. Pasó
+exactamente eso con `V84` (evidencia
+`2026-08-25-corte-5a-ocupacion-y-servicios.md` §10).
+
+Hoy lo único que lo evita es **disciplina de runbook**. Lo que lo cerraría: una
+comprobación de arranque —o una prueba del gate— que lea el checksum resuelto de
+cada migración del classpath y lo compare con `flyway_schema_history`, fallando
+con el nombre de la versión desalineada. **No entra en un corte de catálogo**:
+toca el arranque de la aplicación, no el modelo.
+
 ---
 
 ## 8. Fuera de alcance declarado — que no vuelva a proponerse
@@ -693,7 +751,13 @@ explican el **porqué**, y CLAUDE.md ya avisa de que no gobiernan.
 `795ffbf`. El árbol está limpio y el cierre definitivo de Corte 4 ya está
 publicado.
 
-**La siguiente acción de la ruta es I0:** terminar la ordenación documental y
-dejar congelado el encargo de Corte 5 antes de abrir una migración `V84`.
+~~**La siguiente acción de la ruta es I0:** terminar la ordenación documental y
+dejar congelado el encargo de Corte 5 antes de abrir una migración `V84`.~~
+
+> **Superado el mismo 2026-08-25.** El titular congeló el encargo del Corte 5
+> (D-1…D-7) e I0 dejó de bloquearlo: **la subtanda 5A está implementada y `V84`
+> aplicada**, pendiente de la auditoría de CONTROL. I0 sigue en curso en
+> paralelo (`i0-industrializacion-brox.md`).
+
 La rotación del secreto JWT (§0.2) sigue siendo una prioridad de producción,
 pero no es el siguiente corte de catálogo ni se mezcla con esta preparación.

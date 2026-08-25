@@ -759,13 +759,21 @@ SELECT pg_temp.comprobar('4P las transcripciones documentadas nombran su fuente'
 -- encargo. Se mide el hueco Y la cobertura, porque solo con el hueco esto
 -- saldria verde el dia que `entrega_desocupado` desapareciera del catalogo: cero
 -- descubiertos sobre un universo vacio.
+--
+-- LAS TRES MIRAN EL MISMO UNIVERSO: el catalogo DEL SISTEMA. La tercera ya lo
+-- filtraba y las dos primeras no, y esa asimetria tenia consecuencia: una
+-- organizacion que declarara su propia `estado_ocupacion` habria tapado el hueco
+-- de la del sistema y las dos primeras habrian salido verdes sobre una clave que
+-- solo existe en un tenant.
 SELECT pg_temp.comprobar('5A el hecho de la ocupacion llega donde se pacta su condicion',
     NOT EXISTS (
         SELECT 1
           FROM catalogo_atributo cond
           JOIN catalogo_atributo_operacion o ON o.id_catalogo_atributo = cond.id_catalogo_atributo
           JOIN catalogo_atributo hecho ON hecho.clave = 'estado_ocupacion' AND hecho.activo
+                                      AND hecho.organizacion_id IS NULL
          WHERE cond.clave = 'entrega_desocupado' AND cond.activo
+           AND cond.organizacion_id IS NULL
            AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
                             WHERE t.id_catalogo_atributo = hecho.id_catalogo_atributo
                               AND t.tipo_propiedad = o.tipo_propiedad)));
@@ -775,9 +783,11 @@ SELECT pg_temp.comprobar('5A y el par esta cubierto en los SIETE tipos, no en ce
        FROM catalogo_atributo cond
        JOIN catalogo_atributo_operacion o ON o.id_catalogo_atributo = cond.id_catalogo_atributo
        JOIN catalogo_atributo hecho ON hecho.clave = 'estado_ocupacion' AND hecho.activo
+                                   AND hecho.organizacion_id IS NULL
        JOIN catalogo_atributo_tipo t ON t.id_catalogo_atributo = hecho.id_catalogo_atributo
                                     AND t.tipo_propiedad = o.tipo_propiedad
-      WHERE cond.clave = 'entrega_desocupado' AND cond.activo));
+      WHERE cond.clave = 'entrega_desocupado' AND cond.activo
+        AND cond.organizacion_id IS NULL));
 
 SELECT pg_temp.comprobar('5A estado_ocupacion aplica EXACTAMENTE a los siete tipos',
     (SELECT array_agg(t.tipo_propiedad ORDER BY t.tipo_propiedad)
@@ -851,10 +861,25 @@ SELECT pg_temp.comprobar('5A requerido sigue siendo espejo exacto de exigencia =
 -- inventar por el caso frecuente justo la distincion que el campo viejo no sabia
 -- hacer. Lo ambiguo permanece FALTANTE.
 --
+-- EL PREDICADO QUIERE DECIR "NADIE DECLARO ESTE HECHO", Y NO SE APROXIMA CON EL
+-- CANAL. La primera version exigia un rastro con `canal <> 'SISTEMA'`, y eso
+-- PROHIBIA el unico mecanismo autorizado para mover legado: el reparto del
+-- bloque 5 de V84 escribe `canal = 'SISTEMA'` con su `evidencia_ref`, asi que
+-- esta comprobacion salia verde SOLO mientras el acta no resolviera ninguna
+-- cadena -- y se habria puesto roja el dia que resolviera una, es decir, por
+-- comportarse bien. La auditoria del 2026-08-25 lo reprodujo.
+--
+-- Lo que distingue una traduccion clandestina de un reparto legitimo no es el
+-- canal --los dos son escrituras del Core-- sino el LINAJE: el reparto deja su
+-- fila en `rastro_valor_gobernado` nombrando el acta en `evidencia_ref`, y una
+-- declaracion de una persona deja la suya con su naturaleza. Un valor que
+-- aparece sobre un legado ambiguo SIN NINGUN rastro no lo ha afirmado nadie:
+-- eso es lo prohibido.
+--
 -- Se escribe como INVARIANTE y NUNCA como la cifra 0 de filas legadas: en
 -- `controllocal_dev` no hay ninguna y en la base de integracion un fixture las
 -- escribe en cada corrida.
-SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio traducido',
+SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio sin que nadie lo afirmara',
     NOT EXISTS (
         SELECT 1
           FROM atributo_propiedad legado
@@ -866,7 +891,10 @@ SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio trad
                               AND r.sujeto = 'PROPIEDAD'
                               AND r.id_agregado = nuevo.id_propiedad
                               AND r.clave = nuevo.clave
-                              AND r.canal <> 'SISTEMA')));
+                              AND (r.naturaleza IS NOT NULL
+                                OR r.evidencia_ref IS NOT NULL
+                                OR r.id_persona_rol IS NOT NULL))),
+    'un valor de servicio sobre un legado ambiguo sin nadie que lo declare ni acta que lo reparta');
 
 -- =====================================================================
 -- Lo que NO se ha roto

@@ -1,7 +1,9 @@
 package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
+import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
+import com.controllocal.persistence.repositorio.CatalogoAtributoRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.AtributoQueFalta;
@@ -90,6 +92,7 @@ class OcupacionYServiciosIntegrationTest {
     @Autowired PropiedadUniversalService propiedades;
     @Autowired MotorDeCaptura captura;
     @Autowired PublicacionService publicaciones;
+    @Autowired CatalogoAtributoRepository catalogo;
 
     // ==================================================================
     // 1. La clave transversal: el hecho llega donde llega su condicion
@@ -442,6 +445,22 @@ class OcupacionYServiciosIntegrationTest {
         assertThrows(Exception.class,
                 () -> editar(id, new ValorAtributo("servicios_disponibles", "agua y luz")));
         assertNull(valorDe(id, "servicios_disponibles"), "y no dejo rastro");
+
+        // PERO LA LECTURA SIGUE SABIENDO COMO SE LLAMA. Sobre la clave REAL, y
+        // sin depender de que la base traiga legado: las 322 filas de
+        // `controllocal_repositorios` existen y en `controllocal_dev` no hay
+        // ninguna, asi que un caso que las necesitara seria verde y vacio en la
+        // mitad de las bases. Lo que se afirma es la consulta que la ficha usa
+        // para completar las retiradas.
+        List<CatalogoAtributo> paraLeer = catalogo.paraLeer(actor().idOrganizacion(),
+                List.of("servicios_disponibles"));
+        assertEquals(1, paraLeer.size(),
+                "la definicion de una clave retirada tiene que seguir resolviendose para LEER");
+        assertEquals("Servicios disponibles", paraLeer.get(0).getRotulo());
+        assertEquals("LISTA", paraLeer.get(0).getTipoDato(),
+                "sin tipo, el consumidor no sabe como pintar el valor conservado");
+        assertFalse(paraLeer.get(0).isActivo(),
+                "y sigue retirada: la lectura no la reactiva");
     }
 
     /**
@@ -458,12 +477,27 @@ class OcupacionYServiciosIntegrationTest {
      *
      * <p>Lo que se afirma: el valor <b>se sigue leyendo</b> en la ficha despues
      * de retirar su clave. {@code LectorPorAutoridad} lee las filas del inmueble
-     * sin preguntar si su clave sigue activa, y {@code fichaDeAtributo} tolera la
-     * definicion ausente. Si la lectura filtrara por catalogo activo, retirar una
-     * clave <b>borraria de la vista</b> todo lo capturado con ella.
+     * sin preguntar si su clave sigue activa. Si la lectura filtrara por catalogo
+     * activo, retirar una clave <b>borraria de la vista</b> todo lo capturado con
+     * ella.
+     *
+     * <h2>Y se lee ENTERO, no solo el valor</h2>
+     *
+     * <p>Hasta la correccion de 5A esto se cumplia a medias, y la mitad que
+     * faltaba la encontro la auditoria: {@code definicionesDe} sale de
+     * {@code aplicablesA}, que filtra {@code activo = true}, asi que la ficha
+     * devolvia {@code rotulo = "servicios_disponibles"} y {@code tipoDato = null}
+     * —la <b>clave desnuda</b>, y al final de la lista—. El broker leia
+     * exactamente el defecto que este repositorio ya nombra en
+     * {@code propiedad-detail.html}: «falta metraje_total», que no es una frase
+     * para nadie. Conservar el valor y perder su nombre es conservar a medias.
+     *
+     * <p>Las dos mitades se comprueban aqui: la LECTURA resuelve rotulo y tipo
+     * aunque la clave este inactiva, y la CAPTURA —el alta y el editor— deja de
+     * ofrecerla en el mismo instante.
      */
     @Test
-    @DisplayName("V84: retirar una clave conserva y sigue leyendo los valores ya escritos")
+    @DisplayName("V84: retirar una clave conserva sus valores, su rotulo y su tipo — y deja de preguntarla")
     void retirarUnaClaveNoOcultaSusValores() {
         String clave = "zz_retirable_" + UUID.randomUUID().toString().substring(0, 8);
         long org = actor().idOrganizacion();
@@ -476,6 +510,9 @@ class OcupacionYServiciosIntegrationTest {
             long id = registrarTerreno();
             editar(id, new ValorAtributo(clave, "lo que se sabia"));
             assertEquals("lo que se sabia", valorDe(id, clave));
+            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA",
+                            actor()).todas().stream().anyMatch(p -> clave.equals(p.clave())),
+                    "mientras esta activa, se pregunta: si no, el caso no mediria la retirada");
 
             jdbc.update("update catalogo_atributo set activo = false where clave = ? "
                     + "and organizacion_id = ?", clave, org);
@@ -487,6 +524,22 @@ class OcupacionYServiciosIntegrationTest {
                     select count(*) from atributo_propiedad where id_propiedad = ? and clave = ?
                     """, Integer.class, id, clave),
                     "y la fila sigue donde estaba");
+
+            // MITAD 1 — la LECTURA resuelve el catalogo aunque la clave este inactiva.
+            PropiedadUniversalService.AtributoFicha ficha = fichaDe(id, clave);
+            assertNotNull(ficha, "el valor tiene que seguir llegando a la ficha");
+            assertEquals("Clave retirable", ficha.rotulo(),
+                    "una clave retirada se lee con su nombre, no como clave desnuda: quien lee "
+                            + "la ficha no tiene por que saber que la pregunta se retiro");
+            assertEquals("TEXTO", ficha.tipoDato(),
+                    "y con su tipo: el SPA decide con `tipoDato` como pintar el valor, asi que "
+                            + "perderlo degrada la lectura mas alla del rotulo");
+
+            // MITAD 2 — la CAPTURA no la ofrece. La conservacion de la lectura no
+            // puede haber reabierto ninguna puerta de escritura.
+            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA",
+                            actor()).todas().stream().noneMatch(p -> clave.equals(p.clave())),
+                    "la clave retirada no se vuelve a preguntar en el alta ni en el editor");
         } finally {
             jdbc.update("update catalogo_atributo set activo = false where clave = ? "
                     + "and organizacion_id = ?", clave, org);
@@ -510,9 +563,25 @@ class OcupacionYServiciosIntegrationTest {
      * <p>Se afirma como INVARIANTE y nunca como la cifra 0: en
      * {@code controllocal_dev} no hay legado y en la base de pruebas un fixture
      * lo escribe en cada corrida.
+     *
+     * <h2>El predicado dice «nadie lo afirmo», y no se aproxima con el canal</h2>
+     *
+     * <p>La primera version exigia un rastro con {@code canal <> 'SISTEMA'}, y
+     * eso <b>prohibia el unico mecanismo autorizado</b> para mover legado: el
+     * reparto del acta (bloque 5 de {@code V84}) escribe {@code canal = 'SISTEMA'}
+     * con su {@code evidencia_ref}. Salia verde solo mientras el acta no
+     * resolviera ninguna cadena, y se habria puesto roja el dia que resolviera
+     * una —por comportarse bien—. Lo mide la auditoria del 2026-08-25.
+     *
+     * <p>Lo que separa una traduccion clandestina de un reparto legitimo es el
+     * <b>linaje</b>: el acta deja su {@code evidencia_ref}, una persona deja su
+     * {@code id_persona_rol} —y su {@code naturaleza} si la sabe—. Un valor
+     * sobre un legado ambiguo sin ninguna de las tres no lo afirmo nadie.
+     * Predicado <b>identico</b> al de la comprobacion 91 del gate: dos formas
+     * distintas de la misma pregunta vuelven a divergir.
      */
     @Test
-    @DisplayName("V84: ningun inmueble con legado recibio un servicio traducido")
+    @DisplayName("V84: ningun inmueble con legado recibio un servicio que nadie afirmo")
     void elLegadoNoSeTradujo() {
         List<String> traducidos = jdbc.queryForList("""
                 select p.codigo || ' -> ' || nuevo.clave || ' = ' || nuevo.valor_texto
@@ -526,8 +595,9 @@ class OcupacionYServiciosIntegrationTest {
                                       and r.sujeto = 'PROPIEDAD'
                                       and r.id_agregado = nuevo.id_propiedad
                                       and r.clave = nuevo.clave
-                                      and r.registrado_en > frontera_de_linaje()
-                                      and r.canal <> 'SISTEMA')
+                                      and (r.naturaleza is not null
+                                        or r.evidencia_ref is not null
+                                        or r.id_persona_rol is not null))
                  order by 1
                 """, String.class);
         assertEquals(List.of(), traducidos,
@@ -696,9 +766,14 @@ class OcupacionYServiciosIntegrationTest {
     }
 
     private String valorDe(long id, String clave) {
+        PropiedadUniversalService.AtributoFicha ficha = fichaDe(id, clave);
+        return ficha == null ? null : ficha.valor();
+    }
+
+    /** El atributo ENTERO tal como lo lee un consumidor: rotulo y tipo incluidos. */
+    private PropiedadUniversalService.AtributoFicha fichaDe(long id, String clave) {
         return propiedades.consultar(id, actor()).atributos().stream()
                 .filter(a -> clave.equals(a.clave()))
-                .map(PropiedadUniversalService.AtributoFicha::valor)
                 .findFirst().orElse(null);
     }
 

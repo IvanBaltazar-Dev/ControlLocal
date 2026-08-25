@@ -8,9 +8,23 @@
 
 I0 convierte el trabajo de las sesiones en un sistema que otra sesión pueda
 reanudar sin depender de memoria, resúmenes privados o cifras que envejecieron.
-No implementa producto, no abre el Corte 5 y no modifica `V81`, `V82` ni `V83`.
+No implementa producto, ~~no abre el Corte 5~~ y no modifica `V81`, `V82` ni
+`V83`. **La mitad tachada duró un día**: el titular congeló el encargo del Corte 5
+el mismo 2026-08-25 y la subtanda **5A** (`V84`) se implementó en paralelo. I0 no
+la abrió ni la bloqueó; las dos avanzan a la vez. Ver §2.
 
 ## 1. Qué gobierna cada documento
+
+> **⚠ ESTA TABLA ES UNA PROPUESTA DE I0, NO LA AUTORIDAD VIGENTE.** Lo que
+> gobierna hoy son **tres** documentos —`mapa-ejecucion-brox.md`,
+> `checklist-captura-moat-e-inteligencia-inmobiliaria.md` y `decision-*.md`—,
+> como dicen el mapa y `CLAUDE.md`. Ampliar esa lista es un **cambio de autoridad
+> documental** y **lo decide el titular**: no se establece por escribirlo aquí ni
+> por editar la tabla del mapa dentro de un corte de catálogo. Se intentó el
+> 2026-08-25 y quedó revertido en la auditoría de 5A.
+>
+> La tabla sigue siendo útil como lo que es: **qué pregunta responde cada
+> documento**. Lo que está pendiente de decisión es cuáles **mandan**.
 
 | Documento | Responde | Autoridad |
 |---|---|---|

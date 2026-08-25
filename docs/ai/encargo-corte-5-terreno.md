@@ -62,8 +62,27 @@ Sujeto **PROPIEDAD** en todo. Cinco cambios de catálogo y una guarda.
    vocabulario»**, que hoy sólo cubre ENCARGO y las claves del corte en curso.
 
 **El orden dentro de `V84` es parte del encargo**, no una preferencia de estilo:
-invertir 5 y 6 pierde el legado, e invertir 6 y 7 aborta la migración contra su
-propia clave.
+~~invertir 5 y 6 pierde el legado~~, e invertir 6 y 7 aborta la migración contra
+su propia clave.
+
+> **La primera mitad de esa frase era falsa, y era MÍA (de CONTROL), no del
+> constructor.** La escribí en este encargo el 2026-08-25 sin medirla. El
+> constructor **se negó a repetirla** y la refutó midiendo contra la
+> implementación; la auditoría adversarial **confirmó la refutación**. Lo medido:
+>
+> - el bloque 5 clasifica leyendo `atributo_propiedad` y escribe sobre las claves
+>   **nuevas**, que están activas: **no consulta `catalogo_atributo.activo` de la
+>   clave que reparte**, así que invertirlo con el bloque 6 hoy es **inocuo**;
+> - lo que sí aborta es **invertir 6 y 7**: reactivando `servicios_disponibles`,
+>   el bloque 7 falla con `EXIT=3` («hay LISTAS activas sin vocabulario:
+>   PROPIEDAD/servicios_disponibles (sistema)»), y con la clave ya retirada pasa
+>   (`EXIT=0`). Esa mitad sí se sostiene.
+>
+> **El orden 5 → 6 se conserva igual**, y por la razón que sí resiste: el día que
+> alguien convierta la retirada en algo más que un `activo = false`, el orden es
+> lo único que impide que el reparto no pueda mirar lo que sustituye. Se corrige
+> aquí en vez de borrarse porque durante unas horas fue lo que el encargo pedía.
+> Evidencia: `verificacion/evidencia/2026-08-25-corte-5a-ocupacion-y-servicios.md` §4.
 
 1. foto del estado previo en tabla temporal explícita, con `DROP` al final —
    **no `ON COMMIT DROP`**, que no sobrevive a cómo Flyway envuelve la

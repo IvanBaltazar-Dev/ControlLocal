@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -98,6 +99,49 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
     Optional<CatalogoAtributo> porClave(@Param("idOrganizacion") long idOrganizacion,
                                         @Param("clave") String clave);
 
+
+    /**
+     * <b>Las definiciones de un lote de claves PARA LEER, incluidas las
+     * retiradas</b> (Corte 5 · 5A).
+     *
+     * <p>Es la unica consulta del catalogo que <b>no</b> filtra por
+     * {@code activo}, y esa excepcion es exactamente la asimetria que la
+     * retirada de una clave exige:
+     *
+     * <pre>
+     *   CAPTURA  (alta y edicion) -> solo lo ACTIVO   : una clave retirada no se pregunta
+     *   LECTURA  (la ficha)       -> tambien lo RETIRADO: su valor sigue escrito y se lee
+     * </pre>
+     *
+     * <p>Sin ella, retirar {@code servicios_disponibles} en {@code V84} dejaba
+     * la ficha mostrando <b>la clave desnuda</b> —{@code rotulo = "servicios_disponibles"},
+     * {@code tipoDato = null}— porque {@link #aplicablesA} ya no devolvia su
+     * definicion. El valor se conservaba y la lectura se degradaba, que es la
+     * mitad que faltaba de «retirar la pregunta no retira el dato». Un
+     * {@code tipoDato} nulo ademas cambia lo que se pinta: el SPA decide con el
+     * si un booleano se dice «Si/No» o «true».
+     *
+     * <p>No sustituye a {@link #aplicablesA}: se consulta <b>solo</b> para las
+     * claves que ya tienen valor escrito y que la consulta de captura no
+     * resolvio, asi que no puede reintroducir una clave retirada en ningun
+     * formulario.
+     *
+     * <p>El orden repite la precedencia de {@link #porClave} —la definicion de
+     * la organizacion particulariza la del sistema— y quien consuma la lista se
+     * queda con la primera de cada clave.
+     *
+     * <p>Sin {@code join fetch}: la ficha usa el rotulo, el tipo, la unidad y el
+     * orden, todos columnas de la propia fila. Traerse la aplicabilidad seria
+     * multiplicar filas por tipo para no mirarlas.
+     */
+    @Query("""
+            select c from CatalogoAtributo c
+            where c.clave in :claves
+              and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
+            order by c.clave asc, c.organizacionId desc nulls last
+            """)
+    List<CatalogoAtributo> paraLeer(@Param("idOrganizacion") long idOrganizacion,
+                                    @Param("claves") Collection<String> claves);
 
     /**
      * <b>La clave logica cuya autoridad es este campo canonico</b> (4.P).

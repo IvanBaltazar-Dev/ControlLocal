@@ -151,8 +151,18 @@ una**, con su búsqueda y su razón propias.
 
 - **Deuda:** `tipo_acceso(PUB)`, causa única.
 - **Buscado:** los 16 orígenes de §2.2 más el barrido de §2.3. Tiene prospección
-  (observaciones `NULL`), historial de 5 pasos, una visita, una interacción, un
-  documento — **todo plantilla**.
+  (observaciones `NULL`), historial de 5 pasos, una visita y una interacción —
+  **todo plantilla**.
+
+  > **Corregido por CONTROL al cerrar (2026-08-25).** Esta línea enumeraba además
+  > «un documento». **`LOC-D018` no tiene ninguno**: de los 41 documentos de la
+  > base, **cero** cuelgan de las cuatro propiedades por ninguna vía
+  > (`solicitud_alquiler` de sus oportunidades = 0, luego `documento_solicitud`
+  > = 0), y ninguno de los 5 pasos del historial menciona uno. Lo demás del bullet
+  > se remidió y es exacto. No cambia la decisión —un documento inexistente no
+  > puede contener evidencia, y §2.2 sí lista `documento_solicitud` entre lo
+  > buscado y encontrado vacío—, pero era una afirmación de hecho que no se
+  > sostenía, **en el párrafo donde descansa la afirmación 2**.
 - **Decisión: CERRAR.** No hay nada que diga cómo se entra, y es el caso donde
   suponerlo sería peor: **Mesa Redonda es el ejemplo canónico de que el mismo
   metraje vale cosas distintas según el acceso.**

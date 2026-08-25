@@ -292,6 +292,47 @@ física:
   o el 7 siembren la primera condición ALT/PUB del ENCARGO, **ese escenario pasa
   a ser medible y hay que medirlo**.
 
+### 2.5 quinquies La conciliación de los anuncios vivos — hecha, y lo que dejó medido
+
+**2026-08-25.** `V82` bloqueó 21 locales, pero **cuatro seguían `PUBLICADO`**:
+anuncios creados antes de que `tipo_acceso` existiera, que ninguna migración
+cerró —correctamente, porque nadie lo autorizó—. Así que «los 21 salen del
+mercado» **no era literalmente cierto**: cuatro seguían expuestos, uno de ellos
+una **venta de USD 315 000**.
+
+**Resueltos uno por uno, no en bloque.** En ninguno existía evidencia explícita y
+trazable de cómo se entra al local, así que **no se escribió `tipo_acceso` en
+ninguno** y los cuatro anuncios se **cerraron** por el mecanismo de dominio
+(`cambiarEstado` → `C`, que no pasa por `exigirPublicable` porque **retirar del
+mercado nunca puede estar bloqueado porque falte un dato**).
+
+Medido después: **0** publicaciones `PUBLICADO` con faltantes `PUB` · **4/4**
+explicados · **0** datos inventados · **0** pérdida histórica (12 publicaciones
+antes y después, fechas de publicación e importes intactos) · **0** hitos `P`
+artificiales (3 → 3; el de `PROP-0022` sigue siendo el registro original). Todo
+remedido por auditoría independiente. Evidencia:
+`verificacion/evidencia/2026-08-24-conciliacion-anuncios-bloqueados.md`.
+
+**Lo que hace válido el cero**: el barrido demostró **encontrar cuando hay** —
+halló el acceso explícito en `LOC-0001`, `LOC-0002` y `LOC-D001`. Un cero sin
+control positivo no habría probado nada.
+
+#### Queda abierto, y es del titular
+
+De los **17** locales bloqueados restantes, **tres llevan acceso en su
+descripción**, pero con el mismo listón sólo **dos** son inequívocos:
+
+| propiedad | texto | lectura |
+|---|---|---|
+| `LOC-D001` | «Local **a pie de calle** con vitrina» | **inequívoco** → `A_PIE_DE_CALLE` |
+| `LOC-0002` | «Local **en galeria** del centro» | **inequívoco**, un punto por debajo: en Lima «galería» nombra a veces lo que el vocabulario clasificaría `CENTRO_COMERCIAL` |
+| `LOC-0001` | «**en esquina**, primera linea de avenida» · zona «**Centro comercial** de Miraflores» | **NO inequívoco**: el mismo registro sostiene dos opciones **excluyentes** (`ESQUINA_A_CALLE` y `CENTRO_COMERCIAL`) y `tipo_acceso` es de valor único. Elegir sería la inferencia prohibida |
+
+Ninguno tiene anuncio vivo, así que ninguno estaba en el alcance. **Conservar un
+hecho que ya consta no es inventarlo**, así que los dos primeros podrían
+desbloquearse sin visitar — pero es **decisión del titular**, y `LOC-0001` cae del
+lado de las cuatro: hay señal, y se contradice consigo misma.
+
 ### 2.5 quater Enriquecimiento de Propiedad — capacidad de producto, capa calidad/moat
 
 **Decidido por el titular el 2026-08-24**, al aceptar la consecuencia de `V82`.

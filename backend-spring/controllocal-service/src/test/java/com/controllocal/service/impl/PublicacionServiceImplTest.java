@@ -108,8 +108,8 @@ class PublicacionServiceImplTest {
     void elEncargoExiste() {
         Captacion encargo = encargoVivo();
         when(encargos.findById(ENCARGO)).thenReturn(Optional.of(encargo));
-        // `sincronizar` resuelve el encargo por la propiedad: es el camino del
-        // formulario heredado, que edita un local y no sabe de encargos.
+        // Y tambien por propiedad: `operacionDe` resuelve asi el encargo de una
+        // publicacion que no lo lleva escrito -- los anuncios anteriores a V70.
         when(encargos.encargosDe(ORG, PROPIEDAD)).thenReturn(List.of(encargo));
     }
 
@@ -206,17 +206,26 @@ class PublicacionServiceImplTest {
     }
 
     /**
-     * <b>Sin encargo resuelto no se escribe hito.</b> Es el camino heredado: una
-     * publicacion creada por inmueble, sin saber que operacion publica.
+     * <b>Sin encargo resuelto no se escribe hito.</b>
      *
      * <p>Escribirlo suponiendo ALQUILER es lo que hacia antes de V70, y con la
      * venta en el modelo eso mete precios de venta en la serie de alquiler. Es
      * mejor no tener el dato que tenerlo colgando de una operacion inventada.
+     *
+     * <p>Se ejercitaba por {@code crear(idPropiedad, ...)}, retirado en el
+     * microcorte de las puertas de publicacion. <b>La proteccion sigue viva y es
+     * alcanzable</b>: {@code Publicacion.idEncargo} es anulable --hay anuncios
+     * anteriores a V70-- asi que editar uno de esos llega a la misma rama.
      */
     @Test
     void sinEncargoResueltoNoSeInventaLaOperacion() {
-        service.crear(PROPIEDAD, datos(new BigDecimal("5200.00"), "PEN",
-                Publicacion.ESTADO_PUBLICADO), agente);
+        Publicacion huerfana = publicacion(Publicacion.ESTADO_PUBLICADO,
+                new BigDecimal("5200.00"), "PEN");
+        huerfana.setIdEncargo(null);
+        when(publicaciones.findByOrganizacionIdAndId(ORG, 11L))
+                .thenReturn(Optional.of(huerfana));
+
+        service.actualizar(11L, datos(new BigDecimal("5200.00"), "PEN", null), agente);
 
         verify(precios, never()).save(any());
     }
@@ -228,7 +237,7 @@ class PublicacionServiceImplTest {
      */
     @Test
     void unBorradorNoDejaHitoPorqueElMercadoNoLoVe() {
-        service.crear(PROPIEDAD, datos(new BigDecimal("5200.00"), "PEN",
+        service.crearEnEncargo(ENCARGO, datos(new BigDecimal("5200.00"), "PEN",
                 Publicacion.ESTADO_BORRADOR), agente);
 
         verify(precios, never()).save(any());
@@ -249,14 +258,14 @@ class PublicacionServiceImplTest {
     }
 
     /**
-     * El caso que obliga a deduplicar: {@code LocalComercialServiceImpl} llama a
-     * {@code sincronizar} en TODA edicion de local, cambie o no el precio. Sin
-     * este filtro, editar el metraje escribiria un hito de renta.
+     * El caso que obliga a deduplicar: {@code actualizar} pasa por
+     * {@code registrarImportePublicado} en CADA guardado, cambie o no el precio.
+     * Sin este filtro, corregir el titulo del anuncio escribiria un hito de renta.
      */
     @Test
-    void sincronizarSinCambioEconomicoNoDuplicaElHito() {
-        when(publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(PROPIEDAD))
-                .thenReturn(List.of(publicacion(Publicacion.ESTADO_PUBLICADO,
+    void guardarSinCambioEconomicoNoDuplicaElHito() {
+        when(publicaciones.findByOrganizacionIdAndId(ORG, 11L))
+                .thenReturn(Optional.of(publicacion(Publicacion.ESTADO_PUBLICADO,
                         new BigDecimal("5200.00"), "PEN")));
         when(precios.findFirstByIdPropiedadAndHitoOrderByFechaDescIdDesc(
                 PROPIEDAD, PrecioPropiedad.HITO_PUBLICADO))
@@ -264,23 +273,21 @@ class PublicacionServiceImplTest {
                 // precio. Con equals de BigDecimal esto duplicaria el hito.
                 .thenReturn(Optional.of(hitoPublicado(new BigDecimal("5200"), "PEN")));
 
-        service.sincronizar(PROPIEDAD, "LOC-0100", new BigDecimal("5200.00"), "PEN",
-                Publicacion.ESTADO_PUBLICADO, agente);
+        service.actualizar(11L, datos(new BigDecimal("5200.00"), "PEN", null), agente);
 
         verify(precios, never()).save(any());
     }
 
     @Test
-    void sincronizarConRentaNuevaDejaOtroHito() {
-        when(publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(PROPIEDAD))
-                .thenReturn(List.of(publicacion(Publicacion.ESTADO_PUBLICADO,
+    void guardarConRentaNuevaDejaOtroHito() {
+        when(publicaciones.findByOrganizacionIdAndId(ORG, 11L))
+                .thenReturn(Optional.of(publicacion(Publicacion.ESTADO_PUBLICADO,
                         new BigDecimal("5200.00"), "PEN")));
         when(precios.findFirstByIdPropiedadAndHitoOrderByFechaDescIdDesc(
                 PROPIEDAD, PrecioPropiedad.HITO_PUBLICADO))
                 .thenReturn(Optional.of(hitoPublicado(new BigDecimal("5200.00"), "PEN")));
 
-        service.sincronizar(PROPIEDAD, "LOC-0100", new BigDecimal("4900.00"), "PEN",
-                Publicacion.ESTADO_PUBLICADO, agente);
+        service.actualizar(11L, datos(new BigDecimal("4900.00"), "PEN", null), agente);
 
         assertEquals(new BigDecimal("4900.00"), hitosGuardados().getValue().getMonto());
     }
@@ -292,31 +299,37 @@ class PublicacionServiceImplTest {
      */
     @Test
     void cambiarSoloLaMonedaCuentaComoRentaNueva() {
-        when(publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(PROPIEDAD))
-                .thenReturn(List.of(publicacion(Publicacion.ESTADO_PUBLICADO,
+        when(publicaciones.findByOrganizacionIdAndId(ORG, 11L))
+                .thenReturn(Optional.of(publicacion(Publicacion.ESTADO_PUBLICADO,
                         new BigDecimal("1500.00"), "PEN")));
         when(precios.findFirstByIdPropiedadAndHitoOrderByFechaDescIdDesc(
                 PROPIEDAD, PrecioPropiedad.HITO_PUBLICADO))
                 .thenReturn(Optional.of(hitoPublicado(new BigDecimal("1500.00"), "PEN")));
 
-        service.sincronizar(PROPIEDAD, "LOC-0100", new BigDecimal("1500.00"), "USD",
-                Publicacion.ESTADO_PUBLICADO, agente);
+        service.actualizar(11L, datos(new BigDecimal("1500.00"), "USD", null), agente);
 
         PrecioPropiedad hito = hitosGuardados().getValue();
         assertEquals("USD", hito.getMoneda());
         assertEquals(new BigDecimal("1500.00"), hito.getMonto());
     }
 
-    /** Un local en borrador sin publicacion previa no crea nada: tampoco hito. */
+    /**
+     * <b>Devolver un anuncio a borrador no deja hito.</b>
+     *
+     * <p>Lo protegia {@code sincronizar}, con un local en borrador y sin
+     * publicacion previa: no creaba nada y no escribia hito. Esa via se retiro
+     * --creaba publicaciones sin pasar por {@code exigirPublicable}-- y la mitad
+     * que sigue viva es esta: el hito solo se escribe cuando el anuncio esta
+     * PUBLICADO, asi que pasarlo a borrador no anota nada en la serie.
+     */
     @Test
-    void sincronizarUnBorradorSinPublicacionPreviaNoEscribeNada() {
-        when(publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(anyLong()))
-                .thenReturn(List.of());
+    void devolverAborradorNoEscribeHito() {
+        when(publicaciones.findByOrganizacionIdAndId(ORG, 11L))
+                .thenReturn(Optional.of(publicacion(Publicacion.ESTADO_PUBLICADO,
+                        new BigDecimal("5200.00"), "PEN")));
 
-        service.sincronizar(PROPIEDAD, "LOC-0100", new BigDecimal("5200.00"), "PEN",
-                Publicacion.ESTADO_BORRADOR, agente);
+        service.cambiarEstado(11L, Publicacion.ESTADO_BORRADOR, agente);
 
-        verify(publicaciones, never()).save(any());
         verify(precios, never()).save(any());
     }
 

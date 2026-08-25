@@ -2,6 +2,7 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.domain.inmueble.Propiedad;
+import com.controllocal.domain.inmueble.Publicacion;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.service.Actor;
@@ -1119,6 +1120,79 @@ class CatalogoQueHablaIntegrationTest {
         assertTrue(ficha.encargos().get(0).publicacionGestionable().permitida(),
                 "y la capacidad no se vuelve false por datos que no bloquean nada");
     }
+
+    /**
+     * <b>Ningun camino que quede puede publicar saltandose el bloqueo.</b>
+     *
+     * <p>Es la prueba del microcorte de las puertas. Se recorren <b>todos</b> los
+     * caminos que sobreviven contra una propiedad bloqueada por catalogo, y
+     * ninguno consigue poner el anuncio en el mercado. Las otras dos vias
+     * --{@code crear(idPropiedad, …)} y {@code sincronizar(…)}-- ya no se pueden
+     * recorrer porque no existen; de eso se ocupa {@code PuertasDePublicacionTest}.
+     *
+     * <p><b>Medido, y mas estricto de lo que se suponia:</b> {@code crearEnEncargo}
+     * llama a {@code exigirPublicable} <b>sin mirar el estado pedido</b>, asi que
+     * de una propiedad bloqueada no se puede guardar <b>ni siquiera un borrador</b>.
+     * La unica forma de tener un anuncio sobre una propiedad bloqueada es que se
+     * creara cuando estaba completa y el dato se retirara despues -- y ese es el
+     * escenario con el que se prueba {@code cambiarEstado}.
+     */
+    @Test
+    @DisplayName("ningun camino de publicacion elude el bloqueo del catalogo")
+    void ningunCaminoEludeElBloqueo() {
+        long id = registrarLocalSinTipoAcceso();
+        long encargo = encargoDe(id);
+        assertFalse(propiedades.consultar(id, actor()).faltanParaPublicar().isEmpty(),
+                "el caso necesita una propiedad bloqueada por catalogo");
+
+        // CAMINO 1 - crear el anuncio ya publicado: rechazado.
+        assertThrows(ReglaNegocioException.class,
+                () -> publicaciones.crearEnEncargo(encargo, publicacionDePrueba(), actor()),
+                "crearEnEncargo no puede anunciar algo que no se puede anunciar");
+
+        // CAMINO 1 bis - y ni siquiera como BORRADOR. La guarda no depende del
+        // estado pedido, asi que no hay forma de "colar" el anuncio y promoverlo
+        // luego.
+        assertThrows(ReglaNegocioException.class,
+                () -> publicaciones.crearEnEncargo(encargo, datosEnEstado(Publicacion.ESTADO_BORRADOR), actor()),
+                "de una propiedad bloqueada no entra ni un borrador");
+
+        // CAMINO 2 - el unico anuncio posible sobre una propiedad bloqueada es uno
+        // que nacio cuando NO lo estaba. Se reproduce: se completa el dato, se
+        // guarda el borrador y se retira el dato despues.
+        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+        var borrador = publicaciones.crearEnEncargo(encargo,
+                datosEnEstado(Publicacion.ESTADO_BORRADOR), actor());
+        assertNotNull(borrador, "con la ficha completa, el borrador si entra");
+
+        jdbc.update("delete from atributo_propiedad where id_propiedad = ? and clave = 'tipo_acceso'", id);
+        assertFalse(propiedades.consultar(id, actor()).faltanParaPublicar().isEmpty(),
+                "retirado el dato, la propiedad vuelve a estar bloqueada");
+
+        assertThrows(ReglaNegocioException.class,
+                () -> publicaciones.cambiarEstado(borrador.id(), Publicacion.ESTADO_PUBLICADO, actor()),
+                "cambiarEstado es la ventana, y esta cerrada igual que la puerta");
+
+        // CAMINO 3 - editar no publica: `actualizar` no toca el estado.
+        publicaciones.actualizar(borrador.id(),
+                datosEnEstado(Publicacion.ESTADO_PUBLICADO), actor());
+        assertEquals(Publicacion.ESTADO_BORRADOR,
+                jdbc.queryForObject("select estado from publicacion where id_publicacion = ?",
+                        String.class, borrador.id()),
+                "ni pidiendoselo: actualizar ignora el estado, y por eso no es una puerta");
+
+        // Y con el dato de vuelta, el camino canonico vuelve a funcionar.
+        editar(id, new ValorAtributo("tipo_acceso", "A_PIE_DE_CALLE"));
+        assertNotNull(publicaciones.cambiarEstado(borrador.id(), Publicacion.ESTADO_PUBLICADO, actor()),
+                "completado el dato, publicar deja de estar bloqueado");
+    }
+
+    /** Los mismos datos de prueba, en el estado que pida el caso. */
+    private PublicacionService.DatosPublicacion datosEnEstado(String estado) {
+        return new PublicacionService.DatosPublicacion(Publicacion.CANAL_WEB_PROPIA, null,
+                new BigDecimal("2500"), "PEN", "Anuncio de prueba", null, estado);
+    }
+
 
     /** Un LOCAL con lo minimo del alta y SIN `tipo_acceso`. Es el sujeto de V82. */
     private long registrarLocalSinTipoAcceso() {

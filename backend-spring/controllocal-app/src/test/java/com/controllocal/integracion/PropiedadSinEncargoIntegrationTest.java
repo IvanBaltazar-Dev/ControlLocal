@@ -21,7 +21,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -153,14 +155,43 @@ class PropiedadSinEncargoIntegrationTest {
                 "pero el REGISTRO si esta activo: la propiedad existe y se puede trabajar");
     }
 
+    /**
+     * <b>Una propiedad sin encargo no se puede publicar, y ahora es ESTRUCTURAL.</b>
+     *
+     * <p>Esto se probaba llamando a {@code publicaciones.crear(idPropiedad, ...)},
+     * que aceptaba publicar nombrando solo el inmueble y se defendia con
+     * {@code exigirAlgunEncargo}. Ese metodo <b>se retiro</b> en el microcorte de
+     * las puertas de publicacion --creaba anuncios sin pasar por
+     * {@code exigirPublicable}-- y con el desaparecio la unica firma que aceptaba
+     * un {@code idPropiedad}.
+     *
+     * <p>La garantia no se perdio: <b>se hizo mas fuerte</b>. Ya no hay un metodo
+     * que lo rechace en tiempo de ejecucion; no hay metodo al que pedirselo. Toda
+     * creacion pasa por {@code crearEnEncargo(idEncargo, ...)}, y sin encargo no
+     * hay id que pasarle.
+     *
+     * <p>Se deja constancia aqui --y no solo en el test de arquitectura-- porque
+     * lo que hay que conservar es la REGLA, no el metodo que la implementaba.
+     */
     @Test
-    @DisplayName("una propiedad sin encargo no se puede publicar")
+    @DisplayName("una propiedad sin encargo no se puede publicar: no hay por donde")
     void sinEncargoNoSePublica() {
         long id = registrarSinEncargo();
-        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> publicaciones.crear(id, publicacionDePrueba(), actor()));
-        assertTrue(error.getMessage().toLowerCase().contains("encargo"),
-                "el mensaje tiene que decir que falta el encargo: " + error.getMessage());
+        assertTrue(propiedades.consultar(id, actor()).encargos().isEmpty(),
+                "el caso necesita una propiedad sin ningun encargo");
+
+        // Ninguna firma publica acepta publicar nombrando solo el inmueble.
+        List<String> porInmueble = Arrays.stream(PublicacionService.class.getMethods())
+                .filter(m -> m.getName().equals("crear") || m.getName().equals("sincronizar"))
+                .map(Method::getName)
+                .toList();
+        assertEquals(List.of(), porInmueble,
+                "volvio a existir una via que publica por inmueble, sin encargo que la autorice");
+
+        // Y la unica que crea exige el ENCARGO, no la propiedad.
+        assertTrue(Arrays.stream(PublicacionService.class.getMethods())
+                        .anyMatch(m -> m.getName().equals("crearEnEncargo")),
+                "la via canonica tiene que seguir existiendo");
     }
 
     /** La ficha de una propiedad sin encargos se lee, y ensena que no los tiene. */

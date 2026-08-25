@@ -10,10 +10,14 @@ import java.util.Map;
  * <b>Los anuncios de un ENCARGO</b> (V70).
  *
  * <p>Una publicacion anuncia que esta propiedad se ofrece en ESTA operacion a
- * ESTE precio, asi que pertenece al encargo. Los metodos que siguen
- * preguntando por inmueble --{@link #listarPorInmueble},
- * {@link #codigoEstadoPublicacion}, {@link #sincronizar}-- sirven al listado y
- * al formulario heredados, que todavia razonan en locales.
+ * ESTE precio, asi que pertenece al encargo. Los dos metodos que siguen
+ * preguntando por inmueble --{@link #listarPorInmueble} y
+ * {@link #codigoEstadoPublicacion}-- sirven al listado heredado, que todavia
+ * razona en locales; los dos <b>leen</b>, y ninguno crea.
+ *
+ * <p>El tercero que preguntaba por inmueble, {@code sincronizar}, servia al
+ * formulario de la v1 y <b>si creaba</b>. Se retiro el 2026-08-24 junto con
+ * {@code crear(idPropiedad, ...)}: ver la nota al final de esta interfaz.
  *
  * <p>La publicacion mas reciente es la "principal": su estado es el
  * {@code estadoPublicacion} del cable heredado ('B' si no hay ninguna).
@@ -72,21 +76,31 @@ public interface PublicacionService {
     /** Estado de publicacion por local, en lote (para las listas sin N+1). */
     Map<Long, String> codigosEstadoPublicacion(Collection<Long> idsPropiedad);
 
-    /** El {@code actor} aporta la organizacion que se estampa en la publicacion nueva (D-20). */
-    FichaPublicacion crear(long idPropiedad, DatosPublicacion datos, Actor actor);
-
     /** Edita un anuncio del tenant del actor. */
     FichaPublicacion actualizar(long idPublicacion, DatosPublicacion datos, Actor actor);
 
     /** Publica, pausa o cierra un anuncio del tenant del actor. */
     FichaPublicacion cambiarEstado(long idPublicacion, String estado, Actor actor);
 
-    /**
-     * Mantiene la publicacion principal alineada con el local (alta/edicion):
-     * crea la publicacion web propia si no existe, o actualiza estado, renta
-     * y titulo. Con estado en blanco no hace nada; 'B' sin publicacion previa
-     * tampoco crea nada (paridad v1).
-     */
-    void sincronizar(long idPropiedad, String codigoLocal, BigDecimal precioReferencial,
-                     String monedaReferencial, String codigoEstado, Actor actor);
+    // ------------------------------------------------------------------
+    // NO HAY MAS PUERTAS DE CREACION, Y ESO ES LA GARANTIA
+    //
+    // Aqui vivian `crear(idPropiedad, ...)` y
+    // `sincronizar(idPropiedad, ...)`. Las dos CREABAN una publicacion --
+    // `sincronizar` ademas la dejaba en PUBLICADO y escribia el hito `P` --
+    // <b>sin pasar por `exigirPublicable`</b>. Ninguna estaba expuesta por un
+    // controlador y ninguna tenia un solo consumidor de produccion: `sincronizar`
+    // era residuo del formulario de la v1, borrada el 2026-08-08.
+    //
+    // Se retiraron el 2026-08-24 en vez de hacerlas delegar, y la razon es que
+    // una via que delega SIGUE EXISTIENDO y puede desincronizarse en el proximo
+    // cambio. Una via que no existe no puede eludir nada.
+    //
+    // Lo que queda: `crearEnEncargo` crea y `cambiarEstado` publica, y las dos
+    // llaman a `exigirPublicable`. `actualizar` edita y no toca el estado, asi
+    // que no puede publicar un borrador.
+    //
+    // `PuertasDePublicacionTest` lo comprueba sobre esta interfaz: si alguien
+    // anade un metodo que cree o publique sin la validacion canonica, rompe.
+    // ------------------------------------------------------------------
 }

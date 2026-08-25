@@ -249,21 +249,37 @@ física:
   límite honesto que su propio comentario declara desde `e8cfaa4`, y no es
   defecto de este corte — pero el margen ya es de **69 retiradas** antes de que
   salte. Quien vigila de verdad es la invariante de aplicabilidad, no el número.
-- **DEUDA NUEVA · la cuarta puerta de exposición no pregunta por la deuda de
-  catálogo.** `PublicacionServiceImpl.crear(idPropiedad, datos, actor)`
-  (`:135-147`) **no llama a `exigirPublicable`**: sólo comprueba
-  `exigirAlgunEncargo`. Las otras tres sí lo hacen — `crearEnEncargo:94` y
-  `cambiarEstado:326`, esta última en la transición a `PUBLICADO`, que es la que
-  expone al mercado.
-  **Hoy no es explotable y por eso no fue defecto del corte**: esa ruta **no está
-  expuesta** —el único endpoint de creación es
-  `POST /encargos/{idEncargo}/publicaciones`, que va por `crearEnEncargo`—,
-  verificado en los controladores y en la matriz.
-  Pero la cadena que el corte acaba de establecer —**regla → `faltanParaPublicar`
-  → `permitida` → acción visible**— tiene esa cuarta puerta sin guardar **en el
-  código**. El día que alguien la exponga, `permitida` diría `false` y la
-  publicación funcionaría igual. Se anota **ahora que la coherencia es
-  explícita**, no cuando alguien la abra.
+- ~~**DEUDA NUEVA · la cuarta puerta de exposición no pregunta por la deuda de
+  catálogo**~~ ✅ **SALDADA 2026-08-24 · y eran CINCO, no cuatro.** El preflight
+  del microcorte encontró una quinta que no estaba en ningún inventario:
+  **`sincronizar(idPropiedad, …)`** creaba la publicación, la dejaba en
+  `PUBLICADO` y escribía el hito `P` **sin preguntar por una sola clave del
+  catálogo** — residuo del formulario de la v1, borrada el 2026-08-08. **Las dos
+  tenían cero consumidores de producción y ninguna estaba expuesta**, así que
+  **se retiraron** en lugar de hacerlas delegar: una vía que delega sigue
+  existiendo y puede desincronizarse en el próximo cambio; una que no existe no
+  puede eludir nada. Quedan `crearEnEncargo` (crea) y `cambiarEstado` (publica),
+  las dos con `exigirPublicable`, y `actualizar`, que **no toca el estado**. Lo
+  fija `PuertasDePublicacionTest`, y se comprobó que muerde reintroduciendo la
+  vía. Evidencia:
+  `verificacion/evidencia/2026-08-24-puertas-de-publicacion.md`.
+
+  El diagnóstico original, tal como se escribió:
+
+  > `PublicacionServiceImpl.crear(idPropiedad, datos, actor)`
+  > (`:135-147`) **no llama a `exigirPublicable`**: sólo comprueba
+  > `exigirAlgunEncargo`. Las otras tres sí lo hacen — `crearEnEncargo:94` y
+  > `cambiarEstado:326`, esta última en la transición a `PUBLICADO`, que es la que
+  > expone al mercado.
+  > **Hoy no es explotable y por eso no fue defecto del corte**: esa ruta **no está
+  > expuesta** —el único endpoint de creación es
+  > `POST /encargos/{idEncargo}/publicaciones`, que va por `crearEnEncargo`—,
+  > verificado en los controladores y en la matriz.
+  > Pero la cadena que el corte acaba de establecer —**regla → `faltanParaPublicar`
+  > → `permitida` → acción visible**— tiene esa cuarta puerta sin guardar **en el
+  > código**. El día que alguien la exponga, `permitida` diría `false` y la
+  > publicación funcionaría igual. Se anota **ahora que la coherencia es
+  > explícita**, no cuando alguien la abra.
 - **Límite de cobertura, dicho en vez de presentado como total.** El barrido
   empírico del corte sólo ejercita **la rama de la PROPIEDAD**: las **112** filas
   de `catalogo_atributo_operacion` son **todas OPC**, así que hoy **ningún

@@ -345,6 +345,26 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > · CERO casos de `permitida = true` con faltantes conocidos**. Angular ya
    > obedecía la capacidad, así que sólo se le añadió la prueba.
 
+   > **Y el microcorte que lo remató: ningún camino de creación elude la
+   > publicabilidad.** Al hacer coherente la cadena quedó a la vista que
+   > `PublicacionService` tenía **cinco** vías, no cuatro, y que **dos creaban
+   > anuncios sin pasar por `exigirPublicable`**: `crear(idPropiedad, …)` y
+   > —la que no estaba en ningún inventario— `sincronizar(idPropiedad, …)`, que
+   > además dejaba el anuncio en `PUBLICADO` y escribía el hito `P`. Residuo del
+   > formulario de la v1, borrada el 2026-08-08.
+   >
+   > **Cero consumidores de producción y ninguna expuesta, así que se retiraron**
+   > en lugar de hacerlas delegar: una vía que delega sigue existiendo y puede
+   > desincronizarse; una que no existe no puede eludir nada. Quedan
+   > `crearEnEncargo` y `cambiarEstado`, las dos con la validación canónica, y
+   > `actualizar`, que no toca el estado. **Sin migración y sin Angular.**
+   >
+   > Medido al recorrer los caminos: `crearEnEncargo` valida **sin mirar el estado
+   > pedido**, así que de una propiedad bloqueada **no entra ni un borrador** — más
+   > estricto de lo que se suponía. Lo fija `PuertasDePublicacionTest`, que se
+   > comprobó reintroduciendo la vía retirada: **tres de sus cuatro pruebas la
+   > cazan por separado**.
+
 8. **Corte 1 (resto) / profundidad de la PROPIEDAD** — ⬜ **APLAZADO por
    insuficiencia de corpus real.** Lo que queda del corte no es sujeto, es
    **profundidad**: ampliar aplicabilidad por tipo (`banos` a L,O,A ·
@@ -672,6 +692,7 @@ este orden**:
 4   comercial (L, O, A)                 ✅ CERRADO 2026-08-24 · V81
     └ correccion: tipo_acceso ALT → PUB    ✅ 2026-08-24 · V82
     └ la deuda de publicacion, visible      ✅ 2026-08-24 · sin migracion
+    └ cerrar las puertas de publicacion     ✅ 2026-08-24 · sin migracion
 1   las 19 claves — mitad de PROFUNDIDAD ⬜ APLAZADO (corpus real insuficiente)
 5…7 profundidad por tipo                ⬜
 ```

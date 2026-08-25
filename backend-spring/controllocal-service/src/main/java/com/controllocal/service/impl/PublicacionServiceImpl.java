@@ -130,23 +130,6 @@ public class PublicacionServiceImpl implements PublicacionService {
         return estados;
     }
 
-    @Override
-    @Transactional
-    public FichaPublicacion crear(long idPropiedad, DatosPublicacion datos, Actor actor) {
-        if (idPropiedad <= 0) {
-            throw new ReglaNegocioException("El local de la publicacion es obligatorio.");
-        }
-        // No se anuncia lo que nadie ha encargado (V75). Desde que la propiedad
-        // puede existir sin encargo, este camino -que no nombra ninguno- podia
-        // publicar un inmueble que solo se estaba prospectando: ofrecerlo al
-        // mercado sin que el propietario lo haya encargado.
-        exigirAlgunEncargo(idPropiedad, actor);
-        Publicacion p = construir(idPropiedad, datos, actor);
-        publicaciones.save(p);
-        registrarImportePublicado(p);
-        return ficha(p, operacionDe(p));
-    }
-
     /**
      * <b>El gate de publicacion</b> (Corte 0B, ampliado a los dos sujetos en 0C).
      *
@@ -217,10 +200,19 @@ public class PublicacionServiceImpl implements PublicacionService {
      * El encargo del que cuelga una publicacion, o {@code null} si no cuelga de
      * ninguno.
      *
-     * <p>No falla cuando no hay encargo: {@code crear(idPropiedad, ...)} existe
-     * y produce publicaciones sueltas. Lo que no se hace es dar por buenas sus
-     * condiciones comerciales -- no hay ninguna que mirar, y eso no es lo mismo
-     * que estar completas.
+     * <p>No falla cuando no hay encargo, y la razon es la columna: {@code
+     * publicacion.id_captacion} es ANULABLE -- hay anuncios anteriores a V70 cuya
+     * operacion no se sabe -- y {@code cambiarEstado} pregunta por el encargo de
+     * CUALQUIER anuncio. Medido el 2026-08-24: 0 de 12 filas la tienen a null,
+     * pero el esquema lo permite y basta con eso.
+     *
+     * <p>Hasta el 2026-08-24 esta linea decia que la tolerancia existia porque
+     * {@code crear(idPropiedad, ...)} "produce publicaciones sueltas". Ese metodo
+     * SE RETIRO en el microcorte de las puertas, asi que la frase quedo falsa sin
+     * que nadie la tocara: la razon verdadera nunca fue esa via.
+     *
+     * <p>Lo que no se hace es dar por buenas sus condiciones comerciales -- no hay
+     * ninguna que mirar, y eso no es lo mismo que estar completas.
      */
     private Captacion encargoDe(Publicacion publicacion, Actor actor) {
         Long idEncargo = publicacion.getIdEncargo();
@@ -230,22 +222,6 @@ public class PublicacionServiceImpl implements PublicacionService {
         return encargos.findById(idEncargo)
                 .filter(encargo -> encargo.getOrganizacionId() == actor.idOrganizacion())
                 .orElse(null);
-    }
-
-    /**
-     * Publicar exige que la propiedad este <b>encargada</b>.
-     *
-     * <p>La ruta por encargo ({@code crearEnEncargo}) lo tiene garantizado por
-     * construccion; esta no nombra ninguno, asi que hay que preguntarlo. El
-     * mensaje dice que hacer -captarla- y no solo que no se puede.
-     */
-    private void exigirAlgunEncargo(long idPropiedad, Actor actor) {
-        if (encargos.encargosDe(actor.idOrganizacion(), idPropiedad).isEmpty()) {
-            throw new ReglaNegocioException(
-                    "Esta propiedad no tiene ningun encargo: esta registrada, pero nadie la ha "
-                            + "encargado todavia. Captala primero -- anunciar lo que no se ofrece "
-                            + "pone en el mercado algo que no esta a la venta ni en alquiler.");
-        }
     }
 
     private Propiedad propiedadDe(Publicacion publicacion, Actor actor) {
@@ -335,52 +311,6 @@ public class PublicacionServiceImpl implements PublicacionService {
         return ficha(actual, operacionDe(actual));
     }
 
-    @Override
-    @Transactional
-    public void sincronizar(long idPropiedad, String codigoLocal, BigDecimal precioReferencial,
-                            String monedaReferencial, String codigoEstado, Actor actor) {
-        if (enBlanco(codigoEstado)) {
-            return;
-        }
-        if (!Publicacion.ESTADOS.contains(codigoEstado)) {
-            // Mensaje identico al CodigoEnum.fromCodigo de la v1 (llega como 400).
-            throw new IllegalArgumentException("Codigo invalido para EstadoPublicacion: " + codigoEstado);
-        }
-        String moneda = CondicionesEconomicas.moneda(
-                monedaReferencial, "del precio referencial");
-        // El formulario heredado edita un LOCAL, asi que el encargo que
-        // corresponde es el de alquiler -- que es lo unico que ese formulario
-        // sabe registrar. Si no hay exactamente uno, la publicacion se queda
-        // sin encargo en vez de atribuirse al que sea.
-        Long idEncargo = encargoUnicoDeAlquiler(idPropiedad, actor);
-        Publicacion principal = publicaciones.findByIdPropiedadOrderByFechaPublicacionDesc(idPropiedad).stream()
-                .findFirst()
-                .orElse(null);
-        if (principal == null && Publicacion.ESTADO_BORRADOR.equals(codigoEstado)) {
-            return;
-        }
-        if (principal == null) {
-            principal = new Publicacion();
-            principal.setOrganizacionId(actor.idOrganizacion());
-            principal.setIdPropiedad(idPropiedad);
-            principal.setCanal(Publicacion.CANAL_WEB_PROPIA);
-            principal.setVersionAnuncio(1);
-            principal.setMoneda(moneda);
-            principal.setCodigoOrigen("WEB-" + idPropiedad);
-            principal.setFechaPublicacion(OffsetDateTime.now());
-        }
-        if (principal.getIdEncargo() == null) {
-            principal.setIdEncargo(idEncargo);
-        }
-        principal.setEstado(codigoEstado);
-        principal.setImportePublicado(precioReferencial);
-        principal.setMoneda(moneda);
-        principal.setTituloAnuncio("Publicacion " + codigoLocal);
-        principal.setFechaBaja(Publicacion.ESTADO_CERRADO.equals(codigoEstado) ? OffsetDateTime.now() : null);
-        publicaciones.save(principal);
-        registrarImportePublicado(principal);
-    }
-
     /**
      * <b>E0.2 — deja constancia del importe que el mercado VE.</b>
      *
@@ -410,9 +340,17 @@ public class PublicacionServiceImpl implements PublicacionService {
      * publica es la primera vez que ese importe se ve.
      *
      * <p><b>Deduplica</b> contra el ultimo {@code P} del mismo encargo: sin esto
-     * cada edicion de local escribiria uno, porque
-     * {@code LocalComercialServiceImpl} llama a {@code sincronizar} en TODA
-     * actualizacion, cambie o no el precio.
+     * cada edicion del anuncio escribiria uno, cambie o no el precio -- y
+     * {@code actualizar} pasa por aqui en cada guardado.
+     *
+     * <p>Este parrafo decia hasta el 2026-08-24 que
+     * {@code LocalComercialServiceImpl} llamaba a {@code sincronizar} "en TODA
+     * actualizacion". <b>Era falso</b>: esa clase inyecta {@code PublicacionService}
+     * y <b>solo le pregunta el estado de publicacion</b>
+     * --{@code codigoEstadoPublicacion} y {@code codigosEstadoPublicacion}, tres
+     * llamadas--, pero <b>nunca llamo a {@code sincronizar}</b>, que se retiro en
+     * el microcorte de las puertas por no tener un solo consumidor de produccion.
+     * La deduplicacion sigue haciendo falta igual, ahora por {@code actualizar}.
      */
     private void registrarImportePublicado(Publicacion publicacion) {
         if (!Publicacion.ESTADO_PUBLICADO.equals(publicacion.getEstado())
@@ -474,20 +412,6 @@ public class PublicacionServiceImpl implements PublicacionService {
                 .orElseThrow(() -> new ReglaNegocioException("Publicacion no encontrada."));
     }
 
-    /**
-     * El unico encargo de ALQUILER de una propiedad, si lo hay.
-     *
-     * <p>Lo usa el camino heredado: el formulario de local edita un alquiler y
-     * nada mas. Con cero o con varios devuelve {@code null} en vez de elegir,
-     * porque atribuir el anuncio al encargo equivocado es peor que dejarlo sin
-     * atribuir.
-     */
-    private Long encargoUnicoDeAlquiler(long idPropiedad, Actor actor) {
-        List<Captacion> deAlquiler = encargos.encargosDe(actor.idOrganizacion(), idPropiedad).stream()
-                .filter(encargo -> encargo.operacion() == OperacionInmobiliaria.ALQUILER)
-                .toList();
-        return deAlquiler.size() == 1 ? deAlquiler.get(0).getId() : null;
-    }
     private static String canalOpcional(String canal) {
         if (enBlanco(canal)) {
             return null;

@@ -245,15 +245,60 @@ dos de los tres**, que es exactamente lo que 4.P viene a impedir.
 **Se descartó «nada en el SPA»** porque dejaba el eje vacío en la práctica y
 repetía el patrón que el titular ya rechazó: *backend correcto, usuario ciego*.
 
-**Consecuencias que esto fija:**
+### 6 bis.1 · PRECISIÓN DEL TITULAR — corrige lo que CONTROL había escrito aquí
 
-- **Angular SÍ se toca** en este microcorte: un control **discreto y opcional por
-  fila**, nunca un bloque de procedencia por campo (§3.4 sigue vigente).
-- **La UI habla llano**: «lo observé» / «me lo dijeron», no `OBSERVADO` /
-  `DECLARADO`. El vocabulario del enum viaja por el cable, **no se le enseña al
-  usuario**.
-- **No marcar es la opción por defecto y no cuesta nada.** Un guardado sin marcar
-  ninguna es válido y no debe pedir confirmación.
+CONTROL dedujo de esa decisión que **Angular tenía que estrenar un control por
+fila en 4.P**. **El titular lo acotó y manda su versión:**
+
+> **4.P debe establecer la verdad y la capacidad, no convertir el formulario en un
+> expediente pericial.**
+
+- **Primero, que el cable lo transporte**: `atributo { clave, valor, naturaleza? }`
+  — **opcional**.
+- **Después**, Web lo captura **sólo donde tenga sentido** —una acción secundaria
+  tipo «¿de dónde sale este dato?», o el contexto de captura—. **La UX fina se
+  resuelve más tarde**, fuera de 4.P.
+- **Prohibido** un `Naturaleza: [ DECLARADO ▼ ]` permanente al lado de cada uno de
+  los ~40 campos.
+
+**Por tanto, para 4.P: Angular NO estrena superficie de captura de naturaleza.**
+Sólo debe **seguir funcionando** con un campo opcional más en el contrato. Si algo
+del SPA se rompe por el cambio de contrato, se arregla; nada más.
+
+Cuando llegue esa UX, **la UI hablará llano** —«lo observé» / «me lo dijeron»—:
+el vocabulario del enum viaja por el cable y **no se le enseña al usuario**.
+
+### 6 bis.2 · `NULL` NO ES UNA CUARTA NATURALEZA
+
+**No se crea `DESCONOCIDO`.** Y no es una cuestión de nombres:
+
+```
+naturaleza = NULL       → NO sabemos cómo se obtuvo el hecho
+naturaleza = INFERIDO   → SÍ sabemos cómo se obtuvo: por una inferencia
+```
+
+**Son cosas semánticamente distintas.** Un `DESCONOCIDO` en el vocabulario las
+colapsaría, y **eso importará mucho para Intelligence**: «no consta cómo se supo»
+no es un método de obtención.
+
+La ausencia se representa como **ausencia**. El resto del registro **sigue
+teniendo procedencia operacional** —quién, cuándo, por qué canal—, que es cosa del
+otro eje:
+
+```
+vigilancia · valor = SI · naturaleza = NULL · canal = WEB · actor = agente X
+```
+
+**BROX registra quién lo escribió y por dónde; no inventa cómo se conoció.**
+
+### 6 bis.3 · La misma semántica en KAIROS — casos de aceptación
+
+| lo que ocurre en la conversación | `naturaleza` | exige además |
+|---|---|---|
+| «El propietario me dijo que acepta mascotas» | **`DECLARADO`** | — |
+| «Veo en la foto que parece tener balcón» | **`INFERIDO`** | **modelo · versión · confianza, obligatorios** |
+| «Durante la visita comprobé que tiene ascensor» | **`OBSERVADO`** | — |
+| la conversación no permite saberlo | **`NULL`** | **no se fuerza** |
 
 ## 6 ter. REGLAS CONGELADAS POR EL TITULAR (2026-08-25)
 

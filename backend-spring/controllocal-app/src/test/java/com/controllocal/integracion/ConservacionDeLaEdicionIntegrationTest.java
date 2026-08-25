@@ -1321,6 +1321,15 @@ class ConservacionDeLaEdicionIntegrationTest {
                 null, null, null, null, Boolean.FALSE, LocalDate.now().minusMonths(6), null);
     }
 
+    /** El piso que declara el caso, o {@code null} si su tipo no lo gobierna. */
+    private static String pisoDeclarado(CasoDeTipo caso) {
+        return caso.atributos().stream()
+                .filter(atributo -> "piso".equals(atributo.clave()))
+                .map(ValorAtributo::valor)
+                .findFirst()
+                .orElse(null);
+    }
+
     /**
      * Registra el caso con la ubicacion <b>completa</b> —las nueve piezas— y con
      * una titularidad que empezo hace anios.
@@ -1328,6 +1337,23 @@ class ConservacionDeLaEdicionIntegrationTest {
      * <p>Las dos cosas importan. Una ubicacion a medias no puede demostrar que
      * un guardado borre lo que no trae, y una titularidad de hoy esconde que
      * reemplazarla le cambia la fecha de inicio.
+     *
+     * <h2>El {@code piso} sale del caso, no de aqui (4.P, segunda vuelta)</h2>
+     * Este fixture mandaba {@code "4"} en {@code ubicacion.piso} para los SIETE
+     * tipos, <b>a la vez</b> que el caso declaraba su propio {@code piso} entre
+     * los atributos —{@code "3"} en LOCAL, {@code "7"} en OFICINA—. O sea: dos
+     * valores DISTINTOS para el mismo dato en la misma peticion.
+     *
+     * <p>El Core lo aceptaba y lo resolvia <b>en silencio por orden de
+     * escritura</b>: {@code aplicarUbicacion} escribia el 4 y el enrutador de
+     * atributos lo pisaba con el 3. Eso era posible porque {@code piso} viaja
+     * por DOS huecos del cable, y solo uno pasaba por el enrutador. Al enrutar
+     * los dos, la contradiccion sale a la luz — que es lo que tenia que pasar.
+     *
+     * <p>Ahora el piso lo pone el caso y llega una sola vez. Y no se manda para
+     * los tipos a los que <b>el catalogo dice que no aplica</b> —CASA, TERRENO,
+     * ALMACEN, OTRO—: rellenar ahi un hueco que ningun tipo gobierna era
+     * ejercitar el agujero, no cubrirlo. Ninguna asercion se ha tocado.
      */
     private long registrar(CasoDeTipo caso, List<OperacionSolicitada> operaciones) {
         Actor actor = actor();
@@ -1344,7 +1370,7 @@ class ConservacionDeLaEdicionIntegrationTest {
                 "Caso de conservacion " + caso.tipo(),
                 new Ubicacion("Av. Conservacion " + sufijo, "Miraflores",
                         "Urb. San Antonio", new BigDecimal("-12.1214"), new BigDecimal("-77.0297"),
-                        "Interior 402", "4", "Frente al parque", "Edificio Roma"),
+                        "Interior 402", pisoDeclarado(caso), "Frente al parque", "Edificio Roma"),
                 List.of(new Titular(idPropietario, null, Boolean.TRUE)),
                 caso.atributos(), operaciones, null), actor);
 

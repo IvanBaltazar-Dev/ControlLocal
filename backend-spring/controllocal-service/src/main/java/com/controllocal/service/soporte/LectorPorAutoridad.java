@@ -299,23 +299,12 @@ public class LectorPorAutoridad {
      * <p>{@code multivalor} llega ya resuelto por el lote: una fila ancla no
      * lleva escalar, y preguntar aqui por sus valores seria una consulta por
      * fila -- el N+1 que RC-003 retiro del repositorio.
+     *
+     * <p>La conversion vive en {@link ValorLogico#deFila} desde 4.P: los
+     * enrutadores necesitan la misma para saber QUE HABIA antes de pisar o
+     * borrar un valor, y dos copias del mismo {@code if} divergen.
      */
     private static ValorLogico comoValor(FilaDeValorGobernado fila, List<String> multivalor) {
-        if (multivalor != null && !multivalor.isEmpty()) {
-            return ValorLogico.deValores(multivalor);
-        }
-        if (fila.getValorTexto() != null) {
-            return ValorLogico.deTexto(fila.getValorTexto());
-        }
-        if (fila.getValorNumero() != null) {
-            // La moneda viaja pegada al monto: un importe sin ella no es dinero.
-            return fila.getValorMoneda() == null
-                    ? ValorLogico.deNumero(fila.getValorNumero())
-                    : ValorLogico.deImporte(fila.getValorNumero(), fila.getValorMoneda());
-        }
-        if (fila.getValorFecha() != null) {
-            return ValorLogico.deFecha(fila.getValorFecha());
-        }
-        return ValorLogico.deBooleano(fila.getValorBooleano());
+        return ValorLogico.deFila(fila, multivalor);
     }
 }

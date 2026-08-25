@@ -1,10 +1,14 @@
 package com.controllocal.service.soporte;
 
+import com.controllocal.domain.auditoria.RastroValorGobernado;
 import com.controllocal.domain.inmueble.AtributoPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Propiedad;
+import com.controllocal.domain.inmueble.ValorMultipleAtributo;
 import com.controllocal.persistence.repositorio.AtributoPropiedadRepository;
 import com.controllocal.persistence.repositorio.CatalogoAtributoRepository;
+import com.controllocal.persistence.repositorio.ValorMultipleAtributoRepository;
+import com.controllocal.service.Actor;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.springframework.stereotype.Component;
 
@@ -50,11 +54,17 @@ public class AtributosGobernados {
 
     private final CatalogoAtributoRepository catalogo;
     private final AtributoPropiedadRepository valores;
+    private final ValorMultipleAtributoRepository multivalores;
+    private final LinajeDelValor linaje;
 
     public AtributosGobernados(CatalogoAtributoRepository catalogo,
-                               AtributoPropiedadRepository valores) {
+                               AtributoPropiedadRepository valores,
+                               ValorMultipleAtributoRepository multivalores,
+                               LinajeDelValor linaje) {
         this.catalogo = catalogo;
         this.valores = valores;
+        this.multivalores = multivalores;
+        this.linaje = linaje;
     }
 
     /** Lo que se pregunta para un tipo de propiedad, en orden de presentacion. */
@@ -150,7 +160,7 @@ public class AtributosGobernados {
      * <p>Se hace en este orden a proposito: "esa clave no existe" y "esa clave
      * no aplica a un terreno" son errores distintos y se arreglan distinto.
      */
-    public AtributoPropiedad convertir(long idOrganizacion, long idPropiedad, String tipoPropiedad,
+    private AtributoPropiedad convertir(long idOrganizacion, long idPropiedad, String tipoPropiedad,
                                        String clave, String valor, String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         exigirQueAplique(definicion, tipoPropiedad);
@@ -188,7 +198,7 @@ public class AtributosGobernados {
      * correcto -- anadir dejaria sin forma de quitar una opcion, que es la
      * mitad de lo que significa editar una lista.
      */
-    public AtributoPropiedad convertirMultivalor(long idOrganizacion, long idPropiedad,
+    private AtributoPropiedad convertirMultivalor(long idOrganizacion, long idPropiedad,
                                                  String tipoPropiedad, String clave) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         exigirQueAplique(definicion, tipoPropiedad);
@@ -280,7 +290,7 @@ public class AtributosGobernados {
      * para JPA: reemplazar la fila perderia {@code fecha_creacion}, que es el
      * dato que dice desde cuando se sabe eso de la propiedad.
      */
-    public void actualizar(long idOrganizacion, AtributoPropiedad existente, String valor,
+    private void actualizar(long idOrganizacion, AtributoPropiedad existente, String valor,
                            String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, existente.getClave());
         String clave = existente.getClave();
@@ -306,66 +316,179 @@ public class AtributosGobernados {
         }
     }
 
-    /**
-     * <b>Escribe un valor donde su AUTORIDAD diga</b> (D-E4-3, paso 4).
-     *
-     * <p>Este metodo es el enrutador, y es lo que sustituye al
-     * {@code if ("metraje_total".equals(clave))} que vivia en el caso de uso:
-     *
-     * <pre>
-     *   CampoCaptura
-     *     +- destino = ATRIBUTO     -> AtributoPropiedad
-     *     +- destino = ESTRUCTURAL  -> campoEstructural -> EscritorEstructural
-     * </pre>
-     *
-     * <p>Los dos caminos son <b>mutuamente excluyentes</b>: un valor no se
-     * escribe nunca en los dos sitios. Escribirlo en ambos era exactamente la
-     * doble verdad que D-E4-3 vino a cerrar.
-     *
-     * @return el atributo a guardar, o {@code empty()} si el valor era
-     *         estructural y ya se aplico sobre la propiedad
-     */
-    public Optional<AtributoPropiedad> enrutar(long idOrganizacion, Propiedad propiedad,
-                                               String clave, String valor, String moneda) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
-        exigirQueAplique(definicion, propiedad.getTipoInmueble());
+    // ==================================================================
+    // Escritura con linaje (4.P)
+    //
+    // <b>Escribe un valor donde su AUTORIDAD diga</b> (D-E4-3, paso 4):
+    //
+    //   CampoCaptura
+    //     +- destino = ATRIBUTO     -> AtributoPropiedad
+    //     +- destino = ESTRUCTURAL  -> campoEstructural -> EscritorEstructural
+    //
+    // Los dos caminos son MUTUAMENTE EXCLUYENTES: un valor no se escribe nunca
+    // en los dos sitios. Escribirlo en ambos era exactamente la doble verdad
+    // que D-E4-3 vino a cerrar.
+    //
+    // Las TRES superficies de escritura de la PROPIEDAD entran por aqui, y por
+    // aqui salen con su procedencia: escalar (atributo o campo canonico),
+    // multivalor y retirada. El caso de uso ya no toca `atributo_propiedad` ni
+    // `atributo_propiedad_opcion`: si lo hiciera, habria un camino por el que un
+    // valor se escribe sin dejar de donde salio, y esa es exactamente la fuga
+    // que 4.P cierra.
+    // ==================================================================
 
-        if (definicion.esEstructural()) {
-            EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
-                    valorEstructural(definicion, valor), clave);
-            // Y NO se guarda como atributo: su autoridad es el campo canonico.
-            return Optional.empty();
+    /**
+     * <b>Los estructurales del ALTA, aplicados ANTES del primer save</b>, que es
+     * lo unico que este metodo hace.
+     *
+     * <p>No anota linaje, y no puede: {@code propiedad.metraje} es NOT NULL, asi
+     * que el valor tiene que estar puesto antes del {@code save} — y antes del
+     * {@code save} la propiedad <b>no tiene id</b>, que es justo la coordenada
+     * por la que se direcciona el rastro. Las dos exigencias son ciertas y
+     * apuntan en direcciones contrarias, asi que el alta ocurre en dos tiempos.
+     *
+     * <p>El segundo tiempo es {@link #escribirAlAlta}, que anota el linaje de
+     * <b>todos</b> los valores del alta, incluidos estos. Llamar a este metodo y
+     * no al otro dejaria un valor escrito sin procedencia; es la unica excepcion
+     * declarada del gate {@code LinajeDeTodaEscrituraTest}, y esta ahi con su
+     * motivo para que se vea, no para que se olvide.
+     */
+    public void aplicarEstructuralesAlAlta(long idOrganizacion, Propiedad propiedad,
+                                           List<ValorEntrante> entrantes) {
+        for (ValorEntrante entrante : entrantes) {
+            CatalogoAtributo definicion = definicionDe(idOrganizacion, entrante.clave());
+            if (definicion.esEstructural()) {
+                EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
+                        valorEstructural(definicion, entrante.valor()), entrante.clave());
+            }
         }
-        return Optional.of(convertir(idOrganizacion, propiedad.getId(),
-                propiedad.getTipoInmueble(), clave, valor, moneda));
     }
 
     /**
-     * Lo mismo para una edicion: si es estructural aplica sobre la propiedad;
-     * si es atributo, actualiza el existente o crea el que falte.
+     * El ALTA de una propiedad: escribe lo gobernado y anota el linaje de todo.
      *
-     * <p>Va aqui y no en el caso de uso por la misma razon: <b>alta y edicion
-     * tienen que enrutar igual</b>. Arreglar solo el alta deja la fuga abierta
-     * en cuanto alguien modifique una propiedad, que es la operacion mas
-     * frecuente de las dos.
+     * <p>Todo es {@code ALTA} por construccion —la propiedad acaba de nacer, asi
+     * que no habia nada que hallar— y por eso este metodo no lee el estado
+     * anterior de nada. Los estructurales ya estan aplicados sobre el agregado
+     * ({@link #aplicarEstructuralesAlAlta}); aqui solo reciben su fila de
+     * rastro, que es lo que hace que una clave que NO CREA FILA en
+     * {@code atributo_propiedad} tenga linaje igual que las demas.
      */
-    public Optional<AtributoPropiedad> enrutarEdicion(long idOrganizacion, Propiedad propiedad,
-                                                      String clave, String valor,
-                                                      AtributoPropiedad existente, String moneda) {
-        CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
+    public void escribirAlAlta(Actor actor, Propiedad propiedad, List<ValorEntrante> entrantes) {
+        for (ValorEntrante entrante : entrantes) {
+            if (entrante.esMultivalor()) {
+                escribirMultivalor(actor, propiedad, entrante);
+                continue;
+            }
+            CatalogoAtributo definicion = definicionDe(actor.idOrganizacion(), entrante.clave());
+            ValorLogico escrito;
+            if (definicion.esEstructural()) {
+                escrito = EscritorEstructural.leerValor(
+                        propiedad, definicion.getCampoEstructural());
+            } else {
+                AtributoPropiedad fila = valores.save(convertir(actor.idOrganizacion(),
+                        propiedad.getId(), propiedad.getTipoInmueble(), entrante.clave(),
+                        entrante.valor(), entrante.moneda()));
+                escrito = ValorLogico.deFila(fila, null);
+            }
+            linaje.anotarAlta(actor, entrante.procedencia(),
+                    RastroValorGobernado.SUJETO_PROPIEDAD, propiedad.getId(), entrante.clave(),
+                    escrito);
+        }
+    }
+
+    /**
+     * <b>Una escritura sobre una propiedad que ya existe.</b>
+     *
+     * <p>Lee la autoridad <b>antes</b> de pisarla —sea una fila o un campo
+     * canonico— y ese hallazgo viaja al linaje. Es lo que convierte una edicion
+     * en algo reconstruible: la fila vigente sigue siendo una sola, y el valor
+     * que habia deja de perderse.
+     *
+     * <p>Con un valor legado —anterior al cutover de V83, sin linaje propio—
+     * esto es lo unico que se puede afirmar de el con verdad: <i>«en el momento
+     * de esta edicion, el Core encontro esto»</i>. No se le pone fecha de
+     * nacimiento, ni autor, ni canal, ni naturaleza. Es la diferencia entre
+     * constatar y fechar.
+     */
+    public void escribirEnEdicion(Actor actor, Propiedad propiedad, ValorEntrante entrante) {
+        if (entrante.esMultivalor()) {
+            escribirMultivalor(actor, propiedad, entrante);
+            return;
+        }
+        long idOrganizacion = actor.idOrganizacion();
+        CatalogoAtributo definicion = definicionDe(idOrganizacion, entrante.clave());
         exigirQueAplique(definicion, propiedad.getTipoInmueble());
 
+        ValorLogico hallado;
+        ValorLogico escrito;
         if (definicion.esEstructural()) {
+            hallado = EscritorEstructural.leerValor(propiedad, definicion.getCampoEstructural());
             EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
-                    valorEstructural(definicion, valor), clave);
-            return Optional.empty();
+                    valorEstructural(definicion, entrante.valor()), entrante.clave());
+            escrito = EscritorEstructural.leerValor(propiedad, definicion.getCampoEstructural());
+        } else {
+            AtributoPropiedad existente = valores
+                    .findByIdPropiedadAndClave(propiedad.getId(), entrante.clave())
+                    .orElse(null);
+            // La foto se toma ANTES de actualizar: `actualizar` muta la misma
+            // entidad, asi que leerla despues devolveria el valor nuevo dos
+            // veces y la historia diria que no cambio nada.
+            hallado = existente == null ? null : ValorLogico.deFila(existente, null);
+            AtributoPropiedad fila = existente != null ? existente
+                    : convertir(idOrganizacion, propiedad.getId(), propiedad.getTipoInmueble(),
+                            entrante.clave(), entrante.valor(), entrante.moneda());
+            if (existente != null) {
+                actualizar(idOrganizacion, existente, entrante.valor(), entrante.moneda());
+            }
+            escrito = ValorLogico.deFila(valores.save(fila), null);
         }
-        if (existente != null) {
-            actualizar(idOrganizacion, existente, valor, moneda);
-            return Optional.of(existente);
+        anotarSegunHabia(actor, entrante, propiedad.getId(), hallado, escrito);
+    }
+
+    /**
+     * <b>Un multivalor: su ancla y sus valores, sustituyendo.</b>
+     *
+     * <p>Sustituir y no anadir es toda la decision: sin borrar antes no habria
+     * forma de QUITAR una opcion, y quitar es la mitad de lo que significa
+     * editar una lista.
+     *
+     * <p>Y ese borrado es lo que destruia el conjunto anterior. Desde 4.P se lee
+     * <b>entero</b> antes de borrarlo y viaja al linaje como conjunto, no como
+     * diferencia: «se quito CASETA_24H» no permite reconstruir que habia si el
+     * conjunto anterior era legado y nadie lo escribio nunca.
+     */
+    private void escribirMultivalor(Actor actor, Propiedad propiedad, ValorEntrante entrante) {
+        AtributoPropiedad ancla = valores
+                .findByIdPropiedadAndClave(propiedad.getId(), entrante.clave())
+                .orElse(null);
+        boolean existia = ancla != null;
+        if (!existia) {
+            ancla = valores.save(convertirMultivalor(actor.idOrganizacion(), propiedad.getId(),
+                    propiedad.getTipoInmueble(), entrante.clave()));
         }
-        return Optional.of(convertir(idOrganizacion, propiedad.getId(),
-                propiedad.getTipoInmueble(), clave, valor, moneda));
+        List<String> antes = existia ? multivalores.valoresDe(ancla.getId()) : List.of();
+        ValorLogico hallado = existia ? ValorLogico.deConjunto(antes) : null;
+
+        // Se escribe la DIFERENCIA y se anota el CONJUNTO. No es lo mismo, y las
+        // dos mitades importan: el linaje tiene que poder decir que habia y que
+        // quedo, enteros; la base solo tiene que quedar con lo segundo. Borrarlo
+        // todo y reescribirlo hacia lo segundo apoyandose en que nadie hubiera
+        // leido antes esos elementos -- una invariante que no fijaba ningun
+        // test. Tocar solo lo que cambia la vuelve innecesaria.
+        List<String> despues = entrante.valores();
+        List<String> seVan = antes.stream().filter(valor -> !despues.contains(valor)).toList();
+        if (!seVan.isEmpty()) {
+            multivalores.borrarDe(ancla.getId(), seVan);
+        }
+        for (String valor : despues) {
+            if (!antes.contains(valor)) {
+                multivalores.save(new ValorMultipleAtributo(
+                        actor.idOrganizacion(), ancla.getId(), valor));
+            }
+        }
+        anotarSegunHabia(actor, entrante, propiedad.getId(), hallado,
+                ValorLogico.deConjunto(despues));
     }
 
     /**
@@ -384,25 +507,122 @@ public class AtributosGobernados {
      * un valor que llego mal, y retirar es una <b>intencion declarada</b>. Este
      * corte no le da a {@code ""} ningun significado nuevo.
      *
-     * @return {@code false} si la clave no esta en el catalogo, para que el
-     *         llamante pueda probar el otro espacio de nombres antes de
-     *         rechazarla. Lanza si esta y su autoridad no admite quedarse vacia
+     * <p><b>Desde 4.P devuelve el valor que quito</b> en vez de un
+     * {@code boolean}. El borrado es fisico —la fila se va, y con ella sus
+     * opciones por {@code ON DELETE CASCADE}—, asi que lo que se lee aqui es la
+     * ultima vez que ese dato existe. Se lee antes de borrarlo y se anota; sin
+     * eso, «esta propiedad tuvo vigilancia con caseta hasta marzo» seria una
+     * afirmacion que la base no puede sostener.
+     *
+     * @return {@link ValorRetirado#NO_ES_DEL_CATALOGO} si la clave no esta en el
+     *         catalogo, para que el llamante pueda probar el otro espacio de
+     *         nombres antes de rechazarla. Lanza si esta y su autoridad no
+     *         admite quedarse vacia
      */
-    public boolean retirar(long idOrganizacion, Propiedad propiedad, String clave) {
-        Optional<CatalogoAtributo> definicion = catalogo.porClave(idOrganizacion, clave);
+    public ValorRetirado retirar(Actor actor, Propiedad propiedad, String clave,
+                                 ProcedenciaDelValor procedencia) {
+        Optional<CatalogoAtributo> definicion =
+                catalogo.porClave(actor.idOrganizacion(), clave);
         if (definicion.isEmpty()) {
-            return false;
+            return ValorRetirado.NO_ES_DEL_CATALOGO;
         }
         // Borrar enruta por sujeto igual que leer y escribir. Sin esto, pedir
         // que se retire una condicion del encargo saldria como "no esta en el
         // catalogo" -- un mensaje falso sobre una clave que existe.
         exigirQueSeaDePropiedad(definicion.get());
+
+        ValorLogico hallado;
         if (definicion.get().esEstructural()) {
-            EscritorEstructural.vaciar(propiedad, definicion.get().getCampoEstructural(), clave);
-            return true;
+            String concepto = definicion.get().getCampoEstructural();
+            hallado = EscritorEstructural.leerValor(propiedad, concepto);
+            // `vaciar` lanza para los conceptos que no admiten quedarse vacios
+            // -- METRAJE es NOT NULL --, y tiene que lanzar ANTES de que se anote
+            // nada: un linaje de una retirada que no ocurrio seria peor que no
+            // tenerlo.
+            EscritorEstructural.vaciar(propiedad, concepto, clave);
+        } else {
+            AtributoPropiedad existente = valores
+                    .findByIdPropiedadAndClave(propiedad.getId(), clave)
+                    .orElse(null);
+            hallado = existente == null ? null : loQueTenia(definicion.get(), existente);
+            valores.deleteByIdPropiedadAndClave(propiedad.getId(), clave);
         }
-        valores.deleteByIdPropiedadAndClave(propiedad.getId(), clave);
-        return true;
+        // NO se anota una retirada que no ocurrio. Nombrar en `atributosABorrar`
+        // una clave que nunca tuvo valor es legitimo -- el cliente no siempre
+        // sabe si estaba -- y no pasa nada: se borra lo que no habia. Pero
+        // escribir por eso una fila fechada, con autor y canal, en una tabla que
+        // no se puede corregir ni borrar, seria dejar constancia de un hecho que
+        // no existio. El linaje cuenta lo que paso, no lo que se pidio.
+        if (hallado == null) {
+            return ValorRetirado.de(null);
+        }
+        linaje.anotarRetirada(actor, procedencia, RastroValorGobernado.SUJETO_PROPIEDAD,
+                propiedad.getId(), clave, hallado);
+        return ValorRetirado.de(hallado);
+    }
+
+    /**
+     * <b>Lo que una fila tenia, leido segun la FORMA de su clave</b> (4.P).
+     *
+     * <p>La forma la decide el catalogo, no lo que haya en las columnas. Un
+     * {@code LISTA_MULTIPLE} con el conjunto vacio es un ancla: la clave estaba
+     * <b>respondida</b>, y {@code deFila} con una lista vacia caeria a la rama
+     * escalar y devolveria {@code null} -- o sea, «aqui no habia nada», que es
+     * falso y ademas convertiria la retirada en un no-hecho.
+     *
+     * <p>Es el mismo principio que aplica {@code escribirMultivalor} al escribir
+     * ({@link ValorLogico#deConjunto}): <b>el conjunto vacio es un conjunto</b>.
+     * Estaban a dos metros y decian cosas distintas.
+     */
+    private ValorLogico loQueTenia(CatalogoAtributo definicion, AtributoPropiedad existente) {
+        return definicion.tipo().esMultivalor()
+                ? ValorLogico.deConjunto(multivalores.valoresDe(existente.getId()))
+                : ValorLogico.deFila(existente, null);
+    }
+
+    /**
+     * ALTA o EDICION segun lo que la autoridad tuviera, y no segun por que
+     * endpoint entro la peticion.
+     *
+     * <p>La distincion es del DATO: que una clave reciba valor por primera vez
+     * dentro de un {@code PUT} de edicion sigue siendo su alta, y llamarlo
+     * edicion diria que habia algo antes.
+     */
+    private void anotarSegunHabia(Actor actor, ValorEntrante entrante, long idPropiedad,
+                                  ValorLogico hallado, ValorLogico escrito) {
+        if (hallado == null) {
+            linaje.anotarAlta(actor, entrante.procedencia(),
+                    RastroValorGobernado.SUJETO_PROPIEDAD, idPropiedad, entrante.clave(), escrito);
+        } else {
+            linaje.anotarEdicion(actor, entrante.procedencia(),
+                    RastroValorGobernado.SUJETO_PROPIEDAD, idPropiedad, entrante.clave(),
+                    hallado, escrito);
+        }
+    }
+
+    /**
+     * <b>Como se llama, en ESTA organizacion, la clave que alimenta un campo
+     * canonico</b> (4.P).
+     *
+     * <p>El cable tiene un hueco {@code ubicacion.piso} que parece una
+     * coordenada y no lo es: {@code piso} es una clave gobernada, declarada
+     * {@code ESTRUCTURAL} sobre el campo {@code PISO}. Escribirla por el hueco
+     * de la ubicacion la sacaba del enrutador -- y por tanto del linaje --, que
+     * es el defecto que 4.P cerro en su segunda vuelta.
+     *
+     * <p>Se pregunta por el CONCEPTO y no por el nombre, por la misma razon por
+     * la que {@link EscritorEstructural} conmuta sobre el concepto: la clave es
+     * dato y una organizacion puede llamarla como quiera, mientras que
+     * {@code PISO} existe con ese nombre pase lo que pase.
+     *
+     * @return {@code empty()} si el catalogo de esta organizacion no declara
+     *         ninguna clave sobre ese campo. No es un error: significa que ese
+     *         concepto no se gobierna aqui, y entonces el hueco del cable no
+     *         tiene nada que enrutar
+     */
+    public Optional<String> claveDelCampo(long idOrganizacion, String campoEstructural) {
+        return catalogo.porCampoEstructural(idOrganizacion, campoEstructural)
+                .map(CatalogoAtributo::getClave);
     }
 
     /** La definicion de una clave: la de la organizacion gana sobre la del sistema. */

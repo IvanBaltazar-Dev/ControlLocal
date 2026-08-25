@@ -7,7 +7,6 @@ import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.CondicionEconomicaCaptacion;
 import com.controllocal.domain.comun.EstadosDominio;
 import com.controllocal.domain.comun.EstadosDominio.EstadoCaptacion;
-import com.controllocal.domain.inmueble.AtributoPropiedad;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Distrito;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
@@ -17,7 +16,6 @@ import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.inmueble.TitularidadPropiedad;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.domain.persona.PersonaRol;
-import com.controllocal.persistence.repositorio.AtributoPropiedadRepository;
 import com.controllocal.persistence.repositorio.BorradorCapturaRepository;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
@@ -34,26 +32,21 @@ import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.PublicacionService;
-import com.controllocal.domain.inmueble.ValorMultipleAtributo;
-import com.controllocal.persistence.repositorio.ValorMultipleAtributoRepository;
 import com.controllocal.service.soporte.ValorLogico;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ActividadDeLaPropiedad;
 import com.controllocal.service.soporte.AnunciosDeLosEncargos;
-import com.controllocal.domain.comercial.AtributoEncargo;
-import com.controllocal.domain.comercial.ValorMultipleEncargo;
-import com.controllocal.persistence.repositorio.AtributoEncargoRepository;
-import com.controllocal.persistence.repositorio.ValorMultipleEncargoRepository;
 import com.controllocal.service.soporte.AtributosDeEncargo;
 import com.controllocal.service.soporte.Comercializacion;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.ComandosIdempotentes;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Documentos;
-import com.controllocal.service.soporte.EscritorEstructural;
 import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Procedencia;
+import com.controllocal.service.soporte.ProcedenciaDelValor;
+import com.controllocal.service.soporte.ValorEntrante;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.TitularParaEncargar;
 import com.controllocal.service.soporte.Transiciones;
@@ -128,7 +121,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final DetalleAgenteRepository agentes;
     private final DistritoRepository distritos;
     private final TitularidadPropiedadRepository titularidades;
-    private final AtributoPropiedadRepository atributos;
     private final CaptacionRepository captaciones;
     private final PrecioPropiedadRepository precios;
     private final EventoDominioRepository eventos;
@@ -138,20 +130,23 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final AtributosDeEncargo condiciones;
     /** Conocer un inmueble no es poder venderlo: el ENCARGO si exige titular (V76). */
     private final TitularParaEncargar titularParaEncargar;
-    private final AtributoEncargoRepository condicionesEscritas;
-    private final ValorMultipleEncargoRepository multivaloresDeEncargo;
     private final LectorPorAutoridad lector;
-    private final ValorMultipleAtributoRepository multivalores;
     private final ComandosIdempotentes comandos;
     private final Documentos documentos;
     private final Transiciones transiciones;
     private final ActividadDeLaPropiedad actividad;
     private final AnunciosDeLosEncargos publicaciones;
 
+    // Las cuatro tablas de valor gobernado ya no se inyectan aqui (4.P). Este
+    // caso de uso ORQUESTA -- decide que se escribe, en que orden y dentro de
+    // que transaccion -- y el que ESCRIBE es el enrutador de cada sujeto, que es
+    // el mismo que anota de donde salio cada valor. Mientras hubiera dos
+    // escritores habria un camino por el que un dato entra sin procedencia, y
+    // eso no se arregla acordandose: se arregla quitando el camino.
+
     public PropiedadUniversalServiceImpl(PropiedadRepository propiedades, PersonaRolRepository roles,
                                          DetalleAgenteRepository agentes, DistritoRepository distritos,
                                          TitularidadPropiedadRepository titularidades,
-                                         AtributoPropiedadRepository atributos,
                                          CaptacionRepository captaciones,
                                          PrecioPropiedadRepository precios,
                                          EventoDominioRepository eventos,
@@ -159,10 +154,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          AtributosGobernados gobierno,
                                          AtributosDeEncargo condiciones,
                                          TitularParaEncargar titularParaEncargar,
-                                         AtributoEncargoRepository condicionesEscritas,
-                                         ValorMultipleEncargoRepository multivaloresDeEncargo,
                                          LectorPorAutoridad lector,
-                                       ValorMultipleAtributoRepository multivalores,
                                          ComandosIdempotentes comandos, Documentos documentos,
                                          Transiciones transiciones,
                                          ActividadDeLaPropiedad actividad,
@@ -172,7 +164,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.agentes = agentes;
         this.distritos = distritos;
         this.titularidades = titularidades;
-        this.atributos = atributos;
         this.captaciones = captaciones;
         this.precios = precios;
         this.eventos = eventos;
@@ -180,10 +171,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.gobierno = gobierno;
         this.condiciones = condiciones;
         this.titularParaEncargar = titularParaEncargar;
-        this.condicionesEscritas = condicionesEscritas;
-        this.multivaloresDeEncargo = multivaloresDeEncargo;
         this.lector = lector;
-        this.multivalores = multivalores;
         this.comandos = comandos;
         this.documentos = documentos;
         this.transiciones = transiciones;
@@ -223,7 +211,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         }
 
         List<OperacionSolicitada> operaciones = operacionesValidadas(comando.operaciones());
-        Map<String, ValorAtributo> valores = atributosValidados(comando.atributos());
+        // El `piso` del hueco `ubicacion` entra AQUI, entre los atributos, antes
+        // de que se compruebe nada y mucho antes de que se escriba nada: es una
+        // clave gobernada y tiene que recorrer el mismo camino que las demas.
+        Map<String, ValorAtributo> valores = conElPisoGobernado(actor.idOrganizacion(),
+                atributosValidados(comando.atributos()), comando.ubicacion());
         List<Titular> titulares = titularesValidados(comando.titulares());
 
         // Se comprueba ANTES de escribir nada: "te falta el metraje" es un
@@ -252,8 +244,12 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         //
         // Se hace aqui y se repite despues del save para los atributos porque
         // el orden lo impone la BD: la propiedad no se puede insertar sin
-        // metraje, y un atributo no se puede insertar sin propiedad.
-        enrutarEstructurales(actor, propiedad, valores);
+        // metraje, y un atributo no se puede insertar sin propiedad. Y el
+        // LINAJE de estos estructurales tambien va despues, por la misma razon
+        // al reves: se direcciona por el id de la propiedad, que aqui todavia
+        // no existe (4.P).
+        List<ValorEntrante> entrantes = entrantes(valores, procedencia);
+        gobierno.aplicarEstructuralesAlAlta(actor.idOrganizacion(), propiedad, entrantes);
 
         // `precio_referencial` y `moneda_referencial` son NOT NULL y todo el
         // cable actual las lee. Se proyectan del encargo de ALQUILER si lo hay
@@ -283,7 +279,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         propiedades.save(propiedad);
 
         escribirTitularidades(actor, propiedad.getId(), titulares, rolesTitulares);
-        escribirAtributos(actor, propiedad, valores);
+        // Y aqui se anota el linaje de TODO lo del alta -- lo gobernado que se
+        // acaba de escribir y lo estructural que ya estaba aplicado.
+        gobierno.escribirAlAlta(actor, propiedad, entrantes);
 
         List<Long> idsEncargos = new ArrayList<>();
         if (!operaciones.isEmpty()) {
@@ -444,7 +442,11 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .orElseThrow(() -> new NoEncontradoException("Propiedad"));
         Procedencia procedencia = Procedencia.oPantalla(comando.procedencia());
 
-        Map<String, ValorAtributo> valores = atributosDeEdicion(comando.atributos());
+        Map<String, ValorAtributo> valores = conElPisoGobernado(actor.idOrganizacion(),
+                atributosDeEdicion(comando.atributos()), comando.ubicacion());
+        // Se calcula DESPUES de fusionar el piso: mandar `ubicacion.piso` y a la
+        // vez "piso" en atributosABorrar son dos ordenes contrarias, y aqui es
+        // donde se ven las dos.
         List<String> aBorrar = clavesABorrar(comando.atributosABorrar(), valores);
 
         String huella = documentos.huellaDe(new LinkedHashMap<>(Map.of(
@@ -473,12 +475,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         if (comando.titulares() != null) {
             conciliarTitularidades(actor, propiedad, titularesValidados(comando.titulares()));
         }
-        if (comando.atributos() != null) {
-            actualizarAtributos(actor, propiedad, valores);
+        // La condicion mira el MAPA y no `comando.atributos()`: el piso puede
+        // venir solo dentro de `ubicacion`, y con la comprobacion sobre el
+        // comando se quedaria sin escribir.
+        if (!valores.isEmpty()) {
+            actualizarAtributos(actor, propiedad, valores, procedencia);
         }
         // Despues de los valores: si la misma peticion cambia unas claves y
         // retira otras, el orden no puede depender de como se recorra el mapa.
-        retirarValores(actor, propiedad, aBorrar);
+        retirarValores(actor, propiedad, aBorrar, procedencia);
         if (comando.operaciones() != null) {
             for (OperacionSolicitada solicitada : operacionesValidadas(comando.operaciones())) {
                 actualizarEncargo(actor, propiedad, solicitada, procedencia);
@@ -487,7 +492,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // Y las condiciones de cada encargo, en su bloque (Corte 0C). Van
         // despues de las operaciones porque una operacion recien declarada abre
         // el encargo al que estas condiciones pueden pertenecer.
-        aplicarCondiciones(actor, propiedad, comando.condiciones());
+        aplicarCondiciones(actor, propiedad, comando.condiciones(), procedencia);
         propiedades.save(propiedad);
 
         anotarEvento(actor, EVENTO_EDITADA, Propiedad.ENTIDAD_TIPO, propiedad.getId(), procedencia,
@@ -522,7 +527,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * comprueba {@code SujetoDelDatoIntegrationTest}.
      */
     private void aplicarCondiciones(Actor actor, Propiedad propiedad,
-                                    List<CondicionesDeEncargo> bloques) {
+                                    List<CondicionesDeEncargo> bloques, Procedencia procedencia) {
         if (bloques == null || bloques.isEmpty()) {
             return;
         }
@@ -540,12 +545,12 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                 + "peticion. Cual de los dos bloques gana no lo puede decidir el "
                                 + "Core: seria una regla inventada que el cliente no sabe.");
             }
-            aplicarCondicionesDe(actor, propiedad, bloque);
+            aplicarCondicionesDe(actor, propiedad, bloque, procedencia);
         }
     }
 
     private void aplicarCondicionesDe(Actor actor, Propiedad propiedad,
-                                      CondicionesDeEncargo bloque) {
+                                      CondicionesDeEncargo bloque, Procedencia procedencia) {
         // El encargo tiene que ser de ESTA propiedad y de ESTE tenant. Sin la
         // comprobacion, un id ajeno escribiria condiciones en la cartera de otra
         // corredora -- y la FK compuesta lo dejaria pasar, porque la organizacion
@@ -561,48 +566,21 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         List<String> aBorrar = clavesABorrar(bloque.atributosABorrar(), valores);
 
         if (bloque.atributos() != null) {
-            valores.forEach((clave, valor) -> {
-                if (valor.valores() != null) {
-                    escribirMultivalorDeEncargo(actor, donde, clave, valor.valores());
-                    return;
-                }
-                AtributoEncargo existente = condicionesEscritas
-                        .findByIdCaptacionAndClave(donde.idCaptacion(), clave)
-                        .orElse(null);
-                condicionesEscritas.save(condiciones.enrutarEdicion(actor.idOrganizacion(), donde,
-                        clave, valor.valor(), existente, valor.moneda()));
-            });
+            for (ValorEntrante entrante : entrantes(valores, procedencia)) {
+                condiciones.escribir(actor, donde, entrante);
+            }
         }
         // Despues de los valores, igual que en la propiedad: si la misma
         // peticion cambia unas claves y retira otras, el resultado no puede
         // depender de como se recorra el mapa.
         for (String clave : aBorrar) {
-            if (!condiciones.retirar(actor.idOrganizacion(), donde, clave)) {
+            if (!condiciones.retirar(actor, donde, clave,
+                    ProcedenciaDelValor.delActo(procedencia)).gobernada()) {
                 throw new ReglaNegocioException(
                         "El atributo \"" + clave + "\" no esta en el catalogo, asi que no hay "
                                 + "nada que retirar del encargo " + encargo.getCodigoCaptacion()
                                 + ".");
             }
-        }
-    }
-
-    /**
-     * Un multivalor del encargo: su ancla y sus valores, <b>sustituyendo</b>.
-     *
-     * <p>Mismo gesto que en la propiedad y por la misma razon: sin borrar antes
-     * no habria forma de QUITAR una opcion, y quitar es la mitad de lo que
-     * significa editar una lista.
-     */
-    private void escribirMultivalorDeEncargo(Actor actor, Comercializacion donde, String clave,
-                                             List<String> seleccionados) {
-        AtributoEncargo ancla = condicionesEscritas
-                .findByIdCaptacionAndClave(donde.idCaptacion(), clave)
-                .orElseGet(() -> condicionesEscritas.save(
-                        condiciones.convertirMultivalor(actor.idOrganizacion(), donde, clave)));
-        multivaloresDeEncargo.borrarDe(ancla.getId());
-        for (String valor : seleccionados) {
-            multivaloresDeEncargo.save(new ValorMultipleEncargo(
-                    actor.idOrganizacion(), ancla.getId(), valor));
         }
     }
 
@@ -697,21 +675,29 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     }
 
     /**
-     * Guarda los valores cuya autoridad es {@code atributo_propiedad}.
+     * <b>Cada valor con SU procedencia, y el acto compartido</b> (4.P).
      *
-     * <p>Los estructurales ya se aplicaron sobre la propiedad antes del save, y
-     * el enrutador devuelve {@code empty()} para ellos: <b>no se escriben dos
-     * veces</b>. Esa exclusion mutua es toda la decision de D-E4-3.
+     * <p>La {@link Procedencia} del acto —canal, agente, conversacion, turno— es
+     * la misma para toda la peticion: es lo que el Core sabe siempre. Lo que
+     * cambia valor a valor es la <b>naturaleza</b>, y por eso se compone aqui,
+     * una por clave, en vez de estamparse una sola vez sobre el guardado entero.
+     *
+     * <p>Es la conversion que hace real la regla que abrio el microcorte: un
+     * mismo {@code PUT} puede traer {@code tipo_acceso} observado en una visita,
+     * {@code zonificacion} leida de un certificado y {@code vigilancia} dicha por
+     * el propietario, y las tres salen de aqui con la suya.
      */
-    private void escribirAtributos(Actor actor, Propiedad propiedad, Map<String, ValorAtributo> valores) {
-        valores.forEach((clave, valor) -> {
-            if (valor.valores() != null) {
-                escribirMultivalor(actor, propiedad, clave, valor.valores());
-                return;
-            }
-            gobierno.enrutar(actor.idOrganizacion(), propiedad, clave, valor.valor(), valor.moneda())
-                    .ifPresent(atributos::save);
-        });
+    private static List<ValorEntrante> entrantes(Map<String, ValorAtributo> valores,
+                                                 Procedencia acto) {
+        List<ValorEntrante> entrantes = new ArrayList<>();
+        valores.forEach((clave, valor) -> entrantes.add(entrante(valor, acto)));
+        return entrantes;
+    }
+
+    private static ValorEntrante entrante(ValorAtributo valor, Procedencia acto) {
+        return new ValorEntrante(valor.clave(), valor.valor(), valor.moneda(), valor.valores(),
+                new ProcedenciaDelValor(acto, valor.naturaleza(), valor.observadoEn(),
+                        valor.evidenciaRef(), valor.confianza()));
     }
 
     /**
@@ -779,9 +765,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * nombre</b>, porque un borrado que no borra nada y calla es peor que un
      * error.
      */
-    private void retirarValores(Actor actor, Propiedad propiedad, List<String> claves) {
+    private void retirarValores(Actor actor, Propiedad propiedad, List<String> claves,
+                                Procedencia procedencia) {
         for (String clave : claves) {
-            if (gobierno.retirar(actor.idOrganizacion(), propiedad, clave)) {
+            // El enrutador devuelve LO QUE QUITO, y no un si/no (4.P). El
+            // borrado es fisico —la fila se va, y con ella sus opciones—, asi
+            // que ese es el ultimo instante en que ese dato existe: se lee, se
+            // anota en el linaje y la clave queda con historia y sin valor.
+            if (gobierno.retirar(actor, propiedad, clave,
+                    ProcedenciaDelValor.delActo(procedencia)).gobernada()) {
                 continue;
             }
             switch (clave) {
@@ -802,61 +794,20 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         }
     }
 
-    private void actualizarAtributos(Actor actor, Propiedad propiedad, Map<String, ValorAtributo> valores) {
-        valores.forEach((clave, valor) -> {
-            Optional<AtributoPropiedad> existente =
-                    atributos.findByIdPropiedadAndClave(propiedad.getId(), clave);
-            // El mismo enrutador que el alta: si la clave es estructural aplica
-            // sobre la propiedad y NO deja atributo; si es gobernada, actualiza
-            // el que hay o crea el que falta. Arreglar solo el alta dejaria la
-            // fuga abierta en la operacion mas frecuente de las dos.
-            if (valor.valores() != null) {
-                escribirMultivalor(actor, propiedad, clave, valor.valores());
-                return;
-            }
-            gobierno.enrutarEdicion(actor.idOrganizacion(), propiedad, clave, valor.valor(),
-                            existente.orElse(null), valor.moneda())
-                    .ifPresent(atributos::save);
-        });
-    }
-
     /**
-     * Aplica las claves cuya autoridad es un campo canonico del agregado.
+     * Los valores de una edicion, cada uno por su autoridad y con su linaje.
      *
-     * <p>Se separa del resto porque tiene que ocurrir <b>antes</b> del primer
-     * {@code save}: {@code propiedad.metraje} es NOT NULL. Los atributos
-     * gobernados, en cambio, necesitan que la propiedad ya exista.
+     * <p>El mismo enrutador que el alta: si la clave es estructural aplica sobre
+     * la propiedad y NO deja atributo; si es gobernada, actualiza la que hay o
+     * crea la que falta; si es multivalor, sustituye el conjunto. Arreglar solo
+     * el alta dejaria la fuga abierta en la operacion mas frecuente de las dos —
+     * y desde 4.P «la fuga» es tambien la de la procedencia.
      */
-    /**
-     * <b>Guarda un multivalor: su ancla y sus valores, sustituyendo.</b>
-     *
-     * <p>Sustituir y no anadir es toda la decision: sin borrar antes no habria
-     * forma de QUITAR una opcion, y quitar es la mitad de lo que significa
-     * editar una lista. El borrado va primero y en la misma transaccion, asi
-     * que no existe un instante en el que la ficha diga las dos cosas.
-     */
-    private void escribirMultivalor(Actor actor, Propiedad propiedad, String clave,
-                                    List<String> seleccionados) {
-        AtributoPropiedad ancla = atributos
-                .findByIdPropiedadAndClave(propiedad.getId(), clave)
-                .orElseGet(() -> atributos.save(gobierno.convertirMultivalor(
-                        actor.idOrganizacion(), propiedad.getId(),
-                        propiedad.getTipoInmueble(), clave)));
-        multivalores.borrarDe(ancla.getId());
-        for (String valor : seleccionados) {
-            multivalores.save(new ValorMultipleAtributo(
-                    actor.idOrganizacion(), ancla.getId(), valor));
+    private void actualizarAtributos(Actor actor, Propiedad propiedad,
+                                     Map<String, ValorAtributo> valores, Procedencia procedencia) {
+        for (ValorEntrante entrante : entrantes(valores, procedencia)) {
+            gobierno.escribirEnEdicion(actor, propiedad, entrante);
         }
-    }
-
-    private void enrutarEstructurales(Actor actor, Propiedad propiedad, Map<String, ValorAtributo> valores) {
-        valores.forEach((clave, valor) -> {
-            CatalogoAtributo definicion = gobierno.definicionDe(actor.idOrganizacion(), clave);
-            if (definicion.esEstructural()) {
-                EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
-                        valor.valor(), clave);
-            }
-        });
     }
 
     /**
@@ -943,13 +894,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         if (solicitada.condiciones() != null) {
             Comercializacion donde = new Comercializacion(encargo.getId(),
                     propiedad.getTipoInmueble(), operacion.codigo());
-            for (ValorAtributo valor : atributosValidados(solicitada.condiciones()).values()) {
-                if (valor.valores() != null) {
-                    escribirMultivalorDeEncargo(actor, donde, valor.clave(), valor.valores());
-                } else {
-                    condicionesEscritas.save(condiciones.convertir(actor.idOrganizacion(), donde,
-                            valor.clave(), valor.valor(), valor.moneda()));
-                }
+            for (ValorEntrante entrante
+                    : entrantes(atributosValidados(solicitada.condiciones()), procedencia)) {
+                condiciones.escribir(actor, donde, entrante);
             }
         }
 
@@ -1576,6 +1523,80 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         };
     }
 
+    /**
+     * <b>El `piso` que llega dentro de `ubicacion` es una CLAVE GOBERNADA, y se
+     * enruta como tal</b> (4.P, segunda vuelta).
+     *
+     * <p>De los nueve huecos de {@code UbicacionRequest}, ocho son de la
+     * ubicacion fisica y no estan en el catalogo. {@code piso} es <b>el unico
+     * solape</b>: existe como clave del catalogo, declarada {@code ESTRUCTURAL}
+     * sobre el campo canonico {@code PISO}, con su vocabulario y su exigencia.
+     *
+     * <p>Hasta esta correccion se escribia con {@code propiedad::setPiso} desde
+     * {@code aplicarUbicacion}, o sea <b>por fuera del enrutador</b>. El efecto
+     * medido: {@code PUT /propiedades/{id}} con {@code {"ubicacion":{"piso":"7"}}}
+     * respondia 200, cambiaba la columna, <b>publicaba el valor como gobernado en
+     * la propia respuesta</b> y no dejaba ni una fila de linaje. Y como retirar
+     * SI pasaba por el enrutador, la historia quedaba
+     * {@code EDICION 7->8} + {@code RETIRADA 8->vacio} <b>sin ALTA</b>: el 7
+     * aparecia de la nada como valor hallado.
+     *
+     * <p>No se cierra quitando el hueco del cable —el SPA y las suites lo mandan
+     * ahi, y 4.P no estrena superficie— sino <b>enrutandolo</b>: el cliente manda
+     * un nombre logico y el Core decide donde vive, que es la regla de D-E4-3
+     * aplicada al tercer sitio por el que entraba.
+     *
+     * <p>La clave se resuelve por <b>concepto</b> y no por literal: preguntar
+     * cual es la clave del campo {@code PISO} es lo mismo que hace
+     * {@link EscritorEstructural} al escribir, y deja funcionar a una
+     * organizacion que declare la suya con otro nombre.
+     *
+     * <p><b>Mandar el piso por los dos sitios a la vez se rechaza.</b> Son dos
+     * intenciones sobre el mismo dato y no se elige entre ellas por precedencia:
+     * cualquier orden que se escogiera seria una regla inventada que el cliente
+     * no sabe. Es la misma decision que ya rige para una clave que llega con
+     * valor y en {@code atributosABorrar}.
+     */
+    private Map<String, ValorAtributo> conElPisoGobernado(long idOrganizacion,
+                                                          Map<String, ValorAtributo> valores,
+                                                          Ubicacion ubicacion) {
+        if (ubicacion == null || ubicacion.piso() == null) {
+            return valores;
+        }
+        Optional<String> clave = gobierno.claveDelCampo(
+                idOrganizacion, CatalogoAtributo.CAMPO_PISO);
+        if (clave.isEmpty()) {
+            // El catalogo de esta organizacion no gobierna el piso. Entonces el
+            // hueco del cable no tiene nada que enrutar y se queda donde estaba.
+            return valores;
+        }
+        ValorAtributo yaVenia = valores.get(clave.get());
+        if (yaVenia != null) {
+            // Que llegue por los dos huecos NO es de suyo una contradiccion, y
+            // aqui hay que ser exacto: LA FICHA PUBLICA EL PISO DOS VECES --
+            // dentro de `ubicacion` y entre los `atributos` --, asi que un
+            // cliente que devuelve lo que el Core le dio manda los dos. Rechazar
+            // eso seria rechazar la ida y vuelta del propio Core.
+            //
+            // Contradiccion es que digan COSAS DISTINTAS. Entonces si se avisa,
+            // porque elegir uno seria descartar el otro sin decirlo -- la misma
+            // regla que ya rige para una clave que llega con valor y a la vez en
+            // `atributosABorrar`.
+            if (!ubicacion.piso().equals(yaVenia.valor())) {
+                throw new ReglaNegocioException(
+                        "El piso llego dos veces y con valores distintos: \""
+                                + ubicacion.piso() + "\" dentro de \"ubicacion\" y \""
+                                + yaVenia.valor() + "\" como atributo \"" + clave.get()
+                                + "\". Es el mismo dato, y elegir uno por ti seria descartar el "
+                                + "otro sin decirlo: manda uno.");
+            }
+            return valores;
+        }
+        Map<String, ValorAtributo> conElPiso = new LinkedHashMap<>(valores);
+        conElPiso.put(clave.get(), new ValorAtributo(clave.get(), ubicacion.piso()));
+        return conElPiso;
+    }
+
     private static Ubicacion ubicacionValidada(Ubicacion ubicacion) {
         if (ubicacion == null) {
             throw new ReglaNegocioException("La ubicacion es obligatoria: direccion y distrito.");
@@ -1864,7 +1885,14 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         siViene(ubicacion.distrito(), valor -> propiedad.setDistrito(valor.trim()));
         siViene(ubicacion.zonaUrbanizacion(), propiedad::setZonaUrbanizacion);
         siViene(ubicacion.interiorUnidad(), propiedad::setInteriorUnidad);
-        siViene(ubicacion.piso(), propiedad::setPiso);
+        // `piso` NO se escribe aqui, y es la correccion central de la segunda
+        // vuelta de 4.P. Viaja en el hueco `ubicacion` del cable --lo mandan el
+        // SPA y las suites-- pero NO es una coordenada: es una clave gobernada
+        // declarada ESTRUCTURAL sobre el campo PISO. Escribirla con un setter
+        // la sacaba del enrutador, y con el, del linaje: editar el piso desde
+        // la pantalla no dejaba procedencia JAMAS, que es exactamente lo que la
+        // frontera de V83 define como defecto. La enruta `pisoGobernado`, que
+        // la mete entre los atributos antes de que nadie escriba nada.
         siViene(ubicacion.referenciaInterna(), propiedad::setReferenciaInterna);
         siViene(ubicacion.nombreEdificioGaleria(), propiedad::setNombreEdificioGaleria);
         // `ubicacion` (geography) la deriva el trigger de V46 a partir de estas
@@ -1974,12 +2002,27 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .orElse("");
     }
 
+    /**
+     * Los atributos en la huella de idempotencia, <b>con su naturaleza</b>.
+     *
+     * <p>La naturaleza entra en la huella desde 4.P y no es un detalle: sin
+     * ella, corregir «lo observe» por «me lo dijo el propietario» sobre el mismo
+     * valor produciria la misma huella y la segunda edicion se descartaria como
+     * repetida. El valor no cambia, pero <b>lo que sabemos de el, si</b>.
+     *
+     * <p>La confianza va por lo mismo: reinferir el mismo valor con un modelo
+     * mas seguro es una afirmacion distinta, y descartarla como repetida seria
+     * perder precisamente la mejora.
+     */
     private static String atributosEnHuella(List<ValorAtributo> valores) {
         if (valores == null) {
             return "";
         }
         return valores.stream()
-                .map(valor -> valor.clave() + "=" + valor.valor())
+                .map(valor -> valor.clave() + "=" + valor.valor()
+                        + (valor.naturaleza() == null ? "" : "@" + valor.naturaleza())
+                        + (valor.confianza() == null ? ""
+                                : "~" + valor.confianza().stripTrailingZeros().toPlainString()))
                 .sorted()
                 .reduce((a, b) -> a + "," + b)
                 .orElse("");

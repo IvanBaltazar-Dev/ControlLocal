@@ -26,7 +26,34 @@ public interface ValorMultipleEncargoRepository extends JpaRepository<ValorMulti
             """)
     List<ValorMultipleEncargo> deVarios(@Param("idsAtributo") Collection<Long> idsAtributo);
 
-    @Modifying
-    @Query("delete from ValorMultipleEncargo v where v.idAtributoEncargo = :idAtributo")
-    void borrarDe(@Param("idAtributo") long idAtributo);
+    /**
+     * El conjunto de UNA clave, como texto (4.P). Gemelo de
+     * {@code ValorMultipleAtributoRepository.valoresDe}, incluida la razon por
+     * la que devuelve escalares y no entidades: leerlas las mete en el contexto
+     * de persistencia, el borrado masivo no lo limpia, y el {@code save}
+     * posterior de un elemento que estaba en los dos conjuntos se convierte en
+     * un UPDATE de una fila que ya no existe — o sea, en una perdida callada.
+     */
+    @Query("""
+            select v.valor from ValorMultipleEncargo v
+            where v.idAtributoEncargo = :idAtributo
+            order by v.valor asc
+            """)
+    List<String> valoresDe(@Param("idAtributo") long idAtributo);
+
+    /**
+     * Retira SOLO los elementos que se van (4.P, segunda vuelta). Gemelo de
+     * {@code ValorMultipleAtributoRepository.borrarDe}, y por la misma razon:
+     * borrar el conjunto entero y reescribirlo apoyaba la correccion en una
+     * invariante que no fijaba nadie —que ninguna entidad de este tipo estuviera
+     * en el contexto de persistencia—, y borrar solo lo que se va la hace
+     * innecesaria.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            delete from ValorMultipleEncargo v
+            where v.idAtributoEncargo = :idAtributo and v.valor in :valores
+            """)
+    void borrarDe(@Param("idAtributo") long idAtributo,
+                  @Param("valores") Collection<String> valores);
 }

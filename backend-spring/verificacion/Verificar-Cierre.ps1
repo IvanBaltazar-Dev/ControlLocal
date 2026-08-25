@@ -73,6 +73,10 @@ $integracion = @(
     'NucleoUniversalIntegrationTest',
     'OcupacionInmuebleIntegrationTest',
     'PadronDeGobiernoIntegrationTest',
+    # 4.P: la procedencia del DATO. Los ocho casos de reconstruccion -- alta,
+    # edicion, borrado, multivalor, estructural legado, naturalezas mezcladas,
+    # inferencia incompleta y encargo.
+    'ProcedenciaDelValorIntegrationTest',
     # D-E4-1 / D-E4-2: los escenarios de aceptacion de la propiedad universal y
     # la captura. Es el unico que COMETE de verdad, en tenants propios.
     # La Propiedad como activo de dato: conocida, con procedencia y observaciones.

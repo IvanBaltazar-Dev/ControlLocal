@@ -34,12 +34,58 @@ public interface ValorMultipleAtributoRepository extends JpaRepository<ValorMult
     List<ValorMultipleAtributo> deVarios(@Param("idsAtributo") Collection<Long> idsAtributo);
 
     /**
-     * Retira todos los valores de una clave.
+     * <b>El conjunto de UNA clave, como texto y no como entidades</b> (4.P).
      *
-     * <p>Editar una lista es SUSTITUIR, no anadir: sin este borrado no habria
-     * forma de quitar una opcion, que es la mitad de lo que significa editarla.
+     * <p>La diferencia con {@link #deVarios} no es de comodidad: es lo unico que
+     * hace segura la secuencia <i>leer el conjunto anterior → borrarlo →
+     * escribir el nuevo</i>, que es lo que el linaje necesita para conservar el
+     * conjunto entero en vez de una diferencia.
+     *
+     * <p>Con {@code deVarios} esa secuencia <b>pierde silenciosamente</b> los
+     * elementos que estan en los dos conjuntos. Medido el 2026-08-25: cambiar
+     * {@code vigilancia} de {@code {CASETA_24H, CAMARAS_CCTV}} a
+     * {@code {CAMARAS_CCTV, CONTROL_DE_ACCESO}} dejaba la ficha con
+     * <b>{@code {CONTROL_DE_ACCESO}}</b> a secas. La causa: leer las entidades
+     * las mete en el contexto de persistencia, el {@code borrarDe} es un DELETE
+     * masivo que <b>no lo limpia</b>, y el {@code save} posterior con la misma
+     * clave compuesta se resuelve como {@code merge} de algo que Hibernate cree
+     * ya gestionado — asi que emite un UPDATE de una fila que ya no existe en
+     * vez de un INSERT.
+     *
+     * <p>Devolver escalares corta el problema de raiz: no entra ninguna entidad
+     * en el contexto, y {@code save} vuelve a ser un alta.
      */
-    @Modifying
-    @Query("delete from ValorMultipleAtributo v where v.idAtributoPropiedad = :idAtributo")
-    void borrarDe(@Param("idAtributo") long idAtributo);
+    @Query("""
+            select v.valor from ValorMultipleAtributo v
+            where v.idAtributoPropiedad = :idAtributo
+            order by v.valor asc
+            """)
+    List<String> valoresDe(@Param("idAtributo") long idAtributo);
+
+    /**
+     * <b>Retira SOLO los elementos que se van</b> (4.P, segunda vuelta).
+     *
+     * <p>Editar una lista es SUSTITUIR, y hasta esta correccion sustituir era
+     * «borrarlo todo y volver a escribirlo». Funcionaba, pero apoyaba la
+     * correccion entera en una invariante que no fijaba nadie: <b>que ninguna
+     * entidad de este tipo estuviera en el contexto de persistencia</b> cuando
+     * corriera el borrado. Bastaba que alguien leyera la ficha antes de guardar
+     * para que volviera el fallo, en silencio.
+     *
+     * <p>Borrar solo lo que se va lo cierra <b>por construccion</b>: el elemento
+     * que esta en los dos conjuntos —el unico que podia perderse— ya no se borra
+     * ni se vuelve a insertar, asi que no hay {@code merge} que pueda
+     * convertirse en un UPDATE de una fila que ya no existe. Y ademas es lo que
+     * de verdad pasa: la propiedad no dejo de tener camaras durante un instante.
+     *
+     * <p>{@code flushAutomatically} ordena lo pendiente antes del borrado: el
+     * ancla puede acabar de insertarse en esta misma transaccion.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            delete from ValorMultipleAtributo v
+            where v.idAtributoPropiedad = :idAtributo and v.valor in :valores
+            """)
+    void borrarDe(@Param("idAtributo") long idAtributo,
+                  @Param("valores") Collection<String> valores);
 }

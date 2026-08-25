@@ -93,6 +93,9 @@ class GateDeCierreTest {
                         "NucleoUniversalIntegrationTest",
                         "OcupacionInmuebleIntegrationTest",
                         "PadronDeGobiernoIntegrationTest",
+                        // 4.P - la procedencia del DATO, no la del acto: los
+                        // ocho casos de reconstruccion de una historia real.
+                        "ProcedenciaDelValorIntegrationTest",
                         // D-E4-1 / D-E4-2 — los 15 escenarios de aceptacion de la
                         // propiedad universal y la captura. Es el unico que COMETE
                         // de verdad, en tenants propios: cuatro de sus invariantes

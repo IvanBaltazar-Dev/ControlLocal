@@ -98,6 +98,32 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
     Optional<CatalogoAtributo> porClave(@Param("idOrganizacion") long idOrganizacion,
                                         @Param("clave") String clave);
 
+
+    /**
+     * <b>La clave logica cuya autoridad es este campo canonico</b> (4.P).
+     *
+     * <p>Es la consulta inversa de {@link #porClave}: se pregunta por el
+     * CONCEPTO del dominio --{@code PISO}, {@code METRAJE}-- y responde con la
+     * clave que lo alimenta en esta organizacion.
+     *
+     * <p>Existe porque el cable tiene un campo {@code ubicacion.piso} que NO es
+     * una coordenada: es un hecho gobernado del inmueble, con su vocabulario y
+     * su exigencia. Enrutarlo exige traducir el nombre del hueco del cable al
+     * de la clave, y esa traduccion no puede ser un literal en el caso de uso
+     * --seria la matriz «campo -> clave» otra vez, escondida-- ni puede
+     * suponer que la clave se llama {@code "piso"}: una organizacion puede
+     * declarar la suya con otro nombre sobre el mismo campo canonico.
+     */
+    @Query("""
+            select c from CatalogoAtributo c
+            where c.campoEstructural = :campo
+              and c.activo = true
+              and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
+            order by c.organizacionId desc nulls last
+            limit 1
+            """)
+    Optional<CatalogoAtributo> porCampoEstructural(@Param("idOrganizacion") long idOrganizacion,
+                                                   @Param("campo") String campo);
     /** Los del sistema, que ninguna organizacion puede borrar ni redefinir. */
     List<CatalogoAtributo> findByDelSistemaTrueOrderByOrdenAscClaveAsc();
 }

@@ -62,13 +62,43 @@ public final class PropiedadUniversalDtos {
      * condiciones del encargo —el precio de la cochera adicional y el
      * equipamiento incluido— habrian quedado sembradas y mudas.
      *
-     * @param moneda  obligatoria cuando la clave es un IMPORTE; el trigger la
-     *                exige y el mensaje lo dice
-     * @param valores los elementos de un multivalor. <b>Sustituyen</b> a los
-     *                que hubiera: una lista es un conjunto, no un delta
+     * <h2>Y la procedencia del DATO, no del acto (4.P)</h2>
+     * Los cuatro ultimos campos son <b>opcionales</b> y describen de donde sale
+     * <b>este</b> valor. Ningun cliente actual los manda —el SPA no estrena
+     * superficie de captura en 4.P— y por eso el cable de siempre sigue
+     * funcionando sin tocar una linea de Angular.
+     *
+     * <p><b>El canal, el agente y el actor NO viajan aqui.</b> Los sabe el Core:
+     * el canal sale de {@code X-Origen} y el actor de la sesion. Lo que viaja
+     * por valor es lo unico que el Core no puede saber — la diferencia entre
+     * «me lo dijo el propietario» y «lo vi yo».
+     *
+     * <p>El vocabulario del enum viaja por el cable y <b>no se le ensena al
+     * usuario</b>: cuando llegue su UX, la interfaz dira «lo observe» o «me lo
+     * dijeron».
+     *
+     * @param moneda       obligatoria cuando la clave es un IMPORTE; el trigger
+     *                     la exige y el mensaje lo dice
+     * @param valores      los elementos de un multivalor. <b>Sustituyen</b> a
+     *                     los que hubiera: una lista es un conjunto, no un delta
+     * @param naturaleza   {@code DECLARADO}, {@code OBSERVADO} o {@code INFERIDO}.
+     *                     Omitida cuando no consta, que es lo normal — y omitirla
+     *                     no es una cuarta clase de evidencia, es que no se sabe
+     * @param confianza    de 0 a 1, <b>obligatoria con {@code INFERIDO}</b> junto
+     *                     con el agente, el modelo y su version, que ya viajan en
+     *                     las cabeceras de procedencia
+     * @param observadoEn  cuando se observo, si se sabe: una visita del martes
+     *                     anotada el viernes vale por el martes
+     * @param evidenciaRef el puntero a la prueba
      */
     public record AtributoRequest(String clave, String valor, String moneda,
-                                  List<String> valores) {
+                                  List<String> valores, String naturaleza, BigDecimal confianza,
+                                  LocalDate observadoEn, String evidenciaRef) {
+
+        /** El valor sin declarar procedencia: el cable de todos los clientes de hoy. */
+        public AtributoRequest(String clave, String valor, String moneda, List<String> valores) {
+            this(clave, valor, moneda, valores, null, null, null, null);
+        }
 
         /** El valor de un solo hueco, que es el caso corriente. */
         public AtributoRequest(String clave, String valor) {
@@ -76,7 +106,8 @@ public final class PropiedadUniversalDtos {
         }
 
         PropiedadUniversalService.ValorAtributo aDatos() {
-            return new PropiedadUniversalService.ValorAtributo(clave, valor, moneda, valores);
+            return new PropiedadUniversalService.ValorAtributo(clave, valor, moneda, valores,
+                    naturaleza, confianza, observadoEn, evidenciaRef);
         }
     }
 

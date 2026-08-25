@@ -61,6 +61,60 @@ public record ValorLogico(String texto, BigDecimal numero, Boolean booleano,
     }
 
     /**
+     * <b>El conjunto tal cual, aunque este vacio</b> (4.P).
+     *
+     * <p>Gemelo de {@link #deValores} con una diferencia que solo importa al
+     * escribir: alli una lista vacia se colapsa a {@code null} porque para
+     * <b>leer</b> «respondio y no marco nada» y «no respondio» son lo mismo.
+     * Para <b>anotar el linaje</b> no lo son: vaciar un multivalor es una
+     * escritura, tiene autor y fecha, y colapsarla a {@code null} la dejaria sin
+     * forma valida — el rastro exige un escalar cuando no es multivalor, y ahi
+     * no hay ninguno.
+     *
+     * <p>Asi que aqui el conjunto vacio <b>es</b> un conjunto: una fila de
+     * rastro con {@code es_multivalor} y cero elementos, que es exactamente lo
+     * que ocurrio.
+     */
+    public static ValorLogico deConjunto(List<String> valores) {
+        return valores == null
+                ? null : new ValorLogico(null, null, null, null, null, List.copyOf(valores));
+    }
+
+    /**
+     * <b>Una fila de valor gobernado, leida por la columna que le toca.</b>
+     *
+     * <p>Vive aqui —y no en el lector— porque desde 4.P hacen falta <b>dos</b>
+     * consumidores: {@code LectorPorAutoridad} para publicar el valor vigente, y
+     * los enrutadores para saber <b>que habia</b> justo antes de pisarlo o
+     * borrarlo. Dos copias del mismo {@code if} son como se perdio la moneda de
+     * un importe en el Corte 0B: nadie escribio la segunda para hacer algo
+     * distinto, simplemente dejo de enterarse de los cambios de la primera.
+     *
+     * @param multivalor los elementos, ya resueltos por quien llama. Se pide en
+     *                   vez de consultarlos aqui porque en un lote eso seria una
+     *                   consulta por fila
+     */
+    public static ValorLogico deFila(com.controllocal.domain.comun.FilaDeValorGobernado fila,
+                                     List<String> multivalor) {
+        if (multivalor != null && !multivalor.isEmpty()) {
+            return deValores(multivalor);
+        }
+        if (fila.getValorTexto() != null) {
+            return deTexto(fila.getValorTexto());
+        }
+        if (fila.getValorNumero() != null) {
+            // La moneda viaja pegada al monto: un importe sin ella no es dinero.
+            return fila.getValorMoneda() == null
+                    ? deNumero(fila.getValorNumero())
+                    : deImporte(fila.getValorNumero(), fila.getValorMoneda());
+        }
+        if (fila.getValorFecha() != null) {
+            return deFecha(fila.getValorFecha());
+        }
+        return deBooleano(fila.getValorBooleano());
+    }
+
+    /**
      * El numero sin la escala del ALMACEN.
      *
      * <p>{@code atributo_propiedad.valor_numero} es {@code NUMERIC(14,4)} para

@@ -1,9 +1,13 @@
 package com.controllocal.service.soporte;
 
+import com.controllocal.domain.auditoria.RastroValorGobernado;
 import com.controllocal.domain.comercial.AtributoEncargo;
+import com.controllocal.domain.comercial.ValorMultipleEncargo;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.persistence.repositorio.AtributoEncargoRepository;
 import com.controllocal.persistence.repositorio.CatalogoAtributoRepository;
+import com.controllocal.persistence.repositorio.ValorMultipleEncargoRepository;
+import com.controllocal.service.Actor;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.springframework.stereotype.Component;
 
@@ -50,11 +54,17 @@ public class AtributosDeEncargo {
 
     private final CatalogoAtributoRepository catalogo;
     private final AtributoEncargoRepository valores;
+    private final ValorMultipleEncargoRepository multivalores;
+    private final LinajeDelValor linaje;
 
     public AtributosDeEncargo(CatalogoAtributoRepository catalogo,
-                              AtributoEncargoRepository valores) {
+                              AtributoEncargoRepository valores,
+                              ValorMultipleEncargoRepository multivalores,
+                              LinajeDelValor linaje) {
         this.catalogo = catalogo;
         this.valores = valores;
+        this.multivalores = multivalores;
+        this.linaje = linaje;
     }
 
     /** Lo que se pregunta para esta comercializacion, en orden de presentacion. */
@@ -122,8 +132,8 @@ public class AtributosDeEncargo {
      * comercializacion y que el valor encaja con su tipo. Devuelve el atributo
      * listo para guardar.
      */
-    public AtributoEncargo convertir(long idOrganizacion, Comercializacion donde, String clave,
-                                     String valor, String moneda) {
+    private AtributoEncargo convertir(long idOrganizacion, Comercializacion donde, String clave,
+                                      String valor, String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         exigirQueAplique(definicion, donde);
         String limpio = ConversionDeValores.exigirValor(clave, valor);
@@ -153,8 +163,8 @@ public class AtributosDeEncargo {
     }
 
     /** El ancla de un multivalor. Sus valores viven aparte y se SUSTITUYEN. */
-    public AtributoEncargo convertirMultivalor(long idOrganizacion, Comercializacion donde,
-                                               String clave) {
+    private AtributoEncargo convertirMultivalor(long idOrganizacion, Comercializacion donde,
+                                                String clave) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, clave);
         exigirQueAplique(definicion, donde);
         if (!definicion.tipo().esMultivalor()) {
@@ -169,8 +179,8 @@ public class AtributosDeEncargo {
      * Reemplazar la fila perderia {@code fecha_creacion}, que es el dato que
      * dice desde cuando se pacto eso.
      */
-    public void actualizar(long idOrganizacion, AtributoEncargo existente, String valor,
-                           String moneda) {
+    private void actualizar(long idOrganizacion, AtributoEncargo existente, String valor,
+                            String moneda) {
         CatalogoAtributo definicion = definicionDe(idOrganizacion, existente.getClave());
         String clave = existente.getClave();
         String limpio = valor == null ? null : valor.trim();
@@ -199,22 +209,78 @@ public class AtributosDeEncargo {
     }
 
     /**
-     * Escribe un valor del encargo: actualiza el existente o crea el que falte.
+     * <b>Escribe una condicion del encargo, con su linaje</b> (4.P).
      *
      * <p>No hay rama estructural, y su ausencia esta comprobada en
      * {@link #definicionDe}: hoy los unicos campos canonicos declarados son
      * conceptos de la cosa fisica --METRAJE, PISO--. Una clave del ENCARGO
      * marcada ESTRUCTURAL no tendria escritor, y guardarla como atributo «por
      * si acaso» seria inventarle una autoridad que nadie declaro.
+     *
+     * <p><b>Simetrico con la propiedad desde el primer commit.</b> La asimetria
+     * que se temia ya existia y era peor de lo que parecia: pactar una condicion
+     * no emite ni siquiera el evento de operacion que si emite editar una
+     * propiedad, asi que hasta 4.P una condicion se escribia <b>sin dejar
+     * ningun rastro de ninguna clase</b>. Aqui el encargo deja de ser el sujeto
+     * de segunda.
      */
-    public AtributoEncargo enrutarEdicion(long idOrganizacion, Comercializacion donde,
-                                          String clave, String valor, AtributoEncargo existente,
-                                          String moneda) {
-        if (existente != null) {
-            actualizar(idOrganizacion, existente, valor, moneda);
-            return existente;
+    public void escribir(Actor actor, Comercializacion donde, ValorEntrante entrante) {
+        if (entrante.esMultivalor()) {
+            escribirMultivalor(actor, donde, entrante);
+            return;
         }
-        return convertir(idOrganizacion, donde, clave, valor, moneda);
+        long idOrganizacion = actor.idOrganizacion();
+        AtributoEncargo existente = valores
+                .findByIdCaptacionAndClave(donde.idCaptacion(), entrante.clave())
+                .orElse(null);
+        // La foto, ANTES de actualizar: `actualizar` muta la misma entidad.
+        ValorLogico hallado = existente == null ? null : ValorLogico.deFila(existente, null);
+
+        AtributoEncargo fila = existente != null ? existente
+                : convertir(idOrganizacion, donde, entrante.clave(), entrante.valor(),
+                        entrante.moneda());
+        if (existente != null) {
+            actualizar(idOrganizacion, existente, entrante.valor(), entrante.moneda());
+        }
+        anotarSegunHabia(actor, entrante, donde.idCaptacion(), hallado,
+                ValorLogico.deFila(valores.save(fila), null));
+    }
+
+    /**
+     * Un multivalor del encargo: su ancla y sus valores, <b>sustituyendo</b>.
+     *
+     * <p>Mismo gesto que en la propiedad y por la misma razon: sin borrar antes
+     * no habria forma de QUITAR una opcion, y quitar es la mitad de lo que
+     * significa editar una lista. Y como en la propiedad, el conjunto anterior
+     * se lee entero antes de borrarlo y viaja al linaje como conjunto.
+     */
+    private void escribirMultivalor(Actor actor, Comercializacion donde, ValorEntrante entrante) {
+        AtributoEncargo ancla = valores
+                .findByIdCaptacionAndClave(donde.idCaptacion(), entrante.clave())
+                .orElse(null);
+        boolean existia = ancla != null;
+        if (!existia) {
+            ancla = valores.save(convertirMultivalor(actor.idOrganizacion(), donde,
+                    entrante.clave()));
+        }
+        List<String> antes = existia ? multivalores.valoresDe(ancla.getId()) : List.of();
+        ValorLogico hallado = existia ? ValorLogico.deConjunto(antes) : null;
+
+        // La diferencia a la base, el conjunto entero al linaje. Igual que en la
+        // propiedad y por la misma razon.
+        List<String> despues = entrante.valores();
+        List<String> seVan = antes.stream().filter(valor -> !despues.contains(valor)).toList();
+        if (!seVan.isEmpty()) {
+            multivalores.borrarDe(ancla.getId(), seVan);
+        }
+        for (String valor : despues) {
+            if (!antes.contains(valor)) {
+                multivalores.save(new ValorMultipleEncargo(
+                        actor.idOrganizacion(), ancla.getId(), valor));
+            }
+        }
+        anotarSegunHabia(actor, entrante, donde.idCaptacion(), hallado,
+                ValorLogico.deConjunto(despues));
     }
 
     /**
@@ -226,17 +292,58 @@ public class AtributosDeEncargo {
      * siempre, aplicada al tercer verbo: <b>leer, escribir y borrar recorren el
      * mismo enrutamiento</b>.
      *
-     * @return {@code false} si la clave no esta en el catalogo, para que el
-     *         llamante pueda probar otro espacio de nombres antes de rechazarla
+     * <p>Y desde 4.P devuelve —y anota— <b>lo que se llevo</b>. El borrado es
+     * fisico: sin leerlo antes, la ultima constancia de que ese encargo tuvo esa
+     * condicion se va con la fila.
+     *
+     * @return {@link ValorRetirado#NO_ES_DEL_CATALOGO} si la clave no esta en el
+     *         catalogo, para que el llamante pueda probar otro espacio de
+     *         nombres antes de rechazarla
      */
-    public boolean retirar(long idOrganizacion, Comercializacion donde, String clave) {
-        Optional<CatalogoAtributo> definicion = catalogo.porClave(idOrganizacion, clave);
+    public ValorRetirado retirar(Actor actor, Comercializacion donde, String clave,
+                                 ProcedenciaDelValor procedencia) {
+        Optional<CatalogoAtributo> definicion =
+                catalogo.porClave(actor.idOrganizacion(), clave);
         if (definicion.isEmpty()) {
-            return false;
+            return ValorRetirado.NO_ES_DEL_CATALOGO;
         }
         exigirQueSeaDeEncargo(definicion.get());
+
+        AtributoEncargo existente = valores
+                .findByIdCaptacionAndClave(donde.idCaptacion(), clave)
+                .orElse(null);
+        // La forma la decide el catalogo: un LISTA_MULTIPLE con el conjunto
+        // vacio sigue siendo una clave RESPONDIDA, y leerla con `deFila` caeria
+        // a la rama escalar y diria que no habia nada. Mismo criterio que al
+        // escribir -- el conjunto vacio es un conjunto.
+        ValorLogico hallado = existente == null ? null
+                : (definicion.get().tipo().esMultivalor()
+                        ? ValorLogico.deConjunto(multivalores.valoresDe(existente.getId()))
+                        : ValorLogico.deFila(existente, null));
+
         valores.deleteByIdCaptacionAndClave(donde.idCaptacion(), clave);
-        return true;
+        // Y no se anota una retirada que no ocurrio: retirar una condicion que
+        // este encargo nunca pacto no es un hecho, y el linaje cuenta lo que
+        // paso -- en una tabla que ademas no se puede corregir.
+        if (hallado == null) {
+            return ValorRetirado.de(null);
+        }
+        linaje.anotarRetirada(actor, procedencia, RastroValorGobernado.SUJETO_ENCARGO,
+                donde.idCaptacion(), clave, hallado);
+        return ValorRetirado.de(hallado);
+    }
+
+    /** ALTA o EDICION segun lo que hubiera, no segun por que endpoint entro. */
+    private void anotarSegunHabia(Actor actor, ValorEntrante entrante, long idCaptacion,
+                                  ValorLogico hallado, ValorLogico escrito) {
+        if (hallado == null) {
+            linaje.anotarAlta(actor, entrante.procedencia(),
+                    RastroValorGobernado.SUJETO_ENCARGO, idCaptacion, entrante.clave(), escrito);
+        } else {
+            linaje.anotarEdicion(actor, entrante.procedencia(),
+                    RastroValorGobernado.SUJETO_ENCARGO, idCaptacion, entrante.clave(),
+                    hallado, escrito);
+        }
     }
 
     /**

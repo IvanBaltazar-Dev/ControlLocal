@@ -87,8 +87,36 @@ public interface PropiedadUniversalService {
      *       {@code servicios_disponibles} que 0B viene a cerrar: dos fichas que
      *       dicen lo mismo en distinto orden dejan de poder compararse.</li>
      * </ul>
+     *
+     * <h2>Y la procedencia viaja POR VALOR (4.P)</h2>
+     * Los cuatro ultimos campos son <b>opcionales</b> y describen de donde sale
+     * <b>este</b> valor, no la operacion. Esa es la razon de ser del microcorte:
+     * un mismo {@code PUT} puede cambiar {@code tipo_acceso} (una visita),
+     * {@code zonificacion} (un certificado) y {@code vigilancia} (lo dijo el
+     * propietario), y una sola respuesta al guardar estamparia una naturaleza
+     * <b>falsa</b> en dos de las tres.
+     *
+     * <p><b>El canal, el agente y el actor NO van aqui</b>: los sabe el Core y
+     * los deriva de la sesion y de las cabeceras ({@code Procedencia}). Lo que
+     * viaja por valor es lo unico que el Core no puede saber.
+     *
+     * @param naturaleza   {@code DECLARADO}, {@code OBSERVADO} o {@code INFERIDO}.
+     *                     <b>Ausente</b> cuando el productor no lo sabe — y
+     *                     ausente no es una cuarta clase de evidencia: es que no
+     *                     consta como se obtuvo el hecho. El Core no la deduce
+     *                     jamas del canal ni del actor
+     * @param confianza    de 0 a 1. <b>Obligatoria con {@code INFERIDO}</b>,
+     *                     junto con el agente, el modelo y su version, que ya
+     *                     viajan en la procedencia del acto
+     * @param observadoEn  cuando se observo el hecho, si se sabe. Distinto de
+     *                     cuando se anoto: una visita del martes registrada el
+     *                     viernes vale por el martes
+     * @param evidenciaRef el puntero a la prueba: un documento, una foto, la
+     *                     columna de la que se transcribio
      */
-    record ValorAtributo(String clave, String valor, String moneda, List<String> valores) {
+    record ValorAtributo(String clave, String valor, String moneda, List<String> valores,
+                         String naturaleza, BigDecimal confianza, LocalDate observadoEn,
+                         String evidenciaRef) {
 
         /**
          * <b>Un multivalor no llega ademas como escalar</b> (V77).
@@ -116,6 +144,16 @@ public interface PropiedadUniversalService {
             }
         }
 
+        /**
+         * El valor sin declarar procedencia, que es como llega <b>todo</b> el
+         * cable de hoy: el SPA no estrena superficie de captura en 4.P. No es un
+         * defecto silencioso — el Core sigue registrando quien lo escribio y por
+         * donde; lo que no hace es inventar como se conocio.
+         */
+        public ValorAtributo(String clave, String valor, String moneda, List<String> valores) {
+            this(clave, valor, moneda, valores, null, null, null, null);
+        }
+
         /** El caso normal: una clave y su valor. */
         public ValorAtributo(String clave, String valor) {
             this(clave, valor, null, null);
@@ -129,6 +167,12 @@ public interface PropiedadUniversalService {
         /** Varios valores del mismo vocabulario. Sustituyen a los que hubiera. */
         public static ValorAtributo multiple(String clave, List<String> valores) {
             return new ValorAtributo(clave, null, null, valores);
+        }
+
+        /** El mismo valor declarando como se obtuvo el hecho. */
+        public ValorAtributo declarando(String naturaleza) {
+            return new ValorAtributo(clave, valor, moneda, valores, naturaleza, confianza,
+                    observadoEn, evidenciaRef);
         }
     }
 

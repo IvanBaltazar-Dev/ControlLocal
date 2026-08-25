@@ -47,15 +47,24 @@ class UnSoloLectorPorSujetoTest {
     /**
      * Quien puede tocar los repositorios de valores gobernados.
      *
-     * <p>Los dos enrutadores porque convierten y validan; los dos casos de uso
-     * porque guardan lo que el enrutador les devuelve; y el lector porque es el
-     * lector. Nadie mas.
+     * <p>Los dos enrutadores porque convierten, validan y <b>escriben</b>; y el
+     * lector porque es el lector. Nadie mas.
+     *
+     * <p><b>La lista encogio en 4.P</b>, y eso es lo que hay que mirar:
+     * {@code PropiedadUniversalServiceImpl} estaba aqui porque guardaba lo que
+     * el enrutador le devolvia, y desde el linaje por valor ya no guarda nada.
+     * El caso de uso ORQUESTA —decide que se escribe, en que orden y dentro de
+     * que transaccion— y el que ESCRIBE es el enrutador de su sujeto, que es el
+     * mismo que anota de donde salio cada valor.
+     *
+     * <p>Mientras hubiera dos escritores habria un camino por el que un dato
+     * entra sin procedencia, y eso no se arregla acordandose: se arregla
+     * quitando el camino.
      */
     private static final List<String> CON_PERMISO = List.of(
             "com.controllocal.service.soporte.LectorPorAutoridad",
             "com.controllocal.service.soporte.AtributosGobernados",
-            "com.controllocal.service.soporte.AtributosDeEncargo",
-            "com.controllocal.service.impl.PropiedadUniversalServiceImpl");
+            "com.controllocal.service.soporte.AtributosDeEncargo");
 
     private static final List<String> REPOSITORIOS_DE_VALOR = List.of(
             "com.controllocal.persistence.repositorio.AtributoPropiedadRepository",

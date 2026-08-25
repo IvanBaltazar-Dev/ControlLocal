@@ -565,6 +565,187 @@ SELECT pg_temp.debe_rechazar('V76 un hito de precio exige el encargo que lo auto
 $f$, (SELECT org FROM ctx), (SELECT prop FROM ctx)));
 
 -- =====================================================================
+-- 4.P - La procedencia del DATO, no la del acto (V83, D-4P-1)
+--
+-- Lo que se comprueba aqui es lo que ningun test de Java puede ver: que la
+-- forma del linaje la sostiene la BASE, y que la cartera real esta del lado
+-- correcto de la frontera de garantia.
+-- =====================================================================
+SELECT pg_temp.comprobar('4P existen las dos tablas del linaje',
+    (SELECT count(*) = 2 FROM information_schema.tables
+      WHERE table_name IN ('rastro_valor_gobernado', 'rastro_valor_opcion')));
+
+-- LA DECISION CENTRAL DEL MODELO, comprobada al reves: si el linaje colgara del
+-- id de la fila vigente, borrar un atributo se llevaria por delante su historia
+-- y una clave ESTRUCTURAL --que no crea fila-- no podria tener ninguna. Que NO
+-- haya FK a las tablas de valor es lo que hace posible las cinco superficies.
+SELECT pg_temp.comprobar('4P el linaje NO cuelga del id de la fila vigente',
+    NOT EXISTS (SELECT 1 FROM pg_constraint c
+                 WHERE c.conrelid = 'rastro_valor_gobernado'::regclass
+                   AND c.contype = 'f'
+                   AND c.confrelid IN ('atributo_propiedad'::regclass,
+                                       'atributo_encargo'::regclass)));
+
+SELECT pg_temp.comprobar('4P el linaje se direcciona por la clave logica',
+    EXISTS (SELECT 1 FROM pg_indexes
+             WHERE tablename = 'rastro_valor_gobernado'
+               AND indexdef LIKE '%organizacion_id, sujeto, id_agregado, clave%'));
+
+-- Una fila de apoyo para las pruebas destructivas. Todo esto se deshace en el
+-- ROLLBACK final, igual que el resto del gate.
+INSERT INTO rastro_valor_gobernado
+    (organizacion_id, sujeto, id_agregado, clave, verbo, valor_texto, canal)
+VALUES ((SELECT org FROM ctx), 'PROPIEDAD', (SELECT prop FROM ctx),
+        'gate_4p', 'ALTA', 'valor de prueba', 'SISTEMA');
+
+SELECT pg_temp.debe_rechazar('4P el linaje no se puede corregir', $f$
+    UPDATE rastro_valor_gobernado SET valor_texto = 'otra cosa' WHERE clave = 'gate_4p'
+$f$);
+
+SELECT pg_temp.debe_rechazar('4P el linaje no se puede borrar', $f$
+    DELETE FROM rastro_valor_gobernado WHERE clave = 'gate_4p'
+$f$);
+
+-- NULL no es una cuarta naturaleza, y por eso DESCONOCIDO no existe: colapsaria
+-- "no consta como se supo" con "se supo por una inferencia", que son cosas
+-- distintas.
+SELECT pg_temp.debe_rechazar('4P no hay una cuarta naturaleza', format($f$
+    INSERT INTO rastro_valor_gobernado
+        (organizacion_id, sujeto, id_agregado, clave, verbo, valor_texto, naturaleza)
+    VALUES (%s, 'PROPIEDAD', %s, 'gate_4p', 'ALTA', 'x', 'DESCONOCIDO')
+$f$, (SELECT org FROM ctx), (SELECT prop FROM ctx)));
+
+-- Una inferencia sin autor no se puede revisar ni retirar el dia que el modelo
+-- resulte estar equivocado, y en silencio se convierte en un hecho confirmado.
+SELECT pg_temp.debe_rechazar('4P un INFERIDO sin autor, modelo, version ni confianza', format($f$
+    INSERT INTO rastro_valor_gobernado
+        (organizacion_id, sujeto, id_agregado, clave, verbo, valor_texto, naturaleza)
+    VALUES (%s, 'PROPIEDAD', %s, 'gate_4p', 'ALTA', 'x', 'INFERIDO')
+$f$, (SELECT org FROM ctx), (SELECT prop FROM ctx)));
+
+SELECT pg_temp.debe_rechazar('4P un ALTA no puede haber hallado un valor', format($f$
+    INSERT INTO rastro_valor_gobernado
+        (organizacion_id, sujeto, id_agregado, clave, verbo, valor_texto, hallado_texto)
+    VALUES (%s, 'PROPIEDAD', %s, 'gate_4p', 'ALTA', 'x', 'lo que habia')
+$f$, (SELECT org FROM ctx), (SELECT prop FROM ctx)));
+
+SELECT pg_temp.debe_rechazar('4P una RETIRADA no deja valor vigente', format($f$
+    INSERT INTO rastro_valor_gobernado
+        (organizacion_id, sujeto, id_agregado, clave, verbo, valor_texto)
+    VALUES (%s, 'PROPIEDAD', %s, 'gate_4p', 'RETIRADA', 'x')
+$f$, (SELECT org FROM ctx), (SELECT prop FROM ctx)));
+
+-- LA GENESIS NO INVENTA COMO SE CONOCIO EL HECHO. La procedencia OPERACIONAL de
+-- una fila historica puede ser demostrable; su naturaleza, casi nunca.
+SELECT pg_temp.comprobar('4P ninguna genesis declara naturaleza',
+    NOT EXISTS (SELECT 1 FROM rastro_valor_gobernado
+                 WHERE registrado_en < frontera_de_linaje()
+                   AND naturaleza IS NOT NULL));
+
+-- LA FRONTERA DE GARANTIA, explicita y consultable: es lo que permite decir de
+-- que lado cae cada fila sin dejarlo al criterio de quien consulte.
+SELECT pg_temp.comprobar('4P la frontera del cutover existe y ya paso',
+    frontera_de_linaje() <= now());
+
+-- Y el otro lado de la frontera: DESPUES del cutover, un valor gobernado sin
+-- linaje ES UN DEFECTO. Antes puede haberlo y no lo es -- las 70 filas que V48
+-- copio de las columnas legadas se quedaron sin genesis a proposito.
+--
+-- Y el motivo no es que no se sepa CUALES son: la particion por correlacion las
+-- separa sola (0 eventos -> 70, 1 evento -> 6, dos o mas -> ninguna), y su fecha
+-- es su propio `fecha_creacion`, el mismo criterio que se aplico a las 6. Lo que
+-- no se puede demostrar de ellas es su CANAL: estampar SISTEMA afirmaria que el
+-- valor lo origino el sistema, y V48 no lo origino -- lo TRANSCRIBIO de una
+-- columna cuyo autor no consta. Una genesis con canal inventado es exactamente
+-- lo que la decision congelada prohibe.
+SELECT pg_temp.comprobar('4P despues del cutover ningun hecho del inmueble sin linaje',
+    NOT EXISTS (
+        SELECT 1 FROM atributo_propiedad a
+         WHERE a.fecha_creacion > frontera_de_linaje()
+           AND NOT EXISTS (SELECT 1 FROM rastro_valor_gobernado r
+                            WHERE r.organizacion_id = a.organizacion_id
+                              AND r.sujeto = 'PROPIEDAD'
+                              AND r.id_agregado = a.id_propiedad
+                              AND r.clave = a.clave)));
+
+SELECT pg_temp.comprobar('4P despues del cutover ninguna condicion del encargo sin linaje',
+    NOT EXISTS (
+        SELECT 1 FROM atributo_encargo a
+         WHERE a.fecha_creacion > frontera_de_linaje()
+           AND NOT EXISTS (SELECT 1 FROM rastro_valor_gobernado r
+                            WHERE r.organizacion_id = a.organizacion_id
+                              AND r.sujeto = 'ENCARGO'
+                              AND r.id_agregado = a.id_captacion
+                              AND r.clave = a.clave)));
+
+
+-- LA QUINTA SUPERFICIE, VIGILADA TAMBIEN AQUI (segunda vuelta de 4.P).
+--
+-- Las dos comprobaciones de arriba miran `atributo_propiedad` y
+-- `atributo_encargo`, y una clave ESTRUCTURAL **por definicion NO CREA FILA
+-- ahi**: su autoridad es una columna de `propiedad`. Con solo esas dos, un
+-- valor gobernado escrito por fuera del enrutador --como hacia
+-- `ubicacion.piso`-- pasaba el gate en verde. Un agujero que el gate no ve es
+-- peor que el agujero.
+--
+-- Se mide sobre las propiedades REGISTRADAS despues del cutover: en esas, un
+-- valor en la columna solo puede haberse escrito despues, asi que tiene que
+-- tener linaje. Para las anteriores no se puede afirmar nada -- y no se afirma.
+SELECT pg_temp.comprobar('4P despues del cutover ninguna columna estructural sin linaje',
+    NOT EXISTS (
+        SELECT 1
+          FROM propiedad p
+          CROSS JOIN LATERAL (VALUES ('METRAJE',           p.metraje::text),
+                                     ('PISO',              p.piso),
+                                     ('PARTIDA_REGISTRAL', p.partida_registral),
+                                     ('OFICINA_REGISTRAL', p.oficina_registral)) AS e(campo, valor)
+         WHERE p.fecha_registro > frontera_de_linaje()
+           AND e.valor IS NOT NULL
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM rastro_valor_gobernado r
+                 JOIN catalogo_atributo c
+                   ON c.clave = r.clave
+                  AND c.campo_estructural = e.campo
+                  AND (c.organizacion_id IS NULL OR c.organizacion_id = r.organizacion_id)
+                WHERE r.organizacion_id = p.organizacion_id
+                  AND r.sujeto = 'PROPIEDAD'
+                  AND r.id_agregado = p.id_propiedad)));
+
+-- CONTROL DE COBERTURA, y es lo que de verdad protege. La comprobacion de
+-- arriba nombra cuatro columnas a mano; si manana el catalogo declara un quinto
+-- campo canonico y nadie la actualiza, seguiria en verde vigilando cuatro de
+-- cinco -- que es EXACTAMENTE como paso desapercibido el agujero de `piso`: el
+-- inventario barrio las cuatro TABLAS de valor y no barrio nunca las cuatro
+-- COLUMNAS estructurales.
+SELECT pg_temp.comprobar('4P la frontera vigila TODOS los campos canonicos declarados',
+    (SELECT coalesce(array_agg(DISTINCT campo_estructural ORDER BY campo_estructural),
+                     ARRAY[]::varchar[])
+       FROM catalogo_atributo
+      WHERE destino = 'ESTRUCTURAL' AND activo)
+    = ARRAY['METRAJE', 'OFICINA_REGISTRAL', 'PARTIDA_REGISTRAL', 'PISO']::varchar[],
+    'el catalogo declara campos canonicos que la comprobacion de frontera no mira');
+-- Los dos valores rescatados de la `descripcion` historica no quedan como filas
+-- sin genealogia: consta DE DONDE se copio el texto -- que es comprobable -- y
+-- NO consta quien lo origino, que nadie sabe.
+-- Se compara contra el numero de valores que existen, y no contra si mismo: un
+-- `count = count FILTER` da 0 = 0 en una base donde esos valores no estan, y un
+-- verde que no ha mirado nada no es un verde.
+SELECT pg_temp.comprobar('4P las transcripciones documentadas nombran su fuente',
+    (SELECT count(*) FROM rastro_valor_gobernado r
+       JOIN propiedad p ON p.id_propiedad = r.id_agregado
+                       AND p.organizacion_id = r.organizacion_id
+      WHERE r.sujeto = 'PROPIEDAD' AND r.clave = 'tipo_acceso'
+        AND p.codigo IN ('LOC-D001', 'LOC-0002')
+        AND r.evidencia_ref LIKE '%propiedad.descripcion%'
+        AND r.naturaleza IS NULL)
+    =
+    (SELECT count(*) FROM atributo_propiedad a
+       JOIN propiedad p ON p.id_propiedad = a.id_propiedad
+      WHERE a.clave = 'tipo_acceso' AND p.codigo IN ('LOC-D001', 'LOC-0002')),
+    'una transcripcion documentada perdio su fuente, o gano una naturaleza inventada');
+
+-- =====================================================================
 -- Lo que NO se ha roto
 -- =====================================================================
 SELECT pg_temp.comprobar('SIN ROMPER las columnas del cable siguen existiendo',

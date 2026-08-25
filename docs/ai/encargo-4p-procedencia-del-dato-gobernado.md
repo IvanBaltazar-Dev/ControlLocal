@@ -228,6 +228,79 @@ anterior.
 
 ---
 
+## 6 bis. DECISIÓN DEL TITULAR (2026-08-25) · quién declara `naturaleza` en el SPA
+
+> **Opcional por valor. Ni obligatorio, ni uno para todo el guardado.**
+
+El SPA deja `naturaleza` **sin declarar por defecto** —`NULL` honesto— y permite
+**marcarla en los valores donde el profesional quiera**. Cada valor lleva **su**
+naturaleza o ninguna.
+
+**Se descartó «un control por operación»** —una sola pregunta al guardar, aplicada
+a todos los valores— y la razón es la que abrió este microcorte: un mismo `PUT`
+puede cambiar `tipo_acceso` (visita), `zonificacion` (certificado) y `vigilancia`
+(lo dijo el propietario). **Una respuesta única estamparía una naturaleza falsa en
+dos de los tres**, que es exactamente lo que 4.P viene a impedir.
+
+**Se descartó «nada en el SPA»** porque dejaba el eje vacío en la práctica y
+repetía el patrón que el titular ya rechazó: *backend correcto, usuario ciego*.
+
+**Consecuencias que esto fija:**
+
+- **Angular SÍ se toca** en este microcorte: un control **discreto y opcional por
+  fila**, nunca un bloque de procedencia por campo (§3.4 sigue vigente).
+- **La UI habla llano**: «lo observé» / «me lo dijeron», no `OBSERVADO` /
+  `DECLARADO`. El vocabulario del enum viaja por el cable, **no se le enseña al
+  usuario**.
+- **No marcar es la opción por defecto y no cuesta nada.** Un guardado sin marcar
+  ninguna es válido y no debe pedir confirmación.
+
+## 6 ter. REGLAS CONGELADAS POR EL TITULAR (2026-08-25)
+
+Estas diez no se reinterpretan en el diseño. Se cumplen o se devuelve `STOP`.
+
+1. **`naturaleza` pertenece a CADA VALOR gobernado, nunca a toda la operación.**
+2. Valores admitidos conceptualmente: **`DECLARADO` · `OBSERVADO` · `INFERIDO`**.
+3. **El Core JAMÁS deduce `naturaleza`** a partir del canal, el actor, el
+   *endpoint* ni el tipo de usuario. *(Esto es una prohibición ejecutable: tiene
+   que existir un test que falle si alguien la deriva.)*
+4. Si el productor **conoce** la naturaleza, **puede enviarla por valor**.
+5. Si **no la conoce, queda ausente**. **No se inventa una categoría.**
+6. **`INFERIDO` exige agente/regla/modelo, versión y confianza.**
+7. **`canal` / `agente` / `conversación` siguen viniendo de `Procedencia`** y son
+   **independientes** de `naturaleza`. Dos ejes, nunca uno.
+8. **Una misma operación puede escribir valores con naturalezas diferentes.**
+   *(Prueba obligatoria, no comentario.)*
+9. **El SPA no queda obligado a pedirla para cada campo.**
+10. **KAIROS debe poder aportar la misma metadata por valor** cuando el contexto
+    conversacional sí la determine — **la misma semántica, no una paralela**.
+
+## 6 quater. PARADA OBLIGATORIA ANTES DE IMPLEMENTAR
+
+**No se escribe una línea** hasta presentar, y que CONTROL apruebe:
+
+**(a) Las TRES alternativas de almacenamiento**, cada una con su **impacto sobre
+las 12 invariantes de §6** — una tabla, invariante por invariante, diciendo si la
+alternativa la **sostiene**, la **debilita** o la **imposibilita**:
+
+- **A1** · columnas en `atributo_propiedad` / `atributo_encargo`;
+- **A2** · reutilizar `historial_estado`;
+- **A3** · tabla propia append-only.
+
+Con **medición**, no con preferencia. Si una es inviable, **demuéstralo con el
+dato que la hace inviable**, no con un juicio.
+
+**(b) La demostración de que el modelo cubre las CINCO superficies de escritura**,
+una por una y con el caso concreto:
+
+| # | superficie | qué hay que demostrar |
+|---|---|---|
+| 1 | PROPIEDAD escalar (alta y edición) | el valor y su naturaleza quedan, y **editar no pisa el anterior** |
+| 2 | PROPIEDAD **multivalor** (`LISTA_MULTIPLE`) | se conserva **el conjunto anterior entero**, no la diferencia |
+| 3 | PROPIEDAD **retirada** (borrado) | queda **quién, cuándo y qué valor se quitó**, con la fila vigente ausente |
+| 4 | ENCARGO (escalar, multivalor y retirada) | **simétrico**, y desde el primer commit |
+| 5 | **`ESTRUCTURAL` — campo fijo** (`metraje_total`, `piso`, `partida_registral`, `oficina_registral`) | **no crean fila** en `atributo_propiedad`: hay que demostrar que su linaje **igualmente queda** |
+
 ## 7. Prohibido
 
 Empezar añadiendo una columna antes del inventario · resolver **sólo**

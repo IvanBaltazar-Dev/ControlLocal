@@ -184,7 +184,32 @@ linaje —cuando lo hubo— habría contado sólo la mitad de la historia.
   Eso toca el read model y tiene consumidor en Angular, y 4.P no estrena
   superficie.
 
-### STOP — DECISIÓN REQUERIDA POR CONTROL
+### ✅ RESUELTO POR EL TITULAR (2026-08-25) — **manda el catálogo**
+
+> **Alternativa (1), la implementada.** Las dos puertas responden lo mismo: `piso`
+> aplica a **D, L y O**, y una `CASA` o un `TERRENO` reciben **400 por ambas**.
+
+**Por qué ésta:** es **la única rama que no inventa una regla** — aplica lo que el
+catálogo ya dice. La (2) obligaría a afirmar que un terreno tiene piso, y sería
+**ampliar el catálogo para que encaje una puerta del cable**, al revés de como
+debe ir. La (3) —dos nombres para dos significados— **reintroduce la doble
+autoridad que 4.P vino a eliminar**: el mismo dato con dos dueños y dos historias
+posibles.
+
+**El endurecimiento es correcto y es el punto:** que antes una `CASA` aceptara
+`ubicacion.piso` con `200` **era el síntoma**, no una capacidad — lo permitía
+justamente la puerta **no gobernada**. Cerrarla iguala las dos respuestas.
+
+**Impacto medido antes de decidir:** `0` propiedades con piso · `0` de tipo no
+aplicable · `0` suites que manden uno. **Ningún dato real dependía de la rama.**
+
+> **Queda anotado, y NO es de este microcorte:** si la aplicabilidad actual
+> resultara estrecha —el caso a mirar es **`A` (almacén)**, que puede ocupar una
+> planta alta en un edificio industrial—, eso se revisa en **un corte de catálogo
+> propio, con su medición**. Cambiar aplicabilidad es una decisión, y 4.P no la
+> toma.
+
+### El STOP, tal como se planteó
 
 Cerrar la puerta obliga a que el catálogo mande también por el hueco de
 `ubicacion`, y eso **cambia una respuesta visible** que hasta hoy dependía de por

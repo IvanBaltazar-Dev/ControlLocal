@@ -1566,9 +1566,26 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         Optional<String> clave = gobierno.claveDelCampo(
                 idOrganizacion, CatalogoAtributo.CAMPO_PISO);
         if (clave.isEmpty()) {
-            // El catalogo de esta organizacion no gobierna el piso. Entonces el
-            // hueco del cable no tiene nada que enrutar y se queda donde estaba.
-            return valores;
+            // El catalogo de esta organizacion no declara ninguna clave activa
+            // sobre el campo PISO, asi que no hay donde enrutar el valor.
+            //
+            // Y entonces SE RECHAZA, no se descarta. El comentario que habia
+            // aqui decia que el valor "se queda donde estaba", y desde que
+            // `aplicarUbicacion` dejo de escribirlo eso es falso: devolver el
+            // mapa intacto lo PERDIA con un 200, que es la peor de las tres
+            // respuestas posibles. "Aqui no se gobierna el piso" tiene que
+            // significar «se rechaza» o «se dice»; nunca «se pierde en
+            // silencio».
+            //
+            // Hoy es inalcanzable --`piso` es una clave del sistema y ninguna
+            // organizacion puede retirarla--, y por eso mismo conviene que la
+            // rama diga la verdad: el dia que sea alcanzable, lo sera sin que
+            // nadie vuelva a mirar esta linea.
+            throw new ReglaNegocioException(
+                    "Llego un piso en \"ubicacion\" y el catalogo de esta organizacion no "
+                            + "gobierna ninguna clave sobre el campo PISO, asi que no hay donde "
+                            + "guardarlo. Se rechaza en vez de descartarlo: un valor que se "
+                            + "pierde con un 200 es peor que un error.");
         }
         ValorAtributo yaVenia = valores.get(clave.get());
         if (yaVenia != null) {

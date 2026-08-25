@@ -358,6 +358,15 @@ public class AtributosGobernados {
         for (ValorEntrante entrante : entrantes) {
             CatalogoAtributo definicion = definicionDe(idOrganizacion, entrante.clave());
             if (definicion.esEstructural()) {
+                // La aplicabilidad se comprueba AQUI, y hasta la tercera vuelta
+                // de 4.P no se comprobaba en ninguna parte del alta.
+                //
+                // El camino gobernado la exigia dentro de `convertir`, pero el
+                // ESTRUCTURAL no pasa por ahi -- no crea fila --, asi que una
+                // CASA se podia REGISTRAR con un `piso` que despues no se podia
+                // EDITAR nunca: `escribirEnEdicion` si lo rechazaba. Un dato que
+                // entra y ya no se puede corregir es peor que uno rechazado.
+                exigirQueAplique(definicion, propiedad.getTipoInmueble());
                 EscritorEstructural.aplicar(propiedad, definicion.getCampoEstructural(),
                         valorEstructural(definicion, entrante.valor()), entrante.clave());
             }
@@ -383,6 +392,10 @@ public class AtributosGobernados {
             CatalogoAtributo definicion = definicionDe(actor.idOrganizacion(), entrante.clave());
             ValorLogico escrito;
             if (definicion.esEstructural()) {
+                // Gemela de la de `aplicarEstructuralesAlAlta`: las dos mitades
+                // del alta en dos tiempos tienen que exigir lo mismo, o la que
+                // no exija se convierte en la puerta permisiva.
+                exigirQueAplique(definicion, propiedad.getTipoInmueble());
                 escrito = EscritorEstructural.leerValor(
                         propiedad, definicion.getCampoEstructural());
             } else {

@@ -414,6 +414,62 @@ class ProcedenciaDelValorIntegrationTest {
         assertEquals(1, historia(actor, PROPIEDAD, idPropiedad, "piso").size());
     }
 
+    /**
+     * <b>Las dos puertas responden lo mismo</b> — decisión del titular, 2026-08-25.
+     *
+     * <p>`piso` aplica a `D`, `L` y `O` y a nadie más. Antes de 4.P una `CASA`
+     * recibía <b>200</b> por {@code ubicacion.piso} y <b>400</b> por
+     * {@code atributos.piso}: la misma pregunta con dos respuestas según el hueco
+     * por el que entrara, y la permisiva era justamente la puerta <b>no
+     * gobernada</b>.
+     *
+     * <p>Esta prueba fija esa decisión. Hoy la simetría se sostiene porque
+     * {@code conElPisoGobernado} mete el valor <b>en el mismo mapa</b> que los
+     * atributos, así que la aplicabilidad se comprueba una sola vez y en un solo
+     * sitio. Pero nada impide que mañana alguien valide antes de la fusión y las
+     * dos puertas vuelvan a divergir <b>sin que nada se ponga rojo</b>. Una
+     * decisión recién tomada que ningún test sostiene se pierde en dos cortes.
+     *
+     * <p>Se exige el <b>mismo mensaje</b>, no sólo que las dos fallen: dos
+     * rechazos con motivos distintos serían otra vez dos reglas.
+     */
+    @Test
+    @DisplayName("una CASA rechaza el piso IGUAL por `ubicacion` que por `atributos`")
+    void lasDosPuertasDanLaMismaRespuesta() {
+        Actor actor = actor();
+
+        // La marca es de ESTA corrida: la suite comete, asi que contar por una
+        // descripcion fija mediria tambien lo que dejaron las anteriores.
+        String marca = "casa-4p-" + UUID.randomUUID();
+
+        ReglaNegocioException porUbicacion = assertThrows(ReglaNegocioException.class,
+                () -> registrarCasa(actor, marca, ubicacionConPiso("2"), List.of()));
+        ReglaNegocioException porAtributos = assertThrows(ReglaNegocioException.class,
+                () -> registrarCasa(actor, marca, ubicacion(),
+                        List.of(new ValorAtributo("piso", "2"))));
+
+        assertEquals(porAtributos.getMessage(), porUbicacion.getMessage(),
+                "las dos puertas tienen que dar la MISMA respuesta: si difieren, hay dos reglas");
+        assertTrue(porUbicacion.getMessage().contains("no aplica a una propiedad de tipo CASA"),
+                porUbicacion.getMessage());
+
+        // Y el rechazo no deja nada a medias: la transaccion revierte entera.
+        assertEquals(0, jdbc.queryForObject("""
+                select count(*) from propiedad
+                 where organizacion_id = ? and descripcion = ?
+                """, Integer.class, actor.idOrganizacion(), marca),
+                "un 400 no puede dejar media propiedad registrada");
+
+        // El control positivo de la simetria: donde SI aplica, las dos puertas
+        // aceptan. Sin esto, un fallo que rechazara siempre pasaria por simetria.
+        long porUnaPuerta = registrarConPiso(actor, "2");
+        long porLaOtra = registrar(actor, new ValorAtributo("piso", "2"));
+        assertEquals("2", pisoDe(porUnaPuerta));
+        assertEquals("2", pisoDe(porLaOtra));
+        assertEquals("ALTA", ultima(actor, PROPIEDAD, porUnaPuerta, "piso").get("verbo"));
+        assertEquals("ALTA", ultima(actor, PROPIEDAD, porLaOtra, "piso").get("verbo"));
+    }
+
     // ==================================================================
     // Lo que NO es un hecho no se anota
     // ==================================================================
@@ -837,6 +893,22 @@ class ProcedenciaDelValorIntegrationTest {
                         List<ValorAtributo> atributos, List<String> aBorrar) {
         propiedades.editar(idPropiedad, new ComandoEdicion(null, procedencia, null, null, null,
                 atributos.isEmpty() ? null : atributos, null, aBorrar), actor);
+    }
+
+    /**
+     * Una CASA, que es un tipo al que el catalogo NO le aplica {@code piso}.
+     * Sus dos claves ALT son {@code metraje_total} y {@code dormitorios}.
+     */
+    private long registrarCasa(Actor actor, String marca, Ubicacion ubicacion,
+                               List<ValorAtributo> extra) {
+        List<ValorAtributo> valores = new java.util.ArrayList<>(
+                List.of(new ValorAtributo("metraje_total", "180"),
+                        new ValorAtributo("dormitorios", "4")));
+        valores.addAll(extra);
+        return propiedades.registrar(new ComandoRegistro(null, Procedencia.deLaPantalla(), null,
+                "CASA", null, marca, ubicacion,
+                List.of(new Titular(titular(actor), null, Boolean.TRUE)),
+                valores, List.of(), null), actor).idPropiedad();
     }
 
     private long registrarConPiso(Actor actor, String piso) {

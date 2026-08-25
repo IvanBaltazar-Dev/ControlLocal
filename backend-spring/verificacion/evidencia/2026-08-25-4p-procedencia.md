@@ -12,10 +12,11 @@
 > reconstruir historias reales.** Un valor que se escribe, cambia y se borra
 > tiene que poder contarse entero después — y con la fila vigente ya ausente.
 >
-> **Segunda versión, tras un rechazo con severidad ALTA.** El primer candidato
-> dejaba abierta la única puerta que usa el producto y **ningún gate lo veía**.
-> Empieza por §0 bis: es lo que más enseña de este microcorte, y contiene un
-> `STOP` con una decisión que devuelvo sin tomarla.
+> **Tercera versión.** El primer candidato dejaba abierta la única puerta que usa
+> el producto y **ningún gate lo veía**; el segundo fijó la decisión del titular
+> y, al fijarla, destapó una **tercera** asimetría —el alta aceptaba lo que la
+> edición rechazaba—. Empieza por §0 bis: es lo que más enseña de este
+> microcorte.
 
 ---
 
@@ -269,17 +270,153 @@ la anotación. Es acción a distancia para arreglar un caso local. Tocar sólo l
 que cambia hace la invariante **innecesaria** en vez de exigirla, y el test la
 sostiene igualmente por si alguien vuelve al gesto anterior.
 
-### El residuo de la auditoría — declarado, porque no se puede borrar
+### TERCERA VUELTA — la simetría, y la asimetría que apareció al fijarla
 
-Las filas **23 y 24** de `rastro_valor_gobernado` en `controllocal_dev`
-(`clave='piso'`, `id_agregado=3260`, `EDICION 7→8` y `RETIRADA 8→∅`) las produjo
-**la reproducción del defecto durante la auditoría**. **No son historia del
-producto: `PROP-0023` nunca tuvo un piso 7 ni un piso 8.**
+Fijar por prueba la decisión del titular —**las dos puertas responden lo mismo**—
+no era un trámite: **la primera ejecución de esa prueba se puso roja**, y no por
+la puerta de `ubicacion`.
 
-**No se pueden borrar, y eso es correcto**: la tabla es append-only y su trigger
-lo impide. Queda escrito aquí para que dentro de un año nadie lea esas dos filas
-como un hecho comercial. El Auditor dejó `propiedad.piso` de 3260 restaurado a
-`NULL` — comprobado antes de tocar nada.
+```
+lasDosPuertasDanLaMismaRespuesta:441
+  Expected ReglaNegocioException to be thrown, but nothing was thrown.
+```
+
+**Una `CASA` se podía REGISTRAR con un `piso`, por las dos puertas.** Medido en el
+código: la aplicabilidad se exigía en `convertir`, `convertirMultivalor` y
+`escribirEnEdicion` — y **en ninguna de las dos mitades del alta**. Una clave
+`ESTRUCTURAL` no pasa por `convertir` (no crea fila), así que el alta la escribía
+sin preguntar el tipo.
+
+El resultado era un dato **que entraba y ya no se podía corregir**: registrabas la
+casa con piso `2`, y cualquier edición posterior de ese valor moría con «no aplica
+a una propiedad de tipo CASA». Peor que rechazarlo.
+
+**Cerrado**: `aplicarEstructuralesAlAlta` y `escribirAlAlta` exigen la
+aplicabilidad, cada una en su mitad. Las dos, y no una: son los dos tiempos del
+alta, y **la mitad que no exija se convierte en la puerta permisiva**.
+
+> **Y esto no es la asimetría que buscaba el Auditor, es una tercera.** La suya
+> era *puerta contra puerta*; la del titular, *catálogo contra cable*. Ésta es
+> **alta contra edición**, y estaba viva antes de 4.P —`enrutarEstructurales`
+> tampoco preguntaba—. Salió porque la prueba compara las dos puertas **en el
+> alta**, que es donde nadie había mirado.
+
+**Verificada por sabotaje**, y el primer intento enseñó algo: quitar la guarda de
+**una sola** de las dos mitades **no pone la prueba en rojo** —la otra sigue
+rechazando, sólo que después del `save`—. Con las dos quitadas, que es el estado
+real anterior:
+
+```
+lasDosPuertasDanLaMismaRespuesta:445
+  Expected ReglaNegocioException to be thrown, but nothing was thrown.   ROJO
+```
+
+La prueba lleva además su **control positivo**: donde `piso` **sí** aplica, las
+dos puertas **aceptan** y dejan `ALTA`. Sin él, un fallo que rechazara siempre
+pasaría por simetría.
+
+### Sabotaje B — la salida que faltaba
+
+Constaban A (referencia a método) y C (quinto concepto). **B** —la llamada normal
+al *setter*— no. Ejecutado y medido aquí:
+
+```java
+// inyectado en aplicarUbicacion:
+if (ubicacion.piso() != null) { propiedad.setPiso(ubicacion.piso()); }
+```
+
+```
+LinajeDeTodaEscrituraTest.soloLosEnrutadoresEscribenValores:230
+  estos metodos escriben un valor gobernado fuera del enrutador de su sujeto:
+  [com.controllocal.service.impl.PropiedadUniversalServiceImpl#aplicarUbicacion]
+  ==> expected: <[]> but was: <[...#aplicarUbicacion]>
+  Tests run: 5, Failures: 1                                              ROJO
+```
+
+**Muerde igual que con la referencia a método**, que era lo que había que
+comprobar: `getAccessesFromSelf()` cubre las dos formas de invocación.
+
+### `EDICION 6→6` no contradice al hallazgo 3
+
+En el residuo hay una fila `EDICION` con `hallado = 6` y `valor = 6`: reafirmar el
+mismo valor **deja fila**. Es correcto y hay que decirlo, porque leído deprisa
+parece chocar con «no se anota una retirada que no ocurrió».
+
+```
+V83:  una fila por ESCRITURA, no por valor.
+```
+
+- **`EDICION 6→6`**: hubo una escritura. Alguien mandó el valor, en un instante,
+  por un canal, y el Core lo escribió. Que coincidiera con el anterior no la
+  convierte en un no-hecho — y para Intelligence «lo volvieron a afirmar el 25»
+  es información, no ruido.
+- **`RETIRADA` de lo que no existía**: **no hubo escritura ninguna**. No había
+  fila que borrar ni columna que vaciar; el `DELETE` no tocó nada.
+
+La regla es una sola y distingue las dos: **se anota lo que pasó**. En la primera
+pasó algo; en la segunda, no.
+
+### `RESIDUO_AUDITORIA_4P` — el residuo, remedido y con marca localizable
+
+> **Corregido: la cifra anterior había dejado de ser cierta.** Esta sección decía
+> «8 filas: 6 génesis + **2** de residuo». **Son 12: 6 génesis + 6 de residuo.**
+> La reauditoría añadió cuatro filas más, y el número que yo había escrito
+> envejeció en una tarde. Es la misma clase de afirmación que este corte lleva
+> seis rondas cazando, cometida por mí. **Remedido ahora, no copiado.**
+
+**Medición, `controllocal_dev`, hecha para esta versión:**
+
+```
+rastro_valor_gobernado                      12 filas
+  genesis (V83, ids 1-6)                     6
+  RESIDUO_AUDITORIA_4P (ids 23,24,41-44)     6   todas clave='piso', id_agregado=3260
+
+  23  EDICION   7 -> 8        2026-08-25 11:05:33   (primera auditoria)
+  24  RETIRADA  8 -> ausente  2026-08-25 11:05:52
+  41  ALTA          -> 5      2026-08-25 13:34:27   (reauditoria)
+  42  EDICION   5 -> 6        2026-08-25 13:34:28
+  43  EDICION   6 -> 6        2026-08-25 13:34:29
+  44  RETIRADA  6 -> ausente  2026-08-25 13:34:52
+```
+
+**Y una corrección de hecho sobre lo que se me pasó:** se me indicó que la
+reauditoría había dejado además las claves `AUD2-D-1/2/4/6`. **No están.** Barrido
+con control positivo sobre las cuatro tablas donde podrían estar:
+
+```
+rastro_valor_gobernado   claves 'AUD%'   ->  0
+atributo_propiedad       claves 'AUD%'   ->  0
+catalogo_atributo        claves 'AUD%'   ->  0
+propiedad                codigos 'AUD%'  ->  0
+```
+
+Serán de una base efímera o de una transacción revertida; en la cartera de
+desarrollo **no existen**. El residuo es exactamente el de arriba: **seis filas,
+todas de `piso` sobre `PROP-0023`**.
+
+**No son historia del producto: `PROP-0023` nunca tuvo un piso 5, 6, 7 ni 8.**
+
+**Y no se pueden borrar, que es lo correcto**: la tabla es append-only y su
+trigger lo impide — la misma garantía que el corte entrega es la que conserva su
+propio residuo. Por eso la marca: **`RESIDUO_AUDITORIA_4P`**, greppable en este
+repositorio, con la consulta que lo aísla sin leer prosa:
+
+```sql
+-- RESIDUO_AUDITORIA_4P: linaje producido REPRODUCIENDO el defecto, no por el producto.
+SELECT r.* FROM rastro_valor_gobernado r
+  JOIN propiedad p ON p.id_propiedad = r.id_agregado AND p.organizacion_id = r.organizacion_id
+ WHERE r.sujeto = 'PROPIEDAD' AND r.clave = 'piso' AND p.codigo = 'PROP-0023';
+```
+
+**El rechazo no dejó nada, y eso también se remidió.** Los `400` de `CASA` y
+`TERRENO` revierten la transacción entera:
+
+```
+propiedades                26   (sin cambio; ultimo id 3263)
+propiedades post-cutover    0   ninguna alta llego a comprometer
+atributo_propiedad         76 filas ·  0 con fecha_actualizacion
+propiedad 3260 . piso      NULL   (restaurado por el Auditor, verificado antes de tocar nada)
+```
 
 ## 1. Las cinco superficies — todas, y la quinta decide la forma
 
@@ -685,16 +822,29 @@ tocara Angular**, precisamente para demostrarlo (§9).
 7. **La correlación de génesis del ENCARGO no sembró nada** porque
    `atributo_encargo` tiene cero filas. La rama está escrita y ejercitada por los
    tests, no por datos históricos.
-8. **La comprobación de frontera sobre las columnas `ESTRUCTURAL` es hoy
-   VACUA POR DATOS, no por construcción.** Sólo puede mirar propiedades
-   registradas **después** del cutover, porque son las únicas de las que se
-   puede afirmar que su columna se escribió después; en `controllocal_dev` hay
-   **0**. Medido: si se le quita el filtro de la frontera, el predicado
-   encuentra **26** filas —todas legado legítimo—, así que el cuerpo funciona y
-   lo único vacío es la muestra. Lo que no depende de los datos es el **control
-   de cobertura** que lo acompaña (`4P la frontera vigila TODOS los campos
-   canónicos declarados`): ése se pone rojo el día que aparezca un quinto campo
-   canónico sin vigilar.
+8. **`4P despues del cutover ninguna COLUMNA ESTRUCTURAL sin linaje` es hoy vacua
+   por datos — y su alcance excluye, POR CONSTRUCCIÓN, el escenario que produjo
+   el defecto.** Las dos mitades, y la segunda es la que importa:
+   - **Vacua por datos**: sólo mira propiedades registradas **después** del
+     cutover, y en `controllocal_dev` hay **0**. Medido: quitándole el filtro de
+     frontera, el predicado encuentra **26** filas —legado legítimo—, así que el
+     cuerpo funciona y lo vacío es la muestra.
+   - **Y no habría cazado el defecto, nunca.** `PROP-0023` se registró **antes**
+     del cutover, así que queda fuera de `fecha_registro > frontera_de_linaje()`
+     por definición. Un `piso` escrito hoy sin linaje sobre una propiedad vieja
+     **no la enciende**. No puede: de una columna sin fecha propia sobre una
+     propiedad anterior al cutover no se puede afirmar cuándo se escribió, y esa
+     comprobación se negó a afirmarlo.
+   - **La red real es el gate de arquitectura**, que sí muerde y lo hace sobre el
+     código, no sobre los datos: `LinajeDeTodaEscrituraTest` se pone rojo con la
+     referencia a método, con la llamada normal y con un quinto concepto
+     canónico. **Nadie debe leer la comprobación `.sql` como la protección
+     principal.** Lo que sí aporta sin depender de los datos es su gemela,
+     `4P la frontera vigila TODOS los campos canónicos declarados`: ésa se pone
+     roja el día que aparezca un campo sin vigilar.
+
+   *(Las comprobaciones se nombran, no se numeran: cualquier añadido renumera la
+   lista entera y una referencia por ordinal envejece a la primera inserción.)*
 9. **`TRUNCATE` rodea el append-only.** Los dos triggers son `FOR EACH ROW`, y
    `TRUNCATE` no dispara triggers de fila: vaciaría las dos tablas sin error. Es
    la **misma limitación del patrón que el modelo aprobó** —`V76`
@@ -704,6 +854,22 @@ tocara Angular**, precisamente para demostrarlo (§9).
    dejaría `observacion_mercado` más débil que su gemela sin que nadie lo
    hubiera decidido. `TRUNCATE` además exige privilegios de dueño de la tabla,
    que la aplicación no usa.
+
+10. **`ubicacion.piso` en una organización que no gobierne el campo `PISO`: ahora
+    se RECHAZA, y antes se perdía.** Si `claveDelCampo(PISO)` volviera vacío,
+    `conElPisoGobernado` devolvía el mapa intacto y el valor **desaparecía con un
+    `200`** — el comentario decía que «se queda donde estaba», y desde que
+    `aplicarUbicacion` dejó de escribirlo eso era **falso**. Arreglado: «aquí no
+    se gobierna el piso» significa **se dice**, nunca **se pierde**. La rama
+    **sigue siendo inalcanzable** —`piso` es clave del sistema y ninguna
+    organización puede retirarla—, así que no hay test que la ejercite: queda
+    declarada aquí y el mensaje está escrito para el día que deje de serlo.
+11. **La simetría alta↔edición está fijada sólo para `piso`.** El test compara las
+    dos puertas sobre la única clave `ESTRUCTURAL` que tiene dos; las otras tres
+    (`metraje_total`, `partida_registral`, `oficina_registral`) tienen una sola
+    puerta y su aplicabilidad la cubre el mismo código, no una prueba propia.
+    `metraje_total` además aplica a los siete tipos, así que no hay caso negativo
+    que escribir.
 
 ---
 
@@ -719,51 +885,51 @@ JDK 21 (`C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot`).
 85 en verde  ·  0 en rojo  ·  85 total
 ```
 
-**16 comprobaciones de 4.P**, todas en verde. Las dos últimas son de la segunda
-vuelta y existen porque sin ellas el agujero de `piso` habría vuelto a pasar:
+**16 comprobaciones de 4.P**, nombradas y no numeradas —cualquier añadido
+renumera la lista y una referencia por ordinal envejece a la primera inserción:
 
 ```
-65  4P existen las dos tablas del linaje
-66  4P el linaje NO cuelga del id de la fila vigente
-67  4P el linaje se direcciona por la clave logica
-68  4P el linaje no se puede corregir
-69  4P el linaje no se puede borrar
-70  4P no hay una cuarta naturaleza
-71  4P un INFERIDO sin autor, modelo, version ni confianza
-72  4P un ALTA no puede haber hallado un valor
-73  4P una RETIRADA no deja valor vigente
-74  4P ninguna genesis declara naturaleza
-75  4P la frontera del cutover existe y ya paso
-76  4P despues del cutover ningun hecho del inmueble sin linaje
-77  4P despues del cutover ninguna condicion del encargo sin linaje
-78  4P despues del cutover ninguna COLUMNA ESTRUCTURAL sin linaje   <- nueva
-79  4P la frontera vigila TODOS los campos canonicos declarados     <- nueva
-80  4P las transcripciones documentadas nombran su fuente
+4P existen las dos tablas del linaje
+4P el linaje NO cuelga del id de la fila vigente
+4P el linaje se direcciona por la clave logica
+4P el linaje no se puede corregir
+4P el linaje no se puede borrar
+4P no hay una cuarta naturaleza
+4P un INFERIDO sin autor, modelo, version ni confianza
+4P un ALTA no puede haber hallado un valor
+4P una RETIRADA no deja valor vigente
+4P ninguna genesis declara naturaleza
+4P la frontera del cutover existe y ya paso
+4P despues del cutover ningun hecho del inmueble sin linaje
+4P despues del cutover ninguna condicion del encargo sin linaje
+4P despues del cutover ninguna COLUMNA ESTRUCTURAL sin linaje
+4P la frontera vigila TODOS los campos canonicos declarados
+4P las transcripciones documentadas nombran su fuente
 ```
 
-La **79** es la que de verdad protege: la 78 nombra cuatro columnas a mano, y sin
-un control de cobertura seguiría en verde el día que apareciera una quinta —que
-es exactamente cómo pasó desapercibido `piso`—.
+**Y no se lea la penúltima como la protección real**: es vacua por datos y su
+alcance excluye por construcción el escenario que produjo el defecto (§8.8). La
+red es el gate de arquitectura.
 
 ### 9.2 · Reactor completo contra PostgreSQL real
 
 ```
 servicios     720 tests · 0 fallos
 web            48 tests · 0 fallos
-aplicacion    429 tests · 0 fallos
+aplicacion    430 tests · 0 fallos
               ---
-              1197 tests · 0 fallos · 0 saltados     BUILD SUCCESS
+              1198 tests · 0 fallos · 0 saltados     BUILD SUCCESS
 ```
 
-De los cuales, de 4.P:
+De 4.P:
 
 ```
-LinajeDeTodaEscrituraTest             5 tests   (arquitectura, +1 en la 2.a vuelta)
-ProcedenciaDelValorIntegrationTest   19 tests   (los 8 casos + los 4 hallazgos)
+LinajeDeTodaEscrituraTest             5 tests   (arquitectura)
+ProcedenciaDelValorIntegrationTest   20 tests   (8 casos + hallazgos + simetria)
 ```
 
 **Los 21 tests de integración aparecen EJECUTADOS**, comprobado por el script
-contra la salida de Maven —no «no fallaron»—.
+contra la salida de Maven — no «no fallaron».
 
 ### 9.3 · Suites E2E
 
@@ -784,34 +950,45 @@ editor-universal          147 OK / 0 fallas
 ### 9.4 · Angular, corrido aunque no se tocara
 
 ```
-ng test                          671 SUCCESS / 671
-ng build --configuration production   BUILD OK, sin errores
+ng test                                671 SUCCESS / 671
+ng build --configuration production    BUILD OK, sin errores
 ```
 
-Sólo los avisos de presupuesto **preexistentes**: ninguno nuevo, ninguno en
-error. Se corrió aparte de las suites E2E, no en paralelo.
+Sólo los avisos de presupuesto **preexistentes**. Corrido aparte de las suites
+E2E, no en paralelo.
 
-### 9.5 · Conservación, remedida al cerrar
+### 9.5 · Los sabotajes — ningún gate se entrega sin verlo morder
+
+| sabotaje | resultado medido |
+|---|---|
+| `propiedad::setPiso` (**referencia a método**) | **ROJO**, nombra `aplicarUbicacion` |
+| `propiedad.setPiso(...)` (**llamada normal**) | **ROJO**, nombra `aplicarUbicacion` — §0 bis |
+| quitar **las dos** guardas de aplicabilidad del alta | **ROJO**, `nothing was thrown` — §0 bis |
+| quitar **una sola** de las dos guardas | **verde**: la otra sigue rechazando. Dicho, porque enseña que la prueba mide el comportamiento, no la línea |
+| gesto original del multivalor | **ROJO**, síntoma exacto `[CONTROL_DE_ACCESO]` |
+
+### 9.6 · Conservación, remedida al cerrar
 
 ```
 atributo_propiedad          76 filas ·  0 con fecha_actualizacion
 publicacion                 C = 9  ·  P = 3
-locales bloqueados          19 de 21
-propiedad 3260 . piso       NULL   (restaurado por el Auditor, verificado)
-rastro_valor_gobernado       8 filas: 6 genesis + 2 de residuo de auditoria
+locales bloqueados          19
+propiedad 3260 . piso       NULL
+rastro_valor_gobernado      12 filas: 6 genesis + 6 RESIDUO_AUDITORIA_4P
 ```
 
-**Ningún valor actual se perdió ni cambió**, y las publicaciones y los bloqueados
-están donde estaban.
+**Ningún valor actual se perdió ni cambió.** La corrida de cierre **no añade
+residuo** a la cartera: las suites E2E usan bases efímeras y las de integración
+`controllocal_repositorios`.
 
-### 9.6 · La migración
+### 9.7 · La migración
 
-`V83` sigue aplicada y **no se ha tocado**: la segunda vuelta no cambió el
-esquema, sólo el código que escribe y los gates que lo vigilan.
+`V83` sigue aplicada y **no se ha tocado** en ninguna de las tres vueltas: lo que
+cambió es el código que escribe y los gates que lo vigilan.
 
-### 9.7 · `git diff --check`
+### 9.8 · `git diff --check`
 
-Sin avisos: ni espacios al final de línea ni conflictos sin resolver.
+Sin avisos.
 
 ## 10. Lo que este microcorte NO hizo
 

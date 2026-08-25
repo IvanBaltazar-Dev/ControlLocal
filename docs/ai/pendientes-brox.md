@@ -333,8 +333,9 @@ locales: 21 total · 2 con acceso · 19 bloqueados
 
 > **La publicabilidad del catálogo pasó de `5 de 26` a `7 de 26`**, y las
 > bloqueadas de **21 a 19** — medido, no restado. Cualquier cifra de «21
-> bloqueadas» en documentos anteriores es un registro fechado de su microcorte,
-> no el estado de hoy.
+> bloqueadas» **en éste y en otros documentos** es un registro fechado de su
+> microcorte, no el estado de hoy — incluidas **las dos que están más arriba en
+> esta misma sección**, ya tachadas y con su evidencia.
 
 El análisis que llevó a la decisión, que se conserva porque fija el listón:
 

@@ -489,8 +489,16 @@ git cat-file -t dc54931          -> commit
 dc54931 tree                     -> 9a6478ae14a030e19a766d867b1be9b375588cb6
 46f770c^{tree}                   -> 9a6478ae14a030e19a766d867b1be9b375588cb6   IDENTICOS
 git for-each-ref --contains      -> (ninguna referencia)
-git fsck  ->  34 objetos colgantes, 6 de ellos commits; dc54931 es uno
+git fsck                         -> dc54931 aparece entre los commits colgantes
 ```
+
+> **El censo total de objetos colgantes se retiró a propósito.** Decía «34
+> objetos, 6 commits», y era exacto al escribirlo — pero **un censo de colgantes
+> es local a la máquina y volátil**: durante la auditoría siguiente, que fue de
+> **sólo lectura**, ya marcaba **37**. Era otra cifra que envejece sola sin que
+> nadie la toque. Lo que sostiene este párrafo —`dc54931` colgante, sin
+> referencias, con el árbol de `46f770c`— **es estable y es lo único que hacía
+> falta escribir**.
 
 > **Corregido por CONTROL al cerrar.** Estas dos líneas decían `HEAD^{tree}`, y
 > era cierto al escribirlas —`HEAD` era entonces `46f770c`—, pero **el propio

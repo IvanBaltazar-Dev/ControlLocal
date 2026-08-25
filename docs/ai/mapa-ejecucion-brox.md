@@ -264,6 +264,23 @@ para ser la red del North Star*. Hoy estamos mucho más cerca del primero.
    > procedencia se registra **del acto y no del dato**, y que **una edición o un
    > borrado destruyen el pasado**.
 
+   > **LA CADENA COMPLETA DEL BLOQUE, y la cifra que vale hoy.** Corte 4 no fue
+   > un corte: fueron **siete pasos**, y el mapa se había saltado dos.
+   >
+   > | # | paso | resultado |
+   > |---|---|---|
+   > | 1 | **Corte 4 · comercial** (`V81`) | 39 claves · `tipo_acceso` nace **ALT** · publicables **26 → 5** |
+   > | 2 | **`V82`** · `tipo_acceso` **ALT → PUB** | registrar sí, publicar no · **5 de 26** |
+   > | 3 | **la señal `PUB` visible** (sin migración) | 21 bloqueadas · **21 con causa visible** (eran 0) |
+   > | 4 | **las puertas de publicación** (sin migración) | eran **cinco** vías, no cuatro; dos retiradas |
+   > | 5 | **conciliación de los 4 anuncios vivos** | los 4 **cerrados**, sin inventar `tipo_acceso` |
+   > | 6 | **los dos accesos documentados** (`df05903`) | `LOC-D001` y `LOC-0002` conservados → **7 publicables · 19 bloqueadas** |
+   > | 7 | **4.P · procedencia del dato gobernado** (`V83`) | linaje append-only por valor, cinco superficies |
+   >
+   > **Estado de hoy: `7 publicables · 19 bloqueadas` de 26.** Las cifras de «5 de
+   > 26» y «21 bloqueadas» que aparecen más abajo son **registros fechados de los
+   > pasos 2 y 3**, correctos en su momento y **superados por el paso 6**.
+
    > **4.P · CERRADO 2026-08-25 · `V83` · aprobado en la CUARTA vuelta
    > (`9a7afb3`).** Tabla propia **append-only** (`rastro_valor_gobernado` +
    > `rastro_valor_opcion`), direccionada por

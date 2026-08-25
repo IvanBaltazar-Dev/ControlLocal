@@ -317,10 +317,29 @@ remedido por auditoría independiente. Evidencia:
 halló el acceso explícito en `LOC-0001`, `LOC-0002` y `LOC-D001`. Un cero sin
 control positivo no habría probado nada.
 
-#### Queda abierto, y es del titular
+#### ✅ RESUELTO — los dos accesos documentados, conservados (2026-08-25, `df05903`)
 
-De los **17** locales bloqueados restantes, **tres llevan acceso en su
-descripción**, pero con el mismo listón sólo **dos** son inequívocos:
+**Esto ya no está abierto.** El titular decidió conservar los dos que eran
+inequívocos, y se hizo:
+
+```
+LOC-D001  tipo_acceso = A_PIE_DE_CALLE     2026-08-25 02:56:02
+LOC-0002  tipo_acceso = GALERIA_INTERIOR   2026-08-25 02:56:26
+locales: 21 total · 2 con acceso · 19 bloqueados
+```
+
+**`LOC-0001` sigue sin valor**, por la razón de la tabla de abajo. Evidencia:
+`verificacion/evidencia/2026-08-25-dos-accesos-documentados.md`.
+
+> **La publicabilidad del catálogo pasó de `5 de 26` a `7 de 26`**, y las
+> bloqueadas de **21 a 19** — medido, no restado. Cualquier cifra de «21
+> bloqueadas» en documentos anteriores es un registro fechado de su microcorte,
+> no el estado de hoy.
+
+El análisis que llevó a la decisión, que se conserva porque fija el listón:
+
+De los **17** locales bloqueados que quedaban entonces, **tres llevaban acceso en
+su descripción**, pero con el mismo listón sólo **dos** eran inequívocos:
 
 | propiedad | texto | lectura |
 |---|---|---|
@@ -328,10 +347,10 @@ descripción**, pero con el mismo listón sólo **dos** son inequívocos:
 | `LOC-0002` | «Local **en galeria** del centro» | **inequívoco**, un punto por debajo: en Lima «galería» nombra a veces lo que el vocabulario clasificaría `CENTRO_COMERCIAL` |
 | `LOC-0001` | «**en esquina**, primera linea de avenida» · zona «**Centro comercial** de Miraflores» | **NO inequívoco**: el mismo registro sostiene dos opciones **excluyentes** (`ESQUINA_A_CALLE` y `CENTRO_COMERCIAL`) y `tipo_acceso` es de valor único. Elegir sería la inferencia prohibida |
 
-Ninguno tiene anuncio vivo, así que ninguno estaba en el alcance. **Conservar un
-hecho que ya consta no es inventarlo**, así que los dos primeros podrían
-desbloquearse sin visitar — pero es **decisión del titular**, y `LOC-0001` cae del
-lado de las cuatro: hay señal, y se contradice consigo misma.
+Ninguno tenía anuncio vivo, así que ninguno estaba en el alcance de la
+conciliación. **Conservar un hecho que ya consta no es inventarlo**, así que los
+dos primeros **se conservaron sin visitar**; `LOC-0001` cayó del lado de las
+cuatro —hay señal, y se contradice consigo misma— y **sigue esperando visita**.
 
 ### 2.5 quater Enriquecimiento de Propiedad — capacidad de producto, capa calidad/moat
 

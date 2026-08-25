@@ -363,22 +363,52 @@ las 26.
 `naturaleza` declara que no se sabe cómo se obtuvo. El linaje de esas claves
 **empieza en la primera escritura posterior a `V83`**, que sí es completa.
 
-### La regla que generaliza esta decisión
+**La ausencia de linaje en el legado significa una sola cosa: procedencia NO
+RECONSTRUIBLE.** No se crea `DESCONOCIDO` como naturaleza **ni se estampa
+`SISTEMA` como origen del valor**.
 
-> **Génesis sólo donde sea demostrable, fila a fila. Donde no lo sea, ninguna.**
+### La regla, sin generalizar en ninguna dirección
 
-No es «las de atributo sí y las estructurales no» por tabla: es **por lo que cada
-fila puede probar**.
+> **Génesis sólo donde la procedencia sea REALMENTE demostrable, fila a fila.
+> Donde no lo sea, ninguna.**
 
-- **Las 70 de `V48`**: su `fecha_creacion` **coincide con la fecha de la
-  migración**, así que canal `SISTEMA` y fecha **son verificables** → **génesis
-  sí**, con `naturaleza` **ausente**.
+**Ni backfill de todo lo que se pueda inventar, ni ausencia para todo el legado
+por comodidad.** No es «las de atributo sí y las estructurales no» por tabla: es
+**por lo que cada fila puede probar**.
+
+- **Las 70 de `V48`** son el caso candidato — **pero sólo si el inventario prueba
+  de verdad su fecha y su canal**, no si simplemente lo parece. **Si la prueba no
+  se sostiene al implementarlo, se quedan sin génesis y se dice.**
 - **Las que provengan de un registro con `evento_dominio` correlacionable**:
-  génesis con **lo que ese evento demuestre**.
-- **Cualquier fila cuya fecha o canal no se puedan sostener**: **sin génesis.**
+  génesis con **lo que ese evento demuestre**, y nada más.
+- **Cualquier fila cuya fecha o canal no se sostengan**: **sin génesis.**
+- **En toda génesis que se escriba: `naturaleza` ausente.** La procedencia
+  *operacional* puede ser demostrable; **cómo se conoció el hecho, casi nunca**.
 
-**Si al aplicarlo aparece una fila que no encaja en ninguno de los tres casos,
-`STOP`** — no se le inventa una génesis para que la tabla quede completa.
+**`STOP` si aparece una fila que no encaje en ninguno de esos casos** — no se le
+inventa una génesis para que la tabla quede completa.
+
+### La frontera de garantía — el *cutover*
+
+```
+ANTES de V83   → puede existir legado SIN linaje. NO es defecto.
+DESPUÉS de V83 → una escritura gobernada SIN linaje ES UN DEFECTO.
+```
+
+Se define **explícitamente en el modelo**, para que el gate pueda decir de qué
+lado cae cada fila, y no quede al criterio de quien consulte.
+
+### La primera modificación de una `ESTRUCTURAL` — requisito propio
+
+Al modificarse por primera vez tras el *cutover*, el linaje debe **preservar las
+dos cosas**: **el valor anterior que el Core encontró** y **el valor nuevo con su
+procedencia completa**.
+
+**Al anterior NO se le atribuye procedencia histórica**: ni canal, ni actor, ni
+fecha de nacimiento, ni naturaleza. Lo único que se afirma de él es lo cierto —
+*«en el momento de esta edición, el Core encontró este valor»*—, que es
+**constatación del estado hallado**, no génesis. Detalle en
+`decision-4p-modelo-de-procedencia.md` §3 bis.1.
 
 ## 7. Prohibido
 

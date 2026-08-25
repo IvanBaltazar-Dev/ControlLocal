@@ -346,6 +346,40 @@ una por una y con el caso concreto:
 | 4 | ENCARGO (escalar, multivalor y retirada) | **simétrico**, y desde el primer commit |
 | 5 | **`ESTRUCTURAL` — campo fijo** (`metraje_total`, `piso`, `partida_registral`, `oficina_registral`) | **no crean fila** en `atributo_propiedad`: hay que demostrar que su linaje **igualmente queda** |
 
+## 6 quinquies. DECISIÓN DEL TITULAR · la génesis del legado — **E2**
+
+> **No se escribe génesis para lo histórico de las cuatro claves `ESTRUCTURAL`.**
+
+**Por qué**, y el argumento que lo decidió: E1 proponía una fila `GENESIS` con
+canal `SISTEMA` y `registrado_en` = fecha de `V83`, leída como «se constató que el
+valor existía». **Pero para `ESTRUCTURAL` ninguno de los dos campos consta**: no
+hay fecha por valor —y **5 de 26** propiedades se editaron después del registro—,
+y **nada demuestra que el `metraje` lo escribiera el sistema** y no un agente
+desde el SPA. E1 habría escrito **dos afirmaciones no demostrables**, y una
+consulta de «cuándo apareció este valor» habría devuelto la fecha de `V83` para
+las 26.
+
+**La ausencia de linaje declara que no se sabe** — exactamente como la ausencia de
+`naturaleza` declara que no se sabe cómo se obtuvo. El linaje de esas claves
+**empieza en la primera escritura posterior a `V83`**, que sí es completa.
+
+### La regla que generaliza esta decisión
+
+> **Génesis sólo donde sea demostrable, fila a fila. Donde no lo sea, ninguna.**
+
+No es «las de atributo sí y las estructurales no» por tabla: es **por lo que cada
+fila puede probar**.
+
+- **Las 70 de `V48`**: su `fecha_creacion` **coincide con la fecha de la
+  migración**, así que canal `SISTEMA` y fecha **son verificables** → **génesis
+  sí**, con `naturaleza` **ausente**.
+- **Las que provengan de un registro con `evento_dominio` correlacionable**:
+  génesis con **lo que ese evento demuestre**.
+- **Cualquier fila cuya fecha o canal no se puedan sostener**: **sin génesis.**
+
+**Si al aplicarlo aparece una fila que no encaja en ninguno de los tres casos,
+`STOP`** — no se le inventa una génesis para que la tabla quede completa.
+
 ## 7. Prohibido
 
 Empezar añadiendo una columna antes del inventario · resolver **sólo**

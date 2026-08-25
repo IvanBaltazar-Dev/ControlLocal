@@ -138,6 +138,20 @@ class LinajeDeTodaEscrituraTest {
             CatalogoAtributo.CAMPO_OFICINA_REGISTRAL, "setOficinaRegistral");
 
     /**
+     * Los metodos de {@code AtributosGobernados} que escriben un valor y que, por
+     * tanto, tienen que exigir la aplicabilidad al tipo de la propiedad.
+     *
+     * <p>Es un <b>control de cobertura</b>, no documentacion: si uno pierde la
+     * guarda, el gate se pone rojo. Y si aparece uno nuevo, tambien — anadirlo
+     * aqui es la decision consciente que este gate quiere forzar.
+     */
+    private static final Set<String> EXIGEN_APLICABILIDAD = Set.of(
+            "convertir", "convertirMultivalor",
+            "aplicarEstructuralesAlAlta", "escribirAlAlta", "escribirEnEdicion");
+
+    private static final String GUARDA_APLICABILIDAD = "exigirQueAplique";
+
+    /**
      * <b>La unica excepcion, con su motivo</b>, y esta escrita aqui para que se
      * vea cada vez que alguien lea el gate.
      *
@@ -317,6 +331,54 @@ class LinajeDeTodaEscrituraTest {
                         + "cualquier sinonimo de \"no consta\" --, no va aqui: la ausencia se "
                         + "representa como ausencia, y confundirla con INFERIDO borra la "
                         + "diferencia entre no saber como se supo algo y saber que se dedujo.");
+    }
+
+    /**
+     * <b>Las DOS mitades del alta exigen la aplicabilidad, y ninguna puede
+     * perderla en silencio</b> (cuarta vuelta de 4.P).
+     *
+     * <h2>Por qué esto es un gate y no una nota</h2>
+     * El alta ocurre en dos tiempos —{@code aplicarEstructuralesAlAlta} antes del
+     * primer {@code save}, {@code escribirAlAlta} despues— y las dos comprueban
+     * lo mismo. Se midio que <b>quitar una sola no pone nada en rojo</b>: corren
+     * en la misma transaccion, la guarda superviviente lanza, la transaccion
+     * revierte y el observable por el cable es identico.
+     *
+     * <p>Hoy no es un defecto. Pero significa que <b>una de las dos puede
+     * desaparecer sin que nada avise</b>, y el dia que el alta deje de ser una
+     * sola transaccion sobrevivira la que quede — que puede ser la equivocada.
+     * Barrido con control positivo: {@code exigirQueAplique} no aparecia <b>ni
+     * una vez</b> en todo el arbol de tests.
+     *
+     * <p>Es el mismo patron que {@code SETTER_POR_CONCEPTO}: no vigila que el
+     * codigo haga algo, vigila que <b>el inventario siga completo</b>.
+     */
+    @Test
+    @DisplayName("todo escritor gobernado exige la aplicabilidad, y las dos mitades del alta tambien")
+    void ningunEscritorPierdeLaGuardaDeAplicabilidad() {
+        JavaClass enrutador = CLASES.get("com.controllocal.service.soporte.AtributosGobernados");
+
+        Set<String> conGuarda = enrutador.getMethods().stream()
+                .filter(metodo -> metodo.getAccessesFromSelf().stream()
+                        .anyMatch(acceso -> GUARDA_APLICABILIDAD.equals(acceso.getName())))
+                .map(JavaMethod::getName)
+                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+
+        // CONTROL POSITIVO. Si alguien renombra la guarda, el conjunto se queda
+        // vacio y la comparacion de abajo fallaria igual -- pero con un mensaje
+        // que no dice por que. Esto lo dice.
+        assertTrue(conGuarda.size() >= 3,
+                "el gate dejo de reconocer la guarda \"" + GUARDA_APLICABILIDAD + "\": encontro "
+                        + conGuarda + ". Si se renombro, actualiza GUARDA_APLICABILIDAD antes de "
+                        + "creerte el verde.");
+
+        assertEquals(new java.util.TreeSet<>(EXIGEN_APLICABILIDAD), conGuarda,
+                "cambio el conjunto de escritores que exigen la aplicabilidad. Si uno la PERDIO, "
+                        + "devuelvesela: aunque hoy el rollback tape el sintoma --las dos mitades "
+                        + "del alta corren en la misma transaccion--, el dia que dejen de hacerlo "
+                        + "sobrevive la que quede. Si el metodo es NUEVO, declaralo aqui: "
+                        + "escribir un valor gobernado sin preguntar a que tipo aplica es como "
+                        + "una CASA acabo pudiendo registrarse con un piso.");
     }
 
     // ------------------------------------------------------------------

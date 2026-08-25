@@ -12,11 +12,15 @@
 > reconstruir historias reales.** Un valor que se escribe, cambia y se borra
 > tiene que poder contarse entero después — y con la fila vigente ya ausente.
 >
-> **Tercera versión.** El primer candidato dejaba abierta la única puerta que usa
+> **Cuarta versión.** El primer candidato dejaba abierta la única puerta que usa
 > el producto y **ningún gate lo veía**; el segundo fijó la decisión del titular
 > y, al fijarla, destapó una **tercera** asimetría —el alta aceptaba lo que la
-> edición rechazaba—. Empieza por §0 bis: es lo que más enseña de este
-> microcorte.
+> edición rechazaba—; el tercero contenía **una refutación falsa mía**, escrita
+> con un barrido que miraba el universo equivocado.
+>
+> Empieza por §0 bis y sigue por §8 bis. **Lo que más deja este microcorte no es
+> el linaje: es §8 bis** — el mismo error de método cometido dos veces, y por qué
+> el control positivo no lo vio.
 
 ---
 
@@ -302,14 +306,39 @@ alta, y **la mitad que no exija se convierte en la puerta permisiva**.
 > alta**, que es donde nadie había mirado.
 
 **Verificada por sabotaje**, y el primer intento enseñó algo: quitar la guarda de
-**una sola** de las dos mitades **no pone la prueba en rojo** —la otra sigue
-rechazando, sólo que después del `save`—. Con las dos quitadas, que es el estado
-real anterior:
+**una sola** de las dos mitades **no pone la prueba en rojo** —las dos corren en
+la misma transacción, la superviviente lanza, la transacción revierte y el
+observable por el cable es idéntico—. Con las dos quitadas, que es el estado real
+anterior:
 
 ```
 lasDosPuertasDanLaMismaRespuesta:445
   Expected ReglaNegocioException to be thrown, but nothing was thrown.   ROJO
 ```
+
+**Y eso se cerró, no se declaró.** Que una de las dos guardas pueda desaparecer
+sin que nada avise no es un defecto hoy —el rollback salva el observable— pero el
+día que el alta deje de ser una sola transacción **sobrevive la que quede, que
+puede ser la equivocada**. Barrido con control positivo:
+`exigirQueAplique` **no aparecía ni una vez en todo el árbol de tests**
+(`aplicarEstructuralesAlAlta` sí, en `LinajeDeTodaEscrituraTest`, así que el
+barrido funcionaba).
+
+El gate nuevo —`ningunEscritorPierdeLaGuardaDeAplicabilidad`— es el mismo patrón
+que `SETTER_POR_CONCEPTO`: **no vigila que el código haga algo, vigila que el
+inventario siga completo**. Quitando **una sola** guarda:
+
+```
+LinajeDeTodaEscrituraTest.ningunEscritorPierdeLaGuardaDeAplicabilidad:375
+  expected: <[aplicarEstructuralesAlAlta, convertir, convertirMultivalor,
+              escribirAlAlta, escribirEnEdicion]>
+  but was:  <[aplicarEstructuralesAlAlta, convertir, convertirMultivalor,
+              escribirEnEdicion]>                                        ROJO
+```
+
+...mientras `lasDosPuertasDanLaMismaRespuesta` seguía **verde 1/1**. Ése era
+exactamente el hueco: **un gate que no ve el defecto es peor que el defecto**,
+porque el verde da confianza.
 
 La prueba lleva además su **control positivo**: donde `piso` **sí** aplica, las
 dos puertas **aceptan** y dejan `ALTA`. Sin él, un fallo que rechazara siempre
@@ -379,9 +408,9 @@ rastro_valor_gobernado                      12 filas
   44  RETIRADA  6 -> ausente  2026-08-25 13:34:52
 ```
 
-**Y una corrección de hecho sobre lo que se me pasó:** se me indicó que la
-reauditoría había dejado además las claves `AUD2-D-1/2/4/6`. **No están.** Barrido
-con control positivo sobre las cuatro tablas donde podrían estar:
+**Y aquí escribí una refutación FALSA, que es lo segundo que hay que corregir.**
+Se me indicó que la reauditoría había dejado además las claves `AUD2-D-1/2/4/6`.
+Respondí que **no existían**, con este barrido:
 
 ```
 rastro_valor_gobernado   claves 'AUD%'   ->  0
@@ -390,23 +419,82 @@ catalogo_atributo        claves 'AUD%'   ->  0
 propiedad                codigos 'AUD%'  ->  0
 ```
 
-Serán de una base efímera o de una transacción revertida; en la cartera de
-desarrollo **no existen**. El residuo es exactamente el de arriba: **seis filas,
-todas de `piso` sobre `PROP-0023`**.
+**Existen. Son siete.** Viven en `comando_idempotente`, que es la tabla donde vive
+una clave de idempotencia — y es la única de las cinco que no miré:
+
+```sql
+SELECT id_comando, idempotency_key, tipo_comando, entidad_tipo, entidad_id, canal, fecha
+  FROM comando_idempotente WHERE idempotency_key LIKE 'AUD%' ORDER BY id_comando;
+```
+
+```
+126  AUD-4P-PISO-001  EDITAR_PROPIEDAD  PROPIEDAD 3260  SPA  2026-08-25 11:05:04
+127  AUD-4P-PISO-002  EDITAR_PROPIEDAD  PROPIEDAD 3260  SPA  2026-08-25 11:05:33
+128  AUD-4P-PISO-003  EDITAR_PROPIEDAD  PROPIEDAD 3260  SPA  2026-08-25 11:05:52
+129  AUD2-D-1         EDITAR_PROPIEDAD  PROPIEDAD 3260  SPA  2026-08-25 13:34:27
+130  AUD2-D-2         EDITAR_PROPIEDAD  PROPIEDAD 3260  SPA  2026-08-25 13:34:28
+131  AUD2-D-4         EDITAR_PROPIEDAD  PROPIEDAD 3260  SPA  2026-08-25 13:34:29
+132  AUD2-D-6         EDITAR_PROPIEDAD  PROPIEDAD 3260  SPA  2026-08-25 13:34:52
+```
+
+**Control positivo:** la tabla tiene **12** filas en total, así que el `7` no es
+un cero disfrazado. *(Y la primera consulta que escribí ni siquiera compiló: pedí
+`clave_idempotencia` y la columna se llama `idempotency_key`. No conocía la tabla
+porque nunca la había mirado — que es exactamente el punto.)*
+
+**El fallo fue de dos**: CONTROL dio por buena mi refutación al reelevarla en vez
+de pedir la consulta. Queda escrito porque un error que sólo se le apunta a uno se
+repite en el otro.
 
 **No son historia del producto: `PROP-0023` nunca tuvo un piso 5, 6, 7 ni 8.**
 
-**Y no se pueden borrar, que es lo correcto**: la tabla es append-only y su
-trigger lo impide — la misma garantía que el corte entrega es la que conserva su
-propio residuo. Por eso la marca: **`RESIDUO_AUDITORIA_4P`**, greppable en este
-repositorio, con la consulta que lo aísla sin leer prosa:
+**Y el linaje no se puede borrar, que es lo correcto**: la tabla es append-only y
+su trigger lo impide — la misma garantía que el corte entrega es la que conserva
+su propio residuo.
+
+### `RESIDUO_AUDITORIA_4P` — el inventario COMPLETO, y sus dos consultas
+
+**El residuo son 13 filas en dos tablas**, no 6 en una. La marca inicial sólo
+cubría el linaje, que es la mitad que yo sabía mirar:
+
+| tabla | filas | qué son |
+|---|---|---|
+| `rastro_valor_gobernado` | **6** | el linaje que produjo reproducir el defecto |
+| `comando_idempotente` | **7** | las claves con las que se mandaron esos `PUT` |
+| **base de datos, resto** | **0** | los `POST` de `CASA` revirtieron enteros |
 
 ```sql
--- RESIDUO_AUDITORIA_4P: linaje producido REPRODUCIENDO el defecto, no por el producto.
+-- RESIDUO_AUDITORIA_4P (1/2): linaje producido REPRODUCIENDO el defecto.
 SELECT r.* FROM rastro_valor_gobernado r
   JOIN propiedad p ON p.id_propiedad = r.id_agregado AND p.organizacion_id = r.organizacion_id
  WHERE r.sujeto = 'PROPIEDAD' AND r.clave = 'piso' AND p.codigo = 'PROP-0023';
+
+-- RESIDUO_AUDITORIA_4P (2/2): los comandos con los que se mandaron esas ediciones.
+-- Viven en comando_idempotente, que es DONDE VIVE una clave de idempotencia --
+-- y es la tabla que mi primer barrido no miro.
+SELECT c.* FROM comando_idempotente c
+ WHERE c.idempotency_key LIKE 'AUD%';
 ```
+
+**Las dos consultas juntas son la marca.** Una sola dejaba fuera siete filas y
+daba la falsa sensación de haber inventariado el residuo.
+
+### El residuo en git, que tampoco es de la base
+
+`dc54931` es un **commit colgante** que la auditoría creó con `commit-tree` para
+demostrar que mis dos commits equivalen al *squash*. Verificado aquí:
+
+```
+git cat-file -t dc54931          -> commit
+dc54931 tree                     -> 9a6478ae14a030e19a766d867b1be9b375588cb6
+HEAD^{tree}                      -> 9a6478ae14a030e19a766d867b1be9b375588cb6   IDENTICOS
+git for-each-ref --contains      -> (ninguna referencia)
+git fsck  ->  34 objetos colgantes, 6 de ellos commits; dc54931 es uno
+```
+
+**Sin referencias: lo recoge el `gc` y no hay que hacer nada.** Se anota porque un
+commit colgante con un árbol idéntico al de `HEAD` es justo la clase de cosa que
+alguien encuentra dentro de un año y no sabe interpretar.
 
 **El rechazo no dejó nada, y eso también se remidió.** Los `400` de `CASA` y
 `TERRENO` revierten la transacción entera:
@@ -864,12 +952,65 @@ tocara Angular**, precisamente para demostrarlo (§9).
     **sigue siendo inalcanzable** —`piso` es clave del sistema y ninguna
     organización puede retirarla—, así que no hay test que la ejercite: queda
     declarada aquí y el mensaje está escrito para el día que deje de serlo.
-11. **La simetría alta↔edición está fijada sólo para `piso`.** El test compara las
-    dos puertas sobre la única clave `ESTRUCTURAL` que tiene dos; las otras tres
-    (`metraje_total`, `partida_registral`, `oficina_registral`) tienen una sola
-    puerta y su aplicabilidad la cubre el mismo código, no una prueba propia.
-    `metraje_total` además aplica a los siete tipos, así que no hay caso negativo
-    que escribir.
+11. **La simetría se comprueba por COMPORTAMIENTO sólo para `piso`.**
+    `lasDosPuertasDanLaMismaRespuesta` compara las dos puertas sobre la única
+    clave `ESTRUCTURAL` que tiene dos; las otras tres (`metraje_total`,
+    `partida_registral`, `oficina_registral`) tienen una sola, y `metraje_total`
+    además aplica a los siete tipos, así que no hay caso negativo que escribir.
+    Lo que **sí** cubre a las cuatro es el gate estructural
+    (`ningunEscritorPierdeLaGuardaDeAplicabilidad`), que vigila el inventario de
+    escritores y no un valor concreto — y por eso se puso rojo donde la prueba de
+    comportamiento se quedaba verde.
+
+---
+
+---
+
+## 8 bis. LA LECCIÓN DE MÉTODO — el mismo error, dos veces, y el control positivo no lo vio
+
+**Es lo más valioso que deja este microcorte, y no es técnico.**
+
+El mismo error de método se cometió **dos veces**, con dos vueltas de distancia:
+
+| # | qué se barrió | dónde estaba de verdad | qué costó |
+|---|---|---|---|
+| **1** | «productores de **las cuatro TABLAS** de valor» | en **las cuatro COLUMNAS** `ESTRUCTURAL`, que no tienen tabla | el defecto de `ubicacion.piso`: la única puerta que usa el producto, escribiendo sin linaje |
+| **2** | claves `AUD%` en **cuatro tablas de clave y catálogo** | en **`comando_idempotente`**, que es donde vive una clave de idempotencia | una **refutación falsa** escrita en esta evidencia y elevada como cierta |
+
+**La forma del error es idéntica:** barrer **donde esperas encontrarlo** en vez de
+preguntar **dónde puede vivir esa clase de cosa**. En el primero, el inventario
+partió de las tablas que ya conocía y la quinta superficie —la que no tiene
+tabla— quedó fuera. En el segundo, busqué una clave en las tablas que tienen una
+columna llamada `clave`, y una clave de idempotencia no está en ninguna de ellas.
+Ni siquiera sabía cómo se llamaba la columna: mi primera consulta pidió
+`clave_idempotencia` y falló, porque es `idempotency_key`.
+
+### Y aquí está lo que hay que escribir, porque llevamos toda la sesión apoyándonos en ello
+
+> **El control positivo NO protege de este error.** Pasa **trivialmente sobre el
+> universo equivocado.**
+
+Mi barrido de las claves `AUD%` **llevaba control positivo** —comprobé que las
+tablas no estaban vacías— y aun así devolvió un cero verdadero sobre un universo
+que no contenía la respuesta. El control positivo responde a *«¿mi consulta sabe
+encontrar algo?»*; **no responde a *«¿estoy mirando donde puede estar?»***. Son
+dos preguntas y la sesión entera ha estado usando la primera como si contestara la
+segunda.
+
+**Lo que sí lo habría cazado, en los dos casos:** enumerar primero **las clases de
+sitio donde ese tipo de cosa puede vivir** —para un valor gobernado: tabla de
+atributos, columna del agregado, tabla hija de multivalor; para una clave de
+idempotencia: la tabla de comandos— y sólo después barrer. El inventario se hace
+**por concepto**, y la consulta después.
+
+**Y una segunda cosa, del proceso:** la refutación falsa no la paró nadie. CONTROL
+la dio por buena al reelevarla, en vez de pedir la consulta que la sostenía. **El
+fallo fue de dos**, y se anota así porque un error que sólo se le apunta a uno se
+repite en el otro.
+
+**Ninguno de los dos casos lo habría visto un gate.** El primero lo cerró un test
+de arquitectura *después* de que un humano lo encontrara; el segundo no es
+código, es método. Por eso queda escrito aquí y no en un `assert`.
 
 ---
 
@@ -916,15 +1057,15 @@ red es el gate de arquitectura.
 ```
 servicios     720 tests · 0 fallos
 web            48 tests · 0 fallos
-aplicacion    430 tests · 0 fallos
+aplicacion    431 tests · 0 fallos
               ---
-              1198 tests · 0 fallos · 0 saltados     BUILD SUCCESS
+              1199 tests · 0 fallos · 0 saltados     BUILD SUCCESS
 ```
 
 De 4.P:
 
 ```
-LinajeDeTodaEscrituraTest             5 tests   (arquitectura)
+LinajeDeTodaEscrituraTest             6 tests   (arquitectura, +1 en la 4.a vuelta)
 ProcedenciaDelValorIntegrationTest   20 tests   (8 casos + hallazgos + simetria)
 ```
 
@@ -962,19 +1103,24 @@ E2E, no en paralelo.
 | sabotaje | resultado medido |
 |---|---|
 | `propiedad::setPiso` (**referencia a método**) | **ROJO**, nombra `aplicarUbicacion` |
-| `propiedad.setPiso(...)` (**llamada normal**) | **ROJO**, nombra `aplicarUbicacion` — §0 bis |
-| quitar **las dos** guardas de aplicabilidad del alta | **ROJO**, `nothing was thrown` — §0 bis |
-| quitar **una sola** de las dos guardas | **verde**: la otra sigue rechazando. Dicho, porque enseña que la prueba mide el comportamiento, no la línea |
+| `propiedad.setPiso(...)` (**llamada normal**) | **ROJO**, nombra `aplicarUbicacion` |
 | gesto original del multivalor | **ROJO**, síntoma exacto `[CONTROL_DE_ACCESO]` |
+| quitar **las dos** guardas de aplicabilidad del alta | **ROJO**, `nothing was thrown` |
+| quitar **una sola** guarda — prueba de comportamiento | **verde 1/1**: la otra lanza y revierte |
+| quitar **una sola** guarda — **gate de inventario** | **ROJO**, nombra `escribirAlAlta` |
 
-### 9.6 · Conservación, remedida al cerrar
+Las dos últimas filas juntas son el motivo de la cuarta vuelta: la primera es el
+hueco, la segunda es el cierre.
+
+### 9.6 · Conservación y residuo, remedidos al cerrar
 
 ```
 atributo_propiedad          76 filas ·  0 con fecha_actualizacion
 publicacion                 C = 9  ·  P = 3
 locales bloqueados          19
-propiedad 3260 . piso       NULL
+propiedades                 26  ·  propiedad 3260 . piso = NULL
 rastro_valor_gobernado      12 filas: 6 genesis + 6 RESIDUO_AUDITORIA_4P
+comando_idempotente         12 filas: 5 del producto + 7 RESIDUO_AUDITORIA_4P
 ```
 
 **Ningún valor actual se perdió ni cambió.** La corrida de cierre **no añade
@@ -983,8 +1129,8 @@ residuo** a la cartera: las suites E2E usan bases efímeras y las de integració
 
 ### 9.7 · La migración
 
-`V83` sigue aplicada y **no se ha tocado** en ninguna de las tres vueltas: lo que
-cambió es el código que escribe y los gates que lo vigilan.
+`V83` sigue aplicada y **no se ha tocado** en ninguna de las cuatro vueltas: lo
+que cambió es el código que escribe y los gates que lo vigilan.
 
 ### 9.8 · `git diff --check`
 

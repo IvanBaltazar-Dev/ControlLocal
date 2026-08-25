@@ -122,7 +122,10 @@ exactamente para lo que existe la exigencia.
 > dónde salió. No es **A** porque, sin este documento, nadie puede reconstruir que
 > los dos valores se transcribieron de la `descripcion` en vez de capturarse en
 > una visita. No es **C** porque el acto sí deja huella verificable en
-> `evento_dominio` y en `comando_idempotente`. La evidencia de por qué está abajo.
+> `evento_dominio` — **y sólo ahí**. La evidencia de por qué está abajo.
+>
+> **Matiz que fija la auditoría:** es **B a granularidad de propiedad, no de
+> atributo**.
 
 `atributo_propiedad` **no tiene columna de procedencia**. Confirmado: sus once
 columnas son `id_atributo_propiedad, organizacion_id, id_propiedad, clave,
@@ -141,8 +144,26 @@ canal=SPA · agente=(vacío) · carga_util={"idPropiedad":3}
 ```
 
 **Lo que SÍ queda registrado:** que la propiedad 3 fue editada, **por qué canal**
-(`SPA`), **por qué actor** y **cuándo**. También en `comando_idempotente`, con la
-misma procedencia.
+(`SPA`), **por qué actor** y **cuándo**. **En `evento_dominio`, y sólo ahí.**
+
+> **Corregido por CONTROL al cerrar, tras la auditoría.** Esta línea afirmaba
+> —aquí y en el bloque de §5— que el acto quedaba **«también en
+> `comando_idempotente`, con la misma procedencia»**. **Es falso.** Medido con
+> control positivo (la tabla tiene 5 filas, luego no está vacía): **cero**
+> comandos para las propiedades 2 o 3, **cero** posteriores a las 02:00 del
+> 25-ago, y el último registrado es un `REGISTRAR_PROPIEDAD` del 2026-08-20.
+> `PUT /propiedades/{id}` **no es un comando idempotente y no escribe ahí**. No
+> cambia la letra —`evento_dominio` sostiene **B** por sí solo, y así se
+> verificó—, pero era una afirmación de hecho **dentro de la frase que justifica
+> la clasificación**, que es donde menos puede permitirse.
+
+**Y el hueco es del modelo, no de este microcorte.** El sistema **sí** lleva
+procedencia en otros sitios —`propiedad.origen_incorporacion`,
+`observacion_mercado.fuente`, `meta_revision.origen`,
+`regularizacion_dato_economico.valor_origen`—: **el patrón existe y nunca se
+extendió al valor de un atributo gobernado.** Por eso **cualquier** *backfill*
+futuro, **cualquier** escritura de KAIROS y **cualquier** transcripción de un
+agente caerán en la misma **B**.
 
 **Lo que NO queda registrado, y es la deuda:** la carga útil del evento es
 `{"idPropiedad": 3}` — **no dice qué atributo cambió, ni su valor, ni de dónde

@@ -285,12 +285,18 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 >
 > Se ejecuta en la **subtanda 5A** del Corte 5 (`V84`).
 
-**Totales:** ~20 correcciones sin clave nueva, **~85 claves nuevas de PROPIEDAD**, de las cuales hoy queda **1 en ALT** (`area_terreno` en C, §3.1) más las tres elevaciones de claves existentes (`piso` en D/O, `interiorUnidad` en D). El resto reparte entre PUB y OPC.
+**Totales:** ~20 correcciones sin clave nueva y **~85 claves nuevas de PROPIEDAD**, de las cuales **ninguna queda en ALT**: las dos que lo eran —`tipo_acceso` en L y `condicion_terreno` en T— están derogadas en su eje de exigencia (tabla de abajo), y todas las demás reparten entre PUB y OPC. Toda la exigencia `ALT` que este documento propone cae sobre **claves que ya existían** (§3.1, «cero claves nuevas»): `area_terreno` en C, `piso` en D y O, e `interiorUnidad` en D.
 
-> **Este total decía «4 en ALT» y contradecía a sus propias filas** — corregido
-> el **2026-08-25**. Las tres que se caen no se borran: se nombran con lo que las
-> derogó, porque el argumento de cada celda sigue sosteniendo **que la clave debe
-> existir**, y lo derogado es sólo su eje de exigencia.
+> **Este total ha estado mal dos veces, y las dos por contar sobre sus propias
+> filas sin recorrerlas.** Decía «4 en ALT», se corrigió a «1 en ALT
+> (`area_terreno` en C, §3.1)» el **2026-08-25** — pero ese 1 quedó colgando de
+> «~85 claves nuevas», y `area_terreno` **no es una clave nueva**: es una de las
+> 19 que ya existen. Corregido otra vez el mismo día, tras la segunda vuelta de
+> auditoría: el total y su ejemplo hablan ahora del mismo conjunto. Las tres
+> filas que se caen no se borran: cada una se nombra con lo que la derogó —y la
+> tercera, con que nunca fue `ALT`—, porque el argumento de cada celda sigue
+> sosteniendo **que la clave debe existir**, y lo derogado es sólo su eje de
+> exigencia.
 >
 > | clave | decía | dice su propia fila | quién lo derogó |
 > |---|---|---|---|

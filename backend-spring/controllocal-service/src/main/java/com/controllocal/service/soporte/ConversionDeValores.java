@@ -210,10 +210,31 @@ public final class ConversionDeValores {
      * cuyos reemplazos son del Corte 5». Las dos mitades caducaron con
      * {@code V84}: los reemplazos —{@code agua_desague} y
      * {@code energia_electrica}, con vocabulario sembrado— <b>ya existen</b>, y
-     * la clave quedo <b>retirada</b> ({@code activo = false}), asi que ninguna
-     * escritura suya llega hasta aqui: {@code exigir_atributo_gobernado} exige
-     * {@code activo = true} y la rechaza antes (SQLSTATE 23503). Su valor
+     * la clave quedo <b>retirada</b> ({@code activo = false}). Su valor
      * conservado se sigue LEYENDO; lo que se cerro es la escritura.
+     *
+     * <p><b>Y no era esta capa la que la paraba, ni antes ni ahora</b> —la
+     * primera version de esta correccion lo atribuyo a la retirada, y era falso
+     * por dos medidas—. El orden real de las capas es:
+     *
+     * <ol>
+     *   <li>A este metodo <b>solo lo llama el camino ESTRUCTURAL</b>
+     *       ({@code AtributosGobernados.valorEstructural}, su unico
+     *       llamador), y {@code servicios_disponibles} es
+     *       {@code destino = ATRIBUTO} con {@code campo_estructural = NULL}.
+     *       Una escritura suya <b>nunca</b> llego hasta aqui, ni antes ni
+     *       despues de {@code V84}: la retirada no tiene nada que ver.</li>
+     *   <li>En el camino <b>gobernado</b> quien la rechaza es
+     *       {@code AtributosGobernados.definicionDe} →
+     *       {@code CatalogoAtributoRepository.porClave}, cuyo JPQL lleva
+     *       {@code and c.activo = true}: sale una {@code ReglaNegocioException}
+     *       («no esta en el catalogo») <b>en Java, antes de emitir SQL</b>.</li>
+     *   <li>{@code exigir_atributo_gobernado} es la <b>red de atras</b>, para
+     *       quien entre por SQL directo: busca la clave con {@code activo = true}
+     *       y si no la encuentra levanta SQLSTATE 23503. Por eso el
+     *       {@code sembrarLegadoAmbiguo} de {@code OcupacionYServiciosIntegrationTest}
+     *       tiene que <b>reactivar</b> la clave para poder saltarselo.</li>
+     * </ol>
      *
      * <p>Y hoy <b>ninguna clave la ejerce</b>: medido el 2026-08-25 en las dos
      * bases, no queda una sola LISTA ni LISTA_MULTIPLE activa sin vocabulario,

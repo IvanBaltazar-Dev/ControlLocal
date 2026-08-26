@@ -420,12 +420,21 @@ Barrido con `rg` (nunca `grep -iF`) sobre `controllocal-service`,
 >    1  web/dto/PropiedadUniversalDtos.java            javadoc
 > ```
 >
-> Se clasificaron **una a una**: 8 son comentario o javadoc; 3 son el `name` de
+> Se clasificaron **una a una**: **9** son comentario o javadoc —las 8 de los
+> cinco ficheros de abajo **más `CatalogoAtributo.java:205`**, que va dentro de
+> la fila de 17 y es la cita `si clave == "metraje_total"` del antipatrón que ese
+> mismo javadoc prohíbe—; 3 son el `name` de
 > una `@Column` —de las claves **estructurales**, cuya columna se llama igual, no
 > un enrutado por nombre—; y 16 son las constantes de `CatalogoAtributo`, que es
 > exactamente lo que ese fichero declara hacer («nombrarlas NO es la matriz
 > prohibida; lo prohibido es decidir DÓNDE se guarda una clave a partir de su
-> nombre»). **Ninguna de las 28 escribe un atributo.**
+> nombre»). **9 + 3 + 16 = 28, y ninguna de las 28 escribe un atributo.**
+>
+> > La cifra de comentarios decía **8** y no cuadraba con el total —corregido el
+> > **2026-08-25**, tras la segunda vuelta de auditoría—: se contaron los cinco
+> > ficheros que son sólo comentario y se olvidó que la fila de 17 lleva 16
+> > constantes **y una cita en javadoc**. La tabla de arriba ya lo decía; la
+> > clasificación de abajo no lo sumaba.
 >
 > La conclusión de fondo —«no hay segundo productor»— **se sostiene y no
 > dependía de la frase falsa**: descansa en que el único escritor de

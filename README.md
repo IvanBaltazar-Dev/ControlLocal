@@ -97,8 +97,6 @@ si se desvía del código: un endpoint nuevo necesita su fila.
 | [`backend-spring/`](backend-spring/) | La API. Reactor Maven de cinco módulos sobre Spring Boot 3.5 + PostgreSQL/PostGIS. [README](backend-spring/README.md) |
 | [`frontend-angular/`](frontend-angular/) | La SPA. Angular 20, standalone + signals. [README](frontend-angular/README.md) |
 | [`kairos-service/`](kairos-service/) | Prototipo de asistente conversacional sobre la API. Proyecto aparte. [README](kairos-service/README.md) |
-| [`docs/ai/`](docs/ai/) | Decisiones, contratos y el mapa de avance (abajo) |
-| [`docs/1INF50/`](docs/1INF50/) | Radiografía de arquitectura y diagramas |
 
 El esquema lo posee **Flyway** (`backend-spring/controllocal-app/src/main/resources/db/migration/`).
 No hay scripts sueltos que ejecutar y **una migración aplicada no se edita nunca**.

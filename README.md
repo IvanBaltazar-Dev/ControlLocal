@@ -85,11 +85,6 @@ terreno, almacén, otro) y la profundidad del catálogo no es igual en todos.
 | `BROKER` | Supervisa y **decide**: revisa encargos, evalúa solicitudes, rescinde contratos | No crea ni edita agentes, no invita |
 | `AGENTE` | **Registra y opera**: propiedades, encargos, clientes, oportunidades, visitas, solicitudes | No aprueba su propio trabajo |
 
-La regla de fondo es que *gobernar no es operar* y *el broker decide, el agente registra*.
-Quién puede llamar a qué —y **dónde se decide el alcance**— está en
-[`docs/ai/matriz-operacion-rol.md`](docs/ai/matriz-operacion-rol.md), que **rompe el build**
-si se desvía del código: un endpoint nuevo necesita su fila.
-
 ## El repositorio
 
 | Carpeta | Qué es |

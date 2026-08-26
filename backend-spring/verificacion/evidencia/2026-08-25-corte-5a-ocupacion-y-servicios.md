@@ -1317,24 +1317,31 @@ tiene que anotar. Los atributos de la propiedad 1 quedaron idénticos: 8 filas, 
 | esta evidencia §3 y la tabla de superficies de §12.8 | la ESCRITURA la cerraba sólo el trigger | la cierran dos capas, y por la API actúa la de Java |
 | `OcupacionYServiciosIntegrationTest.serviciosDisponiblesQuedoRetiradaYNoBorrada` (comentario) | «no admite valores nuevos: `exigir_atributo_gobernado` exige `activo = true`» | la capa real, y que el `assertThrows` es ancho a propósito |
 
-**Y el barrido de esa frase se había hecho por fichero, no por frase.** La sexta
-auditoría encontró tres copias vivas más, todas con la misma atribución falsa. Se
-corrigen en este lote:
+**Y el barrido de esa frase se hizo tres veces por fichero, no por frase**: se
+miraba la primera ocurrencia de cada archivo y se daba el archivo por revisado.
+La última vez que falló, lo que quedó vivo fue una **segunda** copia dentro de
+`gate-modelo-universal.sql` —el mismo archivo cuya otra ocurrencia se acababa de
+declarar correcta.
 
-| dónde | qué decía |
-|---|---|
-| `CatalogoQueHablaIntegrationTest.serviciosDisponiblesQuedoRetiradaYSustituida` (**mensaje de aserción**, no comentario) | el caso gemelo exacto del de `OcupacionYServiciosIntegrationTest` —mismo `editar(id, new ValorAtributo("servicios_disponibles", …))`, mismo `propiedades.editar`—, y su mensaje repetía «una clave retirada no sigue capturando: `exigir_atributo_gobernado` exige `activo = true`» |
-| `AtributosGobernados` (javadoc de `definicionesParaLeer`) | «no reabre ninguna puerta de escritura: `aplicablesA` sigue filtrando por `activo`, y el trigger `exigir_atributo_gobernado` también» — omitía `porClave`, que es quien rechaza por la API |
-| `docs/ai/modelo/motor-captura.js` (comentario de `pasosDeAtributos`) | «`aplicablesA` filtra `activo` y el trigger `exigir_atributo_gobernado` lo exige otra vez» |
+**El barrido se rehízo el 2026-08-26 con el método que corresponde**, y esto
+sustituye a la enumeración que había aquí: `rg` sobre todo el repositorio,
+listando **todas** las ocurrencias de `exigir_atributo_gobernado` y clasificando
+**cada una**, no una por archivo. Hicieron falta dos pasadas, porque la copia que
+seguía viva **no nombraba al trigger**: se buscó también por `23503` y por «el
+trigger» en los archivos que se pueden editar. El universo así barrido, clasificado
+entero:
 
-Y una cuarta copia **no se corrige y queda registrada**: `V84` dice lo mismo en la
+| grupo | qué dice | qué se hizo |
+|---|---|---|
+| habla del **INSERT directo**: el javadoc de `sembrarLegadoAmbiguo`, el párrafo «Sembrar el legado exige saltarse la puerta» de §12.8, el segundo comentario del control positivo del gate y el javadoc de la «red de atrás» de `ConversionDeValores` | por esa vía el trigger **sí** es quien rechaza | correcto, no se toca |
+| habla de la **API** y ya se corrigió en los lotes anteriores: el javadoc de `definicionesParaLeer`, el comentario de `motor-captura.js`, el comentario y el mensaje de aserción de las dos pruebas de integración, §3 y §12.8 de esta evidencia y §2.3 ter de `pendientes-brox.md` | por la API rechaza el Core en Java y el trigger no se llega a ejecutar | correcto, no se toca |
+| habla de la **API** y seguía viva: el **primer** comentario del control positivo del gate, que decía «el trigger la rechaza con 23503 por estar retirada» justo sobre la ruta que él mismo llama normal | ni es el trigger, ni es `23503`, ni se llega a ejecutar. La conclusión —nadie escribe esa clave por ahí— sí era cierta | **corregida en este lote** |
+| habla de **otra cosa**: tipo de dato, rango, pertenencia al vocabulario, sujeto del atributo, aplicabilidad por tipo de inmueble, el cuerpo de la función en las migraciones, los rastros de `pg_proc` en los registros de corrida y las tablas de diseño de `auditoria-profundidad-inmobiliaria.md` | ahí el trigger sí actúa, o es la definición misma de la función | correcto, no se toca |
+
+Y una copia **no se corrige y queda registrada**: `V84` dice lo mismo en la
 viñeta «NO borra ni reinterpreta ni un solo valor escrito de esa clave». Es una
 migración **aplicada** y no se edita; queda anotada en `pendientes-brox.md`
-§2.3 quater. Las tres copias que hablan del **INSERT directo** —el comentario del
-control positivo en `gate-modelo-universal.sql`, el javadoc de
-`OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo` y el párrafo «Sembrar el
-legado exige saltarse la puerta» de §12.8— **son correctas y no se tocan**: por
-esa vía el trigger sí es quien rechaza.
+§2.3 quater.
 
 **Lo que NO se hizo, a propósito**: no se añadió ninguna prueba ni ningún gate que
 fije **400 frente a 409**. Los dos `assertThrows(Exception.class, …)` —el de

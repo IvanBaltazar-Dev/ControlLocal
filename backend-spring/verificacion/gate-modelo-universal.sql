@@ -958,7 +958,11 @@ SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio sin 
 -- vacio sale VERDE sin haber mirado nada, y su universo esta vacio en
 -- `controllocal_dev` --0 filas de `servicios_disponibles`-- y lo estara en
 -- cualquier base recien creada, porque desde este corte NADIE escribe esa clave
--- por la ruta normal: el trigger la rechaza con 23503 por estar retirada.
+-- por la ruta normal: la clave esta retirada y por la API la rechaza el Core en
+-- Java --`AtributosGobernados.definicionDe` -> `CatalogoAtributoRepository.porClave`,
+-- cuyo JPQL lleva `and c.activo = true`--, que sale con 400 sin llegar a
+-- ejecutar el trigger. Esta linea decia que la rechazaba el trigger con 23503 y
+-- era falsa por partida triple; se corrigio el 2026-08-26.
 --
 -- Esto no se arregla contando filas de legado y exigiendo que sean mas de cero:
 -- eso volveria a atar el gate al RESIDUO de una base concreta, que es justo el

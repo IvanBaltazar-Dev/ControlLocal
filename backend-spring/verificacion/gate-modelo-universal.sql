@@ -761,10 +761,27 @@ SELECT pg_temp.comprobar('4P las transcripciones documentadas nombran su fuente'
 -- descubiertos sobre un universo vacio.
 --
 -- LAS TRES MIRAN EL MISMO UNIVERSO: el catalogo DEL SISTEMA. La tercera ya lo
--- filtraba y las dos primeras no, y esa asimetria tenia consecuencia: una
--- organizacion que declarara su propia `estado_ocupacion` habria tapado el hueco
--- de la del sistema y las dos primeras habrian salido verdes sobre una clave que
--- solo existe en un tenant.
+-- filtraba y las dos primeras no, y esa asimetria tenia consecuencia: las dos
+-- primeras habrian salido verdes sobre una clave que solo existe en un tenant.
+--
+-- HASTA DONDE LLEGA EL MOTIVO, MEDIDO (correccion del 2026-08-25). Este
+-- comentario decia antes que el sombreado lo produce "una organizacion que
+-- declare su propia `estado_ocupacion`", a secas. La base NO permite eso a
+-- secas: `exigir_catalogo_no_sombrea_al_sistema` (V55) rechaza la fila del
+-- tenant --«una organizacion no puede redefinirla»-- en cuanto la del sistema
+-- existe. El filtro sigue siendo correcto y barato, pero su motivo es mas
+-- estrecho:
+--
+--   * ALCANZABLE, en un orden historico concreto: el trigger solo mira en UNA
+--     direccion. Sale por `RETURN NEW` cuando `NEW.organizacion_id IS NULL`, asi
+--     que una migracion que siembra la clave del sistema NO comprueba si algun
+--     tenant ya la tenia. Un tenant que hubiera declarado `estado_ocupacion`
+--     antes de `V84` conserva su fila, y sin este filtro taparia el hueco.
+--   * NO ALCANZABLE, y conviene decirlo para no defender lo que no se defiende:
+--     una SEGUNDA fila del SISTEMA con la misma clave. La impide
+--     `uq_catalogo_atributo_clave` (V48), que es UNICO sobre
+--     `(COALESCE(organizacion_id, 0), clave)`. Ese caso no existe, y
+--     `organizacion_id IS NULL` no seria quien lo evitara.
 SELECT pg_temp.comprobar('5A el hecho de la ocupacion llega donde se pacta su condicion',
     NOT EXISTS (
         SELECT 1
@@ -876,11 +893,26 @@ SELECT pg_temp.comprobar('5A requerido sigue siendo espejo exacto de exigencia =
 -- aparece sobre un legado ambiguo SIN NINGUN rastro no lo ha afirmado nadie:
 -- eso es lo prohibido.
 --
--- Se escribe como INVARIANTE y NUNCA como la cifra 0 de filas legadas: en
--- `controllocal_dev` no hay ninguna y en la base de integracion un fixture las
--- escribe en cada corrida.
-SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio sin que nadie lo afirmara',
-    NOT EXISTS (
+-- SE ESCRIBE COMO INVARIANTE Y NUNCA COMO LA CIFRA 0 de filas legadas. Aqui
+-- habia una segunda frase que era FALSA y la auditoria del 2026-08-25 la midio:
+-- decia que "en la base de integracion un fixture las escribe en cada corrida".
+-- No lo hacia. El unico productor de `servicios_disponibles` era el fixture de
+-- `ConservacionDeLaEdicionIntegrationTest`, y este mismo corte lo retiro al
+-- retirar la clave. Las 322 filas de `controllocal_repositorios` son RESIDUO
+-- HISTORICO: sobre una base nueva --CI, otra maquina, un `docker volume rm`--
+-- el universo es CERO, y esta comprobacion saldria verde sin haber mirado nada.
+-- En `controllocal_dev` el universo ya es cero HOY.
+--
+-- Por eso la invariante viaja con el CONTROL POSITIVO que va justo debajo: no se
+-- confia en encontrar legado, se construye el par exacto que el predicado tiene
+-- que cazar y se deshace. Un cero que no se ha contrastado con un control
+-- positivo no es un cero.
+-- EL PREDICADO SE DEFINE UNA SOLA VEZ. La invariante y su control positivo tienen
+-- que preguntar EXACTAMENTE lo mismo: si se escribieran dos veces, romper una
+-- dejaria la otra intacta y el control dejaria de vigilar lo que dice vigilar.
+CREATE OR REPLACE FUNCTION pg_temp.hay_legado_traducido_sin_linaje()
+RETURNS boolean LANGUAGE sql AS $$
+    SELECT EXISTS (
         SELECT 1
           FROM atributo_propiedad legado
           JOIN atributo_propiedad nuevo ON nuevo.id_propiedad = legado.id_propiedad
@@ -893,8 +925,100 @@ SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio sin 
                               AND r.clave = nuevo.clave
                               AND (r.naturaleza IS NOT NULL
                                 OR r.evidencia_ref IS NOT NULL
-                                OR r.id_persona_rol IS NOT NULL))),
+                                OR r.id_persona_rol IS NOT NULL)))
+$$;
+
+SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio sin que nadie lo afirmara',
+    NOT pg_temp.hay_legado_traducido_sin_linaje(),
     'un valor de servicio sobre un legado ambiguo sin nadie que lo declare ni acta que lo reparta');
+
+-- CONTROL DE COBERTURA DE LA 91, y por que hace falta (auditoria del 2026-08-25).
+--
+-- La 91 es un NOT EXISTS sobre un JOIN de tres tablas. Si su universo esta
+-- vacio sale VERDE sin haber mirado nada, y su universo esta vacio en
+-- `controllocal_dev` --0 filas de `servicios_disponibles`-- y lo estara en
+-- cualquier base recien creada, porque desde este corte NADIE escribe esa clave
+-- por la ruta normal: el trigger la rechaza con 23503 por estar retirada.
+--
+-- Esto no se arregla contando filas de legado y exigiendo que sean mas de cero:
+-- eso volveria a atar el gate al RESIDUO de una base concreta, que es justo el
+-- defecto. Se arregla construyendo el caso: se siembra el par exacto que el
+-- predicado tiene que cazar --un legado ambiguo y un servicio nuevo que nadie
+-- declaro-- y se exige que LO ENCUENTRE. Si un filtro de mas, un join mal puesto
+-- o un `AND` invertido dejara el predicado ciego, esto sale ROJO aunque la 91
+-- siga verde.
+--
+-- SE ESCRIBE EL LEGADO SALTANDOSE LA PUERTA, Y SE DICE. `servicios_disponibles`
+-- esta `activo = false`, asi que `exigir_atributo_gobernado` rechaza tambien el
+-- INSERT directo: no lo encuentra en el catalogo. Para sembrarlo hay que
+-- reactivar la clave, escribir y volver a retirarla, todo DENTRO del savepoint
+-- --ninguna otra sesion ve la clave activa, y el `ROLLBACK TO` la deja como
+-- estaba--. Que un control positivo necesite saltarse una guarda no es una
+-- licencia: es la prueba de que la guarda esta puesta.
+--
+-- El universo REAL de esta base se declara en el nombre de la comprobacion, para
+-- que un (0 filas, verde) quede dicho y no pase por medicion.
+SELECT count(*) AS n_legado_5a FROM atributo_propiedad WHERE clave = 'servicios_disponibles' \gset
+
+-- Un terreno --`servicios_disponibles` y `agua_desague` solo aplican a `T`-- sin
+-- rastro previo de `agua_desague`: con rastro, el predicado no deberia cazarlo y
+-- el control mediria el dato elegido en vez de la invariante. 0 = no hay
+-- ninguno, y entonces el control no probo nada y lo dice.
+SELECT COALESCE((SELECT min(p.id_propiedad) FROM propiedad p
+                  WHERE p.tipo_inmueble = 'T'
+                    AND NOT EXISTS (SELECT 1 FROM rastro_valor_gobernado r
+                                     WHERE r.sujeto = 'PROPIEDAD'
+                                       AND r.id_agregado = p.id_propiedad
+                                       AND r.clave = 'agua_desague')), 0) AS terreno_5a \gset
+
+SAVEPOINT legado_5a;
+DELETE FROM atributo_propiedad
+ WHERE id_propiedad = :terreno_5a AND clave IN ('servicios_disponibles', 'agua_desague');
+UPDATE catalogo_atributo SET activo = true
+ WHERE clave = 'servicios_disponibles' AND organizacion_id IS NULL;
+-- LAS DOS FILAS NACEN ANTES DE LA FRONTERA DEL LINAJE, y no es un detalle. Un
+-- valor posterior al cutover sin rastro es un defecto REAL que caza la
+-- comprobacion 76 de 4.P: sembrarlo con `now()` fabricaria un dato imposible y
+-- envenenaria otro gate desde este. El legado es, por definicion, anterior al
+-- mecanismo de linaje. Aqui el savepoint lo deshace todo y la 76 va antes en el
+-- script, asi que hoy daria igual -- se hace igualmente para que el control siga
+-- siendo correcto si alguien reordena.
+INSERT INTO atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto, fecha_creacion)
+SELECT organizacion_id, id_propiedad, 'servicios_disponibles', 'Agua, luz y desague',
+       frontera_de_linaje() - interval '1 day'
+  FROM propiedad WHERE id_propiedad = :terreno_5a;
+UPDATE catalogo_atributo SET activo = false
+ WHERE clave = 'servicios_disponibles' AND organizacion_id IS NULL;
+INSERT INTO atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto, fecha_creacion)
+SELECT organizacion_id, id_propiedad, 'agua_desague', 'CONECTADO',
+       frontera_de_linaje() - interval '1 day'
+  FROM propiedad WHERE id_propiedad = :terreno_5a;
+
+SELECT CASE
+    WHEN :terreno_5a = 0
+        THEN 'FALLO - no hay ninguna propiedad de tipo T utilizable: el control no probo nada'
+    WHEN NOT EXISTS (SELECT 1 FROM atributo_propiedad
+                      WHERE id_propiedad = :terreno_5a AND clave = 'servicios_disponibles')
+        THEN 'FALLO - no se pudo sembrar el legado: el control no probo nada'
+    WHEN pg_temp.hay_legado_traducido_sin_linaje()
+        THEN 'OK'
+    ELSE 'FALLO - el predicado de la 91 no caza una traduccion sin linaje: su verde no significa nada'
+  END AS v_legado_ctrl \gset
+ROLLBACK TO SAVEPOINT legado_5a;
+
+INSERT INTO resultado (prueba, veredicto)
+VALUES (format('5A CONTROL el predicado del legado caza una traduccion sin linaje '
+               '(legado realmente presente en esta base: %s filas)', :n_legado_5a),
+        :'v_legado_ctrl');
+
+-- Y la clave tiene que haber vuelto a su sitio. El control positivo la reactiva
+-- para poder escribir; si el `ROLLBACK TO` no la devolviera a `activo = false`,
+-- el gate habria REABIERTO la puerta que 5A cerro -- y las comprobaciones que
+-- vienen despues correrian sobre un catalogo que el gate mismo altero.
+SELECT pg_temp.comprobar('5A CONTROL y el savepoint devolvio servicios_disponibles a retirada',
+    EXISTS (SELECT 1 FROM catalogo_atributo
+             WHERE clave = 'servicios_disponibles' AND organizacion_id IS NULL
+               AND NOT activo));
 
 -- =====================================================================
 -- Lo que NO se ha roto

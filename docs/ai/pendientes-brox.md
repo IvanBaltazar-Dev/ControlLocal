@@ -240,8 +240,21 @@ corte de profundidad.
 en 5A**: es preexistente y no se arregla en el sitio, sino en el mapeo global de
 errores.
 
-Un `PUT /propiedades/{id}` con una clave **retirada** —o con cualquier otro valor
-que un trigger rechace— muere en `exigir_atributo_gobernado` con `SQLSTATE 23514`.
+Un `PUT /propiedades/{id}` con una clave **retirada** muere en
+`exigir_atributo_gobernado` con **`SQLSTATE 23503`** (`foreign_key_violation`), no
+`23514`. Corregido el 2026-08-25 tras la segunda auditoría (N5) y **medido** en
+`pg_proc`: una clave retirada no se encuentra —la consulta del trigger lleva
+`AND c.activo = true`—, así que sale por la rama `IF NOT FOUND` con
+`RAISE … USING ERRCODE = 'foreign_key_violation'`. Un valor fuera de vocabulario u
+otra violación del mismo trigger sí salen con `23514`. Medido contra
+`controllocal_dev`:
+
+```
+ERROR:  23503: El atributo "servicios_disponibles" no esta en el catalogo
+CONTEXT:  PL/pgSQL function exigir_atributo_gobernado() line 16 at RAISE
+```
+
+El desenlace es el mismo por las dos ramas, y es el que importa aquí:
 Hibernate lo envuelve en `DataIntegrityViolationException` y
 `ManejadorErroresApi.unicidadViolada` lo traduce a **409 «Ya existe un registro
 con esos datos: un dato único está duplicado.»**
@@ -262,6 +275,21 @@ agente que lo lee corrige lo que no está roto.
   no admite valores nuevos y el valor no se escribe—, en
   `OcupacionYServiciosIntegrationTest.serviciosDisponiblesQuedoRetiradaYNoBorrada`.
   Lo que falta es que el cliente sepa **por qué**.
+
+### 2.3 quater DEUDAS que dejó la segunda auditoría de 5A (2026-08-25)
+
+Cinco cosas medidas, **ninguna es regresión de este corte** salvo donde se diga, y
+**ninguna se corrige aquí**: cada una tiene alcance propio. Se anotan con ruta y
+condición de disparo para que no haya que volver a descubrirlas.
+
+| # | Qué es | Ruta | Por qué no se toca ahora |
+|---|---|---|---|
+| **N3** | **La quinta superficie de la retirada: una clave ESTRUCTURAL retirada pierde su valor en la ficha.** `armar` inyecta el valor de una estructural sólo si su definición está en el mapa filtrado por `activo`, y `definicionesParaLeer` se aplica **después**, así que no la recupera. La columna canónica sigue llena; la ficha deja de mostrarla | `controllocal-service/…/soporte/LectorPorAutoridad.java:287-292`, contra `…/soporte/AtributosGobernados.java` (`definicionesParaLeer`) | **Hoy no se retira ninguna ESTRUCTURAL, así que no hay dato perdido.** Se dispara **el día que se retire una**. Arreglarlo es un cambio con su propio alcance —el lector tendría que preguntar por las estructurales retiradas *antes* de armar— y merece corte propio. El javadoc ya dice el límite exacto en vez de afirmar sin matiz que «retirar la pregunta no puede degradar la respuesta» |
+| **N7** | **`CatalogoAtributoRepository.paraLeer` no filtra `sujeto` ni acota a una fila.** Misma debilidad que `porClave`: si una clave existiera con el mismo nombre en los dos sujetos, la lectura podría completar la definición del sujeto equivocado | `controllocal-persistence/…/repositorio/CatalogoAtributoRepository.java` (`paraLeer`) | **Hoy inocuo: 0 claves duplicadas entre sujetos, medido.** Es la misma corrección que `porClave` y se hace con ella, no antes |
+| **N8** | **La comprobación 91 del gate se satisface con cualquier rastro anterior**, sin correlacionar el rastro con el **valor vigente**: un valor repartido, luego pisado por otro sin linaje, seguiría contando como declarado | `backend-spring/verificacion/gate-modelo-universal.sql`, comprobación 91 | **Hueco preexistente de 4.P, no regresión de 5A.** Correlacionar rastro y valor vigente es una capacidad del linaje —no de este corte— y afecta a todas las comprobaciones de la familia 76-80, no sólo a la 91 |
+| **N9** | **`UnSoloLectorPorSujetoTest` no ve la dependencia `AtributosDeEncargo → AtributosGobernados`** que introdujo 5A (`completarRetiradas`, estático y compartido), porque el gate está escrito contra **entidades de dominio**. Cualquier método **no neutro** que se añada a `AtributosGobernados` quedará alcanzable desde el ENCARGO sin que ningún gate lo note | `controllocal-app/src/test/java/…/UnSoloLectorPorSujetoTest.java` | Ampliar el gate a dependencias **entre soportes de servicio** cambia lo que el gate significa y puede volverse ruidoso; es una decisión de arquitectura de pruebas, no un arreglo de 5A. Mientras tanto, la regla se sostiene por revisión: lo que se comparte es la consulta al catálogo, que **no tiene sujeto** |
+| **78** | **La comprobación 78** (`4P después del cutover ninguna columna estructural sin linaje`) está **roja de base en cualquier copia de `controllocal_repositorios`**: **54** propiedades con `piso` sin linaje, creadas por pruebas **anteriores a 4.P**. Medido el 2026-08-25 desglosando el `CROSS JOIN` por campo: las 54 son de `PISO`, ninguna de los otros tres campos canónicos | la base `controllocal_repositorios` | **No bloquea el cierre** — `Verificar-Cierre.ps1` corre el gate contra `controllocal_dev`, donde está verde. Pero **envenena cualquier medición futura** que corra el gate sobre esa base y lea el exit-code: un rojo de residuo se confunde con un rojo de defecto. Quien mida ahí tiene que descontarla explícitamente, como hizo la evidencia de 5A |
+| **V84:408** | **Un comentario de `V84` sigue afirmando que «un fixture las escribe en cada corrida»**, que es falso desde este mismo corte (N2). Es la única copia de esa frase que **no** se corrigió | `controllocal-app/src/main/resources/db/migration/V84__la_ocupacion_y_los_servicios_con_vocabulario.sql:408` | **`V84` está aplicada en las dos bases**: editar el fichero invalida el checksum y obliga a repetir el ciclo entero de H1. La regla del repositorio es *never edit an applied migration*, y una migración aplicada es además **evidencia fechada** de por qué se hizo lo que se hizo. La frase **no gobierna ninguna ejecución** —el gate y las suites, que sí deciden verde o rojo, están corregidos—, así que se declara falsa aquí en vez de reescribir el registro. Si algún día `V84` hay que tocarla por una razón funcional, esta línea se arregla en el mismo viaje |
 
 ### 2.4 Los hechos que faltan de un par deliberado — queda **uno**
 
@@ -732,13 +760,34 @@ Y los **bloques 2…9** de la ruta a BROX 1.0, que son otra cosa más.
 
 ### 9.4 Lo que sigue vigente y no se ha tocado
 
-Gobiernan: `north-star-brox.md` (contra qué se mide un avance),
-`mapa-ejecucion-brox.md` (dónde estamos),
-`checklist-captura-moat-e-inteligencia-inmobiliaria.md` (qué falta para cerrar),
-`auditoria-profundidad-inmobiliaria.md` (los cortes), las `decision-*` y
-`matriz-operacion-rol.md` (que además está vigilada por un test), e
-`i0-industrializacion-brox.md` mientras dure la ordenación documental. El
-`encargo-corte-5-terreno.md` prepara el siguiente corte, pero no lo abre. Los
+El orden vigente sale **solo de tres sitios**, y son los mismos que nombra
+`mapa-ejecucion-brox.md` § «Qué gobierna, y qué no»:
+
+| Documento | Responde |
+|---|---|
+| `mapa-ejecucion-brox.md` | dónde estamos |
+| `checklist-captura-moat-e-inteligencia-inmobiliaria.md` | qué falta para cerrar la etapa |
+| `decision-*.md` (D-E…) | decisiones funcionales concretas |
+
+> **Esta lista decía SIETE, y se ha devuelto a tres** (auditoría del 2026-08-25,
+> N1). Enumeraba además `north-star-brox.md`,
+> `auditoria-profundidad-inmobiliaria.md`, `matriz-operacion-rol.md` e
+> `i0-industrializacion-brox.md` —este último **añadido por el propio Corte 5**,
+> medido con `git diff 795ffbf 1b1cc0b`—. Ampliar la lista de lo que **gobierna**
+> es un **cambio de autoridad documental**: contradice `CLAUDE.md` («only three
+> documents govern») y **nadie lo decidió**; se coló dentro de cortes de
+> catálogo, en tres sitios distintos. Queda **como decisión pendiente del
+> titular**, no resuelta por vía de los hechos. El mapa lleva este mismo aviso,
+> con las mismas palabras, para que los tres sitios digan lo mismo.
+>
+> Que no gobiernen no significa que no se lean: `north-star-brox.md` es el marco
+> contra el que se mide un avance, `auditoria-profundidad-inmobiliaria.md` es la
+> fuente de los cortes de catálogo, `matriz-operacion-rol.md` es referencia
+> autoritativa de quién llama a qué —y además está vigilada por un test— e
+> `i0-industrializacion-brox.md` es el protocolo de ejecución en curso. Lo que se
+> discute es si **mandan**, y eso lo decide el titular.
+
+El `encargo-corte-5-terreno.md` prepara el siguiente corte, pero no lo abre. Los
 documentos con banner HISTÓRICO de la era de la migración se conservan tal cual:
 explican el **porqué**, y CLAUDE.md ya avisa de que no gobiernan.
 

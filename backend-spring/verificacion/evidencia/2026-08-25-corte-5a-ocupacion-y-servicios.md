@@ -141,8 +141,19 @@ recuperables + ambiguos + no_inventariados = clasificado
 conjunto de valores de servicios_disponibles ANTES == DESPUÉS  (fila a fila)
 ```
 
-En `dev` hay 0 filas y en `controllocal_repositorios` hay 322 porque un fixture las
-escribe en cada corrida. **Una aserción `= 0` pasaría en dev y mentiría en pruebas.**
+En `dev` hay 0 filas y en `controllocal_repositorios` hay 322. **Una aserción `= 0`
+pasaría en dev y mentiría en pruebas.**
+
+> **La frase que iba aquí era FALSA y la midió la segunda auditoría (N2).** Decía
+> «…hay 322 **porque un fixture las escribe en cada corrida**». No las escribía
+> nadie: el único productor de `servicios_disponibles` era el fixture de
+> `ConservacionDeLaEdicionIntegrationTest`, y **este mismo corte lo eliminó** al
+> reescribir esa línea. Las 322 filas son **residuo histórico** de corridas
+> anteriores: sobre una base nueva —CI, otra máquina, un `docker volume rm`— el
+> universo es **cero**, y tanto la comprobación **91** del gate como
+> `elLegadoNoSeTradujo` salían **verdes sin haber mirado nada**. Corregido en la
+> tercera tanda: hay productor determinista, control de cobertura y control
+> positivo (§13).
 
 ### Conservación comprobada tras aplicar
 
@@ -306,6 +317,12 @@ gate-modelo-universal.sql contra controllocal_dev   (remedido tras las correccio
 ```
 De ellas, **11 nuevas** (81…91), todas del bloque `5A`. Las **81, 82 y 91**
 cambiaron de predicado tras la auditoría (§12.2 y §12.7).
+
+> **Actualizado en la tercera tanda (§13.2): el gate tiene ahora 98
+> comprobaciones**, dos más de `5A` —la **92**, control positivo de la 91, y la
+> **93**, que exige que ese control devuelva la clave a `activo = false`—.
+> Medido: `controllocal_dev` **98/98, EXIT=0**; `controllocal_repositorios`
+> **97/1**, con la **78** como único rojo y **de base** (§13.6).
 
 ---
 
@@ -706,3 +723,248 @@ con su ruta en `pendientes-brox.md` §2.3 ter.
   **autoridad documental**, contradice `CLAUDE.md` («only three documents govern»)
   y **nadie lo decidió**. Vuelve a tres, con la ampliación anotada como **decisión
   pendiente del titular** — que no se resuelve por vía de los hechos.
+
+---
+
+## 13. Correcciones de la SEGUNDA auditoría (2026-08-25, tercera tanda)
+
+La segunda auditoría cerró los ocho hallazgos H1…H8 sin regresión, y encontró
+**dos graves nuevos** —los dos de este corte— más cuatro menores. Esto es lo que
+se hizo con cada uno.
+
+### 13.1 N1 · GRAVE — la corrección de H6 arregló dos documentos de tres
+
+`docs/ai/pendientes-brox.md` §9.4 seguía enumerando **siete** documentos
+gobernantes, e `i0-industrializacion-brox.md` **lo añadió este corte** —medido con
+`git diff 795ffbf 1b1cc0b -- docs/ai/pendientes-brox.md`—: la misma extensión de
+autoridad no decidida de H6, en un tercer sitio.
+
+- §9.4 lleva ahora **la redacción de tres del mapa**, en tabla, y el **mismo
+  aviso**: la ampliación es un cambio de autoridad documental que **nadie
+  decidió**, y queda como decisión pendiente del titular.
+- El mapa gana una nota que dice que había un tercer sitio y que ya está alineado.
+- **Los tres sitios dicen lo mismo**: `CLAUDE.md`, `mapa-ejecucion-brox.md` y
+  `pendientes-brox.md` §9.4.
+
+### 13.2 N2 · GRAVE — el corte borró el productor del legado y seguía citándolo como vivo
+
+**Lo medido.** Ninguna prueba escribía ya `servicios_disponibles`. El único
+productor era el fixture de `ConservacionDeLaEdicionIntegrationTest`, y este mismo
+corte lo eliminó al reescribir esa línea. Las 322 filas de
+`controllocal_repositorios` son **residuo histórico**; en `controllocal_dev` el
+universo ya es **0**. Sobre una base nueva, la comprobación **91** y
+`elLegadoNoSeTradujo` salían **verdes sin haber mirado nada** — y ninguna de las
+dos llevaba el control de cobertura que sí llevan sus vecinas.
+
+| | antes | ahora |
+|---|---|---|
+| **productor** | ninguno | `OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo(idPropiedad)` — siembra por SQL, y **comprueba que sembró** |
+| **cobertura** | ninguna | el caso mide `filas de legado` y `pares legado/servicio` y **falla si el universo está vacío**; en el gate, el universo real viaja **en el nombre** de la comprobación 92 |
+| **control positivo** | ninguno | el mismo par escrito **sin linaje**: la consulta tiene que cazarlo, o su verde no significa nada |
+| **predicado** | escrito **dos veces** (gate y Java) | **una sola definición por lado**: `pg_temp.hay_legado_traducido_sin_linaje()` en el gate, `legadoTraducidoSinLinaje()` en Java |
+
+**Sembrar el legado exige saltarse la puerta, y se dice.** La clave está
+`activo = false`, así que `exigir_atributo_gobernado` rechaza también el INSERT
+directo —no la encuentra: `SQLSTATE 23503`—. Hay que **reactivarla, escribir y
+retirarla**, y las tres sentencias van dentro de un `DO` (Java) o de un
+`SAVEPOINT` (gate), que son **una sola transacción**: ninguna otra sesión ve la
+clave activa y nada queda reabierto. Que sembrar el legado exija esta maniobra es,
+en sí mismo, la prueba de que la puerta está cerrada — y por eso el gate añade la
+comprobación **93**, que exige que la clave haya vuelto a `activo = false`.
+
+**Los tres sabotajes del gate** (contra `controllocal_dev`, sobre el gate real,
+revertidos y verificados con `sha256sum -c`):
+
+| # | defecto introducido | exigido | medido |
+|---|---|---|---|
+| **G1** | el control positivo **no siembra** el legado → universo vacío | ROJO | **97/1** · `92 FALLO - no se pudo sembrar el legado: el control no probo nada`. **La 91 siguió VERDE** — que es exactamente el defecto que N2 denuncia |
+| **G2** | el predicado de la 91 se queda **ciego** (`AND false`) | ROJO | **97/1** · `92 FALLO - el predicado de la 91 no caza una traduccion sin linaje: su verde no significa nada`. **La 91 siguió VERDE** |
+| **G3** | el control reactiva la clave y **no la devuelve** (sin `ROLLBACK TO`, sin el `UPDATE` de vuelta) | ROJO | **97/1** · `93 FALLO` |
+
+Revertido: **98/98 en verde, `EXIT=0`** contra `controllocal_dev`. Contra
+`controllocal_repositorios`: **97/1**, y el único rojo es la **78** de base
+(54 propiedades con `piso` sin linaje, anteriores a 4.P — §13.6).
+
+**Los dos sabotajes de la prueba Java**, sobre una base **sin residuo**
+(`v84_sinresiduo_pruebas`, copia `TEMPLATE` de `controllocal_repositorios` con
+`DELETE FROM atributo_propiedad WHERE clave='servicios_disponibles'` → **0 filas**,
+eliminada al terminar):
+
+| # | defecto introducido | exigido | medido |
+|---|---|---|---|
+| **T1** | `elLegadoNoSeTradujo` **no llama** al productor | ROJO | `AssertionFailedError: el universo de la comprobacion esta VACIO y su verde no significaria nada: 0 filas de legado, 0 pares legado/servicio` |
+| **T2** | el predicado `legadoTraducidoSinLinaje()` se queda **ciego** (`and false`) | ROJO | `AssertionFailedError: la consulta no caza un servicio escrito sobre un legado ambiguo sin ningun linaje: entonces su verde no significa nada` |
+
+Revertidos —`sha256sum -c` OK sobre el fichero de la suite— y **verde sobre esa
+misma base sin residuo**: `Tests run: 15, Failures: 0, Errors: 0`. Medido después:
+la suite dejó **2 filas de legado y 1 par** donde antes había **0**. Ésa es la
+demostración pedida: **el fixture nuevo fabrica su propio universo**.
+
+#### El autoataque que sí encontró algo: el productor envenenaba otro gate
+
+La primera versión del sembrador dejaba el `DEFAULT now()`. Al correr el gate
+después de las suites, `controllocal_repositorios` pasó de **97/1** a **96/2**: se
+había puesto roja la **76** de 4.P —«después del cutover ningún hecho del inmueble
+sin linaje»—, con seis filas nombradas, todas del fixture.
+
+**Tenía razón.** Un valor posterior al cutover sin rastro es un defecto real; el
+fixture estaba fabricando un **dato imposible**. El legado es, por definición,
+anterior al mecanismo de linaje —las filas históricas de `servicios_disponibles`
+anteriores a la frontera lo son—, así que el sembrador escribe con
+`frontera_de_linaje() - interval '1 day'`, en Java y en el gate. Verificado: tras
+la corrección, la suite deja **324** filas de legado (322 + 2) y el gate vuelve a
+**97/1**, con la 78 como único rojo.
+
+> **Y en el camino se perdieron 71 filas de la base de pruebas, por un `DELETE` mal
+> acotado del constructor. Se dice, y se dice cómo se repusieron.** Al limpiar el
+> residuo mal fechado, el `WHERE fecha_creacion > frontera_de_linaje()` alcanzó
+> **77** filas y no las 6 introducidas: 71 eran legado histórico **posterior** al
+> cutover que sí tenía linaje. **No se inventó nada para reponerlas**:
+> `rastro_valor_gobernado` es append-only y conserva de cada una su
+> `organizacion_id`, su `id_agregado`, su `valor_texto` y su `registrado_en`, así
+> que se reconstruyeron **desde el rastro**, que es la autoridad que 4.P existe
+> para dar. Resultado medido, idéntico al corpus que mide este mismo documento más
+> arriba: **322 filas, 283 «Agua, luz y desague» + 39 «agua y desague»**, y `76`
+> otra vez verde. Si el rastro no hubiera existido, esas 71 filas se habrían
+> perdido — que es exactamente el argumento de 4.P, comprobado a mi costa.
+
+**La justificación falsa, corregida donde se podía tocar:**
+
+| artefacto | qué se hizo |
+|---|---|
+| `verificacion/gate-modelo-universal.sql` | **corregido**: dice que el productor no existía, que las 322 son residuo y que por eso la invariante viaja con control positivo |
+| `OcupacionYServiciosIntegrationTest` (javadoc de `elLegadoNoSeTradujo`) | **corregido** |
+| esta evidencia (§ «La invariante, escrita como invariante») | **corregida** |
+| `ConservacionDeLaEdicionIntegrationTest:376` | **corregido**: el comentario ya no deja huérfana la mención; dice que este fixture dejó de producir legado y adónde se movió el productor |
+| **`V84…sql:408`** | **NO se toca. Decisión razonada abajo** |
+
+#### Por qué NO se toca `V84`
+
+`V84` está **aplicada en las dos bases**. Editar su fichero invalida el checksum y
+repite **H1** entero: `clean install` con el tamaño del jar como testigo, deshacer
+y reaplicar en las dos bases, verificar arranque limpio y checksums iguales. Se
+decide **no tocarla**, y por tres razones, no por comodidad:
+
+1. **La regla del repositorio es «never edit an applied migration»**, y aquí no hay
+   defecto funcional que la justifique: lo que sobra es **una frase de un
+   comentario**. El coste del ciclo H1 es alto y el riesgo —dejar una base con un
+   checksum distinto de la otra— es real; ya ocurrió una vez en este mismo corte.
+2. **Una migración aplicada es evidencia fechada.** Su cabecera dice por qué se
+   hizo lo que se hizo el 2026-08-25 y con qué creencias; reescribirla es maquillar
+   el registro, que es precisamente lo que este repositorio prohíbe.
+3. **La frase no gobierna ninguna ejecución.** Los artefactos vivos —el gate y las
+   suites— son los que deciden verde o rojo, y ésos **sí** están corregidos. La
+   línea 408 queda **declarada como falsa aquí y en `pendientes-brox.md`**, que es
+   donde se registra una deuda documental sin tocar la migración.
+
+### 13.3 N4 · `AtributosDeEncargo.definicionesParaLeer` llegaba sin prueba
+
+Añadida `OcupacionYServiciosIntegrationTest.retirarUnaCondicionNoOcultaLoPactado`:
+crea una condición del **ENCARGO** en el tenant, la pacta en un encargo real, la
+**retira**, y comprueba que lo pactado se sigue leyendo **con su rótulo y su tipo**
+y que el motor de captura deja de ofrecerla. Es la gemela exacta de
+`retirarUnaClaveNoOcultaSusValores`. Y no es teórico: una condición pactada vive en
+encargos **ya cerrados**, que nadie puede volver a rellenar.
+
+### 13.4 N5 · SQLSTATE equivocado en la deuda §2.3 ter
+
+Medido contra `controllocal_dev`, no deducido:
+
+```
+ERROR:  23503: El atributo "servicios_disponibles" no esta en el catalogo
+CONTEXT:  PL/pgSQL function exigir_atributo_gobernado() line 16 at RAISE
+```
+
+Una clave **retirada** no se encuentra —la consulta del trigger lleva
+`AND c.activo = true`— y sale por `RAISE … USING ERRCODE = 'foreign_key_violation'`
+→ **23503**. `23514` es lo que devuelven las otras ramas del mismo trigger (valor
+fuera de vocabulario, columna equivocada). El desenlace —409 «duplicado»— es el
+mismo por las dos vías y sigue siendo correcto. Corregido en `pendientes-brox.md`.
+
+### 13.5 N6 · la justificación de H7 describía un estado que la base prohíbe
+
+**Corregido en el gate** (el comentario gemelo de `V84:612-617` cae bajo la
+decisión de §13.2). El motivo verdadero, medido:
+
+- **ALCANZABLE**: `exigir_catalogo_no_sombrea_al_sistema` sólo mira en **una
+  dirección** —sale por `RETURN NEW` cuando `NEW.organizacion_id IS NULL`—, así que
+  una migración que siembra la clave del sistema **no comprueba** si algún tenant
+  ya la tenía. Un tenant que hubiera declarado `estado_ocupacion` **antes de
+  `V84`** conserva su fila y, sin el filtro, taparía el hueco. Ése, y sólo ése, es
+  el orden histórico en que el sombreado existe.
+- **NO ALCANZABLE**, y también se dice: *«una organización declara la suya»* a
+  secas **no puede pasar** — el trigger lanza «una organizacion no puede
+  redefinirla» en cuanto la del sistema existe.
+
+> **DISCREPANCIA CON EL HALLAZGO, MEDIDA.** N6 pedía escribir que el caso
+> alcanzable es «una segunda fila del SISTEMA con la misma clave, porque no hay
+> UNIQUE sobre `(organizacion_id, clave)`». **Eso es falso**: existe
+> `uq_catalogo_atributo_clave` (V48), `UNIQUE` sobre
+> `(COALESCE(organizacion_id, 0), clave)`, que impide exactamente esa segunda fila.
+> Medido en `pg_indexes` de `controllocal_dev`. No se sustituye una justificación
+> falsa por otra: el comentario dice el motivo que sí se sostiene, y nombra el caso
+> que el filtro no defiende **porque no existe**.
+
+**Y S11 necesitó saltarse esa guarda para construir su estado**, cosa que esta
+evidencia no decía. Medido hoy contra `controllocal_dev`:
+
+```
+ERROR:  La clave "estado_ocupacion" es del catalogo comun (tipo LISTA): una
+        organizacion no puede redefinirla. Usa esa clave tal cual, o elige un
+        nombre propio.
+CONTEXT:  PL/pgSQL function exigir_catalogo_no_sombrea_al_sistema() line 26
+```
+
+Es decir: el estado que S11 monta sobre la copia desechable `v84_h7` **no es
+alcanzable por la puerta normal** mientras la fila del sistema exista, así que hubo
+que rodear la guarda para fabricarlo. Un sabotaje que exige rodear una guarda
+prueba la comprobación **y** demuestra que la guarda está puesta; lo que no puede
+es presentarse como un estado que el sistema alcanzaría solo. Eso es exactamente lo
+que corrige la justificación de arriba.
+
+### 13.6 Deudas registradas, sin tocar código
+
+N3 (la quinta superficie: una clave **ESTRUCTURAL** retirada perdería su valor en
+la ficha), N7 (`paraLeer` no filtra `sujeto`), N8 (la 91 no correlaciona el rastro
+con el valor vigente), N9 (`UnSoloLectorPorSujetoTest` no ve la dependencia nueva)
+y la **comprobación 78** en copias de `controllocal_repositorios`: todas anotadas
+con ruta, medición y condición de disparo en `pendientes-brox.md` §2.3 quater.
+
+**N3 no cambia el código, y sí cambia el javadoc.**
+`AtributosGobernados.definicionesParaLeer` afirmaba sin matiz «Retirar la pregunta
+no puede degradar la respuesta», y para las ESTRUCTURALES es **falso**: su valor lo
+inyecta `LectorPorAutoridad.armar` recorriendo el mapa ya filtrado por `activo`, y
+`definicionesParaLeer` llega después. Hoy no se retira ninguna ESTRUCTURAL, así que
+**no hay dato perdido**; el javadoc dice ahora el límite exacto y remite a la
+deuda.
+
+### 13.7 Cierre de la tercera tanda — lo que se ejecutó
+
+`TEST_DB_URL=jdbc:postgresql://localhost:5433/controllocal_repositorios`,
+JDK 21, `CONTROLLOCAL_CIERRE=1`.
+
+| suite | tests | resultado |
+|---|---|---|
+| `OcupacionYServiciosIntegrationTest` | **15** (una nueva: N4) | ✅ |
+| `ConservacionDeLaEdicionIntegrationTest` | 48 | ✅ |
+| `CatalogoQueHablaIntegrationTest` | 38 | ✅ |
+| `SujetoDelDatoIntegrationTest` | 30 | ✅ |
+| `AislamientoDePruebasTest` / `GateDeCierreTest` / `UnSoloLectorPorSujetoTest` | 17 | ✅ |
+| **total** | **148** | **0 fallos, 0 errores, 0 saltados** |
+
+Gate SQL: `controllocal_dev` **98/98 `EXIT=0`**; `controllocal_repositorios`
+**97/1** (la 78, de base).
+
+**Estado del legado en la base de pruebas**, antes y después de la tanda:
+
+```
+antes de la tanda          322 filas   (283 «Agua, luz y desague» + 39 «agua y desague»)
+tras el DELETE mal acotado 251 filas   ← 71 perdidas por error del constructor
+tras reponer desde rastro  322 filas   (283 + 39, corpus IDÉNTICO al de partida)
+tras la corrida dirigida   326 filas   (322 + 4 sembradas por el fixture, todas
+                                        anteriores a la frontera del linaje)
+en controllocal_dev          0 filas   (sin cambio: la suite no escribe en dev)
+```
+
+**No se ejecuta el reactor completo ni `Verificar-Cierre.ps1`**: la corrida larga
+la ordena CONTROL. El corte **no** se declara cerrado y **no** se abre 5B.

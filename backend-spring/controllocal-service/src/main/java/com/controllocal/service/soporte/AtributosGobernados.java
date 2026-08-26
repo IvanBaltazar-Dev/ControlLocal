@@ -704,6 +704,27 @@ public class AtributosGobernados {
      * puerta de escritura: {@link #aplicablesA} sigue filtrando por
      * {@code activo}, y el trigger {@code exigir_atributo_gobernado} tambien.
      *
+     * <h2>HASTA DONDE LLEGA ESA FRASE, Y DONDE NO LLEGA</h2>
+     *
+     * <p>Vale para las claves cuyo valor vive en {@code atributo_propiedad}, que
+     * son las que este metodo completa: el lector las encuentra escritas, las
+     * trae en {@code clavesLeidas}, y aqui se les devuelve su definicion.
+     *
+     * <p><b>NO vale para las ESTRUCTURALES</b>, y decirlo sin matiz era falso.
+     * Una clave estructural no deja fila: su valor esta en una columna canonica
+     * de {@code propiedad}, y {@code LectorPorAutoridad.armar} lo inyecta
+     * recorriendo <b>las definiciones que recibe</b> —el mapa ya filtrado por
+     * {@code activo}— y no las claves escritas. Este metodo se aplica
+     * <b>despues</b>, asi que llega tarde: la clave retirada no esta en
+     * {@code clavesLeidas} porque el lector nunca la produjo. El dia que se
+     * retire una clave ESTRUCTURAL, su valor <b>desaparece de la ficha</b>
+     * aunque la columna siga llena.
+     *
+     * <p>Hoy no se retira ninguna, asi que <b>no hay dato perdido</b> y el codigo
+     * no se toca aqui: arreglar esa quinta superficie es un cambio con su propio
+     * alcance. La deuda esta anotada en {@code docs/ai/pendientes-brox.md} con su
+     * ruta y su condicion de disparo (auditoria del 2026-08-25, N3).
+     *
      * @param clavesLeidas las claves que el lector encontro escritas
      */
     public Map<String, CatalogoAtributo> definicionesParaLeer(long idOrganizacion,

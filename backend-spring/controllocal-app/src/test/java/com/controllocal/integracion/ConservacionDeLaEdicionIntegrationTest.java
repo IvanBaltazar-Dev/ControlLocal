@@ -378,6 +378,19 @@ class ConservacionDeLaEdicionIntegrationTest {
                         // opcion, asi que aceptaba cualquier cadena, y este
                         // fixture era una de las dos que escribian ese legado --
                         // 322 filas en `controllocal_repositorios` el 2026-08-25.
+                        //
+                        // AL REESCRIBIRLA, ESTE FIXTURE DEJO DE PRODUCIR LEGADO, y
+                        // durante unas horas NADIE lo producia: las 322 filas eran
+                        // residuo, sobre una base nueva el universo era cero y la
+                        // comprobacion 91 del gate salia verde sin mirar nada. Lo
+                        // midio la auditoria del 2026-08-25. El productor esta
+                        // repuesto donde vive la comprobacion que lo necesita:
+                        // `OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo`,
+                        // que escribe por SQL porque la puerta normal ya rechaza la
+                        // clave. Aqui NO se repone: este caso mide la conservacion
+                        // de la edicion, y sembrar una clave retirada le anadiria
+                        // un proposito que no es el suyo.
+                        //
                         // La clave queda retirada (`activo = false`) y la sustituyen
                         // DOS hechos separados: en la periferia se tiene luz y no
                         // desague, o al reves, y un solo campo agregado escondia

@@ -546,6 +546,85 @@ class OcupacionYServiciosIntegrationTest {
         }
     }
 
+    /**
+     * <b>La misma pregunta, en la otra mitad del catalogo</b> — retirar una
+     * CONDICION del encargo tampoco puede degradar lo pactado.
+     *
+     * <p>Esta prueba llega con la correccion de la auditoria del 2026-08-25.
+     * {@code AtributosDeEncargo.definicionesParaLeer} nacio en 5A «por simetria»
+     * y <b>sin una sola prueba</b>: la clave que 5A retira es de la PROPIEDAD, y
+     * una simetria que nadie ejecuta es una simetria que se cree, no una que se
+     * sabe. La regla de este repositorio es que el cambio viaja con sus pruebas.
+     *
+     * <p>Y no es teorico: una condicion pactada vive en encargos que ya se
+     * cerraron. Si retirar la pregunta borrara el rotulo, un encargo de 2024 se
+     * leeria con la clave desnuda para siempre, sin que nadie pueda ya
+     * arreglarlo escribiendo el dato de nuevo — porque el encargo esta cerrado.
+     */
+    @Test
+    @DisplayName("V84: retirar una CONDICION del encargo conserva lo pactado, con su rotulo y su tipo")
+    void retirarUnaCondicionNoOcultaLoPactado() {
+        String clave = "zz_condicion_" + UUID.randomUUID().toString().substring(0, 8);
+        long org = actor().idOrganizacion();
+        jdbc.update("""
+                insert into catalogo_atributo (organizacion_id, clave, rotulo, tipo_dato,
+                                               aplica_todos, del_sistema, orden, sujeto)
+                values (?, ?, 'Condicion retirable', 'TEXTO', false, false, 990, 'ENCARGO')
+                """, org, clave);
+        jdbc.update("""
+                insert into catalogo_atributo_operacion (id_catalogo_atributo, tipo_propiedad,
+                                                         tipo_operacion, exigencia)
+                select c.id_catalogo_atributo, t.tipo, 'V', 'OPC'
+                  from catalogo_atributo c
+                  cross join (values ('L'),('O'),('D'),('C'),('T'),('A'),('X')) as t(tipo)
+                 where c.clave = ? and c.organizacion_id = ?
+                """, clave, org);
+        try {
+            long id = registrarTerreno();
+            long encargo = encargoDe(id);
+            propiedades.editar(id, new ComandoEdicion(null, null, null, null, null, null,
+                    null, null,
+                    List.of(new PropiedadUniversalService.CondicionesDeEncargo(encargo,
+                            List.of(new ValorAtributo(clave, "lo que se pacto")), null))), actor());
+            assertEquals("lo que se pacto", condicionDe(id, encargo, clave).valor(),
+                    "mientras la condicion esta activa se pacta: si no, el caso no mediria "
+                            + "la retirada");
+
+            jdbc.update("update catalogo_atributo set activo = false where clave = ? "
+                    + "and organizacion_id = ?", clave, org);
+
+            PropiedadUniversalService.AtributoFicha pactado = condicionDe(id, encargo, clave);
+            assertNotNull(pactado, "lo pactado en un encargo no desaparece porque la condicion "
+                    + "deje de pactarse: el encargo ya cerrado no se puede volver a llenar");
+            assertEquals("lo que se pacto", pactado.valor());
+            assertEquals("Condicion retirable", pactado.rotulo(),
+                    "una condicion retirada se lee con su nombre, no como clave desnuda -- "
+                            + "que es exactamente el defecto que 5A arreglo en la PROPIEDAD");
+            assertEquals("TEXTO", pactado.tipoDato(),
+                    "y con su tipo: sin el, el SPA no sabe como pintar lo pactado");
+
+            assertTrue(captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, "TERRENO", "VENTA",
+                            actor()).todas().stream().noneMatch(p -> clave.equals(p.clave())),
+                    "la condicion retirada no se vuelve a pactar: conservar la lectura no "
+                            + "reabre la escritura");
+        } finally {
+            jdbc.update("update catalogo_atributo set activo = false where clave = ? "
+                    + "and organizacion_id = ?", clave, org);
+        }
+    }
+
+    /** Una condicion de UN encargo, leida por la ficha tal como llega al cable. */
+    private PropiedadUniversalService.AtributoFicha condicionDe(long idPropiedad, long idEncargo,
+                                                                String clave) {
+        return propiedades.consultar(idPropiedad, actor()).encargos().stream()
+                .filter(e -> e.idEncargo() != null && e.idEncargo() == idEncargo)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("el encargo " + idEncargo + " no esta en la ficha"))
+                .condiciones().stream()
+                .filter(c -> clave.equals(c.clave()))
+                .findFirst().orElse(null);
+    }
+
     // ==================================================================
     // 5. El legado y su procedencia
     // ==================================================================
@@ -560,9 +639,24 @@ class OcupacionYServiciosIntegrationTest {
      * aprobada</b>. Traducir «tiene agua» a {@code CONECTADO} seria inventar por
      * el caso frecuente justo la distincion que el campo viejo no sabia hacer.
      *
-     * <p>Se afirma como INVARIANTE y nunca como la cifra 0: en
-     * {@code controllocal_dev} no hay legado y en la base de pruebas un fixture
-     * lo escribe en cada corrida.
+     * <p>Se afirma como INVARIANTE y nunca como la cifra 0.
+     *
+     * <h2>Y el caso SE FABRICA SU PROPIO UNIVERSO</h2>
+     *
+     * <p>Aqui habia escrito que «en la base de pruebas un fixture lo escribe en
+     * cada corrida». Era <b>falso</b>, y lo midio la auditoria del 2026-08-25: el
+     * unico productor de {@code servicios_disponibles} era el fixture de
+     * {@code ConservacionDeLaEdicionIntegrationTest}, y este mismo corte lo
+     * retiro al retirar la clave. Las 322 filas de
+     * {@code controllocal_repositorios} son <b>residuo historico</b>: sobre una
+     * base nueva —CI, otra maquina, un {@code docker volume rm}— el universo es
+     * CERO y este caso saldria verde sin haber mirado nada.
+     *
+     * <p>Por eso el caso <b>siembra</b> lo que necesita mirar —un legado ambiguo
+     * y, sobre el mismo inmueble, un servicio declarado por la ruta normal, que
+     * deja linaje—, <b>declara</b> cuantas filas vio y ademas comprueba con un
+     * <b>control positivo</b> que la consulta caza el caso prohibido. Un cero que
+     * no se ha contrastado con un control positivo no es un cero.
      *
      * <h2>El predicado dice «nadie lo afirmo», y no se aproxima con el canal</h2>
      *
@@ -583,7 +677,76 @@ class OcupacionYServiciosIntegrationTest {
     @Test
     @DisplayName("V84: ningun inmueble con legado recibio un servicio que nadie afirmo")
     void elLegadoNoSeTradujo() {
-        List<String> traducidos = jdbc.queryForList("""
+        // EL PRODUCTOR. Un terreno con legado ambiguo Y con un servicio nuevo
+        // declarado por la ruta normal: es el par que la consulta examina, y sale
+        // limpio porque la declaracion dejo su linaje.
+        long conLegado = registrarTerreno();
+        sembrarLegadoAmbiguo(conLegado);
+        propiedades.editar(conLegado, new ComandoEdicion(null, null, null, null, null,
+                List.of(new ValorAtributo("agua_desague", "CONECTADO", null, null,
+                        "OBSERVADO", null, null, null)),
+                null, null), actor());
+
+        // LA COBERTURA, declarada. No se exige una cifra concreta de residuo -
+        // eso volveria a atar la prueba a una base concreta -, se exige que el
+        // universo que la consulta recorre no este vacio.
+        long filasDeLegado = contar("select count(*) from atributo_propiedad "
+                + "where clave = 'servicios_disponibles'");
+        long pares = contar("""
+                select count(*)
+                  from atributo_propiedad legado
+                  join atributo_propiedad nuevo on nuevo.id_propiedad = legado.id_propiedad
+                                               and nuevo.clave in ('agua_desague', 'energia_electrica')
+                 where legado.clave = 'servicios_disponibles'
+                """);
+        String universo = filasDeLegado + " filas de legado, " + pares + " pares legado/servicio";
+        assertTrue(pares > 0,
+                "el universo de la comprobacion esta VACIO y su verde no significaria nada: "
+                        + universo);
+
+        List<String> traducidos = legadoTraducidoSinLinaje();
+        assertEquals(List.of(), traducidos,
+                "un inmueble cuyo unico dato de servicios era una cadena ambigua no puede "
+                        + "aparecer con el hecho ya declarado sin que nadie lo declarara "
+                        + "(universo: " + universo + "): " + traducidos);
+
+        // EL CONTROL POSITIVO. El mismo par, pero con el servicio escrito por SQL
+        // directo - sin pasar por el Core, asi que sin rastro -. Si la consulta no
+        // lo caza, es que esta ciega y su verde no significa nada.
+        long sinLinaje = registrarTerreno();
+        sembrarLegadoAmbiguo(sinLinaje);
+        String codigo = jdbc.queryForObject("select codigo from propiedad where id_propiedad = ?",
+                String.class, sinLinaje);
+        try {
+            jdbc.update("""
+                    insert into atributo_propiedad (organizacion_id, id_propiedad, clave, valor_texto)
+                    select organizacion_id, id_propiedad, 'agua_desague', 'CONECTADO'
+                      from propiedad where id_propiedad = ?
+                    """, sinLinaje);
+            assertTrue(legadoTraducidoSinLinaje().stream().anyMatch(t -> t.startsWith(codigo + " ->")),
+                    "la consulta no caza un servicio escrito sobre un legado ambiguo sin ningun "
+                            + "linaje: entonces su verde no significa nada");
+        } finally {
+            // Se retira: si se quedara, la comprobacion 78 de 4.P - «despues del
+            // cutover ningun hecho del inmueble sin linaje» - vería un defecto que
+            // introdujo esta prueba, y envenenaria toda medicion posterior.
+            jdbc.update("delete from atributo_propiedad where id_propiedad = ? "
+                    + "and clave = 'agua_desague'", sinLinaje);
+        }
+        assertEquals(List.of(), legadoTraducidoSinLinaje(),
+                "el control positivo tiene que dejar la base como la encontro");
+    }
+
+    /**
+     * Los pares legado/servicio que nadie declaro, en la forma en que se leen.
+     *
+     * <p>Una sola definicion para la invariante y para su control positivo: dos
+     * copias de la misma pregunta divergen, y entonces el control deja de vigilar
+     * lo que dice vigilar. Predicado <b>identico</b> al de
+     * {@code pg_temp.hay_legado_traducido_sin_linaje()} en el gate SQL.
+     */
+    private List<String> legadoTraducidoSinLinaje() {
+        return jdbc.queryForList("""
                 select p.codigo || ' -> ' || nuevo.clave || ' = ' || nuevo.valor_texto
                   from atributo_propiedad legado
                   join propiedad p on p.id_propiedad = legado.id_propiedad
@@ -600,10 +763,11 @@ class OcupacionYServiciosIntegrationTest {
                                         or r.id_persona_rol is not null))
                  order by 1
                 """, String.class);
-        assertEquals(List.of(), traducidos,
-                "un inmueble cuyo unico dato de servicios era una cadena ambigua no puede "
-                        + "aparecer con el hecho ya declarado sin que nadie lo declarara: "
-                        + traducidos);
+    }
+
+    private long contar(String sql) {
+        Long n = jdbc.queryForObject(sql, Long.class);
+        return n == null ? 0L : n;
     }
 
     /**
@@ -706,6 +870,72 @@ class OcupacionYServiciosIntegrationTest {
     // ==================================================================
     // Fixture
     // ==================================================================
+
+    /**
+     * <b>El productor del legado, repuesto</b> (correccion de la auditoria del
+     * 2026-08-25).
+     *
+     * <p>Escribe sobre {@code idPropiedad} la cadena ambigua que
+     * {@code servicios_disponibles} aceptaba cuando era una LISTA sin opciones.
+     * Es la misma que escribia el fixture de
+     * {@code ConservacionDeLaEdicionIntegrationTest} hasta {@code V84}, y sin ella
+     * ninguna prueba de esta suite tiene nada que mirar sobre una base nueva.
+     *
+     * <h2>Por que hace falta saltarse la puerta, y por que es seguro</h2>
+     *
+     * <p>La clave esta {@code activo = false}, asi que
+     * {@code exigir_atributo_gobernado} rechaza tambien el INSERT directo —no la
+     * encuentra en el catalogo y sale por {@code SQLSTATE 23503}—. Para escribir
+     * su legado hay que <b>reactivarla, escribir y volver a retirarla</b>. Las
+     * tres sentencias van dentro de un {@code DO}, que es <b>una sola
+     * transaccion</b>: ninguna otra sesion llega a ver la clave activa, y si algo
+     * falla a mitad no queda reabierta. Que sembrar el legado exija esta maniobra
+     * es, en si mismo, la prueba de que la puerta esta cerrada.
+     *
+     * <h2>Y la fila nace ANTES de la frontera del linaje, porque eso es lo que un
+     * legado es</h2>
+     *
+     * <p>La primera version dejaba el {@code DEFAULT now()}, y la comprobacion
+     * <b>76</b> de 4.P —«despues del cutover ningun hecho del inmueble sin
+     * linaje»— se puso <b>roja</b> sobre {@code controllocal_repositorios}: seis
+     * filas sembradas por este fixture, posteriores a la frontera y sin rastro.
+     * Tenia razon. Un valor que aparece <b>despues</b> del cutover sin que nadie
+     * lo declare es un defecto real, y fabricarlo aqui habria envenenado la
+     * medicion de otro gate con un dato imposible.
+     *
+     * <p>El legado real es, por definicion, <b>anterior</b> al mecanismo de
+     * linaje: las 251 filas de `servicios_disponibles` anteriores a la frontera lo
+     * son. Asi que el fixture escribe con esa fecha, y con eso deja de mentir en
+     * dos direcciones a la vez.
+     */
+    private void sembrarLegadoAmbiguo(long idPropiedad) {
+        jdbc.execute("""
+                do $sembrar$
+                begin
+                    update catalogo_atributo set activo = true
+                     where clave = 'servicios_disponibles' and organizacion_id is null;
+
+                    insert into atributo_propiedad (organizacion_id, id_propiedad, clave,
+                                                    valor_texto, fecha_creacion)
+                    select organizacion_id, id_propiedad, 'servicios_disponibles',
+                           'Agua, luz y desague', frontera_de_linaje() - interval '1 day'
+                      from propiedad where id_propiedad = %d;
+
+                    update catalogo_atributo set activo = false
+                     where clave = 'servicios_disponibles' and organizacion_id is null;
+                end $sembrar$;
+                """.formatted(idPropiedad));
+
+        assertEquals(1L, contar("select count(*) from atributo_propiedad "
+                        + "where clave = 'servicios_disponibles' and id_propiedad = " + idPropiedad),
+                "el productor del legado no escribio nada: la prueba que dependa de el "
+                        + "saldria verde sobre un universo vacio");
+        assertEquals(Boolean.FALSE, jdbc.queryForObject("""
+                select activo from catalogo_atributo
+                 where clave = 'servicios_disponibles' and organizacion_id is null
+                """, Boolean.class),
+                "sembrar el legado dejo la clave REABIERTA: eso deshace la retirada de V84");
+    }
 
     /** El vocabulario del sistema para una clave, en el orden que declara. */
     private List<String> vocabulario(String clave) {

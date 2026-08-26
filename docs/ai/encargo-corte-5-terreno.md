@@ -110,8 +110,19 @@ su propia clave.
 - **ningún valor de `servicios_disponibles` queda sin destino ni sin declararse
   FALTANTE** — y esto se escribe **como invariante, nunca como la cifra 0**: en
   `controllocal_dev` hay 0 filas, pero en `controllocal_repositorios` (la base de
-  pruebas) **sí las hay**, porque un fixture las escribe en cada corrida. Una
-  aserción `= 0` pasaría en `dev` y mentiría en pruebas;
+  pruebas) **sí las hay**. Una aserción `= 0` pasaría en `dev` y mentiría en
+  pruebas;
+
+  > **La premisa «porque un fixture las escribe en cada corrida» era FALSA, y era
+  > de CONTROL.** Se anota aquí con su atribución, igual que la de §«El orden
+  > dentro de `V84`» (H4 bis), y **no se borra**: explica por qué el corte creyó
+  > tener universo. Medido el 2026-08-25 por la segunda auditoría: el único
+  > productor de `servicios_disponibles` era el fixture de
+  > `ConservacionDeLaEdicionIntegrationTest`, y 5A lo eliminó al retirar la clave.
+  > Las 322 filas son **residuo histórico**; sobre una base nueva el universo es
+  > **cero**. **La invariante que pide este punto sigue siendo la correcta** — lo
+  > que faltaba era el productor determinista y el control de cobertura, ya
+  > repuestos (evidencia §13.2).
 - nada de lo que había se perdió.
 
 ### 3.2 Lo que 5A **no** toca

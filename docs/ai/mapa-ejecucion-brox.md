@@ -919,6 +919,12 @@ El orden vigente sale **solo** de tres sitios:
 > es la fuente de los cortes de catálogo e `i0-industrializacion-brox.md` es el
 > protocolo de ejecución en curso. Los tres están enlazados desde la cabecera de
 > este mapa. Lo que se discute es si **mandan**, y eso lo decide el titular.
+>
+> **Había un TERCER sitio, y decía siete.** La corrección del 2026-08-25 arregló
+> este documento y `CLAUDE.md`, pero `pendientes-brox.md` §9.4 seguía enumerando
+> siete documentos gobernantes —incluido `i0`, que **añadió el propio Corte 5**—.
+> Lo encontró la segunda auditoría (N1) y ya dice lo mismo que esto. Los tres
+> sitios están alineados; la ampliación sigue siendo decisión pendiente.
 
 Todo lo demás es **historia**. Los documentos del mundo legado —GlassFish,
 Blazor, "contrato congelado", corte de la v1— llevan una marca

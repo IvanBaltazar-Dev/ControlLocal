@@ -1,27 +1,16 @@
 # ============================================================
-# Secrets and local configuration
+# BROX — Repository hygiene
 # ============================================================
-# IDE
-.idea/
 
-# Configuración local de agentes
-.claude/
-AGENTS.md
-CLAUDE.md
 
-# Documentación interna / académica
-docs/ai/
-docs/1INF50/
-
-# Temporales
-tmp/
-
-# Logs de verificaciones
-backend-spring/verificacion/*.log
+# ============================================================
+# Secrets / local configuration
+# ============================================================
 
 .env
 .env.*
-*.env
+!.env.example
+!.env.*.example
 
 *.pem
 *.key
@@ -30,8 +19,6 @@ backend-spring/verificacion/*.log
 *.jks
 *.keystore
 *.ppk
-
-*.rdp
 
 secrets/
 credentials/
@@ -50,31 +37,123 @@ database.local.properties
 aws.properties
 aws.local.properties
 
-# Los tres ficheros de configuracion del stack legado desaparecieron con el
-# (2026-08-08). Los patrones se conservan como red: si alguien recupera algo
-# del historial, no vuelve a subir el secreto del token ni las credenciales de
-# la RDS. Ojo: esto NO deshace su publicacion en el commit 2832a9b — eso solo
-# lo cierra rotarlas.
 api.properties
 db.properties
-appsettings.json
 
 *.token
 *.jwt
 *.secret
 
+application-local.properties
+application-local.yml
+application-local.yaml
+application-*.local.properties
+application-*.local.yml
+application-*.local.yaml
+
+
+# ============================================================
+# IDE / editors
+# ============================================================
+
+.idea/
+**/.idea/
+
+.vscode/
+**/.vscode/
+
+*.iml
+*.ipr
+*.iws
+
+.project
+.classpath
+.settings/
+
+*.swp
+*.swo
+*~
+
+
+# ============================================================
+# AI / agent tooling
+# ============================================================
+
+.claude/
+**/.claude/
+
+.serena/
+**/.serena/
+
+.codex/
+.codex-build/
+.codex-grade/
+
+.agents/
+**/.agents/
+
+AGENTS.md
+CLAUDE.md
+
+.tmp_*
+*.session
+*.session.json
+
+
+# ============================================================
+# Internal documentation
+# ============================================================
+
+docs/
+
+backend-spring/README.md
+frontend-angular/README.md
+
+
+# ============================================================
+# Internal development / verification tooling
+# ============================================================
+
+backend-spring/operacion/
+backend-spring/verificacion/
+backend-spring/backups/
+
+backend-spring/docker-compose.e2e.yml
+
+frontend-angular/tools/
+
+
+# ============================================================
+# Temporary files
+# ============================================================
+
+tmp/
+temp/
+.tmp/
+.cache/
+
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+
+*.log
+logs/
+**/logs/
+
+
 # ============================================================
 # Java / Maven
 # ============================================================
 
+target/
 **/target/
+
 *.class
 *.jar
 *.war
 *.ear
-
-# Maven Wrapper must remain versioned
-!.mvn/wrapper/maven-wrapper.jar
 
 .mvn/timing.properties
 dependency-reduced-pom.xml
@@ -82,84 +161,127 @@ dependency-reduced-pom.xml
 hs_err_pid*
 replay_pid*
 
+# Maven Wrapper binaries are intentionally versioned
+!.mvn/wrapper/maven-wrapper.jar
+
+
 # ============================================================
 # Angular / Node
 # ============================================================
 
-# `frontend-angular/.gitignore` ya cubre dist, node_modules y compania, pero NO
-# la cache de build del CLI, que son cientos de ficheros generados. Se ignora
-# aqui para que valga aunque alguien mueva o regenere el proyecto.
-.angular/
-**/.angular/
-
 node_modules/
 **/node_modules/
 
+.angular/
+**/.angular/
+
+dist/
+**/dist/
+
+out-tsc/
+**/out-tsc/
+
+coverage/
+**/coverage/
+
+.nyc_output/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+.eslintcache
+
+.angular-cache/
+
+
 # ============================================================
-# .NET (el stack C# se elimino el 2026-08-08; los patrones se
-# conservan por si alguien recupera algo del historial)
+# Test / runtime output
 # ============================================================
 
-**/bin/
-**/obj/
-
-.vs/
-
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
-TestResult*/
+test-results/
 TestResults/
+TestResult*/
 
-artifacts/
-publish/
+playwright-report/
+blob-report/
 
-# Respaldos locales de PostgreSQL previos a saneamientos (nunca versionar)
-backend-spring/backups/
+screenshots/
+videos/
 
-*.nupkg
-*.snupkg
+*.pid
+*.pid.lock
 
-*.rsuser
-*.DotSettings.user
-
-appsettings.Local.json
-appsettings.*.local.json
-appsettings.Production.json
 
 # ============================================================
-# AI local tooling
+# PostgreSQL / database local artifacts
 # ============================================================
 
-.claude/settings.local.json
-.claude/*.local.json
-.claude/logs/
-.claude/history/
-.claude/tmp/
+*.dump
+*.backup
+*.sql.gz
 
-.serena/
+pgdata/
+postgres-data/
+data/postgres/
 
-.codex/
-.codex-build/
-.codex-grade/
-
-.agents/cache/
-.agents/tmp/
-.agents/logs/
-
-.tmp_*
 
 # ============================================================
-# Terraform
+# Docker local overrides
 # ============================================================
+
+docker-compose.override.yml
+docker-compose.local.yml
+docker-compose.*.local.yml
+
+
+# ============================================================
+# Terraform / infrastructure local state
+# ============================================================
+
+.terraform/
 
 terraform.tfstate
 terraform.tfstate.*
-.terraform/
-
 *.tfvars
 *.tfvars.json
 
+.terraform.lock.hcl.backup
+
 cdk.out/
+
+
+# ============================================================
+# Operating system files
+# ============================================================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+
+$RECYCLE.BIN/
+
+
+# ============================================================
+# Miscellaneous generated artifacts
+# ============================================================
+
+artifacts/
+build/
+generated/
+
+*.orig
+*.rej
+
+# ============================================================
+# Documentation policy
+# Keep only the repository root README
+# ============================================================
+
+**/README.md
+!/README.md

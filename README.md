@@ -1,199 +1,127 @@
-# ControlLocal
+# ControlLocal · BROX
 
-ControlLocal es un sistema para gestionar, controlar y auditar el proceso comercial de alquiler de locales comerciales en una corredora inmobiliaria.
+Sistema de gestión y trazabilidad de la operación inmobiliaria: propiedades, encargos,
+propietarios, clientes, visitas, expedientes, contratos y comisiones.
 
-El proyecto busca resolver tres problemas frecuentes del corretaje:
+En el repositorio el proyecto se llama **ControlLocal**; el producto se llama **BROX**
+(SIVAN Solutions). Los documentos nuevos usan el segundo nombre.
 
-- Informacion repartida entre Excel, llamadas, WhatsApp y correos.
-- Poca trazabilidad sobre quien hizo cada accion y por que cambio un estado.
-- Dificultad para supervisar captaciones, visitas, solicitudes y cierres.
+El problema que resuelve: cuando la información de una operación vive repartida entre
+Excel, WhatsApp y correos, nadie sabe cuál es la versión vigente, quién obtuvo cada dato
+ni qué decisión sigue pendiente. Aquí cada hecho queda conectado, fechado y atribuido.
 
-La idea central es sencilla: cada operacion comercial debe quedar conectada desde el propietario y el local hasta la oportunidad, la visita, la solicitud, la evaluacion y el cierre.
+**La distinción que ordena el modelo**: la **propiedad** es el activo físico; el
+**encargo** es una operación comercial concreta sobre ese activo. Por eso una misma
+propiedad puede tener a la vez un encargo de venta y uno de alquiler, cada uno con su
+precio, su vigencia y su histórico, sin mezclarlos.
 
-## Guia Rapida
+## Cómo levantarlo
 
-| Necesitas... | Lee... |
-| --- | --- |
-| Levantar backend, frontend y probar credenciales | [Como Probar](#como-probar) |
-| Crear o recrear la base de datos | Scripts SQL en [`database/`](database/) |
-| Entender entidades, atributos y enums | [Modelo De Dominio](#modelo-de-dominio) y [`database/01_create_schema_controllocal.sql`](database/01_create_schema_controllocal.sql) |
-| Entender roles, permisos y sesion | [Roles](#roles) |
-| Entender el flujo comercial completo | [Flujo Principal](#flujo-principal) |
+Necesitas **JDK 21+**, **Docker** y **Node 20.19+** (el que exige Angular 20; en esta máquina
+corre sobre 24).
 
-## Alcance Funcional
-
-ControlLocal cubre el ciclo operativo de alquiler comercial:
-
-1. Registro de propietarios.
-2. Registro de locales comerciales.
-3. Captacion del local por un agente inmobiliario.
-4. Revision de la captacion por broker.
-5. Registro de clientes interesados.
-6. Creacion de oportunidades comerciales.
-7. Seguimiento mediante interacciones y visitas.
-8. Solicitud formal de alquiler.
-9. Carga y revision de documentos.
-10. Evaluacion de la solicitud.
-11. Contrato, comision, reportes, tareas, alertas e historial.
-
-## Arquitectura
-
-El repositorio combina un backend Java por capas, una API Jakarta REST, una base MySQL y un frontend Blazor.
-
-```text
-ControlLocal/
-|
-|-- backend-java/
-|   |-- controllocal-model/       Entidades y enums del dominio.
-|   |-- controllocal-db-manager/  Conexion JDBC y configuracion de BD.
-|   |-- controllocal-dao/         Persistencia JDBC.
-|   |-- controllocal-bl/          Reglas de negocio.
-|   |-- controllocal-rest/        API Jakarta REST desplegable como WAR.
-|   `-- controllocal-app/         Entrada Java auxiliar.
-|
-|-- frontend-csharp/
-|   `-- ControlLocal.Web/         Frontend Blazor.
-|
-|-- database/                     Scripts SQL, seeds y diagramas.
-`-- docs/                         Diagramas e imagenes del proceso y logo.
+```bash
+mvn -f backend-spring/pom.xml clean install
 ```
 
-### Responsabilidad Por Capa
+```bash
+docker compose -f backend-spring/docker-compose.yml up -d
+```
 
-| Capa | Que contiene | Por que existe |
-| --- | --- | --- |
-| `model` | Entidades, enums y objetos de dominio | Define el vocabulario comun del negocio. |
-| `db-manager` | Configuracion y apertura de conexiones JDBC | Centraliza el acceso a MySQL sin mezclarlo con reglas de negocio. |
-| `dao` | Consultas, inserts, updates y mapeo SQL | Aisla la persistencia para que la capa de negocio no dependa de SQL directo. |
-| `bl` | Validaciones, transiciones de estado y reglas | Evita que la API o la UI decidan reglas criticas por su cuenta. |
-| `rest` | Endpoints HTTP/JSON, autenticacion JWT y filtros | Expone el dominio al frontend y a pruebas externas. |
-| `frontend-csharp` | Pantallas Blazor, navegacion por rol y consumo del API | Permite operar el proceso desde una interfaz web. |
-| `database` | DDL, seeds, datos demo y diagrama | Hace reproducible el esquema y los escenarios de prueba. |
+```bash
+npm --prefix frontend-angular start
+```
 
-## Flujo Principal
+| Servicio | Dónde |
+|---|---|
+| API | `http://localhost:8090/controllocal/Api` |
+| Swagger UI | `http://localhost:8090/controllocal/Api/swagger-ui.html` |
+| SPA | `http://localhost:4200` |
+| PostgreSQL/PostGIS | `localhost:5433`, base `controllocal_dev` |
+
+Credenciales del seed, **publicadas a propósito** (el arranque en `prod` se detiene si
+alguna sigue viva): `admin@controllocal.test`/`Admin2026`, `rsalas`…`sramirez`/`Broker2026`,
+`vmora`…`rgomez`/`Agente2026`.
+
+> El `JAVA_HOME` por defecto de la máquina de desarrollo apunta a un JDK 17 y rompe la
+> compilación (`release=21`). Exporta un JDK 21+ antes de compilar.
+
+## El flujo comercial
 
 ```mermaid
 flowchart LR
-    A["Propietario"] --> B["Local comercial"]
-    B --> C["Captacion"]
-    C --> D{"Revision broker"}
+    A["Propietario"] --> B["Propiedad"]
+    B --> C["Encargo (captación)"]
+    C --> D{"Revisión del broker"}
     D -->|"Observa"| C
-    D -->|"Rechaza"| X["Fin de captacion"]
-    D -->|"Aprueba"| E["Captacion activa"]
+    D -->|"Rechaza"| X["Fin del encargo"]
+    D -->|"Aprueba"| E["Encargo activo"]
     E --> F["Cliente interesado"]
     F --> G["Oportunidad comercial"]
     G --> H["Interacciones y visitas"]
-    H --> I{"Cliente continua?"}
+    H --> I{"¿Continúa?"}
     I -->|"No"| J["Motivo de no continuidad"]
-    J --> K["Oportunidad no continua"]
-    I -->|"Si"| L["Solicitud de alquiler"]
+    I -->|"Sí"| L["Solicitud de alquiler"]
     L --> M["Documentos"]
-    M --> N{"Evaluacion broker"}
+    M --> N{"Evaluación del broker"}
     N -->|"Observa"| L
     N -->|"Rechaza"| O["Cierre no favorable"]
-    N -->|"Aprueba"| P["Cierre exitoso"]
+    N -->|"Aprueba"| P["Contrato + comisión"]
 ```
 
-La entidad que une casi todo el proceso comercial es `OportunidadComercial`: permite conservar trazabilidad aunque el cliente nunca llegue a presentar una solicitud formal.
+`OportunidadComercial` es la entidad bisagra: conserva la trazabilidad aunque el
+interesado nunca llegue a presentar una solicitud formal.
 
-## Roles
+**Alcance real, sin adornos**: el expediente formal está construido de punta a punta para
+**alquiler**. Venta tiene modelo, encargo y publicación, pero todavía no un cierre
+equivalente. La propiedad admite **siete tipos** (local, oficina, departamento, casa,
+terreno, almacén, otro) y la profundidad del catálogo no es igual en todos.
 
-| Rol | Responsabilidad principal | Puede hacer |
-| --- | --- | --- |
-| Broker administrador | Gobierno global del sistema | Gestionar brokers, auditar, reasignar agentes y ver reportes globales. |
-| Broker supervisor | Supervision de su equipo | Registrar agentes propios, revisar captaciones, reasignar captaciones y evaluar solicitudes de sus agentes. |
-| Agente inmobiliario | Operacion comercial diaria | Registrar propietarios, locales, captaciones, clientes, oportunidades, visitas, solicitudes y documentos. |
+## Quién hace qué
 
-Regla clave: el broker supervisa y decide; el agente registra y opera. Separar esas funciones da trazabilidad y evita que una misma persona registre y apruebe sin control.
+| Banda | Responsabilidad | No puede |
+|---|---|---|
+| `TENANT_ADMIN` | Gobierna la organización: cuentas, organigrama, invitaciones | **No firma hechos del negocio**: ni aprueba encargos, ni conforma documentos, ni evalúa solicitudes |
+| `BROKER` | Supervisa y **decide**: revisa encargos, evalúa solicitudes, rescinde contratos | No crea ni edita agentes, no invita |
+| `AGENTE` | **Registra y opera**: propiedades, encargos, clientes, oportunidades, visitas, solicitudes | No aprueba su propio trabajo |
 
-## Modelo De Dominio
+La regla de fondo es que *gobernar no es operar* y *el broker decide, el agente registra*.
+Quién puede llamar a qué —y **dónde se decide el alcance**— está en
+[`docs/ai/matriz-operacion-rol.md`](docs/ai/matriz-operacion-rol.md), que **rompe el build**
+si se desvía del código: un endpoint nuevo necesita su fila.
 
-Las entidades existen para responder preguntas operativas concretas:
+## El repositorio
 
-| Pregunta de negocio | Entidades que la responden |
-| --- | --- |
-| Quien participa? | `Persona`, `UsuarioInterno`, `Broker`, `AgenteInmobiliario`, `Propietario`, `ClienteInteresado`. |
-| Que inmueble se ofrece? | `Distrito`, `LocalComercial`, `PrecioLocal`, `Publicacion`. |
-| Como se capta y supervisa? | `Captacion`, `Prospeccion`, `ReasignacionCaptacion`, `BrokerAgente`, `ReasignacionAgenteBroker`. |
-| Como avanza el interesado? | `OportunidadComercial`, `InteraccionComercial`, `Visita`, `MotivoNoContinuidad`. |
-| Cuando se formaliza? | `SolicitudAlquiler`, `DocumentoSolicitud`, `TipoDocumentoRequerido`, `EvaluacionSolicitud`. |
-| Como se cierra y controla? | `ContratoAlquiler`, `ComisionLiquidacion`, `ReportePropietario`, `Tarea`, `Alerta`, `HistorialEstado`. |
+| Carpeta | Qué es |
+|---|---|
+| [`backend-spring/`](backend-spring/) | La API. Reactor Maven de cinco módulos sobre Spring Boot 3.5 + PostgreSQL/PostGIS. [README](backend-spring/README.md) |
+| [`frontend-angular/`](frontend-angular/) | La SPA. Angular 20, standalone + signals. [README](frontend-angular/README.md) |
+| [`kairos-service/`](kairos-service/) | Prototipo de asistente conversacional sobre la API. Proyecto aparte. [README](kairos-service/README.md) |
+| [`docs/ai/`](docs/ai/) | Decisiones, contratos y el mapa de avance (abajo) |
+| [`docs/1INF50/`](docs/1INF50/) | Radiografía de arquitectura y diagramas |
 
-El sustento detallado de cada entidad, sus atributos y sus enums esta en el esquema [`database/01_create_schema_controllocal.sql`](database/01_create_schema_controllocal.sql).
+El esquema lo posee **Flyway** (`backend-spring/controllocal-app/src/main/resources/db/migration/`).
+No hay scripts sueltos que ejecutar y **una migración aplicada no se edita nunca**.
 
-## API Y Frontend
+## Qué leer, y en qué orden
 
-La API corre bajo:
+1. **[`docs/ai/mapa-ejecucion-brox.md`](docs/ai/mapa-ejecucion-brox.md) — la portada.** Dónde
+   estamos, qué cerró y qué sigue, en una tabla. Ábrelo primero, siempre.
+2. [`docs/ai/north-star-brox.md`](docs/ai/north-star-brox.md) — el marco estratégico. No dice
+   qué hacer mañana; dice **contra qué se mide** si algo fue un avance.
+3. [`docs/ai/pendientes-brox.md`](docs/ai/pendientes-brox.md) — el inventario transversal de
+   todo lo que queda, incluido lo que no pertenece a ninguna etapa.
+4. `docs/ai/decision-*.md` — decisiones funcionales, cada una autocontenida.
 
-```text
-http://localhost:8080/controllocal/Api
-```
-
-Endpoints publicos principales:
-
-- `GET /salud`
-- `POST /auth/login`
-
-Modulos REST principales:
-
-- `/propietarios`
-- `/locales`
-- `/captaciones`
-- `/clientes`
-- `/oportunidades`
-- `/visitas`
-- `/solicitudes`
-- `/evaluaciones`
-- `/alertas`
-- `/agentes`
-- `/prospecciones`
-
-El frontend Blazor se ejecuta por defecto en:
-
-```text
-http://localhost:5232/login
-```
-
-## Como Probar
-
-El procedimiento es:
-
-1. Preparar MySQL con los scripts de `database/`.
-2. Crear archivos privados de configuracion desde los `.example`.
-3. Compilar backend Java con Maven.
-4. Desplegar `controllocal-rest` en GlassFish.
-5. Ejecutar el frontend Blazor.
-6. Iniciar sesion con los usuarios demo del seed.
-7. Validar un flujo minimo: captacion, oportunidad, visita, solicitud y evaluacion.
-
-## Configuracion Privada
-
-No se deben versionar credenciales. Los archivos privados esperados son:
-
-```text
-backend-java/controllocal-rest/src/main/resources/api.properties
-backend-java/controllocal-rest/src/main/resources/aws.properties
-backend-java/controllocal-db-manager/src/main/resources/db.properties
-frontend-csharp/ControlLocal.Web/appsettings.json
-```
-
-Usa como base:
-
-```text
-backend-java/controllocal-rest/src/main/resources/api.properties.example
-backend-java/controllocal-rest/src/main/resources/aws.properties.example
-backend-java/controllocal-db-manager/src/main/resources/db.properties.example
-frontend-csharp/ControlLocal.Web/appsettings.example.json
-```
+Los documentos de la época de la migración llevan el rótulo
+`HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL`. Sirven para el *porqué*, nunca para el
+*qué sigue*, y **su numeración E1…E5 no es la del mapa actual**.
 
 ## Convenciones
 
-Este proyecto usa Conventional Commits:
-
-- `feat:` nueva funcionalidad.
-- `fix:` correccion de errores.
-- `docs:` documentacion.
-- `refactor:` mejora interna sin cambiar comportamiento.
-- `chore:` mantenimiento.
-
-Para documentacion, prioriza claridad operativa: que una persona pueda entender que hace el sistema, por que existe cada pieza y como probarla sin pedir contexto adicional.
+- **El vocabulario del dominio es español** —entidades, enums, métodos y comentarios—.
+  Si añades código, mantenlo en español.
+- Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `chore:`.
+- **Nada de credenciales versionadas.** La configuración va por variables de entorno según
+  el perfil de Spring; en `prod` no hay valores por defecto y el arranque se detiene
+  nombrando la variable que falte.

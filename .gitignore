@@ -280,8 +280,11 @@ generated/
 
 # ============================================================
 # Documentation policy
-# Keep only the repository root README
+# Keep the root README plus one per module (backend-spring, frontend-angular, kairos-service)
 # ============================================================
 
 **/README.md
 !/README.md
+!/backend-spring/README.md
+!/frontend-angular/README.md
+!/kairos-service/README.md

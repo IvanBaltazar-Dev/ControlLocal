@@ -735,7 +735,7 @@ cosmético: el SPA decide con él si un booleano se dice «Sí/No» o «true»
 | superficie | antes | ahora |
 |---|---|---|
 | **CAPTURA** — alta y editor (`aplicablesA`) | filtra `activo` | **igual**: una clave retirada no se pregunta |
-| **ESCRITURA** — `porClave` (Java, la que actúa por la API) y `exigir_atributo_gobernado` (la red de atrás, para SQL directo) | las dos exigen `activo` | **igual**: una clave retirada no admite valores nuevos — **400** por la API, medido en §15 |
+| **ESCRITURA** — `porClave` (Java, la que actúa por la API) y `exigir_atributo_gobernado` (la red de atrás, para SQL directo) | las dos exigen `activo` | **igual** para un valor **escalar**: una clave retirada no admite valores nuevos — **400** por la API, medido en §15. **Con una excepción en el MULTIVALOR**, medida en §15 y registrada como deuda `N22`: editar una `LISTA_MULTIPLE` con ancla existente no consulta el catálogo, y el trigger de opciones no ve el `DELETE` |
 | **LECTURA** — la ficha | perdía rótulo, tipo, unidad y orden | los resuelve **aunque la clave esté inactiva** |
 
 - `CatalogoAtributoRepository.paraLeer(org, claves)` — **la única** consulta del
@@ -1232,22 +1232,36 @@ HTTP 400
 existió** son indistinguibles por el cable —el mismo 400, el mismo texto—, porque
 las dos mueren en el mismo sitio: `AtributosGobernados.definicionDe` →
 `CatalogoAtributoRepository.porClave`, cuyo JPQL lleva `and c.activo = true`.
-`ManejadorErroresApi.java:45-48` mapea `ReglaNegocioException` a **400**. El
+`ManejadorErroresApi.reglaNegocio` mapea `ReglaNegocioException` a **400**. El
 trigger no se llega a ejecutar. El **409 «duplicado»** —la deuda de verdad— lo
 produce un valor fuera del vocabulario de una LISTA viva, que pasa Java
 (`AtributosGobernados.convertir` acota tipo, rango y longitud, nunca pertenencia)
 y muere en `exigir_atributo_gobernado` con `23514` →
-`DataIntegrityViolationException` → `ManejadorErroresApi.unicidadViolada`
-(`:106-110`, con `mensajeDuplicado` en `:152-164`, que no encuentra
-«documento», «correo» ni «nombre» en el mensaje del trigger y cae al genérico).
+`DataIntegrityViolationException` → `ManejadorErroresApi.unicidadViolada`, cuyo
+`mensajeDuplicado` no encuentra «documento», «correo» ni «nombre» en el mensaje
+del trigger y cae al genérico.
 
-**Simetría ALTA ↔ EDICIÓN: leída, no disparada.** Lo de arriba es el `PUT`. En el
-alta ocurre lo mismo por construcción —las **cuatro** puertas de escritura de
-`AtributosGobernados` empiezan por `definicionDe` o por `porClave`:
-`escribirAlAlta:393`, `aplicarEstructuralesAlAlta:360`, `escribirEnEdicion:434` y
-`retirar:539`—, pero **no se lanzó ningún `POST /propiedades`**: habría creado una
-propiedad en `controllocal_dev` y toda esta medición se hizo **sin escribir nada**.
-Se dice para que no se lea como medido lo que está leído.
+**Simetría ALTA ↔ EDICIÓN: leída, no disparada.** Lo de arriba es el `PUT`. Para
+un valor **escalar** el alta hace lo mismo —`escribirAlAlta` llama a
+`definicionDe` antes de tocar nada, igual que `escribirEnEdicion`—, pero **no se
+lanzó ningún `POST /propiedades`**: habría creado una propiedad en
+`controllocal_dev` y toda esta medición se hizo **sin escribir nada**. Se dice
+para que no se lea como medido lo que está leído.
+
+**Simetría ESCALAR ↔ MULTIVALOR: la frase no llega hasta ahí.** `escribirAlAlta` y
+`escribirEnEdicion` comprueban `esMultivalor()` y delegan en `escribirMultivalor`
+**antes** de llamar a `definicionDe`; y `escribirMultivalor` consulta el catálogo
+**sólo cuando el ancla no existe**, para crearla. Con ancla existente escribe y
+borra opciones sin mirar `catalogo_atributo`. La red de atrás cubre la mitad:
+`exigir_opcion_gobernada` exige `c.activo = true`, pero su trigger es
+`BEFORE INSERT OR UPDATE` y **no ve el `DELETE`**. En `controllocal_dev` no hay
+dato afectado —la única clave retirada es `servicios_disponibles`, que es `LISTA`;
+las cuatro `LISTA_MULTIPLE` están activas y `atributo_propiedad_opcion` tiene 0
+filas—; en `controllocal_repositorios` **sí es alcanzable**, por las claves `zz_*`
+que dejan los fixtures retiradas y con opciones escritas, que son residuo de
+pruebas. **CONTROL decidió no cerrarlo en 5A**. Queda como deuda
+propia en `pendientes-brox.md` §2.3 sexies · **N22**, con su condición de
+disparo: el día que se retire una clave `LISTA_MULTIPLE` que ya tenga ancla.
 
 **Que el rechazo no escribe, y que el SELECT sí se emite.** Con
 `pg_stat_user_tables` alrededor del `PUT` del caso A:
@@ -1267,9 +1281,7 @@ catalogo_atributo|5317|2657|554036
 `catalogo_atributo` sube **un** `seq_scan` y `+123` tuplas leídas —la tabla
 entera, que hoy son 123 filas—, y `atributo_propiedad` **no se mueve**. Es la
 medida que corrige el «antes de emitir SQL» del javadoc de
-`ConversionDeValores`: SQL **se emite** (no hay caché de segundo nivel: 0
-apariciones de `Cacheable` / `use_second_level_cache` en `backend-spring`, barrido
-con control positivo); lo que no se intenta es la **escritura**.
+`ConversionDeValores`: SQL **se emite**; lo que no se intenta es la **escritura**.
 
 **Conservación de `controllocal_dev`**, contada antes y después de toda la
 medición:
@@ -1299,18 +1311,41 @@ tiene que anotar. Los atributos de la propiedad 1 quedaron idénticos: 8 filas, 
 |---|---|---|
 | `ConversionDeValores.java` (javadoc del orden de capas) | «en Java, **antes de emitir SQL**» | «en Java, **sin llegar a intentar la escritura**», con el `seq_scan` que lo prueba |
 | `ConversionDeValores.java` (javadoc de `exigirDelVocabulario`) | «y **antes de abrir la transaccion**» | falso y dicho: los dos caminos cuelgan de `registrar` / `editar`, las dos `@Transactional` |
-| `ConversionDeValores.java` (javadoc **de la clase**, `:29`) | la misma frase, y **nadie la había señalado** — la encontró el autoataque de esta tanda | falso y dicho: **todos** los llamadores están dentro de un método ya transaccional (`registrar`, `editar`, `MotorDeCapturaImpl.avanzar`) |
+| `ConversionDeValores.java` (javadoc **de la clase**) | la misma frase, y **nadie la había señalado** — la encontró el autoataque de esta tanda | falso y dicho: **todos** los llamadores están dentro de un método ya transaccional (`registrar`, `editar`, `MotorDeCapturaImpl.avanzar`) |
 | `pendientes-brox.md` §2.3 ter (título y primer bloque) | «el rechazo de una **clave retirada** llega al cliente como duplicado» | «un **valor fuera de vocabulario** llega al cliente como duplicado», con las dos salidas literales |
 | esta evidencia §12.8 y §13.4 | «el `PUT` de una clave retirada muere en el trigger» · «el desenlace es el mismo por las dos vías» | los dos declarados falsos, con el desenlace real |
 | esta evidencia §3 y la tabla de superficies de §12.8 | la ESCRITURA la cerraba sólo el trigger | la cierran dos capas, y por la API actúa la de Java |
-| `OcupacionYServiciosIntegrationTest:442` (comentario) | «no admite valores nuevos: `exigir_atributo_gobernado` exige `activo = true`» | la capa real, y que el `assertThrows` es ancho a propósito |
+| `OcupacionYServiciosIntegrationTest.serviciosDisponiblesQuedoRetiradaYNoBorrada` (comentario) | «no admite valores nuevos: `exigir_atributo_gobernado` exige `activo = true`» | la capa real, y que el `assertThrows` es ancho a propósito |
+
+**Y el barrido de esa frase se había hecho por fichero, no por frase.** La sexta
+auditoría encontró tres copias vivas más, todas con la misma atribución falsa. Se
+corrigen en este lote:
+
+| dónde | qué decía |
+|---|---|
+| `CatalogoQueHablaIntegrationTest.serviciosDisponiblesQuedoRetiradaYSustituida` (**mensaje de aserción**, no comentario) | el caso gemelo exacto del de `OcupacionYServiciosIntegrationTest` —mismo `editar(id, new ValorAtributo("servicios_disponibles", …))`, mismo `propiedades.editar`—, y su mensaje repetía «una clave retirada no sigue capturando: `exigir_atributo_gobernado` exige `activo = true`» |
+| `AtributosGobernados` (javadoc de `definicionesParaLeer`) | «no reabre ninguna puerta de escritura: `aplicablesA` sigue filtrando por `activo`, y el trigger `exigir_atributo_gobernado` también» — omitía `porClave`, que es quien rechaza por la API |
+| `docs/ai/modelo/motor-captura.js` (comentario de `pasosDeAtributos`) | «`aplicablesA` filtra `activo` y el trigger `exigir_atributo_gobernado` lo exige otra vez» |
+
+Y una cuarta copia **no se corrige y queda registrada**: `V84` dice lo mismo en la
+viñeta «NO borra ni reinterpreta ni un solo valor escrito de esa clave». Es una
+migración **aplicada** y no se edita; queda anotada en `pendientes-brox.md`
+§2.3 quater. Las tres copias que hablan del **INSERT directo** —el comentario del
+control positivo en `gate-modelo-universal.sql`, el javadoc de
+`OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo` y el párrafo «Sembrar el
+legado exige saltarse la puerta» de §12.8— **son correctas y no se tocan**: por
+esa vía el trigger sí es quien rechaza.
 
 **Lo que NO se hizo, a propósito**: no se añadió ninguna prueba ni ningún gate que
-fije **400 frente a 409**, ni se tocó el `assertThrows(Exception.class, …)` del
-caso de conservación. El script de medición vivió fuera del repositorio y **no se
-commitea**. Lo único que hoy fija un 400 en esta familia es
-`e2e-editor-universal.ps1:431`, y lo hace sobre `zzz_clave_inexistente` —una clave
-que nunca existió—, no sobre una retirada ni sobre un valor fuera de vocabulario;
-barrido con control positivo, **ninguna prueba Java afirma un código HTTP**. Que
+fije **400 frente a 409**. Los dos `assertThrows(Exception.class, …)` —el de
+`OcupacionYServiciosIntegrationTest` y el de `CatalogoQueHablaIntegrationTest`—
+siguen siendo **igual de anchos**: del segundo se acortó el **mensaje**, que
+afirmaba la capa equivocada, y ninguna condición cambió. El script de medición
+vivió fuera del repositorio y **no se commitea**. Lo que hoy fija un 400 en esta familia es la comprobación
+`una clave fuera del catalogo se rechaza` de `e2e-editor-universal.ps1`, y lo hace
+sobre `zzz_clave_inexistente` —una clave que nunca existió—, no sobre una retirada
+ni sobre un valor fuera de vocabulario. **Ninguna prueba Java afirma un código
+HTTP**: 0 apariciones de `isBadRequest`, `isConflict`, `HttpStatus.`,
+`status().is` ni `getStatusCode` en **todos** los `src/test` de `backend-spring`. Que
 esa distinción merezca un gate permanente es **alcance propio** y lo decide
 CONTROL; queda anotado en `pendientes-brox.md` §2.3 ter.

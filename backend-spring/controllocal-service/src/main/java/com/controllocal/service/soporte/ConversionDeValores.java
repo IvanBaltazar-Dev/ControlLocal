@@ -244,10 +244,7 @@ public final class ConversionDeValores {
      *       {@code seq_tup_read} +123, la tabla entera— y dejo
      *       {@code atributo_propiedad} igual (950/243/71179 antes y despues).
      *       Al cliente le llega <b>400</b>. La version anterior de esta linea
-     *       decia «antes de emitir SQL» y era falsa: no hay cache de segundo
-     *       nivel que evite la consulta (0 apariciones de {@code Cacheable} o
-     *       {@code use_second_level_cache} en {@code backend-spring}, barrido con
-     *       control positivo).</li>
+     *       decia «antes de emitir SQL» y era falsa.</li>
      *   <li>{@code exigir_atributo_gobernado} es la <b>red de atras</b>, para
      *       quien entre por SQL directo: busca la clave con {@code activo = true}
      *       y si no la encuentra levanta SQLSTATE 23503. Por eso el

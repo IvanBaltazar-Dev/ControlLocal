@@ -755,10 +755,22 @@ class CatalogoQueHablaIntegrationTest {
                 "y sigue existiendo: un DELETE se llevaria por delante el significado de los "
                         + "valores que quedaron escritos con ella");
 
+        // OJO CON LA CAPA, igual que en el caso gemelo de
+        // `OcupacionYServiciosIntegrationTest`: por esta via -- `editar` llama a
+        // `PropiedadUniversalService.editar`, la misma que usa el PUT -- quien
+        // rechaza es el CORE en Java, `AtributosGobernados.definicionDe` ->
+        // `CatalogoAtributoRepository.porClave`, cuyo JPQL lleva
+        // `and c.activo = true`. El trigger `exigir_atributo_gobernado` exige lo
+        // mismo, pero es la red de atras: solo actua contra SQL directo, y por
+        // esta llamada NO llega a ejecutarse. Este mensaje decia lo contrario y
+        // se corrigio el 2026-08-26 (evidencia de 5A, §15).
+        //
+        // El `assertThrows(Exception.class, ...)` es ancho a proposito: fija que
+        // el rechazo EXISTE y que no deja rastro, no en que capa ocurre ni con
+        // que codigo llega. Fijar eso es deuda de `pendientes-brox.md` §2.3 ter.
         assertThrows(Exception.class,
                 () -> editar(id, new ValorAtributo("servicios_disponibles", "agua y desague")),
-                "una clave retirada no sigue capturando: `exigir_atributo_gobernado` exige "
-                        + "`activo = true`");
+                "una clave retirada no sigue capturando");
         assertNull(valorDe(id, "servicios_disponibles"), "y el rechazo no dejo rastro");
 
         // Sus reemplazos existen, estan activos y NO nacieron mudos: es la

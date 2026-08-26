@@ -707,7 +707,19 @@ public class AtributosGobernados {
      *
      * <p>Retirar la pregunta no puede degradar la respuesta. Y no reabre ninguna
      * puerta de escritura: {@link #aplicablesA} sigue filtrando por
-     * {@code activo}, y el trigger {@code exigir_atributo_gobernado} tambien.
+     * {@code activo} —o sea que la clave retirada no se pregunta—, y quien
+     * rechaza el valor por la API es {@link #definicionDe} →
+     * {@code CatalogoAtributoRepository.porClave}, cuyo JPQL lleva
+     * {@code and c.activo = true}. El trigger
+     * {@code exigir_atributo_gobernado} exige lo mismo, pero es la <b>red de
+     * atras</b>: actua contra SQL directo, no contra esta ruta. Esta frase
+     * atribuia el cierre solo al trigger y se corrigio el 2026-08-26, medido por
+     * HTTP (evidencia de 5A, §15).
+     *
+     * <p><b>Con una excepcion, registrada y no cerrada</b>: la rama MULTIVALOR
+     * no pasa por {@link #definicionDe} cuando el ancla ya existe, y el trigger
+     * de opciones no ve el {@code DELETE}. Hoy no hay dato afectado y la deuda
+     * es {@code pendientes-brox.md} §2.3 sexies · N22.
      *
      * <h2>HASTA DONDE LLEGA ESA FRASE, Y DONDE NO LLEGA</h2>
      *

@@ -103,20 +103,6 @@ si se desvía del código: un endpoint nuevo necesita su fila.
 El esquema lo posee **Flyway** (`backend-spring/controllocal-app/src/main/resources/db/migration/`).
 No hay scripts sueltos que ejecutar y **una migración aplicada no se edita nunca**.
 
-## Qué leer, y en qué orden
-
-1. **[`docs/ai/mapa-ejecucion-brox.md`](docs/ai/mapa-ejecucion-brox.md) — la portada.** Dónde
-   estamos, qué cerró y qué sigue, en una tabla. Ábrelo primero, siempre.
-2. [`docs/ai/north-star-brox.md`](docs/ai/north-star-brox.md) — el marco estratégico. No dice
-   qué hacer mañana; dice **contra qué se mide** si algo fue un avance.
-3. [`docs/ai/pendientes-brox.md`](docs/ai/pendientes-brox.md) — el inventario transversal de
-   todo lo que queda, incluido lo que no pertenece a ninguna etapa.
-4. `docs/ai/decision-*.md` — decisiones funcionales, cada una autocontenida.
-
-Los documentos de la época de la migración llevan el rótulo
-`HISTÓRICO — NO GOBIERNA EL ROADMAP ACTUAL`. Sirven para el *porqué*, nunca para el
-*qué sigue*, y **su numeración E1…E5 no es la del mapa actual**.
-
 ## Convenciones
 
 - **El vocabulario del dominio es español** —entidades, enums, métodos y comentarios—.

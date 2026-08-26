@@ -759,7 +759,7 @@ dos llevaba el control de cobertura que sí llevan sus vecinas.
 | | antes | ahora |
 |---|---|---|
 | **productor** | ninguno | `OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo(idPropiedad)` — siembra por SQL, y **comprueba que sembró** |
-| **cobertura** | ninguna | el caso mide `filas de legado` y `pares legado/servicio` y **falla si el universo está vacío**; en el gate, el universo real viaja **en el nombre** de la comprobación 92 |
+| **cobertura** | ninguna | el caso mide `filas de legado` y `pares legado/servicio` y **falla si el universo está vacío**; en el gate, el universo real viaja en la **columna `nota`** de la comprobación 92 y **se imprime** |
 | **control positivo** | ninguno | el mismo par escrito **sin linaje**: la consulta tiene que cazarlo, o su verde no significa nada |
 | **predicado** | escrito **dos veces** (gate y Java) | **una sola definición por lado**: `pg_temp.hay_legado_traducido_sin_linaje()` en el gate, `legadoTraducidoSinLinaje()` en Java |
 
@@ -965,6 +965,172 @@ tras la corrida dirigida   326 filas   (322 + 4 sembradas por el fixture, todas
                                         anteriores a la frontera del linaje)
 en controllocal_dev          0 filas   (sin cambio: la suite no escribe en dev)
 ```
+
+**No se ejecuta el reactor completo ni `Verificar-Cierre.ps1`**: la corrida larga
+la ordena CONTROL. El corte **no** se declara cerrado y **no** se abre 5B.
+
+---
+
+## 14. Correcciones de la TERCERA auditoría (2026-08-25, cuarta tanda)
+
+La tercera auditoría declaró el candidato **apto para corrida larga** y midió por
+su cuenta N1, N2, N4, N5, N6, la mordida del legado con cuatro sabotajes propios,
+la reposición del incidente de datos y que `V84` sigue intacta y con checksum
+idéntico en las dos bases. Quedaron **cuatro menores y dos observaciones**, todas
+de una o dos líneas. **Ninguna cambia comportamiento**, y esta tanda no lo hizo:
+`V84` no se toca, ni el servicio, ni el lector, ni el predicado del legado.
+
+### 14.1 N10 · el mecanismo de cobertura de N2 era **inobservable**, y el gate lo afirmaba
+
+**Lo medido.** El informe formateaba con `rpad(prueba, 62)` y `rpad` **trunca**.
+El nombre de la 92 medía **115 caracteres**, así que el sufijo
+`(legado realmente presente en esta base: N filas)` **no se imprimía nunca**; y
+como el script termina en `ROLLBACK`, la tabla `resultado` tampoco se podía
+consultar después. La cifra era literalmente inobservable — y el gate y esta
+evidencia la daban por informada. No era sólo la 92: **siete** nombres salían
+cortados.
+
+```
+ n  | len |                        prueba (medido antes del arreglo)
+----+-----+------------------------------------------------------------------
+ 33 |  67 | M4 ninguna propiedad tiene dos encargos vivos de la misma operacion
+ 42 |  63 | M5 rechaza condiciones de compraventa en expediente de alquiler
+ 77 |  63 | 4P despues del cutover ninguna condicion del encargo sin linaje
+ 88 |  65 | 5A gas distingue la red de la calle del papel de la concesionaria
+ 91 |  75 | 5A ningun inmueble con legado recibio un servicio sin que nadie lo afirmara
+ 92 | 115 | 5A CONTROL el predicado del legado caza una traduccion sin linaje (...)
+ 93 |  67 | 5A CONTROL y el savepoint devolvio servicios_disponibles a retirada
+```
+
+**Lo que entró.** Tres cosas, y ninguna toca la mordida de la 91/92:
+
+1. `resultado` gana una columna **`nota`**, y `pg_temp.comprobar` un cuarto
+   parámetro opcional para escribirla. La cifra del universo viaja ahí, en
+   **columna propia**, no en el nombre.
+2. El informe **deja de usar `rpad`**: rellena con `repeat(' ', greatest(2, ...))`,
+   así que un nombre largo **desalinea** la fila pero ya **no puede perder su
+   cola**. La truncadura silenciosa deja de ser posible por construcción.
+3. Dos comprobaciones nuevas, las **99** y **100**, con una única cifra de ancho
+   (`\set ANCHO_PRUEBA 78`) compartida por el informe y por la que lo vigila, para
+   que no puedan separarse.
+
+**Y ahora se lee.** El contraste entre las dos bases —que era justo lo que N2
+denunciaba y no se veía— sale impreso:
+
+```
+controllocal_dev           92  5A CONTROL el predicado del legado caza una traduccion sin linaje   OK   legado realmente presente en esta base: 0 filas
+controllocal_repositorios  92  5A CONTROL el predicado del legado caza una traduccion sin linaje   OK   legado realmente presente en esta base: 328 filas
+                          100  INFORME ningun nombre de comprobacion se sale del ancho             OK   el mas largo mide 75 de 76
+```
+
+**Sabotaje de las dos comprobaciones nuevas** (gate real, `controllocal_dev`, una
+sola a la vez, revertida y comprobada con `git diff`):
+
+| # | defecto introducido | exigido | obtenido |
+|---|---|---|---|
+| **G4** | se alarga el nombre de la 98 hasta **80** caracteres | ROJO | **99/1** · `100 FALLO - un nombre no cabe en el ancho del informe...` · `el mas largo mide 80 de 76`. Y la 98 salió **entera**, desalineada: el informe ya no corta |
+| **G5** | el control del legado inserta `nota = NULL` (deja de declarar su universo) | ROJO | **99/1** · `99 FALLO - el control del legado no dejo dicho cuantas filas de legado hay en esta base` |
+
+Revertidos los dos: **100/100 `EXIT=0`** en `controllocal_dev`;
+`controllocal_repositorios` **99/1**, con la **78** como único rojo y **de base**
+(§13.6). `git diff` sin residuo de sabotaje.
+
+### 14.2 N11 · número de comprobación equivocado
+
+`OcupacionYServiciosIntegrationTest` citaba la **78** para «después del cutover
+ningún hecho del inmueble sin linaje». Esa es la **76**; la 78 es «ninguna columna
+estructural sin linaje». Importa porque la 78 es justo la que está **roja de base**
+en `controllocal_repositorios`: citarla mal apunta la deuda equivocada. Una
+palabra. El comentario gemelo del gate ya decía 76.
+
+### 14.3 N12 · dos atribuciones de autoridad que el barrido de N1 no cazó
+
+El barrido de N1 buscó **enumeraciones** de documentos gobernantes; estas dos son
+**atribuciones puntuales**, y las dos son de este corte:
+
+| dónde | decía | dice |
+|---|---|---|
+| `pendientes-brox.md` §9.4 | «El `encargo-corte-5-terreno.md` prepara el siguiente corte, **pero no lo abre**» | es el encargo del **corte en curso** —congelado, 5A ejecutándose contra él— y, como todo `encargo-*`, **ejecuta** lo que las decisiones y el mapa gobiernan |
+| `auditoria-profundidad-inmobiliaria.md:5-7` (introducida por `8048006`) | «para Corte 5 **gobiernan** `decision-estado-ocupacion-en-los-siete.md` y `encargo-corte-5-terreno.md`» | gobierna la **decisión**; el encargo la **ejecuta** |
+
+**Barrido de esta corrección** (`rg`, nunca `grep -iF`): `rg -n "gobiern..."` sobre
+`docs/ai/*.md` cruzado con `encargo|i0-|north-star|auditoria-profundidad`. Queda
+**una tercera** ocurrencia, y **no se toca**: `encargo-corte-3-vivienda.md:8`
+(«el encargo que gobierna el Corte 3 es ...»), dentro del banner de incidente que
+documenta un hecho **fechado** del 2026-08-24 sobre un corte **cerrado**. Es
+registro histórico, no estado presente. **Se declara aquí para que CONTROL
+decida**, no se reescribe.
+
+### 14.4 N13 · el fixture fabricaba una fila temporalmente imposible
+
+**Lo medido.** `sembrarLegadoAmbiguo` fechaba el legado en
+`frontera_de_linaje() - 1 day`, pero la propiedad se acababa de crear con
+`registrarTerreno()`, o sea **después** de la frontera: el atributo quedaba ~5 días
+**anterior a su propia propiedad**. Esas 4 filas eran las **únicas de toda la
+tabla** con `fecha_creacion < propiedad.fecha_registro`. Esquivar el dato imposible
+que la **76** sí ve fabricando otro que hoy nadie mira no es esquivarlo.
+
+**Lo que entró.** El mismo `DO` envejece también `propiedad.fecha_registro`
+(`frontera - 2 days`), y el orden queda entero: **propiedad → legado → frontera**.
+Una aserción nueva en el propio fixture lo exige, así que no puede volver.
+
+**Lo que eso cuesta, dicho.** La propiedad sembrada **sale del universo de la
+comprobación 78**, que se mide sobre las registradas *después* del cutover. Es
+coherente —una propiedad con legado previo al cutover es anterior al cutover— y
+**no tapa nada**: medido el 2026-08-25 sobre `controllocal_repositorios`, lo que
+tiene roja la 78 es `PISO` escrito sin linaje por **otra** suite (54 propiedades,
+§13.6), ninguna de ellas un `Caso 5A TERRENO`; y los otros siete
+`registrarTerreno()` de esta suite siguen entrando en ese universo.
+
+**Antes / después** en `controllocal_repositorios`:
+
+```
+filas con fecha_creacion < fecha_registro de su propiedad
+  antes de la tanda            4   (PROP-8681, PROP-8682, PROP-8771, PROP-8772)
+  aportadas por esta corrida   0   <- las dos nuevas (PROP-8804, PROP-8805) nacen
+                                      con fecha_registro = frontera - 2 dias
+```
+
+Las 4 anteriores **se declaran como residuo y no se reparan a mano**
+(`pendientes-brox.md` §2.3 quinquies): son datos de prueba en una base de pruebas,
+y el mecanismo que las producía ya no existe.
+
+### 14.5 O2 · cifra que se auto-invalidaba
+
+El javadoc del fixture decía «las **251** filas anteriores a la frontera». Cada
+corrida de esa misma prueba añade filas: eran 255 cuando lo midió la auditoría y
+328 al cerrar esta tanda. **La cifra sale del javadoc**: la mide el propio caso
+antes de afirmar nada, y el gate la imprime en la columna `nota` de la 92. Y no se
+sustituye por una invariante falsa: medido, `servicios_disponibles` tenía **326
+filas totales y 255 anteriores a la frontera** en esa base, así que «todas son
+anteriores» **no** es cierto y no se escribe.
+
+### 14.6 O3 · deuda registrada, no corregida
+
+En `pendientes-brox.md` §2.3 quinquies, junto a `N8`:
+
+- **N14** — las comprobaciones **76, 77 y 78** corren sobre **universo vacío** en
+  `controllocal_dev`, que es la base del gate de cierre. Medido el 2026-08-25:
+  `atributo_propiedad` 76 filas / **0** posteriores a la frontera;
+  `atributo_encargo` **0** filas en total; `propiedad` **0** registradas después de
+  la frontera. Es la ceguera de N2 en la familia del linaje, **preexistente**.
+- **N15** — **acumulación entre suites**: cada corrida deja 2 filas permanentes de
+  legado. Si otra prueba llegara a escribir `agua_desague`/`energia_electrica`
+  **sin rastro** sobre una propiedad con legado, la 91 y `elLegadoNoSeTradujo`
+  dependerían del orden de ejecución. **Hoy no ocurre**, y se comprobó por qué: los
+  únicos otros escritores de esas dos claves pasan por el Core —dejan rastro— o
+  esperan que el INSERT **falle**.
+
+### 14.7 Cierre de la cuarta tanda — lo que se ejecutó
+
+| qué | resultado |
+|---|---|
+| `OcupacionYServiciosIntegrationTest` (única suite tocada) | **15/15**, 0 fallos, 0 errores, 0 saltados |
+| Gate SQL · `controllocal_dev` | **100/100 · `EXIT=0`** |
+| Gate SQL · `controllocal_repositorios` | **99/1**, único rojo la **78**, de base |
+| Sabotajes G4 y G5 | ROJO exigido y obtenido; revertidos; `git diff` sin residuo |
+| `V84` | **no se toca** — ni el fichero ni su checksum |
+| comportamiento | **sin cambios**: migraciones, servicio, lector y predicados intactos; lo tocado son el formato del informe del gate, dos comprobaciones nuevas del gate, la fecha del fixture y documentación |
 
 **No se ejecuta el reactor completo ni `Verificar-Cierre.ps1`**: la corrida larga
 la ordena CONTROL. El corte **no** se declara cerrado y **no** se abre 5B.

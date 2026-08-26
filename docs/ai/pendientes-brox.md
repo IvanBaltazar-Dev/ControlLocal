@@ -291,6 +291,26 @@ condición de disparo para que no haya que volver a descubrirlas.
 | **78** | **La comprobación 78** (`4P después del cutover ninguna columna estructural sin linaje`) está **roja de base en cualquier copia de `controllocal_repositorios`**: **54** propiedades con `piso` sin linaje, creadas por pruebas **anteriores a 4.P**. Medido el 2026-08-25 desglosando el `CROSS JOIN` por campo: las 54 son de `PISO`, ninguna de los otros tres campos canónicos | la base `controllocal_repositorios` | **No bloquea el cierre** — `Verificar-Cierre.ps1` corre el gate contra `controllocal_dev`, donde está verde. Pero **envenena cualquier medición futura** que corra el gate sobre esa base y lea el exit-code: un rojo de residuo se confunde con un rojo de defecto. Quien mida ahí tiene que descontarla explícitamente, como hizo la evidencia de 5A |
 | **V84:408** | **Un comentario de `V84` sigue afirmando que «un fixture las escribe en cada corrida»**, que es falso desde este mismo corte (N2). Es la única copia de esa frase que **no** se corrigió | `controllocal-app/src/main/resources/db/migration/V84__la_ocupacion_y_los_servicios_con_vocabulario.sql:408` | **`V84` está aplicada en las dos bases**: editar el fichero invalida el checksum y obliga a repetir el ciclo entero de H1. La regla del repositorio es *never edit an applied migration*, y una migración aplicada es además **evidencia fechada** de por qué se hizo lo que se hizo. La frase **no gobierna ninguna ejecución** —el gate y las suites, que sí deciden verde o rojo, están corregidos—, así que se declara falsa aquí en vez de reescribir el registro. Si algún día `V84` hay que tocarla por una razón funcional, esta línea se arregla en el mismo viaje |
 
+### 2.3 quinquies DEUDAS que dejó la TERCERA auditoría de 5A (2026-08-25)
+
+Dos más, **ninguna es regresión de 5A** y **ninguna se corrige aquí**. La primera
+es hermana de la que motivó `N2` —un verde sobre universo vacío—, sólo que en otra
+familia y **preexistente**; la segunda es un riesgo latente que hoy no se dispara.
+
+| # | Qué es | Ruta | Por qué no se toca ahora |
+|---|---|---|---|
+| **N14** | **Las comprobaciones 76, 77 y 78 de 4.P corren sobre universo vacío en `controllocal_dev`**, que es la base contra la que `Verificar-Cierre.ps1` pasa el gate. Medido el 2026-08-25 en `controllocal_dev`: `atributo_propiedad` = **76 filas, 0 posteriores** a la frontera; `atributo_encargo` = **0 filas** en total; `propiedad` = **0 registradas** después de la frontera. Las tres salen verdes **sin mirar ninguna fila**. Es exactamente la ceguera que denunció `N2`, en la familia del linaje | `backend-spring/verificacion/gate-modelo-universal.sql`, comprobaciones 76, 77 y 78 | **Hueco preexistente de 4.P, no regresión de 5A**, y emparenta con `N8`: las cuatro son de la misma familia. Cerrarlo pide lo mismo que se hizo en la 91/92 —un **control positivo** que siembre el caso y exija que el predicado lo cace— para cada una de las tres, y eso es alcance de un corte del linaje, no de 5A. Hasta entonces, **un verde de 76/77/78 sobre `dev` no es una medición**: la medición está en `ProcedenciaDelValorIntegrationTest`, que sí escribe lo que mira |
+| **N15** | **Acumulación entre suites.** Cada corrida de `OcupacionYServiciosIntegrationTest` deja **2 filas permanentes** de legado `servicios_disponibles` sobre dos propiedades nuevas. Si algún día otra prueba escribiera `agua_desague`/`energia_electrica` **sin rastro** sobre una propiedad que ya tenga legado, `elLegadoNoSeTradujo` y la comprobación **91** pasarían a depender del **orden de ejecución**. Medido el 2026-08-25: **no ocurre hoy** —el único escritor sin rastro es el control positivo, y borra lo que escribe en su `finally`— | `OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo`, `…/gate-modelo-universal.sql` comprobación 91 | El legado **tiene que quedarse**: es lo que da universo a la 91 sobre una base nueva, y borrarlo al final reabriría el agujero que `N2` cerró. Lo que falta no es limpiar, es **aislar** —que el caso mire sólo las propiedades que él sembró—, y eso cambia el predicado compartido gate/Java, que es justo lo que 5A acaba de unificar. Se hace cuando se toque esa familia, no antes |
+
+> **Residuo declarado, no corregido.** En `controllocal_repositorios` quedan **4
+> filas** de `servicios_disponibles` con `fecha_creacion` **anterior a la
+> `fecha_registro` de su propia propiedad** (`PROP-8681`, `PROP-8682`,
+> `PROP-8771`, `PROP-8772`), sembradas por la versión del fixture que corrigió
+> `N13`. El fixture **ya no las fabrica** —envejece también la propiedad—, pero
+> las cuatro anteriores siguen ahí: son datos de prueba en una base de pruebas y
+> repararlos a mano sería reescribir residuo, no arreglar un mecanismo.
+> Desaparecen cuando esa base se recree.
+
 ### 2.4 Los hechos que faltan de un par deliberado — queda **uno**
 
 El guard de pares vigila que un hecho y su condición no compartan sujeto, y V78
@@ -787,7 +807,11 @@ El orden vigente sale **solo de tres sitios**, y son los mismos que nombra
 > `i0-industrializacion-brox.md` es el protocolo de ejecución en curso. Lo que se
 > discute es si **mandan**, y eso lo decide el titular.
 
-El `encargo-corte-5-terreno.md` prepara el siguiente corte, pero no lo abre. Los
+El `encargo-corte-5-terreno.md` es el encargo del **corte en curso** —está
+congelado y 5A se está ejecutando contra él—, y como todo `encargo-*` **ejecuta
+lo que las decisiones y el mapa gobiernan**: no gobierna él. La frase anterior
+—«prepara el siguiente corte, pero no lo abre»— era falsa y la corrigió la
+tercera auditoría del 2026-08-25. Los
 documentos con banner HISTÓRICO de la era de la migración se conservan tal cual:
 explican el **porqué**, y CLAUDE.md ya avisa de que no gobiernan.
 

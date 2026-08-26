@@ -17,15 +17,26 @@
 \set ON_ERROR_STOP on
 \timing off
 
+-- Ancho de la columna del nombre en el informe. Es UNA sola cifra a proposito:
+-- la usan el informe y la comprobacion que vigila que ningun nombre lo pase,
+-- asi que no pueden separarse (auditoria del 2026-08-25, N10).
+\set ANCHO_PRUEBA 78
+
 BEGIN;
 
-CREATE TEMP TABLE resultado (n serial, prueba text, veredicto text);
+-- `nota` lleva la CIFRA que una comprobacion mide de paso y su nombre no puede
+-- cargar sin estorbar: por ejemplo el tamano real del universo que la
+-- comprobacion acaba de mirar. Existe porque meterla en el nombre no funciono
+-- --el informe la cortaba y la cifra no se imprimia nunca-- y un artefacto que
+-- afirma informar sin informar es peor que uno que calla.
+CREATE TEMP TABLE resultado (n serial, prueba text, veredicto text, nota text);
 
-CREATE OR REPLACE FUNCTION pg_temp.comprobar(p_prueba text, p_condicion boolean, p_detalle text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION pg_temp.comprobar(p_prueba text, p_condicion boolean, p_detalle text DEFAULT NULL,
+                                             p_nota text DEFAULT NULL)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO resultado (prueba, veredicto)
-    VALUES (p_prueba, CASE WHEN p_condicion THEN 'OK' ELSE 'FALLO' || COALESCE(' - ' || p_detalle, '') END);
+    INSERT INTO resultado (prueba, veredicto, nota)
+    VALUES (p_prueba, CASE WHEN p_condicion THEN 'OK' ELSE 'FALLO' || COALESCE(' - ' || p_detalle, '') END, p_nota);
 END $$;
 
 -- Ejecuta algo que DEBE fallar. Si no falla, la invariante no existe.
@@ -956,8 +967,12 @@ SELECT pg_temp.comprobar('5A ningun inmueble con legado recibio un servicio sin 
 -- estaba--. Que un control positivo necesite saltarse una guarda no es una
 -- licencia: es la prueba de que la guarda esta puesta.
 --
--- El universo REAL de esta base se declara en el nombre de la comprobacion, para
--- que un (0 filas, verde) quede dicho y no pase por medicion.
+-- El universo REAL de esta base se declara en la columna `nota` del informe,
+-- para que un (0 filas, verde) quede dicho y no pase por medicion. Iba en el
+-- NOMBRE de la comprobacion y ahi no se leia: el informe cortaba a 62, el nombre
+-- media 115 y la cifra iba en la cola cortada -- no se imprimio nunca (auditoria
+-- del 2026-08-25, N10). Como el script termina en ROLLBACK, la tabla `resultado`
+-- tampoco se podia consultar despues: la cifra era, literalmente, inobservable.
 SELECT count(*) AS n_legado_5a FROM atributo_propiedad WHERE clave = 'servicios_disponibles' \gset
 
 -- Un terreno --`servicios_disponibles` y `agua_desague` solo aplican a `T`-- sin
@@ -1006,10 +1021,10 @@ SELECT CASE
   END AS v_legado_ctrl \gset
 ROLLBACK TO SAVEPOINT legado_5a;
 
-INSERT INTO resultado (prueba, veredicto)
-VALUES (format('5A CONTROL el predicado del legado caza una traduccion sin linaje '
-               '(legado realmente presente en esta base: %s filas)', :n_legado_5a),
-        :'v_legado_ctrl');
+INSERT INTO resultado (prueba, veredicto, nota)
+VALUES ('5A CONTROL el predicado del legado caza una traduccion sin linaje',
+        :'v_legado_ctrl',
+        format('legado realmente presente en esta base: %s filas', :n_legado_5a));
 
 -- Y la clave tiene que haber vuelto a su sitio. El control positivo la reactiva
 -- para poder escribir; si el `ROLLBACK TO` no la devolviera a `activo = false`,
@@ -1053,12 +1068,43 @@ SELECT pg_temp.comprobar('SIN ROMPER no se perdio ninguna propiedad',
     (SELECT count(*) >= 21 FROM propiedad));
 
 -- =====================================================================
+-- El informe tiene que caber, o el informe miente
+-- =====================================================================
+-- LAS DOS VAN LAS ULTIMAS a proposito: miran las filas ya escritas, asi que una
+-- comprobacion nueva va ARRIBA de ellas. Existen porque durante 5A siete nombres
+-- salieron cortados sin que nada lo dijera, y uno de ellos perdia justo la cifra
+-- que declaraba su propio universo (auditoria del 2026-08-25, N10).
+--
+-- La primera: el universo del control del legado tiene que LLEGAR al informe.
+-- Que el nombre no se corte no basta si la cifra no viaja. Se apoya en el nombre
+-- de la 92 a proposito -- si alguien lo cambia sale ROJA, que es el sentido
+-- correcto del error: nunca verde por no encontrar lo que buscaba.
+SELECT pg_temp.comprobar('INFORME el control del legado imprime su universo',
+    EXISTS (SELECT 1 FROM resultado
+             WHERE prueba LIKE '5A CONTROL el predicado del legado%' AND nota IS NOT NULL),
+    'el control del legado no dejo dicho cuantas filas de legado hay en esta base');
+
+-- La segunda: la alineacion. El informe ya no puede cortar a nadie --pasa de
+-- `rpad`, que TRUNCA, a rellenar sin cortar--, asi que un nombre largo saldria
+-- desalineado, nunca mutilado; esta comprobacion evita incluso eso, y comparte
+-- la cifra del ancho con el informe para que no puedan separarse.
+SELECT pg_temp.comprobar('INFORME ningun nombre de comprobacion se sale del ancho',
+    NOT EXISTS (SELECT 1 FROM resultado WHERE length(prueba) > :ANCHO_PRUEBA - 2),
+    'un nombre no cabe en el ancho del informe: acortalo o pasa la cifra a la columna nota',
+    format('el mas largo mide %s de %s', (SELECT max(length(prueba)) FROM resultado), :ANCHO_PRUEBA - 2));
+
+-- =====================================================================
 -- Veredicto
 -- =====================================================================
 -- Se recupera la salida: a partir de aqui si queremos ver lo que sale.
 \o
 \echo ''
-SELECT lpad(n::text, 3) || '  ' || rpad(prueba, 62) || veredicto AS "GATE DEL MODELO UNIVERSAL"
+-- Se rellena sin `rpad` A PROPOSITO: `rpad` corta lo que no cabe y asi es como
+-- el gate estuvo afirmando cosas que no imprimia. Un nombre mas largo que el
+-- ancho ahora desalinea la fila --se ve-- en vez de perder su cola en silencio.
+SELECT lpad(n::text, 3) || '  ' || prueba
+       || repeat(' ', greatest(2, :ANCHO_PRUEBA - length(prueba)))
+       || veredicto || COALESCE('   ' || nota, '') AS "GATE DEL MODELO UNIVERSAL"
   FROM resultado ORDER BY n;
 
 \echo ''

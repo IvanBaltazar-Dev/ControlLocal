@@ -2,9 +2,11 @@
 
 > **Estado documental 2026-08-25:** este archivo conserva la medición original
 > y las propuestas de cada corte. No sustituye al encargo vigente. Corte 4 está
-> cerrado definitivamente en `795ffbf`; para Corte 5 gobiernan
-> `decision-estado-ocupacion-en-los-siete.md` y
-> `encargo-corte-5-terreno.md`.
+> cerrado definitivamente en `795ffbf`; para Corte 5 la decisión que **gobierna**
+> es `decision-estado-ocupacion-en-los-siete.md`, y `encargo-corte-5-terreno.md`
+> es el encargo que la **ejecuta** —un `encargo-*` no gobierna—. La redacción
+> anterior los presentaba a los dos como gobernantes; lo midió la tercera
+> auditoría del 2026-08-25.
 
 **Qué es:** la medición que pidió el corte adicional, hecha ANTES de tocar el
 catálogo. Diez auditorías en paralelo: una por tipo de propiedad —leyendo

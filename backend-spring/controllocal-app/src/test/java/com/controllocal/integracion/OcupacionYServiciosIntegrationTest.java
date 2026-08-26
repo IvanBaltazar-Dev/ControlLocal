@@ -727,7 +727,7 @@ class OcupacionYServiciosIntegrationTest {
                     "la consulta no caza un servicio escrito sobre un legado ambiguo sin ningun "
                             + "linaje: entonces su verde no significa nada");
         } finally {
-            // Se retira: si se quedara, la comprobacion 78 de 4.P - «despues del
+            // Se retira: si se quedara, la comprobacion 76 de 4.P - «despues del
             // cutover ningun hecho del inmueble sin linaje» - vería un defecto que
             // introdujo esta prueba, y envenenaria toda medicion posterior.
             jdbc.update("delete from atributo_propiedad where id_propiedad = ? "
@@ -904,9 +904,31 @@ class OcupacionYServiciosIntegrationTest {
      * medicion de otro gate con un dato imposible.
      *
      * <p>El legado real es, por definicion, <b>anterior</b> al mecanismo de
-     * linaje: las 251 filas de `servicios_disponibles` anteriores a la frontera lo
-     * son. Asi que el fixture escribe con esa fecha, y con eso deja de mentir en
-     * dos direcciones a la vez.
+     * linaje. Asi que el fixture escribe con esa fecha, y con eso deja de mentir
+     * en dos direcciones a la vez. <b>Aqui no va la cifra</b> de cuantas filas de
+     * legado hay: la mide el propio caso antes de afirmar nada, y el gate la
+     * imprime en la columna {@code nota} de su comprobacion 92. Escrita aqui como
+     * estado presente naceria caducada -- cada corrida de esta suite la mueve --,
+     * y esta casa ya pago esa leccion.
+     *
+     * <h2>Y la propiedad se envejece con ella</h2>
+     *
+     * <p>La propiedad se acaba de crear por {@code registrarTerreno()}, o sea
+     * <b>despues</b> de la frontera. Fechar solo el atributo dejaba la fila del
+     * legado <b>anterior a su propia propiedad</b>: un imposible temporal --las
+     * unicas cuatro filas asi de toda la tabla el 2026-08-25-- que hoy no mira
+     * ningun gate, y esquivar el dato imposible que la 76 <i>si</i> ve fabricando
+     * otro que nadie ve no es esquivarlo (auditoria del 2026-08-25, N13). El
+     * {@code DO} envejece tambien {@code fecha_registro}, un dia antes que el
+     * legado, y el orden queda entero: propiedad -> legado -> frontera.
+     *
+     * <p><b>Lo que eso cuesta, dicho</b>: la propiedad sembrada sale del universo
+     * de la comprobacion <b>78</b> de 4.P, que se mide sobre las registradas
+     * <i>despues</i> del cutover. Es coherente --una propiedad con legado previo
+     * al cutover es, precisamente, anterior al cutover-- y no tapa nada: los
+     * otros siete {@code registrarTerreno()} de esta suite siguen entrando en ese
+     * universo, y lo que hoy tiene roja la 78 en {@code controllocal_repositorios}
+     * es {@code PISO} escrito sin linaje por otra suite, no estos terrenos.
      */
     private void sembrarLegadoAmbiguo(long idPropiedad) {
         jdbc.execute("""
@@ -915,11 +937,15 @@ class OcupacionYServiciosIntegrationTest {
                     update catalogo_atributo set activo = true
                      where clave = 'servicios_disponibles' and organizacion_id is null;
 
+                    -- La propiedad, ANTES que su legado y los dos antes de la frontera.
+                    update propiedad set fecha_registro = frontera_de_linaje() - interval '2 days'
+                     where id_propiedad = %1$d;
+
                     insert into atributo_propiedad (organizacion_id, id_propiedad, clave,
                                                     valor_texto, fecha_creacion)
                     select organizacion_id, id_propiedad, 'servicios_disponibles',
                            'Agua, luz y desague', frontera_de_linaje() - interval '1 day'
-                      from propiedad where id_propiedad = %d;
+                      from propiedad where id_propiedad = %1$d;
 
                     update catalogo_atributo set activo = false
                      where clave = 'servicios_disponibles' and organizacion_id is null;
@@ -930,6 +956,15 @@ class OcupacionYServiciosIntegrationTest {
                         + "where clave = 'servicios_disponibles' and id_propiedad = " + idPropiedad),
                 "el productor del legado no escribio nada: la prueba que dependa de el "
                         + "saldria verde sobre un universo vacio");
+        assertEquals(0L, contar("""
+                        select count(*) from atributo_propiedad a
+                          join propiedad p on p.id_propiedad = a.id_propiedad
+                         where a.id_propiedad = %d and a.clave = 'servicios_disponibles'
+                           and (a.fecha_creacion < p.fecha_registro
+                                or a.fecha_creacion > frontera_de_linaje())
+                        """.formatted(idPropiedad)),
+                "el legado sembrado no cabe en su propia linea de tiempo: tiene que ser "
+                        + "posterior a su propiedad y anterior a la frontera del linaje");
         assertEquals(Boolean.FALSE, jdbc.queryForObject("""
                 select activo from catalogo_atributo
                  where clave = 'servicios_disponibles' and organizacion_id is null

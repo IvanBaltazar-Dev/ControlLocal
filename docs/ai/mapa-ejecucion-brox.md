@@ -538,7 +538,7 @@ estables**.
 | `docs/ai/modelo/` | el contrato **como dato ejecutable** + su gate |
 
 ```bash
-node docs/ai/modelo/gate-modelo-universal.js   # 160 comprobaciones
+node docs/ai/modelo/gate-modelo-universal.js   # 165 comprobaciones (medido 2026-08-25)
 node docs/ai/modelo/motor-captura.js           # tres altas, incluida la de KAIROS
 ```
 

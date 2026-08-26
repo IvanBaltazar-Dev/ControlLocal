@@ -1016,7 +1016,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         //
         // Y la LECTURA resuelve tambien las claves RETIRADAS (Corte 5 · 5A). El
         // catalogo de captura filtra `activo`, asi que en cuanto `V84` retiro
-        // `servicios_disponibles` sus 322 valores se seguian leyendo pero
+        // `servicios_disponibles` sus valores conservados —cuantos haya; el
+        // tamano del legado se afirma como invariante y nunca como cifra, que
+        // caduca en cuanto corre una suite— se seguian leyendo pero
         // llegaban con la CLAVE DESNUDA —`rotulo = "servicios_disponibles"`,
         // `tipoDato = null`, al final de la lista—. Conservar el valor y perder
         // su nombre es conservar a medias: el broker lee la clave, y un

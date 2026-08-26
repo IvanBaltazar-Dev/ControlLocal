@@ -392,9 +392,45 @@ cuando CONTROL la autorice.
 
 Barrido con `rg` (nunca `grep -iF`) sobre `controllocal-service`,
 `controllocal-web` y `controllocal-persistence`: el **único** escritor de
-`atributo_propiedad` es `AtributosGobernados`, y la única aparición de un literal
-de clave en `main` es **dentro de un comentario** de `EscritorEstructural`. No hay
-segundo productor.
+`atributo_propiedad` es `AtributosGobernados`. **No hay segundo productor.**
+
+> **La segunda frase de este párrafo era falsa, y la corrección es del
+> 2026-08-25.** Decía: *«la única aparición de un literal de clave en `main` es
+> dentro de un comentario de `EscritorEstructural`»*. **El universo barrido no
+> incluía `controllocal-domain`**, que es justo donde viven los literales:
+> `CatalogoAtributo.java` declara **16 constantes `CLAVE_*`** con su literal
+> (`:110-130`), y `Propiedad.java` nombra otras tres en el `name` de sus
+> `@Column` (`piso`, `partida_registral`, `oficina_registral`).
+>
+> **Universo real y hecho medido** (2026-08-25) — se enumeró primero el universo
+> en vez de buscar ficheros conocidos: **las 123 claves** que tiene
+> `catalogo_atributo` en `controllocal_dev` (PROPIEDAD y ENCARGO, activas y
+> retiradas), leídas de la base y no escritas a mano, buscadas **como literal
+> entrecomillado** con `rg` sobre el `src/main` de **los cinco módulos**
+> —`domain`, `persistence`, `service`, `web`, `app`—:
+>
+> ```
+> 28 líneas en 7 ficheros
+>   17  domain/inmueble/CatalogoAtributo.java          16 constantes CLAVE_* + 1 cita en javadoc
+>    3  domain/inmueble/Propiedad.java                 3 @Column(name=…): piso, partida_registral, oficina_registral
+>    3  service/impl/PropiedadUniversalServiceImpl.java  comentario / javadoc
+>    2  persistence/repositorio/CatalogoAtributoRepository.java  javadoc
+>    1  service/soporte/AtributosGobernados.java       javadoc
+>    1  service/soporte/EscritorEstructural.java       comentario (el antipatrón que prohíbe)
+>    1  web/dto/PropiedadUniversalDtos.java            javadoc
+> ```
+>
+> Se clasificaron **una a una**: 8 son comentario o javadoc; 3 son el `name` de
+> una `@Column` —de las claves **estructurales**, cuya columna se llama igual, no
+> un enrutado por nombre—; y 16 son las constantes de `CatalogoAtributo`, que es
+> exactamente lo que ese fichero declara hacer («nombrarlas NO es la matriz
+> prohibida; lo prohibido es decidir DÓNDE se guarda una clave a partir de su
+> nombre»). **Ninguna de las 28 escribe un atributo.**
+>
+> La conclusión de fondo —«no hay segundo productor»— **se sostiene y no
+> dependía de la frase falsa**: descansa en que el único escritor de
+> `atributo_propiedad` es `AtributosGobernados`. Lo que no se sostenía era
+> afirmar «la única aparición» habiendo barrido tres módulos de cinco.
 
 ---
 

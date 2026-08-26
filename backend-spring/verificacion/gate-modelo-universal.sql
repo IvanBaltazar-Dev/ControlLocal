@@ -909,10 +909,19 @@ SELECT pg_temp.comprobar('5A requerido sigue siendo espejo exacto de exigencia =
 -- decia que "en la base de integracion un fixture las escribe en cada corrida".
 -- No lo hacia. El unico productor de `servicios_disponibles` era el fixture de
 -- `ConservacionDeLaEdicionIntegrationTest`, y este mismo corte lo retiro al
--- retirar la clave. Las 322 filas de `controllocal_repositorios` son RESIDUO
--- HISTORICO: sobre una base nueva --CI, otra maquina, un `docker volume rm`--
--- el universo es CERO, y esta comprobacion saldria verde sin haber mirado nada.
--- En `controllocal_dev` el universo ya es cero HOY.
+-- retirar la clave. Las filas que quedan en `controllocal_repositorios` son
+-- RESIDUO HISTORICO: sobre una base nueva --CI, otra maquina, un
+-- `docker volume rm`-- el universo es CERO, y esta comprobacion saldria verde
+-- sin haber mirado nada. En `controllocal_dev` el universo ya es cero HOY.
+--
+-- EL TAMANO DE ESE RESIDUO NO SE ESCRIBE AQUI COMO CIFRA, y es la misma regla
+-- que manda V84: una cifra caduca en cuanto corre una suite --el fixture
+-- `sembrarLegadoAmbiguo` deja dos filas por corrida--, asi que un comentario
+-- con un numero envejece a mentira sin que nada lo avise. El numero de verdad
+-- lo MIDE y lo IMPRIME el CONTROL POSITIVO de aqui abajo --la comprobacion
+-- "5A CONTROL el predicado del legado caza una traduccion sin linaje"-- en su
+-- columna `nota` ("legado realmente presente en esta base: N filas"): ahi esta
+-- siempre al dia y no hay que mantenerlo a mano.
 --
 -- Por eso la invariante viaja con el CONTROL POSITIVO que va justo debajo: no se
 -- confia en encontrar legado, se construye el par exacto que el predicado tiene

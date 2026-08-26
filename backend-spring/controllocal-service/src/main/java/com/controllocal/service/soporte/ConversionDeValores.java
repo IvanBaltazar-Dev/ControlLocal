@@ -199,10 +199,28 @@ public final class ConversionDeValores {
      * lista de oficinas, y anadir Ica pasaria a ser un despliegue.
      *
      * <p><b>Sin vocabulario sembrado no comprueba nada</b>, y es la misma
-     * tolerancia que V72 dejo puesta en el trigger. Es lo que permite que
-     * {@code servicios_disponibles} —LISTA de la PROPIEDAD, sin una sola opcion,
-     * y cuyos reemplazos son del Corte 5— siga comportandose exactamente igual
-     * que antes de este corte.
+     * tolerancia que V72 dejo puesta en el trigger: una LISTA sin una sola
+     * opcion admite cualquier cadena, en vez de rechazarlas todas. Esa
+     * tolerancia sigue vigente y es lo que este parrafo documenta.
+     *
+     * <p>El ejemplo que ilustraba la frase ya <b>no</b> vale, y decirlo importa
+     * porque afirmaba lo contrario de lo que hoy pasa. Era
+     * {@code servicios_disponibles} —LISTA de la PROPIEDAD sin una sola opcion—
+     * «que sigue comportandose exactamente igual que antes de este corte, y
+     * cuyos reemplazos son del Corte 5». Las dos mitades caducaron con
+     * {@code V84}: los reemplazos —{@code agua_desague} y
+     * {@code energia_electrica}, con vocabulario sembrado— <b>ya existen</b>, y
+     * la clave quedo <b>retirada</b> ({@code activo = false}), asi que ninguna
+     * escritura suya llega hasta aqui: {@code exigir_atributo_gobernado} exige
+     * {@code activo = true} y la rechaza antes (SQLSTATE 23503). Su valor
+     * conservado se sigue LEYENDO; lo que se cerro es la escritura.
+     *
+     * <p>Y hoy <b>ninguna clave la ejerce</b>: medido el 2026-08-25 en las dos
+     * bases, no queda una sola LISTA ni LISTA_MULTIPLE activa sin vocabulario,
+     * en ninguno de los dos sujetos ni de los dos ambitos. La tolerancia se
+     * conserva porque el catalogo es dato y una clave nueva puede nacer muda
+     * entre migraciones; lo que la vigila es el gate («5A ninguna LISTA activa
+     * se quedo sin vocabulario»), no este metodo.
      *
      * <p>Lo que rechaza lo rechazaria igualmente {@code tg_vocabulario_estructural}.
      * La diferencia es la de siempre: aqui sale con el nombre del atributo

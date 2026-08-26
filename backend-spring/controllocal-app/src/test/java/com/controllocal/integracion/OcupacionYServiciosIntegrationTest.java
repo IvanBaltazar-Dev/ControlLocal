@@ -447,10 +447,12 @@ class OcupacionYServiciosIntegrationTest {
         assertNull(valorDe(id, "servicios_disponibles"), "y no dejo rastro");
 
         // PERO LA LECTURA SIGUE SABIENDO COMO SE LLAMA. Sobre la clave REAL, y
-        // sin depender de que la base traiga legado: las 322 filas de
-        // `controllocal_repositorios` existen y en `controllocal_dev` no hay
-        // ninguna, asi que un caso que las necesitara seria verde y vacio en la
-        // mitad de las bases. Lo que se afirma es la consulta que la ficha usa
+        // sin depender de que la base traiga legado: en `controllocal_dev` no
+        // hay ninguna fila y en la base de pruebas hay las que dejaron las
+        // corridas anteriores, asi que un caso que las necesitara seria verde y
+        // vacio en la mitad de las bases. El tamano del legado se afirma como
+        // INVARIANTE y nunca como cifra —una cifra caduca en cuanto corre una
+        // suite—. Lo que se afirma es la consulta que la ficha usa
         // para completar las retiradas.
         List<CatalogoAtributo> paraLeer = catalogo.paraLeer(actor().idOrganizacion(),
                 List.of("servicios_disponibles"));
@@ -471,9 +473,11 @@ class OcupacionYServiciosIntegrationTest {
      * a proposito: la real ya no admite escrituras —esa es justo la otra mitad
      * del contrato— asi que no hay forma de fabricarle legado despues de V84, y
      * un caso que dependiera del legado que traiga la base seria verde y vacio en
-     * una base limpia. El legado real de `controllocal_repositorios` —322 filas
-     * el 2026-08-25— lo conserva la migracion, cuyo bloque 8.8 lo compara por
-     * conjunto contra una foto del antes.
+     * una base limpia. El legado real de `controllocal_repositorios` —el que
+     * haya; se afirma como invariante y no como cifra, porque el fixture de
+     * {@code sembrarLegadoAmbiguo} anade filas en cada corrida— lo conserva la
+     * migracion, cuyo bloque 8.8 lo compara por conjunto contra una foto del
+     * antes.
      *
      * <p>Lo que se afirma: el valor <b>se sigue leyendo</b> en la ficha despues
      * de retirar su clave. {@code LectorPorAutoridad} lee las filas del inmueble
@@ -647,10 +651,12 @@ class OcupacionYServiciosIntegrationTest {
      * cada corrida». Era <b>falso</b>, y lo midio la auditoria del 2026-08-25: el
      * unico productor de {@code servicios_disponibles} era el fixture de
      * {@code ConservacionDeLaEdicionIntegrationTest}, y este mismo corte lo
-     * retiro al retirar la clave. Las 322 filas de
-     * {@code controllocal_repositorios} son <b>residuo historico</b>: sobre una
-     * base nueva —CI, otra maquina, un {@code docker volume rm}— el universo es
-     * CERO y este caso saldria verde sin haber mirado nada.
+     * retiro al retirar la clave. Las filas que hay en
+     * {@code controllocal_repositorios} son <b>residuo historico</b> —cuantas
+     * sean; el tamano no se escribe como cifra porque cada corrida de este
+     * mismo caso deja dos mas—: sobre una base nueva —CI, otra maquina, un
+     * {@code docker volume rm}— el universo es CERO y este caso saldria verde
+     * sin haber mirado nada.
      *
      * <p>Por eso el caso <b>siembra</b> lo que necesita mirar —un legado ambiguo
      * y, sobre el mismo inmueble, un servicio declarado por la ruta normal, que

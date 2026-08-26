@@ -75,7 +75,11 @@ function planBase() {
 function pasosDeAtributos(tipo) {
   const aplica = (a) => a.aplica === "TODOS" || a.aplica.indexOf(tipo) !== -1;
   const requerido = (a) => a.requerido || (a.requeridoPara || []).indexOf(tipo) !== -1;
-  return M.ATRIBUTOS.filter(aplica).map((a) =>
+  /* La CAPTURA sólo pregunta lo ACTIVO, igual que en el Core: `aplicablesA`
+     filtra `activo` y el trigger `exigir_atributo_gobernado` lo exige otra vez.
+     Una clave retirada sigue en el catálogo porque su valor se sigue LEYENDO,
+     pero volver a preguntarla sería reabrir la puerta que `V84` cerró. */
+  return M.ATRIBUTOS.filter((a) => !a.retirado).filter(aplica).map((a) =>
     paso("attr:" + a.clave, preguntaDe(a), tipoDePregunta(a), {
       obligatorio: requerido(a),
       unidad: a.unidad,

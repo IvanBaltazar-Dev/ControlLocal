@@ -168,7 +168,11 @@ comparaba con nada.
   concesionaria. **No se extendió `gas` a `X`**.
 - El reparto del legado fue **después** de que existieran los reemplazos, con
   linaje de procedencia (`V83`). **No se tradujo nada**: las dos cadenas medidas
-  —322 filas en la base de pruebas, 0 en `dev`— son **ambiguas**, porque ninguna
+  —cuantas filas haya en la base de pruebas, 0 en `dev`; el tamaño del legado se
+  escribe como invariante y nunca como cifra, porque el fixture
+  `sembrarLegadoAmbiguo` añade dos filas por corrida y cualquier número aquí
+  caduca solo. El número al día lo imprime el gate SQL en la columna `nota` de
+  su comprobación 92— son **ambiguas**, porque ninguna
   dice si el servicio está conectado o sólo tiene factibilidad aprobada, que es
   justo la distinción que las claves nuevas existen para capturar. `SIN_SERVICIO`
   **no** es la traducción de «no lo mencionó». Y una cadena que el acta no
@@ -310,6 +314,27 @@ familia y **preexistente**; la segunda es un riesgo latente que hoy no se dispar
 > las cuatro anteriores siguen ahí: son datos de prueba en una base de pruebas y
 > repararlos a mano sería reescribir residuo, no arreglar un mecanismo.
 > Desaparecen cuando esa base se recree.
+
+### 2.3 sexies LO QUE DEJÓ ABIERTO LA AUDITORÍA DE CERTIFICACIÓN DE 5A (2026-08-25)
+
+La cuarta auditoría de 5A declaró el candidato **CERTIFICABLE — sin defecto
+bloqueante**. El lote que la siguió corrigió **verdad documental** y no tocó
+`V84`, ni el esquema, ni el cable, ni la lógica de servicio. **Esto es lo que ese
+lote deliberadamente NO corrigió**, anotado abierto y sin decidir por CONTROL.
+
+| # | Qué es | Ruta | Por qué queda abierto |
+|---|---|---|---|
+| **N16** · *decisión pendiente de CONTROL* | **La ficha devuelve un atributo de clave RETIRADA idéntico a uno vivo.** Desde 5A la lectura completa la definición de las claves retiradas —era el defecto que 5A vino a arreglar—, así que `servicios_disponibles` llega con su **mismo rótulo**, su **mismo `tipoDato`** y colocado por su **`orden` de catálogo** (190), es decir **en medio de los vivos**. `AtributoFicha` **no lleva ninguna señal de retirada** (`clave, rotulo, tipoDato, unidad, valor, moneda, valores`), y el editor no ofrece la clave porque la captura filtra `activo`. Resultado: el bróker ve un atributo que no puede editar y **nadie le explica por qué** | `web/dto/PropiedadUniversalDtos.java:357` (`AtributoFicha`), `service/impl/PropiedadUniversalServiceImpl` (lectura), `soporte/AtributosGobernados.definicionesParaLeer` | **No se implementa.** Añadir `retirado` al DTO es **cambio de contrato** con alcance propio —campo nuevo en el cable, decisión de si el SPA lo pinta y cómo, y si la ficha lo mueve al final o lo deja en su orden—. **Lo decide CONTROL**, no el constructor |
+| **N17** | **`docs/ai/i0-industrializacion-brox.md` es el encargo de I0 y nació dentro de 5A** (creado el 2026-08-25 en el mismo corte, commits `8048006` y `1b1cc0b`). Un encargo de una etapa distinta escrito y versionado dentro de otra | `docs/ai/i0-industrializacion-brox.md` | Es un hecho registrado, no un defecto de 5A. I0 sigue **🟡 EN CURSO** y su propio documento ya declara que las dos avanzan a la vez |
+| **N18** | **`docs/ai/modelo/modelo-universal.js` declara una fracción del catálogo.** Medido el 2026-08-25 contra `controllocal_dev`: el Core tiene **97** claves de sujeto PROPIEDAD (92 atributos activos + 1 retirada + 4 estructurales) y el contrato-dato declara **22** (19 antes del lote de certificación, que añadió las 3 de 5A). El artefacto tampoco conoce el eje **ALT/PUB/OPC** ni el sujeto **ENCARGO** (26 claves más), y `gas` —que en 5A **ganó** la opción `CON_FACTIBILIDAD_APROBADA`— no aparece en él | `docs/ai/modelo/modelo-universal.js` | **La deriva es anterior a 5A**: los Cortes 2, 3 y 4 ampliaron el Core sin pasar por aquí. El lote de certificación alineó **sólo lo que 5A cambió** (la clave retirada y las tres nuevas) por instrucción de alcance estricto. Ponerlo al día entero es trabajo propio, y la pregunta previa —**si este artefacto debe reflejar el catálogo completo o seguir siendo el subconjunto que instancia los ocho casos**— la decide CONTROL |
+| **N19** | **Riesgo residual que la auditoría deja explícito, ya inventariado aquí**: (a) la **doble autoridad de aplicabilidad** —`aplica_todos` + filas por tipo, D-5— **sigue sin gate**, y 5A añadió una clave más que la ejerce (`estado_ocupacion`: los siete tipos con `aplica_todos = false`); (b) **nada compara el checksum de la migración aplicada contra el del classpath** | (a) §2.3 bis · (b) §7.1 | Ninguna de las dos es regresión de 5A y las dos tienen su sección propia. Se repiten aquí para que la certificación de 5A **no se lea como si estuvieran cerradas** |
+
+> **Y una cifra que este lote NO tocó a propósito.** `encargo-corte-5-terreno.md`
+> §3.1 cita «las 322 filas» del legado. Es una **medición fechada dentro de un
+> encargo congelado** —atribuida a la segunda auditoría del 2026-08-25— y
+> reescribirla sería reescribir el encargo. Se deja. Lo mismo con los comentarios
+> de `V84`, que es migración aplicada. Donde la cifra sí se sustituyó por la
+> invariante es en lo **vivo**: `main`, los tests, el gate SQL y este documento.
 
 ### 2.4 Los hechos que faltan de un par deliberado — queda **uno**
 

@@ -78,6 +78,22 @@ const EXPEDIENTE_DE = {
    Cada atributo declara TIPO, UNIDAD y a qué tipos de propiedad aplica; el
    catálogo es por organización pero los de aquí son del sistema y no se
    pueden borrar.
+
+   ESTA LISTA NO ES EL CATÁLOGO ENTERO, y confundirlos ha costado caro. La
+   autoridad del catálogo es `catalogo_atributo` en el Core; esto nació como el
+   subconjunto que los ocho casos del gate necesitan para instanciarse, más lo
+   que después haya hecho falta declarar para no contradecirlo. Medido
+   contra `controllocal_dev` el 2026-08-25: el Core lleva **97** claves de
+   sujeto PROPIEDAD (92 atributos activos + 1 retirada + 4 estructurales) y
+   aquí se declaran **22**. La diferencia NO es deuda de este corte —viene de
+   los Cortes 2, 3 y 4, que ampliaron el Core sin pasar por aquí— y está
+   registrada en `pendientes-brox.md`.
+
+   Lo que sí es obligación de este archivo: **no contradecir al Core**. Una
+   clave declarada aquí tiene que decir lo mismo que dice el catálogo, porque
+   el gate la lee como si fuera el contrato. Por eso `retirado` existe: una
+   clave que el Core retiró no se borra —su valor se sigue leyendo— pero
+   tampoco se sigue anunciando como viva.
    ------------------------------------------------------------------ */
 
 const ATRIBUTOS = [
@@ -111,7 +127,45 @@ const ATRIBUTOS = [
   /* suelo */
   { clave: "zonificacion", tipo: "TEXTO", aplica: ["TERRENO", "LOCAL_COMERCIAL", "ALMACEN", "CASA"], requeridoPara: ["TERRENO"] },
   { clave: "area_terreno", tipo: "DECIMAL", unidad: "m2", aplica: ["TERRENO", "CASA", "ALMACEN"] },
-  { clave: "servicios_disponibles", tipo: "LISTA", aplica: ["TERRENO"] },
+
+  /* servicios del suelo — Corte 5 · 5A (`V84`)
+
+     `servicios_disponibles` era una LISTA **sin una sola opción sembrada**, es
+     decir texto libre disfrazado de vocabulario: «Agua, luz y desagüe» y «agua
+     y desagüe» son la misma fila para cualquier comparador. Y ninguna de las
+     dos dice lo único que hace falta saber en un terreno —si el servicio está
+     CONECTADO o sólo tiene FACTIBILIDAD APROBADA—, así que su legado quedó
+     AMBIGUO y permanece FALTANTE: no se tradujo nada.
+
+     Se queda escrita aquí, retirada, y no se borra: sus valores se conservan y
+     la ficha los sigue leyendo con su rótulo y su tipo. Lo que se cerró es la
+     escritura. */
+  { clave: "servicios_disponibles", tipo: "LISTA", aplica: ["TERRENO"],
+    retirado: true, retiradaPor: "V84",
+    sustituidaPor: ["agua_desague", "energia_electrica"],
+    nota: "activo = false en el Core: no se pregunta ni se admite valor nuevo; se sigue leyendo" },
+
+  { clave: "agua_desague", tipo: "LISTA", aplica: ["TERRENO", "ALMACEN"],
+    exigencia: { TERRENO: "PUB", ALMACEN: "OPC" },
+    opciones: ["CONECTADO", "CON_FACTIBILIDAD_APROBADA", "SIN_SERVICIO"] },
+
+  { clave: "energia_electrica", tipo: "LISTA", aplica: ["TERRENO"],
+    exigencia: { TERRENO: "PUB" },
+    opciones: ["CONECTADO", "CON_FACTIBILIDAD_APROBADA", "SIN_SERVICIO"] },
+
+  /* ocupación — Corte 5 · 5A (`V84`), por D-C5-1 y D-1 del titular
+
+     Aplica a LOS SIETE tipos y aun así `aplica_todos = false` en el Core, con
+     una fila explícita por tipo. Por eso se escribe la lista y no "TODOS": son
+     dos cosas distintas en el esquema, y esa doble autoridad de aplicabilidad
+     (D-5) sigue sin gate — está registrada en `pendientes-brox.md`. */
+  { clave: "estado_ocupacion", tipo: "LISTA",
+    aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO"],
+    aplicaTodos: false,
+    exigencia: { LOCAL_COMERCIAL: "OPC", OFICINA: "OPC", DEPARTAMENTO: "OPC", CASA: "OPC",
+                 TERRENO: "OPC", ALMACEN: "OPC", OTRO: "OPC" },
+    opciones: ["DESOCUPADO", "OCUPADO_POR_EL_PROPIETARIO", "OCUPADO_POR_INQUILINO",
+               "OCUPADO_POR_TERCEROS_SIN_TITULO"] },
 ];
 
 /* ------------------------------------------------------------------

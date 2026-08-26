@@ -376,11 +376,11 @@ class ConservacionDeLaEdicionIntegrationTest {
                         // aqui iba `servicios_disponibles` con el texto libre
                         // «Agua, luz y desague»: la clave era LISTA sin una sola
                         // opcion, asi que aceptaba cualquier cadena, y este
-                        // fixture era una de las dos que escribian ese legado --
-                        // 322 filas en `controllocal_repositorios` el 2026-08-25.
+                        // fixture era una de las dos que escribian ese legado que
+                        // quedo en `controllocal_repositorios`.
                         //
                         // AL REESCRIBIRLA, ESTE FIXTURE DEJO DE PRODUCIR LEGADO, y
-                        // durante unas horas NADIE lo producia: las 322 filas eran
+                        // durante unas horas NADIE lo producia: esas filas eran
                         // residuo, sobre una base nueva el universo era cero y la
                         // comprobacion 91 del gate salia verde sin mirar nada. Lo
                         // midio la auditoria del 2026-08-25. El productor esta

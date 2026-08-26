@@ -692,8 +692,13 @@ public class AtributosGobernados {
      *   LECTURA (la ficha)       -> esto: tambien lo RETIRADO
      * </pre>
      *
-     * <p>{@code V84} retira {@code servicios_disponibles} conservando sus 322
-     * valores, y hasta 5A la ficha los mostraba con <b>la clave desnuda</b>
+     * <p>{@code V84} retira {@code servicios_disponibles} <b>conservando sus
+     * valores</b> —cuantos haya: en {@code controllocal_dev} son cero y en la
+     * base de pruebas son los que dejaron las corridas anteriores. El tamano se
+     * escribe como INVARIANTE y jamas como cifra, porque una cifra caduca en
+     * cuanto corre una suite; quien lo quiera medido lo lee en la columna
+     * {@code nota} del gate («legado realmente presente en esta base: N
+     * filas»)—, y hasta 5A la ficha los mostraba con <b>la clave desnuda</b>
      * —{@code rotulo = "servicios_disponibles"}, {@code tipoDato = null},
      * colocados al final de la lista— porque la definicion ya no llegaba. El
      * valor se conservaba y la <b>lectura</b> se degradaba: exactamente el

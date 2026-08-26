@@ -285,7 +285,24 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 >
 > Se ejecuta en la **subtanda 5A** del Corte 5 (`V84`).
 
-**Totales:** ~20 correcciones sin clave nueva, **~85 claves nuevas de PROPIEDAD**, de las cuales **4 en ALT** (`tipo_acceso` en L, `condicion_terreno` en T, `metraje_construido` en A vía §3.1, `area_terreno` en C vía §3.1) más las tres elevaciones de claves existentes (`piso` en D/O, `interiorUnidad` en D). El resto reparte entre PUB y OPC.
+**Totales:** ~20 correcciones sin clave nueva, **~85 claves nuevas de PROPIEDAD**, de las cuales hoy queda **1 en ALT** (`area_terreno` en C, §3.1) más las tres elevaciones de claves existentes (`piso` en D/O, `interiorUnidad` en D). El resto reparte entre PUB y OPC.
+
+> **Este total decía «4 en ALT» y contradecía a sus propias filas** — corregido
+> el **2026-08-25**. Las tres que se caen no se borran: se nombran con lo que las
+> derogó, porque el argumento de cada celda sigue sosteniendo **que la clave debe
+> existir**, y lo derogado es sólo su eje de exigencia.
+>
+> | clave | decía | dice su propia fila | quién lo derogó |
+> |---|---|---|---|
+> | `tipo_acceso` en **L** | ALT | **PUB** (§3.7, fila `tipo_acceso`) | `V82`, decisión del titular el **2026-08-24**, el mismo día que `V81` la sembró `ALT`: `ALT` bloquea **también el alta** y un local se tiene que poder registrar sin haberlo visitado. Sigue impidiendo publicar |
+> | `condicion_terreno` en **T** | ALT | **PUB** (§3.8, fila `condicion_terreno`) | **D-3 del titular, 2026-08-25** (`encargo-corte-5-terreno.md` §2): BROX debe poder registrar un terreno aunque su condición no se conozca todavía. Va en la subtanda **5B** |
+> | `metraje_construido` en **A** | ALT | **PUB en A y C** (§3.1, fila `metraje_construido`) | nadie: **nunca fue ALT**. El total lo contaba mal ya al escribirse — §3.1 dice PUB desde la primera versión |
+>
+> Medido contra `controllocal_dev` el 2026-08-25, el catálogo **aplicado** lleva
+> `ALT` sólo donde ya lo tenía antes de esta auditoría (`metraje_total` en los
+> siete, `dormitorios` en C y D, `zonificacion` en T): **ninguna de las claves
+> nuevas de este documento ha entrado `ALT`**. `area_terreno` en C es propuesta
+> de 5B, todavía no aplicada.
 
 ---
 

@@ -1,6 +1,23 @@
 # ============================================================
 # Secrets and local configuration
 # ============================================================
+# IDE
+.idea/
+
+# Configuración local de agentes
+.claude/
+AGENTS.md
+CLAUDE.md
+
+# Documentación interna / académica
+docs/ai/
+docs/1INF50/
+
+# Temporales
+tmp/
+
+# Logs de verificaciones
+backend-spring/verificacion/*.log
 
 .env
 .env.*

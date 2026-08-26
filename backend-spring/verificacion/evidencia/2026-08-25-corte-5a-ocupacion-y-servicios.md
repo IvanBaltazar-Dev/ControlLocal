@@ -180,10 +180,15 @@ clave de prueba: la real ya no admite escrituras —esa es la otra mitad del
 contrato— y un caso que dependiera del legado que traiga la base sería verde y
 vacío en una base limpia.
 
-**Lo que sí se cierra es la ESCRITURA.** `exigir_atributo_gobernado` exige
-`activo = true`, así que la clave retirada no admite valores nuevos. Es lo correcto
-—un concepto retirado no sigue capturando— y queda dicho para que no se descubra
-como sorpresa.
+**Lo que sí se cierra es la ESCRITURA**, y se cierra **dos veces**. Por la API la
+cierra el Core, en Java: `AtributosGobernados.definicionDe` →
+`CatalogoAtributoRepository.porClave`, cuyo JPQL lleva `and c.activo = true`, y de
+ahí sale un **400** con el motivo escrito. `exigir_atributo_gobernado` exige
+`activo = true` también, pero es la **red de atrás**, para quien entre por SQL
+directo. Es lo correcto —un concepto retirado no sigue capturando— y queda dicho
+para que no se descubra como sorpresa. **Cuál de las dos capas actúa se midió por
+HTTP el 2026-08-26** (§15): antes se atribuía sólo al trigger, y por la API el
+trigger no llega a ejecutarse.
 
 ---
 
@@ -730,7 +735,7 @@ cosmético: el SPA decide con él si un booleano se dice «Sí/No» o «true»
 | superficie | antes | ahora |
 |---|---|---|
 | **CAPTURA** — alta y editor (`aplicablesA`) | filtra `activo` | **igual**: una clave retirada no se pregunta |
-| **ESCRITURA** — `exigir_atributo_gobernado` | exige `activo` | **igual**: una clave retirada no admite valores nuevos |
+| **ESCRITURA** — `porClave` (Java, la que actúa por la API) y `exigir_atributo_gobernado` (la red de atrás, para SQL directo) | las dos exigen `activo` | **igual**: una clave retirada no admite valores nuevos — **400** por la API, medido en §15 |
 | **LECTURA** — la ficha | perdía rótulo, tipo, unidad y orden | los resuelve **aunque la clave esté inactiva** |
 
 - `CatalogoAtributoRepository.paraLeer(org, claves)` — **la única** consulta del
@@ -752,10 +757,16 @@ motor de captura **deja de ofrecerla**. Y sobre la clave **real**, en
 `"Servicios disponibles"` / `LISTA` con `activo = false` — un caso que **no
 depende** de que la base traiga legado, porque `dev` no tiene ninguno.
 
-**Lo que NO entra**, por decisión de CONTROL: el `PUT` de una clave retirada muere
-en el trigger y `ManejadorErroresApi` lo mapea a **409 «duplicado»**, que no es lo
-que pasó. Es preexistente y toca el mapeo global de errores. Anotado como deuda
-con su ruta en `pendientes-brox.md` §2.3 ter.
+**Lo que NO entra**, por decisión de CONTROL: el mapeo global de errores devuelve
+**409 «duplicado»** a rechazos que no son duplicados. Es preexistente y toca el
+mapeo global de errores. Anotado como deuda con su ruta en `pendientes-brox.md`
+§2.3 ter.
+
+> **Este párrafo decía «el `PUT` de una clave retirada muere en el trigger», y es
+> falso.** Medido por HTTP el 2026-08-26 (§15): por la API, una clave retirada
+> sale con **400** desde Java y su motivo escrito; el 409 «duplicado» lo produce
+> un **valor fuera de vocabulario** en una LISTA gobernada viva. La deuda es la
+> misma, el ejemplo era el otro.
 
 ### 12.9 H6 · alcance — lo que se queda y lo que se revierte
 
@@ -923,8 +934,15 @@ CONTEXT:  PL/pgSQL function exigir_atributo_gobernado() line 16 at RAISE
 Una clave **retirada** no se encuentra —la consulta del trigger lleva
 `AND c.activo = true`— y sale por `RAISE … USING ERRCODE = 'foreign_key_violation'`
 → **23503**. `23514` es lo que devuelven las otras ramas del mismo trigger (valor
-fuera de vocabulario, columna equivocada). El desenlace —409 «duplicado»— es el
-mismo por las dos vías y sigue siendo correcto. Corregido en `pendientes-brox.md`.
+fuera de vocabulario, columna equivocada). Corregido en `pendientes-brox.md`.
+
+> **La frase de cierre de esta corrección decía «el desenlace —409 «duplicado»—
+> es el mismo por las dos vías y sigue siendo correcto», y era falsa.** Se dio
+> por supuesta: se midió el SQLSTATE en `pg_proc` y no se recorrió el camino
+> hasta el cliente. Medido por HTTP el **2026-08-26** (§15), una clave retirada
+> **ni siquiera llega al trigger** por la API: sale con **400**. Los `23503` de
+> este bloque siguen siendo ciertos para quien entra por **SQL directo** —que es
+> lo que hace `sembrarLegadoAmbiguo`, y por eso tiene que reactivar la clave—.
 
 ### 13.5 N6 · la justificación de H7 describía un estado que la base prohíbe
 
@@ -1179,3 +1197,120 @@ En `pendientes-brox.md` §2.3 quinquies, junto a `N8`:
 
 **No se ejecuta el reactor completo ni `Verificar-Cierre.ps1`**: la corrida larga
 la ordena CONTROL. El corte **no** se declara cerrado y **no** se abre 5B.
+
+---
+
+## 15. La medición que faltaba: qué devuelve la API de verdad (2026-08-26)
+
+**Por qué existe esta sección.** La deuda §2.3 ter de `pendientes-brox.md` se
+escribió, se corrigió dos veces y se citó en dos sitios más **sin que nadie
+hiciera nunca la petición**. Se dedujo del cuerpo del trigger y del handler, y la
+deducción saltó una capa: la que decide si la escritura llega al trigger. La
+cuarta auditoría lo señaló y esta tanda lo midió.
+
+**Cómo se midió.** API en Docker (`controllocal-api-v2`, base `controllocal_dev`),
+`POST /auth/login` con el agente de siembra `vmora`, y tres `PUT /propiedades/1`
+—propiedad de tipo `L`, existente, no creada para esto—: el caso de la clave
+retirada, el del valor fuera de vocabulario y un control con una clave que nunca
+existió. Los tres son **rechazos**: no escriben. Salida literal:
+
+```
+=== CASO A: clave RETIRADA (servicios_disponibles) por PUT /propiedades/1 ===
+HTTP 400
+{"error":"El atributo \"servicios_disponibles\" no esta en el catalogo. Una clave existe antes que su valor: si no, dos propiedades dicen lo mismo con nombres distintos y dejan de poder compararse."}
+
+=== CASO B: valor FUERA DE VOCABULARIO en LISTA gobernada viva (estado_ocupacion) ===
+HTTP 409
+{"error":"Ya existe un registro con esos datos: un dato único está duplicado."}
+
+=== CONTROL: clave inexistente (jamas estuvo en el catalogo) ===
+HTTP 400
+{"error":"El atributo \"clave_que_no_existe_jamas\" no esta en el catalogo. Una clave existe antes que su valor: si no, dos propiedades dicen lo mismo con nombres distintos y dejan de poder compararse."}
+```
+
+**Lo que dice esa salida.** Una clave **retirada** y una clave **que nunca
+existió** son indistinguibles por el cable —el mismo 400, el mismo texto—, porque
+las dos mueren en el mismo sitio: `AtributosGobernados.definicionDe` →
+`CatalogoAtributoRepository.porClave`, cuyo JPQL lleva `and c.activo = true`.
+`ManejadorErroresApi.java:45-48` mapea `ReglaNegocioException` a **400**. El
+trigger no se llega a ejecutar. El **409 «duplicado»** —la deuda de verdad— lo
+produce un valor fuera del vocabulario de una LISTA viva, que pasa Java
+(`AtributosGobernados.convertir` acota tipo, rango y longitud, nunca pertenencia)
+y muere en `exigir_atributo_gobernado` con `23514` →
+`DataIntegrityViolationException` → `ManejadorErroresApi.unicidadViolada`
+(`:106-110`, con `mensajeDuplicado` en `:152-164`, que no encuentra
+«documento», «correo» ni «nombre» en el mensaje del trigger y cae al genérico).
+
+**Simetría ALTA ↔ EDICIÓN: leída, no disparada.** Lo de arriba es el `PUT`. En el
+alta ocurre lo mismo por construcción —las **cuatro** puertas de escritura de
+`AtributosGobernados` empiezan por `definicionDe` o por `porClave`:
+`escribirAlAlta:393`, `aplicarEstructuralesAlAlta:360`, `escribirEnEdicion:434` y
+`retirar:539`—, pero **no se lanzó ningún `POST /propiedades`**: habría creado una
+propiedad en `controllocal_dev` y toda esta medición se hizo **sin escribir nada**.
+Se dice para que no se lea como medido lo que está leído.
+
+**Que el rechazo no escribe, y que el SELECT sí se emite.** Con
+`pg_stat_user_tables` alrededor del `PUT` del caso A:
+
+```
+=== ANTES  (relname|seq_scan|idx_scan|seq_tup_read) ===
+atributo_propiedad|950|243|71179
+catalogo_atributo|5316|2657|553913
+
+PUT clave retirada -> HTTP 400
+
+=== DESPUES ===
+atributo_propiedad|950|243|71179
+catalogo_atributo|5317|2657|554036
+```
+
+`catalogo_atributo` sube **un** `seq_scan` y `+123` tuplas leídas —la tabla
+entera, que hoy son 123 filas—, y `atributo_propiedad` **no se mueve**. Es la
+medida que corrige el «antes de emitir SQL» del javadoc de
+`ConversionDeValores`: SQL **se emite** (no hay caché de segundo nivel: 0
+apariciones de `Cacheable` / `use_second_level_cache` en `backend-spring`, barrido
+con control positivo); lo que no se intenta es la **escritura**.
+
+**Conservación de `controllocal_dev`**, contada antes y después de toda la
+medición:
+
+| tabla | antes | después |
+|---|---|---|
+| `propiedad` | 26 | 26 |
+| `atributo_propiedad` | 76 | 76 |
+| `atributo_propiedad_opcion` | 0 | 0 |
+| `atributo_encargo` | 0 | 0 |
+| `catalogo_atributo` (activas / total) | 122 / 123 | 122 / 123 |
+| `rastro_valor_gobernado` | 12 | 12 |
+| `rastro_valor_opcion` | 0 | 0 |
+| `historial_estado` | 151 | 151 |
+| `evento_seguridad` | 469 | **472** |
+
+Las tres filas nuevas de `evento_seguridad` son los `LOGIN_OK` de las tres sesiones
+que abrió la medición —una por cada script: sondeo, desenlaces y contadores—
+(ids 496, 497 y 498, `tipo = LOGIN_OK`, `resultado = OK`). El
+registro de seguridad es *append-only* por diseño y esto es exactamente lo que
+tiene que anotar. Los atributos de la propiedad 1 quedaron idénticos: 8 filas, con
+`rubro_permitido = "Restaurante / cafeteria"` y `zonificacion = "CZ"`.
+
+**Qué frases corrige esta medición** — todas de texto, ninguna de comportamiento:
+
+| dónde | decía | dice ahora |
+|---|---|---|
+| `ConversionDeValores.java` (javadoc del orden de capas) | «en Java, **antes de emitir SQL**» | «en Java, **sin llegar a intentar la escritura**», con el `seq_scan` que lo prueba |
+| `ConversionDeValores.java` (javadoc de `exigirDelVocabulario`) | «y **antes de abrir la transaccion**» | falso y dicho: los dos caminos cuelgan de `registrar` / `editar`, las dos `@Transactional` |
+| `ConversionDeValores.java` (javadoc **de la clase**, `:29`) | la misma frase, y **nadie la había señalado** — la encontró el autoataque de esta tanda | falso y dicho: **todos** los llamadores están dentro de un método ya transaccional (`registrar`, `editar`, `MotorDeCapturaImpl.avanzar`) |
+| `pendientes-brox.md` §2.3 ter (título y primer bloque) | «el rechazo de una **clave retirada** llega al cliente como duplicado» | «un **valor fuera de vocabulario** llega al cliente como duplicado», con las dos salidas literales |
+| esta evidencia §12.8 y §13.4 | «el `PUT` de una clave retirada muere en el trigger» · «el desenlace es el mismo por las dos vías» | los dos declarados falsos, con el desenlace real |
+| esta evidencia §3 y la tabla de superficies de §12.8 | la ESCRITURA la cerraba sólo el trigger | la cierran dos capas, y por la API actúa la de Java |
+| `OcupacionYServiciosIntegrationTest:442` (comentario) | «no admite valores nuevos: `exigir_atributo_gobernado` exige `activo = true`» | la capa real, y que el `assertThrows` es ancho a propósito |
+
+**Lo que NO se hizo, a propósito**: no se añadió ninguna prueba ni ningún gate que
+fije **400 frente a 409**, ni se tocó el `assertThrows(Exception.class, …)` del
+caso de conservación. El script de medición vivió fuera del repositorio y **no se
+commitea**. Lo único que hoy fija un 400 en esta familia es
+`e2e-editor-universal.ps1:431`, y lo hace sobre `zzz_clave_inexistente` —una clave
+que nunca existió—, no sobre una retirada ni sobre un valor fuera de vocabulario;
+barrido con control positivo, **ninguna prueba Java afirma un código HTTP**. Que
+esa distinción merezca un gate permanente es **alcance propio** y lo decide
+CONTROL; queda anotado en `pendientes-brox.md` §2.3 ter.

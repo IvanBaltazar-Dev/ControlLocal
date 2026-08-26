@@ -439,8 +439,21 @@ class OcupacionYServiciosIntegrationTest {
                         .noneMatch(p -> "servicios_disponibles".equals(p.clave())),
                 "una clave retirada no se sigue preguntando");
 
-        // Y no admite valores nuevos: `exigir_atributo_gobernado` exige
-        // `activo = true`. Un concepto retirado no sigue capturando.
+        // Y no admite valores nuevos. Un concepto retirado no sigue capturando.
+        //
+        // OJO CON LA CAPA: por esta via -- `PropiedadUniversalService.editar`, la
+        // misma que usa el PUT -- quien rechaza es el CORE en Java:
+        // `AtributosGobernados.definicionDe` -> `CatalogoAtributoRepository.porClave`,
+        // cuyo JPQL lleva `and c.activo = true`, y sale una `ReglaNegocioException`
+        // que la API mapea a 400. `exigir_atributo_gobernado` exige `activo = true`
+        // tambien, pero es la red de atras: solo actua contra SQL directo, y por
+        // esta llamada NO llega a ejecutarse. Este comentario decia lo contrario y
+        // se corrigio el 2026-08-26 tras medirlo por HTTP (evidencia de 5A, §15).
+        //
+        // El `assertThrows(Exception.class, ...)` es deliberadamente ancho: fija que
+        // el rechazo EXISTE y que no deja rastro, no en que capa ocurre ni con que
+        // codigo llega. Que eso se fije es deuda registrada en
+        // `pendientes-brox.md` §2.3 ter, y su alcance lo decide CONTROL.
         long id = registrarTerreno();
         assertThrows(Exception.class,
                 () -> editar(id, new ValorAtributo("servicios_disponibles", "agua y luz")));

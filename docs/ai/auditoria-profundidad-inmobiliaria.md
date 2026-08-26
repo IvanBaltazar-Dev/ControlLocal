@@ -93,9 +93,26 @@ Notación: **aplica_a** y **requerido_para** con los códigos de una letra. Nive
 > 400 en el momento de anunciar, sobre toda propiedad que no tenga el dato. Las
 > columnas «nivel» de aquí abajo son **propuestas**, no estado.
 
-### 3.1 Correcciones sobre las 19 claves que YA existen (cero claves nuevas)
+### 3.1 Correcciones sobre lo que YA existe (cero claves nuevas)
 
 Esto es lo más barato del plan: filas en `catalogo_atributo_tipo`, cambios de `tipo_dato` y de rótulo.
+
+> **El título decía «las 19 claves» sobre una tabla de 20 filas.** Contadas el
+> **2026-08-26** contra `controllocal_dev`, las 20 filas son **18 de las 19 claves
+> del catálogo original** (ids 1-19; la que no aparece es `carga_electrica_kw`,
+> que este plan no corrige) **más 2 campos ESTRUCTURAL que no son claves de
+> catálogo**: `interiorUnidad` y `nombreEdificioGaleria` no existen en
+> `catalogo_atributo` —ni en camelCase ni en `snake_case`— y son columnas de
+> `propiedad` (`interior_unidad`, `nombre_edificio_galeria`). El propio documento
+> ya lo dice más abajo, dentro del **Corte 1**: la fila «`interiorUnidad` /
+> `nombreEdificioGaleria` habilitados para A» de «Lo que V77 SÍ hace» lo declara
+> —«**no son claves de catálogo**»— y la fila «Exigencia declarada de
+> `interiorUnidad` / `nombreEdificioGaleria`» de «Lo que V77 NO hace» añade que su
+> exigencia **no tiene dónde escribirse**. Las claves con `destino = ESTRUCTURAL` del
+> catálogo son **cuatro** —`metraje_total`, `oficina_registral`,
+> `partida_registral`, `piso`— y sólo dos de ellas, `metraje_total` y `piso`,
+> aparecen en esta tabla. **Se corrige el título, no la tabla**: las 20 filas y su
+> contenido se quedan como estaban.
 
 | clave | qué cambia | aplica_a resultante | exigencia |
 |---|---|---|---|
@@ -285,7 +302,7 @@ y su aplicabilidad sí depende del tipo, así que son atributos gobernados.
 >
 > Se ejecuta en la **subtanda 5A** del Corte 5 (`V84`).
 
-**Totales:** ~20 correcciones sin clave nueva y **~85 claves nuevas de PROPIEDAD**, de las cuales **ninguna queda en ALT**: las dos que lo eran —`tipo_acceso` en L y `condicion_terreno` en T— están derogadas en su eje de exigencia (tabla de abajo), y todas las demás reparten entre PUB y OPC. Toda la exigencia `ALT` que este documento propone cae sobre **claves que ya existían** (§3.1, «cero claves nuevas»): `area_terreno` en C, `piso` en D y O, e `interiorUnidad` en D.
+**Totales:** ~20 correcciones sin clave nueva y **~85 claves nuevas de PROPIEDAD**, de las cuales **ninguna queda en ALT**: las dos que lo eran —`tipo_acceso` en L y `condicion_terreno` en T— están derogadas en su eje de exigencia (tabla de abajo), y todas las demás reparten entre PUB y OPC. Toda la exigencia `ALT` que este documento propone cae sobre **lo que ya existía** (§3.1, «cero claves nuevas»): dos **claves** —`area_terreno` en C y `piso` en D y O— y un **campo ESTRUCTURAL sin clave de catálogo**, `interiorUnidad` en D, cuya exigencia declarada **no tiene hoy dónde escribirse** (medido el 2026-08-26; lo dice la fila «Exigencia declarada de `interiorUnidad` / `nombreEdificioGaleria`» del Corte 1).
 
 > **Este total ha estado mal dos veces, y las dos por contar sobre sus propias
 > filas sin recorrerlas.** Decía «4 en ALT», se corrigió a «1 en ALT

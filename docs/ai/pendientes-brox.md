@@ -238,34 +238,64 @@ desaparece y la aplicabilidad es siempre explícita, o el booleano pasa a ser la
 ambos. Las tres son cambios de contrato del Core, y por eso no caben dentro de un
 corte de profundidad.
 
-### 2.3 ter DEUDA · el rechazo de una clave retirada llega al cliente como «duplicado»
+### 2.3 ter DEUDA · un valor fuera de vocabulario llega al cliente como «duplicado»
 
 **Anotada el 2026-08-25**, encontrada auditando la conservación de 5A. **No entra
 en 5A**: es preexistente y no se arregla en el sitio, sino en el mapeo global de
 errores.
 
-Un `PUT /propiedades/{id}` con una clave **retirada** muere en
-`exigir_atributo_gobernado` con **`SQLSTATE 23503`** (`foreign_key_violation`), no
-`23514`. Corregido el 2026-08-25 tras la segunda auditoría (N5) y **medido** en
-`pg_proc`: una clave retirada no se encuentra —la consulta del trigger lleva
-`AND c.activo = true`—, así que sale por la rama `IF NOT FOUND` con
-`RAISE … USING ERRCODE = 'foreign_key_violation'`. Un valor fuera de vocabulario u
-otra violación del mismo trigger sí salen con `23514`. Medido contra
-`controllocal_dev`:
+**El caso, medido por HTTP el 2026-08-26** contra la API en Docker (agente
+`vmora`, propiedad `1`, de tipo `L`): un valor que **no está en el vocabulario**
+de una LISTA gobernada viva **pasa la capa Java** —`AtributosGobernados.convertir`
+acota tipo, rango y longitud y **nunca** pertenencia, y `exigirDelVocabulario`
+sólo lo llama el camino ESTRUCTURAL— y muere en `exigir_atributo_gobernado` con
+`SQLSTATE 23514`. Hibernate lo envuelve en `DataIntegrityViolationException`,
+`ManejadorErroresApi.unicidadViolada` lo traduce, y al agente le llega esto:
 
 ```
-ERROR:  23503: El atributo "servicios_disponibles" no esta en el catalogo
-CONTEXT:  PL/pgSQL function exigir_atributo_gobernado() line 16 at RAISE
+PUT /propiedades/1
+{"atributos":[{"clave":"estado_ocupacion","valor":"VALOR_QUE_NO_EXISTE"}]}
+
+HTTP 409
+{"error":"Ya existe un registro con esos datos: un dato único está duplicado."}
 ```
 
-El desenlace es el mismo por las dos ramas, y es el que importa aquí:
-Hibernate lo envuelve en `DataIntegrityViolationException` y
-`ManejadorErroresApi.unicidadViolada` lo traduce a **409 «Ya existe un registro
-con esos datos: un dato único está duplicado.»**
+Eso no es lo que pasó. No hay nada duplicado: hay un valor que no está en el
+vocabulario de su clave. El cliente recibe un diagnóstico **falso**, y el agente
+que lo lee corrige lo que no está roto.
 
-Eso no es lo que pasó. No hay nada duplicado: hay una clave que ya no se captura,
-o un valor fuera de vocabulario. El cliente recibe un diagnóstico **falso**, y el
-agente que lo lee corrige lo que no está roto.
+> **El ejemplo titular con el que nació esta deuda era el equivocado, y se
+> conserva dicho.** La sección se llamaba «el rechazo de una **clave retirada**
+> llega al cliente como duplicado» y se retocó una vez sin salir del error
+> (N5: `23514` → `23503`). Medido el **2026-08-26 por el camino real de la API**
+> —el `PUT` de edición—, una clave retirada **no llega al trigger**: sale una
+> `ReglaNegocioException` de `AtributosGobernados.definicionDe` →
+> `CatalogoAtributoRepository.porClave` (cuyo JPQL lleva `and c.activo = true`),
+> que `ManejadorErroresApi` mapea a **400 BAD_REQUEST**
+> (`ManejadorErroresApi.java:45-48`):
+>
+> ```
+> PUT /propiedades/1
+> {"atributos":[{"clave":"servicios_disponibles","valor":"AGUA"}]}
+>
+> HTTP 400
+> {"error":"El atributo \"servicios_disponibles\" no esta en el catalogo. Una clave
+>  existe antes que su valor: si no, dos propiedades dicen lo mismo con nombres
+>  distintos y dejan de poder compararse."}
+> ```
+>
+> El `23503` medido en `pg_proc` **es cierto**, pero describe la **red de atrás**:
+> a quien entra por SQL directo, no a quien entra por la API. La deuda no
+> desaparece —el 409 falso existe y se acaba de reproducir—; lo que cambia es el
+> caso que la nombra.
+>
+> **Simetría alta ↔ edición, leída y no medida por HTTP**: lo anterior se midió
+> sobre el `PUT`. En el alta pasa lo mismo por construcción y no por casualidad —
+> las **cuatro** puertas de escritura de `AtributosGobernados` empiezan por
+> `definicionDe` o por `porClave`: `escribirAlAlta` (`:393`),
+> `aplicarEstructuralesAlAlta` (`:360`), `escribirEnEdicion` (`:434`) y `retirar`
+> (`:539`)—, pero **no se disparó un `POST /propiedades`**: habría creado una
+> propiedad en `controllocal_dev`, y esta medición se hizo sin escribir nada.
 
 - **Ruta**: `backend-spring/controllocal-web/src/main/java/com/controllocal/web/http/ManejadorErroresApi.java`
   (líneas 102-110 y `mensajeDuplicado`, 152-164).
@@ -275,10 +305,26 @@ agente que lo lee corrige lo que no está roto.
   trigger» cambia el código de estado y el texto de **todos** los recursos, y hay
   contratos y pruebas colgando de ellos. Es un corte propio, con su medición de
   qué endpoints devuelven hoy 409 por esta vía.
-- **Lo que sí está probado en 5A**: que el rechazo **existe** —una clave retirada
-  no admite valores nuevos y el valor no se escribe—, en
+- **Lo que sí está probado en 5A**, y lo que no: que el rechazo de una clave
+  retirada **existe** —no admite valores nuevos y el valor no se escribe—, en
   `OcupacionYServiciosIntegrationTest.serviciosDisponiblesQuedoRetiradaYNoBorrada`.
-  Lo que falta es que el cliente sepa **por qué**.
+  Ese caso rechaza con un `assertThrows(Exception.class, …)` **deliberadamente
+  ancho**: fija que el rechazo ocurre, **no** en qué capa ni con qué código llega
+  al cliente. Barrido el 2026-08-26 con control positivo: **ninguna prueba Java
+  afirma un código HTTP** (0 apariciones de `isBadRequest` / `isConflict` /
+  `HttpStatus.BAD_REQUEST` / `HttpStatus.CONFLICT` en
+  `controllocal-app/src/test`, mientras `assertThrows` sale en cinco ficheros), y
+  lo único que fija un 400 sobre esta familia es
+  `e2e-editor-universal.ps1:431` — pero sobre `zzz_clave_inexistente`, una clave
+  que **nunca existió**, no sobre una **retirada** ni sobre un valor **fuera de
+  vocabulario**. **Los dos casos de esta deuda están sin fijar.** Se anota aquí,
+  no se implementa: escribir ese gate es alcance propio y lo decide CONTROL.
+- **Cómo reproducirlo**, sin ensuciar nada: los dos `PUT` de arriba contra
+  `controllocal-api-v2`. Los dos son rechazos, así que **no escriben**; medido
+  antes y después el 2026-08-26, `propiedad` 26, `atributo_propiedad` 76,
+  `atributo_propiedad_opcion` 0, `rastro_valor_gobernado` 12 y `catalogo_atributo`
+  122 activas / 123 totales, iguales. Lo único que crece es `evento_seguridad`,
+  con el `LOGIN_OK` de cada sesión.
 
 ### 2.3 quater DEUDAS que dejó la segunda auditoría de 5A (2026-08-25)
 
@@ -330,7 +376,7 @@ tampoco se corrigen aquí, y por la misma razón —alcance propio.
 | **N17** | **`docs/ai/i0-industrializacion-brox.md` es el encargo de I0 y nació dentro de 5A** (creado el 2026-08-25 en el mismo corte, commits `8048006` y `1b1cc0b`). Un encargo de una etapa distinta escrito y versionado dentro de otra | `docs/ai/i0-industrializacion-brox.md` | Es un hecho registrado, no un defecto de 5A. I0 sigue **🟡 EN CURSO** y su propio documento ya declara que las dos avanzan a la vez |
 | **N18** | **`docs/ai/modelo/modelo-universal.js` declara una fracción del catálogo.** Medido el 2026-08-25 contra `controllocal_dev`: el Core tiene **97** claves de sujeto PROPIEDAD (92 atributos activos + 1 retirada + 4 estructurales) y el contrato-dato declara **22** (19 antes del lote de certificación, que añadió las 3 de 5A). El artefacto tampoco conoce el eje **ALT/PUB/OPC** ni el sujeto **ENCARGO** (26 claves más), y `gas` —que en 5A **ganó** la opción `CON_FACTIBILIDAD_APROBADA`— no aparece en él | `docs/ai/modelo/modelo-universal.js` | **La deriva es anterior a 5A**: los Cortes 2, 3 y 4 ampliaron el Core sin pasar por aquí. El lote de certificación alineó **sólo lo que 5A cambió** (la clave retirada y las tres nuevas) por instrucción de alcance estricto. Ponerlo al día entero es trabajo propio, y la pregunta previa —**si este artefacto debe reflejar el catálogo completo o seguir siendo el subconjunto que instancia los ocho casos**— la decide CONTROL |
 | **N19** | **Riesgo residual que la auditoría deja explícito, ya inventariado aquí**: (a) la **doble autoridad de aplicabilidad** —`aplica_todos` + filas por tipo, D-5— **sigue sin gate**, y 5A añadió una clave más que la ejerce (`estado_ocupacion`: los siete tipos con `aplica_todos = false`); (b) **nada compara el checksum de la migración aplicada contra el del classpath** | (a) §2.3 bis · (b) §7.1 | Ninguna de las dos es regresión de 5A y las dos tienen su sección propia. Se repiten aquí para que la certificación de 5A **no se lea como si estuvieran cerradas** |
-| **N20** | **Los campos nuevos del contrato-dato no tienen gate.** El lote de certificación añadió a `modelo-universal.js` los campos `retirado`, `retiradaPor`, `sustituidaPor` (y usa `exigencia`, `opciones`, `aplicaTodos`), y **`gate-modelo-universal.js` no menciona ninguno**: medido el 2026-08-25, 0 apariciones de los seis en el gate —barrido con control positivo, `clave` da 7 en ese mismo fichero—. El único consumidor de alguno es `motor-captura.js:82` (`filter((a) => !a.retirado)`); las dos apariciones de `opciones` en el motor (`:54`, `:62`) son sus propias listas de paso, no el campo del catálogo. Hoy los tres campos nuevos son **exactos** contra `catalogo_atributo` —verificados uno a uno—, pero son **prosa inerte** dentro del fichero cuyo propósito declarado es «el contrato como dato ejecutable», y nada los compara con la base. Es el mismo mecanismo que dejó `servicios_disponibles` declarada viva | `docs/ai/modelo/gate-modelo-universal.js`, `docs/ai/modelo/modelo-universal.js` | **Distinto de N18**: aquélla es la **deriva** de contenido (97 claves en el Core, 22 declaradas); ésta es la **ausencia de gate** sobre los campos nuevos. Escribir esa comprobación exige antes decidir contra qué compara —el catálogo completo o el subconjunto—, que es justo la pregunta que N18 deja en CONTROL |
+| **N20** | **Los campos nuevos del contrato-dato no tienen gate.** El lote de certificación añadió a `modelo-universal.js` los campos `retirado`, `retiradaPor`, `sustituidaPor` (y usa `exigencia`, `opciones`, `aplicaTodos`), y **`gate-modelo-universal.js` no menciona ninguno**: medido el 2026-08-25, 0 apariciones de los seis en el gate —barrido con control positivo, `clave` da 7 en ese mismo fichero—. El único consumidor de alguno es `motor-captura.js:82` (`filter((a) => !a.retirado)`); las dos apariciones de `opciones` en el motor (`:54`, `:62`) son sus propias listas de paso, no el campo del catálogo. Hoy los tres campos nuevos son **ciertos**, pero cada uno contra una fuente distinta y **ninguno contra una columna homónima**: `catalogo_atributo` no tiene columna `retirada_por` ni `sustituida_por` (medido el 2026-08-26: sus 19 columnas no incluyen ninguna de las dos). Sólo `retirado` tiene contraparte —`catalogo_atributo.activo`—; `retiradaPor: "V84"` se contrasta con la migración que la retira, y `sustituidaPor` con la existencia de las dos claves sustitutas en el catálogo. Ciertos, sí, pero son **prosa inerte** dentro del fichero cuyo propósito declarado es «el contrato como dato ejecutable», y nada los compara con la base. Es el mismo mecanismo que dejó `servicios_disponibles` declarada viva | `docs/ai/modelo/gate-modelo-universal.js`, `docs/ai/modelo/modelo-universal.js` | **Distinto de N18**: aquélla es la **deriva** de contenido (97 claves en el Core, 22 declaradas); ésta es la **ausencia de gate** sobre los campos nuevos. Escribir esa comprobación exige antes decidir contra qué compara —el catálogo completo o el subconjunto—, que es justo la pregunta que N18 deja en CONTROL |
 | **N21** | **La numeración del gate SQL es posicional y las citas a un número son frágiles.** `gate-modelo-universal.sql:32` declara `CREATE TEMP TABLE resultado (n serial, …)`: el número de cada comprobación es su **orden de inserción**, así que insertar una por encima desplaza todas las de abajo. Tres textos citan hoy «la comprobación 92» —`pendientes-brox.md:175`, la evidencia de 5A (§ del caso de conservación) y `OcupacionYServiciosIntegrationTest:916`—, y la cita es correcta hoy (así salió en la corrida registrada: `controllocal_repositorios 92 5A CONTROL el predicado del legado…`), pero envejece sola y **en silencio**: nada falla cuando deja de serlo | `backend-spring/verificacion/gate-modelo-universal.sql:32` y los tres textos citados | No se corrige en este lote: sustituir el número por el **nombre** de la comprobación en los tres sitios es cambio de texto en un test además de en dos documentos, y la comprobación que ya se apoya en el nombre (`INFORME el control del legado imprime su universo`) demuestra que el nombre es la referencia estable. Alcance propio |
 
 > **Y una cifra que este lote NO tocó a propósito.** `encargo-corte-5-terreno.md`

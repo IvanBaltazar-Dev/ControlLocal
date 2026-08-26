@@ -26,8 +26,16 @@ import java.util.Locale;
  *
  * <p>Todo lo que rechaza lo rechazaria igualmente el trigger de PostgreSQL.
  * La diferencia es el mensaje: aqui sale con el nombre del atributo delante y
- * antes de abrir la transaccion; alli sale en ingles, a mitad de un {@code
- * INSERT}, y no se le puede ensenar a nadie.
+ * <b>sin llegar a intentar la escritura</b>; alli sale en ingles, a mitad de un
+ * {@code INSERT}, y no se le puede ensenar a nadie.
+ *
+ * <p><b>Esta frase decia «antes de abrir la transaccion» y era falsa</b>, medido
+ * el 2026-08-26. Todos los llamadores de esta clase estan dentro de un metodo ya
+ * transaccional: {@code AtributosGobernados} y {@code AtributosDeEncargo} cuelgan
+ * de {@code PropiedadUniversalServiceImpl.registrar} y {@code editar}, y
+ * {@code MotorDeCapturaImpl} llama desde {@code avanzar} — las tres
+ * {@code @Transactional}. Lo que esta capa se ahorra no es la transaccion: es el
+ * {@code INSERT} —y con el, un mensaje que el agente no podria leer—.
  */
 public final class ConversionDeValores {
 
@@ -228,7 +236,18 @@ public final class ConversionDeValores {
      *       {@code AtributosGobernados.definicionDe} →
      *       {@code CatalogoAtributoRepository.porClave}, cuyo JPQL lleva
      *       {@code and c.activo = true}: sale una {@code ReglaNegocioException}
-     *       («no esta en el catalogo») <b>en Java, antes de emitir SQL</b>.</li>
+     *       («no esta en el catalogo») <b>en Java, sin llegar a intentar la
+     *       escritura</b>. Lo unico que se emite es el SELECT del catalogo, y eso
+     *       se midio: el 2026-08-26, un {@code PUT /propiedades/1} con la clave
+     *       retirada movio {@code catalogo_atributo} en
+     *       {@code pg_stat_user_tables} —{@code seq_scan} 5316 → 5317 y
+     *       {@code seq_tup_read} +123, la tabla entera— y dejo
+     *       {@code atributo_propiedad} igual (950/243/71179 antes y despues).
+     *       Al cliente le llega <b>400</b>. La version anterior de esta linea
+     *       decia «antes de emitir SQL» y era falsa: no hay cache de segundo
+     *       nivel que evite la consulta (0 apariciones de {@code Cacheable} o
+     *       {@code use_second_level_cache} en {@code backend-spring}, barrido con
+     *       control positivo).</li>
      *   <li>{@code exigir_atributo_gobernado} es la <b>red de atras</b>, para
      *       quien entre por SQL directo: busca la clave con {@code activo = true}
      *       y si no la encuentra levanta SQLSTATE 23503. Por eso el
@@ -245,7 +264,17 @@ public final class ConversionDeValores {
      *
      * <p>Lo que rechaza lo rechazaria igualmente {@code tg_vocabulario_estructural}.
      * La diferencia es la de siempre: aqui sale con el nombre del atributo
-     * delante y antes de abrir la transaccion.
+     * delante y <b>sin llegar a tocar la fila</b> —{@code valorEstructural} se
+     * evalua como argumento de {@code EscritorEstructural.aplicar}, asi que la
+     * entidad ni se muta—.
+     *
+     * <p><b>Esta linea decia «antes de abrir la transaccion» y era falso</b>,
+     * medido el 2026-08-26. Los dos unicos caminos que llegan hasta aqui
+     * —{@code AtributosGobernados.aplicarEstructuralesAlAlta} y
+     * {@code escribirEnEdicion}— cuelgan de
+     * {@code PropiedadUniversalServiceImpl.registrar} y de su {@code editar}, las
+     * dos anotadas {@code @Transactional}. Cuando esta comprobacion corre, la
+     * transaccion lleva abierta desde el borde del servicio.
      */
     public static String exigirDelVocabulario(CatalogoAtributo definicion, String valor) {
         List<String> admitidos = definicion.opcionesVigentes().stream()

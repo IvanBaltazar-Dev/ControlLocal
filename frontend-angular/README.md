@@ -40,8 +40,8 @@ nombre distinto falla con `Cannot load browser`.
   *desarrollo*, que no lleva `budgets`; el tope de estilo por componente (16 kB) solo se aplica en
   `ng build --configuration production`. Así viajó una build rota durante cuatro commits con la
   suite en verde. **Si tocas una hoja de estilos o `angular.json`, corre también la build de
-  producción.** El porqué del tope está en
-  [`docs/ai/decision-presupuesto-de-estilos-de-componente.md`](../docs/ai/decision-presupuesto-de-estilos-de-componente.md).
+  producción.** El tope está declarado en [`angular.json`](angular.json): `anyComponentStyle`
+  avisa a los 4 kB y falla a los 16 kB, y solo en la configuración de producción.
 - **Angular acota los nombres de `@keyframes` por componente.** Una regla que use una animación
   declarada en la hoja de *otro* componente sale con el nombre pelado, no encaja con nada y **la
   animación simplemente no corre**: sin error de compilación, sin aviso, y `animation-name` sigue
@@ -56,22 +56,15 @@ nombre distinto falla con `Cannot load browser`.
 
 ## Cómo se decide la interfaz
 
-Las pantallas de inteligencia no se improvisan: su diseño está decidido y escrito.
-
-| Documento | Qué gobierna |
-|---|---|
-| [`decision-inicio-foco-y-resolucion.md`](../docs/ai/decision-inicio-foco-y-resolucion.md) | El Inicio: el foco, el Radar y cómo se resuelve un asunto |
-| [`decision-indicadores-comerciales.md`](../docs/ai/decision-indicadores-comerciales.md) | Qué mide cada indicador y cómo se dibuja |
-| [`decision-lenguaje-natural-de-negocio.md`](../docs/ai/decision-lenguaje-natural-de-negocio.md) | Cómo se escribe el texto: el hecho con su cifra y su fecha, sin metáforas |
-| [`matriz-operacion-rol.md`](../docs/ai/matriz-operacion-rol.md) | Quién puede llamar a qué. Léela antes de construir cualquier pantalla con roles |
-
-Dos reglas que se rompen sin querer:
+Las pantallas de inteligencia no se improvisan: el Inicio y su Radar, qué mide cada indicador y
+cómo se dibuja, y cómo se redacta el texto están decididos y escritos en la documentación de
+producto, que es **interna y no se publica en este repositorio**. Lo que sí manda aquí, sobre el
+código, son estas reglas:
 
 - **El frontend no reclasifica: dibuja.** Los umbrales y la interpretación viven en el dominio y
   llegan ya resueltos en el cable. Si necesitas un número interpretado, el sitio es el backend.
+- **El texto lleva el hecho con su cifra y su fecha**, sin metáforas ni lenguaje figurado.
+- **Quién puede llamar a qué lo decide el backend**, y la matriz operación→rol que lo fija rompe
+  el build si se desvía. Léela antes de construir cualquier pantalla con roles.
 - **Ninguna pantalla lleva «Exportar PDF»** (D-F5-1). Lo que se exporta es CSV, que es dato y no
   maquetación.
-
-Hay además dos maquetas de alta fidelidad con una única fuente de datos en
-[`docs/ai/prototipos/`](../docs/ai/prototipos/), y un instrumento para comparar el estilo calculado
-antes y después de un refactor en [`tools/diagnostico-visual/`](tools/diagnostico-visual/).

@@ -6,8 +6,9 @@ propiedad hablando, retomar un borrador a medias, consultar una ficha.
 **Es un proyecto aparte, y eso es la decisión, no un accidente.** No comparte proceso, ni base de
 datos, ni jar con BROX; queda fuera del reactor de `backend-spring/`. Comparte **el contrato**, y
 la dependencia va en una sola dirección: KAIROS conoce a BROX, BROX no conoce a KAIROS. Lo
-sostiene una prueba, `FronteraKairosTest`, que rompe el build de BROX si alguien invierte la
-flecha.
+sostiene una prueba,
+[`FronteraKairosTest`](../backend-spring/controllocal-app/src/test/java/com/controllocal/arquitectura/FronteraKairosTest.java),
+que rompe el build de BROX si alguien invierte la flecha.
 
 Que sea un servicio separado es lo que permite que el mismo Core atienda a la SPA y a un canal de
 mensajería sin que ninguno de los dos herede las decisiones del otro.
@@ -40,5 +41,4 @@ propietario, registrar interacción—.
 
 Mientras esas cuatro cosas no se resuelvan, esto es un prototipo que demuestra la forma, no un
 canal en operación. La decisión de si KAIROS es exploración, producto o base contractual está
-abierta y se resolverá en la etapa E6 del
-[mapa de ejecución](../docs/ai/mapa-ejecucion-brox.md).
+abierta y se resolverá más adelante en el plan de producto.

@@ -55,7 +55,7 @@ Cuatro puertas rompen el build, y están así a propósito:
 | Capas estrictas | `app → web → service → persistence → domain` |
 | `service/soporte/Transiciones` | **Único** punto que muta el estado de un `Transicionable` y emite `historial_estado` |
 | Discriminador de tenant | Toda entidad privada hereda `EntidadDeOrganizacion` (`organizacion_id` NOT NULL, sin DEFAULT) |
-| Matriz operación→rol | [`docs/ai/matriz-operacion-rol.md`](../docs/ai/matriz-operacion-rol.md) se compara contra los controladores: **un endpoint nuevo necesita su fila** — método, ruta, roles y dónde se decide el alcance |
+| Matriz operación→rol | [`MatrizOperacionRolTest`](controllocal-app/src/test/java/com/controllocal/arquitectura/MatrizOperacionRolTest.java) contrasta la matriz contra los controladores: **un endpoint nuevo necesita su fila** — método, ruta, roles y dónde se decide el alcance |
 
 Y tres puntos de escritura únicos que **no se rodean**:
 
@@ -81,13 +81,15 @@ Y tres puntos de escritura únicos que **no se rodean**:
 con el build en verde. Así entraron tres columnas `estado` en palabra completa, rompiendo el
 invariante de código unitario, durante un bloque entero.
 
-```powershell
-powershell -File backend-spring/verificacion/Verificar-Cierre.ps1
+```bash
+TEST_DB_URL=jdbc:postgresql://localhost:5433/controllocal_repositorios CONTROLLOCAL_CIERRE=1 mvn -f backend-spring/pom.xml clean install
 ```
 
-Exige `TEST_DB_URL`, activa el gate dentro del reactor, **comprueba en la salida que los tests de
-integración se ejecutaron** —no que no fallaron— y corre el gate SQL contra la base real. Suites y
-detalle en [`verificacion/README.md`](verificacion/README.md).
+`TEST_DB_URL` habilita los tests de integración contra PostgreSQL real; `CONTROLLOCAL_CIERRE=1`
+convierte el salto silencioso en un fallo dentro del propio reactor, y de eso responde
+[`GateDeCierreTest`](controllocal-app/src/test/java/com/controllocal/arquitectura/GateDeCierreTest.java),
+que además **inventaría los tests de integración**: si alguien añade uno, la prueba obliga a
+declararlo ahí en vez de dejarlo saltando en silencio para siempre.
 
 ## El modelo, en cuatro reglas
 
@@ -102,8 +104,9 @@ detalle en [`verificacion/README.md`](verificacion/README.md).
 3. **`/captura` es el motor de preguntas y lo comparten la SPA y KAIROS**: qué se sabe, qué falta,
    qué se pregunta ahora. La lista de campos de cada tipo **sale del catálogo**, no del cliente:
    añadir un atributo es una fila, no un despliegue.
-4. **Los estados persisten como código unitario**, con el enum derivado por `EstadosDominio`. La
-   matriz completa está en [`docs/ai/matriz-codigos-estado.md`](../docs/ai/matriz-codigos-estado.md).
+4. **Los estados persisten como código unitario**, y el enum lo deriva
+   [`EstadosDominio`](controllocal-domain/src/main/java/com/controllocal/domain/comun/EstadosDominio.java),
+   que es donde vive la correspondencia completa entre código almacenado y estado.
 
 **El esquema lo posee Flyway** (`controllocal-app/src/main/resources/db/migration/`); Hibernate
 solo `validate`. **Una migración aplicada no se edita nunca.** Dos cosas que `validate` no ve:
@@ -129,23 +132,21 @@ inválida» se acaba resolviendo desactivando la comprobación.
 Los binarios tienen dos proveedores tras una sola frontera (`AlmacenDocumentos`):
 `ALMACEN_PROVEEDOR=DISCO`, el defecto, o `S3` genérico (MinIO, SeaweedFS, Garage, Ceph RGW o AWS;
 el servidor productivo aún no está elegido). **No cambies el defecto a S3 antes de migrar los
-binarios**: hoy viven en el volumen `controllocal_almacen`, no en un bucket. Respaldo, restauración
-y migración del almacén en [`operacion/README.md`](operacion/README.md).
+binarios**: hoy viven en el volumen `controllocal_almacen`, no en un bucket. El respaldo, la
+restauración y la migración entre proveedores se operan con herramienta interna que no forma
+parte de este repositorio; la frontera que hay que respetar sí está aquí, en
+[`AlmacenDocumentos`](controllocal-web/src/main/java/com/controllocal/web/almacen/AlmacenDocumentos.java).
 
 ## Lo que no está aquí
 
-Este README explica cómo trabajar sobre el backend. Lo demás vive donde se puede mantener:
+Este README explica cómo trabajar sobre el backend. Dos cosas que se buscan aquí y no están:
 
-| Qué buscas | Dónde está |
-|---|---|
-| Dónde estamos y qué sigue | [`docs/ai/mapa-ejecucion-brox.md`](../docs/ai/mapa-ejecucion-brox.md) |
-| Por qué una regla es como es | `docs/ai/decision-*.md` |
-| El contrato ejecutable | OpenAPI y las pruebas |
-| Comportamiento del cable por vertical | `docs/ai/contrato-congelado-*.md` |
-| Resultado de cada corrida | `verificacion/evidencia/` |
+- **El contrato ejecutable son OpenAPI y las pruebas**, no un documento. Levanta la API y abre
+  `/swagger-ui.html`; lo que no esté ahí o en un test, no es contrato.
+- **La documentación de decisiones, el mapa de etapas y la evidencia de cada corrida son
+  internos** y no se publican en este repositorio.
 
 > **El contrato REST se descongeló el 2026-08-09.** DTOs, endpoints, estados, errores y flujos
 > pueden cambiar con dos condiciones: una razón funcional o arquitectónica, y **que el cambio
-> llegue con sus pruebas**. Los ficheros `contrato-congelado-*.md` conservan el nombre por
-> historia; la autoridad son las pruebas y OpenAPI. La regla de trabajo es
+> llegue con sus pruebas**. La regla de trabajo es
 > *necesidad → regla de dominio → contrato → backend → frontend → pruebas*.

@@ -137,10 +137,18 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * {@code lote_minimo_normativo} la siembran, asi que son 13—. Una cifra a
      * mano sobre algo que el propio corte mueve envejece a mentira sin que nada
      * avise. La <b>mide el gate</b>, en la columna {@code nota} de
-     * «5B ninguna clave del catalogo escribe m2 sin superindice», igual que se
-     * hizo con el suelo de {@code M2}. Lo que si es invariante —y por eso vive
-     * en una comprobacion y no en una frase— es que <b>el conjunto sea uno
-     * solo</b>: cero claves con {@code m2}.
+     * «5B la superficie tiene UNA grafia en el catalogo del sistema», igual
+     * que se hizo con el suelo de {@code M2}. Lo que si es invariante —y por eso
+     * vive en una comprobacion y no en una frase— es que <b>el conjunto sea uno
+     * solo</b>: una sola grafia para la unidad de superficie.
+     *
+     * <p><b>Esta cita estuvo MUERTA una ronda entera.</b> Nacio nombrando
+     * «5B ninguna clave del catalogo escribe m2 sin superindice» y la rompio
+     * <b>el propio corte</b> al renombrar esa comprobacion para que dijera lo
+     * que mide. Citar por NOMBRE en vez de por numero es mejor, pero no basta:
+     * un nombre tambien se renombra. Desde la sexta ronda, la pasada de cierre
+     * contrasta <b>toda cita de comprobacion contra la lista de nombres de la
+     * corrida real</b> del gate, que es lo unico que lo detecta.
      */
     @Test
     @DisplayName("V85: las 18 claves del suelo nacieron con su tipo, su unidad y su exigencia")

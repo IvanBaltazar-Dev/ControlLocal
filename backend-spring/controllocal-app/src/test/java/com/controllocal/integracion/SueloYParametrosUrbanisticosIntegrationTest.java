@@ -128,8 +128,19 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * <p>La <b>unidad</b> entra en la comparacion a proposito. Es lo unico que
      * distingue un {@code area_libre_minima} en por ciento de uno en metros, y
      * un catalogo que lo callara dejaria que un agente escribiera 30 y otro 0,30
-     * sin que nada los separase. Ademas fija la convencion medida —{@code m²}
-     * con acento, que usan once claves y ninguna escribe {@code m2}—.
+     * sin que nada los separase. Ademas fija la convencion: {@code m²} con
+     * superindice, y <b>ninguna clave escribe {@code m2}</b>.
+     *
+     * <p><b>Cuantas la usan NO se escribe aqui</b>, y esa es la enmienda: este
+     * javadoc decia «once claves», que era cierto <b>antes</b> de este corte y
+     * dejo de serlo <b>por este corte</b> —{@code edificacion_existente} y
+     * {@code lote_minimo_normativo} la siembran, asi que son 13—. Una cifra a
+     * mano sobre algo que el propio corte mueve envejece a mentira sin que nada
+     * avise. La <b>mide el gate</b>, en la columna {@code nota} de
+     * «5B ninguna clave del catalogo escribe m2 sin superindice», igual que se
+     * hizo con el suelo de {@code M2}. Lo que si es invariante —y por eso vive
+     * en una comprobacion y no en una frase— es que <b>el conjunto sea uno
+     * solo</b>: cero claves con {@code m2}.
      */
     @Test
     @DisplayName("V85: las 18 claves del suelo nacieron con su tipo, su unidad y su exigencia")
@@ -520,12 +531,24 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * ({@code escribirEnEdicion}), asi que de paso ejercitaba esa puerta con la
      * aplicabilidad abierta. La version atomica lo escribe con un {@code INSERT}
      * crudo dentro del bloque. <b>Es una perdida de cobertura real</b>, y se
-     * acepta por dos razones: lo que este caso viene a probar es la LECTURA y la
-     * RETIRADA de un huerfano —no su escritura—, y la puerta de escritura ya la
-     * cubre {@code areaTerrenoYaNoEntraPorNingunaPuertaEnUnTerreno}, que exige
-     * que el servicio la RECHACE. Cubrir tambien el camino contrario obligaria a
-     * dejar la puerta abierta entre dos transacciones, que es exactamente el
-     * defecto que se corrige.
+     * acepta porque lo que este caso viene a probar es la LECTURA y la RETIRADA
+     * de un huerfano, no su escritura.
+     *
+     * <p><b>Lo que se perdio es el camino de ACEPTACION</b> —escribir una clave
+     * que SI aplica, por {@code escribirEnEdicion}—, y conviene decirlo bien
+     * porque la primera version de este parrafo lo justifico mal: decia que lo
+     * cubre {@code areaTerrenoYaNoEntraPorNingunaPuertaEnUnTerreno}, «que exige
+     * que el servicio la RECHACE». <b>Un rechazo no cubre una aceptacion.</b>
+     *
+     * <p>La conclusion era cierta, pero por otros casos: la aceptacion por
+     * {@code escribirEnEdicion} la ejercitan
+     * {@link #elTerrenoSinCondicionSeRegistraPeroNoSePublica} (con
+     * {@code fondo}), {@link #lasDiecisieteOpcNoBloquean} (con
+     * {@code edificacion_existente}), {@link #lasDosClavesDeLaViaConviven} (con
+     * las tres claves de la via) y {@link #declararLaPeorCondicionTambienEsDeclarar}
+     * (con {@code condicion_terreno}). Cubrir ademas ese camino <b>aqui</b>
+     * obligaria a dejar la puerta abierta entre dos transacciones, que es
+     * exactamente el defecto que se corrige.
      *
      * <p><b>Y la atomicidad no es autocuracion.</b> El bloque garantiza que este
      * caso no deja la puerta abierta; <b>no</b> repara una que ya lo estuviera.
@@ -534,11 +557,14 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * igual que el patron viejo—. La promesa cubre la ventana que este caso
      * crea, no una heredada.
      *
-     * <p>Efecto colateral, medido: retrasar {@code propiedad.fecha_registro}
-     * saca a esta propiedad del universo de la comprobacion <b>78</b> del gate
-     * —una propiedad menos por corrida—. Hoy es inocuo (la propiedad que se
-     * siembra no era infractora), pero es una reduccion de universo y por eso se
-     * escribe.
+     * <p><b>Efecto colateral, y se ACUMULA.</b> Retrasar
+     * {@code propiedad.fecha_registro} saca a esta propiedad del universo de la
+     * comprobacion <b>78</b> del gate, y la propiedad <b>se queda</b>: no es una
+     * menos por corrida, son <b>29 acumuladas</b> a fecha de 2026-08-29, todas
+     * con {@code fecha_registro = frontera - 2 dias}. Hoy es inocuo —medido: las
+     * 29 tienen {@code METRAJE} con rastro, asi que <b>ninguna era
+     * infractora</b>—, pero el universo de esa comprobacion se estrecha con cada
+     * corrida y eso hay que decirlo, no descubrirlo.
      */
     @Test
     @DisplayName("V85: un area_terreno huerfano sobre un TERRENO se lee entero y se puede retirar")

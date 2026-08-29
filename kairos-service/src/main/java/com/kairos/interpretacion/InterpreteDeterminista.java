@@ -50,10 +50,19 @@ import java.util.regex.Pattern;
  *       importe solo si viene <i>anclado</i>: con moneda o con escala ("mil",
  *       "millones"). Sin eso, "un depa de 3 dormitorios" registraria una
  *       propiedad de tres soles.</li>
- *   <li><b>Lo ambiguo se declara, no se resuelve.</b> "120 m2" encaja con tres
- *       atributos del catalogo —metraje total, metraje construido y area de
- *       terreno— asi que no se emite ninguno: se declara en
- *       {@code noEntendido} y el motor lo pregunta con su nombre.</li>
+ *   <li><b>Lo ambiguo se declara, no se resuelve.</b> Esa es la INTENCION, y
+ *       hoy <b>NO esta implementada</b>: la rama que la aplicaria
+ *       ({@code atributosDe}, el {@code if (cuantos > 1)}) es <b>inalcanzable
+ *       contra el catalogo real, en los SIETE tipos</b>. Medido el 2026-08-29:
+ *       las unicas unidades que comparten mas de un atributo son {@code m} y
+ *       {@code m2} —con superindice—, y <b>ninguna de las dos es emitible</b>
+ *       por {@code NUMERO_Y_PALABRA}: {@code m} mide 1 caracter y el patron
+ *       exige 2, y el superindice no esta en {@code [a-z0-9_]} ni lo descompone
+ *       {@code llano()}, que normaliza con NFD. Las unidades que si son
+ *       emitibles —{@code anos}, {@code kW}, {@code personas},
+ *       {@code pisos}— las usa <b>un solo</b> atributo por tipo, asi que
+ *       tampoco disparan. Esta regla queda como <b>propuesta</b>; ver
+ *       {@code N29} en {@code docs/ai/pendientes-brox.md}.</li>
  * </ol>
  */
 @Component
@@ -375,10 +384,32 @@ public class InterpreteDeterminista implements Interprete {
      * Los atributos que la frase declare, contra el catalogo del tipo.
      *
      * <p>Se reconoce por la <b>clave</b> ({@code dormitorios}) o por el
-     * <b>rotulo</b> ({@code Dormitorios}); nunca por la unidad, porque tres
-     * atributos comparten {@code m2} y "120 m2" no dice cual de los tres es.
-     * Ese caso se declara en {@code noEntendido}: el motor lo preguntara por su
-     * nombre, que es lo unico que lo desambigua.
+     * <b>rotulo</b> ({@code Dormitorios}); nunca por la unidad.
+     *
+     * <p><b>Este javadoc decia que "120 m2" se declara en {@code noEntendido}
+     * porque tres atributos comparten {@code m2}. Las dos mitades son
+     * falsas</b>, y se corrigen sin tocar el comportamiento (2026-08-29,
+     * subtanda 5B):
+     *
+     * <ul>
+     *   <li>La unidad del catalogo se escribe con <b>superindice</b>, y
+     *       {@code llano()} normaliza con <b>NFD</b>, que <b>no</b> lo
+     *       descompone. Asi que {@code llano(unidad) != "m2"} y el mapa
+     *       {@code unidades} <b>nunca contiene la clave "m2"</b>: una frase con
+     *       "120 m2" cae en {@code cuantos == null} y se descarta <b>en
+     *       silencio</b>, no en {@code noEntendido}.</li>
+     *   <li>Y no eran tres: {@code m2} la comparten <b>13</b> claves del
+     *       catalogo del sistema (medido). El numero era de un catalogo muy
+     *       anterior.</li>
+     * </ul>
+     *
+     * <p>La consecuencia es que <b>el bloque {@code if (cuantos > 1)} de abajo
+     * es codigo inalcanzable contra el catalogo real</b>, en los siete tipos:
+     * las unicas unidades compartidas son {@code m} y la del superindice, y
+     * ninguna es emitible por {@code NUMERO_Y_PALABRA}. Se deja <b>tal cual</b>
+     * a proposito: quitarlo o arreglar el patron cambia lo que KAIROS entiende
+     * de todas las frases y de todos los tipos, y eso es una <b>decision
+     * funcional</b> con su propio corte. Ver {@code N28} y {@code N29}.
      */
     private void atributosDe(String llano, SesionBrox sesion, String tipoPropiedad,
                              Map<String, String> datos, List<String> noEntendido) {

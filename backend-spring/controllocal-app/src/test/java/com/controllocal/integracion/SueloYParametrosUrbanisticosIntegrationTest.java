@@ -485,32 +485,58 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * rechaza, que es precisamente lo que prueba el caso anterior. Que un
      * control necesite saltarse una guarda no es una licencia — es la prueba de
      * que la guarda esta puesta.
+     *
+     * <h2>Por que la siembra va en UN SOLO bloque {@code DO}, y no en un
+     * {@code try/finally}</h2>
+     * La primera version de este caso abria la aplicabilidad con un
+     * {@code jdbc.update}, escribia por el servicio y la cerraba en un
+     * {@code finally}. <b>Eso no es una restauracion: es una intencion.</b> Son
+     * tres sentencias con tres transacciones, y si el proceso muere entre la
+     * primera y la ultima —o si alguien interrumpe la corrida— la base
+     * compartida se queda con <b>D-7 deshecho</b>: {@code area_terreno} vuelve a
+     * aplicar a {@code T} para todo el mundo. No es hipotetico: sembrada la fila
+     * a mano, este caso aborta con {@code DuplicateKeyException} y arrastra
+     * consigo a {@code ConservacionDeLaEdicion.cadaCasoLlevaTodoLoQueSuTipoAdmite}.
+     *
+     * <p>El gate SQL de este mismo corte ya lo hacia bien —{@code SAVEPOINT
+     * repite_5b}, y una comprobacion propia (la 106) que exige que la puerta
+     * quedara cerrada—, asi que la prueba estaba <b>por debajo del nivel de su
+     * propio corte</b>. Un bloque {@code DO} de PL/pgSQL es <b>una sola
+     * sentencia</b> y por tanto una sola transaccion: abrir, escribir y cerrar
+     * ocurren juntos o no ocurren. Y el cierre se comprueba igual, porque una
+     * restauracion que nadie mira es la misma promesa que el {@code finally}.
+     *
+     * <p>La fila se siembra <b>anterior a la frontera del linaje</b>, y no es un
+     * detalle: un huerfano conservado por {@code V85} es, por construccion, un
+     * valor <b>legado</b> —escrito antes de que el corte existiera—. Sembrarlo
+     * con {@code now()} fabricaria un dato imposible —un valor gobernado
+     * posterior al cutover y sin rastro— y envenenaria la comprobacion 76 del
+     * gate de 4.P desde aqui. Misma leccion que
+     * {@code OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo}.
      */
     @Test
     @DisplayName("V85: un area_terreno huerfano sobre un TERRENO se lee entero y se puede retirar")
     void elHuerfanoSeLeeEnteroYSePuedeRetirar() {
         long id = registrarTerreno();
-        jdbc.update("""
-                insert into catalogo_atributo_tipo (id_catalogo_atributo, tipo_propiedad,
-                                                    requerido, exigencia)
-                select c.id_catalogo_atributo, 'T', false, 'OPC' from catalogo_atributo c
-                 where c.clave = 'area_terreno' and c.organizacion_id is null
-                """);
-        try {
-            editar(id, new ValorAtributo("area_terreno", "777"));
-        } finally {
-            jdbc.update("""
-                    delete from catalogo_atributo_tipo t using catalogo_atributo c
-                     where c.id_catalogo_atributo = t.id_catalogo_atributo
-                       and c.clave = 'area_terreno' and c.organizacion_id is null
-                       and t.tipo_propiedad = 'T'
-                    """);
-        }
+        sembrarHuerfano(id, 777);
+
         assertEquals(List.of("A=OPC", "C=OPC"), exigenciasDe("area_terreno"),
-                "sembrar el huerfano dejo la aplicabilidad REABIERTA: eso deshace D-7");
+                "sembrar el huerfano dejo la aplicabilidad REABIERTA: eso deshace D-7 para "
+                        + "TODA la base, no solo para este caso. Es la comprobacion 106 del "
+                        + "gate SQL, dicha desde Java");
         assertEquals(1L, contar("select count(*) from atributo_propiedad where id_propiedad = "
                         + id + " and clave = 'area_terreno'"),
                 "el productor del huerfano no escribio nada: el caso mediria un universo vacio");
+        assertEquals(0L, contar("""
+                select count(*) from atributo_propiedad a
+                  join propiedad p on p.id_propiedad = a.id_propiedad
+                 where a.id_propiedad = %d and a.clave = 'area_terreno'
+                   and (a.fecha_creacion < p.fecha_registro
+                        or a.fecha_creacion > frontera_de_linaje())
+                """.formatted(id)),
+                "el huerfano sembrado no cabe en su propia linea de tiempo: tiene que ser "
+                        + "posterior a su propiedad y anterior a la frontera del linaje, o "
+                        + "envenena la comprobacion 76 del gate desde aqui");
 
         // (1) Se lee ENTERO. Conservar el valor y perder su nombre es conservar
         // a medias: el broker leeria la clave en vez del rotulo.
@@ -695,6 +721,52 @@ class SueloYParametrosUrbanisticosIntegrationTest {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * <b>Un {@code area_terreno} huerfano sobre un TERRENO, sembrado de forma
+     * ATOMICA.</b>
+     *
+     * <p>Abre la aplicabilidad que D-7 retiro, escribe la fila y la vuelve a
+     * cerrar <b>dentro de un unico bloque {@code DO}</b> — una sola sentencia,
+     * una sola transaccion. Si algo falla en medio, PostgreSQL deshace las tres
+     * cosas y la base queda como estaba; no hay ninguna ventana en la que
+     * {@code area_terreno} vuelva a aplicar a {@code T} para el resto de las
+     * suites que comparten esta base.
+     *
+     * <p>Es el mismo patron que el gate SQL de este corte (`SAVEPOINT
+     * repite_5b`), y por la misma razon: la puerta esta cerrada a proposito y la
+     * unica forma de fabricar el caso es abrirla un instante. Que haga falta
+     * abrirla <b>es</b> la prueba de que esta cerrada.
+     *
+     * <p>Y se escribe con {@code frontera_de_linaje() - 1 dia}, retrasando
+     * tambien el registro de la propiedad para que la linea de tiempo sea
+     * coherente: un huerfano es legado por definicion.
+     */
+    private void sembrarHuerfano(long idPropiedad, int valor) {
+        jdbc.execute("""
+                do $huerfano$
+                begin
+                    insert into catalogo_atributo_tipo (id_catalogo_atributo, tipo_propiedad,
+                                                        requerido, exigencia)
+                    select c.id_catalogo_atributo, 'T', false, 'OPC' from catalogo_atributo c
+                     where c.clave = 'area_terreno' and c.organizacion_id is null;
+
+                    update propiedad set fecha_registro = frontera_de_linaje() - interval '2 days'
+                     where id_propiedad = %1$d;
+
+                    insert into atributo_propiedad (organizacion_id, id_propiedad, clave,
+                                                    valor_numero, fecha_creacion)
+                    select organizacion_id, id_propiedad, 'area_terreno', %2$d,
+                           frontera_de_linaje() - interval '1 day'
+                      from propiedad where id_propiedad = %1$d;
+
+                    delete from catalogo_atributo_tipo t using catalogo_atributo c
+                     where c.id_catalogo_atributo = t.id_catalogo_atributo
+                       and c.clave = 'area_terreno' and c.organizacion_id is null
+                       and t.tipo_propiedad = 'T';
+                end $huerfano$;
+                """.formatted(idPropiedad, valor));
+    }
 
     private List<String> vocabulario(String clave) {
         return jdbc.queryForList("""

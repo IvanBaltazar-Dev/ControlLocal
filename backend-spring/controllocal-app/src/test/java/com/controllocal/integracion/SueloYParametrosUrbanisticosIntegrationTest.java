@@ -510,7 +510,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * consigo a {@code ConservacionDeLaEdicion.cadaCasoLlevaTodoLoQueSuTipoAdmite}.
      *
      * <p>El gate SQL de este mismo corte ya lo hacia bien —{@code SAVEPOINT
-     * repite_5b}, y una comprobacion propia (la 106) que exige que la puerta
+     * repite_5b}, y una comprobacion propia —«5B CONTROL y el savepoint volvio a cerrar la puerta de T»— que exige que la puerta
      * quedara cerrada—, asi que la prueba estaba <b>por debajo del nivel de su
      * propio corte</b>. Un bloque {@code DO} de PL/pgSQL es <b>una sola
      * sentencia</b> y por tanto una sola transaccion: abrir, escribir y cerrar
@@ -521,7 +521,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * detalle: un huerfano conservado por {@code V85} es, por construccion, un
      * valor <b>legado</b> —escrito antes de que el corte existiera—. Sembrarlo
      * con {@code now()} fabricaria un dato imposible —un valor gobernado
-     * posterior al cutover y sin rastro— y envenenaria la comprobacion 76 del
+     * posterior al cutover y sin rastro— y envenenaria la comprobacion «4P despues del cutover ningun hecho del inmueble sin linaje» del
      * gate de 4.P desde aqui. Misma leccion que
      * {@code OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo}.
      *
@@ -557,11 +557,25 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * igual que el patron viejo—. La promesa cubre la ventana que este caso
      * crea, no una heredada.
      *
-     * <p><b>Efecto colateral, y se ACUMULA.</b> Retrasar
-     * {@code propiedad.fecha_registro} saca a esta propiedad del universo de la
-     * comprobacion <b>78</b> del gate, y la propiedad <b>se queda</b>: no es una
-     * menos por corrida, es <b>una mas fuera del universo por cada corrida</b>,
-     * todas con {@code fecha_registro = frontera - 2 dias}.
+     * <p><b>Efecto colateral, y se ACUMULA — pero NO es sólo de este caso.</b>
+     * Retrasar {@code propiedad.fecha_registro} saca a esa propiedad del
+     * universo de la comprobacion
+     * «4P despues del cutover ninguna columna estructural sin linaje» del gate,
+     * y la propiedad <b>se queda</b>.
+     *
+     * <p><b>Son TRES por corrida, desde DOS clases</b>, y la version anterior de
+     * este parrafo se atribuia las tres: una la siembra
+     * {@code sembrarHuerfano} de aqui, y <b>dos</b>
+     * {@code OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo} —de
+     * <b>5A</b>, con dos sitios de llamada—, que hace el mismo
+     * {@code update ... frontera_de_linaje() - interval '2 days'}. Medido:
+     * 35 -&gt; 38 tras un solo {@code mvn test}. Esa clase ya documenta su parte
+     * por su cuenta.
+     *
+     * <p><b>Y hay que decir contra que base.</b> {@code Verificar-Cierre.ps1}
+     * pasa el gate sobre {@code controllocal_dev}, y ahi las acumuladas son
+     * <b>CERO</b>: el efecto sólo existe en {@code controllocal_repositorios},
+     * que es donde corren las pruebas.
      *
      * <p><b>Cuantas hay NO se escribe aqui</b>, y la razon es la misma que
      * obligo a sacar del javadoc de arriba el recuento de {@code m²}: <b>esta
@@ -572,7 +586,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      *
      * <p>Lo que si es invariante, y por eso se dice: <b>ninguna de las
      * acumuladas es infractora</b> —todas tienen {@code METRAJE} con rastro—,
-     * asi que el efecto <b>estrecha</b> el universo de la 78 pero <b>no oculta
+     * asi que el efecto <b>estrecha</b> el universo de esa comprobacion pero <b>no oculta
      * ningun defecto</b>. Se comprueba con:
      *
      * <pre>
@@ -582,6 +596,12 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      *                       where r.id_agregado = p.id_propiedad
      *                         and r.clave = 'metraje_total');   -- tiene que dar 0
      * </pre>
+     *
+     * <p>Esa consulta cuenta un <b>superconjunto</b>: incluye tambien lo que
+     * siembra 5A, porque las dos clases usan la misma fecha. Se deja asi a
+     * proposito —la invariante que importa es que <b>ninguna</b> de las
+     * acumuladas sea infractora, vengan de donde vengan—, pero no se puede leer
+     * como "las que siembra este caso".
      */
     @Test
     @DisplayName("V85: un area_terreno huerfano sobre un TERRENO se lee entero y se puede retirar")
@@ -591,7 +611,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
 
         assertEquals(List.of("A=OPC", "C=OPC"), exigenciasDe("area_terreno"),
                 "sembrar el huerfano dejo la aplicabilidad REABIERTA: eso deshace D-7 para "
-                        + "TODA la base, no solo para este caso. Es la comprobacion 106 del "
+                        + "TODA la base, no solo para este caso. Es la comprobacion «5B CONTROL y el savepoint volvio a cerrar la puerta de T» del "
                         + "gate SQL, dicha desde Java");
         assertEquals(1L, contar("select count(*) from atributo_propiedad where id_propiedad = "
                         + id + " and clave = 'area_terreno'"),
@@ -605,7 +625,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                 """.formatted(id)),
                 "el huerfano sembrado no cabe en su propia linea de tiempo: tiene que ser "
                         + "posterior a su propiedad y anterior a la frontera del linaje, o "
-                        + "envenena la comprobacion 76 del gate desde aqui");
+                        + "envenena la comprobacion «4P despues del cutover ningun hecho del inmueble sin linaje» del gate desde aqui");
 
         // (1) Se lee ENTERO. Conservar el valor y perder su nombre es conservar
         // a medias: el broker leeria la clave en vez del rotulo.

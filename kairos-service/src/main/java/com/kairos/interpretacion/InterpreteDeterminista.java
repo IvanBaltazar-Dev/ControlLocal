@@ -50,19 +50,32 @@ import java.util.regex.Pattern;
  *       importe solo si viene <i>anclado</i>: con moneda o con escala ("mil",
  *       "millones"). Sin eso, "un depa de 3 dormitorios" registraria una
  *       propiedad de tres soles.</li>
- *   <li><b>Lo ambiguo se declara, no se resuelve.</b> Esa es la INTENCION, y
- *       hoy <b>NO esta implementada</b>: la rama que la aplicaria
- *       ({@code atributosDe}, el {@code if (cuantos > 1)}) es <b>inalcanzable
- *       contra el catalogo real, en los SIETE tipos</b>. Medido el 2026-08-29:
- *       las unicas unidades que comparten mas de un atributo son {@code m} y
- *       {@code m2} —con superindice—, y <b>ninguna de las dos es emitible</b>
- *       por {@code NUMERO_Y_PALABRA}: {@code m} mide 1 caracter y el patron
- *       exige 2, y el superindice no esta en {@code [a-z0-9_]} ni lo descompone
- *       {@code llano()}, que normaliza con NFD. Las unidades que si son
- *       emitibles —{@code anos}, {@code kW}, {@code personas},
- *       {@code pisos}— las usa <b>un solo</b> atributo por tipo, asi que
- *       tampoco disparan. Esta regla queda como <b>propuesta</b>; ver
- *       {@code N29} en {@code docs/ai/pendientes-brox.md}.</li>
+ *   <li><b>Lo ambiguo se declara, no se resuelve.</b> Esta regla <b>SI esta
+ *       implementada y SI dispara</b>, en los siete tipos, pero <b>no por donde
+ *       se suele contar</b>. Medido el 2026-08-29 replicando
+ *       {@code atributosDe} contra la respuesta viva de
+ *       {@code GET /captura/definicion}:
+ *       <ul>
+ *         <li><b>Dispara para {@code grados}</b>: la comparten {@code latitud} y
+ *             {@code longitud}, es emitible por {@code NUMERO_Y_PALABRA} y no es
+ *             clave ni rotulo de nada, asi que
+ *             «latitud 12.05 grados» produce
+ *             {@code noEntendido = ["12.05 grados"]}. Ocurre en los SIETE.</li>
+ *         <li><b>NO dispara para la unidad de superficie</b> ni para
+ *             {@code m}: el patron exige dos caracteres —{@code m} mide uno— y
+ *             el superindice no esta en {@code [a-z0-9_]} ni lo descompone
+ *             {@code llano()}, que normaliza con NFD. Una frase con "120 m2"
+ *             cae en {@code cuantos == null} y <b>se descarta en silencio</b>.
+ *             Eso es lo que sigue abierto: ver {@code N28}.</li>
+ *       </ul>
+ *       <b>Este texto afirmo lo contrario</b> —que la rama era inalcanzable— y
+ *       era falso <b>por medir el universo equivocado</b>: se conto sobre la
+ *       tabla {@code catalogo_atributo}, y {@code ClienteBrox.catalogoDe}
+ *       devuelve {@code comunes + delTipo}, donde {@code comunes} sale de
+ *       {@code GuionRegistroPropiedad.COMUNES} —<b>Java escrito a mano, no una
+ *       fila</b>— y es quien aporta {@code latitud}/{@code longitud} con su
+ *       unidad. Toda afirmacion sobre lo que KAIROS ve se mide desde
+ *       {@code catalogoDe}, nunca desde la tabla. Ver {@code N29}.</li>
  * </ol>
  */
 @Component
@@ -387,29 +400,44 @@ public class InterpreteDeterminista implements Interprete {
      * <b>rotulo</b> ({@code Dormitorios}); nunca por la unidad.
      *
      * <p><b>Este javadoc decia que "120 m2" se declara en {@code noEntendido}
-     * porque tres atributos comparten {@code m2}. Las dos mitades son
+     * porque tres atributos comparten esa unidad. Las dos mitades eran
      * falsas</b>, y se corrigen sin tocar el comportamiento (2026-08-29,
      * subtanda 5B):
      *
      * <ul>
-     *   <li>La unidad del catalogo se escribe con <b>superindice</b>, y
-     *       {@code llano()} normaliza con <b>NFD</b>, que <b>no</b> lo
-     *       descompone. Asi que {@code llano(unidad) != "m2"} y el mapa
-     *       {@code unidades} <b>nunca contiene la clave "m2"</b>: una frase con
+     *   <li>La unidad se escribe con <b>superindice</b>, y {@code llano()}
+     *       normaliza con <b>NFD</b>, que <b>no</b> lo descompone. Asi que
+     *       {@code llano(unidad)} nunca vale {@code "m2"} y el mapa
+     *       {@code unidades} <b>no contiene esa clave</b>: una frase con
      *       "120 m2" cae en {@code cuantos == null} y se descarta <b>en
      *       silencio</b>, no en {@code noEntendido}.</li>
-     *   <li>Y no eran tres: {@code m2} la comparten <b>13</b> claves del
-     *       catalogo del sistema (medido). El numero era de un catalogo muy
-     *       anterior.</li>
+     *   <li>Y no eran tres: son <b>12</b> las que {@code atributosDe} puede
+     *       llegar a ver —union de los siete tipos, medida sobre
+     *       {@code catalogoDe}—. En la tabla {@code catalogo_atributo} son 13,
+     *       pero {@code area_minima_arrendable} es del sujeto ENCARGO y
+     *       <b>nunca entra</b> en este catalogo.</li>
      * </ul>
      *
-     * <p>La consecuencia es que <b>el bloque {@code if (cuantos > 1)} de abajo
-     * es codigo inalcanzable contra el catalogo real</b>, en los siete tipos:
-     * las unicas unidades compartidas son {@code m} y la del superindice, y
-     * ninguna es emitible por {@code NUMERO_Y_PALABRA}. Se deja <b>tal cual</b>
-     * a proposito: quitarlo o arreglar el patron cambia lo que KAIROS entiende
-     * de todas las frases y de todos los tipos, y eso es una <b>decision
-     * funcional</b> con su propio corte. Ver {@code N28} y {@code N29}.
+     * <p><b>Y el bloque {@code if (cuantos > 1)} de abajo NO es codigo
+     * inalcanzable</b> —este javadoc tambien llego a decirlo, y tambien era
+     * falso—. <b>Dispara para {@code grados}</b>, unidad que comparten
+     * {@code latitud} y {@code longitud} y que <b>si</b> es emitible por el
+     * patron: «latitud 12.05 grados» produce
+     * {@code noEntendido = ["12.05 grados"]}, en los siete tipos.
+     *
+     * <p>El error estaba en el <b>universo</b>, no en el razonamiento: se conto
+     * sobre la tabla {@code catalogo_atributo}, y este metodo lee de
+     * {@link com.kairos.brox.ClienteBrox#catalogoDe}, que devuelve
+     * {@code comunes + delTipo}. <b>{@code comunes} no sale de la tabla</b>:
+     * sale de {@code GuionRegistroPropiedad.COMUNES}, Java escrito a mano, y es
+     * quien aporta {@code latitud} y {@code longitud} con {@code unidad =
+     * "grados"}. Ninguna consulta SQL lo habria visto.
+     *
+     * <p>Lo que <b>si</b> sigue abierto es que la unidad de superficie no
+     * dispare, y arreglarlo exige tocar {@code NUMERO_Y_PALABRA}, que cambia lo
+     * que KAIROS entiende de todas las frases y de todos los tipos: es
+     * <b>decision funcional</b> con su propio corte. Ver {@code N28} y
+     * {@code N29}.
      */
     private void atributosDe(String llano, SesionBrox sesion, String tipoPropiedad,
                              Map<String, String> datos, List<String> noEntendido) {

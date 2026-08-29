@@ -560,11 +560,28 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * <p><b>Efecto colateral, y se ACUMULA.</b> Retrasar
      * {@code propiedad.fecha_registro} saca a esta propiedad del universo de la
      * comprobacion <b>78</b> del gate, y la propiedad <b>se queda</b>: no es una
-     * menos por corrida, son <b>29 acumuladas</b> a fecha de 2026-08-29, todas
-     * con {@code fecha_registro = frontera - 2 dias}. Hoy es inocuo —medido: las
-     * 29 tienen {@code METRAJE} con rastro, asi que <b>ninguna era
-     * infractora</b>—, pero el universo de esa comprobacion se estrecha con cada
-     * corrida y eso hay que decirlo, no descubrirlo.
+     * menos por corrida, es <b>una mas fuera del universo por cada corrida</b>,
+     * todas con {@code fecha_registro = frontera - 2 dias}.
+     *
+     * <p><b>Cuantas hay NO se escribe aqui</b>, y la razon es la misma que
+     * obligo a sacar del javadoc de arriba el recuento de {@code m²}: <b>esta
+     * prueba mueve esa cifra cada vez que corre</b>. La ronda que la midio
+     * escribio 29 y en la pasada de cierre de esa misma ronda ya eran 32,
+     * porque la suite habia vuelto a correr. Una cifra que el propio artefacto
+     * incrementa no puede vivir escrita a mano en el artefacto.
+     *
+     * <p>Lo que si es invariante, y por eso se dice: <b>ninguna de las
+     * acumuladas es infractora</b> —todas tienen {@code METRAJE} con rastro—,
+     * asi que el efecto <b>estrecha</b> el universo de la 78 pero <b>no oculta
+     * ningun defecto</b>. Se comprueba con:
+     *
+     * <pre>
+     *   select count(*) from propiedad p
+     *    where p.fecha_registro = frontera_de_linaje() - interval '2 days'
+     *      and not exists (select 1 from rastro_valor_gobernado r
+     *                       where r.id_agregado = p.id_propiedad
+     *                         and r.clave = 'metraje_total');   -- tiene que dar 0
+     * </pre>
      */
     @Test
     @DisplayName("V85: un area_terreno huerfano sobre un TERRENO se lee entero y se puede retirar")

@@ -1065,11 +1065,26 @@ class OcupacionYServiciosIntegrationTest {
      * Un terreno con lo minimo del alta y SIN los dos servicios. Lleva
      * {@code zonificacion} porque en un terreno es ALT desde antes de este corte:
      * sin ella el alta se rechazaria y el caso mediria otra cosa.
+     *
+     * <p><b>Y lleva {@code condicion_terreno} desde `V85`</b>, que es la TERCERA
+     * {@code PUB} del terreno (D-3, subtanda 5B). No es una concesion ni un
+     * relleno: los casos de esta clase afirman que <b>los dos servicios son la
+     * unica causa de bloqueo</b> de este terreno, y esa afirmacion solo se
+     * sostiene si lo demas esta satisfecho. Sin esta linea, 5B habria puesto en
+     * rojo tres casos de 5A por una razon que no tiene nada que ver con lo que
+     * miden — y "arreglarlo" aflojando la lista esperada a "contiene
+     * agua_desague" habria convertido una igualdad en una inclusion, que es
+     * justo la forma de debilitar una prueba sin que se note.
+     *
+     * <p>Que este metodo tenga que crecer cada vez que el terreno estrena una
+     * {@code PUB} es correcto y es la señal: el dia que alguien anada una cuarta
+     * sin tocar esto, estos casos se lo diran.
      */
     private long registrarTerreno() {
         return registrar("TERRENO",
                 List.of(new ValorAtributo("metraje_total", "500"),
-                        new ValorAtributo("zonificacion", "RDM")),
+                        new ValorAtributo("zonificacion", "RDM"),
+                        new ValorAtributo("condicion_terreno", "URBANO_HABILITADO")),
                 new OperacionSolicitada("VENTA", new BigDecimal("300000"), "USD",
                         null, null, null, null, null, null, null));
     }

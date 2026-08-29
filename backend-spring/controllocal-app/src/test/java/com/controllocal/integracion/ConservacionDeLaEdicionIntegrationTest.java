@@ -208,7 +208,12 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("acceso_vehiculo_maximo", "CAMIONETA"),
                         // V84: el hecho sobre el que se pacta `entrega_desocupado`,
                         // que llega a los siete tipos.
-                        v("estado_ocupacion", "OCUPADO_POR_INQUILINO")),
+                        v("estado_ocupacion", "OCUPADO_POR_INQUILINO"),
+                        // CORTE 5 · 5B (`V85`): la unica clave del suelo que llega
+                        // al local. Avenida o pasaje es el doble de precio para el
+                        // mismo metraje, y eso vale igual para un local que para un
+                        // terreno.
+                        v("tipo_via_acceso", "CALLE_O_JIRON")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("OFICINA", "COMERCIAL", List.of(
@@ -362,7 +367,21 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("mascotas_reglamento", "true"),
                         v("gas", "SIN_RED_CERCANA"),
                         v("agua_caliente", "NO_TIENE"),
-                        v("estado_ocupacion", "OCUPADO_POR_TERCEROS_SIN_TITULO")),
+                        v("estado_ocupacion", "OCUPADO_POR_TERCEROS_SIN_TITULO"),
+                        // CORTE 5 · 5B (`V85`): las cinco claves del suelo que NO
+                        // son solo del terreno. Una casa que se compra por su lote
+                        // se cotiza por lo mismo que un terreno --partida, fondo,
+                        // frentes, altura permitida y riesgo declarado-- y ahi el
+                        // dato es el mismo hecho, no una version reducida.
+                        //
+                        // `area_terreno` SE QUEDA en este caso: para una CASA no
+                        // nombra la misma verdad que `metraje_total`. D-7 retira
+                        // SOLO la fila de `T`.
+                        v("situacion_registral", "EN_SANEAMIENTO"),
+                        v("fondo", "20.00"),
+                        v("posicion_en_manzana", "UN_FRENTE"),
+                        v("altura_normativa_pisos", "5"),
+                        v("zona_de_riesgo", "false")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("TERRENO", "COMERCIAL", List.of(
@@ -371,7 +390,28 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("estacionamientos", "1"),
                         v("frente", "15.50"),
                         v("zonificacion", "CZ"),
-                        v("area_terreno", "500.00"),
+                        // `area_terreno` SE VA DE ESTE CASO, Y SOLO DE ESTE (D-7,
+                        // `V85`). Para un TERRENO nombraba la MISMA verdad que
+                        // `metraje_total` --que es la superficie canonica, columna
+                        // `propiedad.metraje`, ALT en los siete y NOT NULL--, y dos
+                        // claves para una verdad no comparan nada. `V85` retira su
+                        // aplicabilidad a `T`, asi que desde ahi el alta la rechaza
+                        // y dejarla aqui pondria este caso rojo.
+                        //
+                        // SE VA DE `T` Y **SOLO** DE `T`: los casos de CASA (250.00)
+                        // y ALMACEN (900.00) la conservan, porque ahi NO es la misma
+                        // verdad -- una casa se tasa por el par (terreno, construida)
+                        // y una nave tiene patio ademas de techo.
+                        //
+                        // Este fixture es ademas el que produjo las 307 filas de
+                        // `area_terreno` sobre terrenos que quedaron en
+                        // `controllocal_repositorios`, todas con 500.00 contra un
+                        // metraje de 500.00: COINCIDIAN POR CONSTRUCCION. Por eso
+                        // `V85` escribe su regla como invariante --"ninguna se pierde
+                        // sin coincidir con `metraje_total` o sin quedar contada"-- y
+                        // nunca como la cifra "0 discrepantes", que es lo que este
+                        // fixture hacia cierto y dejaria de serlo en cuanto alguien
+                        // registrara un terreno a mano.
                         // V84 REESCRIBE ESTA LINEA, NO LA BORRA. Hasta el Corte 5
                         // aqui iba `servicios_disponibles` con el texto libre
                         // «Agua, luz y desague»: la clave era LISTA sin una sola
@@ -406,8 +446,48 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("gas", "SIN_RED_CERCANA"),
                         v("acceso_vehiculo_maximo", "CAMIONETA"),
                         v("via_de_acceso", "Panamericana Sur km 32"),
-                        v("estado_ocupacion", "DESOCUPADO")),
-                        Set.of("DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
+                        v("estado_ocupacion", "DESOCUPADO"),
+                        // CORTE 5 · 5B (`V85`): las 18 claves del suelo. Todas
+                        // aplican a T, y con ellas el TERRENO pasa de 16 a 33
+                        // caracteristicas -- medido contra el catalogo, no contra
+                        // el prototipo `motor-captura.js`, que declara 22 de las
+                        // 123 claves del Core (deriva N18 de `pendientes-brox.md`)
+                        // y por eso imprime 9. Ninguna de las 16 anteriores
+                        // hablaba del suelo COMO SUELO.
+                        //
+                        // `tipo_via_acceso` CONVIVE con `via_de_acceso`, dos lineas
+                        // mas arriba, y por eso van las dos en este caso: una dice
+                        // CUAL es la via, la otra de que CLASE es. Si una sustituyera
+                        // a la otra, este fixture seria el sitio donde se notaria.
+                        v("condicion_terreno", "URBANO_HABILITADO"),
+                        v("situacion_registral", "INSCRITO_EN_SUNARP"),
+                        v("zona_de_riesgo", "false"),
+                        v("restriccion_arqueologica", "NO_APLICA"),
+                        v("fondo", "25.00"),
+                        v("posicion_en_manzana", "ESQUINA"),
+                        v("topografia", "PLANO"),
+                        v("tipo_via_acceso", "AVENIDA"),
+                        v("estado_via", "ASFALTADA"),
+                        // CERO A PROPOSITO, y es la unica clave de las 18 que se
+                        // elige por su valor y no por comodidad: declarar 0 m2
+                        // construidos es una MEDIDA --el lote esta vacio-- y no es
+                        // lo mismo que dejarlo en blanco, que es "no consta". Si la
+                        // ida y vuelta convirtiera el 0 en nulo, esa distincion se
+                        // perderia sin que nada mas lo dijera.
+                        v("edificacion_existente", "0.00"),
+                        v("cercado", "true"),
+                        v("certificado_parametros_vigente", "true"),
+                        v("altura_normativa_pisos", "8"),
+                        v("coeficiente_edificacion", "3.50"),
+                        v("area_libre_minima", "30.00"),
+                        v("retiro_municipal", "3.00"),
+                        v("lote_minimo_normativo", "160.00"),
+                        v("usos_compatibles", "Comercio vecinal, vivienda multifamiliar")),
+                        // BOOLEANO entra aqui con `V85`: hasta 5B el TERRENO no
+                        // tenia ni una sola clave booleana y ahora tiene tres
+                        // (`cercado`, `certificado_parametros_vigente`,
+                        // `zona_de_riesgo`).
+                        Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 new CasoDeTipo("ALMACEN", "INDUSTRIAL", List.of(
                         v("metraje_total", "800.00"),
@@ -464,7 +544,13 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("via_de_acceso", "Panamericana Sur km 32"),
                         // V84: `agua_desague` llega tambien a la nave, y ahi es OPC.
                         v("agua_desague", "CONECTADO"),
-                        v("estado_ocupacion", "DESOCUPADO")),
+                        v("estado_ocupacion", "DESOCUPADO"),
+                        // CORTE 5 · 5B (`V85`): la via llega tambien a la nave, y
+                        // ahi decide el negocio -- a un almacen al que se llega por
+                        // trocha no entra un trailer. Van las DOS, `via_de_acceso`
+                        // (arriba, TEXTO: cual) y estas (que clase y en que estado).
+                        v("tipo_via_acceso", "CARRETERA"),
+                        v("estado_via", "AFIRMADA")),
                         Set.of("BOOLEANO", "DECIMAL", "ENTERO", "LISTA", "LISTA_MULTIPLE", "TEXTO")),
 
                 // OTRO admitia tres claves hasta V84 y ahora admite cuatro: el

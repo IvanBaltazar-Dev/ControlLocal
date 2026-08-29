@@ -1074,12 +1074,28 @@ class CatalogoQueHablaIntegrationTest {
         assertTrue(ficha.faltanParaPublicar().stream().anyMatch(a -> "zonificacion".equals(a.clave())),
                 "y tambien impide publicar: omitirla aqui prometeria que basta con completar las PUB");
 
-        // Y ninguna OPC se cuela en ninguna de las dos. `area_terreno` aplica a T
-        // y es OPC; el terreno de prueba no la trae.
-        assertNull(valorDe(id, "area_terreno"), "el caso necesita que esa OPC este ausente");
-        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "area_terreno".equals(a.clave()))
+        // Y ninguna OPC se cuela en ninguna de las dos. `frente` aplica a T y es
+        // OPC; el terreno de prueba no la trae.
+        //
+        // AQUI IBA `area_terreno` HASTA `V85`, y cambiarla no es cosmetica: D-7
+        // retiro esa clave de `T`, asi que una OPC que ya no aplica al tipo
+        // habria seguido saliendo VERDE -- por supuesto que no aparece entre los
+        // faltantes de un terreno: el catalogo ya no la pregunta ahi. La prueba
+        // habria dejado de medir lo que dice medir sin ponerse roja, que es
+        // exactamente el modo de fallo que este repositorio persigue. Se
+        // reapunta a una OPC que SIGUE aplicando a `T` despues de 5B.
+        assertNull(valorDe(id, "frente"), "el caso necesita que esa OPC este ausente");
+        assertEquals(1, jdbc.queryForObject("""
+                select count(*) from catalogo_atributo c
+                  join catalogo_atributo_tipo t on t.id_catalogo_atributo = c.id_catalogo_atributo
+                 where c.clave = 'frente' and c.organizacion_id is null and c.activo
+                   and t.tipo_propiedad = 'T' and t.exigencia = 'OPC'
+                """, Integer.class),
+                "el caso necesita que `frente` sea una OPC VIVA en T: si dejara de aplicar, "
+                        + "las dos aserciones de abajo saldrian verdes sin medir nada");
+        assertTrue(ficha.atributosQueFaltan().stream().noneMatch(a -> "frente".equals(a.clave()))
                         && ficha.faltanParaPublicar().stream()
-                                .noneMatch(a -> "area_terreno".equals(a.clave())),
+                                .noneMatch(a -> "frente".equals(a.clave())),
                 "una OPC ausente no bloquea nada y no aparece como faltante en ninguna lista");
     }
 

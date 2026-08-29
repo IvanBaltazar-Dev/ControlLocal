@@ -114,6 +114,11 @@ class GateDeCierreTest {
                         "PropiedadUniversalIntegrationTest",
                         "RepositorioEstadosIntegrationTest",
                         "SimulacroRecuperacionIntegrationTest",
+                        // Corte 5 · 5B (V85) - el suelo y lo que la norma deja
+                        // hacer con el: las 18 claves del terreno, la unica PUB
+                        // que estrena el corte y la retirada de `area_terreno`
+                        // en T, que era la segunda clave para una sola verdad.
+                        "SueloYParametrosUrbanisticosIntegrationTest",
                         // Corte 0C - de quien es cada dato.
                         "SujetoDelDatoIntegrationTest",
                         "VocabularioPersistidoIntegrationTest"),

@@ -208,9 +208,13 @@ class PropiedadUniversalIntegrationTest {
         ResultadoRegistro alta = propiedades.registrar(comando("TERRENO", "VENTA",
                 new BigDecimal("95000"), "USD",
                 List.of(new Titular(propietarioAna, null, null)),
+                // `area_terreno` SALE de esta alta con `V85` (D-7): para un
+                // TERRENO nombraba la misma verdad que `metraje_total` --que ya
+                // esta aqui arriba con el mismo 300-- y el catalogo ya no la
+                // admite sobre `T`. Dejarla haria que esta alta se rechazara con
+                // `check_violation`, que es el efecto buscado y no un fallo.
                 List.of(new ValorAtributo("metraje_total", "300"),
-                        new ValorAtributo("zonificacion", "RDM"),
-                        new ValorAtributo("area_terreno", "300"))), agenteA);
+                        new ValorAtributo("zonificacion", "RDM"))), agenteA);
 
         FichaPropiedadUniversal ficha = propiedades.consultar(alta.idPropiedad(), agenteA);
         assertTrue(ficha.atributos().stream().anyMatch(a -> "zonificacion".equals(a.clave())));

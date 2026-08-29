@@ -513,6 +513,32 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * posterior al cutover y sin rastro— y envenenaria la comprobacion 76 del
      * gate de 4.P desde aqui. Misma leccion que
      * {@code OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo}.
+     *
+     * <h2>Lo que este caso DEJO de cubrir al hacerse atomico, dicho y no
+     * disimulado</h2>
+     * La version del {@code finally} escribia el huerfano <b>por el servicio</b>
+     * ({@code escribirEnEdicion}), asi que de paso ejercitaba esa puerta con la
+     * aplicabilidad abierta. La version atomica lo escribe con un {@code INSERT}
+     * crudo dentro del bloque. <b>Es una perdida de cobertura real</b>, y se
+     * acepta por dos razones: lo que este caso viene a probar es la LECTURA y la
+     * RETIRADA de un huerfano —no su escritura—, y la puerta de escritura ya la
+     * cubre {@code areaTerrenoYaNoEntraPorNingunaPuertaEnUnTerreno}, que exige
+     * que el servicio la RECHACE. Cubrir tambien el camino contrario obligaria a
+     * dejar la puerta abierta entre dos transacciones, que es exactamente el
+     * defecto que se corrige.
+     *
+     * <p><b>Y la atomicidad no es autocuracion.</b> El bloque garantiza que este
+     * caso no deja la puerta abierta; <b>no</b> repara una que ya lo estuviera.
+     * Si un residuo previo dejo la fila {@code area_terreno/T} sembrada, el
+     * {@code INSERT} de aqui aborta por clave primaria y la deja como estaba —
+     * igual que el patron viejo—. La promesa cubre la ventana que este caso
+     * crea, no una heredada.
+     *
+     * <p>Efecto colateral, medido: retrasar {@code propiedad.fecha_registro}
+     * saca a esta propiedad del universo de la comprobacion <b>78</b> del gate
+     * —una propiedad menos por corrida—. Hoy es inocuo (la propiedad que se
+     * siembra no era infractora), pero es una reduccion de universo y por eso se
+     * escribe.
      */
     @Test
     @DisplayName("V85: un area_terreno huerfano sobre un TERRENO se lee entero y se puede retirar")
@@ -526,7 +552,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                         + "gate SQL, dicha desde Java");
         assertEquals(1L, contar("select count(*) from atributo_propiedad where id_propiedad = "
                         + id + " and clave = 'area_terreno'"),
-                "el productor del huerfano no escribio nada: el caso mediria un universo vacio");
+                "la siembra del huerfano no escribio la fila: el caso mediria un universo vacio");
         assertEquals(0L, contar("""
                 select count(*) from atributo_propiedad a
                   join propiedad p on p.id_propiedad = a.id_propiedad

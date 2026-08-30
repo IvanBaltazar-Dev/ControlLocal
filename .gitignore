@@ -102,20 +102,80 @@ CLAUDE.md
 
 # ============================================================
 # Internal documentation
+#
+# The repository is PUBLIC (github.com/IvanBaltazar-Dev/ControlLocal), so
+# `docs/` does NOT travel: it carries the North Star, the commissions, the
+# audits and `docs/ai/seguridad-no-leer.md`.
+#
+# The exception is narrow and mechanical: a document travels ONLY if a test
+# READS it, because otherwise a clean clone cannot run the build. There is no
+# copy under `src/test/resources` on purpose -- two copies diverge in silence,
+# which is the disease that cost eight rounds in 5B. Authority stays single.
+#
+#   docs/ai/matriz-codigos-estado.md          <- CatalogoEstadosTest
+#   docs/ai/catalogo-productores-canonico.md  <- CatalogoProductoresTest
+#   docs/ai/decision-estados-sin-productor.md <- EstadosSinProductorTest
+#   docs/ai/matriz-operacion-rol.md           <- MatrizOperacionRolTest
+#   docs/ai/prototipos/nucleo-brox.js         <- PoliticaUnicaTest
+#   docs/ai/modelo/*.js                       <- node gate-modelo-universal.js
+#
+# The six tests FAIL (they do not skip) when the file is missing, so a clone
+# without them is a red build, not a silent green.
+#
+# The `docs/*` + `!` shape is deliberate: git cannot re-include a file whose
+# parent DIRECTORY is excluded, so each level has to be opened before the
+# contents of the next one are excluded.
 # ============================================================
 
-docs/
+docs/*
+!docs/ai/
+docs/ai/*
+!docs/ai/matriz-codigos-estado.md
+!docs/ai/catalogo-productores-canonico.md
+!docs/ai/decision-estados-sin-productor.md
+!docs/ai/matriz-operacion-rol.md
+!docs/ai/modelo/
+docs/ai/modelo/*
+!docs/ai/modelo/gate-modelo-universal.js
+!docs/ai/modelo/modelo-universal.js
+!docs/ai/modelo/motor-captura.js
+!docs/ai/prototipos/
+docs/ai/prototipos/*
+!docs/ai/prototipos/nucleo-brox.js
 
 
 # ============================================================
 # Internal development / verification tooling
+#
+# Same rule as `docs/`: only what a clean clone needs to run the closing run
+# (`verificacion/Verificar-Cierre.ps1`) travels.
+#
+#   Verificar-Cierre.ps1      the closing run itself, read by GateDeCierreTest
+#   gate-modelo-universal.sql step 2 of the closing run
+#   Invoke-E2E.ps1            step 5, and it needs docker-compose.e2e.yml
+#   e2e-context.ps1           dot-sourced by every suite
+#   lib-alta-inmueble.ps1     dot-sourced by `editor-universal`
+#   e2e-<suite>.ps1           the five suites of the DEFAULT $Suites list
+#
+# `evidencia/` does NOT travel (2.4 MB, 69 files): it is dated history, not a
+# requirement to run anything. Neither do the E2E suites outside the closing
+# run's default list, nor `operacion/`, nor `backups/`.
 # ============================================================
 
 backend-spring/operacion/
-backend-spring/verificacion/
 backend-spring/backups/
 
-backend-spring/docker-compose.e2e.yml
+backend-spring/verificacion/*
+!backend-spring/verificacion/Verificar-Cierre.ps1
+!backend-spring/verificacion/gate-modelo-universal.sql
+!backend-spring/verificacion/Invoke-E2E.ps1
+!backend-spring/verificacion/e2e-context.ps1
+!backend-spring/verificacion/lib-alta-inmueble.ps1
+!backend-spring/verificacion/e2e-comision-movimientos.ps1
+!backend-spring/verificacion/e2e-disponibilidad-contrato.ps1
+!backend-spring/verificacion/e2e-f4-solicitud.ps1
+!backend-spring/verificacion/e2e-estabilizacion-alquiler.ps1
+!backend-spring/verificacion/e2e-editor-universal.ps1
 
 frontend-angular/tools/
 

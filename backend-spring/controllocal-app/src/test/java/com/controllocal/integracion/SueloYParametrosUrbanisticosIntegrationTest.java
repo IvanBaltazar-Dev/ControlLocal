@@ -767,6 +767,113 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                         + "escrita esa medida» seria una afirmacion que la base no sostiene");
     }
 
+    /**
+     * <b>Y si la edicion REENVIA la ficha entera, con el conservado dentro.</b>
+     *
+     * <p>Este caso no existia y la deuda {@code N33} lo pedia por nombre
+     * (auditoria del 2026-08-29; construido en D0 el 2026-08-30). Las dos mitades
+     * de {@code D-7} son deliberadas —conservar el {@code area_terreno} que
+     * <b>discrepa</b> de {@code metraje_total}, porque no se sabe cual de las dos
+     * superficies es la correcta y elegir seria inventar; y cerrar la puerta de
+     * escritura para {@code T}, porque sobre un terreno esa clave duplica la
+     * superficie canonica—. Lo que nadie habia medido es <b>que pasa cuando las
+     * dos se encuentran</b>: un cliente que lee la ficha y la devuelve entera
+     * manda tambien el valor conservado, sin cambiarlo.
+     *
+     * <h2>Lo que se mide aqui, y no es una eleccion</h2>
+     *
+     * <p>El caso se construye —{@link #sembrarHuerfano} escribe 777 sobre un
+     * terreno de 500 m², que es un discrepante de verdad— y se observa. Lo
+     * medido:
+     *
+     * <ol>
+     *   <li>la ficha <b>devuelve</b> el conservado, asi que un cliente que
+     *       reenvie lo que leyo lo incluye sin saberlo;</li>
+     *   <li>el reenvio se <b>rechaza por aplicabilidad</b>, aunque el valor sea
+     *       <b>identico</b> al que ya estaba: {@code escribirEnEdicion} llama a
+     *       {@code exigirQueAplique} antes de mirar si hay algo que cambiar;</li>
+     *   <li>el conservado <b>no se pierde</b> —{@code editar} es
+     *       {@code @Transactional}, asi que no queda a medias—;</li>
+     *   <li><b>pero la edicion legitima que viajaba en la misma carga tampoco
+     *       entra</b>. Es el coste real: mientras el conservado este en la ficha,
+     *       un cliente que reenvie entero no puede editar <i>nada</i> de ese
+     *       terreno;</li>
+     *   <li>y sin el conservado en la carga, esa misma edicion entra.</li>
+     * </ol>
+     *
+     * <h2>Por que esto NO decide nada</h2>
+     *
+     * <p>Hay <b>dos comportamientos legitimos</b> y este caso no elige: tolerar
+     * el reenvio del valor <i>identico</i> —la puerta rechazaria solo el
+     * <b>cambio</b>—, o exigir que el cliente lo excluya —lo de hoy—. Las dos
+     * respetan {@code D-7}; la primera es mas amable con el cliente y la segunda
+     * es mas simple de explicar. La eleccion es del titular, no de una prueba.
+     *
+     * <p>Mientras tanto esto fija <b>lo que hoy ocurre</b>, que es lo que faltaba:
+     * si alguien cambia la puerta, este caso lo dice en vez de dejar que el
+     * cambio pase inadvertido. El SPA no provoca el caso —edita por atributo, no
+     * reenviando la ficha—, asi que hoy no hay nadie a quien le duela; el dia que
+     * un consumidor reenvie entero, lo hara.
+     */
+    @Test
+    @DisplayName("V85: reenviar la ficha entera con el area_terreno conservado se rechaza")
+    void reenviarLaFichaEnteraConElAreaConservada() {
+        long id = registrarTerreno();
+        sembrarHuerfano(id, 777);
+
+        assertEquals(0, new BigDecimal("777").compareTo(new BigDecimal(valorDe(id, "area_terreno"))),
+                "el caso empieza con un DISCREPANTE conservado -- 777 contra los 500 de "
+                        + "metraje_total -- o no habria nada que medir");
+        assertNull(valorDe(id, "topografia"),
+                "y sin la edicion legitima puesta todavia: si ya estuviera, el paso que mide "
+                        + "si se pierde no probaria nada");
+
+        // (1) Lo que un cliente que lee la ficha y la devuelve entera mandaria:
+        //     el conservado con su MISMO valor, junto a una edicion legitima.
+        ReglaNegocioException reenvio = assertThrows(ReglaNegocioException.class,
+                () -> propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
+                        List.of(new ValorAtributo("topografia", "PLANO"),
+                                new ValorAtributo("area_terreno", "777")),
+                        null, null), actor()),
+                "reenviar la ficha entera con el conservado dentro tiene que dar una respuesta "
+                        + "dicha, no un comportamiento sin medir");
+        assertTrue(reenvio.getMessage()
+                        .contains("\"area_terreno\" no aplica a una propiedad de tipo TERRENO"),
+                "y la rechaza por APLICABILIDAD, sin mirar si el valor cambia: " + reenvio.getMessage());
+
+        // (2) El conservado sigue entero: el rechazo no deja la ficha a medias.
+        assertEquals(0, new BigDecimal("777").compareTo(new BigDecimal(valorDe(id, "area_terreno"))),
+                "el valor que D-7 conserva a proposito no se puede perder por un rechazo");
+
+        // (3) Y este es el coste, medido: la edicion legitima que viajaba con el
+        //     tampoco entro. No es una perdida de dato escrito -- es una edicion
+        //     que el broker creyo hacer y no ocurrio.
+        assertNull(valorDe(id, "topografia"),
+                "la edicion legitima cae con el conservado: `editar` es @Transactional y es "
+                        + "todo o nada. Este es el coste que N33 pedia medir");
+
+        // (4) Sin el conservado en la carga, la misma edicion entra. Es lo que
+        //     hace que la decision sea entre dos comportamientos y no una entre
+        //     un defecto y su arreglo.
+        editar(id, new ValorAtributo("topografia", "PLANO"));
+        assertEquals("PLANO", valorDe(id, "topografia"),
+                "excluyendo el conservado, editar ese terreno funciona: la puerta cerrada no "
+                        + "bloquea la ficha, bloquea la carga que incluye la clave retirada");
+
+        // (5) Y SE DEJA LA BASE COMO SE ENCONTRO. Sin esto, cada corrida deja un
+        //     `area_terreno` sobre un TERRENO en `controllocal_repositorios` --se
+        //     midieron dos el 2026-08-30, de las dos primeras pasadas de este
+        //     caso-- y esa fila entra en el universo de «5B ningun area_terreno
+        //     de un TERRENO repite su metraje canonico». Un gate que mide sobre
+        //     el residuo que dejan sus propias pruebas queda atado a una base
+        //     concreta, que es el defecto que D0 vino a pagar. El universo de esa
+        //     comprobacion lo fabrica su control positivo, no este caso.
+        propiedades.editar(id, new ComandoEdicion(null, null, null, null, null,
+                null, null, List.of("area_terreno")), actor());
+        assertNull(valorDe(id, "area_terreno"),
+                "el caso tiene que dejar la base como la encontro: el conservado se retira");
+    }
+
     // ==================================================================
     // 4. El par hecho/condicion, y la convivencia de las dos vias
     // ==================================================================

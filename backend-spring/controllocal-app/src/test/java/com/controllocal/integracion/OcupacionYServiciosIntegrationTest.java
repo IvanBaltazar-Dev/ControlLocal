@@ -690,8 +690,11 @@ class OcupacionYServiciosIntegrationTest {
      * <b>linaje</b>: el acta deja su {@code evidencia_ref}, una persona deja su
      * {@code id_persona_rol} —y su {@code naturaleza} si la sabe—. Un valor
      * sobre un legado ambiguo sin ninguna de las tres no lo afirmo nadie.
-     * Predicado <b>identico</b> al de la comprobacion 91 del gate: dos formas
-     * distintas de la misma pregunta vuelven a divergir.
+     * Predicado <b>identico</b> al de «5A ningun inmueble con legado recibio
+     * un servicio sin que nadie lo afirmara», la comprobacion del gate: dos
+     * formas distintas de la misma pregunta vuelven a divergir. Se cita por su
+     * NOMBRE y no por su posicion en el informe -- una comprobacion nueva mas
+     * arriba mueve el numero y deja el puntero senalando a otra cosa (N30).
      */
     @Test
     @DisplayName("V84: ningun inmueble con legado recibio un servicio que nadie afirmo")
@@ -746,8 +749,8 @@ class OcupacionYServiciosIntegrationTest {
                     "la consulta no caza un servicio escrito sobre un legado ambiguo sin ningun "
                             + "linaje: entonces su verde no significa nada");
         } finally {
-            // Se retira: si se quedara, la comprobacion 76 de 4.P - «despues del
-            // cutover ningun hecho del inmueble sin linaje» - vería un defecto que
+            // Se retira: si se quedara, «4P despues del cutover ningun hecho del
+            // inmueble sin linaje» veria un defecto que
             // introdujo esta prueba, y envenenaria toda medicion posterior.
             jdbc.update("delete from atributo_propiedad where id_propiedad = ? "
                     + "and clave = 'agua_desague'", sinLinaje);
@@ -915,8 +918,8 @@ class OcupacionYServiciosIntegrationTest {
      * legado es</h2>
      *
      * <p>La primera version dejaba el {@code DEFAULT now()}, y la comprobacion
-     * <b>76</b> de 4.P —«despues del cutover ningun hecho del inmueble sin
-     * linaje»— se puso <b>roja</b> sobre {@code controllocal_repositorios}: seis
+     * «4P despues del cutover ningun hecho del inmueble sin linaje»
+     * se puso <b>roja</b> sobre {@code controllocal_repositorios}: seis
      * filas sembradas por este fixture, posteriores a la frontera y sin rastro.
      * Tenia razon. Un valor que aparece <b>despues</b> del cutover sin que nadie
      * lo declare es un defecto real, y fabricarlo aqui habria envenenado la
@@ -926,7 +929,8 @@ class OcupacionYServiciosIntegrationTest {
      * linaje. Asi que el fixture escribe con esa fecha, y con eso deja de mentir
      * en dos direcciones a la vez. <b>Aqui no va la cifra</b> de cuantas filas de
      * legado hay: la mide el propio caso antes de afirmar nada, y el gate la
-     * imprime en la columna {@code nota} de su comprobacion 92. Escrita aqui como
+     * imprime en la columna {@code nota} de «5A CONTROL el predicado del legado
+     * caza una traduccion sin linaje». Escrita aqui como
      * estado presente naceria caducada -- cada corrida de esta suite la mueve --,
      * y esta casa ya pago esa leccion.
      *
@@ -936,18 +940,39 @@ class OcupacionYServiciosIntegrationTest {
      * <b>despues</b> de la frontera. Fechar solo el atributo dejaba la fila del
      * legado <b>anterior a su propia propiedad</b>: un imposible temporal --las
      * unicas cuatro filas asi de toda la tabla el 2026-08-25-- que hoy no mira
-     * ningun gate, y esquivar el dato imposible que la 76 <i>si</i> ve fabricando
+     * ningun gate hasta D0, y esquivar el dato imposible que «4P despues del
+     * cutover ningun hecho del inmueble sin linaje» <i>si</i> ve fabricando
      * otro que nadie ve no es esquivarlo (auditoria del 2026-08-25, N13). El
      * {@code DO} envejece tambien {@code fecha_registro}, un dia antes que el
      * legado, y el orden queda entero: propiedad -> legado -> frontera.
      *
      * <p><b>Lo que eso cuesta, dicho</b>: la propiedad sembrada sale del universo
-     * de la comprobacion <b>78</b> de 4.P, que se mide sobre las registradas
-     * <i>despues</i> del cutover. Es coherente --una propiedad con legado previo
-     * al cutover es, precisamente, anterior al cutover-- y no tapa nada: los
-     * otros siete {@code registrarTerreno()} de esta suite siguen entrando en ese
-     * universo, y lo que hoy tiene roja la 78 en {@code controllocal_repositorios}
-     * es {@code PISO} escrito sin linaje por otra suite, no estos terrenos.
+     * de «4P despues del cutover ninguna columna estructural sin linaje», que se
+     * mide sobre las registradas <i>despues</i> del cutover. Es coherente --una
+     * propiedad con legado previo al cutover es, precisamente, anterior al
+     * cutover-- y no tapa nada: <b>los demas</b> {@code registrarTerreno()} de
+     * esta suite --todos los que no pasan por este fixture-- siguen entrando en
+     * ese universo.
+     *
+     * <h2>Dos cosas que este javadoc afirmaba y no eran ciertas</h2>
+     *
+     * <p><b>Citaba las dos comprobaciones por su NUMERO DE ORDEN</b> --«la 76»,
+     * «la 78»-- y el orden lo decide el fichero del gate: basta con anadir una
+     * comprobacion mas arriba para que el puntero senale a otra. D0 le anadio
+     * cuatro controles positivos al bloque 4.P y las dos se movieron. Se citan
+     * por su NOMBRE, que es lo unico estable, y el gate ancla esos nombres en
+     * «INFORME las guardas que otros artefactos citan siguen ahi»: renombrarlos
+     * sale rojo en vez de dejar este javadoc apuntando a nada.
+     *
+     * <p><b>Y decia «los otros SIETE {@code registrarTerreno()}»</b>, que eran
+     * ocho: la clase tiene diez sitios de llamada y solo dos pasan por este
+     * fixture. La cifra no se corrige por otra --la siguiente llamada que alguien
+     * anada la vuelve a caducar, y nada avisa--: se dice «los demas», que es lo
+     * que se queria decir y no depende de contar.
+     *
+     * <p>Las dos son la misma enfermedad -- documentacion viva apoyada en
+     * posiciones y en cifras contadas a mano -- y la misma que ya costo `N21`
+     * (auditoria del 2026-08-29, `N30`; corregido en D0 el 2026-08-30).
      */
     private void sembrarLegadoAmbiguo(long idPropiedad) {
         jdbc.execute("""

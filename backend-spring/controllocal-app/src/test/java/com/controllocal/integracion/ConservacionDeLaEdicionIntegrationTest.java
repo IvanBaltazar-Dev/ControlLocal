@@ -432,7 +432,9 @@ class ConservacionDeLaEdicionIntegrationTest {
                         // AL REESCRIBIRLA, ESTE FIXTURE DEJO DE PRODUCIR LEGADO, y
                         // durante unas horas NADIE lo producia: esas filas eran
                         // residuo, sobre una base nueva el universo era cero y la
-                        // comprobacion 91 del gate salia verde sin mirar nada. Lo
+                        // comprobacion «5A ningun inmueble con legado recibio un
+                        // servicio sin que nadie lo afirmara» salia verde sin mirar
+                        // nada. Lo
                         // midio la auditoria del 2026-08-25. El productor esta
                         // repuesto donde vive la comprobacion que lo necesita:
                         // `OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo`,

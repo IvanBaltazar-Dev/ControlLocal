@@ -203,7 +203,22 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      *
      * <p>Sin la segunda mitad, promover una clave <b>vieja</b> pasaria sin
      * ruido, y eso es exactamente lo que D-1 prohibe: la auditoria propone
-     * catorce {@code PUB} mas y ninguna esta autorizada.
+     * {@code PUB} para muchas claves que <b>ya existen</b> en el catalogo, y
+     * ninguna esta autorizada.
+     *
+     * <p><b>Aqui iba «catorce» y no salia de ninguna medicion.</b> Cruzada la
+     * columna «nivel» de {@code auditoria-profundidad-inmobiliaria.md} contra el
+     * catalogo vivo, las propuestas {@code PUB} sobre claves ya existentes y que
+     * hoy no lo son se cuentan por decenas, no por catorce. <b>La cifra se
+     * quita en vez de corregirse</b>, y es deliberado: la mueven el documento y
+     * el catalogo, ninguno de los dos vive aqui, y lo que esta prueba fija —la
+     * lista <b>exacta</b> de las cuatro— no la necesita. Lo que si es una
+     * medicion sobre un universo cerrado es el «cinco» de la asercion de abajo:
+     * son las claves de estas 18 a las que §3.8 pone {@code PUB} <b>ademas</b>
+     * de {@code condicion_terreno} — {@code situacion_registral},
+     * {@code fondo}, {@code posicion_en_manzana},
+     * {@code altura_normativa_pisos} y {@code tipo_via_acceso}—, contadas sobre
+     * la seccion entera y no sobre un recuerdo.
      */
     @Test
     @DisplayName("V85: condicion_terreno es la UNICA PUB nueva, y el catalogo tiene cuatro")
@@ -576,9 +591,27 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * {@code sembrarHuerfano} de aqui, y <b>dos</b>
      * {@code OcupacionYServiciosIntegrationTest.sembrarLegadoAmbiguo} —de
      * <b>5A</b>, con dos sitios de llamada—, que hace el mismo
-     * {@code update ... frontera_de_linaje() - interval '2 days'}. Medido:
-     * 35 -&gt; 38 tras un solo {@code mvn test}. Esa clase ya documenta su parte
-     * por su cuenta.
+     * {@code update ... frontera_de_linaje() - interval '2 days'}. Esa clase ya
+     * documenta su parte por su cuenta.
+     *
+     * <p><b>Se dice el INCREMENTO —tres— y NO el total</b>, y esa es la enmienda
+     * de la septima ronda. Para demostrar el incremento, la version anterior de
+     * este parrafo escribio el par absoluto «35 -&gt; 38 tras un solo
+     * {@code mvn test}» — <b>y ese par tambien habia caducado</b> una ronda
+     * despues, medido contra {@code controllocal_repositorios}, exactamente
+     * igual que las dos cifras que este mismo javadoc manda no escribir en el
+     * parrafo que empieza «Cuantas hay NO se escribe aqui». Ilustrar una regla
+     * con un ejemplo que la incumple no la ilustra: la deroga. Quien quiera
+     * comprobar el mecanismo <b>cuenta antes y despues en su propia
+     * corrida</b>, con la consulta que cierra este javadoc y <b>sin</b> su
+     * clausula {@code not exists}.
+     *
+     * <p><b>El incremento si aguanta, y por eso se escribe:</b> no es una medida
+     * de la base —que sube en cada corrida— sino un recuento de <b>sitios de
+     * llamada</b>, uno aqui y dos en la clase de 5A, que solo cambia si alguien
+     * anade o quita uno. Verificado el 2026-08-29 contra
+     * {@code controllocal_repositorios} corriendo las dos clases y contando el
+     * universo antes y despues: sube <b>exactamente en tres</b>.
      *
      * <p><b>Y hay que decir contra que base.</b> {@code Verificar-Cierre.ps1}
      * pasa el gate sobre {@code controllocal_dev}, y ahi las acumuladas son

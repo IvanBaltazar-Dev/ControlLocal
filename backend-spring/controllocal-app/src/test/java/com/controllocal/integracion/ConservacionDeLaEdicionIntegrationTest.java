@@ -403,11 +403,21 @@ class ConservacionDeLaEdicionIntegrationTest {
                         // verdad -- una casa se tasa por el par (terreno, construida)
                         // y una nave tiene patio ademas de techo.
                         //
-                        // Este fixture es ademas el que produjo las 307 filas de
-                        // `area_terreno` sobre terrenos que quedaron en
-                        // `controllocal_repositorios`, todas con 500.00 contra un
-                        // metraje de 500.00: COINCIDIAN POR CONSTRUCCION. Por eso
-                        // `V85` escribe su regla como invariante --"ninguna se pierde
+                        // Este fixture es ademas el que habia producido las filas
+                        // de `area_terreno` sobre terrenos que `V85` encontro en
+                        // `controllocal_repositorios`: 307, todas con 500.00
+                        // contra un metraje de 500.00, o sea COINCIDIENDO POR
+                        // CONSTRUCCION.
+                        //
+                        // Esa cifra es HISTORIA y se dice como tal: se midio
+                        // ANTES de aplicar la migracion, y la retirada de D-7 se
+                        // llevo las que coincidian y cerro la puerta de `T`.
+                        // Cuantas sobreviven hoy NO se escribe aqui -- lo mide
+                        // el gate en la columna `nota` de la comprobacion
+                        // «5B ningun area_terreno de un TERRENO repite su
+                        // metraje canonico».
+                        //
+                        // Por eso `V85` escribe su regla como invariante --"ninguna se pierde
                         // sin coincidir con `metraje_total` o sin quedar contada"-- y
                         // nunca como la cifra "0 discrepantes", que es lo que este
                         // fixture hacia cierto y dejaria de serlo en cuanto alguien
@@ -448,12 +458,26 @@ class ConservacionDeLaEdicionIntegrationTest {
                         v("via_de_acceso", "Panamericana Sur km 32"),
                         v("estado_ocupacion", "DESOCUPADO"),
                         // CORTE 5 · 5B (`V85`): las 18 claves del suelo. Todas
-                        // aplican a T, y con ellas el TERRENO pasa de 16 a 33
-                        // caracteristicas -- medido contra el catalogo, no contra
-                        // el prototipo `motor-captura.js`, que declara 22 de las
-                        // 123 claves del Core (deriva N18 de `pendientes-brox.md`)
-                        // y por eso imprime 9. Ninguna de las 16 anteriores
-                        // hablaba del suelo COMO SUELO.
+                        // aplican a T, y ninguna de las caracteristicas que el
+                        // TERRENO tenia antes hablaba del suelo COMO SUELO.
+                        //
+                        // ESTE COMENTARIO YA NO LLEVA CIFRAS DEL CATALOGO NI DEL
+                        // PROTOTIPO, y es la enmienda de la septima ronda.
+                        // Llevaba cuatro -- cuantas caracteristicas gana el
+                        // TERRENO, cuantas claves declara el prototipo
+                        // `motor-captura.js`, cuantas tiene el Core y cuantas
+                        // imprime el prototipo para TERRENO -- y TRES de ellas
+                        // las movio ESTE MISMO CORTE al sembrar las 18 claves y
+                        // al ampliar el contrato-dato, asi que nacieron
+                        // caducadas y siguieron caducadas seis rondas sin que
+                        // nada avisara. Una cifra que el propio corte incrementa
+                        // no puede vivir escrita a mano en un comentario: se
+                        // miden con `node docs/ai/modelo/motor-captura.js`,
+                        // contra `catalogo_atributo`, y en la columna `nota` de
+                        // la comprobacion «M2 no se retiraron claves del
+                        // catalogo del sistema» del gate SQL. La deriva
+                        // prototipo/Core sigue anotada como N18 en
+                        // `pendientes-brox.md`.
                         //
                         // `tipo_via_acceso` CONVIVE con `via_de_acceso`, dos lineas
                         // mas arriba, y por eso van las dos en este caso: una dice

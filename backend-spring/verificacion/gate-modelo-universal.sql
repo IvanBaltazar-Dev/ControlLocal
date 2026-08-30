@@ -288,16 +288,63 @@ SELECT pg_temp.comprobar('M2 no se retiraron claves del catalogo del sistema',
 -- por sujeto -- `catalogo_atributo_tipo` para PROPIEDAD,
 -- `catalogo_atributo_operacion` para ENCARGO --, que es la regla que la guarda
 -- 2.5 de V78 vigila en la otra direccion.
+--
+-- Llevaba delante un `AND NOT c.aplica_todos` que perdonaba a la clave que
+-- pusiera el campo. V86 le quito la autoridad al campo: una clave sin filas no
+-- aplica a nada por mucho que lo diga, asi que la excepcion pasaba a perdonar
+-- justo el caso roto.
 SELECT pg_temp.comprobar('M2 ninguna clave del sistema se quedo sin aplicabilidad',
     NOT EXISTS (
         SELECT 1 FROM catalogo_atributo c
-         WHERE c.del_sistema AND c.activo AND NOT c.aplica_todos
+         WHERE c.del_sistema AND c.activo
            AND ((c.sujeto = 'PROPIEDAD'
                  AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
                                   WHERE t.id_catalogo_atributo = c.id_catalogo_atributo))
              OR (c.sujeto = 'ENCARGO'
                  AND NOT EXISTS (SELECT 1 FROM catalogo_atributo_operacion o
                                   WHERE o.id_catalogo_atributo = c.id_catalogo_atributo)))));
+
+-- V86 - NINGUNA clave puede depender EXCLUSIVAMENTE de `aplica_todos`.
+--
+-- Es la comprobacion en estado de reposo del invariante que
+-- `tg_aplica_todos_respaldado` vigila al escribir: el campo resume las filas y
+-- no puede contradecirlas. Mide TODAS las claves, del sistema y de tenant, y
+-- declara en `nota` el universo que acaba de mirar -- un "0 encontradas" sin
+-- decir sobre cuantas no es una medicion.
+SELECT pg_temp.comprobar('M2 ninguna clave depende exclusivamente de aplica_todos',
+    NOT EXISTS (
+        SELECT 1 FROM catalogo_atributo c
+         WHERE c.aplica_todos
+           AND (c.sujeto <> 'PROPIEDAD'
+             OR EXISTS (SELECT 1 FROM tipos_de_propiedad() AS t(tipo)
+                         WHERE NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo x
+                                            WHERE x.id_catalogo_atributo = c.id_catalogo_atributo
+                                              AND x.tipo_propiedad = t.tipo)))),
+    'hay claves cuyo `aplica_todos` no esta respaldado por sus siete filas: el campo estaria decidiendo',
+    (SELECT format('%s claves con `aplica_todos` sobre %s del catalogo; sin respaldo: %s',
+                   count(*) FILTER (WHERE aplica_todos), count(*),
+                   count(*) FILTER (WHERE aplica_todos AND (sujeto <> 'PROPIEDAD'
+                       OR EXISTS (SELECT 1 FROM tipos_de_propiedad() AS t(tipo)
+                                   WHERE NOT EXISTS (SELECT 1 FROM catalogo_atributo_tipo x
+                                                      WHERE x.id_catalogo_atributo = c.id_catalogo_atributo
+                                                        AND x.tipo_propiedad = t.tipo)))))
+       FROM catalogo_atributo c));
+
+-- Y ningun cuerpo PL/pgSQL vuelve a consultarlo como autoridad. Es la leccion
+-- de V40/V44: una conversion que no llega al cuerpo de una funcion deja el
+-- esquema correcto, el build verde y la aplicacion rota, porque ni javac ni
+-- Hibernate leen un `prosrc`. Se excluye por nombre la unica funcion que SI
+-- tiene que nombrarlo: la guarda que lo vigila.
+SELECT pg_temp.comprobar('M2 ninguna funcion consulta aplica_todos como autoridad',
+    NOT EXISTS (
+        SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'public' AND p.prosrc LIKE '%aplica_todos%'
+           AND p.proname <> 'exigir_que_las_filas_respalden_aplica_todos'),
+    'un cuerpo PL/pgSQL sigue cortocircuitando por `aplica_todos`',
+    (SELECT format('funciones que lo nombran: %s',
+                   coalesce(string_agg(p.proname, ', ' ORDER BY p.proname), 'ninguna'))
+       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.prosrc LIKE '%aplica_todos%'));
 
 SELECT pg_temp.comprobar('M2 los atributos del sistema no tienen organizacion',
     NOT EXISTS (SELECT 1 FROM catalogo_atributo WHERE del_sistema AND organizacion_id IS NOT NULL));
@@ -1637,44 +1684,39 @@ SELECT pg_temp.comprobar('5B las siete LISTA del suelo tienen su vocabulario ent
 -- congelarlo: una clave anadida mueve el numero que imprime el informe. Bien
 -- formada, pasa --como debe--; mal formada, cae aqui.
 --
--- «APLICABLE A T» SE PREGUNTA COMO LO PREGUNTA LA PUERTA, Y SON DOS.
+-- «APLICABLE A T» SE PREGUNTA POR LAS FILAS, QUE SON LA UNICA AUTORIDAD.
 -- La primera version de esta comprobacion hacia `JOIN catalogo_atributo_tipo`
--- con `tipo_propiedad = 'T'`, y esa es UNA de las dos formas de aplicar: la otra
--- es `aplica_todos = true`, que vale para los siete tipos SIN necesidad de una
--- sola fila en esa tabla.
+-- con `tipo_propiedad = 'T'`; la segunda anadio `aplica_todos` porque entonces
+-- eran DOS las formas de aplicar, y una comprobacion que mira una sola de las
+-- dos puertas repite en su predicado el mismo hueco que vino a cerrar.
 --
--- EL HUECO ERA LATENTE, NO VIVO, y conviene decirlo con precision porque la
--- primera version de este comentario afirmo lo contrario. Medido el 2026-08-30:
--- las tres claves con `aplica_todos` --`metraje_total`, `estacionamientos` y
--- `antiguedad_anios`, y la primera es la superficie canonica-- llevan ADEMAS sus
--- siete filas de `catalogo_atributo_tipo`, asi que hoy las dos puertas dan el
--- mismo conjunto y el recuento no se mueve. Lo que el `JOIN` no habria visto es
--- la clave que use SOLO `aplica_todos`, que el esquema permite y ninguna guarda
--- impide. Una comprobacion que dice «toda clave aplicable a T» y mira una sola
--- de las dos puertas repite en su predicado el mismo hueco que vino a cerrar.
+-- Desde `V86` vuelve a ser UNA. El campo dejo de decidir --se lo quito a las dos
+-- consultas del repositorio, a los dos `aplicaA` del dominio y a tres cuerpos
+-- PL/pgSQL-- y se quedo como resumen, con una guarda que impide ponerlo sin sus
+-- siete filas. Preguntar por las filas ya es preguntar por todo, y seguir
+-- nombrando el campo aqui seria mantener viva la segunda autoridad justo en el
+-- gate que la vigila.
 --
--- Se escribe como lo escribe `exigir_atributo_gobernado`
--- --`IF NOT cat.aplica_todos AND NOT EXISTS (... catalogo_atributo_tipo ...)`--,
--- que es la autoridad de verdad. Esto NO resuelve la doble autoridad de
--- aplicabilidad, que es deuda estructural con decision pendiente (§2.3 bis de
--- `pendientes-brox.md`): sencillamente deja de fingir que no existe.
-CREATE OR REPLACE FUNCTION pg_temp.aplica_al_tipo(p_id bigint, p_todos boolean, p_tipo varchar)
+-- El conjunto no cambia: las tres claves que lo llevan --`metraje_total`,
+-- `estacionamientos` y `antiguedad_anios`-- tienen sus siete filas, y `V86` se
+-- aseguro de que ninguna clave pudiera quedarse sin ellas.
+CREATE OR REPLACE FUNCTION pg_temp.aplica_al_tipo(p_id bigint, p_tipo varchar)
 RETURNS boolean LANGUAGE sql AS $$
-    SELECT p_todos OR EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
-                               WHERE t.id_catalogo_atributo = p_id
-                                 AND t.tipo_propiedad = p_tipo)
+    SELECT EXISTS (SELECT 1 FROM catalogo_atributo_tipo t
+                    WHERE t.id_catalogo_atributo = p_id
+                      AND t.tipo_propiedad = p_tipo)
 $$;
 
 SELECT count(*) AS n_claves_t
   FROM catalogo_atributo c
  WHERE c.organizacion_id IS NULL AND c.activo
-   AND pg_temp.aplica_al_tipo(c.id_catalogo_atributo, c.aplica_todos, 'T') \gset
+   AND pg_temp.aplica_al_tipo(c.id_catalogo_atributo, 'T') \gset
 
 SELECT pg_temp.comprobar('5B toda clave del sistema aplicable a T cumple el contrato',
     NOT EXISTS (
         SELECT 1 FROM catalogo_atributo c
          WHERE c.organizacion_id IS NULL AND c.activo
-           AND pg_temp.aplica_al_tipo(c.id_catalogo_atributo, c.aplica_todos, 'T')
+           AND pg_temp.aplica_al_tipo(c.id_catalogo_atributo, 'T')
            AND (c.rotulo IS NULL OR btrim(c.rotulo) = ''
              OR (c.unidad = '%' AND (c.valor_minimo IS DISTINCT FROM 0
                                   OR c.valor_maximo IS DISTINCT FROM 100))
@@ -1683,7 +1725,7 @@ SELECT pg_temp.comprobar('5B toda clave del sistema aplicable a T cumple el cont
                            AND o.activo
                            AND (o.rotulo IS NULL OR btrim(o.rotulo) = '')))),
     'una clave aplicable a T entro en el catalogo sin lo que se le exige a cualquiera',
-    format('claves del sistema aplicables a T en esta base: %s (las dos puertas)', :n_claves_t));
+    format('claves del sistema aplicables a T en esta base: %s (por sus filas por tipo, unica autoridad desde V86)', :n_claves_t));
 
 -- =====================================================================
 -- LO QUE LEE UNA PERSONA (bloque 3 de V85), que hasta la ronda 8 no lo

@@ -104,6 +104,34 @@ export interface AtributoPropiedad {
   moneda?: string | null;
   /** Los elementos de un LISTA_MULTIPLE, crudos. Misma razón. */
   valores?: string[] | null;
+  /**
+   * `VIGENTE` si el valor forma parte de lo que **hoy** se pregunta;
+   * `HISTORICO` si existe, se conserva y ya no.
+   *
+   * Un dato sale del contrato de dos maneras distintas —la clave se retiró del
+   * catálogo, o la clave sigue viva pero ya no aplica a este tipo de
+   * propiedad— y para quien lee la ficha son la misma cosa: está escrito y no
+   * se puede corregir. Por eso el Core publica el **estado**, no cuál de las
+   * dos ocurrió.
+   *
+   * **Esta pantalla no lo deduce.** No conoce ninguna clave por su nombre ni
+   * lleva una lista de campos no editables: qué pertenece al contrato lo decide
+   * el catálogo, y deducirlo aquí sería una segunda deducción que se separa de
+   * la de KAIROS.
+   */
+  estadoDato?: 'VIGENTE' | 'HISTORICO';
+  /**
+   * Si el Core aceptaría corregirlo. Es exactamente lo que contestará el `PUT`,
+   * que lo vuelve a comprobar: esta señal evita ofrecer lo imposible, **no**
+   * sustituye a la validación del servidor.
+   *
+   * Viaja siempre —es un booleano primitivo y `NON_NULL` no omite `false`—,
+   * pero se declara opcional porque un cliente compilado contra una respuesta
+   * sin el campo lo leería como `undefined`: se compara con `=== false`.
+   */
+  editable?: boolean;
+  /** Por qué no se puede corregir, **ya redactado**. Ausente si se puede. */
+  motivoNoEditable?: string | null;
 }
 
 /** Un hito de la serie económica de un encargo. */

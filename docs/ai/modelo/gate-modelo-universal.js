@@ -313,6 +313,210 @@ Object.keys(M.ENTIDADES.Propiedad.seVan).forEach((columna) => {
     "ya no está: revisa el contrato, puede haber quedado obsoleto");
 });
 
+/* ==================================================================
+   D · EL CONTRATO-DATO: lo declarado coincide con la autoridad del Core
+   ------------------------------------------------------------------
+   `modelo-universal.js` es un SUBCONJUNTO a propósito: instancia los ocho
+   casos y no tiene por qué declarar las 115 claves del catálogo. Lo que no
+   puede es MENTIR sobre lo que declara.
+
+   Y mentía. Medido el 2026-08-30 contra `controllocal_dev`, cuatro claves:
+
+     metraje_total, metraje_construido  declaran `m2` y el Core dice `m²`
+     cuota_mantenimiento                declara unidad `moneda`; el Core no
+                                        tiene unidad, y aplica a cinco tipos
+                                        donde el contrato decía tres
+     amoblado                           declara D,C y el Core dice C,D,O
+
+   Ninguna la veía nadie: el gate comprobaba entidades, columnas y casos, y
+   sobre `ATRIBUTOS` no comprobaba NADA. Un contrato que nadie contrasta es
+   documentación, no contrato.
+
+   LA AUTORIDAD ES EL CORE, y el Core no es este fichero ni las migraciones:
+   es el catálogo VIVO. Se consulta con `docker exec psql` —la misma vía por
+   la que `Verificar-Cierre.ps1` corre el gate `.sql`— porque leer las
+   migraciones seria interpretar 96 sentencias a mano y llamar autoridad al
+   resultado.
+
+   SIN CIFRAS. No se fija ninguna cardinalidad: ni 40, ni 115, ni 141. Un
+   censo congelado se rompe al avanzar y el que avanza lo actualiza sin
+   mirarlo, que es como un gate deja de vigilar sin ponerse rojo.
+
+   Y NO PUEDE QUEDAR VERDE POR NO HABER ENCONTRADO NADA: si el catálogo no
+   responde, o si ninguna clave declarada se empareja con él, esto es ROJO.
+   Un conjunto vacío no es una comprobación superada.
+   ================================================================== */
+
+grupo("D · Lo que el contrato declara de cada clave, dicho por el Core");
+
+const { execFileSync } = require("child_process");
+
+const CONTENEDOR = process.env.BROX_GATE_CONTENEDOR || "controllocal-postgres-v2";
+const BASE = process.env.BROX_GATE_BASE || "controllocal_dev";
+const USUARIO = process.env.BROX_GATE_USUARIO || "controllocal";
+
+/* Una fila por clave del catálogo del sistema, con su forma y su
+   aplicabilidad ya agregada. `organizacion_id is null` porque lo que este
+   contrato describe es el catálogo COMÚN: una clave de tenant no es parte
+   del modelo universal. */
+const CONSULTA = `
+select c.clave,
+       c.tipo_dato,
+       coalesce(c.unidad, ''),
+       case when c.activo then 'ACTIVA' else 'RETIRADA' end,
+       coalesce(string_agg(t.tipo_propiedad || '=' || t.exigencia, ','
+                           order by t.tipo_propiedad), '')
+  from catalogo_atributo c
+  left join catalogo_atributo_tipo t
+    on t.id_catalogo_atributo = c.id_catalogo_atributo
+ where c.organizacion_id is null
+   and c.sujeto = 'PROPIEDAD'
+ group by c.clave, c.tipo_dato, c.unidad, c.activo
+ order by c.clave`;
+
+let core = null;
+let motivoSinCore = "";
+try {
+  const salida = execFileSync("docker",
+    ["exec", CONTENEDOR, "psql", "-U", USUARIO, "-d", BASE,
+      "-v", "ON_ERROR_STOP=1", "-A", "-t", "-F", "|", "-c", CONSULTA],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+  core = {};
+  salida.split("\n").map((l) => l.trim()).filter(Boolean).forEach((linea) => {
+    const campos = linea.split("|");
+    if (campos.length !== 5) {
+      throw new Error("fila con " + campos.length + " campos: " + linea);
+    }
+    const aplicabilidad = {};
+    if (campos[4]) {
+      campos[4].split(",").forEach((par) => {
+        const [tipo, exigencia] = par.split("=");
+        aplicabilidad[tipo] = exigencia;
+      });
+    }
+    core[campos[0]] = {
+      tipoDato: campos[1],
+      unidad: campos[2],
+      activa: campos[3] === "ACTIVA",
+      aplicabilidad,
+    };
+  });
+} catch (e) {
+  core = null;
+  motivoSinCore = (e && e.message ? e.message : String(e)).split("\n")[0];
+}
+
+ok("el catálogo vivo responde (" + CONTENEDOR + " / " + BASE + ")",
+  core !== null && Object.keys(core).length > 0,
+  core === null
+    ? motivoSinCore + " — levanta la base (`docker compose -f backend-spring/docker-compose.yml up -d`) "
+      + "o apunta el gate con BROX_GATE_CONTENEDOR/BROX_GATE_BASE. Sin el Core no hay autoridad "
+      + "contra la que comparar, y eso NO es un verde."
+    : "el catálogo respondió vacío");
+
+if (core) {
+  /* El código de una letra sale de `TIPO_PROPIEDAD`, que ya lo declara. Una
+     segunda tabla aquí sería la doble autoridad que D0-4 acaba de cerrar,
+     un nivel más abajo. */
+  const codigo = (nombre) => (M.TIPO_PROPIEDAD[nombre] || {}).codigo;
+  const LOS_SIETE = Object.keys(M.TIPO_PROPIEDAD);
+
+  /* CONTROL POSITIVO. Es la comprobación que impide el fallo silencioso de
+     este bloque: si el emparejamiento se rompiera —un nombre de columna, un
+     separador, un `clave` que deja de serlo—, el bucle de abajo recorrería
+     un mapa que no encuentra nada y todas sus comprobaciones podrían salir
+     verdes por vacío. Aquí se exige que al menos una clave declarada esté
+     de verdad en la autoridad, y se DICE cuántas: un número medido en la
+     corrida, no escrito a mano. */
+  const emparejadas = M.ATRIBUTOS.filter((a) => core[a.clave]);
+  ok("CONTROL el emparejamiento encuentra la autoridad de las claves declaradas",
+    emparejadas.length > 0,
+    "ninguna de las " + M.ATRIBUTOS.length + " claves declaradas aparece en el catálogo: "
+    + "el emparejamiento está roto y las comparaciones de abajo no estarían mirando nada");
+  console.log("      (" + emparejadas.length + " de " + M.ATRIBUTOS.length
+    + " claves declaradas emparejadas con el Core, que publica "
+    + Object.keys(core).length + ")");
+
+  M.ATRIBUTOS.forEach((declarado) => {
+    const real = core[declarado.clave];
+    const nombre = "`" + declarado.clave + "`";
+
+    if (!real) {
+      ok(nombre + " existe en el catálogo del Core", false,
+        "el contrato la declara y el Core no la tiene: o se sembró con otro nombre, o el "
+        + "contrato quedó desfasado");
+      return;
+    }
+
+    ok(nombre + " · tipo de dato", real.tipoDato === declarado.tipo,
+      "el contrato dice " + declarado.tipo + " y el Core dice " + real.tipoDato);
+
+    /* La unidad se compara SOLO si el contrato la declara. Omitirla es
+       legítimo —es un subconjunto—; declararla distinta, no. Y declarar una
+       donde el Core no tiene ninguna es el caso de `cuota_mantenimiento`:
+       «moneda» no es una unidad, es el tipo de dato IMPORTE. */
+    if (declarado.unidad !== undefined) {
+      ok(nombre + " · unidad", real.unidad === declarado.unidad,
+        "el contrato dice «" + declarado.unidad + "» y el Core dice «"
+        + (real.unidad || "(sin unidad)") + "»");
+    }
+
+    /* Retirada. `retirado: true` significa `activo = false` en el Core: la
+       pregunta se cerró y el valor se conserva. Y al revés — una clave que
+       el contrato no marca retirada no puede estar apagada en el Core, o el
+       contrato estaría describiendo un formulario que ya no existe. */
+    ok(nombre + " · " + (declarado.retirado ? "retirada en el Core" : "activa en el Core"),
+      real.activa === !declarado.retirado,
+      "el contrato la da por " + (declarado.retirado ? "retirada" : "activa")
+      + " y el Core la tiene " + (real.activa ? "activa" : "retirada"));
+
+    /* Aplicabilidad. `"TODOS"` se expande a los siete: desde V86 no existe
+       otra forma de aplicar a todos, porque `aplica_todos` dejó de decidir
+       y son las filas por tipo las que responden. */
+    const declaradosNombres = declarado.aplica === "TODOS" ? LOS_SIETE : declarado.aplica;
+    const esperados = declaradosNombres.map(codigo).sort();
+    const reales = Object.keys(real.aplicabilidad).sort();
+    ok(nombre + " · aplica a los mismos tipos",
+      esperados.join(",") === reales.join(","),
+      "el contrato dice [" + esperados.join(",") + "] y el Core dice [" + reales.join(",") + "]");
+
+    /* Una retirada de aplicabilidad —`area_terreno` perdiendo TERRENO en
+       V85— se afirma aparte: la comparación de conjuntos ya la cubre, pero
+       el mensaje tiene que decir QUÉ se retiró, o el día que reaparezca
+       nadie sabrá que fue una decisión. */
+    (declarado.retiradaDe || []).forEach((nombreTipo) => {
+      ok(nombre + " · sigue retirada de " + nombreTipo,
+        real.aplicabilidad[codigo(nombreTipo)] === undefined,
+        "volvió a aplicar a " + nombreTipo + ", y su retirada fue una decisión ("
+        + (declarado.retiradaPor || "sin migración citada") + ")");
+    });
+
+    /* Exigencia. Se compara la que el contrato declare, por tipo. */
+    if (declarado.exigencia) {
+      Object.entries(declarado.exigencia).forEach(([nombreTipo, nivel]) => {
+        ok(nombre + " · exigencia en " + nombreTipo,
+          real.aplicabilidad[codigo(nombreTipo)] === nivel,
+          "el contrato dice " + nivel + " y el Core dice "
+          + (real.aplicabilidad[codigo(nombreTipo)] || "(no aplica)"));
+      });
+    }
+
+    /* `requerido` y `requeridoPara` son la forma vieja de decir ALT, y
+       siguen en el contrato. Se comprueban igual: un obligatorio que el
+       Core tiene en OPC es un alta que deja de exigir lo que el contrato
+       dice que exige. */
+    const obligatoriosEn = declarado.requerido ? declaradosNombres
+      : (declarado.requeridoPara || []);
+    obligatoriosEn.forEach((nombreTipo) => {
+      ok(nombre + " · obligatoria en " + nombreTipo,
+        real.aplicabilidad[codigo(nombreTipo)] === "ALT",
+        "el contrato la declara obligatoria y el Core la tiene en "
+        + (real.aplicabilidad[codigo(nombreTipo)] || "(no aplica)"));
+    });
+  });
+}
+
 /* ================================================================== */
 
 console.log("\n" + "─".repeat(64));

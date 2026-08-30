@@ -349,18 +349,49 @@ public interface PropiedadUniversalService {
      * poder corregirla. Lo que estaba mal era tener solo la primera y pedirle
      * al cliente que dedujera la segunda.
      *
+     * <h2>Y por que viajan {@code estadoDato}, {@code editable} y su motivo</h2>
+     * Un valor puede estar escrito y <b>ya no formar parte de lo que hoy se
+     * pregunta</b>. Ocurre de dos maneras distintas que dan el mismo resultado:
+     *
+     * <pre>
+     *   la clave se retiro del catalogo        (servicios_disponibles, V84)
+     *   la clave sigue viva pero ya no aplica  (area_terreno en un TERRENO, V85)
+     *   a ESTE tipo
+     * </pre>
+     *
+     * <p>Hasta aqui las dos llegaban <b>indistinguibles de un dato corregible</b>,
+     * asi que quien lee la ficha lo intenta, no encuentra el campo en el editor
+     * y nada se lo explica. Y una senal que dijera solo «retirada» solo
+     * describiria la primera: {@code area_terreno} no esta retirada --se sigue
+     * preguntando en una casa-- y llamarla asi seria falso.
+     *
+     * <p>Por eso lo que viaja es la pregunta generica que
+     * {@link com.controllocal.service.soporte.ContratoDeEscritura} responde:
+     * si la clave pertenece <b>hoy</b> al contrato de escritura de esta
+     * propiedad. Va aqui y no en el cliente porque la respuesta la tiene el
+     * catalogo, y con dos consumidores --BROX Web y KAIROS-- deducirla dos
+     * veces serian dos deducciones que se separan (D-A-1 §5).
+     *
      * @param moneda  la del IMPORTE, aparte de la cifra. {@code null} si la
      *                clave no es un importe
      * @param valores los elementos de un LISTA_MULTIPLE, uno por elemento.
      *                {@code null} si la clave no es multivalor
+     * @param estadoDato {@code VIGENTE} o {@code HISTORICO}
+     * @param editable si el Core aceptaria hoy un valor para esta clave en esta
+     *                propiedad. Es lo mismo que contestara el {@code PUT}, que
+     *                lo vuelve a comprobar
+     * @param motivoNoEditable la frase, ya escrita, de por que no se corrige.
+     *                {@code null} cuando si se corrige
      */
     record AtributoFicha(String clave, String rotulo, String tipoDato, String unidad,
-                         String valor, String moneda, List<String> valores) {
+                         String valor, String moneda, List<String> valores,
+                         String estadoDato, boolean editable, String motivoNoEditable) {
 
         /** El atributo de un solo hueco: ni importe ni multivalor. */
         public AtributoFicha(String clave, String rotulo, String tipoDato, String unidad,
                              String valor) {
-            this(clave, rotulo, tipoDato, unidad, valor, null, null);
+            this(clave, rotulo, tipoDato, unidad, valor, null, null,
+                    com.controllocal.service.soporte.ContratoDeEscritura.VIGENTE, true, null);
         }
     }
 

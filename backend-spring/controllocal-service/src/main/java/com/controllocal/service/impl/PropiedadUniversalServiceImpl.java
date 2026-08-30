@@ -32,6 +32,7 @@ import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.PublicacionService;
+import com.controllocal.service.soporte.ContratoDeEscritura;
 import com.controllocal.service.soporte.ValorLogico;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
@@ -1031,7 +1032,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
 
         for (String clave : leidos.claves()) {
             CatalogoAtributo definicion = definiciones.get(clave);
-            valores.add(fichaDeAtributo(clave, definicion, leidos));
+            valores.add(fichaDeAtributo(clave, definicion, leidos,
+                    ContratoDeEscritura.dePropiedad(definicion, tipo)));
         }
         // Por el ORDEN del catalogo, no alfabetico por clave: la colocacion la
         // gobierna el catalogo desde 0B, y ordenar por clave aqui la tiraba.
@@ -1345,7 +1347,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * lectores.
      */
     private static AtributoFicha fichaDeAtributo(String clave, CatalogoAtributo definicion,
-                                                 ValoresGobernados leidos) {
+                                                 ValoresGobernados leidos,
+                                                 ContratoDeEscritura.Vigencia vigencia) {
         ValorLogico crudo = leidos.valor(clave);
         return new AtributoFicha(clave,
                 definicion == null ? clave : definicion.getRotulo(),
@@ -1353,7 +1356,14 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 definicion == null ? null : definicion.getUnidad(),
                 leidos.texto(clave),
                 crudo == null ? null : crudo.moneda(),
-                crudo == null ? null : crudo.valores());
+                crudo == null ? null : crudo.valores(),
+                // La senal sale del CATALOGO --de `activo` y de las filas por
+                // tipo--, nunca de un nombre de clave. Un
+                // `if (clave.equals("servicios_disponibles"))` funcionaria hoy,
+                // dejaria muda la retirada siguiente y no diria nada de
+                // `area_terreno`, que no esta retirada y tampoco se puede
+                // corregir en un terreno.
+                vigencia.estadoDato(), vigencia.editable(), vigencia.motivoNoEditable());
     }
 
     private List<AtributoFicha> condicionesDe(long idOrganizacion, Captacion encargo,
@@ -1371,7 +1381,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         List<AtributoFicha> valores = new ArrayList<>();
         for (String clave : pactadas.claves()) {
             CatalogoAtributo definicion = definiciones.get(clave);
-            valores.add(fichaDeAtributo(clave, definicion, pactadas));
+            valores.add(fichaDeAtributo(clave, definicion, pactadas,
+                    ContratoDeEscritura.deEncargo(definicion, tipoPropiedad,
+                            encargo.getMotivoOperacion())));
         }
         valores.sort(java.util.Comparator
                 .<AtributoFicha>comparingInt(a -> definiciones.containsKey(a.clave())

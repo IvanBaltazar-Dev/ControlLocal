@@ -181,6 +181,28 @@
   margin: 3px 0 0;
 }
 
+/* Una característica histórica: existe, se conserva y ya no se pregunta. El
+   dato sigue ahí y se lee igual —no se atenúa el VALOR, que es lo que se
+   conserva—; lo que cambia es que lleva su marca y la frase que el Core
+   redacta. */
+.datos .historica {
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  color: var(--ink-3);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+  padding: 1px 7px;
+  text-transform: none;
+}
+
+.datos .nota-historica {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  margin: 2px 0 0;
+}
+
 .descripcion {
   border-left: 2px solid var(--hairline);
   color: var(--ink-2);

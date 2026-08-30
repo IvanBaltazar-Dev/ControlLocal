@@ -55,6 +55,10 @@ $integracion = @(
     'BusquedaLocalesIntegrationTest',
     # Corte 0B: los tres tipos nuevos, el vocabulario y la exigencia PUB.
     'CatalogoQueHablaIntegrationTest',
+    # D0-3: retirar la pregunta no retira el dato, y ahora ademas se NOTA. El
+    # valor historico llega marcado por el cable en vez de indistinguible del
+    # que si se puede corregir.
+    'ClaveRetiradaEnLaFichaIntegrationTest',
     # Corte 0A: la ida y vuelta de la edicion por los siete tipos.
     'ConservacionDeLaEdicionIntegrationTest',
     'ConvergenciaCampanaColaIntegrationTest',
@@ -160,6 +164,33 @@ if ($LASTEXITCODE -ne 0) {
     Abortar "el gate del modelo universal salio en rojo (codigo $LASTEXITCODE). El detalle esta arriba: cada comprobacion dice OK o FALLO."
 }
 Write-Host "  OK   gate del modelo universal en verde sobre $BaseDelGate"
+
+Write-Host "`n== 2 bis. Contrato-dato: lo que el modelo declara lo dice el Core ==" -ForegroundColor Cyan
+# `docs/ai/modelo/modelo-universal.js` declara la forma de 40 claves --tipo,
+# unidad, aplicabilidad y exigencia-- y hasta el 2026-08-30 NADIE la contrastaba
+# con el catalogo: el gate JS comprobaba entidades, columnas y casos, y sobre
+# `ATRIBUTOS` no comprobaba nada. Cuatro claves llevaban meses mintiendo (`m2`
+# donde el Core dice `m2` con el dos volado, una unidad "moneda" que V69 retiro,
+# y dos aplicabilidades que V78 amplio sin que el contrato se enterara).
+#
+# Corre AQUI y no a mano por la misma razon por la que el gate .sql entro en
+# este script: un gate que depende de que alguien se acuerde no es un gate.
+# Y si `node` no esta, esto ABORTA -- no se salta. Un contrato que no se pudo
+# comprobar no es un contrato comprobado.
+$gateJs = Join-Path $raiz '..\docs\ai\modelo\gate-modelo-universal.js'
+if (-not (Test-Path $gateJs)) {
+    Abortar @"
+no se encuentra el gate del contrato-dato en $gateJs.
+
+Es uno de los ficheros que un clon limpio necesita; si falta, el clon no esta
+completo.
+"@
+}
+& node $gateJs
+if ($LASTEXITCODE -ne 0) {
+    Abortar "el gate del contrato-dato salio en rojo (codigo $LASTEXITCODE). Cada linea dice que declara el contrato y que dice el Core."
+}
+Write-Host "  OK   el contrato-dato coincide con el catalogo del Core"
 
 Write-Host "`n== 3. Reactor completo contra PostgreSQL real ==" -ForegroundColor Cyan
 $salida = Join-Path ([IO.Path]::GetTempPath()) 'controllocal-cierre-reactor.log'

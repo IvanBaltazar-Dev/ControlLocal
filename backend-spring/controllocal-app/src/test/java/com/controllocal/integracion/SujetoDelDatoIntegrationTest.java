@@ -212,16 +212,22 @@ class SujetoDelDatoIntegrationTest {
                     rotas.add(clave + ": es de la PROPIEDAD y declara aplicabilidad por operacion "
                             + "-- la cosa fisica no cambia segun se venda o se alquile");
                 }
-                if (porTipo == 0 && !aplicaTodos) {
-                    rotas.add(clave + ": es de la PROPIEDAD y no dice a que tipos aplica");
+                // Sin la excusa de `aplica_todos`. Hasta V86 el campo perdonaba
+                // a la clave que no declaraba nada, asi que este invariante
+                // dejaba pasar exactamente el caso que existe para cazar: una
+                // clave cuya aplicabilidad no vive donde manda su sujeto.
+                if (porTipo == 0) {
+                    rotas.add(clave + ": es de la PROPIEDAD y no dice a que tipos aplica"
+                            + (aplicaTodos ? " (`aplica_todos` dejo de decidirlo en V86)" : ""));
                 }
             } else {
                 if (porTipo > 0) {
                     rotas.add(clave + ": es del ENCARGO y declara aplicabilidad por tipo -- una "
                             + "condicion negociada no es un hecho del inmueble");
                 }
-                if (porOperacion == 0 && !aplicaTodos) {
-                    rotas.add(clave + ": es del ENCARGO y no dice a que (tipo, operacion) aplica");
+                if (porOperacion == 0) {
+                    rotas.add(clave + ": es del ENCARGO y no dice a que (tipo, operacion) aplica"
+                            + (aplicaTodos ? " (`aplica_todos` dejo de decidirlo en V86)" : ""));
                 }
             }
         }
@@ -235,6 +241,197 @@ class SujetoDelDatoIntegrationTest {
                       %s
                     """.formatted(String.join("\n      ", rotas)));
         }
+    }
+
+    // ==================================================================
+    // V86 - `catalogo_atributo_tipo` es la UNICA autoridad de aplicabilidad
+    //
+    // `aplica_todos` era la segunda: un campo que cortocircuitaba la consulta
+    // ANTES de mirar las filas, en las dos consultas del repositorio, en los
+    // dos `aplicaA` del dominio y en tres cuerpos PL/pgSQL. Dos autoridades
+    // para la misma pregunta divergen; aqui divergian ademas en la direccion
+    // peor, porque la del campo no sabe decir de que tipo habla y retirar una
+    // clave de UNO obligaba a cambiarle la forma a la clave entera.
+    // ==================================================================
+
+    /**
+     * <b>Las tres que vivian del campo siguen aplicando a los siete.</b>
+     *
+     * <p>Son las unicas del catalogo del sistema que llevan {@code
+     * aplica_todos}: {@code antiguedad_anios}, {@code estacionamientos} y
+     * {@code metraje_total}. Se prueban POR EL NUCLEO —el motor de captura, que
+     * es lo que reciben BROX Web y KAIROS— y no consultando la tabla: lo que
+     * hay que conservar es la RESPUESTA, no la fila.
+     *
+     * <p>Y se comprueba la exigencia junto a la aplicabilidad, porque son la
+     * misma decision: {@code metraje_total} bloquea el alta en los siete y las
+     * otras dos no bloquean nada. Un respaldo que hubiera escrito {@code ALT}
+     * de mas habria dejado la aplicabilidad intacta y roto el alta.
+     */
+    @Test
+    @DisplayName("V86: las tres claves que aplicaban por el campo siguen preguntandose en los siete tipos")
+    void lasTresQueVivianDelCampoSiguenAplicandoALosSiete() {
+        List<String> mal = new ArrayList<>();
+        for (String tipo : List.of("LOCAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO",
+                "ALMACEN", "OTRO")) {
+            List<MotorDeCaptura.Pregunta> preguntas =
+                    captura.definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo, null, actor())
+                            .todas();
+            Map<String, MotorDeCaptura.Pregunta> porClave = new LinkedHashMap<>();
+            preguntas.forEach(p -> porClave.putIfAbsent(p.clave(), p));
+
+            for (String clave : List.of("antiguedad_anios", "estacionamientos", "metraje_total")) {
+                MotorDeCaptura.Pregunta pregunta = porClave.get(clave);
+                if (pregunta == null) {
+                    mal.add(tipo + " ya no pregunta " + clave);
+                }
+            }
+            MotorDeCaptura.Pregunta metraje = porClave.get("metraje_total");
+            if (metraje != null && !"ALT".equals(metraje.exigencia())) {
+                mal.add(tipo + ": metraje_total llego con exigencia " + metraje.exigencia()
+                        + " y tenia que seguir siendo ALT");
+            }
+            for (String clave : List.of("antiguedad_anios", "estacionamientos")) {
+                MotorDeCaptura.Pregunta pregunta = porClave.get(clave);
+                if (pregunta != null && !"OPC".equals(pregunta.exigencia())) {
+                    mal.add(tipo + ": " + clave + " llego con exigencia " + pregunta.exigencia()
+                            + " y tenia que seguir siendo OPC");
+                }
+            }
+        }
+        assertEquals(List.of(), mal, """
+                Quitarle la autoridad a `aplica_todos` cambio alguna respuesta, y no podia
+                cambiar ninguna: V86 respaldo esas claves con sus siete filas ANTES de que el
+                campo dejara de decidir, precisamente para que el nucleo contestara igual.
+                """);
+    }
+
+    /**
+     * <b>Web y KAIROS reciben la MISMA aplicabilidad, porque la piden a la
+     * misma pieza del Core.</b>
+     *
+     * <p>No basta con mirar una superficie: el North Star pide que los dos
+     * canales reciban la definicion del Core, no cada uno la suya. Se mide en
+     * la frontera de cada uno --{@code MotorDeCaptura}, que es lo que
+     * {@code GET /captura/definicion} publica para el SPA y lo que
+     * {@code ClienteBroxHttp.catalogoDe} consume para KAIROS-- y se compara
+     * ademas contra la tabla, que es la autoridad.
+     *
+     * <p>La comparacion es de CONJUNTOS por tipo: contar coincidiria aunque
+     * sobrara una clave y faltara otra.
+     */
+    @Test
+    @DisplayName("V86: la aplicabilidad que reciben Web y KAIROS es la que declara la tabla")
+    void laAplicabilidadPublicadaEsLaDeLaTabla() {
+        List<String> mal = new ArrayList<>();
+        for (Map.Entry<String, String> tipo : Map.of("L", "LOCAL", "O", "OFICINA",
+                "D", "DEPARTAMENTO", "C", "CASA", "T", "TERRENO", "A", "ALMACEN",
+                "X", "OTRO").entrySet()) {
+
+            List<String> enLaTabla = jdbc.queryForList("""
+                    select c.clave
+                      from catalogo_atributo c
+                      join catalogo_atributo_tipo t
+                        on t.id_catalogo_atributo = c.id_catalogo_atributo
+                     where c.activo and c.sujeto = 'PROPIEDAD'
+                       and t.tipo_propiedad = ?
+                       and (c.organizacion_id is null or c.organizacion_id = ?)
+                     order by c.clave
+                    """, String.class, tipo.getKey(), actor().idOrganizacion());
+
+            // El motor publica ademas los huecos ESTRUCTURALES del guion
+            // (direccion, distrito...), que no son claves del catalogo. Se
+            // compara contra lo que el catalogo gobierna, que es lo que
+            // `aplica_todos` decidia.
+            List<String> publicadas = captura
+                    .definicion(MotorDeCaptura.REGISTRAR_PROPIEDAD, tipo.getValue(), null, actor())
+                    .todas().stream()
+                    .map(MotorDeCaptura.Pregunta::clave)
+                    .filter(enLaTabla::contains)
+                    .distinct()
+                    .sorted()
+                    .toList();
+
+            List<String> faltan = enLaTabla.stream().filter(c -> !publicadas.contains(c))
+                    .sorted().toList();
+            if (!faltan.isEmpty()) {
+                mal.add(tipo.getValue() + ": la tabla declara " + faltan
+                        + " y el nucleo no las publica");
+            }
+        }
+        assertEquals(List.of(), mal, """
+                Lo que el nucleo publica no es lo que la tabla declara, asi que la
+                aplicabilidad tiene otra vez una segunda fuente. BROX Web y KAIROS piden la
+                definicion a la MISMA pieza: si esa pieza no dice lo que dice la tabla, los
+                dos canales estan igual de equivocados y ninguno puede detectarlo.
+                """);
+    }
+
+    /**
+     * <b>El campo no se puede mantener por su cuenta, en las DOS
+     * direcciones.</b>
+     *
+     * <p>Mientras `aplica_todos` exista por compatibilidad tiene que ser un
+     * RESUMEN de las filas y no una afirmacion independiente. Las dos maneras
+     * de separarlo se prueban por separado porque son dos escrituras distintas
+     * y una guarda que solo cubriera la primera dejaria abierta la segunda —que
+     * ademas es la silenciosa: nadie mira el campo al borrar una fila.
+     */
+    @Test
+    @DisplayName("V86: `aplica_todos` no se puede poner sin sus filas, ni dejar puesto al quitarlas")
+    void elCampoNoSeMantieneSolo() {
+        long org = actor().idOrganizacion();
+        String clave = "zz_sin_respaldo_" + java.util.UUID.randomUUID().toString().substring(0, 8);
+
+        // DIRECCION 1 - poner el campo sin las filas que lo respalden.
+        Exception puesto = assertThrows(Exception.class, () -> jdbc.update("""
+                insert into catalogo_atributo (organizacion_id, clave, rotulo, tipo_dato,
+                                               aplica_todos, del_sistema, orden)
+                values (?, ?, 'Sin respaldo', 'TEXTO', true, false, 999)
+                """, org, clave),
+                "una clave puede declararse `aplica_todos` sin una sola fila por tipo: el campo "
+                        + "sigue siendo una segunda autoridad, y ademas una que no sabe decir de "
+                        + "que tipo habla");
+        assertTrue(raiz(puesto).contains("no esta respaldado"),
+                "el rechazo tiene que explicar QUE falta, no ser un error cualquiera: " + puesto);
+        assertEquals(0, jdbc.queryForObject(
+                "select count(*) from catalogo_atributo where clave = ?", Integer.class, clave),
+                "y la fila no puede haber quedado escrita");
+
+        // DIRECCION 2 - quitar las filas dejando el campo puesto. Se prueba
+        // sobre una clave del sistema que SI lo tiene respaldado, porque es el
+        // unico sitio donde el defecto puede aparecer de verdad.
+        Long id = jdbc.queryForObject("""
+                select id_catalogo_atributo from catalogo_atributo
+                 where clave = 'metraje_total' and organizacion_id is null
+                """, Long.class);
+        assertEquals(Boolean.TRUE, jdbc.queryForObject(
+                "select aplica_todos from catalogo_atributo where id_catalogo_atributo = ?",
+                Boolean.class, id),
+                "el caso mide la retirada de filas bajo un campo PUESTO: si no lo estuviera, "
+                        + "no mediria nada");
+
+        Exception quitado = assertThrows(Exception.class, () -> jdbc.update("""
+                delete from catalogo_atributo_tipo
+                 where id_catalogo_atributo = ? and tipo_propiedad = 'X'
+                """, id),
+                "se pueden borrar filas por tipo dejando `aplica_todos` puesto: el campo "
+                        + "afirmaria una aplicabilidad que la tabla ya no respalda");
+        assertTrue(raiz(quitado).contains("no esta respaldado"),
+                "el rechazo del otro lado tiene que decir lo mismo: " + quitado);
+        assertEquals(7, jdbc.queryForObject("""
+                select count(*) from catalogo_atributo_tipo where id_catalogo_atributo = ?
+                """, Integer.class, id),
+                "y la fila que se intento borrar sigue donde estaba");
+    }
+
+    /** El mensaje del fondo de la cadena: PostgreSQL lo envuelve varias veces. */
+    private static String raiz(Throwable error) {
+        StringBuilder texto = new StringBuilder();
+        for (Throwable actual = error; actual != null; actual = actual.getCause()) {
+            texto.append(actual.getMessage()).append(' ');
+        }
+        return texto.toString();
     }
 
     @Test

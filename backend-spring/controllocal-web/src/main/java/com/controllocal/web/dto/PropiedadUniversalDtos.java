@@ -253,12 +253,27 @@ public final class PropiedadUniversalDtos {
      * {@code valores} van crudos al lado, para poder <b>corregir</b>: partir
      * «PEN 350» o «COCINA, LAVADORA» de vuelta seria inferir, y un elemento
      * con una coma dentro lo haria imposible (V77).
+     *
+     * <p>{@code estadoDato} dice si el valor forma parte de lo que HOY se
+     * pregunta ({@code VIGENTE}) o si existe y ya no ({@code HISTORICO});
+     * {@code editable} dice si el Core aceptaria corregirlo --es lo mismo que
+     * contestara el {@code PUT}, que lo vuelve a comprobar--; y
+     * {@code motivoNoEditable} lo explica con palabras.
+     *
+     * <p>Los tres viajan porque sin ellos los dos consumidores tendrian que
+     * deducirlo, y con dos serian dos deducciones que se separan (D-A-1 §5).
+     * {@code editable} es un {@code boolean} primitivo, asi que viaja SIEMPRE,
+     * tambien cuando es {@code false}: {@code NON_NULL} no lo omite.
+     * {@code motivoNoEditable} es nulo cuando se puede editar, y entonces NO
+     * viaja -- que es correcto: no hay motivo que dar.
      */
     public record AtributoResponse(String clave, String rotulo, String tipoDato, String unidad,
-                                   String valor, String moneda, List<String> valores) {
+                                   String valor, String moneda, List<String> valores,
+                                   String estadoDato, boolean editable, String motivoNoEditable) {
         static AtributoResponse desde(AtributoFicha f) {
             return new AtributoResponse(f.clave(), f.rotulo(), f.tipoDato(), f.unidad(),
-                    f.valor(), f.moneda(), f.valores());
+                    f.valor(), f.moneda(), f.valores(),
+                    f.estadoDato(), f.editable(), f.motivoNoEditable());
         }
     }
 

@@ -79,6 +79,9 @@ class GateDeCierreTest {
                         "BusquedaLocalesIntegrationTest",
                         // Corte 0B - el catalogo aprende a hablar.
                         "CatalogoQueHablaIntegrationTest",
+                        // D0-3 - una clave retirada se lee, se distingue y no
+                        // se edita: la mitad de la retirada que mira el usuario.
+                        "ClaveRetiradaEnLaFichaIntegrationTest",
                         // Corte 0A - editar no destruye lo que el usuario no toco.
                         "ConservacionDeLaEdicionIntegrationTest",
                         "ConvergenciaCampanaColaIntegrationTest",

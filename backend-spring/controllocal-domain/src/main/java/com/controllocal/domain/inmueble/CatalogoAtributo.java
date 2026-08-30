@@ -151,7 +151,19 @@ public class CatalogoAtributo {
     @Column(name = "unidad", length = 20)
     private String unidad;
 
-    /** true = aplica a cualquier tipo; si no, manda {@link #aplicaciones}. */
+    /**
+     * <b>Resumen, no autoridad</b> (V86). Dice "esta clave declara los siete
+     * tipos"; NO decide a que tipos aplica. Eso lo decide
+     * {@link #aplicaciones}, que es la unica autoridad de aplicabilidad.
+     *
+     * <p>Se conserva mientras algun contrato lo necesite, y la base impide que
+     * se mantenga por su cuenta: no se puede poner sin las siete filas que lo
+     * respalden, ni retirar las filas dejandolo puesto.
+     *
+     * <p>Cuidado al leerlo: {@code false} NO significa "no aplica a todos".
+     * {@code estado_ocupacion} aplica a los siete con filas explicitas y lo
+     * tiene en {@code false} porque asi lo pidio D-C5-1.
+     */
     @Column(name = "aplica_todos", nullable = false)
     private boolean aplicaTodos;
 
@@ -293,12 +305,22 @@ public class CatalogoAtributo {
             joinColumns = @JoinColumn(name = "id_catalogo_atributo"))
     private Set<OpcionDeAtributo> opciones = new LinkedHashSet<>();
 
-    /** ¿Este atributo tiene sentido para una propiedad de este tipo? */
+    /**
+     * ¿Este atributo tiene sentido para una propiedad de este tipo?
+     *
+     * <p><b>Lo responde {@link #aplicaciones}, y nada mas</b> (V86). Antes
+     * empezaba con {@code if (aplicaTodos) return true;}, un cortocircuito que
+     * contestaba ANTES de mirar las filas: la misma pregunta tenia dos
+     * autoridades y la del campo ganaba. Con dos, retirar una clave de UN tipo
+     * exigia ademas acordarse de bajar el campo, y nadie lo comprobaba.
+     *
+     * <p>El campo sigue existiendo por compatibilidad, pero ya no decide: la
+     * base garantiza que solo puede estar puesto cuando las siete filas lo
+     * respaldan ({@code tg_aplica_todos_respaldado}), asi que leerlo o leer las
+     * filas da lo mismo -- y las filas dicen ademas cual es cual.
+     */
     @Transient
     public boolean aplicaA(String tipoPropiedad) {
-        if (aplicaTodos) {
-            return true;
-        }
         return aplicaciones.stream().anyMatch(a -> a.getTipoPropiedad().equals(tipoPropiedad));
     }
 
@@ -308,12 +330,12 @@ public class CatalogoAtributo {
      * <p>Se pregunta con las dos dimensiones porque la aplicabilidad comercial
      * depende de las dos: `garantia_meses` aplica al alquiler de un
      * departamento y no a su venta; `partida_registral` es al reves.
+     *
+     * <p>Como su gemela, desde V86 no consulta {@code aplicaTodos}: la
+     * aplicabilidad de una condicion la decide {@link #aplicacionesOperacion}.
      */
     @Transient
     public boolean aplicaA(String tipoPropiedad, String tipoOperacion) {
-        if (aplicaTodos) {
-            return true;
-        }
         return aplicacionesOperacion.stream()
                 .anyMatch(a -> a.getTipoPropiedad().equals(tipoPropiedad)
                         && a.getTipoOperacion().equals(tipoOperacion));

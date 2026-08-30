@@ -117,10 +117,28 @@
     <h3>Características</h3>
     @if (p.atributos.length > 0) {
       <dl class="datos caracteristicas">
+        <!-- Una característica HISTÓRICA se sigue enseñando y se marca. El
+             valor se capturó cuando la pregunta existía, y esconderlo sería
+             borrarlo de la vista; enseñarlo sin decir nada haría que el
+             broker intentara corregirlo y no encontrara el campo en el
+             editor.
+
+             El estado y el motivo los trae el backend: aquí no se conoce
+             ninguna clave por su nombre, ni se distingue si la clave se
+             retiró del catálogo o si dejó de aplicar a este tipo. Para quien
+             lee son la misma cosa, y el Core publica esa misma cosa. -->
         @for (atributo of p.atributos; track atributo.clave) {
-          <div>
-            <dt>{{ atributo.rotulo }}</dt>
+          <div [class.historico]="esHistorico(atributo)">
+            <dt>
+              {{ atributo.rotulo }}
+              @if (esHistorico(atributo)) {
+                <span class="historica">histórica</span>
+              }
+            </dt>
             <dd>{{ caracteristica(atributo) }}</dd>
+            @if (atributo.motivoNoEditable) {
+              <p class="nota-historica">{{ atributo.motivoNoEditable }}</p>
+            }
           </div>
         }
       </dl>

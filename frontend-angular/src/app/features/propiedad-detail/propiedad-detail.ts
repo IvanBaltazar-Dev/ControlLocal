@@ -258,6 +258,20 @@ export class PropiedadDetail implements OnInit {
     return atributo.unidad ? `${limpio} ${atributo.unidad}` : limpio;
   }
 
+  /**
+   * ¿Es un dato **histórico**? Lo dice el Core en `estadoDato`; aquí no se
+   * decide, ni se mira la clave, ni se mantiene ninguna lista de campos no
+   * editables.
+   *
+   * Se compara contra `'HISTORICO'` y no contra `!== 'VIGENTE'`: un valor que
+   * no llegara —cliente contra una respuesta más vieja— se leería como
+   * histórico, y marcar como historia un dato corregible es peor que no
+   * marcarlo.
+   */
+  protected esHistorico(atributo: AtributoPropiedad): boolean {
+    return atributo.estadoDato === 'HISTORICO';
+  }
+
   /** El importe de un hecho de actividad, cuando lo tiene. */
   protected montoDelHecho(hecho: HechoDeActividad): string {
     return hecho.monto === null || hecho.monto === undefined ? '' : monto(hecho.monto, hecho.moneda);

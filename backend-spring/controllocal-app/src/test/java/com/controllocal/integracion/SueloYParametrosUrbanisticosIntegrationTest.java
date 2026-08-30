@@ -190,9 +190,10 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                 El catalogo del suelo no quedo como lo congelo el encargo.
 
                 Las 18 son del sujeto PROPIEDAD, destino ATRIBUTO y con aplicabilidad
-                EXPLICITA por tipo: `aplica_todos` es la doble autoridad que D-5 deja
-                anotada como deuda, y una clave que la usara no podria despues excluir
-                un tipo sin cambiar de forma.
+                EXPLICITA por tipo. `aplica_todos` era la segunda autoridad que D-5 dejo
+                anotada como deuda -- V86 se la quito y lo dejo como resumen de las filas --,
+                y una clave que se apoyara en el no podria despues excluir un tipo sin
+                cambiar de forma.
                 """);
     }
 
@@ -780,11 +781,35 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * dos se encuentran</b>: un cliente que lee la ficha y la devuelve entera
      * manda tambien el valor conservado, sin cambiarlo.
      *
-     * <h2>Lo que se mide aqui, y no es una eleccion</h2>
+     * <h2>Lo que se afirma aqui es una DECISION, no una observacion</h2>
+     *
+     * <p>La primera version de este caso dejaba la eleccion abierta: fijaba lo
+     * que hoy ocurre y decia que habia dos comportamientos legitimos. <b>El
+     * titular decidio la opcion B el 2026-08-30</b> y esto pasa a afirmarla.
+     *
+     * <p>La pregunta que el Core se hace <b>no</b> es «¿coincide con lo que ya
+     * habia?», sino:
+     *
+     * <blockquote>¿pertenece esta clave al contrato de escritura de ESTA
+     * propiedad?</blockquote>
+     *
+     * <p>Si la respuesta es no, rechazo — <b>tambien cuando el valor enviado es
+     * identico al conservado</b>. Tolerar el reenvio identico abriria la
+     * excepcion «una clave no aplicable si puede escribirse si coincide con
+     * algo historico», que es una segunda puerta a lo que {@code D-7} cerro; y
+     * obligaria a la puerta a comparar VALORES para decidir COMPETENCIAS, que
+     * son dos preguntas distintas.
+     *
+     * <p>El coste se declara y se acepta: mientras el conservado este en la
+     * ficha, un cliente que reenvie entero no puede editar nada de ese terreno.
+     * El cliente sabe cual excluir porque la ficha se lo dice — desde D0-3 cada
+     * atributo viaja con {@code estadoDato} y {@code editable}, y esa senal
+     * existe precisamente para que reenviar entero deje de ser a ciegas.
+     *
+     * <h2>Lo medido</h2>
      *
      * <p>El caso se construye —{@link #sembrarHuerfano} escribe 777 sobre un
-     * terreno de 500 m², que es un discrepante de verdad— y se observa. Lo
-     * medido:
+     * terreno de 500 m², que es un discrepante de verdad—. Lo medido:
      *
      * <ol>
      *   <li>la ficha <b>devuelve</b> el conservado, asi que un cliente que
@@ -801,23 +826,13 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      *   <li>y sin el conservado en la carga, esa misma edicion entra.</li>
      * </ol>
      *
-     * <h2>Por que esto NO decide nada</h2>
-     *
-     * <p>Hay <b>dos comportamientos legitimos</b> y este caso no elige: tolerar
-     * el reenvio del valor <i>identico</i> —la puerta rechazaria solo el
-     * <b>cambio</b>—, o exigir que el cliente lo excluya —lo de hoy—. Las dos
-     * respetan {@code D-7}; la primera es mas amable con el cliente y la segunda
-     * es mas simple de explicar. La eleccion es del titular, no de una prueba.
-     *
-     * <p>Mientras tanto esto fija <b>lo que hoy ocurre</b>, que es lo que faltaba:
-     * si alguien cambia la puerta, este caso lo dice en vez de dejar que el
-     * cambio pase inadvertido. El SPA no provoca el caso —edita por atributo, no
-     * reenviando la ficha—, asi que hoy no hay nadie a quien le duela; el dia que
-     * un consumidor reenvie entero, lo hara.
+     * <p>El SPA no provoca el caso —edita por atributo, no reenviando la
+     * ficha—, asi que hoy no hay nadie a quien le duela; el dia que un
+     * consumidor reenvie entero, este caso dice lo que se va a encontrar.
      */
     @Test
-    @DisplayName("V85: reenviar la ficha entera con el area_terreno conservado se rechaza")
-    void reenviarLaFichaEnteraConElAreaConservada() {
+    @DisplayName("N33 opcion B: reenviar la ficha entera con el area_terreno conservado se rechaza, por decision")
+    void reenviarLaFichaEnteraConElAreaConservadaSeRechazaPorDecision() {
         long id = registrarTerreno();
         sembrarHuerfano(id, 777);
 

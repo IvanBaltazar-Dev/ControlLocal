@@ -104,20 +104,34 @@ const EXPEDIENTE_DE = {
 
 const ATRIBUTOS = [
   /* comunes a todo */
-  { clave: "metraje_total", tipo: "DECIMAL", unidad: "m2", aplica: "TODOS", requerido: true },
+  /* `m²`, no `m2`. Lo corrigió `V69` en el Core —el metro cuadrado se escribe
+     así y el catálogo es el dueño del texto, porque arreglarlo en la ficha
+     sería devolver una tabla de traducción al cliente— y este contrato se
+     quedó cuatro migraciones diciendo lo otro sin que nada lo mirara. */
+  { clave: "metraje_total", tipo: "DECIMAL", unidad: "m²", aplica: "TODOS", requerido: true },
   { clave: "antiguedad_anios", tipo: "ENTERO", unidad: "años", aplica: "TODOS" },
   { clave: "estacionamientos", tipo: "ENTERO", aplica: "TODOS" },
 
   /* construido */
-  { clave: "metraje_construido", tipo: "DECIMAL", unidad: "m2", aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO", "CASA", "ALMACEN"] },
+  { clave: "metraje_construido", tipo: "DECIMAL", unidad: "m²", aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO", "CASA", "ALMACEN"] },
   { clave: "ambientes", tipo: "ENTERO", aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO", "CASA", "ALMACEN"] },
   { clave: "piso", tipo: "TEXTO", aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO"] },
-  { clave: "cuota_mantenimiento", tipo: "DECIMAL", unidad: "moneda", aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO"] },
+  /* SIN unidad, y en CINCO tipos. Las dos cosas las decidió el Core y este
+     contrato se quedó atrás: `V69` le quitó la unidad «moneda» —no es una
+     unidad, es un IMPORTE, y su moneda depende de la propiedad, no del
+     catálogo: la ficha llegó a escribir «450 moneda»— y `V78` la extendió a
+     CASA y ALMACÉN, porque su condición gemela `mantenimiento_a_cargo_de` ya
+     llegaba ahí y un hecho que no llega donde llega su pacto deja el pacto
+     como único sitio donde cabe el dato. */
+  { clave: "cuota_mantenimiento", tipo: "DECIMAL", aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO", "CASA", "ALMACEN"] },
 
   /* vivienda */
   { clave: "dormitorios", tipo: "ENTERO", aplica: ["DEPARTAMENTO", "CASA"], requeridoPara: ["DEPARTAMENTO", "CASA"] },
   { clave: "banos", tipo: "DECIMAL", aplica: ["DEPARTAMENTO", "CASA"] },
-  { clave: "amoblado", tipo: "BOOLEANO", aplica: ["DEPARTAMENTO", "CASA"] },
+  /* También OFICINA desde `V78`, por la misma razón que la cuota: se pacta
+     `se_ofrece_amoblado` sobre oficinas, y el hecho tiene que llegar donde
+     llega su condición. */
+  { clave: "amoblado", tipo: "BOOLEANO", aplica: ["DEPARTAMENTO", "CASA", "OFICINA"] },
   { clave: "pisos_edificacion", tipo: "ENTERO", aplica: ["CASA"] },
 
   /* comercial e industrial */
@@ -179,8 +193,15 @@ const ATRIBUTOS = [
 
      Aplica a LOS SIETE tipos y aun así `aplica_todos = false` en el Core, con
      una fila explícita por tipo. Por eso se escribe la lista y no "TODOS": son
-     dos cosas distintas en el esquema, y esa doble autoridad de aplicabilidad
-     (D-5) sigue sin gate — está registrada en `pendientes-brox.md`. */
+     dos cosas distintas en el esquema.
+
+     La doble autoridad de aplicabilidad (D-5) **ya no existe**: `V86` le quitó
+     al campo la facultad de decidir —lo hacía en las dos consultas del
+     repositorio, en los dos `aplicaA` del dominio y en tres cuerpos PL/pgSQL— y
+     lo dejó como resumen de las filas, con una guarda que impide ponerlo sin
+     ellas. La tabla es la única autoridad, y hay gate: en `.sql` («ninguna clave
+     depende exclusivamente de aplica_todos», «ninguna función lo consulta como
+     autoridad») y en `AutoridadDeAplicabilidadTest`. */
   { clave: "estado_ocupacion", tipo: "LISTA",
     aplica: ["LOCAL_COMERCIAL", "OFICINA", "DEPARTAMENTO", "CASA", "TERRENO", "ALMACEN", "OTRO"],
     aplicaTodos: false,

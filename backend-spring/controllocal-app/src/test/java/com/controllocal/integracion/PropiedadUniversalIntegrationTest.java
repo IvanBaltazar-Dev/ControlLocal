@@ -953,9 +953,20 @@ class PropiedadUniversalIntegrationTest {
     @Test
     @DisplayName("una clave propia del tenant si se admite, y se puede usar")
     void elTenantPuedeAnadirLoSuyo() {
+        // Con sus filas por tipo. Nacio con `aplica_todos = true` y sin
+        // ninguna, y desde V86 el campo no decide aplicabilidad: asi declarada,
+        // la clave del tenant no se preguntaria en ningun tipo.
         jdbc.update("""
                 insert into catalogo_atributo (organizacion_id, clave, rotulo, tipo_dato, aplica_todos, del_sistema)
-                values (?, 'vista_al_mar', 'Vista al mar', 'BOOLEANO', true, false)
+                values (?, 'vista_al_mar', 'Vista al mar', 'BOOLEANO', false, false)
+                """, agenteA.idOrganizacion());
+        jdbc.update("""
+                insert into catalogo_atributo_tipo (id_catalogo_atributo, tipo_propiedad,
+                                                    requerido, exigencia)
+                select c.id_catalogo_atributo, t.tipo, false, 'OPC'
+                  from catalogo_atributo c
+                  cross join tipos_de_propiedad() as t(tipo)
+                 where c.clave = 'vista_al_mar' and c.organizacion_id = ?
                 """, agenteA.idOrganizacion());
 
         ResultadoRegistro alta = propiedades.registrar(comando("DEPARTAMENTO", "VENTA",

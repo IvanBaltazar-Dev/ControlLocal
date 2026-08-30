@@ -89,7 +89,7 @@ class CatalogoQueHablaIntegrationTest {
     /**
      * Cada caso arranca sin claves de prueba vivas.
      *
-     * <p>Las que siembra son `aplica_todos`, asi que una marcada PUB que
+     * <p>Las que siembra aplican a los SIETE tipos, asi que una marcada PUB que
      * sobreviva bloquea la publicacion de TODOS los casos siguientes -- y el
      * fallo aparece en el caso equivocado, que es peor que no tenerlo. Se
      * desactivan en vez de borrarse porque una clave con valores escritos no se
@@ -866,21 +866,31 @@ class CatalogoQueHablaIntegrationTest {
     // Fixture
     // ==================================================================
 
-    /** Una clave del tenant, con su aplicabilidad a los siete tipos y su vocabulario. */
+    /**
+     * Una clave del tenant, con su aplicabilidad a los siete tipos y su
+     * vocabulario.
+     *
+     * <p>La aplicabilidad la declaran las FILAS, y `aplica_todos` se queda en
+     * {@code false} (V86). Antes se sembraba en {@code true} ademas de escribir
+     * las filas, que era decir lo mismo dos veces por dos autoridades
+     * distintas; y como esta clase no vive en una transaccion, la fila del
+     * catalogo se confirmaba SOLA -- sin sus filas todavia-- y la guarda
+     * {@code tg_aplica_todos_respaldado} la rechazaria con razon.
+     */
     private String sembrarClave(String base, String tipoDato, List<String> opciones) {
         String clave = base + "_" + java.util.UUID.randomUUID().toString().substring(0, 8);
         long org = actor().idOrganizacion();
         jdbc.update("""
                 insert into catalogo_atributo (organizacion_id, clave, rotulo, tipo_dato,
                                                aplica_todos, del_sistema, orden)
-                values (?, ?, ?, ?, true, false, 900)
+                values (?, ?, ?, ?, false, false, 900)
                 """, org, clave, "Prueba " + base, tipoDato);
         jdbc.update("""
                 insert into catalogo_atributo_tipo (id_catalogo_atributo, tipo_propiedad,
                                                     requerido, exigencia)
                 select c.id_catalogo_atributo, t.tipo, false, 'OPC'
                   from catalogo_atributo c
-                  cross join (values ('L'),('O'),('D'),('C'),('T'),('A'),('X')) as t(tipo)
+                  cross join tipos_de_propiedad() as t(tipo)
                  where c.clave = ? and c.organizacion_id = ?
                 """, clave, org);
         if (opciones != null) {
@@ -898,8 +908,8 @@ class CatalogoQueHablaIntegrationTest {
     /**
      * Retira la clave al terminar el caso.
      *
-     * <p>Hace falta porque estas claves son `aplica_todos`: una marcada PUB en
-     * un caso bloquearia la publicacion de TODOS los demas, y el fallo
+     * <p>Hace falta porque estas claves aplican a los siete tipos: una marcada
+     * PUB en un caso bloquearia la publicacion de TODOS los demas, y el fallo
      * aparecia en el caso equivocado.
      */
     private void retirar(String clave) {

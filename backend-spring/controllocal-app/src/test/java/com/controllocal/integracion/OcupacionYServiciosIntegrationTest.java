@@ -518,11 +518,17 @@ class OcupacionYServiciosIntegrationTest {
     void retirarUnaClaveNoOcultaSusValores() {
         String clave = "zz_retirable_" + UUID.randomUUID().toString().substring(0, 8);
         long org = actor().idOrganizacion();
+        // Con FILAS por tipo, no con `aplica_todos`. Nacio con el campo y sin
+        // una sola fila -- era la unica clave del arbol que dependia
+        // EXCLUSIVAMENTE de el--, y desde V86 el campo no decide aplicabilidad:
+        // asi declarada, la clave no se preguntaria en ningun tipo y el caso
+        // mediria la retirada de algo que nunca se ofrecio.
         jdbc.update("""
                 insert into catalogo_atributo (organizacion_id, clave, rotulo, tipo_dato,
                                                aplica_todos, del_sistema, orden)
-                values (?, ?, 'Clave retirable', 'TEXTO', true, false, 990)
+                values (?, ?, 'Clave retirable', 'TEXTO', false, false, 990)
                 """, org, clave);
+        declararAplicabilidadEnLosSiete(clave, org);
         try {
             long id = registrarTerreno();
             editar(id, new ValorAtributo(clave, "lo que se sabia"));
@@ -871,8 +877,9 @@ class OcupacionYServiciosIntegrationTest {
         jdbc.update("""
                 insert into catalogo_atributo (organizacion_id, clave, rotulo, tipo_dato,
                                                aplica_todos, del_sistema, orden)
-                values (?, ?, 'Lista muda de control', 'LISTA', true, false, 991)
+                values (?, ?, 'Lista muda de control', 'LISTA', false, false, 991)
                 """, org, clave);
+        declararAplicabilidadEnLosSiete(clave, org);
         try {
             assertTrue(jdbc.queryForList("""
                     select c.sujeto || '/' || c.clave
@@ -1141,6 +1148,28 @@ class OcupacionYServiciosIntegrationTest {
         return jdbc.queryForObject(
                 "select min(id_captacion) from captacion where id_propiedad = ?",
                 Long.class, idPropiedad);
+    }
+
+    /**
+     * <b>La aplicabilidad de una clave de prueba, declarada como la del
+     * catalogo real</b> (V86).
+     *
+     * <p>Estas dos claves nacian con {@code aplica_todos = true} y sin una sola
+     * fila por tipo: era el atajo que la doble autoridad permitia, y eran las
+     * unicas del arbol que dependian del campo para aplicar a algo. Con la
+     * tabla como unica autoridad, el atajo no existe -- ni aqui, donde ademas
+     * habria dejado el caso midiendo la retirada de una pregunta que nunca se
+     * hizo.
+     */
+    private void declararAplicabilidadEnLosSiete(String clave, long org) {
+        jdbc.update("""
+                insert into catalogo_atributo_tipo (id_catalogo_atributo, tipo_propiedad,
+                                                    requerido, exigencia)
+                select c.id_catalogo_atributo, t.tipo, false, 'OPC'
+                  from catalogo_atributo c
+                  cross join tipos_de_propiedad() as t(tipo)
+                 where c.clave = ? and c.organizacion_id = ?
+                """, clave, org);
     }
 
     private PublicacionService.DatosPublicacion publicacionDePrueba() {

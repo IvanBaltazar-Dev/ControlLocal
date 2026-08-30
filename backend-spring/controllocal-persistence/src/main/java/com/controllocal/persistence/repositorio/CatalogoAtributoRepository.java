@@ -36,6 +36,14 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
     /**
      * Lo que se pregunta para un tipo de propiedad, y solo eso. Es la consulta
      * que hace que registrar un terreno no pida dormitorios.
+     *
+     * <p><b>La aplicabilidad la decide {@code catalogo_atributo_tipo}, y solo
+     * ella</b> (V86). Hasta entonces esta consulta llevaba delante un
+     * {@code c.aplicaTodos = true or ...} que la cortocircuitaba: una clave con
+     * el campo puesto aplicaba a un tipo que nadie habia declarado, asi que
+     * retirarla de UNO obligaba a cambiarle la forma. Las claves que vivian de
+     * ese atajo se respaldaron con sus filas en V86 --ninguna respuesta
+     * cambio-- y el campo dejo de decidir.
      */
     @Query("""
             select distinct c from CatalogoAtributo c
@@ -43,9 +51,8 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
             where c.activo = true
               and c.sujeto = 'PROPIEDAD'
               and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
-              and (c.aplicaTodos = true
-                   or exists (select 1 from CatalogoAtributo c2 join c2.aplicaciones a2
-                               where c2 = c and a2.tipoPropiedad = :tipoPropiedad))
+              and exists (select 1 from CatalogoAtributo c2 join c2.aplicaciones a2
+                           where c2 = c and a2.tipoPropiedad = :tipoPropiedad)
             order by c.orden asc, c.clave asc
             """)
     List<CatalogoAtributo> aplicablesA(@Param("idOrganizacion") long idOrganizacion,
@@ -66,6 +73,10 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
      * <p>El {@code sujeto = 'ENCARGO'} no es defensivo: es la mitad del
      * enrutamiento. Sin el, una clave fisica que por error declarara
      * aplicabilidad por operacion se colaria en el bloque del encargo.
+     *
+     * <p>Y, como su gemela, <b>ya no consulta {@code aplicaTodos}</b> (V86):
+     * la aplicabilidad de una condicion la decide {@code
+     * catalogo_atributo_operacion}.
      */
     @Query("""
             select distinct c from CatalogoAtributo c
@@ -73,10 +84,9 @@ public interface CatalogoAtributoRepository extends JpaRepository<CatalogoAtribu
             where c.activo = true
               and c.sujeto = 'ENCARGO'
               and (c.organizacionId is null or c.organizacionId = :idOrganizacion)
-              and (c.aplicaTodos = true
-                   or exists (select 1 from CatalogoAtributo c2 join c2.aplicacionesOperacion o2
-                               where c2 = c and o2.tipoPropiedad = :tipoPropiedad
-                                 and o2.tipoOperacion = :tipoOperacion))
+              and exists (select 1 from CatalogoAtributo c2 join c2.aplicacionesOperacion o2
+                           where c2 = c and o2.tipoPropiedad = :tipoPropiedad
+                             and o2.tipoOperacion = :tipoOperacion)
             order by c.orden asc, c.clave asc
             """)
     List<CatalogoAtributo> aplicablesAEncargo(@Param("idOrganizacion") long idOrganizacion,

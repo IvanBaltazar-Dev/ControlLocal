@@ -567,6 +567,94 @@ describe('PropiedadDetail', () => {
   });
 
   // ------------------------------------------------------------------
+  // Una característica HISTÓRICA: el dato se conserva y se distingue
+  //
+  // Un valor sale del contrato de escritura de dos maneras —la clave se retiró
+  // del catálogo, o sigue viva y ya no aplica a este tipo—, y para quien lee la
+  // ficha son la misma cosa: está escrito y no se puede corregir. Hasta aquí
+  // llegaban indistinguibles de un dato corregible, así que el broker lo
+  // intentaba, no encontraba el campo en el editor y nada se lo explicaba.
+  //
+  // Ninguna de estas pruebas nombra una clave real en la lógica: el estado y el
+  // motivo los trae el Core, y una prueba escrita sobre `servicios_disponibles`
+  // no distinguiría un mecanismo de un `if` con ese nombre dentro.
+  // ------------------------------------------------------------------
+
+  const HISTORICA = {
+    clave: 'zz_vieja',
+    rotulo: 'Pregunta vieja',
+    tipoDato: 'TEXTO',
+    valor: 'lo que se supo',
+    estadoDato: 'HISTORICO' as const,
+    editable: false,
+    motivoNoEditable: 'Ya no se pregunta para terreno. El valor se conserva tal como se registro.',
+  };
+
+  it('una caracteristica historica sigue enseñando su valor', async () => {
+    await montar(ficha({ atributos: [HISTORICA] }));
+
+    expect(html()).toContain('Pregunta vieja');
+    expect(html()).toContain('lo que se supo');
+  });
+
+  it('y se marca, con el motivo que redacta el Core y no esta pantalla', async () => {
+    await montar(ficha({ atributos: [HISTORICA] }));
+
+    const marca = (fixture.nativeElement as HTMLElement).querySelector('.caracteristicas .historica');
+    expect(marca).not.toBeNull();
+    expect(marca?.textContent?.trim()).toBe('histórica');
+    // La frase llega escrita: componerla aquí sería la matriz «motivo → texto»
+    // viviendo en la interfaz, y con dos consumidores serían dos.
+    expect(html()).toContain(HISTORICA.motivoNoEditable);
+  });
+
+  it('el mismo mecanismo sirve para una clave retirada del catalogo', async () => {
+    // Mismo estado, otro motivo. La pantalla no distingue los dos casos y no
+    // tiene por qué: lo que cambia es la frase, que viene hecha.
+    const retirada = {
+      ...HISTORICA,
+      clave: 'zz_otra',
+      rotulo: 'Otra pregunta',
+      motivoNoEditable: 'Ya no se pregunta: «Otra pregunta» se retiro del catalogo.',
+    };
+    await montar(ficha({ atributos: [retirada] }));
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.caracteristicas .historica'),
+    ).not.toBeNull();
+    expect(html()).toContain('se retiro del catalogo');
+  });
+
+  it('una caracteristica vigente no lleva ninguna marca', async () => {
+    await montar(PROP_0022);
+
+    expect(html()).toContain('160 m²');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.caracteristicas .historica'),
+    ).toBeNull();
+  });
+
+  it('sin la señal del Core no se marca nada: no se deduce por el nombre de la clave', async () => {
+    // Claves que de verdad están fuera del contrato en el Core, pero el cable
+    // no dice `estadoDato`. Si la pantalla marcara igualmente, estaría
+    // decidiéndolo ella — y ésa es la deducción que el Core no le delega.
+    await montar(
+      ficha({
+        atributos: [
+          { clave: 'servicios_disponibles', rotulo: 'Servicios disponibles', tipoDato: 'LISTA', valor: 'Agua y luz' },
+          { clave: 'area_terreno', rotulo: 'Área del terreno', tipoDato: 'DECIMAL', unidad: 'm²', valor: '777' },
+        ],
+      }),
+    );
+
+    expect(html()).toContain('Agua y luz');
+    expect(html()).toContain('777 m²');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.caracteristicas .historica'),
+    ).toBeNull();
+  });
+
+  // ------------------------------------------------------------------
   // La memoria del inmueble: el OTRO nivel de lectura
   // ------------------------------------------------------------------
 

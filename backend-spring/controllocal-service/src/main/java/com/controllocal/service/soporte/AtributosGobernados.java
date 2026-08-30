@@ -639,15 +639,35 @@ public class AtributosGobernados {
                 .map(CatalogoAtributo::getClave);
     }
 
-    /** La definicion de una clave: la de la organizacion gana sobre la del sistema. */
+    /**
+     * La definicion de una clave: la de la organizacion gana sobre la del
+     * sistema. {@code porClave} filtra {@code activo}, asi que una clave
+     * RETIRADA no se resuelve aqui -- y eso es la puerta cerrada que se quiere.
+     *
+     * <p>Lo que cambia es lo que se dice al cerrarla. El mensaje era «no esta
+     * en el catalogo», y de una clave retirada eso es <b>falso</b>: esta, con
+     * su rotulo y sus valores, y lo que se cerro es la pregunta. Quien recibia
+     * ese error se iba a buscar una clave mal escrita. La consulta extra solo
+     * ocurre en el camino del fallo.
+     */
     public CatalogoAtributo definicionDe(long idOrganizacion, String clave) {
         CatalogoAtributo definicion = catalogo.porClave(idOrganizacion, clave)
-                .orElseThrow(() -> new ReglaNegocioException(
-                        "El atributo \"" + clave + "\" no esta en el catalogo. Una clave existe "
-                                + "antes que su valor: si no, dos propiedades dicen lo mismo con "
-                                + "nombres distintos y dejan de poder compararse."));
+                .orElseThrow(() -> new ReglaNegocioException(porQueNoSeResuelve(idOrganizacion, clave)));
         exigirQueSeaDePropiedad(definicion);
         return definicion;
+    }
+
+    private String porQueNoSeResuelve(long idOrganizacion, String clave) {
+        boolean retirada = catalogo.paraLeer(idOrganizacion, List.of(clave)).stream()
+                .anyMatch(c -> clave.equals(c.getClave()));
+        if (retirada) {
+            return "El atributo \"" + clave + "\" se retiro del catalogo: su valor se conserva y "
+                    + "se lee, pero ya no se pregunta ni se corrige. Retirar la pregunta no "
+                    + "retira el dato, y tampoco lo reabre.";
+        }
+        return "El atributo \"" + clave + "\" no esta en el catalogo. Una clave existe "
+                + "antes que su valor: si no, dos propiedades dicen lo mismo con "
+                + "nombres distintos y dejan de poder compararse.";
     }
 
     /**

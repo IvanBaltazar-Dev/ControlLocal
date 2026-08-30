@@ -209,6 +209,16 @@ export interface EncargoPropiedad {
   condiciones?: AtributoPropiedad[];
   /** Lo obligatorio para publicar este encargo que todavía no tiene valor. */
   faltanParaPublicar?: AtributoQueFalta[];
+  /**
+   * Si quien está mirando puede tocar **este** encargo (P0-4): su importe, su
+   * exclusividad, su vigencia, sus condiciones y sus anuncios.
+   *
+   * Es la autoridad del **encargo**, no la de la propiedad, y son distintas a
+   * propósito: el responsable del inmueble no manda sobre el encargo ajeno, y
+   * el agente del alquiler no manda sobre la venta. Antes esto se deducía del
+   * rol de la sesión, y por eso todos los agentes del tenant veían el botón.
+   */
+  puedeEditar?: boolean;
 }
 
 // ====================================================================
@@ -517,6 +527,48 @@ export interface FichaPropiedad {
   historia: HistoriaComercial;
   actividad: ActividadPropiedad;
   fechaRegistro?: string | null;
+  /**
+   * **Quién responde por la propiedad, y qué puede hacer quien está mirando**
+   * (P0).
+   *
+   * Llega **resuelto por el backend**, no en piezas para que la pantalla lo
+   * componga. Es deliberado: si el SPA calculara «puedo editar» comparando el
+   * rol de la sesión con el responsable, existirían dos copias de una regla de
+   * autoridad —una aquí y otra en el Core— y divergirían hacia el lado peor,
+   * el de pintar un botón que el backend va a rechazar. Aquí lo decide el
+   * mismo método que después deniega el PUT.
+   *
+   * Por eso esta pantalla **no lleva ninguna lista de roles ni de claves**.
+   */
+  responsabilidad?: Responsabilidad | null;
+}
+
+/**
+ * La autoridad de escritura sobre una propiedad, tal como el cable la cuenta.
+ *
+ * Jackson viaja `NON_NULL`, así que un campo nulo **no llega**: aquí es
+ * `undefined` y no `null`. De ahí que todo sea opcional y que la comparación
+ * correcta sea `== null` — `=== null` no ve el caso real.
+ */
+export interface Responsabilidad {
+  /**
+   * El rol del agente que responde hoy. Ausente = **FALTANTE**: no se sabe, y
+   * eso no es lo mismo que «de todos». La propiedad se ve igual; lo que no se
+   * puede es escribirla.
+   */
+  idResponsable?: number | null;
+  nombre?: string | null;
+  /** Si **este** usuario puede escribir hechos de la propiedad. */
+  puedeEditar: boolean;
+  /**
+   * El código del rechazo: `FALTA_RESPONSABLE`, `OTRO_RESPONSABLE` o
+   * `NO_OPERA`. Ausente cuando sí puede. **No se traduce en el cliente** —para
+   * eso viene `motivoTexto`—; sirve para distinguir casos si alguna vista
+   * necesita reaccionar distinto, no para redactar.
+   */
+  motivo?: string | null;
+  /** El motivo **en palabras, escrito por el Core**. Es lo que se pinta. */
+  motivoTexto?: string | null;
 }
 
 /**

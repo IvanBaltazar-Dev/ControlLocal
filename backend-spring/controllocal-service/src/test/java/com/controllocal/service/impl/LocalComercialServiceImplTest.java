@@ -15,7 +15,6 @@ import com.controllocal.persistence.repositorio.HistorialEstadoRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
-import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.AlertaService;
 import com.controllocal.service.LocalComercialService.DatosLocal;
@@ -31,6 +30,7 @@ import com.controllocal.service.soporte.Transiciones;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValorLogico;
 import com.controllocal.service.soporte.ValoresGobernados;
@@ -71,7 +71,6 @@ class LocalComercialServiceImplTest {
     private final PublicacionService publicaciones = mock(PublicacionService.class);
     private final ProspeccionService prospecciones = mock(ProspeccionService.class);
     private final CaptacionRepository captaciones = mock(CaptacionRepository.class);
-    private final ProspeccionRepository prospeccionesRepo = mock(ProspeccionRepository.class);
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
 
     /**
@@ -83,10 +82,22 @@ class LocalComercialServiceImplTest {
     private final LectorPorAutoridad lector = mock(LectorPorAutoridad.class);
     private final AtributosGobernados gobierno = mock(AtributosGobernados.class);
 
+    /**
+     * <b>La autoridad va de verdad, no mockeada</b> (P0).
+     *
+     * <p>Un mock permisivo aqui dejaria pasar exactamente el defecto que la
+     * autoridad existe para impedir, y este test seguiria verde con la regla
+     * apagada. Se construye con sus repositorios mockeados, que es otra cosa:
+     * lo que decide sigue siendo el codigo real.
+     */
+    private final AutoridadDePropiedad autoridad = new AutoridadDePropiedad(
+            mock(com.controllocal.persistence.repositorio.DetalleAgenteRepository.class),
+            mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class));
+
     private final LocalComercialServiceImpl service = new LocalComercialServiceImpl(
             propiedades, roles, distritos, fotos, precios, publicaciones, prospecciones,
-            captaciones, prospeccionesRepo, new Transiciones(historial), mock(AlertaService.class),
-            lector, gobierno);
+            captaciones, new Transiciones(historial), mock(AlertaService.class),
+            lector, gobierno, autoridad);
 
     /**
      * El lector devuelve "no se sabe nada" en vez de null.
@@ -138,8 +149,11 @@ class LocalComercialServiceImplTest {
     @Test
     void desactivarTransicionaAInactivoYLoAudita() {
         Propiedad propiedad = propiedadExistente();
+        // Retirar la propiedad lo hace SU responsable (P0-1). Antes bastaba con
+        // haberla prospectado, y esa era la regla que dejaba a dos agentes
+        // distintos ser "duenos" del mismo inmueble a la vez.
+        propiedad.responsable(30L);
         when(propiedades.findByOrganizacionIdAndId(ORG, 7L)).thenReturn(Optional.of(propiedad));
-        when(prospeccionesRepo.existsByOrganizacionIdAndPropiedadIdAndAgenteId(ORG, 7L, 30L)).thenReturn(true);
 
         service.desactivar(7L, agente);
 

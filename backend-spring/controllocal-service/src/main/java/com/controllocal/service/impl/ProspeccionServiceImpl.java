@@ -319,6 +319,35 @@ public class ProspeccionServiceImpl implements ProspeccionService {
         transiciones.iniciar(captacion, Captacion.PENDIENTE_REVISION);
         captaciones.save(captacion);
 
+        // ---------------------------------------------------------------
+        // POR QUE ESTA VIA NO PIDE LA AUTORIDAD DE LA PROPIEDAD (P0).
+        //
+        // Aqui se escriben tres columnas de `propiedad` —precio_referencial,
+        // moneda_referencial y disponibilidad_comercial— y aun asi NO se llama
+        // a `AutoridadDePropiedad.exigirEdicion`. La razon, dicha entera para
+        // que nadie la lea como un olvido:
+        //
+        //  1. Ninguna de las tres es un hecho FISICO declarado del inmueble.
+        //     Las dos primeras son la COLUMNA ESPEJO del importe del encargo
+        //     que acaba de nacer —su autoridad real es la condicion economica
+        //     de esa captacion, no la ficha— y la tercera es "entra al
+        //     mercado", que es un efecto del encargo por definicion.
+        //  2. Este caso de uso YA tiene su autoridad, y es la correcta para lo
+        //     que hace: `cargarEnProceso` -> `cargarConAcceso` exige que la
+        //     PROSPECCION sea del actor (`alcances.alcanza`). El encargo nace
+        //     con `p.getAgente()`, asi que el agente del encargo es siempre el
+        //     de la prospeccion: la operacion del encargo la ejecuta su agente.
+        //  3. Exigir aqui la autoridad de la propiedad CERRARIA UNA PUERTA QUE
+        //     ESTE P0 NO DECIDE: una propiedad FALTANTE dejaria de poder
+        //     captarse, y la regla es que FALTANTE bloquea la escritura de la
+        //     PROPIEDAD y nada mas — ni el encargo, ni la publicacion, ni el
+        //     matching.
+        //
+        // Queda medido y registrado como residuo, no como cobertura: un agente
+        // con prospeccion propia sobre una propiedad de otro responsable mueve
+        // estas tres columnas espejo al captar. Es el precio de no cerrar la
+        // puerta del encargo, y se declara en el gate en vez de disimularse.
+        // ---------------------------------------------------------------
         // La columna espejo sigue lo que lee el cable heredado. Si la propiedad
         // llega sin precio -registrada para prospectarla, V75- este encargo es
         // el primero que se lo da; si ya lo tenia, manda el alquiler, que es lo

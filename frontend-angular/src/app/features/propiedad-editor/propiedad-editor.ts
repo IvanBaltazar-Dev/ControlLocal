@@ -211,6 +211,35 @@ export class PropiedadEditor implements OnInit {
   protected readonly cambios = computed<EdicionPropiedad | null>(() => this.construir());
   protected readonly hayCambios = computed(() => this.cambios() !== null);
 
+  // ------------------------------------------------------------------
+  // La autoridad, tal como llega del cable (P0)
+  // ------------------------------------------------------------------
+
+  /**
+   * Si **este** usuario puede escribir hechos de esta propiedad.
+   *
+   * Sale del backend ya resuelto. Aquí no se compara ningún rol ni ningún id:
+   * hacerlo pondría una segunda copia de la regla de autoridad en la pantalla,
+   * y dos copias divergen — hacia el lado de habilitar un botón que el PUT va
+   * a rechazar cuando la persona ya escribió.
+   *
+   * Mientras la ficha carga vale `true`, que es lo mismo que valía antes de
+   * este cambio: no se bloquea nada por no saber todavía.
+   */
+  protected readonly puedeEditar = computed(
+    () => this.ficha()?.responsabilidad?.puedeEditar ?? true,
+  );
+
+  /** El motivo del bloqueo **escrito por el Core**. La pantalla no redacta. */
+  protected readonly motivoBloqueo = computed(
+    () => this.ficha()?.responsabilidad?.motivoTexto ?? null,
+  );
+
+  /** Quién responde hoy, o `null` si está FALTANTE. */
+  protected readonly responsable = computed(
+    () => this.ficha()?.responsabilidad?.nombre ?? null,
+  );
+
   /** Los bloques tocados, con nombre, para que se vea qué va a viajar. */
   protected readonly resumenDeCambios = computed<readonly string[]>(() => {
     const cuerpo = this.cambios();

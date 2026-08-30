@@ -2,6 +2,7 @@ package com.controllocal.service.impl;
 
 import com.controllocal.service.soporte.AtributosDeEncargo;
 import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.Comercializacion;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.domain.inmueble.Propiedad;
@@ -46,18 +47,23 @@ public class PublicacionServiceImpl implements PublicacionService {
     private final AtributosGobernados gobierno;
     private final AtributosDeEncargo condiciones;
 
+    /** Anunciar un encargo escribe su serie economica: lo hace SU agente (P0-4). */
+    private final AutoridadDePropiedad autoridad;
+
     public PublicacionServiceImpl(PublicacionRepository publicaciones,
                                   PrecioPropiedadRepository precios,
                                   CaptacionRepository encargos,
                                   PropiedadRepository propiedades,
                                   AtributosGobernados gobierno,
-                                  AtributosDeEncargo condiciones) {
+                                  AtributosDeEncargo condiciones,
+                                  AutoridadDePropiedad autoridad) {
         this.publicaciones = publicaciones;
         this.precios = precios;
         this.encargos = encargos;
         this.propiedades = propiedades;
         this.gobierno = gobierno;
         this.condiciones = condiciones;
+        this.autoridad = autoridad;
     }
 
     @Override
@@ -84,6 +90,14 @@ public class PublicacionServiceImpl implements PublicacionService {
     @Transactional
     public FichaPublicacion crearEnEncargo(long idEncargo, DatosPublicacion datos, Actor actor) {
         Captacion encargo = encargoDelTenant(idEncargo, actor);
+        // Anunciar un encargo es un acto de SU agente (P0-4). Hasta aqui solo se
+        // comprobaba el tenant, y no era solo un problema de permisos: publicar
+        // escribe un hito `P` en la serie economica del encargo
+        // (`registrarImportePublicado`), asi que cualquier agente de la
+        // corredora podia meter una cifra en el historico economico de un
+        // encargo ajeno. Es la MISMA regla que ya cierra `actualizarEncargo` y
+        // `POST /locales/{id}/precios`, y por eso es la misma llamada.
+        autoridad.exigirEdicionDelEncargo(actor, encargo);
         // Publicar un encargo cerrado pondria en el mercado algo que ya no se
         // ofrece. Es una regla de negocio: vive aqui y no en el boton.
         if (!Captacion.esVivo(encargo.estadoActual())) {
@@ -224,6 +238,30 @@ public class PublicacionServiceImpl implements PublicacionService {
                 .orElse(null);
     }
 
+    /**
+     * <b>El anuncio se toca desde el encargo que lo autoriza</b> (P0-4).
+     *
+     * <p>Se llega a una publicacion por dos coordenadas —su encargo o su propio
+     * id— y las dos escriben la misma serie economica. Cerrar solo la primera
+     * dejaria la regla puesta en la puerta y abierta la ventana, que es
+     * literalmente el comentario que ya vive en {@code cambiarEstado} sobre los
+     * dos caminos de exposicion.
+     *
+     * <p>Una publicacion <b>sin encargo resuelto</b> no se deja tocar: sin
+     * saber de quien es el anuncio no hay forma de decir si es tuyo, y suponer
+     * que si es la respuesta que este P0 vino a quitar. Son filas anteriores a
+     * V70, que no llevaban {@code id_captacion}.
+     */
+    private void exigirEncargoPropio(Publicacion publicacion, Actor actor) {
+        Captacion encargo = encargoDe(publicacion, actor);
+        if (encargo == null) {
+            throw new ReglaNegocioException(
+                    "Este anuncio no dice de que encargo es, asi que no se puede saber quien "
+                            + "responde por el. Publica desde el encargo.");
+        }
+        autoridad.exigirEdicionDelEncargo(actor, encargo);
+    }
+
     private Propiedad propiedadDe(Publicacion publicacion, Actor actor) {
         return propiedades
                 .findByOrganizacionIdAndId(actor.idOrganizacion(), publicacion.getIdPropiedad())
@@ -260,6 +298,11 @@ public class PublicacionServiceImpl implements PublicacionService {
     @Transactional
     public FichaPublicacion actualizar(long idPublicacion, DatosPublicacion datos, Actor actor) {
         Publicacion actual = delTenant(idPublicacion, actor);
+        // Editar el anuncio cambia el importe publicado, y eso vuelve a escribir
+        // un hito `P` en la serie del encargo. Llegar por el id de la
+        // publicacion no puede ser una puerta mas barata que llegar por el del
+        // encargo (P0-4).
+        exigirEncargoPropio(actual, actor);
         if (datos != null) {
             String canal = canalOpcional(datos.canal());
             if (canal != null) {
@@ -294,6 +337,9 @@ public class PublicacionServiceImpl implements PublicacionService {
             throw new ReglaNegocioException("Estado de publicacion no valido: " + estado);
         }
         Publicacion actual = delTenant(idPublicacion, actor);
+        // Y la tercera puerta al mismo hito: pasar el anuncio a PUBLICADO
+        // tambien escribe la serie del encargo (P0-4).
+        exigirEncargoPropio(actual, actor);
         // Los DOS caminos de exposicion externa preguntan lo mismo. Poner una
         // publicacion en PUBLICADO es anunciar igual que crearla, y cerrar solo
         // uno de los dos dejaria la regla puesta en la puerta y abierta la

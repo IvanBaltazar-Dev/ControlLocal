@@ -454,7 +454,8 @@ public interface PropiedadUniversalService {
                         List<AtributoFicha> condiciones,
                         List<AtributoQueFalta> faltanParaPublicar,
                         List<PublicacionService.FichaPublicacion> publicaciones,
-                        GestionDePublicacion publicacionGestionable) {
+                        GestionDePublicacion publicacionGestionable,
+                        boolean puedeEditar) {
     }
 
     /** Una clave obligatoria que todavia no tiene valor, con su nombre legible. */
@@ -645,7 +646,48 @@ public interface PropiedadUniversalService {
                                    List<AtributoQueFalta> faltanParaPublicar,
                                    HistoriaComercial historia,
                                    ActividadPropiedad actividad,
-                                   LocalDateTime fechaRegistro) {
+                                   LocalDateTime fechaRegistro,
+                                   Responsabilidad responsabilidad) {
+    }
+
+    /**
+     * <b>Quien responde por la propiedad y que puede hacer QUIEN PREGUNTA</b>
+     * (P0). Las dos cosas juntas y calculadas en el Core, no dos campos sueltos
+     * que el cliente combine.
+     *
+     * <p><b>Por que viaja el permiso ya resuelto.</b> Si la ficha publicara
+     * solo {@code idResponsable}, cada consumidor —BROX Web, KAIROS y el
+     * siguiente— tendria que llevar su propia copia de la regla ("si soy AGENTE
+     * y mi rol coincide…"). Dos copias de una regla de autoridad divergen, y
+     * divergen hacia el lado que deja pintar un boton que el backend va a
+     * rechazar. Aqui lo decide el <b>mismo metodo</b> que despues deniega la
+     * escritura, asi que la pantalla no puede prometer lo que el Core niega.
+     *
+     * <p><b>Es informacion interna del tenant.</b> Sale en la ficha operativa,
+     * que ya es de la organizacion. No sale —ni {@code idResponsable}, ni
+     * {@code motivo}— por ninguna proyeccion externa: publicaciones, anuncios,
+     * fichas compartidas o exportaciones. La ficha se construye campo a campo
+     * y nunca serializando la entidad, que es lo que hace que eso sea
+     * comprobable y no una promesa.
+     *
+     * @param idResponsable   el rol del agente que responde HOY, o {@code null}
+     *                        si esta <b>FALTANTE</b>. NULL no es "de todos": es
+     *                        "no se sabe", y no se rellena con el agente de
+     *                        ningun encargo
+     * @param nombre          su nombre, para no obligar a la pantalla a
+     *                        resolver el id contra otra lista
+     * @param puedeEditar     si <b>este</b> actor puede escribir hechos de la
+     *                        propiedad. No dice nada de los encargos: cada uno
+     *                        responde por su cuenta en {@link EncargoFicha}
+     * @param motivo          el codigo del rechazo cuando no puede
+     *                        ({@code FALTA_RESPONSABLE}, {@code OTRO_RESPONSABLE},
+     *                        {@code NO_OPERA}); {@code null} cuando si puede
+     * @param motivoTexto     el mismo motivo en palabras, escrito por el Core.
+     *                        El cliente pinta este texto y no traduce el codigo:
+     *                        dos redacciones del mismo rechazo se separan
+     */
+    record Responsabilidad(Long idResponsable, String nombre, boolean puedeEditar,
+                           String motivo, String motivoTexto) {
     }
 
     /** Que produjo el alta. {@code reintento} avisa de que ya existia. */
@@ -721,4 +763,38 @@ public interface PropiedadUniversalService {
 
     /** Edicion parcial: lo que llega {@code null} no se toca. */
     FichaPropiedadUniversal editar(long idPropiedad, ComandoEdicion comando, Actor actor);
+
+    // ------------------------------------------------------------------
+    // El traspaso del responsable (P0-2)
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>Un traspaso de responsable, tal como queda en el expediente.</b>
+     *
+     * <p>Lleva las cinco cosas que hacen falta para auditarlo, y el
+     * {@code anterior} viaja {@code null} cuando la propiedad estaba FALTANTE:
+     * ese hueco es informacion —dice que no habia predecesor— y no se rellena
+     * con el agente de ningun encargo.
+     */
+    record TraspasoDeResponsable(Long id, Long idPropiedad,
+                                 Long idResponsableAnterior, String responsableAnterior,
+                                 Long idResponsableNuevo, String responsableNuevo,
+                                 Long idPersonaActor, String rolActor,
+                                 String motivo, LocalDateTime fecha) {
+    }
+
+    /**
+     * <b>Asigna o cambia quien responde por la propiedad</b> (P0-2). Lo hace un
+     * BROKER o el gobierno del tenant, nunca un agente.
+     *
+     * <p>Es la unica forma de mover la autoridad despues del alta, y la unica
+     * forma de sacar a una propiedad de FALTANTE. <b>No</b> reasigna ningun
+     * encargo, <b>no</b> modifica ningun atributo inmobiliario y <b>no</b>
+     * cambia lo que nadie puede leer.
+     */
+    TraspasoDeResponsable asignarResponsable(long idPropiedad, long idRolAgente, String motivo,
+                                             Actor actor);
+
+    /** El expediente de traspasos de una propiedad, el mas reciente primero. */
+    List<TraspasoDeResponsable> traspasosDe(long idPropiedad, Actor actor);
 }

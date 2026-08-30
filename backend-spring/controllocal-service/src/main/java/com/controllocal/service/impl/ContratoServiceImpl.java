@@ -761,6 +761,26 @@ public class ContratoServiceImpl implements ContratoService {
     /**
      * Efecto 6 de la cascada. El precio de cierre conserva la moneda de la
      * renta final y usa la fecha de HOY —no la de cierre—, como la v1.
+     *
+     * <h2>Por que esta via no pide la autoridad de la propiedad (P0)</h2>
+     * Escribe {@code disponibilidad_comercial} y un hito {@code C}, y aun asi
+     * no llama a {@code AutoridadDePropiedad}. No es un hueco:
+     * <ul>
+     *   <li>Es el <b>ciclo del contrato</b>, no la edicion de la ficha. Lo
+     *       ejecuta el BROKER —que por P0-1 nunca es responsable de una
+     *       propiedad— dentro de un flujo con su propia autoridad, la de
+     *       decidir sobre el contrato. Exigir aqui la de la propiedad
+     *       significaria que <b>ningun contrato se puede cerrar</b>, porque
+     *       quien lo cierra jamas podra pasar esa comprobacion.</li>
+     *   <li>Lo que escribe no es una declaracion sobre el inmueble sino la
+     *       <b>consecuencia</b> de un hecho ya decidido: el inmueble esta
+     *       alquilado porque hay contrato, y el hito {@code C} es el ultimo de
+     *       la serie de <b>ese</b> encargo, del que nace.</li>
+     *   <li>Y bloquearlo cerraria una puerta que este P0 no decide: una
+     *       propiedad FALTANTE dejaria de poder cerrar su contrato.</li>
+     * </ul>
+     * Registrado en la lista explicita de {@code AutoridadDeLaPropiedadTest},
+     * que es donde tiene que estar para que se vea.
      */
     private void cerrarLocal(Captacion captacion, BigDecimal renta, String moneda,
                              Actor actor, String motivo) {
@@ -970,6 +990,15 @@ public class ContratoServiceImpl implements ContratoService {
 
         // 6-7) La transicion pasa por Transiciones, asi que queda en
         //      historial_estado con actor, rol, motivo y fecha efectiva.
+        //
+        //      No pide la autoridad de la propiedad (P0), por la misma razon
+        //      que `cerrarLocal`: es el ciclo del CONTRATO, lo ejecuta el
+        //      broker que revisa —que nunca es responsable de una propiedad— y
+        //      la disponibilidad que escribe es la consecuencia de que el
+        //      inmueble dejo de estar ocupado, no una declaracion sobre el.
+        //      Exigirla haria imposible recuperar la disponibilidad de ningun
+        //      inmueble al terminar su contrato. Registrado en la lista
+        //      explicita de `AutoridadDeLaPropiedadTest`.
         transiciones.aplicarDisponibilidad(propiedad, propiedad.getId(),
                 DisponibilidadComercial.desde(destino), actor,
                 "Revision del contrato " + idContrato + ": " + texto);

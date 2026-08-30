@@ -62,14 +62,31 @@ class PublicacionServiceImplTest {
     private final com.controllocal.service.soporte.AtributosDeEncargo condiciones =
             mock(com.controllocal.service.soporte.AtributosDeEncargo.class);
 
+    /**
+     * <b>La autoridad va de verdad</b> (P0-4). Publicar escribe un hito `P` en
+     * la serie economica del encargo, asi que estas pruebas tienen que correr
+     * con la regla puesta: con un mock permisivo seguirian verdes justo si
+     * alguien la quitara.
+     */
+    private final com.controllocal.service.soporte.AutoridadDePropiedad autoridad =
+            new com.controllocal.service.soporte.AutoridadDePropiedad(
+                    mock(com.controllocal.persistence.repositorio.DetalleAgenteRepository.class),
+                    mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class));
+
     private final PublicacionServiceImpl service = new PublicacionServiceImpl(
-            publicaciones, precios, encargos, propiedades, gobierno, condiciones);
+            publicaciones, precios, encargos, propiedades, gobierno, condiciones, autoridad);
 
     private static final long ORG = 1L;
     private static final long PROPIEDAD = 7L;
     private static final long ENCARGO = 55L;
 
-    private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
+    private static final long ROL_AGENTE = 30L;
+
+    /** El agente que lleva el encargo de estas pruebas (P0-4). */
+    private final Actor agente = new Actor(ORG, 3L, ROL_AGENTE, "AGENTE");
+
+    /** Otro agente del mismo tenant: el que NO puede tocar este encargo. */
+    private final Actor ajeno = new Actor(ORG, 4L, 44L, "AGENTE");
 
     @org.junit.jupiter.api.BeforeEach
     void elCatalogoNoEncuentraNadaFaltante() {
@@ -124,6 +141,15 @@ class PublicacionServiceImplTest {
         encargo.setCodigoCaptacion("CAP-0001");
         encargo.setMotivoOperacion(OperacionInmobiliaria.ALQUILER.codigo());
         encargo.setPropiedad(propiedad);
+        // El agente del encargo, que en la base es NOT NULL y aqui faltaba.
+        // Desde P0-4 no es decorado: publicar escribe un hito en la serie
+        // economica de ESTE encargo, asi que lo hace SU agente. Con el encargo
+        // sin agente, la autoridad -que aqui va de verdad, no mockeada- deniega,
+        // y es lo correcto: un encargo de nadie no lo publica nadie.
+        com.controllocal.domain.persona.DetalleAgente suAgente =
+                new com.controllocal.domain.persona.DetalleAgente();
+        ReflectionTestUtils.setField(suAgente, "id", ROL_AGENTE);
+        encargo.setAgente(suAgente);
         encargo.transicionarA(Captacion.ACTIVA);
         return encargo;
     }
@@ -212,10 +238,12 @@ class PublicacionServiceImplTest {
      * venta en el modelo eso mete precios de venta en la serie de alquiler. Es
      * mejor no tener el dato que tenerlo colgando de una operacion inventada.
      *
-     * <p>Se ejercitaba por {@code crear(idPropiedad, ...)}, retirado en el
-     * microcorte de las puertas de publicacion. <b>La proteccion sigue viva y es
-     * alcanzable</b>: {@code Publicacion.idEncargo} es anulable --hay anuncios
-     * anteriores a V70-- asi que editar uno de esos llega a la misma rama.
+     * <p><b>Desde P0-4 el anuncio huerfano se rechaza ANTES</b>, y por una razon
+     * distinta pero de la misma familia: si no se sabe de que encargo es, no se
+     * sabe quien responde por el, y suponerlo es la clase de respuesta que este
+     * corte vino a quitar. El efecto observable es el que importaba y no cambia
+     * --<b>no se escribe ningun hito</b>-- y ademas ahora se dice por que en vez
+     * de guardar en silencio media operacion.
      */
     @Test
     void sinEncargoResueltoNoSeInventaLaOperacion() {
@@ -225,9 +253,34 @@ class PublicacionServiceImplTest {
         when(publicaciones.findByOrganizacionIdAndId(ORG, 11L))
                 .thenReturn(Optional.of(huerfana));
 
-        service.actualizar(11L, datos(new BigDecimal("5200.00"), "PEN", null), agente);
+        com.controllocal.service.excepcion.ReglaNegocioException error = assertThrows(
+                com.controllocal.service.excepcion.ReglaNegocioException.class,
+                () -> service.actualizar(11L, datos(new BigDecimal("5200.00"), "PEN", null),
+                        agente));
+        assertTrue(error.getMessage().contains("de que encargo es"),
+                "el rechazo tiene que explicar el hueco, no acusar de permisos: "
+                        + error.getMessage());
 
         verify(precios, never()).save(any());
+    }
+
+    /**
+     * <b>Y el encargo ajeno no se publica</b> (P0-4).
+     *
+     * <p>Es la puerta que el inventario de las ocho vias no tenia: publicar
+     * escribe un hito {@code P} en la serie economica del encargo, asi que hasta
+     * V87 cualquier agente del tenant metia una cifra en el historico de otro
+     * comprobando unicamente la organizacion.
+     */
+    @Test
+    void publicarElEncargoDeOtroAgenteSeDeniegaYNoDejaHito() {
+        assertThrows(com.controllocal.service.excepcion.AccesoNoAutorizadoException.class,
+                () -> service.crearEnEncargo(ENCARGO,
+                        datos(new BigDecimal("5200.00"), "PEN", Publicacion.ESTADO_PUBLICADO),
+                        ajeno));
+
+        verify(precios, never()).save(any());
+        verify(publicaciones, never()).save(any());
     }
 
     /**

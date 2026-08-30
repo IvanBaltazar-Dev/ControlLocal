@@ -35,6 +35,29 @@
   max-width: 62ch;
 }
 
+// El motivo por el que esta propiedad no se escribe. No es un error --nada
+// falló-- así que no lleva el rojo de `.aviso`: lleva el fondo de atención y
+// la tinta normal, que es como se dice un hecho.
+.bloqueo {
+  background: var(--atencion-p);
+  border-radius: var(--r-chico);
+  color: var(--ink-1);
+  font-size: 13px;
+  margin: 10px 0 0;
+  max-width: 62ch;
+  padding: 9px 11px;
+
+  strong {
+    display: block;
+  }
+
+  .responsable {
+    color: var(--ink-2);
+    display: block;
+    margin-top: 3px;
+  }
+}
+
 .miga {
   color: var(--ink-3);
   font-size: 11px;

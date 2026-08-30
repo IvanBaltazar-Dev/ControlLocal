@@ -9,6 +9,7 @@ import com.controllocal.domain.comun.EstadosDominio;
 import com.controllocal.domain.comun.EstadosDominio.EstadoCaptacion;
 import com.controllocal.domain.inmueble.CatalogoAtributo;
 import com.controllocal.domain.inmueble.Distrito;
+import com.controllocal.domain.inmueble.AsignacionResponsablePropiedad;
 import com.controllocal.domain.inmueble.OperacionInmobiliaria;
 import com.controllocal.domain.inmueble.OrigenIncorporacion;
 import com.controllocal.domain.inmueble.PrecioPropiedad;
@@ -29,6 +30,7 @@ import com.controllocal.persistence.repositorio.TitularidadPropiedadRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.PublicacionService;
@@ -38,6 +40,7 @@ import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ActividadDeLaPropiedad;
 import com.controllocal.service.soporte.AnunciosDeLosEncargos;
+import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.AtributosDeEncargo;
 import com.controllocal.service.soporte.Comercializacion;
 import com.controllocal.service.soporte.AtributosGobernados;
@@ -116,6 +119,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private static final String EVENTO_EDITADA = "PROPIEDAD_EDITADA";
     private static final String EVENTO_ENCARGO = "ENCARGO_ABIERTO";
     private static final String EVENTO_PRECIO = "PRECIO_AUTORIZADO";
+    /** El traspaso de autoridad es un hecho, y como tal deja evento (P0-2). */
+    private static final String EVENTO_RESPONSABLE = "PROPIEDAD_RESPONSABLE_ASIGNADO";
 
     private final PropiedadRepository propiedades;
     private final PersonaRolRepository roles;
@@ -137,6 +142,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final Transiciones transiciones;
     private final ActividadDeLaPropiedad actividad;
     private final AnunciosDeLosEncargos publicaciones;
+    /** Quien puede escribir la propiedad, y quien cada encargo (P0). */
+    private final AutoridadDePropiedad autoridad;
 
     // Las cuatro tablas de valor gobernado ya no se inyectan aqui (4.P). Este
     // caso de uso ORQUESTA -- decide que se escribe, en que orden y dentro de
@@ -159,7 +166,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          ComandosIdempotentes comandos, Documentos documentos,
                                          Transiciones transiciones,
                                          ActividadDeLaPropiedad actividad,
-                                         AnunciosDeLosEncargos publicaciones) {
+                                         AnunciosDeLosEncargos publicaciones,
+                                         AutoridadDePropiedad autoridad) {
         this.propiedades = propiedades;
         this.roles = roles;
         this.agentes = agentes;
@@ -178,6 +186,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.transiciones = transiciones;
         this.actividad = actividad;
         this.publicaciones = publicaciones;
+        this.autoridad = autoridad;
     }
 
     // ==================================================================
@@ -273,6 +282,14 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // conociendose observando el mercado.
         propiedad.incorporadaPor(origenDeclarado(comando.origen(), operaciones),
                 actor.idRolOperativo());
+        // Y quien responde por ella desde hoy (P0). Es lo unico que fija la
+        // autoridad sin pasar por un broker, y solo puede serlo aqui: el alta
+        // CREA la fila, asi que no hay responsable anterior a quien desplazar y
+        // no hay nada que traspasar. Despues del alta la autoridad solo se
+        // mueve por `AutoridadDePropiedad.asignar`, que exige broker y deja
+        // rastro — volver a registrar una propiedad no captura la de nadie,
+        // porque el alta jamas toca una fila existente.
+        autoridad.fijarAlAlta(actor, propiedad);
         // Registrada y activa. La OFERTA la abre el encargo, no el alta: con
         // cero operaciones la propiedad queda en el registro maestro sin decir
         // que esta disponible, que es lo que seria falso (V75).
@@ -450,6 +467,31 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // donde se ven las dos.
         List<String> aBorrar = clavesABorrar(comando.atributosABorrar(), valores);
 
+        // ---------------------------------------------------------------
+        // LA AUTORIDAD, antes de escribir nada (P0).
+        //
+        // Este endpoint mezcla DOS cosas que hasta V87 viajaban bajo la misma
+        // autorizacion —la de nadie: solo se comprobaba el tenant—. Se separan
+        // aqui porque son dos autoridades distintas y pueden ser dos personas:
+        //
+        //   la FICHA FISICA (descripcion, ubicacion, titulares, atributos y
+        //   retiradas)          -> el responsable de la PROPIEDAD
+        //
+        //   los ENCARGOS (importe, exclusividad, vigencia y condiciones)
+        //                       -> el agente de CADA encargo, uno por uno,
+        //                          dentro de `actualizarEncargo` y
+        //                          `aplicarCondicionesDe`
+        //
+        // Se comprueban por separado y no con un OR, y eso importa en las dos
+        // direcciones: responder por la propiedad no deja tocar el encargo
+        // ajeno, y tener un encargo no deja tocar la ficha. Tambien importa lo
+        // que NO se comprueba: una peticion que solo trae `operaciones` o
+        // `condiciones` no pide la autoridad de la propiedad, asi que el agente
+        // de un encargo lo sigue operando aunque la propiedad este FALTANTE.
+        if (tocaLaFicha(comando, valores, aBorrar)) {
+            autoridad.exigirEdicion(actor, propiedad);
+        }
+
         String huella = documentos.huellaDe(new LinkedHashMap<>(Map.of(
                 "idPropiedad", idPropiedad,
                 "descripcion", texto(comando.descripcion()),
@@ -503,6 +545,91 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 documentos.objeto(Map.of("idPropiedad", propiedad.getId())));
 
         return ficha(actor, propiedad);
+    }
+
+    // ==================================================================
+    // El traspaso del responsable (P0-2)
+    // ==================================================================
+
+    /**
+     * <b>Cambia quien responde por la propiedad, y lo deja escrito.</b>
+     *
+     * <p>Este caso de uso <b>solo</b> hace eso. No toca la ficha, ni los
+     * encargos, ni la disponibilidad: si un dia hiciera falta que un traspaso
+     * arrastre algo mas, sera otra decision y otro metodo — mezclarlo aqui
+     * convertiria un acto de gobierno auditable en un cambio de datos con
+     * efectos que nadie pidio.
+     *
+     * <p>El evento de dominio se anota como cualquier otro hecho y en la misma
+     * transaccion, ademas de la fila del expediente: la fila es el rastro
+     * dirigido —"de quien a quien"— y el evento es el que ve la auditoria
+     * transversal.
+     */
+    @Override
+    @Transactional
+    public TraspasoDeResponsable asignarResponsable(long idPropiedad, long idRolAgente,
+                                                    String motivo, Actor actor) {
+        Propiedad propiedad = propiedades
+                .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+                .orElseThrow(() -> new NoEncontradoException("Propiedad"));
+
+        AsignacionResponsablePropiedad fila =
+                autoridad.asignar(actor, propiedad, idRolAgente, motivo);
+        propiedades.save(propiedad);
+
+        anotarEvento(actor, EVENTO_RESPONSABLE, Propiedad.ENTIDAD_TIPO, propiedad.getId(),
+                Procedencia.oPantalla(null),
+                fila.getIdRolResponsableAnterior() == null
+                        ? Map.of("idPropiedad", propiedad.getId(),
+                                 "responsableNuevo", fila.getIdRolResponsableNuevo())
+                        : Map.of("idPropiedad", propiedad.getId(),
+                                 "responsableAnterior", fila.getIdRolResponsableAnterior(),
+                                 "responsableNuevo", fila.getIdRolResponsableNuevo()));
+        return traspaso(fila);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TraspasoDeResponsable> traspasosDe(long idPropiedad, Actor actor) {
+        // Un id de otro tenant se comporta como inexistente, igual que la ficha.
+        propiedades.findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+                .orElseThrow(() -> new NoEncontradoException("Propiedad"));
+        return autoridad.historial(actor.idOrganizacion(), idPropiedad).stream()
+                .map(this::traspaso)
+                .toList();
+    }
+
+    private TraspasoDeResponsable traspaso(AsignacionResponsablePropiedad fila) {
+        return new TraspasoDeResponsable(fila.getId(), fila.getIdPropiedad(),
+                fila.getIdRolResponsableAnterior(), nombreDelAgente(fila.getIdRolResponsableAnterior()),
+                fila.getIdRolResponsableNuevo(), nombreDelAgente(fila.getIdRolResponsableNuevo()),
+                fila.getIdPersonaActor(), fila.getTipoRolActor(), fila.getMotivo(),
+                Fechas.local(fila.getFechaAsignacion()));
+    }
+
+    private String nombreDelAgente(Long idRol) {
+        return idRol == null ? null
+                : agentes.findById(idRol).map(a -> nombreDe(a.getRol())).orElse(null);
+    }
+
+    /**
+     * <b>¿Esta peticion escribe algun hecho de la PROPIEDAD?</b>
+     *
+     * <p>Mira los cinco huecos que pertenecen al inmueble, y ninguno de los dos
+     * que pertenecen a sus encargos. Se pregunta sobre el <b>mapa ya fusionado</b>
+     * y sobre la lista ya resuelta de retiradas, no sobre {@code comando
+     * .atributos()}: el piso puede llegar solo dentro de {@code ubicacion}, y
+     * mirando el comando en crudo una edicion que solo cambia el piso pasaria
+     * por "no toca la ficha" — que es exactamente la puerta de al lado que este
+     * P0 viene a cerrar.
+     */
+    private static boolean tocaLaFicha(ComandoEdicion comando, Map<String, ValorAtributo> valores,
+                                       List<String> aBorrar) {
+        return comando.descripcion() != null
+                || comando.ubicacion() != null
+                || comando.titulares() != null
+                || !valores.isEmpty()
+                || !aBorrar.isEmpty();
     }
 
     // ==================================================================
@@ -561,6 +688,12 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 .filter(c -> c.getPropiedad() != null
                         && Objects.equals(c.getPropiedad().getId(), propiedad.getId()))
                 .orElseThrow(() -> new NoEncontradoException("Encargo"));
+
+        // Y tiene que ser SUYO (P0-4). Las condiciones comerciales gobernadas
+        // —garantia, adelanto, plazo— son datos del encargo tanto como el
+        // importe, y sin esto el agente del alquiler escribia las de la venta
+        // ajena con solo nombrar su id.
+        autoridad.exigirEdicionDelEncargo(actor, encargo);
 
         Comercializacion donde = Comercializacion.de(encargo, propiedad);
         Map<String, ValorAtributo> valores = atributosDeEdicion(bloque.atributos());
@@ -942,6 +1075,12 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                         "Esta propiedad no tiene ningun encargo vivo de " + operacion.name()
                                 + ". Abrelo antes de cambiar su " + operacion.nombreDelImporte() + "."));
 
+        // El encargo lo edita SU agente (P0-4). Va antes de tocar la condicion
+        // economica a proposito: el efecto que hay que impedir no es solo el
+        // cambio de importe, es el hito `U` que ese cambio anade a la serie
+        // economica de un encargo que no es del actor.
+        autoridad.exigirEdicionDelEncargo(actor, encargo);
+
         CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
         boolean cambioElImporte = condicion == null
                 || condicion.getImporteReferencia() == null
@@ -1105,7 +1244,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // la PROPIEDAD --que es una sola para todos-- ademas de la suya. Es la
         // unica razon del orden.
         List<EncargoFicha> encargos = todos.stream()
-                .map(encargo -> fichaDeEncargo(encargo, serie,
+                .map(encargo -> fichaDeEncargo(actor, encargo, serie,
                         anuncios.getOrDefault(encargo.getId(), List.of()),
                         idOrganizacion, tipo,
                         pactadas.getOrDefault(encargo.getId(), ValoresGobernados.vacio()),
@@ -1140,7 +1279,30 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 // vez de como episodios sueltos. Sin consultas de mas.
                 historiaDe(todos, serie),
                 actividad.de(idOrganizacion, todos),
-                Fechas.local(propiedad.getFechaRegistro()));
+                Fechas.local(propiedad.getFechaRegistro()),
+                responsabilidadDe(actor, propiedad));
+    }
+
+    /**
+     * <b>Quien responde, y que puede hacer quien mira</b> (P0).
+     *
+     * <p>Lo resuelve la misma {@code AutoridadDePropiedad} que despues deniega
+     * la escritura. Es a proposito: una segunda tabla de decision aqui haria
+     * posible que la ficha dijera "puedes editar" y el PUT contestara 403 —el
+     * peor fallo de esta pantalla, porque el usuario ya escribio.
+     *
+     * <p>Una propiedad FALTANTE llega igual que cualquier otra: <b>visible</b>,
+     * completa y con el motivo dicho. No desaparece del listado ni de la ficha,
+     * y no se le inventa un dueno.
+     */
+    private Responsabilidad responsabilidadDe(Actor actor, Propiedad propiedad) {
+        String motivo = autoridad.motivoNoEditable(actor, propiedad);
+        return new Responsabilidad(
+                propiedad.getIdRolResponsable(),
+                autoridad.nombreDelResponsable(propiedad),
+                motivo == null,
+                motivo,
+                motivo == null ? null : autoridad.explicacion(motivo));
     }
 
     /**
@@ -1280,7 +1442,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * precios de 2024. El hito se escribe atado a su encargo
      * ({@code precio_propiedad.id_captacion}) justo para esto.
      */
-    private EncargoFicha fichaDeEncargo(Captacion encargo, List<PrecioPropiedad> serie,
+    private EncargoFicha fichaDeEncargo(Actor actor, Captacion encargo, List<PrecioPropiedad> serie,
                                         List<PublicacionService.FichaPublicacion> anuncios,
                                         long idOrganizacion, String tipoPropiedad,
                                         ValoresGobernados pactadas,
@@ -1322,7 +1484,29 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 // el alquiler cerrado de 2024 sigue ensenando los suyos.
                 condicionesDe(idOrganizacion, encargo, tipoPropiedad, pactadas),
                 faltanDelEncargo,
-                anuncios, gestionDePublicacion(encargo, faltanDeLaPropiedad, faltanDelEncargo));
+                anuncios, gestionDePublicacion(encargo, faltanDeLaPropiedad, faltanDelEncargo),
+                // Y si QUIEN PREGUNTA puede tocar ESTE encargo (P0-4). Es una
+                // tercera autoridad, distinta de la de la propiedad: el
+                // responsable del inmueble no manda sobre el encargo ajeno, y
+                // el agente del alquiler no manda sobre la venta. Sin este
+                // campo la pantalla lo deducia del rol -- un "el rol de la
+                // sesion es AGENTE" que habilitaba el boton a TODOS los agentes
+                // del tenant, incluidos los que iban a recibir un 403.
+                autoridadDelEncargo(actor, encargo));
+    }
+
+    /**
+     * Se pregunta con el <b>mismo metodo</b> que despues deniega. Un segundo
+     * criterio "solo para pintar" es exactamente como se llega a un boton
+     * activo que el backend rechaza cuando la persona ya escribio.
+     */
+    private boolean autoridadDelEncargo(Actor actor, Captacion encargo) {
+        try {
+            autoridad.exigirEdicionDelEncargo(actor, encargo);
+            return true;
+        } catch (AccesoNoAutorizadoException denegado) {
+            return false;
+        }
     }
 
     /**

@@ -28,13 +28,25 @@
         Sólo se guarda lo que cambies. Lo que no toques queda exactamente como
         está; para retirar un dato, usa <strong>Quitar</strong>.
       </p>
+      <!-- Por qué no se puede escribir, dicho por el backend. El texto no se
+           redacta aquí: si esta pantalla lo escribiera por su cuenta, BROX Web
+           y KAIROS acabarían diciendo dos cosas distintas del mismo rechazo. -->
+      @if (!puedeEditar()) {
+        <p class="bloqueo" role="status">
+          <strong>Esta propiedad no la editas tú.</strong>
+          {{ motivoBloqueo() }}
+          @if (responsable(); as quien) {
+            <span class="responsable">Responde: {{ quien }}.</span>
+          }
+        </p>
+      }
     </div>
     <div class="acciones">
       <a class="cl-btn" [routerLink]="['/propiedades', p.id]">Cancelar</a>
       <button
         type="button"
         class="cl-btn primario"
-        [disabled]="!hayCambios() || guardando()"
+        [disabled]="!hayCambios() || guardando() || !puedeEditar()"
         (click)="guardar()"
       >
         {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
@@ -333,7 +345,7 @@
       <button
         type="button"
         class="cl-btn primario ancho"
-        [disabled]="!hayCambios() || guardando()"
+        [disabled]="!hayCambios() || guardando() || !puedeEditar()"
         (click)="guardar()"
       >
         {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}

@@ -5,11 +5,13 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.web.seguridad.ProcedenciaDeCabeceras;
 import jakarta.servlet.http.HttpServletRequest;
 import com.controllocal.web.http.PageResponse;
+import com.controllocal.web.dto.PropiedadUniversalDtos.AsignarResponsableRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.EdicionRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.FilaPropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.PropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.RegistroResponse;
+import com.controllocal.web.dto.PropiedadUniversalDtos.TraspasoResponse;
 import com.controllocal.service.ObservacionMercadoService;
 import com.controllocal.web.dto.ObservacionMercadoDtos.ObservacionRequest;
 import com.controllocal.web.dto.ObservacionMercadoDtos.ObservacionResponse;
@@ -194,6 +196,54 @@ public class PropiedadesUniversalesController {
         }
         return PropiedadResponse.desde(
                 propiedades.editar(id, dto.aDatos(claveIdempotencia, procedencias.de(peticion)), SesionActual.actor()));
+    }
+
+    // ------------------------------------------------------------------
+    // El traspaso del responsable (P0-2)
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>Quien responde por esta propiedad a partir de ahora.</b>
+     *
+     * <p>Es la unica forma de mover la autoridad de escritura despues del alta,
+     * y la unica de sacar a una propiedad de FALTANTE. Lo decide un BROKER —o
+     * el gobierno del tenant—, nunca el agente: si el traspaso fuera del propio
+     * agente, la autoridad seria autoservicio.
+     *
+     * <p>Es {@code POST} y no {@code PUT} a proposito: <b>anade un hecho</b> al
+     * expediente de la propiedad. Un {@code PUT} sugeriria que el valor
+     * anterior se reemplaza y se olvida, y lo que ocurre es lo contrario — la
+     * fila anterior se conserva y el rastro se acumula.
+     *
+     * <p>No reasigna ningun encargo. El de venta y el de alquiler siguen siendo
+     * de quien eran: para eso esta {@code POST /captaciones/{id}/reasignar},
+     * que es otra decision y otro hecho.
+     */
+    @PostMapping("{id}/responsable")
+    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public TraspasoResponse asignarResponsable(@PathVariable long id,
+                                               @RequestBody(required = false) AsignarResponsableRequest dto) {
+        if (dto == null || dto.idAgente() == null) {
+            throw new ReglaNegocioException(
+                    "Hay que decir a que agente se le asigna: no se deduce de sus captaciones.");
+        }
+        return TraspasoResponse.desde(propiedades.asignarResponsable(
+                id, dto.idAgente(), dto.motivo(), SesionActual.actor()));
+    }
+
+    /**
+     * El expediente de traspasos, del mas reciente al mas antiguo.
+     *
+     * <p>Sin gate de rol: es informacion operativa <b>interna del tenant</b>,
+     * como la ficha, y un id de otra corredora responde 404. Lo que aqui se lee
+     * no concede nada — leer quien responde no es poder escribir.
+     */
+    @GetMapping("{id}/responsable/historial")
+    public List<TraspasoResponse> historialDeResponsables(@PathVariable long id) {
+        return propiedades.traspasosDe(id, SesionActual.actor()).stream()
+                .map(TraspasoResponse::desde)
+                .toList();
     }
 
 }

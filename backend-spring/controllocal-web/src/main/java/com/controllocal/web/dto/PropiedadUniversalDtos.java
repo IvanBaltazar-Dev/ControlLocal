@@ -325,7 +325,16 @@ public final class PropiedadUniversalDtos {
                                   List<AtributoResponse> condiciones,
                                   List<AtributoQueFaltaResponse> faltanParaPublicar,
                                   List<PublicacionResponse> publicaciones,
-                                  GestionPublicacionResponse publicacionGestionable) {
+                                  GestionPublicacionResponse publicacionGestionable,
+                                  /*
+                                   * Si quien pregunta puede tocar ESTE encargo
+                                   * (P0-4): su importe, su exclusividad, su
+                                   * vigencia, sus condiciones y sus anuncios.
+                                   * Es la autoridad del encargo, no la de la
+                                   * propiedad, y no se deduce de ninguna otra
+                                   * cosa que viaje en la ficha.
+                                   */
+                                  boolean puedeEditar) {
         static EncargoResponse desde(EncargoFicha f) {
             return new EncargoResponse(f.idEncargo(), f.codigo(), f.operacion(),
                     f.operacionRotulo(), f.estado(), f.estadoRotulo(), f.vivo(),
@@ -337,7 +346,8 @@ public final class PropiedadUniversalDtos {
                     f.condiciones().stream().map(AtributoResponse::desde).toList(),
                     f.faltanParaPublicar().stream().map(AtributoQueFaltaResponse::desde).toList(),
                     f.publicaciones().stream().map(PublicacionResponse::desde).toList(),
-                    GestionPublicacionResponse.desde(f.publicacionGestionable()));
+                    GestionPublicacionResponse.desde(f.publicacionGestionable()),
+                    f.puedeEditar());
         }
     }
 
@@ -495,7 +505,8 @@ public final class PropiedadUniversalDtos {
                                     List<AtributoQueFaltaResponse> faltanParaPublicar,
                                     HistoriaResponse historia,
                                     ActividadResponse actividad,
-                                    LocalDateTime fechaRegistro) {
+                                    LocalDateTime fechaRegistro,
+                                    ResponsabilidadResponse responsabilidad) {
 
         public static PropiedadResponse desde(FichaPropiedadUniversal f) {
             return new PropiedadResponse(f.id(), f.codigo(), f.tipoPropiedad(), f.tipoRotulo(),
@@ -510,7 +521,52 @@ public final class PropiedadUniversalDtos {
                     f.faltanParaPublicar().stream().map(AtributoQueFaltaResponse::desde).toList(),
                     HistoriaResponse.desde(f.historia()),
                     ActividadResponse.desde(f.actividad()),
-                    f.fechaRegistro());
+                    f.fechaRegistro(),
+                    ResponsabilidadResponse.desde(f.responsabilidad()));
+        }
+    }
+
+    /**
+     * <b>Quien responde por la propiedad, y que puede hacer quien pregunta</b>
+     * (P0).
+     *
+     * <p>El permiso viaja <b>ya resuelto</b> y con su texto: el SPA pinta
+     * {@code motivoTexto} y desactiva por {@code puedeEditar}, sin llevar
+     * ninguna lista de roles ni de claves. Es lo que impide que la pantalla
+     * prometa un boton que el backend va a rechazar, y lo que hace que BROX Web
+     * y KAIROS reciban la misma respuesta a la misma pregunta.
+     *
+     * <p>{@code idResponsable} llega {@code null} cuando la propiedad esta
+     * FALTANTE. Jackson esta configurado {@code NON_NULL}, asi que en Angular
+     * ese campo llega {@code undefined} y no {@code null}: declararlo opcional
+     * y comparar con {@code == null} es obligatorio en el cliente.
+     */
+    public record ResponsabilidadResponse(Long idResponsable, String nombre, boolean puedeEditar,
+                                          String motivo, String motivoTexto) {
+        static ResponsabilidadResponse desde(PropiedadUniversalService.Responsabilidad r) {
+            return r == null ? null : new ResponsabilidadResponse(r.idResponsable(), r.nombre(),
+                    r.puedeEditar(), r.motivo(), r.motivoTexto());
+        }
+    }
+
+    /**
+     * A quien se le asigna, y por que. El motivo no es opcional: sin el, el
+     * expediente dice que la propiedad cambio de manos y no dice por que.
+     */
+    public record AsignarResponsableRequest(Long idAgente, String motivo) {
+    }
+
+    /** Un traspaso ya escrito, tal como se lee en el expediente. */
+    public record TraspasoResponse(Long id, Long idPropiedad,
+                                   Long idResponsableAnterior, String responsableAnterior,
+                                   Long idResponsableNuevo, String responsableNuevo,
+                                   Long idPersonaActor, String rolActor,
+                                   String motivo, LocalDateTime fecha) {
+        public static TraspasoResponse desde(PropiedadUniversalService.TraspasoDeResponsable t) {
+            return new TraspasoResponse(t.id(), t.idPropiedad(),
+                    t.idResponsableAnterior(), t.responsableAnterior(),
+                    t.idResponsableNuevo(), t.responsableNuevo(),
+                    t.idPersonaActor(), t.rolActor(), t.motivo(), t.fecha());
         }
     }
 

@@ -16,7 +16,6 @@ import {
   ImporteFechado,
   PropiedadesService,
 } from '../../core/api/propiedades.service';
-import { AuthService } from '../../core/auth/auth.service';
 import { fechaCorta, monto, SIN_DATO, texto } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { BloqueEncargo } from './bloque-encargo';
@@ -75,7 +74,6 @@ export class PropiedadDetail implements OnInit {
   private readonly api = inject(PropiedadesService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly auth = inject(AuthService);
 
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -92,8 +90,36 @@ export class PropiedadDetail implements OnInit {
 
   protected readonly SIN_DATO = SIN_DATO;
 
-  /** Sólo el AGENTE escribe. Es el mismo gate que el backend impone. */
-  protected readonly puedeEditar = computed(() => this.auth.sesion()?.rol === 'AGENTE');
+  /**
+   * **Si esta persona puede escribir esta propiedad** (P0).
+   *
+   * Lo dice el backend en la ficha. Antes lo decidía esta línea:
+   *
+   * ```
+   * this.auth.sesion()?.rol === 'AGENTE'
+   * ```
+   *
+   * y era una copia del gate del backend que dejó de ser cierta con V87: la
+   * autoridad ya no es «ser agente», es **ser el responsable de esta
+   * propiedad**. Con la copia vieja, todo agente del tenant veía el botón
+   * «Editar» de toda propiedad y se llevaba un 403 al guardar.
+   *
+   * Mientras la ficha carga vale `false`: no se ofrece una acción que
+   * todavía no se sabe si existe.
+   */
+  protected readonly puedeEditar = computed(
+    () => this.ficha()?.responsabilidad?.puedeEditar ?? false,
+  );
+
+  /** Quién responde por el inmueble hoy, o `null` si está FALTANTE. */
+  protected readonly responsable = computed(
+    () => this.ficha()?.responsabilidad?.nombre ?? null,
+  );
+
+  /** Por qué no se puede escribir, en las palabras del Core. */
+  protected readonly motivoBloqueo = computed(
+    () => this.ficha()?.responsabilidad?.motivoTexto ?? null,
+  );
 
   protected readonly vivos = computed(
     () => this.ficha()?.encargos.filter((encargo) => encargo.vivo) ?? [],

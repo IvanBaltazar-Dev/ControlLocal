@@ -128,6 +128,9 @@ function encargo(
 }
 
 const FICHA: FichaPropiedad = {
+  // El caso normal: la ficha la abre su responsable (P0). El bloqueo se
+  // declara en su prueba, que es donde se lee.
+  responsabilidad: { idResponsable: 30, nombre: 'Valeria Mora', puedeEditar: true },
   id: 3259,
   codigo: 'LOC-0022',
   tipoPropiedad: 'LOCAL',
@@ -510,6 +513,57 @@ describe('PropiedadEditor', () => {
     expect(id).toBe(3259);
     expect(typeof clave).toBe('string');
     expect(router.navigate).toHaveBeenCalledWith(['/propiedades', 3259]);
+  });
+
+  // ------------------------------------------------------------------
+  // La autoridad, que llega resuelta del cable (P0)
+  // ------------------------------------------------------------------
+
+  /**
+   * **No se guarda lo que el Core va a rechazar, y se dice por qué.**
+   *
+   * El motivo se pinta tal como viene: esta pantalla no redacta rechazos. Si
+   * lo hiciera, BROX Web y KAIROS acabarían diciendo dos cosas distintas del
+   * mismo hecho.
+   */
+  it('con la propiedad de otro responsable no deja guardar, y dice por que', async () => {
+    api.consultar.and.resolveTo({
+      ...structuredClone(FICHA),
+      responsabilidad: {
+        idResponsable: 44,
+        nombre: 'Otro Agente',
+        puedeEditar: false,
+        motivoTexto: 'De esta propiedad responde otro agente.',
+      },
+    });
+    await montar();
+    escribir(control('Distrito'), 'Surco');
+    fixture.detectChanges();
+
+    expect(raiz().textContent).toContain('De esta propiedad responde otro agente.');
+    expect(raiz().textContent).toContain('Otro Agente');
+    for (const boton of Array.from(
+      raiz().querySelectorAll<HTMLButtonElement>('button.primario'),
+    )) {
+      expect(boton.disabled)
+        .withContext('hay cambios tocados: sin la autoridad, el boton seguiria activo')
+        .toBeTrue();
+    }
+  });
+
+  it('sin responsable tampoco: FALTANTE no habilita a quien pase por ahi', async () => {
+    api.consultar.and.resolveTo({
+      ...structuredClone(FICHA),
+      responsabilidad: {
+        puedeEditar: false,
+        motivoTexto: 'Esta propiedad no tiene agente responsable asignado.',
+      },
+    });
+    await montar();
+    escribir(control('Distrito'), 'Surco');
+    fixture.detectChanges();
+
+    expect(raiz().textContent).toContain('no tiene agente responsable asignado');
   });
 
   it('si el Core rechaza, el error se lee y lo tocado no se pierde', async () => {

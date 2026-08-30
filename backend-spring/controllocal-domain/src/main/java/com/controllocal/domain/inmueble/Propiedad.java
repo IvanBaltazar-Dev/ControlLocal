@@ -207,6 +207,28 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
     @Column(name = "id_rol_incorporo")
     private Long idRolIncorporo;
 
+    /**
+     * <b>Quien responde HOY por esta propiedad</b> (V87, P0-1). Es la unica
+     * autoridad de escritura sobre sus hechos: ver no concede editar, y el
+     * alcance de tenant tampoco.
+     *
+     * <p><b>No confundir con {@link #idRolIncorporo}.</b> Aquella es
+     * procedencia historica y se escribe una vez; esta es autoridad ACTUAL y
+     * cambia por traspaso. Que la primera diga "la incorporo Ana" no da a Ana
+     * ningun permiso hoy.
+     *
+     * <p><b>Es independiente de los ENCARGOS.</b> No se deriva de
+     * {@code captacion.id_rol_agente} —una propiedad admite una VENTA y un
+     * ALQUILER vivos de agentes distintos, y entonces "el agente de la
+     * propiedad" no seria una pregunta con respuesta— y reasignar un encargo no
+     * la mueve.
+     *
+     * <p><b>NULL es FALTANTE</b>, no "de todos": la propiedad se ve y no se
+     * edita hasta que un BROKER asigne. Sin defecto y sin relleno.
+     */
+    @Column(name = "id_rol_responsable")
+    private Long idRolResponsable;
+
     @Column(name = "fecha_registro", insertable = false, updatable = false)
     private OffsetDateTime fechaRegistro;
 
@@ -362,6 +384,28 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
 
     public Long getIdRolIncorporo() {
         return idRolIncorporo;
+    }
+
+    /**
+     * <b>Fija quien responde por la propiedad.</b>
+     *
+     * <p>Lo llama <b>solo</b> {@code service.soporte.AutoridadDePropiedad}, y
+     * eso lo vigila {@code AutoridadDeLaPropiedadTest}: si el setter fuera de
+     * uso libre, cualquier caso de uso podria darse la autoridad a si mismo y
+     * la regla se evaporaria sin que nadie tocara la comprobacion.
+     */
+    public void responsable(Long idRolAgente) {
+        this.idRolResponsable = idRolAgente;
+    }
+
+    public Long getIdRolResponsable() {
+        return idRolResponsable;
+    }
+
+    /** ¿Hay alguien que responda por ella? {@code false} = FALTANTE. */
+    @Transient
+    public boolean tieneResponsable() {
+        return idRolResponsable != null;
     }
 
     public String getEstadoRegistro() { return estadoActual(); }

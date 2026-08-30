@@ -51,6 +51,11 @@ $integracion = @(
     # que el 18 de agosto escribio 162 propiedades en controllocal_dev. Ahora
     # GateDeCierreTest compara las dos listas, asi que no pueden volver a
     # separarse.
+    # P0 (V87): la autoridad de EDICION. Una propiedad la escribe su responsable
+    # y un encargo su propio agente; ver no concede editar y FALTANTE no habilita
+    # a nadie. Va en el cierre porque lo que prueba no es un if: es que no queda
+    # ninguna otra puerta, y eso solo se ve recorriendolas contra la base.
+    'AutoridadDeEdicionIntegrationTest',
     'AutoridadDelDatoIntegrationTest',
     'BusquedaLocalesIntegrationTest',
     # Corte 0B: los tres tipos nuevos, el vocabulario y la exigencia PUB.

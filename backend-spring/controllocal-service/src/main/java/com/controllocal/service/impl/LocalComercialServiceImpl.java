@@ -20,7 +20,6 @@ import com.controllocal.persistence.repositorio.FotoPropiedadRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
-import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.AlertaService;
 import com.controllocal.service.LocalComercialService;
@@ -29,6 +28,7 @@ import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AtributosGobernados;
+import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresGobernados;
@@ -87,7 +87,9 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     private final PublicacionService publicaciones;
     private final ProspeccionService prospecciones;
     private final CaptacionRepository captaciones;
-    private final ProspeccionRepository prospeccionesRepo;
+    // `prospeccionesRepo` se retiro con `exigirPertenencia` (P0): era su unico
+    // lector. Una dependencia inyectada que ya no lee nadie no es inocua --
+    // sugiere una relacion que el caso de uso ya no tiene.
     private final Transiciones transiciones;
     private final AlertaService alertas;
 
@@ -104,6 +106,9 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     private final LectorPorAutoridad lector;
     private final AtributosGobernados gobierno;
 
+    /** La unica autoridad de escritura sobre la propiedad (P0). */
+    private final AutoridadDePropiedad autoridad;
+
     public LocalComercialServiceImpl(PropiedadRepository propiedades,
                                      PersonaRolRepository roles,
                                      DistritoRepository distritos,
@@ -112,11 +117,11 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                                      PublicacionService publicaciones,
                                      ProspeccionService prospecciones,
                                      CaptacionRepository captaciones,
-                                     ProspeccionRepository prospeccionesRepo,
                                      Transiciones transiciones,
                                      AlertaService alertas,
                                      LectorPorAutoridad lector,
-                                     AtributosGobernados gobierno) {
+                                     AtributosGobernados gobierno,
+                                     AutoridadDePropiedad autoridad) {
         this.alertas = alertas;
         this.propiedades = propiedades;
         this.roles = roles;
@@ -126,10 +131,10 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         this.publicaciones = publicaciones;
         this.prospecciones = prospecciones;
         this.captaciones = captaciones;
-        this.prospeccionesRepo = prospeccionesRepo;
         this.transiciones = transiciones;
         this.lector = lector;
         this.gobierno = gobierno;
+        this.autoridad = autoridad;
     }
 
     /**
@@ -256,7 +261,13 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         Propiedad propiedad = propiedades.findByOrganizacionIdAndId(actor.idOrganizacion(), id)
                 .orElseThrow(() -> new ReglaNegocioException("Local no encontrado"));
 
-        exigirPertenencia(propiedad, actor);
+        // Retirar del registro es el hecho mas irreversible de la ficha, asi
+        // que lo escribe quien responde por ella (P0-1). Antes lo decidia
+        // `exigirPertenencia`, un OR de tres condiciones —captacion viva,
+        // prospeccion o `id_rol_incorporo`— que con dos encargos de agentes
+        // distintos daba verdadero para los dos, y que ademas convertia una
+        // procedencia historica en un permiso vigente.
+        autoridad.exigirEdicion(actor, propiedad);
 
         // EstadoRegistroPropiedad, no Propiedad.LEGADO_INACTIVO: el destino de
         // esta transicion es la COLUMNA `estado_registro`, y aquella constante
@@ -302,44 +313,6 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         return new Pagina<>(items, pagina.getTotalElements());
     }
 
-    /**
-     * Regla de pertenencia (RF-004). Mejora v2 sobre el hueco de la v1: la v1
-     * exigia una CAPTACION del agente (captacion.perteneceAlAgente), asi que un
-     * local recien creado — que solo tiene su prospeccion inicial — no se podia
-     * editar hasta captarlo. En v2 el agente es dueno si PROSPECTO o CAPTO el
-     * local (misma intencion, sin el hueco). Mensaje del cable v1.
-     *
-     * <h2>La tercera rama, y por que V76 la hacia obligatoria</h2>
-     * Las dos primeras preguntan por una <b>relacion comercial</b>, y desde V76
-     * una Propiedad puede existir legitimamente sin ninguna: se registra un
-     * inmueble que BROX conoce y no gestiona. El resultado era que su propio
-     * autor recibia un 403 al intentar darla de baja —y no habia otra puerta,
-     * porque {@code ComandoEdicion} no lleva estado y el DELETE esta cerrado a
-     * broker y admin—, de modo que la propiedad quedaba <b>atrapada</b>: se
-     * podia crear, leer, editar y observar, pero no retirar. El criterio de
-     * aceptacion de V76 medía cinco verbos y ese era el sexto.
-     *
-     * <p>La rama nueva no inventa ningun concepto: pregunta por un hecho que la
-     * propia V76 empezo a registrar, {@code propiedad.id_rol_incorporo} —quien
-     * la incorporo—, y lo lee de la entidad que el caso de uso ya tiene
-     * cargada, sin una consulta mas. Deja fuera a proposito las filas
-     * anteriores a V76, que no saben quien las incorporo: eso no se rellena con
-     * el caso frecuente.
-     */
-    private void exigirPertenencia(Propiedad propiedad, Actor actor) {
-        long idOrganizacion = actor.idOrganizacion();
-        long idRolAgente = actor.idRolOperativo();
-        long idPropiedad = propiedad.getId();
-        boolean dueno = captaciones.existsByOrganizacionIdAndPropiedadIdAndAgenteIdAndEstadoNot(
-                        idOrganizacion, idPropiedad, idRolAgente, Captacion.CERRADA)
-                || prospeccionesRepo.existsByOrganizacionIdAndPropiedadIdAndAgenteId(
-                        idOrganizacion, idPropiedad, idRolAgente)
-                || Objects.equals(propiedad.getIdRolIncorporo(), idRolAgente);
-        if (!dueno) {
-            throw new ReglaNegocioException("Operación denegada. Este local no pertenece a tus captaciones.");
-        }
-    }
-
     @Override
     @Transactional(readOnly = true)
     public List<FotoLocal> listarFotos(long idPropiedad) {
@@ -353,9 +326,16 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     @Transactional
     public FotoLocal agregarFoto(long idPropiedad, String clave, String nombreArchivo, Actor actor) {
         validarId(idPropiedad, "El id del local");
-        if (!propiedades.existsByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)) {
-            throw new ReglaNegocioException("El local no existe.");
-        }
+        // Las fotos SON la ficha del inmueble, asi que las escribe quien
+        // responde por el (P0-1). Hasta V87 esto solo miraba el tenant: la
+        // portada de cualquier propiedad de la corredora la ponia cualquiera.
+        // Se carga la entidad en vez de preguntar `exists` porque la autoridad
+        // necesita la fila, no su existencia.
+        Propiedad propiedad = propiedades
+                .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+                .orElseThrow(() -> new ReglaNegocioException("El local no existe."));
+        autoridad.exigirEdicion(actor, propiedad);
+
         long actuales = fotos.countByIdPropiedad(idPropiedad);
         if (actuales >= 6) {
             throw new ReglaNegocioException("Maximo 6 fotos por local. Elimina alguna para subir otra.");
@@ -378,6 +358,15 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 // Una foto de otra corredora se comporta como inexistente (404).
                 .filter(foto -> foto.getOrganizacionId().equals(actor.idOrganizacion()))
                 .map(foto -> {
+                    // La autoridad es la de la PROPIEDAD, no la de la foto: la
+                    // foto no tiene dueno propio y llegar por su id no puede ser
+                    // una puerta mas barata que llegar por el del inmueble
+                    // (P0-1). Si la propiedad no aparece —imposible por la FK—
+                    // se deniega, que es el lado seguro.
+                    Propiedad propiedad = propiedades
+                            .findByOrganizacionIdAndId(actor.idOrganizacion(), foto.getIdPropiedad())
+                            .orElseThrow(() -> new ReglaNegocioException("El local no existe."));
+                    autoridad.exigirEdicion(actor, propiedad);
                     fotos.delete(foto);
                     return foto.getClave();
                 });

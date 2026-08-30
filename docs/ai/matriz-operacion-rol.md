@@ -1,6 +1,12 @@
 # Matriz operación → rol
 
-**Las 180 operaciones REST del backend v2, con quién puede llamarlas y dónde se decide qué ve.**
+**Las 189 operaciones REST del backend v2, con quién puede llamarlas y dónde se decide qué ve.**
+
+> **La cifra se remidió el 2026-08-30 y estaba caducada antes de este corte.** Decía 180 cuando
+> la tabla ya tenía 187 filas en `d329003`; P0 añadió dos (`POST /propiedades/{id}/responsable` y
+> su historial). Se cuenta con `grep -cE '^| (GET|POST|PUT|DELETE|PATCH) |'` sobre este
+> archivo. `MatrizOperacionRolTest` compara la tabla con los controladores fila a fila, pero **no
+> lee este número**: por eso pudo envejecer siete operaciones sin que nada se pusiera rojo.
 
 Este documento es la **fuente de verdad**, no un resumen: `MatrizOperacionRolTest`
 (`controllocal-app/src/test/java/com/controllocal/arquitectura/`) lo parsea y **rompe el build**
@@ -34,7 +40,8 @@ Está pensado para el SPA Angular: es la entrada directa del estado por rol y de
 >
 > Si una persona gobierna **y** opera, lleva **dos roles explícitos** y la auditoría dice cuál usó.
 
-**87 de las 180 operaciones no llevan gate de rol** (7 públicas + 79 autenticadas). No es un olvido:
+**92 de las 189 operaciones no llevan gate de rol** (7 públicas + 85 autenticadas), remedido el
+2026-08-30 igual que el total. No es un olvido:
 en la v1 el control de esas operaciones es de *alcance*, no de *acceso* — todos entran y cada uno
 recibe su porción. Por eso la columna **Alcance** es la parte importante de esta tabla, y la que el
 SPA necesita para no prometer en pantalla lo que el backend va a devolver vacío.
@@ -89,9 +96,9 @@ dar de alta y editar agentes pasó a ser gobierno (filas 17 y 18). La tabla list
 | GET | `/locales/{id}` | TODOS | Cartera de la organización. | F2 |
 | GET | `/locales/mis-locales` | AGENTE | Los locales de **sus captaciones** (RF-004), no los que registró. | F2 |
 | POST | `/locales/posibles-duplicados` | AGENTE | Advertencia no bloqueante dentro del tenant: compara inmuebles del mismo propietario por dirección técnica, unidad/piso compatibles y metraje aproximado. | F2 |
-| DELETE | `/locales/{id}` | AGENTE | Baja lógica (estado I); solo propiedades que el agente **prospectó, captó o incorporó** — la tercera la añadió V76: una propiedad puede existir sin relación comercial, y sin ella su propio autor no podía retirarla. Si nunca estuvo en oferta, la baja **no** declara un retiro comercial. | F2 |
+| DELETE | `/locales/{id}` | AGENTE | Baja lógica (estado I); **sólo el `id_rol_responsable` de la propiedad** (P0-1, V87). Sustituye a `exigirPertenencia`, que era un OR de «captación viva ∨ prospección ∨ `id_rol_incorporo`»: con dos encargos de agentes distintos daba verdadero para los dos, y convertía una procedencia histórica e inmutable en un permiso vigente. Si nunca estuvo en oferta, la baja **no** declara un retiro comercial. | F2 |
 | GET | `/locales/{id}/precios` | TODOS | Colección hija: se alcanza por el id del padre, que sí va filtrado por tenant. | F2 |
-| POST | `/locales/{id}/precios` | AGENTE | Hito del histórico sobre un local de sus captaciones. | F2 |
+| POST | `/locales/{id}/precios` | AGENTE | Hito del histórico **del encargo que lo autorizó, y sólo si ese encargo es del actor** (P0-4, V87). Hasta V87 esta fila declaraba «un local de sus captaciones» y el código sólo comprobaba el tenant: cualquier agente metía una cifra en la serie económica de un encargo ajeno. La operación se declara o se deduce del único encargo vivo (D-E4-1), y la autoridad se exige **después** de resolverlo, porque hasta ahí no se sabe de qué encargo es el importe. | F2 |
 | GET | `/locales/{id}/fotos` | TODOS | Colección hija del local. | F2 |
 | POST | `/locales/{id}/fotos` | AGENTE | Máximo 6 por local; el binario ya está en el almacén. | F2 |
 | DELETE | `/locales/{id}/fotos/{idFoto}` | AGENTE | Devuelve la clave para limpiar el almacén. | F2 |
@@ -119,11 +126,13 @@ viaja al evento de dominio y es lo que responde *«quién decidió esto»*.
 | GET | `/propiedades/{id}/observaciones` | TODOS | Lo observado de una propiedad, de lo más reciente a lo más antiguo, con su fuente y quién la capturó. Mismo alcance que la ficha. | E4 |
 | GET | `/propiedades/filtros` | TODOS | Los valores que el filtro puede ofrecer sin inventarse ninguno: hoy los distritos **con cartera** del tenant. Los tipos y las operaciones no están aquí — son vocabulario del dominio y los publica `/captura/apertura`, que es su único dueño. | E4 |
 | GET | `/propiedades/{id}` | TODOS | Cartera de la organización; un id de otro tenant responde **404**. **El read model completo de la ficha**, listo para pintarse: la cosa física (tipo, ubicación, atributos con su rótulo, titulares con cuota y representante), **todos** sus encargos —vivos y cerrados, cada uno con su importe, su agente, su exclusividad y su histórico **separado por encargo**, no por operación— y su **actividad** (oportunidades, visitas, interacciones, expedientes y contratos), donde **cada hecho lleva el `idEncargo` del que nace**. Cada código viaja con su rótulo: el cliente no traduce ninguno. | E4 |
-| PUT | `/propiedades/{id}` | AGENTE | Edición parcial sobre la cartera del tenant: lo que llega `null` no se toca. Cambiar el importe **añade** un hito; nunca sobrescribe el anterior. | E4 |
+| PUT | `/propiedades/{id}` | AGENTE | Edición parcial: lo que llega `null` no se toca. **Ya no es «la cartera del tenant»** (P0, V87): esta petición mezcla dos autoridades y se comprueban **por separado**. Los hechos de la PROPIEDAD —descripción, ubicación, titulares, atributos y retiradas— los escribe **su `id_rol_responsable`**; los de cada ENCARGO —importe, exclusividad, vigencia y condiciones— **su propio `captacion.id_rol_agente`**, encargo por encargo. Ni un OR ni una herencia: responder por la propiedad no permite tocar el encargo ajeno, y tener un encargo no permite tocar la ficha. Una petición que sólo trae `operaciones`/`condiciones` **no** pide la autoridad de la propiedad, así que su agente la sigue operando aunque la propiedad esté FALTANTE. Cambiar el importe **añade** un hito; nunca sobrescribe el anterior. | E4 |
+| POST | `/propiedades/{id}/responsable` | BROKER, TENANT_ADMIN | **El traspaso de la autoridad de escritura** (P0-2, V87). Fija `propiedad.id_rol_responsable` y escribe su fila en `asignacion_responsable_propiedad` —propiedad, anterior (NULL si estaba FALTANTE), nuevo, quién autorizó, banda, motivo y fecha—, las dos cosas en la misma transacción. **Es la única forma de mover la autoridad después del alta** y la única de sacar a una propiedad de FALTANTE. El agente **no** puede: si el traspaso fuera del propio agente, la autoridad sería autoservicio. **No reasigna ningún encargo, no toca ningún atributo inmobiliario y no abre ningún histórico** — concede escritura sobre lo vigente, no lectura de lo pasado. Motivo obligatorio; reasignar al mismo agente es 400. | E4 |
+| GET | `/propiedades/{id}/responsable/historial` | TODOS | El expediente de traspasos de una propiedad, del más reciente al más antiguo. Información operativa **interna del tenant**, mismo alcance que la ficha: un id de otra corredora responde **404**. Sin gate de rol porque leer quién responde no concede nada — **ver no concede editar**, que es justo la asimetría que este P0 introduce. | E4 |
 | GET | `/encargos/{idEncargo}/publicaciones` | TODOS | **Los anuncios de UN encargo** (V70), del más reciente al más antiguo; un encargo de otro tenant responde **404**. Sustituye a `/locales/{id}/publicaciones`, que devolvía las series de venta y alquiler juntas sin poder decir cuál publicaba qué — porque la publicación no llevaba la operación. Cada anuncio viaja con su `idEncargo` y con `importeRotulo` («precio de venta» / «renta mensual»). | E4 |
-| POST | `/encargos/{idEncargo}/publicaciones` | AGENTE | Publica el encargo en un canal. **Rechaza el encargo no vigente**: publicar uno cerrado pondría en el mercado algo que ya no se ofrece. El hito `P` del histórico nace atado a ESTE encargo y con SU operación, no suponiendo alquiler. | E4 |
-| PUT | `/encargos/{idEncargo}/publicaciones/{idPublicacion}` | AGENTE | Edita un anuncio del tenant del actor. Cambiar el importe **añade** un hito `P` si el anuncio está publicado; nunca sobrescribe el anterior. | E4 |
-| POST | `/encargos/{idEncargo}/publicaciones/{idPublicacion}/estado` | AGENTE | Publicar (`P`), pausar (`S`) o cerrar (`C`). El instante en que un borrador pasa a publicado es la primera vez que ese importe lo ve el mercado, y por eso también escribe hito. | E4 |
+| POST | `/encargos/{idEncargo}/publicaciones` | AGENTE | Publica el encargo en un canal, **y sólo su propio agente** (P0-4, V87): publicar escribe un hito `P` en la serie económica del encargo, así que hasta V87 cualquier agente del tenant metía una cifra en el histórico de otro. **Rechaza el encargo no vigente**: publicar uno cerrado pondría en el mercado algo que ya no se ofrece. El hito `P` nace atado a ESTE encargo y con SU operación, no suponiendo alquiler. | E4 |
+| PUT | `/encargos/{idEncargo}/publicaciones/{idPublicacion}` | AGENTE | Edita un anuncio **de un encargo del actor** (P0-4, V87): llegar por el id de la publicación no puede ser una puerta más barata que llegar por el del encargo, porque las dos escriben la misma serie. Un anuncio anterior a V70, sin `id_captacion`, **se rechaza** en vez de suponer de quién es. Cambiar el importe **añade** un hito `P` si el anuncio está publicado; nunca sobrescribe el anterior. | E4 |
+| POST | `/encargos/{idEncargo}/publicaciones/{idPublicacion}/estado` | AGENTE | Publicar (`P`), pausar (`S`) o cerrar (`C`), **sólo el agente del encargo** (P0-4, V87). El instante en que un borrador pasa a publicado es la primera vez que ese importe lo ve el mercado, y por eso también escribe hito — la tercera puerta a la misma serie. | E4 |
 | POST | `/captura` | TODOS | Abre o continúa un borrador del tenant. **No escribe nada del negocio**: sólo anota lo conocido y responde qué falta. | E4 |
 | GET | `/captura` | TODOS | Los borradores en curso de la **organización**, no los de quien pregunta: es lo que permite que una captura iniciada por KAIROS la termine otra persona. | E4 |
 | GET | `/captura/apertura` | TODOS | Qué hay que decidir **antes** de que exista un plan de preguntas: el tipo y la operación, con sus opciones y sus rótulos. El **tipo** es el que manda —decide qué se pregunta después—; la operación se ofrece pero **ya no bloquea** (V75): una propiedad puede registrarse para prospectarla y su encargo nace al captar. Sin alcance porque no devuelve datos de nadie. Existe para que ni Angular ni KAIROS escriban «primero el tipo, luego la operación»: lo dice el motor. | E4 |

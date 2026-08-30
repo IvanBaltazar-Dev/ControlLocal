@@ -29,6 +29,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -564,7 +565,33 @@ class ClaveRetiradaEnLaFichaIntegrationTest {
      * SQL a proposito -- por el caso de uso es imposible, y ese es justamente
      * el punto de la prueba.
      */
+    /**
+     * <b>Lo sembrado por SQL, para poder retirarlo.</b>
+     *
+     * <p>Sin esto la prueba deja residuo: un valor sin linaje que ninguna puerta
+     * habria aceptado, y que el gate del modelo universal caza —con razón— en
+     * «4P despues del cutover ningun hecho del inmueble sin linaje». Cuatro
+     * filas por corrida, que en {@code controllocal_repositorios} se acumulan
+     * hasta poner el gate en rojo. Lo destapó el cierre de P0 con <b>36</b>
+     * filas de nueve corridas del mismo dia.
+     *
+     * <p>Es la misma disciplina que ya aplicaba
+     * {@code SueloYParametrosUrbanisticosIntegrationTest} —«y se deja la base
+     * como se encontro»—: <b>quien se salta la puerta a proposito, limpia</b>.
+     */
+    private final List<Object[]> sembradosPorSql = new ArrayList<>();
+
+    @org.junit.jupiter.api.AfterEach
+    void retirarLoSembradoPorSql() {
+        for (Object[] fila : sembradosPorSql) {
+            jdbc.update("delete from atributo_propiedad where id_propiedad = ? and clave = ?",
+                    fila[0], fila[1]);
+        }
+        sembradosPorSql.clear();
+    }
+
     private void sembrarValorHuerfano(long idPropiedad, String clave, String valor) {
+        sembradosPorSql.add(new Object[] {idPropiedad, clave});
         // Se reabre la aplicabilidad, se escribe y se vuelve a cerrar, todo en
         // UNA sentencia: el trigger `exigir_atributo_gobernado` rechaza un valor
         // de una clave que no aplique al tipo, que es exactamente la puerta que

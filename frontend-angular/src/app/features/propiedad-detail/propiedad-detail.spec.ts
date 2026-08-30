@@ -79,6 +79,10 @@ function ficha(parcial: Partial<FichaPropiedad>): FichaPropiedad {
       contratos: [],
     },
     fechaRegistro: '2026-01-10T10:00:00',
+    // Quien responde por ella y que puede hacer quien mira (P0). Por defecto,
+    // el caso normal: la ficha la pide su responsable. Los casos de bloqueo se
+    // declaran uno por uno, que es como se leen.
+    responsabilidad: { idResponsable: 30, nombre: 'Valeria Mora', puedeEditar: true },
     ...parcial,
   };
 }
@@ -838,19 +842,52 @@ describe('PropiedadDetail', () => {
   // Permisos
   // ------------------------------------------------------------------
 
-  it('solo el AGENTE ve el boton de editar', async () => {
-    await montar(PROP_0022);
-    const auth = TestBed.inject(AuthService);
-
-    spyOn(auth, 'sesion').and.returnValue(null);
-    fixture.detectChanges();
+  /**
+   * **El botón de editar sale del cable, no del rol** (P0).
+   *
+   * Esta prueba decía «sólo el AGENTE ve el botón» y comprobaba
+   * `sesion()?.rol === 'AGENTE'`. Dejó de ser cierto con V87: la autoridad
+   * ya no es «ser agente», es **ser el responsable de esta propiedad**, y con
+   * la regla vieja todo agente del tenant veía «Editar» en toda propiedad y se
+   * llevaba un 403 al guardar.
+   */
+  it('no ofrece editar cuando la propiedad responde a otro agente', async () => {
+    await montar(
+      ficha({
+        responsabilidad: {
+          idResponsable: 44,
+          nombre: 'Otro Agente',
+          puedeEditar: false,
+          motivo: 'OTRO_RESPONSABLE',
+          motivoTexto: 'De esta propiedad responde otro agente.',
+        },
+      }),
+      'AGENTE',
+    );
 
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('.acciones .primario'),
     ).toBeNull();
   });
 
-  it('el AGENTE entra al editor universal, nunca a /locales', async () => {
+  it('tampoco cuando la propiedad no tiene responsable: FALTANTE no es de todos', async () => {
+    await montar(
+      ficha({
+        responsabilidad: {
+          puedeEditar: false,
+          motivo: 'FALTA_RESPONSABLE',
+          motivoTexto: 'Esta propiedad no tiene agente responsable asignado.',
+        },
+      }),
+      'AGENTE',
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.acciones .primario'),
+    ).toBeNull();
+  });
+
+  it('el responsable entra al editor universal, nunca a /locales', async () => {
     await montar(PROP_0022, 'AGENTE');
 
     const editar = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>(

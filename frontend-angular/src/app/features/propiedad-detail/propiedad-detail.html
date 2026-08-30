@@ -203,7 +203,7 @@
       @for (encargo of vivos(); track encargo.idEncargo) {
         <cl-bloque-encargo
           [encargo]="encargo"
-          [puedeEditar]="puedeEditar()"
+          [puedeEditar]="encargo.puedeEditar ?? false"
           (cambio)="cargar()"
         />
       }
@@ -222,7 +222,7 @@
           @for (encargo of cerrados(); track encargo.idEncargo) {
             <cl-bloque-encargo
           [encargo]="encargo"
-          [puedeEditar]="puedeEditar()"
+          [puedeEditar]="encargo.puedeEditar ?? false"
           (cambio)="cargar()"
         />
           }

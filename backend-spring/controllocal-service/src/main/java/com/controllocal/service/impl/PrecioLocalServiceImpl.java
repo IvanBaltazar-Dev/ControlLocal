@@ -8,6 +8,7 @@ import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.PrecioLocalService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Fechas;
 import com.controllocal.service.soporte.OperacionDelEncargo;
@@ -29,12 +30,16 @@ public class PrecioLocalServiceImpl implements PrecioLocalService {
     private final PrecioPropiedadRepository precios;
     private final PropiedadRepository propiedades;
     private final OperacionDelEncargo operaciones;
+    /** Un hito economico nace de un encargo: lo escribe SU agente (P0-4). */
+    private final AutoridadDePropiedad autoridad;
 
     public PrecioLocalServiceImpl(PrecioPropiedadRepository precios, PropiedadRepository propiedades,
-                                  OperacionDelEncargo operaciones) {
+                                  OperacionDelEncargo operaciones,
+                                  AutoridadDePropiedad autoridad) {
         this.precios = precios;
         this.propiedades = propiedades;
         this.operaciones = operaciones;
+        this.autoridad = autoridad;
     }
 
     @Override
@@ -88,6 +93,19 @@ public class PrecioLocalServiceImpl implements PrecioLocalService {
                                 + ": un hito economico nace del encargo que lo autorizo. Si lo que "
                                 + "quieres guardar es lo que se VIO en el mercado, va en las "
                                 + "observaciones de la propiedad."));
+        // Y el encargo tiene que ser SUYO (P0-4).
+        //
+        // Esta es la via indirecta al historico economico ajeno: hasta V87 solo
+        // se comprobaba `existsByOrganizacionIdAndId` sobre la propiedad, asi
+        // que cualquier agente del tenant metia un hito en la serie de un
+        // encargo que no habia negociado. La fila de la matriz ya declaraba
+        // "un local de sus captaciones" — el codigo no lo comprobaba, y ahora
+        // cumple lo que la matriz dice.
+        //
+        // Va DESPUES de resolver el encargo y no antes, porque hasta aqui no se
+        // sabe de que encargo es el importe: la operacion puede venir declarada
+        // o deducirse del unico encargo vivo (D-E4-1).
+        autoridad.exigirEdicionDelEncargo(actor, encargo);
         precio.delEncargo(encargo.getId());
         precios.save(precio);
         return ficha(precio);

@@ -25,6 +25,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Hasta V85 un TERRENO se describia con DIECISEIS caracteristicas —medidas
  * contra el catalogo el 2026-08-29— y <b>ninguna hablaba del suelo como
  * suelo</b>: cinco medidas o identidad que valen para cualquier activo, cuatro
- * registrales, cuatro de servicios, la via como texto libre, la ocupacion, y una
+ * registrales, <b>tres</b> de servicios ({@code gas}, {@code agua_desague} y
+ * {@code energia_electrica}; {@code servicios_disponibles} ya estaba retirada
+ * desde V84), el acceso de vehiculo —que no es un servicio—, la via como texto
+ * libre, la ocupacion, y una
  * {@code area_terreno} que repetia la superficie que ya estaba en
  * {@code metraje_total}. Dos lotes de 500 m² en el mismo distrito eran la misma
  * ficha aunque uno fuera urbano habilitado con ocho pisos de altura normativa y
@@ -302,16 +306,72 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                 """, String.class, (Object) LAS_DIECIOCHO.stream().map(k -> k[0]).toArray(String[]::new)));
     }
 
+    /**
+     * <b>Un valor fuera del vocabulario se rechaza, y hay que exigir CON QUE
+     * codigo.</b>
+     *
+     * <p>Un {@code assertThrows(Exception.class, …)} pasa igual con una
+     * {@code NullPointerException}, con un {@code unique_violation} o con la
+     * base caida: afirma que algo fallo, no que la invariante existe. Es el
+     * mismo liston que el gate SQL de este corte se exige a si mismo —«no basta
+     * con exigir que el {@code INSERT} falle: hay que exigir con que codigo
+     * falla»—, y esta prueba estaba por debajo de el (auditoria del 2026-08-29,
+     * H5).
+     *
+     * <p>Quien rechaza aqui es {@code exigir_atributo_gobernado}, el trigger, y
+     * no una comprobacion en Java: {@code convertir} acota tipo, rango y
+     * longitud, y la <b>pertenencia</b> al vocabulario solo la mira la base para
+     * una clave gobernada. Por eso lo que se exige es el {@code SQLSTATE}
+     * {@code 23514} y el texto del trigger, leidos recorriendo la cadena de
+     * causas: el envoltorio que Spring pone encima puede cambiar y el codigo
+     * de la base, no.
+     */
     @Test
-    @DisplayName("V85: un valor fuera del vocabulario del suelo se rechaza")
+    @DisplayName("V85: un valor fuera del vocabulario del suelo se rechaza con 23514")
     void elVocabularioDelSueloNoAdmiteCualquierCadena() {
         long id = registrarTerreno();
-        assertThrows(Exception.class,
+
+        Exception condicion = assertThrows(Exception.class,
                 () -> editar(id, new ValorAtributo("condicion_terreno", "urbano")),
                 "es justo lo que una LISTA muda aceptaba");
-        assertThrows(Exception.class,
+        assertEquals("23514", sqlStateDe(condicion),
+                "tiene que rechazarlo la guarda del vocabulario (check_violation), no otra cosa: "
+                        + causasDe(condicion));
+        assertTrue(causasDe(condicion).contains("no admite el valor \"urbano\""),
+                "y el rechazo dice QUE valor no admite: " + causasDe(condicion));
+
+        Exception topografia = assertThrows(Exception.class,
                 () -> editar(id, new ValorAtributo("topografia", "con pendiente")));
+        assertEquals("23514", sqlStateDe(topografia), causasDe(topografia));
+
         assertNull(valorDe(id, "condicion_terreno"), "y el rechazo no deja rastro a medias");
+    }
+
+    /** El {@code SQLSTATE} de la primera {@code SQLException} de la cadena, o {@code null}. */
+    private static String sqlStateDe(Throwable error) {
+        for (Throwable causa = error; causa != null; causa = causa.getCause()) {
+            if (causa instanceof SQLException sql) {
+                return sql.getSQLState();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Los mensajes de toda la cadena de causas.
+     *
+     * <p>El texto del trigger no viaja en el mensaje del envoltorio: viaja en el
+     * de la {@code SQLException} de mas abajo. Buscar solo en
+     * {@code getMessage()} daria un fallo que dice «no lo encontro» sobre algo
+     * que si esta.
+     */
+    private static String causasDe(Throwable error) {
+        StringBuilder texto = new StringBuilder();
+        for (Throwable causa = error; causa != null; causa = causa.getCause()) {
+            texto.append(causa.getClass().getSimpleName()).append(": ")
+                    .append(causa.getMessage()).append(" | ");
+        }
+        return texto.toString();
     }
 
     // ==================================================================
@@ -436,6 +496,16 @@ class SueloYParametrosUrbanisticosIntegrationTest {
      * reparar cuando una CASA se podia registrar con un {@code piso} que despues
      * no se podia corregir nunca. Una puerta que no exija lo mismo que la otra
      * es la puerta permisiva, y por ahi vuelve el dato que el corte retira.
+     *
+     * <p><b>Y se exige el motivo, no solo el fallo</b> (auditoria del
+     * 2026-08-29, H5). Con {@code Exception.class} a secas, las dos puertas
+     * saldrian verdes ante un {@code unique_violation} —{@code
+     * uq_atributo_propiedad_clave} deja una sola fila por (propiedad, clave)— o
+     * ante cualquier averia, que es el modo de fallo contra el que el gate SQL
+     * de este mismo corte se blinda comprobando el {@code SQLSTATE}. Aqui el
+     * equivalente es la {@link ReglaNegocioException} de
+     * {@code AtributosGobernados.exigirQueAplique}, que rechaza <b>en Java y sin
+     * llegar a escribir</b>, con el tipo dicho por su nombre y no por su letra.
      */
     @Test
     @DisplayName("V85: un TERRENO ya no admite area_terreno, ni al alta ni al editar")
@@ -443,7 +513,7 @@ class SueloYParametrosUrbanisticosIntegrationTest {
         assertEquals(List.of("A=OPC", "C=OPC"), exigenciasDe("area_terreno"),
                 "D-7 retira SOLO la fila de T: A y C no se tocan");
 
-        assertThrows(Exception.class,
+        ReglaNegocioException alta = assertThrows(ReglaNegocioException.class,
                 () -> registrar("TERRENO",
                         List.of(new ValorAtributo("metraje_total", "500"),
                                 new ValorAtributo("zonificacion", "RDM"),
@@ -451,12 +521,18 @@ class SueloYParametrosUrbanisticosIntegrationTest {
                         new OperacionSolicitada("VENTA", new BigDecimal("300000"), "USD",
                                 null, null, null, null, null, null, null)),
                 "el ALTA de un terreno ya no admite la clave duplicada");
+        assertTrue(alta.getMessage()
+                        .contains("\"area_terreno\" no aplica a una propiedad de tipo TERRENO"),
+                "tiene que rechazarla por APLICABILIDAD, no por otra regla: " + alta.getMessage());
 
         long id = registrarTerreno();
-        assertThrows(Exception.class,
+        ReglaNegocioException edicion = assertThrows(ReglaNegocioException.class,
                 () -> editar(id, new ValorAtributo("area_terreno", "500")),
                 "y la EDICION tampoco: si una de las dos puertas la aceptara, el dato "
                         + "duplicado volveria por ahi");
+        assertEquals(alta.getMessage(), edicion.getMessage(),
+                "y las dos puertas dan la MISMA respuesta: si difieren, hay dos reglas");
+
         assertNull(valorDe(id, "area_terreno"), "y el rechazo no deja la fila a medias");
     }
 

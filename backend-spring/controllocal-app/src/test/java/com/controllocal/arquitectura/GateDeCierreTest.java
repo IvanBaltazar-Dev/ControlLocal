@@ -78,6 +78,7 @@ class GateDeCierreTest {
                         // encargo. Recorre las vias de escritura una por una con dos
                         // agentes del mismo equipo, y mira precio_propiedad despues:
                         // el permiso importa, y el hito economico falso importa mas.
+                        "AlcanceYGobiernoDeLaAutoridadIntegrationTest",
                         "AutoridadDeEdicionIntegrationTest",
                         // D-E4-3 — una autoridad persistente por clave publicada.
                         "AutoridadDelDatoIntegrationTest",

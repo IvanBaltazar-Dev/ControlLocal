@@ -542,10 +542,11 @@ public final class PropiedadUniversalDtos {
      * y comparar con {@code == null} es obligatorio en el cliente.
      */
     public record ResponsabilidadResponse(Long idResponsable, String nombre, boolean puedeEditar,
-                                          String motivo, String motivoTexto) {
+                                          String motivo, String motivoTexto,
+                                          boolean puedeTraspasar) {
         static ResponsabilidadResponse desde(PropiedadUniversalService.Responsabilidad r) {
             return r == null ? null : new ResponsabilidadResponse(r.idResponsable(), r.nombre(),
-                    r.puedeEditar(), r.motivo(), r.motivoTexto());
+                    r.puedeEditar(), r.motivo(), r.motivoTexto(), r.puedeTraspasar());
         }
     }
 
@@ -560,13 +561,14 @@ public final class PropiedadUniversalDtos {
     public record TraspasoResponse(Long id, Long idPropiedad,
                                    Long idResponsableAnterior, String responsableAnterior,
                                    Long idResponsableNuevo, String responsableNuevo,
-                                   Long idPersonaActor, String rolActor,
+                                   Long idPersonaActor, String rolActor, String origen,
                                    String motivo, LocalDateTime fecha) {
         public static TraspasoResponse desde(PropiedadUniversalService.TraspasoDeResponsable t) {
             return new TraspasoResponse(t.id(), t.idPropiedad(),
                     t.idResponsableAnterior(), t.responsableAnterior(),
                     t.idResponsableNuevo(), t.responsableNuevo(),
-                    t.idPersonaActor(), t.rolActor(), t.motivo(), t.fecha());
+                    t.idPersonaActor(), t.rolActor(), t.origen(),
+                    t.motivo(), t.fecha());
         }
     }
 

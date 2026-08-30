@@ -92,7 +92,9 @@ class LocalComercialServiceImplTest {
      */
     private final AutoridadDePropiedad autoridad = new AutoridadDePropiedad(
             mock(com.controllocal.persistence.repositorio.DetalleAgenteRepository.class),
-            mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class));
+            mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class),
+            new com.controllocal.service.soporte.Alcances(
+                    mock(com.controllocal.persistence.repositorio.SupervisionAgenteRepository.class)));
 
     private final LocalComercialServiceImpl service = new LocalComercialServiceImpl(
             propiedades, roles, distritos, fotos, precios, publicaciones, prospecciones,

@@ -55,6 +55,7 @@ $integracion = @(
     # y un encargo su propio agente; ver no concede editar y FALTANTE no habilita
     # a nadie. Va en el cierre porque lo que prueba no es un if: es que no queda
     # ninguna otra puerta, y eso solo se ve recorriendolas contra la base.
+    'AlcanceYGobiernoDeLaAutoridadIntegrationTest',
     'AutoridadDeEdicionIntegrationTest',
     'AutoridadDelDatoIntegrationTest',
     'BusquedaLocalesIntegrationTest',

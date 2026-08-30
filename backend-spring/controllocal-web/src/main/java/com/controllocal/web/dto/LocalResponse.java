@@ -6,8 +6,20 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Contrato CONGELADO: mismos campos y nombres que Dtos.LocalResponse de la
- * v1 (idPropietario = persona_rol.id del rol PROPIETARIO en la semantica v2).
+ * La ficha del inmueble tal como la lee la pantalla del encargo.
+ * idPropietario = persona_rol.id del rol PROPIETARIO en la semantica v2.
+ *
+ * <p><b>{@code responsabilidad} es aditivo</b> (P0-H1) y reutiliza el MISMO
+ * tipo de cable que {@code GET /propiedades/{id}}:
+ * {@link PropiedadUniversalDtos.ResponsabilidadResponse}. No es ahorro de
+ * codigo — es que dos pantallas que preguntan lo mismo tienen que recibir la
+ * misma respuesta, con los mismos nombres y el mismo texto. Un segundo record
+ * con los mismos campos seria la "segunda manera de escribir esto", y las dos
+ * maneras se separan en el primer cambio.
+ *
+ * <p>Solo viaja en el <b>detalle</b>. En los listados es {@code null} y Jackson
+ * ({@code NON_NULL}) no lo emite: en Angular llega {@code undefined}, se compara
+ * con {@code == null} y el cliente cae del lado que no ofrece el boton.
  */
 public record LocalResponse(Long id, String codigoLocal, String direccion, String distrito, BigDecimal metraje,
                             BigDecimal precioReferencial, String monedaReferencial,
@@ -20,7 +32,8 @@ public record LocalResponse(Long id, String codigoLocal, String direccion, Strin
                             Long idDistrito, LocalDateTime fechaRegistro, String fotoPortadaClave,
                             String estadoRegistro, String disponibilidadComercial,
                             String interiorUnidad, String piso, String referenciaInterna,
-                            String nombreEdificioGaleria) {
+                            String nombreEdificioGaleria,
+                            PropiedadUniversalDtos.ResponsabilidadResponse responsabilidad) {
 
     public static LocalResponse desde(LocalComercialService.FichaLocal f) {
         return new LocalResponse(f.id(), f.codigoLocal(), f.direccion(), f.distrito(), f.metraje(),
@@ -32,6 +45,7 @@ public record LocalResponse(Long id, String codigoLocal, String direccion, Strin
                 f.numeroEstacionamientos(), f.cuotaMantenimiento(),
                 f.idDistrito(), f.fechaRegistro(), f.fotoPortadaClave(), f.estadoRegistro(),
                 f.disponibilidadComercial(), f.interiorUnidad(), f.piso(), f.referenciaInterna(),
-                f.nombreEdificioGaleria());
+                f.nombreEdificioGaleria(),
+                PropiedadUniversalDtos.ResponsabilidadResponse.desde(f.responsabilidad()));
     }
 }

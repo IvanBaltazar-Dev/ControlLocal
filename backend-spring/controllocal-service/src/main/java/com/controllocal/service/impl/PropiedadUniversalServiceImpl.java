@@ -296,6 +296,16 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         propiedad.registrarSinOferta();
         propiedades.save(propiedad);
 
+        // Y el alta del responsable queda en el expediente (V88). Va DESPUES
+        // del save y no antes por la misma razon que el linaje: la fila se
+        // direcciona por el id de la propiedad, que hasta el insert no existe.
+        //
+        // Solo aqui, y solo en un alta de verdad: este metodo CREA la fila,
+        // asi que no hay forma de que se ejecute sobre una propiedad que ya
+        // existia. Y si alguien la buscara, el indice parcial
+        // `uq_asignacion_alta_por_propiedad` rechaza una segunda alta.
+        autoridad.anotarElAlta(actor, propiedad);
+
         escribirTitularidades(actor, propiedad.getId(), titulares, rolesTitulares);
         // Y aqui se anota el linaje de TODO lo del alta -- lo gobernado que se
         // acaba de escribir y lo estructural que ya estaba aplicado.
@@ -591,9 +601,18 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     @Override
     @Transactional(readOnly = true)
     public List<TraspasoDeResponsable> traspasosDe(long idPropiedad, Actor actor) {
-        // Un id de otro tenant se comporta como inexistente, igual que la ficha.
-        propiedades.findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+        // 1. FRONTERA DE TENANT, siempre primero (C1). Un id de otra corredora
+        //    se comporta como inexistente: 404 y no 403, porque un 403 ya
+        //    confirmaria que esa propiedad existe en alguna parte.
+        Propiedad propiedad = propiedades
+                .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
                 .orElseThrow(() -> new NoEncontradoException("Propiedad"));
+        // 2. Y DESPUES la banda y el alcance (C2). El expediente es superficie
+        //    de gobierno: lo leen el broker que supervisa a quien responde y el
+        //    gobierno del tenant. El AGENTE no, ni siquiera el responsable
+        //    vigente -- que sabe que responde el, pero no hereda a los
+        //    anteriores ni los motivos por los que la propiedad cambio de manos.
+        autoridad.exigirLecturaDelExpediente(actor, propiedad);
         return autoridad.historial(actor.idOrganizacion(), idPropiedad).stream()
                 .map(this::traspaso)
                 .toList();
@@ -603,7 +622,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         return new TraspasoDeResponsable(fila.getId(), fila.getIdPropiedad(),
                 fila.getIdRolResponsableAnterior(), nombreDelAgente(fila.getIdRolResponsableAnterior()),
                 fila.getIdRolResponsableNuevo(), nombreDelAgente(fila.getIdRolResponsableNuevo()),
-                fila.getIdPersonaActor(), fila.getTipoRolActor(), fila.getMotivo(),
+                fila.getIdPersonaActor(), fila.getTipoRolActor(), fila.getOrigen(),
+                fila.getMotivo(),
                 Fechas.local(fila.getFechaAsignacion()));
     }
 
@@ -1294,15 +1314,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * <p>Una propiedad FALTANTE llega igual que cualquier otra: <b>visible</b>,
      * completa y con el motivo dicho. No desaparece del listado ni de la ficha,
      * y no se le inventa un dueno.
+     *
+     * <p><b>No lo compone este metodo</b>: lo produce {@code AutoridadDePropiedad},
+     * que es el unico productor del Core (P0-H1). Aqui se compuso hasta la
+     * primera version de este corte, y por eso la ficha del encargo —otra
+     * pantalla, otro servicio— acabo calculando su propia version de la regla
+     * en Angular. Un productor, todas las pantallas.
      */
     private Responsabilidad responsabilidadDe(Actor actor, Propiedad propiedad) {
-        String motivo = autoridad.motivoNoEditable(actor, propiedad);
-        return new Responsabilidad(
-                propiedad.getIdRolResponsable(),
-                autoridad.nombreDelResponsable(propiedad),
-                motivo == null,
-                motivo,
-                motivo == null ? null : autoridad.explicacion(motivo));
+        return autoridad.responsabilidadDe(actor, propiedad);
     }
 
     /**

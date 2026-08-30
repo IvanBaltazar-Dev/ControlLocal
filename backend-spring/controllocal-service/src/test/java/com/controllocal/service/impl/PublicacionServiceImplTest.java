@@ -71,7 +71,9 @@ class PublicacionServiceImplTest {
     private final com.controllocal.service.soporte.AutoridadDePropiedad autoridad =
             new com.controllocal.service.soporte.AutoridadDePropiedad(
                     mock(com.controllocal.persistence.repositorio.DetalleAgenteRepository.class),
-                    mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class));
+                    mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class),
+                    new com.controllocal.service.soporte.Alcances(mock(
+                            com.controllocal.persistence.repositorio.SupervisionAgenteRepository.class)));
 
     private final PublicacionServiceImpl service = new PublicacionServiceImpl(
             publicaciones, precios, encargos, propiedades, gobierno, condiciones, autoridad);

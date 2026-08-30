@@ -58,14 +58,23 @@ public class AtributosGobernados {
     private final ValorMultipleAtributoRepository multivalores;
     private final LinajeDelValor linaje;
 
+    /**
+     * Quien puede escribir esta propiedad (P0). Se consulta <b>aqui dentro</b>
+     * y no solo en el caso de uso: por este componente pasa la inmensa mayoria
+     * de los hechos gobernados del inmueble, y es publico e inyectable.
+     */
+    private final AutoridadDePropiedad autoridad;
+
     public AtributosGobernados(CatalogoAtributoRepository catalogo,
                                AtributoPropiedadRepository valores,
                                ValorMultipleAtributoRepository multivalores,
-                               LinajeDelValor linaje) {
+                               LinajeDelValor linaje,
+                               AutoridadDePropiedad autoridad) {
         this.catalogo = catalogo;
         this.valores = valores;
         this.multivalores = multivalores;
         this.linaje = linaje;
+        this.autoridad = autoridad;
     }
 
     /** Lo que se pregunta para un tipo de propiedad, en orden de presentacion. */
@@ -424,8 +433,30 @@ public class AtributosGobernados {
      * de esta edicion, el Core encontro esto»</i>. No se le pone fecha de
      * nacimiento, ni autor, ni canal, ni naturaleza. Es la diferencia entre
      * constatar y fechar.
+     *
+     * <h2>Y aqui se exige la autoridad, no solo en el caso de uso</h2>
+     * Este metodo es {@code public} en un {@code @Component} inyectable, y por
+     * el pasa <b>la inmensa mayoria</b> de los hechos gobernados de una
+     * propiedad: todas las claves de destino {@code ATRIBUTO}, que son casi
+     * todas — solo las declaradas {@code ESTRUCTURAL} viajan por columnas del
+     * agregado. <b>La proporcion exacta no se escribe aqui a mano</b>: la mide
+     * {@code AlcanceYGobiernoDeLaAutoridadIntegrationTest} contra el catalogo
+     * vivo y la imprime si deja de cumplirse. Una cifra transcrita caduca sola
+     * y nadie la revisa, que es lo que le paso a este mismo corte.
+     *
+     * <p>Un caso de uso nuevo que cargara la propiedad y llamara aqui sin
+     * preguntar antes escribiria un hecho gobernado del inmueble de otro — y lo
+     * haria anotando linaje, con lo que el rastro diria que la escritura fue
+     * legitima.
+     *
+     * <p>Por eso la guarda esta <b>en el hecho</b> y no solo en la puerta. Es
+     * la misma razon por la que {@code AutoridadDePropiedad} no vive en un
+     * {@code @PreAuthorize}: una puerta protege un camino, el hecho los
+     * protege todos. Que {@code editar} tambien la exija no sobra —corta antes
+     * de tocar nada y con el motivo dicho—; esto es el suelo.
      */
     public void escribirEnEdicion(Actor actor, Propiedad propiedad, ValorEntrante entrante) {
+        autoridad.exigirEdicion(actor, propiedad);
         if (entrante.esMultivalor()) {
             escribirMultivalor(actor, propiedad, entrante);
             return;
@@ -535,6 +566,11 @@ public class AtributosGobernados {
      */
     public ValorRetirado retirar(Actor actor, Propiedad propiedad, String clave,
                                  ProcedenciaDelValor procedencia) {
+        // Misma guarda que `escribirEnEdicion`, y por la misma razon: retirar es
+        // una escritura -- la mas irreversible de las tres, porque el borrado es
+        // fisico. Una retirada es exactamente el hecho que no puede quedar en
+        // manos de quien no responde por la propiedad.
+        autoridad.exigirEdicion(actor, propiedad);
         Optional<CatalogoAtributo> definicion =
                 catalogo.porClave(actor.idOrganizacion(), clave);
         if (definicion.isEmpty()) {

@@ -46,7 +46,24 @@ public interface LocalComercialService {
         }
     }
 
-    /** Espejo de LocalResponse (cable congelado). idPropietario = persona_rol.id del rol PROPIETARIO. */
+    /**
+     * Espejo de LocalResponse. idPropietario = persona_rol.id del rol PROPIETARIO.
+     *
+     * <p><b>{@code responsabilidad} viaja resuelta desde el Core</b> (P0-H1) y
+     * <b>solo en el detalle</b> ({@code GET /locales/{id}}), igual que los seis
+     * campos que la preceden. La galeria de fotos se pinta desde esta ficha, y
+     * {@code POST}/{@code DELETE /locales/{id}/fotos} los cierra
+     * {@code AutoridadDePropiedad}: sin este campo la pantalla tendria que
+     * deducir la regla, y la deduccion que tenia —"si eres AGENTE"— ofrecia los
+     * dos botones a todo agente del tenant y fallaba con 403 siempre.
+     *
+     * <p>En los <b>listados</b> llega {@code null}, y no es un olvido: un
+     * listado no ofrece acciones de escritura por fila, y resolver el nombre del
+     * responsable de cada una costaria una consulta por fila. Jackson viaja
+     * {@code NON_NULL}, asi que el campo simplemente no aparece — y el cliente,
+     * que compara con {@code == null}, cae del lado que <b>no</b> ofrece el
+     * boton.
+     */
     record FichaLocal(Long id, String codigoLocal, String direccion, String distrito, BigDecimal metraje,
                       BigDecimal precioReferencial, String monedaReferencial,
                       String rubroPermitido, String descripcion, String estado,
@@ -58,7 +75,8 @@ public interface LocalComercialService {
                       Long idDistrito, LocalDateTime fechaRegistro, String fotoPortadaClave,
                       String estadoRegistro, String disponibilidadComercial,
                       String interiorUnidad, String piso, String referenciaInterna,
-                      String nombreEdificioGaleria) {
+                      String nombreEdificioGaleria,
+                      PropiedadUniversalService.Responsabilidad responsabilidad) {
     }
 
     record FotoLocal(Long idFoto, String clave, String nombreArchivo) {

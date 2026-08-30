@@ -1933,6 +1933,12 @@ class PropiedadUniversalIntegrationTest {
         jdbc.update("delete from precio_propiedad where organizacion_id = ?", idOrganizacion);
         jdbc.update("delete from atributo_propiedad where organizacion_id = ?", idOrganizacion);
         jdbc.update("delete from titularidad_propiedad where organizacion_id = ?", idOrganizacion);
+        // Antes que propiedad: desde V88 TODA alta escribe su fila de
+        // responsable, asi que la FK compuesta bloquea el borrado. La FK esta
+        // bien y hace su trabajo -- en produccion una propiedad NUNCA se borra,
+        // se desactiva (estado I); el DELETE duro solo existe en esta limpieza.
+        jdbc.update("delete from asignacion_responsable_propiedad where organizacion_id = ?",
+                idOrganizacion);
         jdbc.update("""
                 delete from historial_estado where organizacion_id = ?
                 """, idOrganizacion);

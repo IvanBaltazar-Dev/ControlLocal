@@ -10,6 +10,13 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,20 +34,34 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Hasta V87 la propiedad no tenia dueno de escritura. {@code PUT
  * /propiedades/{id}} cargaba la fila por {@code (organizacion, id)} y escribia:
  * cualquier AGENTE del tenant editaba la ficha de cualquier inmueble. Y no era
- * una via, eran <b>ocho</b>, repartidas por cuatro servicios — de las cuales
- * siete no comprobaban absolutamente nada mas que el tenant.
+ * una via: eran <b>varias</b>, repartidas por varios servicios, y casi ninguna
+ * comprobaba nada mas que el tenant.
  *
- * <p>Arreglar las ocho a mano las deja arregladas <b>hoy</b>. Lo que este gate
- * protege es el <b>manana</b>: la novena. Un caso de uso nuevo que guarde una
- * propiedad, una foto o un hito economico sin pasar por
- * {@code AutoridadDePropiedad} pone el build en rojo, en vez de reabrir el
- * agujero en silencio dos cortes despues, cuando ya nadie recuerde por que la
- * columna existe.
+ * <h2>Por que aqui no va ninguna cifra</h2>
+ * La llevaba, y era falsa. Se escribio "ocho vias" —la cuenta del inventario
+ * inicial— y se repitio cuatro veces, incluida "la novena" como nombre de lo
+ * que este gate protege. Para cuando se escribio ya no era cierto: el propio
+ * gate encontro una via que el inventario no tenia
+ * ({@code PublicacionServiceImpl}), el corte declaro trece y la auditoria
+ * conto doce. Tres cifras distintas para una sola cosa, y el resultado era
+ * correcto: lo falso era <b>la explicacion</b>.
+ *
+ * <p>Es la familia de fallos que mas caro ha salido en este repositorio —una
+ * cifra transcrita a mano caduca sola y nadie la revisa, porque nada la
+ * verifica—. Asi que la regla aqui es: <b>o la genera una comprobacion, o no se
+ * escribe</b>. Las vias las cuenta este gate en cada build contra el bytecode,
+ * y la lista sale en el mensaje de error cuando alguna se queda sin guarda.
+ *
+ * <p>Lo que este gate protege es el <b>manana</b>: la <b>siguiente</b>. Un caso
+ * de uso nuevo que guarde una propiedad, una foto, un atributo gobernado o un
+ * hito economico sin pasar por {@code AutoridadDePropiedad} pone el build en
+ * rojo, en vez de reabrir el agujero en silencio dos cortes despues, cuando ya
+ * nadie recuerde por que la columna existe.
  *
  * <h2>Por que un gate y no un {@code @PreAuthorize}</h2>
  * Dos razones medidas, y las dos aparecieron en el inventario de este P0:
  * <ol>
- *   <li>Las ocho vias viven en cuatro servicios. Una anotacion protege
+ *   <li>Las vias viven repartidas por varios servicios. Una anotacion protege
  *       <b>una puerta</b>; la autoridad tiene que proteger <b>el hecho</b>.</li>
  *   <li><b>KAIROS entra por los mismos endpoints</b> con la cabecera
  *       {@code X-Origen} y el mismo token — no tiene escritor propio. Una regla
@@ -77,19 +98,42 @@ class AutoridadDeLaPropiedadTest {
     private static final String REPOSITORIO_DEL_RASTRO =
             "com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository";
 
-    /**
-     * Las tablas que <b>son</b> la propiedad: ella misma, sus fotos y su serie
-     * economica. Escribir en cualquiera de las tres es escribir un hecho del
-     * inmueble o de su encargo, y las tres estaban abiertas al tenant entero.
-     */
-    private static final Set<String> REPOSITORIOS_DE_LA_PROPIEDAD = Set.of(
-            "com.controllocal.persistence.repositorio.PropiedadRepository",
-            "com.controllocal.persistence.repositorio.FotoPropiedadRepository",
-            "com.controllocal.persistence.repositorio.TitularidadPropiedadRepository");
+    /** El paquete de dominio donde vive todo lo que ES la propiedad. */
+    private static final String PAQUETE_DEL_INMUEBLE = "com.controllocal.domain.inmueble";
+
+    private static final String REPOSITORIOS = "com.controllocal.persistence.repositorio.";
 
     /**
-     * <b>La serie economica es del ENCARGO, no de la propiedad</b>, y por eso
-     * es un universo aparte con OTRA guarda.
+     * <b>Los hechos que SON la propiedad</b>, y la tabla de cada uno.
+     *
+     * <p>Es un mapa {@code repositorio -> tabla} y no un {@code Set} de
+     * repositorios porque la unidad de la decision es la <b>tabla</b>: lo que
+     * hay que poder responder es "¿que tablas de hechos del inmueble estan
+     * vigiladas?", y un conjunto de repositorios no responde eso sin que
+     * alguien traduzca de memoria.
+     *
+     * <p><b>Las dos ultimas entradas faltaban</b>, y se llevaban la mayor parte
+     * del hecho: casi todas las claves gobernadas de una PROPIEDAD se guardan
+     * como fila de {@code atributo_propiedad} (o de su tabla de opciones, si
+     * son multivalor), y solo las cuatro declaradas ESTRUCTURAL viajan por
+     * columnas de {@code propiedad}. El gate vigilaba las columnas y dejaba
+     * fuera las filas.
+     *
+     * <p><b>La proporcion no se escribe aqui</b>, a proposito: la mide
+     * {@code AlcanceYGobiernoDeLaAutoridadIntegrationTest} contra el catalogo
+     * vivo. Este mismo corte fue rechazado, entre otras cosas, por transcribir
+     * cifras que ya no eran ciertas cuando se escribieron.
+     */
+    private static final Map<String, String> TABLAS_DE_LA_PROPIEDAD = Map.of(
+            REPOSITORIOS + "PropiedadRepository", "propiedad",
+            REPOSITORIOS + "FotoPropiedadRepository", "foto_propiedad",
+            REPOSITORIOS + "TitularidadPropiedadRepository", "titularidad_propiedad",
+            REPOSITORIOS + "AtributoPropiedadRepository", "atributo_propiedad",
+            REPOSITORIOS + "ValorMultipleAtributoRepository", "atributo_propiedad_opcion");
+
+    /**
+     * <b>Los hechos que son del ENCARGO</b>, que es otro universo con OTRA
+     * guarda: {@code exigirEdicionDelEncargo}.
      *
      * <p>No es una sutileza: fundir los dos universos hacia "llama a la
      * autoridad, la que sea" es lo que dejo pasar el primer sabotaje de este
@@ -98,9 +142,59 @@ class AutoridadDeLaPropiedadTest {
      * consulta la autoridad -- <b>la del encargo</b>. Dos autoridades distintas
      * comprobadas como si fueran una es exactamente el OR que este P0 vino a
      * quitar de {@code exigirPertenencia}.
+     *
+     * <p>Aqui entran la serie economica y las <b>condiciones pactadas</b>
+     * (garantia, adelanto, plazo): son datos del trato tanto como el importe, y
+     * responden ante quien lo negocio, no ante quien responde por el inmueble.
      */
-    private static final Set<String> REPOSITORIOS_DE_LA_SERIE = Set.of(
-            "com.controllocal.persistence.repositorio.PrecioPropiedadRepository");
+    private static final Map<String, String> TABLAS_DEL_ENCARGO = Map.of(
+            REPOSITORIOS + "PrecioPropiedadRepository", "precio_propiedad",
+            REPOSITORIOS + "AtributoEncargoRepository", "atributo_encargo",
+            REPOSITORIOS + "ValorMultipleEncargoRepository", "atributo_encargo_opcion");
+
+    /**
+     * <b>Lo que vive en el paquete del inmueble y NO es un hecho gobernado
+     * suyo</b>, con el motivo de cada uno.
+     *
+     * <p>Existe para que el control de cobertura pueda ser una comparacion de
+     * verdad. La version anterior recorria el mismo {@code Set} que declaraba,
+     * asi que una tabla ausente del conjunto era <b>invisible</b> — el gate no
+     * podia ver lo que le faltaba, que es exactamente la forma del fallo de 4.P
+     * que decia prevenir. Ahora se enumeran las entidades reales del paquete y
+     * cada tabla tiene que estar clasificada: vigilada en un universo, o aqui
+     * con su razon. Una entidad nueva pone el gate en <b>rojo</b> hasta que
+     * alguien decida cual de las dos cosas es.
+     */
+    private static final Map<String, String> FUERA_DEL_GOBIERNO_DE_LA_PROPIEDAD = Map.of(
+            "asignacion_responsable_propiedad",
+            "es el rastro de QUIEN puede escribir, no un hecho escrito. Tiene su propio "
+                    + "gate -- unSoloEscritorDelRastroDeTraspasos -- que es mas estricto: "
+                    + "un unico escritor, no una guarda",
+
+            "catalogo_atributo",
+            "es el vocabulario de la organizacion, no un dato de ningun inmueble. Lo "
+                    + "gobierna el tenant; una propiedad no lo escribe nunca",
+
+            "distrito",
+            "es geografia compartida, anterior a cualquier propiedad y comun a todas. No "
+                    + "pertenece a ninguna",
+
+            "observacion_mercado",
+            "es lo que se VIO del mercado (V76), y BROX no lo autorizo, ni lo publico, ni "
+                    + "lo negocio. Es append-only y a proposito NO escribe la propiedad: "
+                    + "exigir aqui la autoridad de edicion impediria observar un inmueble "
+                    + "ajeno, que es justo para lo que existe",
+
+            "publicacion",
+            "es el anuncio de un ENCARGO, no un hecho del inmueble. Su autoridad es la del "
+                    + "encargo y ya se comprueba: el hito 'P' que escribe cae en "
+                    + "precio_propiedad, que si esta vigilado en el universo del encargo");
+
+    private static final Set<String> REPOSITORIOS_DE_LA_PROPIEDAD =
+            Set.copyOf(TABLAS_DE_LA_PROPIEDAD.keySet());
+
+    private static final Set<String> REPOSITORIOS_DEL_ENCARGO =
+            Set.copyOf(TABLAS_DEL_ENCARGO.keySet());
 
     /**
      * <b>La guarda de los hechos de la PROPIEDAD: los metodos que DENIEGAN.</b>
@@ -124,22 +218,46 @@ class AutoridadDeLaPropiedadTest {
     private static final Set<String> GUARDAS_DEL_ENCARGO =
             Set.of("exigirEdicionDelEncargo");
 
+    /**
+     * Los metodos por los que un repositorio escribe.
+     *
+     * <p>Los tres ultimos son los borrados <b>por clave logica</b>, y estaban
+     * fuera: un {@code deleteByIdPropiedadAndClave} retira un hecho gobernado
+     * igual que un {@code save} lo pone, pero no se llama "delete" a secas y el
+     * gate no lo reconocia. Ya estaban inventariados en
+     * {@code LinajeDeTodaEscrituraTest.ESCRIBEN_UN_VALOR}: el linaje los veia y
+     * la autoridad no.
+     */
     private static final Set<String> ESCRIBEN = Set.of(
-            "save", "saveAndFlush", "delete", "deleteById", "saveAll");
+            "save", "saveAndFlush", "delete", "deleteById", "saveAll",
+            "deleteByIdPropiedadAndClave", "deleteByIdCaptacionAndClave", "borrarDe");
 
     /**
-     * <b>Las excepciones, con su motivo, y aqui para que se vean.</b>
+     * <b>Las excepciones del universo PROPIEDAD, con su motivo.</b>
      *
      * <p>No es una lista de perdones: es la parte del inventario que se
      * respondio con "no, y por esto". Cada entrada tuvo que justificarse una
      * por una, y anadir la siguiente obliga a escribir su razon en el mismo
      * sitio donde cualquiera la va a leer.
+     *
+     * <h2>Por que hay DOS mapas y no uno</h2>
+     * Habia uno solo, consultado <b>antes</b> de mirar que guarda tocaba, asi
+     * que una exencion escrita pensando en la PROPIEDAD eximia al mismo metodo
+     * en el universo del ENCARGO. {@code cerrarLocal} estaba exento en los dos
+     * por una unica entrada: se sostenia <b>por suerte, no por construccion</b>.
+     * Era la fusion "que llame a la autoridad, la que sea" —la misma que este
+     * gate quito del lado de las guardas— reintroducida por el lado de las
+     * exenciones. Un metodo que necesite las dos ahora lo dice dos veces, cada
+     * vez con su razon.
      */
-    private static final Map<String, String> SIN_AUTORIDAD_PROPIA = Map.of(
+    private static final Map<String, String> SIN_AUTORIDAD_DE_LA_PROPIEDAD = Map.of(
             "com.controllocal.service.impl.PropiedadUniversalServiceImpl#registrar",
-            "el alta CREA la fila: no hay responsable anterior a quien respetar. Fija el "
-                    + "suyo por AutoridadDePropiedad.fijarAlAlta, que es lo contrario de "
-                    + "saltarse la autoridad",
+            "el alta CREA la fila: no hay responsable anterior a quien respetar. Fija "
+                    + "el suyo por AutoridadDePropiedad.fijarAlAlta y lo deja escrito por "
+                    + "anotarElAlta (V88), que es lo contrario de saltarse la autoridad. "
+                    + "Solo vale para una propiedad NUEVA: reutilizar una existente jamas "
+                    + "puede pasar por aqui, y el indice parcial uq_asignacion_alta_por_"
+                    + "propiedad lo impide en la base",
 
             "com.controllocal.service.impl.PropiedadUniversalServiceImpl#asignarResponsable",
             "ES el traspaso: llama a AutoridadDePropiedad.asignar, que exige broker. "
@@ -161,7 +279,63 @@ class AutoridadDeLaPropiedadTest {
             "com.controllocal.service.impl.ContratoServiceImpl#revisarDisponibilidad",
             "misma razon que cerrarLocal, al reves: recupera la disponibilidad cuando el "
                     + "contrato termina. Exigirla dejaria todo inmueble ALQUILADO para "
-                    + "siempre");
+                    + "siempre",
+
+            "com.controllocal.service.soporte.AtributosGobernados#escribirAlAlta",
+            "es el ALTA y solo el alta: escribe los gobernados de una propiedad que acaba "
+                    + "de nacer, cuyo responsable lo acaba de fijar fijarAlAlta unas lineas "
+                    + "antes. Su gemelo de edicion -escribirEnEdicion- SI exige la "
+                    + "autoridad, y el nombre de este metodo es la unica forma de llegar al "
+                    + "camino del alta",
+
+            "com.controllocal.service.soporte.AtributosGobernados#aplicarEstructuralesAlAlta",
+            "la otra mitad del alta en dos tiempos: aplica las claves ESTRUCTURAL sobre el "
+                    + "agregado ANTES del primer save, cuando la fila todavia no tiene id. "
+                    + "Misma razon que escribirAlAlta");
+
+    /**
+     * <b>Las excepciones del universo ENCARGO, con su motivo.</b>
+     *
+     * <p>Lista aparte de la de la propiedad, y esa separacion es la correccion:
+     * una exencion concedida en un universo ya no vale en el otro.
+     */
+    private static final Map<String, String> SIN_AUTORIDAD_DEL_ENCARGO = Map.of(
+            "com.controllocal.service.impl.ContratoServiceImpl#cerrarLocal",
+            "cierra el contrato y con el la serie: escribe el hito 'C' del encargo que se "
+                    + "firmo. Lo ejecuta el BROKER, que nunca es agente de un encargo, asi "
+                    + "que exigirEdicionDelEncargo aqui significaria que ningun contrato se "
+                    + "puede cerrar. Es la MISMA exencion que en el universo de la "
+                    + "propiedad, y esta escrita dos veces a proposito: alli el motivo es la "
+                    + "disponibilidad del inmueble, aqui es el hito economico. Una sola "
+                    + "entrada para las dos ocultaba que son dos decisiones",
+
+            "com.controllocal.service.soporte.AtributosDeEncargo#escribir",
+            "no puede preguntar: recibe Comercializacion -un record con idCaptacion, tipo y "
+                    + "operacion-, no la entidad Captacion, y exigirEdicionDelEncargo "
+                    + "necesita la fila para saber de quien es. Sus DOS unicos llamadores "
+                    + "estan medidos y los dos responden: actualizarEncargo llama a "
+                    + "exigirEdicionDelEncargo antes, y el alta del encargo lo esta creando "
+                    + "en ese mismo instante. Deuda declarada: darle la Captacion para que "
+                    + "pueda exigirla por si mismo, como ya hace AtributosGobernados",
+
+            "com.controllocal.service.soporte.AtributosDeEncargo#retirar",
+            "misma razon y mismos llamadores que escribir",
+
+            "com.controllocal.service.impl.PropiedadUniversalServiceImpl#abrirEncargo",
+            "ABRE el encargo: escribe su primer hito 'U' y las condiciones que se pactaron "
+                    + "al abrirlo. No hay agente anterior a quien respetar porque el encargo "
+                    + "nace aqui, y su agente es el actor. Este metodo aparecio al separar "
+                    + "los dos mapas de exenciones: hasta entonces lo cubria, por el camino "
+                    + "de sus llamadores, la exencion que `registrar` tenia declarada para "
+                    + "el universo de la PROPIEDAD -- una exencion de un universo tapando un "
+                    + "hueco del otro, que es justo lo que la separacion vino a impedir",
+
+            "com.controllocal.service.impl.ProspeccionServiceImpl#captar",
+            "convierte una prospeccion en encargo: tambien lo CREA. Ya tiene su autoridad "
+                    + "-cargarEnProceso exige que la prospeccion sea del actor- y el hito que "
+                    + "escribe es el de entrada al mercado del encargo que acaba de abrir. "
+                    + "Estaba declarado solo para el universo de la PROPIEDAD y se colaba en "
+                    + "este por el mapa unico");
 
     /**
      * <b>Solo la autoridad mueve la autoridad.</b>
@@ -221,7 +395,7 @@ class AutoridadDeLaPropiedadTest {
     }
 
     /**
-     * <b>La comprobacion que caza el olvido real: la via numero nueve.</b>
+     * <b>La comprobacion que caza el olvido real: la via SIGUIENTE.</b>
      *
      * <p>Se recorre <b>dos veces</b>, una por universo, y con la guarda que le
      * toca a cada uno. Esa separacion no es elegancia: es la correccion que
@@ -256,12 +430,14 @@ class AutoridadDeLaPropiedadTest {
                             + "empezo todo esto. Encontro: " + nombres);
         }
 
-        assertEquals(List.of(), sinGuarda(escrituras, GUARDAS_DE_LA_PROPIEDAD),
+        List<String> sinGuarda = sinGuarda(escrituras, GUARDAS_DE_LA_PROPIEDAD,
+                SIN_AUTORIDAD_DE_LA_PROPIEDAD);
+        assertEquals(List.of(), sinGuarda,
                 "estos metodos escriben un hecho de la PROPIEDAD sin preguntar quien responde "
-                        + "por ella: " + sinGuarda(escrituras, GUARDAS_DE_LA_PROPIEDAD)
+                        + "por ella: " + sinGuarda
                         + ". Tiene que ser exigirEdicion -- no vale exigirEdicionDelEncargo, que "
-                        + "responde otra pregunta. O eso, o entran en SIN_AUTORIDAD_PROPIA con "
-                        + "el motivo escrito.");
+                        + "responde otra pregunta. O eso, o entran en "
+                        + "SIN_AUTORIDAD_DE_LA_PROPIEDAD con el motivo escrito.");
     }
 
     /**
@@ -271,7 +447,7 @@ class AutoridadDeLaPropiedadTest {
      * o {@code C} no es un hecho del inmueble, es un hecho del trato que lo
      * autorizo. De aqui salio el hallazgo de este corte —
      * {@code PublicacionServiceImpl}, que escribia un {@code P} en la serie de
-     * cualquier encargo del tenant— y no estaba en el inventario de ocho vias:
+     * cualquier encargo del tenant— y no estaba en el inventario inicial de vias:
      * lo encontro este gate.
      */
     @Test
@@ -282,16 +458,18 @@ class AutoridadDeLaPropiedadTest {
 
         assertTrue(nombres.size() >= 4,
                 "el gate dejo de reconocer las escrituras de la SERIE ECONOMICA: encontro "
-                        + nombres + ". Revisa REPOSITORIOS_DE_LA_SERIE antes de creerte el verde.");
+                        + nombres + ". Revisa REPOSITORIOS_DEL_ENCARGO antes de creerte el verde.");
         assertTrue(nombres.contains(
                         "com.controllocal.service.impl.PublicacionServiceImpl"
                                 + "#registrarImportePublicado"),
                 "el gate no ve la escritura de hito desde la publicacion, que es justo la que "
                         + "nadie habia inventariado. Encontro: " + nombres);
 
-        assertEquals(List.of(), sinGuarda(escrituras, GUARDAS_DEL_ENCARGO),
-                "estos metodos escriben en la serie economica de un encargo sin comprobar que "
-                        + "sea del actor: " + sinGuarda(escrituras, GUARDAS_DEL_ENCARGO)
+        List<String> sinGuarda = sinGuarda(escrituras, GUARDAS_DEL_ENCARGO,
+                SIN_AUTORIDAD_DEL_ENCARGO);
+        assertEquals(List.of(), sinGuarda,
+                "estos metodos escriben un hecho de un ENCARGO sin comprobar que sea del "
+                        + "actor: " + sinGuarda
                         + ". Tiene que ser exigirEdicionDelEncargo -- no vale exigirEdicion, "
                         + "porque responder por la propiedad no es responder por el encargo de "
                         + "otro.");
@@ -315,9 +493,10 @@ class AutoridadDeLaPropiedadTest {
         return metodos.stream().map(AutoridadDeLaPropiedadTest::nombre).distinct().sorted().toList();
     }
 
-    private List<String> sinGuarda(List<JavaMethod> escrituras, Set<String> guardas) {
+    private List<String> sinGuarda(List<JavaMethod> escrituras, Set<String> guardas,
+                                   Map<String, String> exentos) {
         return escrituras.stream()
-                .filter(m -> !cubierto(m, guardas, new HashSet<>()))
+                .filter(m -> !cubierto(m, guardas, exentos, new HashSet<>()))
                 .map(AutoridadDeLaPropiedadTest::nombre)
                 .distinct()
                 .sorted()
@@ -329,29 +508,158 @@ class AutoridadDeLaPropiedadTest {
     }
 
     /**
-     * <b>Y el gate cubre las cuatro tablas que son la propiedad</b>, no las que
-     * recuerde.
+     * <b>Ninguna tabla del inmueble se queda sin clasificar.</b>
      *
-     * <p>Control de cobertura, no documentacion: es la contramedida al fallo que
-     * ya ocurrio en 4.P, donde se inventariaron los productores de cuatro tablas
-     * y no los de cuatro columnas, y el gate quedo verde vigilando la mitad.
+     * <p>Este es el control que <b>no podia existir</b> en la version anterior.
+     * Aquella recorria el mismo {@code Set} que declaraba —"para cada
+     * repositorio que he declarado, ¿veo alguna escritura suya?"— asi que una
+     * tabla <b>ausente</b> del conjunto era invisible por construccion: el gate
+     * no puede echar de menos lo que no se ha nombrado. Es, exactamente, la
+     * forma del fallo de 4.P que decia prevenir.
+     *
+     * <p>La correccion es comparar contra una fuente <b>independiente</b>: las
+     * entidades JPA reales del paquete del inmueble, leidas del bytecode. Cada
+     * tabla que aparezca tiene que estar clasificada en uno de los tres sitios
+     * —universo PROPIEDAD, universo ENCARGO, o exclusion con motivo— y una
+     * entidad nueva pone esto en rojo hasta que alguien decida cual es.
      */
     @Test
-    @DisplayName("el gate ve escrituras en las cuatro tablas de la propiedad")
-    void elGateCubreLasCuatroTablas() {
-        for (String repositorio : REPOSITORIOS_DE_LA_PROPIEDAD) {
+    @DisplayName("toda tabla del inmueble esta vigilada o excluida con motivo")
+    void ningunaTablaDelInmuebleSinClasificar() {
+        Set<String> clasificadas = new HashSet<>(TABLAS_DE_LA_PROPIEDAD.values());
+        clasificadas.addAll(TABLAS_DEL_ENCARGO.values());
+        clasificadas.addAll(FUERA_DEL_GOBIERNO_DE_LA_PROPIEDAD.keySet());
+
+        List<String> entidades = CLASES.stream()
+                .filter(clase -> PAQUETE_DEL_INMUEBLE.equals(clase.getPackageName()))
+                .filter(clase -> clase.isAnnotatedWith(Entity.class))
+                .map(clase -> clase.getAnnotationOfType(Table.class).name())
+                .sorted()
+                .toList();
+
+        // CONTROL POSITIVO. Si el paquete cambiara de nombre, o las entidades
+        // dejaran de llevar @Table, esta lista saldria vacia y el bucle de abajo
+        // no compararia nada -- verde sin haber mirado. Es la leccion del
+        // barrido de `grep -iF` del 2026-08-24: un cero sin control positivo no
+        // es una medicion.
+        assertTrue(entidades.size() >= 10,
+                "se esperaban las entidades JPA de " + PAQUETE_DEL_INMUEBLE + " y se "
+                        + "encontraron " + entidades.size() + ": " + entidades + ". Sin ellas "
+                        + "este control no compara nada y su verde no significa nada.");
+        assertTrue(entidades.contains("propiedad"),
+                "no se ve la tabla `propiedad` entre las entidades del paquete: " + entidades);
+
+        List<String> huerfanas = entidades.stream()
+                .filter(tabla -> !clasificadas.contains(tabla))
+                .distinct()
+                .sorted()
+                .toList();
+        assertEquals(List.of(), huerfanas,
+                "estas tablas del inmueble no estan ni vigiladas ni excluidas: " + huerfanas
+                        + ". Decide: si guardan un hecho gobernado de la propiedad van a "
+                        + "TABLAS_DE_LA_PROPIEDAD; si es del trato, a TABLAS_DEL_ENCARGO; si no "
+                        + "es ninguna de las dos, a FUERA_DEL_GOBIERNO_DE_LA_PROPIEDAD con el "
+                        + "motivo escrito. Lo que no puede es quedarse sin respuesta: asi quedo "
+                        + "atributo_propiedad fuera del gate, y ahi vive casi todo lo gobernado.");
+
+        // Y lo declarado no puede sobrar: una exclusion para una tabla que ya no
+        // existe es ruido que hace creer que se penso en algo.
+        List<String> excluidasFantasma = FUERA_DEL_GOBIERNO_DE_LA_PROPIEDAD.keySet().stream()
+                .filter(tabla -> !entidades.contains(tabla))
+                .sorted()
+                .toList();
+        assertEquals(List.of(), excluidasFantasma,
+                "estas exclusiones ya no corresponden a ninguna entidad del paquete: "
+                        + excluidasFantasma + ". Borralas.");
+    }
+
+    /**
+     * <b>Y cada repositorio declarado se ve de verdad escribiendo.</b>
+     *
+     * <p>Complemento del anterior y no un duplicado: aquel comprueba que no
+     * falte ninguna tabla, este que ninguna de las declaradas haya dejado de
+     * reconocerse. Un repositorio renombrado, movido de paquete o con otro
+     * metodo de escritura dejaria de aparecer y el gate seguiria verde
+     * vigilandolo sobre el papel.
+     */
+    @Test
+    @DisplayName("el gate ve escrituras reales en cada tabla que declara vigilar")
+    void elGateVeEscriturasEnCadaTablaVigilada() {
+        Map<String, String> vigiladas = new java.util.HashMap<>(TABLAS_DE_LA_PROPIEDAD);
+        vigiladas.putAll(TABLAS_DEL_ENCARGO);
+        for (Map.Entry<String, String> entrada : vigiladas.entrySet()) {
             boolean alguna = CLASES.stream()
                     .filter(clase -> clase.getPackageName().startsWith("com.controllocal.service"))
                     .flatMap(clase -> clase.getMethods().stream())
                     .anyMatch(m -> m.getAccessesFromSelf().stream()
-                            .anyMatch(a -> repositorio.equals(a.getTargetOwner().getFullName())
+                            .anyMatch(a -> entrada.getKey().equals(a.getTargetOwner().getFullName())
                                     && ESCRIBEN.contains(a.getName())));
             assertTrue(alguna,
-                    "el gate no encuentra NINGUNA escritura por " + repositorio + ". O el "
+                    "el gate no encuentra NINGUNA escritura por " + entrada.getKey() + ", que "
+                            + "declara vigilar la tabla `" + entrada.getValue() + "`. O el "
                             + "repositorio cambio de nombre o de paquete, o su metodo de "
                             + "escritura ya no se llama como los de ESCRIBEN. En cualquiera de "
                             + "los dos casos esa tabla ha dejado de estar vigilada.");
         }
+    }
+
+    /**
+     * <b>La decision que este gate protege tiene que VIAJAR con el codigo.</b>
+     *
+     * <h2>Por que es una comprobacion y no una nota</h2>
+     * `docs/ai/*` esta en `.gitignore` con una lista blanca de excepciones. Es
+     * deliberado —solo viaja lo que un clon limpio necesita— pero tiene un
+     * filo: <b>un documento que gobierna y no viaja no gobierna nada</b>. El
+     * clon no lo tiene, el auditor no lo ve, y la unica copia vive en el disco
+     * de una maquina.
+     *
+     * <p>Esta prueba cierra ese filo por el unico camino que no depende de que
+     * alguien se acuerde: <b>lee el fichero</b>. En el arbol de trabajo pasa
+     * siempre; en un <b>clon limpio</b> solo pasa si el documento esta en la
+     * lista blanca de `.gitignore`. Y la corrida de cierre se ejecuta tambien
+     * desde un clon limpio, asi que sacar la decision de la lista pone el
+     * cierre en <b>rojo</b> en vez de dejar la regla huerfana en silencio.
+     *
+     * <h2>Lo que NO dice</h2>
+     * No dice que el documento sea correcto ni que este al dia. Dice que
+     * <b>existe donde el codigo lo cita</b>. Que la regla sea la que el codigo
+     * aplica lo prueban las otras comprobaciones de esta clase y las de
+     * integracion.
+     */
+    @Test
+    @DisplayName("la decision que gobierna esta autoridad viaja con el codigo")
+    void laAutoridadQueGobiernaViajaConElCodigo() throws IOException {
+        for (String documento : List.of(
+                "decision-autoridad-de-edicion-de-la-propiedad.md",
+                "decision-brox-intelligence-alcances-y-frontera.md")) {
+            Path ruta = RAIZ.resolve("docs/ai").resolve(documento);
+            assertTrue(Files.isRegularFile(ruta),
+                    "falta " + ruta + ". O el documento se borro, o salio de la lista blanca "
+                            + "de .gitignore -- y entonces un clon limpio no lo tiene y la regla "
+                            + "que este gate protege se quedo sin autoridad escrita.");
+            assertTrue(Files.readString(ruta, StandardCharsets.UTF_8).length() > 1000,
+                    ruta + " esta practicamente vacio: existe el fichero pero no la decision.");
+        }
+    }
+
+    /**
+     * La raiz del repositorio, resuelta subiendo desde el directorio de trabajo
+     * del modulo. Igual que hace {@code FronteraKairosTest} para leer el POM.
+     */
+    private static final Path RAIZ = raizDelRepositorio();
+
+    private static Path raizDelRepositorio() {
+        Path actual = Path.of("").toAbsolutePath();
+        while (actual != null && !Files.isDirectory(actual.resolve("docs/ai"))) {
+            actual = actual.getParent();
+        }
+        if (actual == null) {
+            throw new AssertionError(
+                    "no se encontro la raiz del repositorio subiendo desde "
+                            + Path.of("").toAbsolutePath() + ": sin ella esta comprobacion no "
+                            + "puede mirar nada, y un verde aqui no significaria nada.");
+        }
+        return actual;
     }
 
     // ------------------------------------------------------------------
@@ -359,7 +667,8 @@ class AutoridadDeLaPropiedadTest {
     // ------------------------------------------------------------------
 
     /**
-     * Escribe la propiedad quien guarda en una de sus cuatro tablas, o quien
+     * Escribe la propiedad quien guarda en una de las tablas declaradas en
+     * {@link #TABLAS_DE_LA_PROPIEDAD}, o quien
      * transiciona su estado.
      *
      * <p>La segunda mitad no es opcional: {@code desactivar} no llama a
@@ -390,7 +699,7 @@ class AutoridadDeLaPropiedadTest {
     /** Escribe la serie economica quien guarda un hito de precio. */
     private static boolean escribeLaSerie(JavaMethod metodo) {
         return metodo.getAccessesFromSelf().stream().anyMatch(a ->
-                REPOSITORIOS_DE_LA_SERIE.contains(a.getTargetOwner().getFullName())
+                REPOSITORIOS_DEL_ENCARGO.contains(a.getTargetOwner().getFullName())
                         && ESCRIBEN.contains(a.getName()));
     }
 
@@ -410,8 +719,12 @@ class AutoridadDeLaPropiedadTest {
      * metodo sin ningun llamador dentro de su clase es publico de hecho, y
      * entonces la tercera rama no aplica y tiene que responder por si mismo.
      */
-    private static boolean cubierto(JavaMethod metodo, Set<String> guardas, Set<String> visitados) {
-        if (SIN_AUTORIDAD_PROPIA.containsKey(nombre(metodo))) {
+    private static boolean cubierto(JavaMethod metodo, Set<String> guardas,
+                                    Map<String, String> exentos, Set<String> visitados) {
+        // La exencion se consulta en el mapa DEL UNIVERSO que se esta
+        // recorriendo. Con un mapa unico, una exencion escrita para la PROPIEDAD
+        // eximia el mismo metodo cuando se median los hechos del ENCARGO.
+        if (exentos.containsKey(nombre(metodo))) {
             return true;
         }
         if (consultaLaAutoridad(metodo, guardas, new HashSet<>())) {
@@ -429,7 +742,8 @@ class AutoridadDeLaPropiedadTest {
                                 && a.getName().equals(metodo.getName())))
                 .toList();
         return !llamadores.isEmpty()
-                && llamadores.stream().allMatch(otro -> cubierto(otro, guardas, visitados));
+                && llamadores.stream()
+                        .allMatch(otro -> cubierto(otro, guardas, exentos, visitados));
     }
 
     /**

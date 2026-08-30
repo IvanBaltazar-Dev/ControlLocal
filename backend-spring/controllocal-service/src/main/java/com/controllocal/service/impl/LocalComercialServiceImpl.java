@@ -24,6 +24,7 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.AlertaService;
 import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.Pagina;
+import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PublicacionService;
 import com.controllocal.service.excepcion.ReglaNegocioException;
@@ -251,7 +252,7 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     public Optional<FichaLocal> buscarPorId(long id, Actor actor) {
         validarId(id, "El id de local comercial");
         return propiedades.buscarFicha(actor.idOrganizacion(), id)
-                .map(p -> fichaCompleta(actor.idOrganizacion(), p));
+                .map(p -> fichaCompleta(actor, p));
     }
 
     @Override
@@ -308,7 +309,10 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         List<FichaLocal> items = pagina.stream()
                 .map(p -> ficha(p, estadosPublicacion.get(p.getId()), portadas.get(p.getId()),
                         nombrePropietario(p),
-                        LectorPorAutoridad.de(valores, p.getId())))
+                        LectorPorAutoridad.de(valores, p.getId()),
+                        // Listado: misma razon que el otro. La cartera propia
+                        // del agente no pinta botones de escritura por fila.
+                        null))
                 .toList();
         return new Pagina<>(items, pagina.getTotalElements());
     }
@@ -473,14 +477,23 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         return List.copyOf(criterios);
     }
 
-    /** Ficha del detalle: portada real y estado de publicacion frescos (GET/PUT). */
-    private FichaLocal fichaCompleta(long idOrganizacion, Propiedad p) {
+    /**
+     * Ficha del detalle: portada real, estado de publicacion frescos y
+     * <b>la autoridad de escritura ya resuelta</b> (GET/PUT).
+     *
+     * <p>Recibe el {@code Actor} entero y no solo su organizacion porque la
+     * autoridad depende de <b>quien</b> mira, no solo de <b>desde donde</b>. Es
+     * el cambio que arregla la ficha del encargo: su galeria decidia en Angular
+     * con la regla derogada ("si eres AGENTE") y ofrecia dos botones que el
+     * backend rechaza desde V87.
+     */
+    private FichaLocal fichaCompleta(Actor actor, Propiedad p) {
         String portada = fotos.findByIdPropiedadOrderByOrdenAscIdAsc(p.getId()).stream()
                 .findFirst()
                 .map(FotoPropiedad::getClave)
                 .orElse(null);
         return ficha(p, publicaciones.codigoEstadoPublicacion(p.getId()), portada, nombrePropietario(p),
-                lector.de(idOrganizacion, p));
+                lector.de(actor.idOrganizacion(), p), autoridad.responsabilidadDe(actor, p));
     }
 
     /**
@@ -504,7 +517,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
      * {@code ambientes} se promoviera a estructural, aqui no cambia una linea.
      */
     private FichaLocal ficha(Propiedad p, String estadoPublicacion, String fotoPortadaClave,
-                             String propietarioNombre, ValoresGobernados valores) {
+                             String propietarioNombre, ValoresGobernados valores,
+                             PropiedadUniversalService.Responsabilidad responsabilidad) {
 
         return new FichaLocal(
                 p.getId(), p.getCodigo(), p.getDireccion(), p.getDistrito(), p.getMetraje(),
@@ -525,7 +539,8 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 valores.decimal(CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO), p.getIdDistrito(),
                 Fechas.local(p.getFechaRegistro()), fotoPortadaClave,
                 p.getEstadoRegistro(), p.getDisponibilidadComercial(), p.getInteriorUnidad(),
-                p.getPiso(), p.getReferenciaInterna(), p.getNombreEdificioGaleria());
+                p.getPiso(), p.getReferenciaInterna(), p.getNombreEdificioGaleria(),
+                responsabilidad);
     }
 
     /**
@@ -553,6 +568,9 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 valores.entero(CatalogoAtributo.CLAVE_ESTACIONAMIENTOS),
                 valores.decimal(CatalogoAtributo.CLAVE_CUOTA_MANTENIMIENTO), p.getIdDistrito(),
                 Fechas.local(p.getFechaRegistro()), fotoPortadaClave,
-                null, null, null, null, null, null);
+                // El listado no ofrece acciones de escritura por fila, asi que
+                // no resuelve la autoridad: costaria una consulta por fila para
+                // pintar nada. Ausente = el cliente no ofrece el boton.
+                null, null, null, null, null, null, null);
     }
 }

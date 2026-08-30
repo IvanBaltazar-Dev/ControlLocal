@@ -685,9 +685,21 @@ public interface PropiedadUniversalService {
      * @param motivoTexto     el mismo motivo en palabras, escrito por el Core.
      *                        El cliente pinta este texto y no traduce el codigo:
      *                        dos redacciones del mismo rechazo se separan
+     * @param puedeTraspasar  si <b>este</b> actor puede cambiar quien responde
+     *                        (C3). Viaja resuelto por la misma razon que
+     *                        {@code puedeEditar}: sin el, la pantalla tendria
+     *                        que preguntar por el rol de la sesion —
+     *                        {@code rol !== 'AGENTE'}— y eso es otra vez una
+     *                        copia de la regla en el cliente, la misma que este
+     *                        P0 acaba de quitar de dos pantallas.
+     *                        <p>Dice si la accion se <b>ofrece</b>, no si un
+     *                        traspaso concreto se permite: el alcance sobre el
+     *                        agente destino lo decide {@code asignar}, y la
+     *                        lista de destinos posibles ya la acota
+     *                        {@code GET /agentes}, que es scoped por supervision
      */
     record Responsabilidad(Long idResponsable, String nombre, boolean puedeEditar,
-                           String motivo, String motivoTexto) {
+                           String motivo, String motivoTexto, boolean puedeTraspasar) {
     }
 
     /** Que produjo el alta. {@code reintento} avisa de que ya existia. */
@@ -774,12 +786,16 @@ public interface PropiedadUniversalService {
      * <p>Lleva las cinco cosas que hacen falta para auditarlo, y el
      * {@code anterior} viaja {@code null} cuando la propiedad estaba FALTANTE:
      * ese hueco es informacion —dice que no habia predecesor— y no se rellena
-     * con el agente de ningun encargo.
+     *
+     * <p>{@code origen} dice si la fijo el ALTA de una propiedad nueva o un
+     * TRASPASO de broker. Viaja porque son dos hechos distintos y el
+     * expediente tiene que poder distinguirlos: no se deducen del predecesor,
+     * porque la primera asignacion de una propiedad FALTANTE tampoco lo tiene.
      */
     record TraspasoDeResponsable(Long id, Long idPropiedad,
                                  Long idResponsableAnterior, String responsableAnterior,
                                  Long idResponsableNuevo, String responsableNuevo,
-                                 Long idPersonaActor, String rolActor,
+                                 Long idPersonaActor, String rolActor, String origen,
                                  String motivo, LocalDateTime fecha) {
     }
 

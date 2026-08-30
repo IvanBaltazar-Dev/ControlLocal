@@ -12,6 +12,7 @@ import {
   LocalesService,
   PrecioLocal,
 } from '../../core/api/locales.service';
+import { Responsabilidad } from '../../core/api/propiedades.service';
 import { Propietario, PropietariosService } from '../../core/api/propietarios.service';
 import { ArchivoPreparado } from '../../core/archivos/archivos.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -130,7 +131,10 @@ describe('FichaPropiedad', () => {
       'subirFoto',
       'eliminarFoto',
     ]);
-    locales.obtener$.and.returnValue(of(LOCAL));
+    // Por defecto, quien mira ES el responsable: es el caso normal y deja que
+    // el resto de pruebas hablen de otra cosa. Los demás casos de autoridad se
+    // piden con `conAutoridad(...)`, que sustituye este stub.
+    locales.obtener$.and.returnValue(of({ ...LOCAL, responsabilidad: responde() }));
     locales.precios$.and.returnValue(of([PRECIO]));
     locales.fotos$.and.returnValue(of([FOTO]));
     locales.fotos.and.resolveTo([FOTO]);
@@ -291,8 +295,28 @@ describe('FichaPropiedad', () => {
     expect(texto(fixture)).toContain('fuera de tu alcance');
   });
 
-  describe('permisos de la galería', () => {
-    it('el agente puede agregar y eliminar fotos', async () => {
+  /**
+   * **Quién escribe las fotos** (P0).
+   *
+   * Este bloque decía otra cosa, y su verde era el problema: afirmaba
+   * `it('el agente puede agregar y eliminar fotos')` y comprobaba que un agente
+   * cualquiera veía «Agregar fotos». Ese invariante quedó **derogado por V87**
+   * —las fotos son la ficha del inmueble, así que las escribe **su
+   * responsable**—, pero el test seguía verde y por eso el defecto sobrevivió a
+   * un corte entero: la pantalla ofrecía los dos botones a todo agente sobre
+   * toda propiedad y el backend respondía **403 siempre**.
+   *
+   * La lección no es «faltaba un caso»: es que **un test puede fijar una regla
+   * que ya no existe**, y entonces protege el defecto en vez del invariante.
+   * Por eso ahora los casos se nombran por la **autoridad**, que es lo que
+   * decide, y no por el rol, que ya no decide nada aquí.
+   *
+   * El rol de la sesión sigue viajando al montar porque otras partes de la
+   * ficha lo usan; para la galería es **irrelevante a propósito** — hay un caso
+   * que lo comprueba.
+   */
+  describe('quién escribe las fotos (P0)', () => {
+    it('el responsable del inmueble agrega y elimina', async () => {
       const fixture = await montar('AGENTE');
       const html = texto(fixture);
       expect(html).toContain('Agregar fotos');
@@ -307,28 +331,73 @@ describe('FichaPropiedad', () => {
       expect(locales.eliminarFoto).toHaveBeenCalledOnceWith(77, FOTO.idFoto);
     });
 
-    it('el broker ve la galería pero no puede escribir en ella', async () => {
-      const fixture = await montar('BROKER');
+    it('OTRO responsable: ni botones ni escritura, y se dice por qué', async () => {
+      // El caso que el test viejo no tenía: un AGENTE de pleno derecho, con su
+      // sesión válida, sobre una propiedad de otro. Antes veía los dos botones.
+      conAutoridad(deOtro());
+      const fixture = await montar('AGENTE');
       const html = texto(fixture);
 
       expect(html).toContain('Galería del local');
       expect(html).not.toContain('Agregar fotos');
       expect(html).not.toContain('Eliminar');
-    });
+      // Y no desaparecen en silencio: el motivo lo escribe el Core.
+      expect(html).toContain('responde otro agente');
+      expect(html).toContain('Ana Responsable');
 
-    it('un rol sin permiso tampoco escribe llamando al método directamente', async () => {
-      // Ocultar el botón no basta: la acción misma tiene que negarse.
-      const fixture = await montar('BROKER');
       const acceso = fixture.componentInstance as unknown as AccesoFicha;
-
       await acceso.fotosElegidas([archivo()]);
       await acceso.eliminarFoto(FOTO.idFoto);
-
       expect(locales.subirFoto).not.toHaveBeenCalled();
       expect(locales.eliminarFoto).not.toHaveBeenCalled();
     });
 
-    it('el admin tampoco escribe: las fotos son del agente', async () => {
+    it('propiedad FALTANTE: nadie escribe, y el motivo lo dice', async () => {
+      // Es el caso que hoy manda: las 26 propiedades de `dev` están FALTANTE.
+      conAutoridad(faltante());
+      const fixture = await montar('AGENTE');
+      const html = texto(fixture);
+
+      expect(html).not.toContain('Agregar fotos');
+      expect(html).toContain('no tiene agente responsable');
+
+      const acceso = fixture.componentInstance as unknown as AccesoFicha;
+      await acceso.fotosElegidas([archivo()]);
+      expect(locales.subirFoto).not.toHaveBeenCalled();
+    });
+
+    it('sin bloque de autoridad en el cable, no se ofrece nada', async () => {
+      // Jackson va NON_NULL: un `responsabilidad` ausente llega `undefined`, no
+      // `null`. Se cae del lado que NO ofrece el botón, igual que la ficha
+      // universal y el editor — antes cada pantalla elegía su propio defecto.
+      conAutoridad(undefined);
+      const fixture = await montar('AGENTE');
+
+      expect(texto(fixture)).not.toContain('Agregar fotos');
+      const acceso = fixture.componentInstance as unknown as AccesoFicha;
+      await acceso.fotosElegidas([archivo()]);
+      expect(locales.subirFoto).not.toHaveBeenCalled();
+    });
+
+    // Dos pruebas y no un bucle: `TestBed.configureTestingModule` no se puede
+    // llamar dos veces en el mismo `it` -- el segundo montaje falla con
+    // «the test module has already been instantiated».
+    it('el BROKER ve la galería y no la escribe', async () => {
+      conAutoridad(noOpera());
+      const fixture = await montar('BROKER');
+      const html = texto(fixture);
+
+      expect(html).toContain('Galería del local');
+      expect(html).not.toContain('Agregar fotos');
+      expect(html).toContain('Supervisar y gobernar no es registrar');
+
+      const acceso = fixture.componentInstance as unknown as AccesoFicha;
+      await acceso.fotosElegidas([archivo()]);
+      expect(locales.subirFoto).not.toHaveBeenCalled();
+    });
+
+    it('el gobierno del tenant tampoco escribe: las fotos son del responsable', async () => {
+      conAutoridad(noOpera());
       const fixture = await montar('TENANT_ADMIN');
       const acceso = fixture.componentInstance as unknown as AccesoFicha;
 
@@ -336,6 +405,17 @@ describe('FichaPropiedad', () => {
 
       expect(locales.subirFoto).not.toHaveBeenCalled();
       expect(texto(fixture)).not.toContain('Agregar fotos');
+    });
+
+    it('la galería NO mira el rol de la sesión: manda la autoridad del cable', async () => {
+      // El caso que cierra la puerta a que vuelva la copia de la regla. Un
+      // BROKER cuya respuesta dijera `puedeEditar` escribiría — porque quien
+      // decide es el Core, no esta pantalla. Si alguien reintrodujera un
+      // `sesion()?.rol === 'AGENTE'`, esto se pone rojo.
+      conAutoridad(responde());
+      const fixture = await montar('BROKER');
+
+      expect(texto(fixture)).toContain('Agregar fotos');
     });
   });
 
@@ -394,6 +474,57 @@ describe('FichaPropiedad', () => {
       expect(diasHasta('', hoy)).toBeNull();
     });
   });
+
+  /**
+   * La autoridad tal como la resuelve el Core, con los textos que él escribe.
+   *
+   * Se declaran los cuatro casos del cable —responde, otro responde, FALTANTE y
+   * «gobernar no es registrar»— porque son los que la pantalla tiene que saber
+   * distinguir. El quinto, **ausente**, no necesita fábrica: es `undefined`.
+   */
+  /** Sustituye la ficha del local por una con OTRA autoridad. */
+  function conAutoridad(responsabilidad: Responsabilidad | undefined): void {
+    locales.obtener$.and.returnValue(of({ ...LOCAL, responsabilidad }));
+  }
+
+  function responde(): Responsabilidad {
+    return { idResponsable: 2, nombre: 'Prueba', puedeEditar: true };
+  }
+
+  function deOtro(): Responsabilidad {
+    return {
+      idResponsable: 99,
+      nombre: 'Ana Responsable',
+      puedeEditar: false,
+      motivo: 'OTRO_RESPONSABLE',
+      motivoTexto:
+        'De esta propiedad responde otro agente. Puedes consultarla, y puedes operar los ' +
+        'encargos que sean tuyos, pero sus datos los escribe su responsable.',
+    };
+  }
+
+  function faltante(): Responsabilidad {
+    return {
+      puedeEditar: false,
+      motivo: 'FALTA_RESPONSABLE',
+      motivoTexto:
+        'Esta propiedad no tiene agente responsable asignado, asi que todavia no la edita ' +
+        'nadie. Un broker tiene que asignarlo antes.',
+    };
+  }
+
+  function noOpera(): Responsabilidad {
+    return {
+      idResponsable: 2,
+      nombre: 'Prueba',
+      puedeEditar: false,
+      motivo: 'NO_OPERA',
+      motivoTexto:
+        'Supervisar y gobernar no es registrar: los hechos de la propiedad los escribe el ' +
+        'agente que responde por ella.',
+      puedeTraspasar: true,
+    };
+  }
 
   async function montar(
     rol: RolSesion = 'AGENTE',

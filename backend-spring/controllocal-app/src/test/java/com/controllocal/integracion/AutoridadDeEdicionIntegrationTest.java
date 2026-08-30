@@ -6,6 +6,7 @@ import com.controllocal.service.Actor;
 import com.controllocal.service.CaptacionService;
 import com.controllocal.service.LocalComercialService;
 import com.controllocal.service.PrecioLocalService;
+import com.controllocal.service.ProspeccionService;
 import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.PropiedadUniversalService.ComandoEdicion;
 import com.controllocal.service.PropiedadUniversalService.ComandoRegistro;
@@ -31,6 +32,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -89,6 +91,7 @@ class AutoridadDeEdicionIntegrationTest {
     @Autowired PrecioLocalService precios;
     @Autowired PublicacionService publicaciones;
     @Autowired CaptacionService captaciones;
+    @Autowired ProspeccionService prospecciones;
 
     // ==================================================================
     // 1. La estructura: la columna, su FK y el rastro
@@ -347,8 +350,10 @@ class AutoridadDeEdicionIntegrationTest {
      * <b>Sin responsable no edita nadie</b> — y no queda "de todos" en silencio.
      *
      * <p>Se llega al estado por SQL directo porque es exactamente el estado de
-     * las 26 propiedades de {@code controllocal_dev} y las 13.070 de la base de
-     * pruebas tras V87: la columna nacio NULL y no se rellenó. Reproducirlo
+     * la mayoria de las propiedades tras V87 -- en {@code controllocal_dev},
+     * de TODAS: la columna nacio NULL y no se rellena. La cifra exacta de la
+     * base de pruebas NO se escribe aqui porque las propias suites la mueven
+     * en cada corrida, y una cifra que caduca sola no es evidencia. Reproducirlo
      * escribiendo NULL es la unica forma de probar contra el dato que de verdad
      * hay.
      */
@@ -439,8 +444,17 @@ class AutoridadDeEdicionIntegrationTest {
         assertEquals(incorporoAntes, incorporoDe(idPropiedad),
                 "`id_rol_incorporo` es procedencia historica e inmutable: quien la incorporo la "
                         + "incorporo, y el traspaso de HOY no reescribe eso");
-        assertEquals(2, propiedades.traspasosDe(idPropiedad, nueva).size() + 1,
-                "el expediente acumula: un traspaso deja una fila y no borra las anteriores");
+        // El expediente acumula y DISTINGUE: el alta que la creo y el traspaso
+        // que la movio. Se compara el contenido y no un recuento -- un recuento
+        // no habria notado que el alta dejo de anotarse.
+        assertEquals(List.of("TRASPASO", "ALTA"),
+                // Se lee con el BROKER: desde C2 el expediente es superficie de
+                // GOBIERNO y el AGENTE no lo abre, ni siquiera el responsable
+                // vigente. Lo que esta prueba comprueba es el RASTRO, no quien
+                // puede leerlo -- eso lo mide AlcanceYGobierno...
+                propiedades.traspasosDe(idPropiedad, broker()).stream()
+                        .map(TraspasoDeResponsable::origen).toList(),
+                "un traspaso deja su fila y no borra la del alta");
     }
 
     // ==================================================================
@@ -585,19 +599,6 @@ class AutoridadDeEdicionIntegrationTest {
     // 10. El alta y la frontera de informacion
     // ==================================================================
 
-    @Test
-    @DisplayName("quien registra la propiedad responde por ella desde el alta")
-    void elAltaFijaAlResponsable() {
-        Actor quien = agente(0);
-        long idPropiedad = registrar(quien, "ALQUILER");
-        assertEquals(quien.idRolOperativo(), responsableDe(idPropiedad),
-                "el actor del alta es un hecho conocido, no una inferencia. La alternativa -que "
-                        + "toda propiedad nazca FALTANTE- dejaria al agente sin poder editar lo "
-                        + "que acaba de registrar");
-        assertEquals(0, propiedades.traspasosDe(idPropiedad, quien).size(),
-                "el alta no es un traspaso: no hay de quien a quien, y una fila «de nadie a mi» "
-                        + "convertiria cada alta en un cambio de manos");
-    }
 
     /**
      * <b>El responsable es dato de gobierno interno.</b>
@@ -698,6 +699,188 @@ class AutoridadDeEdicionIntegrationTest {
     }
 
     // ==================================================================
+    // 10. El ALTA fija el responsable — y SOLO el alta de una propiedad
+    //     NUEVA (decision del titular, 2026-08-30; V88)
+    // ==================================================================
+
+    @Test
+    @DisplayName("propiedad NUEVA: el registrante queda responsable y el alta deja su fila")
+    void elAltaFijaAlResponsableYLoDejaEnElExpediente() {
+        Actor quien = agente(0);
+        long idPropiedad = registrar(quien, "ALQUILER");
+
+        assertEquals(quien.idRolOperativo(), responsableDe(idPropiedad),
+                "el actor del alta es un hecho conocido, no una inferencia");
+
+        // Con el BROKER que lo supervisa: el expediente es gobierno (C2).
+        List<TraspasoDeResponsable> expediente = propiedades.traspasosDe(idPropiedad, broker());
+        assertEquals(1, expediente.size(),
+                "hasta V88 la columna aparecia poblada y el expediente no decia de donde "
+                        + "salio: un valor de autoridad sin acto que lo explique");
+        TraspasoDeResponsable alta = expediente.get(0);
+        assertEquals("ALTA", alta.origen(),
+                "y tiene que decir que nace del ALTA, no de un traspaso");
+        assertNull(alta.idResponsableAnterior(),
+                "no hay a quien desplazar: la propiedad acaba de existir. Y ese hueco es "
+                        + "informacion, no un campo por rellenar");
+        assertEquals(quien.idRolOperativo(), alta.idResponsableNuevo());
+        assertEquals(Actor.AGENTE, alta.rolActor(),
+                "la firma un AGENTE, que es justo lo que el CHECK de V87 no admitia");
+        assertEquals(quien.idPersona(), alta.idPersonaActor());
+        assertNotNull(alta.motivo(), "el motivo lo redacta el Core, no cada cliente");
+    }
+
+    /**
+     * <b>El limite critico, en la base y no en un comentario.</b>
+     *
+     * <p>«Detectar o reutilizar una propiedad existente jamas debe ejecutar el
+     * alta del responsable.» Aqui se comprueba que, aunque alguien lo
+     * intentara por SQL, <b>la base lo rechaza</b>: el indice parcial
+     * {@code uq_asignacion_alta_por_propiedad} admite <b>una sola</b> fila de
+     * origen {@code ALTA} por propiedad.
+     */
+    @Test
+    @DisplayName("una SEGUNDA alta sobre la misma propiedad no entra ni por SQL")
+    void soloPuedeHaberUnAltaPorPropiedad() {
+        Actor quien = agente(0);
+        Actor otra = agente(1);
+        long idPropiedad = registrar(quien, "ALQUILER");
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> jdbc.update("""
+                        insert into asignacion_responsable_propiedad
+                            (organizacion_id, id_propiedad, id_rol_responsable_anterior,
+                             id_rol_responsable_nuevo, id_persona_actor, tipo_rol_actor,
+                             origen, motivo)
+                        values (?, ?, null, ?, ?, 'AGENTE', 'ALTA', 'Segunda alta')
+                        """, quien.idOrganizacion(), idPropiedad, otra.idRolOperativo(),
+                        otra.idPersona()),
+                "un comentario pide que no ocurra; este indice lo IMPIDE, venga del canal "
+                        + "que venga y lo escriba quien lo escriba");
+    }
+
+    /**
+     * <b>Retomar no es crear.</b> Otro agente prospecta y capta una propiedad
+     * que ya existe: nace su ENCARGO, y el responsable de la PROPIEDAD no se
+     * mueve.
+     */
+    @Test
+    @DisplayName("propiedad existente retomada por OTRO agente: el responsable no cambia")
+    void retomarUnaPropiedadExistenteNoCambiaAlResponsable() {
+        Actor duena = agente(0);
+        Actor otra = agente(1);
+        long idPropiedad = registrar(duena, "ALQUILER");
+        int altasAntes = altasDe(idPropiedad);
+
+        // La otra agente la prospecta y la capta en VENTA: encargo nuevo suyo
+        // sobre una propiedad que no es suya.
+        long idProspeccion = prospecciones.registrar(
+                new ProspeccionService.DatosProspeccion(idPropiedad, "La retoma otra agente"),
+                otra).id();
+        prospecciones.contactar(idProspeccion, otra);
+        prospecciones.captar(idProspeccion, capturaDeVenta(), otra);
+
+        assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
+                "captar una propiedad que ya existia no convierte a nadie en responsable de "
+                        + "ella: solo abre un encargo");
+        assertEquals(altasAntes, altasDe(idPropiedad), "y no aparece una segunda alta");
+        assertEquals(otra.idRolOperativo(), agentesDeLosEncargos(idPropiedad).get("V"),
+                "el encargo SI es suyo -- si no, esta prueba estaria midiendo que no paso nada");
+    }
+
+    @Test
+    @DisplayName("un ENCARGO nuevo sobre propiedad existente no cambia al responsable")
+    void unEncargoNuevoNoCambiaAlResponsable() {
+        Actor duena = agente(0);
+        Actor otra = agente(1);
+        long idPropiedad = registrar(duena, "ALQUILER");
+        int altasAntes = altasDe(idPropiedad);
+
+        captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, otra), otra);
+
+        assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
+                "abrir una VENTA no cambia quien responde por el inmueble: son autoridades "
+                        + "distintas y ese es todo el punto de P0");
+        assertEquals(altasAntes, altasDe(idPropiedad));
+    }
+
+    @Test
+    @DisplayName("propiedad FALTANTE + encargo nuevo: sigue FALTANTE")
+    void unEncargoNuevoNoSacaDeFaltanteAUnaPropiedadHistorica() {
+        Actor duena = agente(0);
+        Actor otra = agente(1);
+        long idPropiedad = registrar(duena, "ALQUILER");
+        dejarSinResponsable(idPropiedad);
+
+        captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, otra), otra);
+
+        assertNull(responsableDe(idPropiedad),
+                "una propiedad historica sin responsable NO se adopta abriendole un encargo: "
+                        + "sigue FALTANTE hasta que un BROKER asigne");
+        assertFalse(propiedades.consultar(idPropiedad, otra).responsabilidad().puedeEditar(),
+                "y sigue sin poder editarla nadie");
+    }
+
+    /**
+     * <b>Solo el traspaso de BROKER saca a una propiedad existente de donde
+     * este.</b> Recorre las puertas que podrian pretenderlo —abrirle un encargo
+     * y operar ese encargo— y despues comprueba que la unica que mueve la
+     * columna es la del broker.
+     */
+    @Test
+    @DisplayName("de una propiedad ya existente, solo el traspaso de BROKER cambia al responsable")
+    void soloElTraspasoDeBrokerCambiaAlResponsableDeUnaPropiedadExistente() {
+        Actor duena = agente(0);
+        Actor otra = agente(1);
+        long idPropiedad = registrar(duena, "ALQUILER");
+
+        // Puerta 1: abrirle un encargo.
+        captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, otra), otra);
+        assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad));
+
+        // Puerta 2: operar ese encargo propio -- legitimo, y sin efecto aqui.
+        propiedades.editar(idPropiedad,
+                edicionDeEncargo("VENTA", new BigDecimal("410000"), "USD"), otra);
+        assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
+                "operar un encargo propio no concede la ficha: son tres autoridades");
+
+        // Puerta 3: la unica que si.
+        propiedades.asignarResponsable(idPropiedad, otra.idRolOperativo(),
+                "Traspaso autorizado por el broker del equipo", broker());
+        assertEquals(otra.idRolOperativo(), responsableDe(idPropiedad));
+
+        assertEquals(List.of("TRASPASO", "ALTA"),
+                propiedades.traspasosDe(idPropiedad, broker()).stream()
+                        .map(TraspasoDeResponsable::origen).toList(),
+                "el expediente acumula y distingue los dos hechos, del mas reciente al mas "
+                        + "antiguo");
+    }
+
+    /**
+     * <b>Web y KAIROS producen la misma semantica del alta.</b>
+     *
+     * <p>No solo el mismo permiso: el mismo <b>efecto</b>. Un alta por el canal
+     * conversacional deja exactamente el mismo rastro que una por pantalla,
+     * porque es el mismo caso de uso.
+     */
+    @Test
+    @DisplayName("el alta por WHATSAPP deja el mismo rastro que por SPA")
+    void lasDosSuperficiesProducenLaMismaSemanticaDelAlta() {
+        Actor quien = agente(0);
+        long porPantalla = registrarPorCanal(quien, "SPA");
+        long porConversacion = registrarPorCanal(quien, "WHATSAPP");
+
+        for (long id : List.of(porPantalla, porConversacion)) {
+            assertEquals(quien.idRolOperativo(), responsableDe(id));
+            List<TraspasoDeResponsable> expediente = propiedades.traspasosDe(id, broker());
+            assertEquals(1, expediente.size());
+            assertEquals("ALTA", expediente.get(0).origen());
+            assertEquals(Actor.AGENTE, expediente.get(0).rolActor());
+            assertNull(expediente.get(0).idResponsableAnterior());
+        }
+    }
+
+    // ==================================================================
     // Fixtures
     // ==================================================================
 
@@ -729,6 +912,50 @@ class AutoridadDeEdicionIntegrationTest {
                 null), quien).idPropiedad();
     }
 
+    /**
+     * El alta declarando el canal, que es lo unico que separa BROX Web de
+     * KAIROS: el caso de uso es el mismo y por eso el efecto tiene que serlo.
+     */
+    private long registrarPorCanal(Actor quien, String canalDeclarado) {
+        return propiedades.registrar(new ComandoRegistro(UUID.randomUUID().toString(),
+                canal(canalDeclarado), null, "DEPARTAMENTO", null,
+                "Caso P0 por " + canalDeclarado,
+                new Ubicacion("Av. Canal " + UUID.randomUUID().toString().substring(0, 8),
+                        "Miraflores", null, null, null, null, null, null, null),
+                List.of(new Titular(unPropietario(quien), null, Boolean.TRUE)),
+                List.of(new ValorAtributo("metraje_total", "90"),
+                        new ValorAtributo("dormitorios", "3")),
+                List.of(new OperacionSolicitada("ALQUILER", new BigDecimal("3000"), "PEN",
+                        null, null, null, null, null, null, null)),
+                null), quien).idPropiedad();
+    }
+
+    /** Un encargo de VENTA sobre una propiedad que YA existe. */
+    private CaptacionService.DatosCaptacion nuevoEncargoDeVenta(long idPropiedad, Actor deQuien) {
+        return new CaptacionService.DatosCaptacion(
+                "CAP-P0-" + UUID.randomUUID().toString().substring(0, 8),
+                LocalDate.now(), LocalDate.now(), LocalDate.now().plusMonths(6),
+                null, "Encargo sobre una propiedad existente",
+                idPropiedad, deQuien.idRolOperativo(), "VENTA", 3, Boolean.FALSE,
+                "VENTA", new BigDecimal("400000"), "USD",
+                "P", "V", new BigDecimal("3"), "USD", "I", null);
+    }
+
+    /** Las condiciones con las que se capta una prospeccion, en VENTA. */
+    private ProspeccionService.DatosCaptura capturaDeVenta() {
+        return new ProspeccionService.DatosCaptura("VENTA", new BigDecimal("400000"), "USD",
+                new BigDecimal("3"), "P", "V", "I", Boolean.FALSE, null, null);
+    }
+
+    /** Cuantas filas de origen ALTA tiene esta propiedad. Debe ser 0 o 1. */
+    private int altasDe(long idPropiedad) {
+        Integer n = jdbc.queryForObject("""
+                select count(*) from asignacion_responsable_propiedad
+                 where id_propiedad = ? and origen = 'ALTA'
+                """, Integer.class, idPropiedad);
+        return n == null ? 0 : n;
+    }
+
     private ComandoEdicion edicionDeFicha(String descripcion) {
         return edicionDeFicha(descripcion, null);
     }
@@ -748,8 +975,18 @@ class AutoridadDeEdicionIntegrationTest {
      * permite que su agente lo siga operando aunque la propiedad este FALTANTE.
      */
     private ComandoEdicion edicionDeEncargo(String operacion, BigDecimal importe) {
+        return edicionDeEncargo(operacion, importe, "PEN");
+    }
+
+    /**
+     * La moneda se declara porque no es decorativa: {@code ck_condicion_tipo_base}
+     * exige que la comision porcentual lleve la MISMA moneda que la referencia,
+     * asi que cambiar el importe de un encargo en USD mandando PEN rompe la
+     * invariante economica -- y con razon.
+     */
+    private ComandoEdicion edicionDeEncargo(String operacion, BigDecimal importe, String moneda) {
         return new ComandoEdicion(UUID.randomUUID().toString(), null, null, null, null, null,
-                List.of(new OperacionSolicitada(operacion, importe, "PEN",
+                List.of(new OperacionSolicitada(operacion, importe, moneda,
                         null, null, null, null, null, null, null)),
                 null, null);
     }

@@ -561,3 +561,22 @@
     justify-self: start;
   }
 }
+
+// Por qué no se puede editar. Mismo tono y misma forma que el aviso del editor
+// (`propiedad-editor.scss .bloqueo`): es el mismo hecho dicho en las dos
+// pantallas, y leerlo distinto haría dudar de si son la misma regla.
+.motivo-autoridad {
+  background: var(--atencion-p);
+  border-radius: var(--r-chico);
+  color: var(--ink-1);
+  font-size: 13px;
+  margin: 10px 0 0;
+  max-width: 62ch;
+  padding: 9px 11px;
+
+  .quien {
+    color: var(--ink-2);
+    display: block;
+    margin-top: 3px;
+  }
+}

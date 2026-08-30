@@ -35,6 +35,11 @@ import java.time.OffsetDateTime;
 @Table(name = "asignacion_responsable_propiedad")
 public class AsignacionResponsablePropiedad extends EntidadDeOrganizacion {
 
+    /** La fijo el agente que registro una propiedad NUEVA. Una por propiedad. */
+    public static final String ORIGEN_ALTA = "ALTA";
+    /** La decidio un BROKER o el gobierno del tenant. Puede haber varias. */
+    public static final String ORIGEN_TRASPASO = "TRASPASO";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_asignacion")
@@ -66,6 +71,18 @@ public class AsignacionResponsablePropiedad extends EntidadDeOrganizacion {
      */
     @Column(name = "tipo_rol_actor", nullable = false, length = 20)
     private String tipoRolActor;
+
+    /**
+     * <b>De donde sale esta asignacion</b> (V88): { ALTA} o { TRASPASO}.
+     *
+     * <p><b>No se deduce de { #idRolResponsableAnterior}</b>, y esa es la
+     * razon de que exista la columna: la PRIMERA asignacion de una propiedad
+     * FALTANTE tampoco tiene predecesor y es un traspaso. Medido antes de
+     * anadirla: de 63 filas, 12 no tenian anterior y las 63 eran de BROKER --
+     * deducirlo del NULL habria clasificado 12 traspasos como altas.
+     */
+    @Column(name = "origen", nullable = false, length = 8)
+    private String origen;
 
     @Column(name = "motivo", nullable = false)
     private String motivo;
@@ -122,6 +139,19 @@ public class AsignacionResponsablePropiedad extends EntidadDeOrganizacion {
 
     public void setTipoRolActor(String tipoRolActor) {
         this.tipoRolActor = tipoRolActor;
+    }
+
+    public String getOrigen() {
+        return origen;
+    }
+
+    public void setOrigen(String origen) {
+        this.origen = origen;
+    }
+
+    /** ¿La fijo el alta de una propiedad nueva? */
+    public boolean naceDelAlta() {
+        return ORIGEN_ALTA.equals(origen);
     }
 
     public String getMotivo() {

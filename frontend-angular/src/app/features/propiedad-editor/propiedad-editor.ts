@@ -25,6 +25,8 @@ import {
   EncargoPropiedad,
   FichaPropiedad,
   OperacionEnEdicion,
+  motivoDeBloqueo,
+  puedeEscribir,
   PropiedadesService,
   UbicacionEnEdicion,
 } from '../../core/api/propiedades.service';
@@ -223,16 +225,19 @@ export class PropiedadEditor implements OnInit {
    * y dos copias divergen — hacia el lado de habilitar un botón que el PUT va
    * a rechazar cuando la persona ya escribió.
    *
-   * Mientras la ficha carga vale `true`, que es lo mismo que valía antes de
-   * este cambio: no se bloquea nada por no saber todavía.
+   * Cuando el bloque **no llega** —Jackson va `NON_NULL`, así que es un caso
+   * real del cable— vale `false`. Valía `true`, y la ficha de al lado valía
+   * `false` ante exactamente la misma respuesta: dos pantallas decidiendo lo
+   * contrario sobre el mismo silencio. Ahora lo decide `puedeEscribir`, una
+   * sola vez, para las tres.
    */
-  protected readonly puedeEditar = computed(
-    () => this.ficha()?.responsabilidad?.puedeEditar ?? true,
+  protected readonly puedeEditar = computed(() =>
+    puedeEscribir(this.ficha()?.responsabilidad),
   );
 
   /** El motivo del bloqueo **escrito por el Core**. La pantalla no redacta. */
-  protected readonly motivoBloqueo = computed(
-    () => this.ficha()?.responsabilidad?.motivoTexto ?? null,
+  protected readonly motivoBloqueo = computed(() =>
+    motivoDeBloqueo(this.ficha()?.responsabilidad),
   );
 
   /** Quién responde hoy, o `null` si está FALTANTE. */

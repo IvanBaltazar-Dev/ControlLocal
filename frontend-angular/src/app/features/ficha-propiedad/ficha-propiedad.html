@@ -108,6 +108,7 @@
             @if (subiendo()) {
               <p class="cl-menudo">Guardando…</p>
             }
+
             @if (mensajeFoto(); as ok) {
               <p class="cl-ok" role="status">{{ ok }}</p>
             }
@@ -115,6 +116,20 @@
               <p class="cl-aviso" role="alert">{{ fallo }}</p>
             }
           </div>
+        }
+
+        <!--
+          Y cuando NO se pueden tocar, se dice por qué. Esconder los botones en
+          silencio obliga a adivinar si falta un permiso o falta un dato: es lo
+          mismo que el Core evita al devolver el motivo con el 403.
+        -->
+        @if (!puedeEditarFotos() && motivoSinFotos(); as motivo) {
+          <p class="cl-vacio" role="note">
+            {{ motivo }}
+            @if (responsableFotos(); as quien) {
+              <span class="cl-menudo">Responde por este inmueble: {{ quien }}.</span>
+            }
+          </p>
         }
       </article>
 

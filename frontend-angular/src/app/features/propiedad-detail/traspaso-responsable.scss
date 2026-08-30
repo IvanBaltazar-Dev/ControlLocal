@@ -1,0 +1,82 @@
+// La llave del P0 dentro de la ficha (C3). Tono neutro y de gobierno: no es una
+// acción comercial ni una alerta, es quién responde por el inmueble.
+.traspaso {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--cl-borde);
+  border-radius: 12px;
+  background: var(--cl-superficie);
+
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.6rem;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--cl-tinta-suave);
+  }
+
+  .quien {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--cl-tinta);
+  }
+
+  // FALTANTE se dice, no se disimula con un guion ni con un nombre inventado.
+  .faltante {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--cl-tinta-suave);
+  }
+
+  .formulario {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+
+    > span {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--cl-tinta-suave);
+    }
+  }
+
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--cl-borde);
+    border-radius: 8px;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--cl-tinta);
+    background: #fff;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  .acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}

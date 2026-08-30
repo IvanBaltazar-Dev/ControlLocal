@@ -40,9 +40,9 @@ import {
   LocalesService,
   PrecioLocal,
 } from '../../core/api/locales.service';
+import { motivoDeBloqueo, puedeEscribir } from '../../core/api/propiedades.service';
 import { Propietario, PropietariosService } from '../../core/api/propietarios.service';
 import { ArchivoPreparado, ArchivosService } from '../../core/archivos/archivos.service';
-import { AuthService } from '../../core/auth/auth.service';
 import { Bloque, bloque, complementario } from '../../core/bloque';
 import {
   calcularCondicionComision,
@@ -117,7 +117,6 @@ export class FichaPropiedad implements OnInit {
   private readonly archivos = inject(ArchivosService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly recargar$ = new Subject<void>();
 
@@ -139,12 +138,45 @@ export class FichaPropiedad implements OnInit {
   protected readonly extensionesFoto = ['.png', '.jpg', '.jpeg'] as const;
 
   /**
-   * Solo el AGENTE escribe fotos: `POST`/`DELETE /locales/{id}/fotos` llevan
-   * `hasRole('AGENTE')` (`matriz-operacion-rol.md`). Ver la ficha, en cambio,
-   * es de los tres roles con su alcance, así que la ruta no lleva `roles`.
+   * **Si esta persona puede escribir las fotos de este inmueble** (P0).
+   *
+   * Lo dice el backend en la ficha del local. Antes lo decidía esta línea:
+   *
+   * ```
+   * this.auth.sesion()?.rol === 'AGENTE'
+   * ```
+   *
+   * y dejó de ser cierta con V87: las fotos son la ficha del inmueble, así que
+   * `POST`/`DELETE /locales/{id}/fotos` los escribe **su responsable**, no
+   * cualquier agente. Con la copia vieja, «Agregar fotos» y «Eliminar» se
+   * ofrecían a todo agente sobre toda propiedad y respondían **403 siempre** —
+   * con las 26 propiedades de `dev` en FALTANTE, siempre de verdad.
+   *
+   * Es la misma regla, el mismo campo y el mismo texto que usa la ficha
+   * universal: no hay dos copias porque no hay nada que copiar. La resuelve el
+   * mismo método del Core que después deniega la escritura.
+   *
+   * Mientras la ficha carga vale `false`: no se ofrece una acción que todavía
+   * no se sabe si existe.
    */
-  protected readonly puedeEditarFotos = computed(
-    () => this.auth.sesion()?.rol === 'AGENTE',
+  protected readonly puedeEditarFotos = computed(() =>
+    puedeEscribir(this.local().datos?.responsabilidad),
+  );
+
+  /** Quién responde por el inmueble hoy, o `null` si está FALTANTE. */
+  protected readonly responsableFotos = computed(
+    () => this.local().datos?.responsabilidad?.nombre ?? null,
+  );
+
+  /**
+   * Por qué no se pueden tocar las fotos, **en las palabras del Core**.
+   *
+   * Se pinta. Esconder los botones sin decir por qué obliga a adivinar si falta
+   * un permiso o falta un dato — que es exactamente lo que `exigirEdicion`
+   * evita en el backend, y sería incoherente que la pantalla lo deshiciera.
+   */
+  protected readonly motivoSinFotos = computed(() =>
+    motivoDeBloqueo(this.local().datos?.responsabilidad),
   );
 
   protected readonly totalFotos = computed(() => this.fotos().datos.length);

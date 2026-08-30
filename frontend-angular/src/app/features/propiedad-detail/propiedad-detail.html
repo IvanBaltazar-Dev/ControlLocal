@@ -39,6 +39,34 @@
     </div>
   </header>
 
+  <!--
+    Cuando NO se puede editar, se dice por qué y quién responde. Estaba
+    calculado y sin pintar: el agente veía desaparecer «Editar» sin ninguna
+    explicación y tenía que adivinar si le faltaba un permiso o un dato. El
+    Core devuelve el motivo con el 403 justamente para no obligar a eso.
+  -->
+  @if (!puedeEditar() && motivoBloqueo(); as motivo) {
+    <p class="motivo-autoridad" role="note">
+      {{ motivo }}
+      @if (responsable(); as quien) {
+        <span class="quien">Responde por este inmueble: {{ quien }}.</span>
+      }
+    </p>
+  }
+
+  <!--
+    Y la llave, donde ya se ve la propiedad (C3). Sólo aparece para quien puede
+    ejecutarla, y eso lo dice el Core en `puedeTraspasar` — no un rol leído de
+    la sesión.
+  -->
+  @if (p.responsabilidad?.puedeTraspasar) {
+    <cl-traspaso-responsable
+      [idPropiedad]="p.id"
+      [responsabilidad]="p.responsabilidad"
+      (traspasado)="cargar()"
+    />
+  }
+
   @if (p.faltanParaPublicar.length > 0) {
     <!-- El rótulo lo trae el catálogo. Con la clave desnuda esto diría
          «falta metraje_total», que no es una frase para nadie.

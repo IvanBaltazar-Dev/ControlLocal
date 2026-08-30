@@ -134,6 +134,14 @@ docs/ai/*
 !docs/ai/catalogo-productores-canonico.md
 !docs/ai/decision-estados-sin-productor.md
 !docs/ai/matriz-operacion-rol.md
+# Autoridad del corte P0: la regla viva de quien puede escribir la propiedad y
+# cada encargo. Viaja porque GOBIERNA -- un documento que decide y no viaja no
+# puede gobernar un clon limpio, y `AutoridadDeLaPropiedadTest` lo comprueba.
+!docs/ai/decision-autoridad-de-edicion-de-la-propiedad.md
+# Marco de alcances y frontera de informacion de BROX Intelligence (D-I-1). No
+# hay codigo de Intelligence todavia; viaja porque fija que puede salir de la
+# operacion interna, y eso condiciona cada salida nueva.
+!docs/ai/decision-brox-intelligence-alcances-y-frontera.md
 !docs/ai/modelo/
 docs/ai/modelo/*
 !docs/ai/modelo/gate-modelo-universal.js

@@ -2,6 +2,10 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiClient } from './api.client';
 import { PageResponse } from './api.types';
+// La autoridad de escritura tiene UNA sola definición en el cliente, igual que
+// tiene una sola en el Core. Un segundo `interface Responsabilidad` aquí sería
+// la copia que diverge en el primer cambio.
+import { Responsabilidad } from './propiedades.service';
 
 /** Contrato CONGELADO: mismos campos y nombres que `LocalResponse` del backend. */
 export interface Local {
@@ -43,6 +47,21 @@ export interface Local {
   piso?: string;
   referenciaInterna?: string;
   nombreEdificioGaleria?: string;
+  /**
+   * **Quién responde por el inmueble, y qué puede hacer quien está mirando**
+   * (P0).
+   *
+   * Llega **resuelto por el Core** y es el **mismo tipo** que trae la ficha
+   * universal: una sola definición para las dos pantallas. La galería de fotos
+   * se pinta desde aquí, y `POST`/`DELETE /locales/{id}/fotos` los cierra
+   * `AutoridadDePropiedad` desde V87 — así que esta pantalla no puede tener su
+   * propia versión de la regla.
+   *
+   * Sólo viaja en el **detalle** (`GET /locales/{id}`). En los listados no
+   * aparece: Jackson va `NON_NULL`, de modo que aquí es `undefined` y hay que
+   * compararlo con `== null` — con `=== null` no se ve el caso real.
+   */
+  responsabilidad?: Responsabilidad | null;
 }
 
 /** Cuerpo congelado de POST/PUT /locales. */

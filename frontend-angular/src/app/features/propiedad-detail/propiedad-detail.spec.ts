@@ -896,4 +896,85 @@ describe('PropiedadDetail', () => {
     expect(editar).not.toBeNull();
     expect(editar!.getAttribute('href')).toBe('/propiedades/3259/editar');
   });
+
+  /**
+   * **Y cuando no se puede, se dice por qué** (H8).
+   *
+   * `motivoBloqueo()` y `responsable()` estaban calculados y **sin pintar**: el
+   * agente veía desaparecer «Editar» sin ninguna explicación y tenía que
+   * adivinar si le faltaba un permiso o un dato. El Core devuelve el motivo con
+   * el 403 justamente para no obligar a eso, y la pantalla lo deshacía.
+   */
+  it('dice por qué no se puede editar, y quién responde', async () => {
+    await montar(
+      ficha({
+        responsabilidad: {
+          idResponsable: 44,
+          nombre: 'Otro Agente',
+          puedeEditar: false,
+          motivo: 'OTRO_RESPONSABLE',
+          motivoTexto: 'De esta propiedad responde otro agente.',
+        },
+      }),
+      'AGENTE',
+    );
+
+    const html = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(html).toContain('De esta propiedad responde otro agente.');
+    expect(html).toContain('Otro Agente');
+  });
+
+  /**
+   * **Ante el silencio del cable, las tres pantallas dicen lo mismo** (H8).
+   *
+   * Jackson va `NON_NULL`, así que un `responsabilidad` ausente llega
+   * `undefined`. Esta ficha caía a `false` y el editor a `true` sobre
+   * exactamente la misma respuesta. Ahora lo decide `puedeEscribir`, una vez.
+   */
+  it('sin bloque de autoridad no ofrece editar, y lo explica', async () => {
+    await montar(ficha({ responsabilidad: undefined }), 'AGENTE');
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.acciones .primario'),
+    ).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'No llegó quién responde por esta propiedad',
+    );
+  });
+
+  /**
+   * **La llave, donde ya se ve la propiedad** (C3).
+   *
+   * Que se ofrezca lo dice el Core en `puedeTraspasar`, no un rol leído de la
+   * sesión: por eso el caso que lo comprueba monta la ficha con **rol AGENTE**
+   * y `puedeTraspasar` verdadero. Si alguien volviera a decidirlo mirando la
+   * sesión, esto se pone rojo.
+   */
+  it('ofrece traspasar sólo cuando el Core dice que se puede', async () => {
+    await montar(
+      ficha({
+        responsabilidad: {
+          idResponsable: 44,
+          nombre: 'Otro Agente',
+          puedeEditar: false,
+          motivo: 'NO_OPERA',
+          motivoTexto: 'Supervisar y gobernar no es registrar.',
+          puedeTraspasar: true,
+        },
+      }),
+      'AGENTE',
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('cl-traspaso-responsable'),
+    ).not.toBeNull();
+  });
+
+  it('no ofrece traspasar cuando el Core no lo concede', async () => {
+    await montar(PROP_0022, 'BROKER');
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('cl-traspaso-responsable'),
+    ).toBeNull();
+  });
 });

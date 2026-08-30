@@ -233,13 +233,35 @@ public class PropiedadesUniversalesController {
     }
 
     /**
-     * El expediente de traspasos, del mas reciente al mas antiguo.
+     * <b>El expediente de traspasos: superficie de GOBIERNO</b> (C2), del mas
+     * reciente al mas antiguo.
      *
-     * <p>Sin gate de rol: es informacion operativa <b>interna del tenant</b>,
-     * como la ficha, y un id de otra corredora responde 404. Lo que aqui se lee
-     * no concede nada — leer quien responde no es poder escribir.
+     * <p>Lo leen el BROKER —dentro de su alcance de supervision— y el
+     * TENANT_ADMIN dentro de su tenant. <b>El AGENTE no</b>, y eso incluye al
+     * responsable vigente de la propiedad: el sabe que responde el y tiene todo
+     * lo que necesita para operar, pero no hereda quienes fueron los
+     * responsables anteriores, ni los motivos de cada traspaso, ni las
+     * observaciones de gobierno sobre agentes que ya no la llevan. El texto
+     * libre del motivo es dato interno de gobierno.
+     *
+     * <p><b>Dos comprobaciones y en este orden</b>, porque no son la misma:
+     * <ol>
+     *   <li>la banda, aqui — un AGENTE no entra ni con un id de su propia
+     *       propiedad;</li>
+     *   <li>el alcance sobre <b>este</b> objeto, en el servicio — un BROKER
+     *       valido sobre una propiedad que no responde ante ninguno de sus
+     *       supervisados tampoco entra. La anotacion no puede saber eso: no
+     *       conoce la fila.</li>
+     * </ol>
+     * Y antes que las dos, la frontera de tenant: un id de otra corredora
+     * responde <b>404</b>, no 403.
+     *
+     * <p>Si el nuevo responsable necesita contexto, la respuesta no es abrirle
+     * el expediente: seria una <b>nota de traspaso operativa</b>, distinta del
+     * historico de gobierno. No existe todavia.
      */
     @GetMapping("{id}/responsable/historial")
+    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
     public List<TraspasoResponse> historialDeResponsables(@PathVariable long id) {
         return propiedades.traspasosDe(id, SesionActual.actor()).stream()
                 .map(TraspasoResponse::desde)

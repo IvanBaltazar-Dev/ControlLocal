@@ -569,6 +569,58 @@ export interface Responsabilidad {
   motivo?: string | null;
   /** El motivo **en palabras, escrito por el Core**. Es lo que se pinta. */
   motivoTexto?: string | null;
+  /**
+   * Si **este** usuario puede cambiar quién responde por la propiedad (C3).
+   *
+   * Viaja resuelto por la misma razón que `puedeEditar`. Sin él, esta pantalla
+   * tendría que preguntar `sesion()?.rol !== 'AGENTE'`, que es exactamente la
+   * copia de la regla en el cliente que este P0 vino a quitar.
+   *
+   * Dice si la acción **se ofrece**, no si un traspaso concreto se permite: a
+   * qué agentes puede pasársela lo acota `GET /agentes`, que ya viene limitado
+   * a quien el actor supervisa.
+   */
+  puedeTraspasar?: boolean;
+}
+
+/**
+ * **Si se puede escribir, cuando el bloque puede no venir.**
+ *
+ * Existe porque cada pantalla se estaba inventando su propio valor por defecto
+ * y salían contrarios: la ficha caía a `false` y el editor a `true` ante la
+ * **misma** respuesta. Y no es un caso teórico — Jackson viaja `NON_NULL`, así
+ * que un `responsabilidad` ausente llega como `undefined` de verdad.
+ *
+ * El defecto es **`false`**, y se elige aquí y no en cada pantalla: si el Core
+ * no ha dicho que se puede, no se ofrece. Fallar hacia «no puedes» muestra un
+ * botón de menos; fallar hacia «sí puedes» promete una escritura que el backend
+ * va a rechazar **después** de que la persona haya escrito.
+ */
+export function puedeEscribir(responsabilidad?: Responsabilidad | null): boolean {
+  return responsabilidad?.puedeEditar ?? false;
+}
+
+/**
+ * **Por qué no se puede, en las palabras del Core.**
+ *
+ * Cuando el Core lo dijo, se devuelve tal cual: la pantalla no traduce el
+ * código ni redacta el rechazo, porque dos redacciones del mismo rechazo se
+ * separan en el primer cambio.
+ *
+ * El único texto propio es el del caso en que **el Core no dijo nada**, y dice
+ * exactamente eso —que no llegó— en vez de fingir un motivo. Es el precio de
+ * que el defecto sea `false`: esconder el botón sin explicación obliga a
+ * adivinar si falta un permiso o falta un dato.
+ */
+export function motivoDeBloqueo(responsabilidad?: Responsabilidad | null): string | null {
+  if (responsabilidad?.puedeEditar) {
+    return null;
+  }
+  return (
+    responsabilidad?.motivoTexto ??
+    'No llegó quién responde por esta propiedad, así que no se ofrece editarla. ' +
+      'Vuelve a cargar la ficha; si sigue igual, avísale a un broker.'
+  );
 }
 
 /**
@@ -619,4 +671,43 @@ export class PropiedadesService {
       claveIdempotencia ? { 'Idempotency-Key': claveIdempotencia } : undefined,
     );
   }
+
+  /**
+   * **Traspasa quién responde por la propiedad** (P0-2).
+   *
+   * Es la única forma de mover la autoridad de escritura después del alta, y la
+   * única de sacar a una propiedad de FALTANTE. Lo ejecuta un BROKER —dentro de
+   * su equipo— o el gobierno del tenant; el agente nunca, ni sobre sí mismo.
+   *
+   * El `motivo` queda en un expediente **append-only** que no se corrige
+   * después, y por eso el Core exige el mismo mínimo que la reasignación de un
+   * encargo. La pantalla avisa antes de enviar porque es mejor experiencia, no
+   * porque sea ella quien lo hace cumplir.
+   */
+  asignarResponsable(id: number, idAgente: number, motivo: string): Promise<Traspaso> {
+    return this.api.post<Traspaso>(`propiedades/${id}/responsable`, { idAgente, motivo });
+  }
+}
+
+/**
+ * Una línea del expediente de traspasos.
+ *
+ * No la consume ninguna pantalla todavía: el expediente es superficie de
+ * **gobierno** (C2) —lo leen BROKER y TENANT_ADMIN, nunca el agente, ni
+ * siquiera el responsable vigente— y su pantalla no entra en este corte. Vive
+ * aquí porque es lo que devuelve `asignarResponsable`, que sí entra.
+ */
+export interface Traspaso {
+  id: number;
+  idPropiedad: number;
+  idResponsableAnterior?: number | null;
+  responsableAnterior?: string | null;
+  idResponsableNuevo: number;
+  responsableNuevo?: string | null;
+  idPersonaActor: number;
+  rolActor: string;
+  /** `ALTA` o `TRASPASO`. No se deduce de que falte el anterior (V88). */
+  origen: string;
+  motivo: string;
+  fecha: string;
 }

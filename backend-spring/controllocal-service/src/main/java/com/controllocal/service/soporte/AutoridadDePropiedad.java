@@ -7,6 +7,7 @@ import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.service.Actor;
+import com.controllocal.service.PropiedadUniversalService;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.springframework.stereotype.Component;
@@ -28,9 +29,13 @@ import java.util.Objects;
  * <p>La regla <b>no</b> puede vivir en la anotacion del controlador por dos
  * razones medidas:
  * <ol>
- *   <li>Hay <b>ocho vias de escritura</b> sobre la propiedad y su ficha, en
- *       cuatro servicios distintos. Una anotacion protege una puerta; la
- *       autoridad tiene que proteger el hecho.</li>
+ *   <li>Las vias de escritura sobre la propiedad y su ficha estan repartidas
+ *       por <b>varios servicios</b>, y no son las que nadie recuerde: las
+ *       cuenta {@code AutoridadDeLaPropiedadTest} en cada build, contra el
+ *       bytecode. Aqui no va la cifra a proposito — la del inventario inicial
+ *       ya se quedo corta el mismo dia, cuando el gate encontro una via mas
+ *       que el inventario no tenia. Una anotacion protege <b>una puerta</b>;
+ *       la autoridad tiene que proteger <b>el hecho</b>.</li>
  *   <li><b>KAIROS entra por los mismos endpoints</b> con la cabecera
  *       {@code X-Origen} y el mismo token. Lo que se compruebe aqui lo hereda
  *       igual; lo que se comprobara en la capa web tendria que reescribirse
@@ -84,10 +89,19 @@ public class AutoridadDePropiedad {
     private final DetalleAgenteRepository agentes;
     private final AsignacionResponsablePropiedadRepository asignaciones;
 
+    /**
+     * Quien alcanza a quien dentro del tenant. La frontera de organizacion va
+     * <b>antes</b> que cualquier alcance de equipo, y las dos van antes que el
+     * rol: es el orden que fija C1.
+     */
+    private final Alcances alcances;
+
     public AutoridadDePropiedad(DetalleAgenteRepository agentes,
-                                AsignacionResponsablePropiedadRepository asignaciones) {
+                                AsignacionResponsablePropiedadRepository asignaciones,
+                                Alcances alcances) {
         this.agentes = agentes;
         this.asignaciones = asignaciones;
+        this.alcances = alcances;
     }
 
     // ==================================================================
@@ -187,17 +201,34 @@ public class AutoridadDePropiedad {
     // ==================================================================
 
     /**
-     * <b>Quien la registra responde por ella</b> — y solo en el alta.
+     * <b>Quien registra una propiedad NUEVA responde por ella</b> — y solo ahi.
      *
      * <p>No es una inferencia: el actor del alta es un hecho conocido, no un
      * valor deducido del caso frecuente. La alternativa —que toda propiedad
      * nazca FALTANTE— dejaria al agente sin poder editar lo que acaba de
      * registrar, y convertiria al broker en un paso obligatorio de cada alta.
      *
-     * <p>Que sea <b>solo</b> en el alta es la otra mitad: volver a registrar
-     * una propiedad no captura la autoridad de otra, porque el alta crea una
-     * fila nueva y jamas toca una existente. Despues del alta la autoridad solo
-     * se mueve por {@link #asignar}.
+     * <h2>El limite, que es la mitad importante</h2>
+     * Esto vale <b>unica y exclusivamente cuando nace una fila de
+     * {@code propiedad}</b>. Que otro agente vuelva a captar una propiedad
+     * existente, le abra un ENCARGO nuevo, la retome o la vuelva a trabajar
+     * <b>no</b> lo convierte en responsable; y una propiedad historica FALTANTE
+     * <b>sigue FALTANTE</b> hasta que un BROKER asigne. Una propiedad que ya
+     * existe solo cambia de manos por {@link #asignar}.
+     *
+     * <p><b>Detectar o reutilizar una propiedad existente no puede llamar
+     * aqui.</b> Y no se deja en un comentario: el indice parcial
+     * {@code uq_asignacion_alta_por_propiedad} (V88) hace que una <b>segunda</b>
+     * fila de origen {@code ALTA} sobre la misma propiedad no entre en la base,
+     * venga del canal que venga y la escriba quien la escriba.
+     *
+     * <h2>Va en dos tiempos, y por la misma razon que el linaje</h2>
+     * La columna se fija <b>antes</b> del primer {@code save} —para que la fila
+     * nazca ya con su responsable— y el rastro se escribe <b>despues</b>, con
+     * {@link #anotarElAlta}: el rastro se direcciona por el id de la propiedad,
+     * que antes del insert todavia no existe. Es exactamente el mismo orden en
+     * dos tiempos que ya usa {@code AtributosGobernados} para los
+     * estructurales, y por el mismo motivo.
      */
     public void fijarAlAlta(Actor actor, Propiedad propiedad) {
         if (!actor.esAgente()) {
@@ -207,6 +238,41 @@ public class AutoridadDePropiedad {
             return;
         }
         propiedad.responsable(actor.idRolOperativo());
+    }
+
+    /**
+     * <b>El alta, en el expediente</b> (V88).
+     *
+     * <p>Se llama <b>despues</b> del {@code save} de la propiedad. Sin esta
+     * fila, {@code id_rol_responsable} aparecia poblada y el expediente no
+     * decia de donde salio — un valor de autoridad sin acto que lo explique es
+     * justo lo que este P0 vino a quitar.
+     *
+     * <p>La fila nace {@code origen = ALTA} y <b>sin predecesor</b>: no hay a
+     * quien desplazar, porque la propiedad acaba de existir. Ese hueco es
+     * informacion y no se rellena con nada.
+     *
+     * <p>Si el actor no es agente no se escribe nada, en coherencia con
+     * {@link #fijarAlAlta}: no habria responsable que anotar.
+     */
+    public AsignacionResponsablePropiedad anotarElAlta(Actor actor, Propiedad propiedad) {
+        if (!actor.esAgente() || !propiedad.tieneResponsable()) {
+            return null;
+        }
+        AsignacionResponsablePropiedad fila = new AsignacionResponsablePropiedad();
+        fila.setOrganizacionId(actor.idOrganizacion());
+        fila.setIdPropiedad(propiedad.getId());
+        fila.setIdRolResponsableAnterior(null);
+        fila.setIdRolResponsableNuevo(propiedad.getIdRolResponsable());
+        fila.setIdPersonaActor(actor.idPersona());
+        fila.setTipoRolActor(actor.tipoRolOperativo());
+        fila.setOrigen(AsignacionResponsablePropiedad.ORIGEN_ALTA);
+        // El motivo es obligatorio y aqui no lo escribe una persona: lo dice el
+        // acto. Se redacta en el Core y no en cada cliente, para que las altas
+        // de BROX Web y las de KAIROS digan lo mismo en el expediente.
+        fila.setMotivo("Alta de la propiedad: la registro este agente, que responde por ella "
+                + "desde su creacion.");
+        return asignaciones.save(fila);
     }
 
     // ==================================================================
@@ -232,6 +298,23 @@ public class AutoridadDePropiedad {
      *       vigente</b>, y no cambia una sola linea de lo que el nuevo
      *       responsable puede leer.</li>
      * </ul>
+     *
+     * <h2>Hasta donde llega cada banda (C1)</h2>
+     * El orden de las comprobaciones no es casual — <b>la frontera del tenant va
+     * siempre antes que cualquier permiso de rol</b>:
+     * <pre>
+     *   ¿misma organizacion?  NO -&gt; el agente destino no existe, y punto
+     *                         SI |
+     *   ¿que banda?              v
+     *     BROKER        -&gt; solo los agentes que SUPERVISA
+     *     TENANT_ADMIN  -&gt; cualquier agente de SU tenant, aunque sea del
+     *                      equipo de otro broker. Esta exento de la
+     *                      restriccion de EQUIPO, nunca de la de TENANT
+     *     AGENTE        -&gt; nunca
+     * </pre>
+     * Es el mismo {@link Alcances#alcanza} que usa {@code reasignar} para el
+     * encargo, y a proposito: dos implementaciones del mismo alcance divergen,
+     * y divergen hacia el lado que concede de mas.
      */
     public AsignacionResponsablePropiedad asignar(Actor actor, Propiedad propiedad,
                                                   long idRolAgenteNuevo, String motivo) {
@@ -240,17 +323,34 @@ public class AutoridadDePropiedad {
                     "Quien responde por una propiedad lo decide un broker. Un agente no puede "
                             + "traspasarsela ni traspasarla.");
         }
-        String texto = motivo == null ? "" : motivo.trim();
-        if (texto.isEmpty()) {
-            throw new ReglaNegocioException(
-                    "El traspaso necesita un motivo: sin el, el expediente dice que la propiedad "
-                            + "cambio de manos y no dice por que.");
-        }
+        // El MISMO minimo que exige reasignar un encargo (H6). Antes bastaba
+        // con que no viniera vacio: un "ok" de dos caracteres entraba en una
+        // tabla append-only que nadie puede corregir despues. `V87` declara
+        // esta tabla "el mismo tipo de hecho un nivel mas arriba" que la
+        // reasignacion de captacion, asi que no puede pedir menos que ella.
+        String texto = PoliticaComercial.exigirMotivoDeReasignacion(motivo);
+
+        // FRONTERA DE TENANT, y va primero. Un agente de otra corredora se
+        // comporta como inexistente: el mensaje es el mismo que si el id no
+        // existiera en ninguna parte, para no confirmar por la puerta de atras
+        // que ese rol existe en otra organizacion.
         DetalleAgente nuevo = agentes.findById(idRolAgenteNuevo)
                 .filter(a -> Objects.equals(a.getOrganizacionId(), actor.idOrganizacion()))
                 .orElseThrow(() -> new ReglaNegocioException(
                         "Ese agente no existe en la organizacion, asi que no puede responder por "
                                 + "ninguna propiedad suya."));
+
+        // Y DESPUES el alcance de equipo. `alcanza` devuelve true para el
+        // TENANT_ADMIN —gobierna la organizacion entera, incluidos los equipos
+        // de otros brokers— y para el BROKER solo si supervisa a ese agente.
+        // La frontera de tenant ya quedo cerrada arriba, asi que este `true`
+        // del gobierno nunca sale de su organizacion.
+        if (!alcances.alcanza(actor, nuevo.getId())) {
+            throw new AccesoNoAutorizadoException(
+                    "No supervisas a ese agente, asi que no puedes ponerlo a responder por esta "
+                            + "propiedad. Un broker asigna dentro de su equipo; entre equipos lo "
+                            + "decide el gobierno de la organizacion.");
+        }
 
         Long anterior = propiedad.getIdRolResponsable();
         if (Objects.equals(anterior, nuevo.getId())) {
@@ -268,8 +368,70 @@ public class AutoridadDePropiedad {
         fila.setIdRolResponsableNuevo(nuevo.getId());
         fila.setIdPersonaActor(actor.idPersona());
         fila.setTipoRolActor(actor.tipoRolOperativo());
+        // Y declara su origen (V88). No se deduce del predecesor: la PRIMERA
+        // asignacion de una propiedad FALTANTE tampoco lo tiene, y es un
+        // traspaso -- 12 de las 63 filas medidas estaban en ese caso.
+        fila.setOrigen(AsignacionResponsablePropiedad.ORIGEN_TRASPASO);
         fila.setMotivo(texto);
         return asignaciones.save(fila);
+    }
+
+    /**
+     * <b>El expediente de traspasos es superficie de GOBIERNO, no de operacion</b>
+     * (C2).
+     *
+     * <p>Lo consultan el BROKER que supervisa a quien responde por la propiedad
+     * y el TENANT_ADMIN dentro de su tenant. <b>El AGENTE no</b>, y eso incluye
+     * al responsable vigente: sabe que responde el —se lo dice
+     * {@code responsabilidad} en su ficha— y tiene lo que necesita para operar,
+     * pero <b>no hereda</b> los responsables anteriores, los motivos de cada
+     * traspaso ni las observaciones de gobierno sobre agentes que ya no la
+     * llevan. El texto libre del motivo es dato interno de gobierno.
+     *
+     * <p><b>Ver quien responde no es ver por que cambio de manos</b>: son dos
+     * preguntas distintas y solo la segunda es un expediente.
+     *
+     * <h2>Una propiedad FALTANTE y el broker</h2>
+     * Sin responsable no hay a quien supervisar, asi que
+     * {@link Alcances#alcanza} dice {@code false} y el broker <b>no</b> lo lee:
+     * un inmueble que no responde ante nadie es gobierno del tenant hasta que
+     * alguien lo asigne. Se deniega por el lado seguro y no se pierde nada — el
+     * TENANT_ADMIN lo lee, y el broker lo leera en cuanto asigne a alguien de
+     * su equipo. Medido el 2026-08-30: hoy las 26 propiedades de {@code dev}
+     * estan FALTANTE, asi que en la practica solo el gobierno del tenant abre
+     * un expediente. Es consecuencia de C1+C2, no una regla aparte.
+     *
+     * <p>Si el nuevo responsable necesita contexto, la respuesta <b>no</b> es
+     * abrirle el expediente: seria una nota de traspaso operativa, distinta del
+     * historico de gobierno, y todavia no existe.
+     */
+    public void exigirLecturaDelExpediente(Actor actor, Propiedad propiedad) {
+        if (actor.esAgente()) {
+            throw new AccesoNoAutorizadoException(
+                    "El expediente de traspasos es informacion de gobierno. Puedes ver quien "
+                            + "responde hoy por esta propiedad y operar lo que sea tuyo, pero los "
+                            + "responsables anteriores y los motivos de cada cambio los consulta "
+                            + "quien supervisa.");
+        }
+        if (actor.esTenantAdmin()) {
+            // Su alcance ES el tenant, y el tenant ya se comprobo antes de
+            // llegar aqui (un id de otra corredora responde 404). No se le
+            // pregunta a `alcances.alcanza` a proposito: ese metodo responde
+            // otra cosa —"¿alcanzas un recurso cuyo dueno es ESTE agente?"— y
+            // ante un dueno NULL contesta `false` <b>antes</b> de mirar la
+            // banda. Con una propiedad FALTANTE eso habria dejado el expediente
+            // sin ningun lector: ni el broker, por no supervisar a nadie, ni el
+            // gobierno, por una guarda que ni siquiera le estaba preguntando a
+            // el. Reutilizar la funcion que "suena bien" en vez de la que
+            // responde la pregunta es la forma de fallo que este corte lleva
+            // toda la auditoria persiguiendo.
+            return;
+        }
+        if (!alcances.alcanza(actor, propiedad.getIdRolResponsable())) {
+            throw new AccesoNoAutorizadoException(
+                    "Esta propiedad no responde ante ninguno de tus agentes, asi que su "
+                            + "expediente de traspasos no esta en tu alcance de supervision.");
+        }
     }
 
     /** El expediente de traspasos de una propiedad, el mas reciente primero. */
@@ -277,6 +439,44 @@ public class AutoridadDePropiedad {
         return asignaciones
                 .findByOrganizacionIdAndIdPropiedadOrderByFechaAsignacionDescIdDesc(
                         idOrganizacion, idPropiedad);
+    }
+
+    /**
+     * <b>La autoridad, resuelta y lista para viajar al cliente.</b>
+     *
+     * <p>Vive aqui —y no en cada servicio que devuelve una ficha— porque hay
+     * <b>dos pantallas</b> con acciones de escritura sobre la misma propiedad:
+     * la ficha universal ({@code GET /propiedades/{id}}) y la ficha del encargo
+     * con su galeria ({@code GET /locales/{id}}). La primera version de este P0
+     * resolvio la autoridad dentro de {@code PropiedadUniversalServiceImpl} y
+     * dejo a la segunda calculandola en Angular con la regla vieja
+     * ({@code rol === 'AGENTE'}), que dejo de ser cierta con V87: el boton se
+     * ofrecia a todo agente sobre toda propiedad y respondia 403 siempre.
+     *
+     * <p>La leccion no es "faltaba una pantalla": es que <b>el inventario se
+     * hizo por servicio y las pantallas no se reparten por servicio</b>. Con un
+     * solo productor, la tercera pantalla que aparezca no puede nacer con una
+     * copia distinta de la regla, porque no hay copia que hacer.
+     *
+     * <p>Lo produce el <b>mismo metodo</b> que despues deniega la escritura. Si
+     * fueran dos, la ficha podria decir "puedes editar" y la escritura contestar
+     * 403 — el peor fallo posible de esta pantalla, porque el usuario ya
+     * escribio.
+     */
+    public PropiedadUniversalService.Responsabilidad responsabilidadDe(Actor actor,
+                                                                      Propiedad propiedad) {
+        String motivo = motivoNoEditable(actor, propiedad);
+        return new PropiedadUniversalService.Responsabilidad(
+                propiedad == null ? null : propiedad.getIdRolResponsable(),
+                nombreDelResponsable(propiedad),
+                motivo == null,
+                motivo,
+                motivo == null ? null : explicacion(motivo),
+                // Quien puede decidir QUIEN responde. Es la misma condicion que
+                // abre `asignar` -- no ser agente -- y por eso se lee de aqui y
+                // no de una segunda tabla: la ficha no puede ofrecer un boton
+                // que el POST vaya a rechazar por banda.
+                !actor.esAgente());
     }
 
     /** Nombre del responsable actual, o {@code null} si esta FALTANTE. */

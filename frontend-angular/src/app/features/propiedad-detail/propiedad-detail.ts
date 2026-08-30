@@ -14,11 +14,14 @@ import {
   FichaPropiedad,
   HechoDeActividad,
   ImporteFechado,
+  motivoDeBloqueo,
   PropiedadesService,
+  puedeEscribir,
 } from '../../core/api/propiedades.service';
 import { fechaCorta, monto, SIN_DATO, texto } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { BloqueEncargo } from './bloque-encargo';
+import { TraspasoResponsable } from './traspaso-responsable';
 
 /** Un proceso de la actividad, con su rótulo y el orden en que se lee. */
 interface Carril {
@@ -65,7 +68,7 @@ interface Carril {
  */
 @Component({
   selector: 'app-propiedad-detail',
-  imports: [RouterLink, EstadoListado, BloqueEncargo],
+  imports: [RouterLink, EstadoListado, BloqueEncargo, TraspasoResponsable],
   templateUrl: './propiedad-detail.html',
   styleUrl: './propiedad-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -105,10 +108,13 @@ export class PropiedadDetail implements OnInit {
    * «Editar» de toda propiedad y se llevaba un 403 al guardar.
    *
    * Mientras la ficha carga vale `false`: no se ofrece una acción que
-   * todavía no se sabe si existe.
+   * todavía no se sabe si existe. Y ante un `responsabilidad` **ausente** vale
+   * lo mismo, porque lo decide `puedeEscribir` — una sola función para esta
+   * pantalla, el editor y la ficha del encargo. Antes cada una elegía su
+   * defecto y el editor elegía el contrario.
    */
-  protected readonly puedeEditar = computed(
-    () => this.ficha()?.responsabilidad?.puedeEditar ?? false,
+  protected readonly puedeEditar = computed(() =>
+    puedeEscribir(this.ficha()?.responsabilidad),
   );
 
   /** Quién responde por el inmueble hoy, o `null` si está FALTANTE. */
@@ -116,9 +122,15 @@ export class PropiedadDetail implements OnInit {
     () => this.ficha()?.responsabilidad?.nombre ?? null,
   );
 
-  /** Por qué no se puede escribir, en las palabras del Core. */
-  protected readonly motivoBloqueo = computed(
-    () => this.ficha()?.responsabilidad?.motivoTexto ?? null,
+  /**
+   * Por qué no se puede escribir, en las palabras del Core.
+   *
+   * **Se pinta.** Estuvo declarado y sin usar en la plantilla: el agente veía
+   * desaparecer «Editar» sin ninguna explicación, que es justo lo que el propio
+   * `exigirEdicion` evita en el backend cuando devuelve el motivo con el 403.
+   */
+  protected readonly motivoBloqueo = computed(() =>
+    motivoDeBloqueo(this.ficha()?.responsabilidad),
   );
 
   protected readonly vivos = computed(

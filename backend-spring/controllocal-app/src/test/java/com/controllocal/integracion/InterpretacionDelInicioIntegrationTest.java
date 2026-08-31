@@ -90,25 +90,86 @@ class InterpretacionDelInicioIntegrationTest {
     @Test
     @DisplayName("un hecho resuelto sale verde aunque el asunto este en rojo")
     void elEstadoEsDelHechoYNoDelAsunto() {
-        unAsuntoQueEsperaAOtro();
-        List<FichaTarea> bandeja = tareas.bandejaDe(actorAgente());
+        conElAsuntoQueEsperaAOtro(() -> {
+            List<FichaTarea> bandeja = tareas.bandejaDe(actorAgente());
 
-        // El asunto que espera al broker es de prioridad ALTA y aun asi su primer
-        // hecho es un HECHO: la parte del agente esta cumplida. Si el estado se
-        // dedujera del tono, saldria en rojo (D-E2-1 seccion 10.1).
-        FichaTarea esperandoAOtro = bandeja.stream()
-                .filter(t -> !t.dependeDeMi())
-                .findFirst()
-                .orElse(null);
-        assertNotNull(esperandoAOtro,
-                "no hay ningun asunto que espere a otro, asi que esta prueba no habria medido "
-                        + "nada. Antes esto era un `return` y pasaba en verde SIN ejecutar una "
-                        + "sola asercion; ahora el escenario lo construye "
-                        + "`unAsuntoQueEsperaAOtro`, asi que si falta es que la construccion "
-                        + "dejo de funcionar");
-        List<Hecho> hechos = esperandoAOtro.interpretacion().comoEsta().hechos();
-        assertTrue(hechos.get(0).estado() == EstadoDelHecho.HECHO,
-                "lo que ya esta va primero, y va en verde: " + hechos);
+            // El asunto que espera al broker es de prioridad ALTA y aun asi su
+            // primer hecho es un HECHO: la parte del agente esta cumplida. Si el
+            // estado se dedujera del tono, saldria en rojo (D-E2-1 seccion 10.1).
+            FichaTarea esperandoAOtro = bandeja.stream()
+                    .filter(t -> !t.dependeDeMi())
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(esperandoAOtro,
+                    "no hay ningun asunto que espere a otro, asi que esta prueba no habria "
+                            + "medido nada. Antes esto era un `return` y pasaba en verde SIN "
+                            + "ejecutar una sola asercion; ahora el escenario lo construye "
+                            + "`conElAsuntoQueEsperaAOtro`, asi que si falta es que la "
+                            + "construccion dejo de funcionar");
+            List<Hecho> hechos = esperandoAOtro.interpretacion().comoEsta().hechos();
+            assertTrue(hechos.get(0).estado() == EstadoDelHecho.HECHO,
+                    "lo que ya esta va primero, y va en verde: " + hechos);
+        });
+    }
+
+    /**
+     * <b>Esta clase se puede volver a correr contra la misma base.</b>
+     *
+     * <h2>Por que existe: costo un rechazo de auditoria</h2>
+     * {@code Verificar-Cierre.ps1} <b>no crea ni recrea la base</b> — no hay un
+     * solo {@code create database} ni un {@code down -v} en todo el script—, asi
+     * que <b>la segunda corrida contra la misma base es la corrida normal</b>, no
+     * un caso raro. Y sin embargo nada lo comprobaba.
+     *
+     * <p>Lo que paso: el montaje de {@link #elEstadoEsDelHechoYNoDelAsunto}
+     * escribia una {@code tarea} sobre un contrato inventado y <b>la dejaba
+     * abierta</b>. La primera corrida pasaba —la victima se ejecuta antes que el
+     * inyector— y la <b>segunda</b> encontraba en la bandeja un asunto que el
+     * interprete no sabe describir, porque su entidad no existe: expediente de
+     * <b>0</b> renglones donde {@link #todoAsuntoLlevaCuatroRenglones} exige
+     * cuatro. Tres pruebas mas de esta misma clase caian por lo mismo.
+     *
+     * <p>La leccion, que ya estaba escrita en N15 y en N27 y volvio a costar una
+     * ronda: <b>todo montaje que sobreviva a su prueba es un productor</b>. Un
+     * productor que ademas nadie inventario, porque no parecia produccion.
+     *
+     * <h2>Que comprueba, y por que en ese orden</h2>
+     * Reproduce el ciclo entero —entrada limpia, montaje vivo, salida limpia— y
+     * despues vuelve a exigir lo que la segunda corrida exigiria: que
+     * <b>ningun</b> asunto de la bandeja se quede sin expediente. Sin ese ultimo
+     * paso esto solo diria "borre una fila"; con el, dice lo que de verdad
+     * importa, que es que la bandeja queda como estaba.
+     */
+    @Test
+    @DisplayName("ningun montaje sobrevive a su prueba: la clase se puede correr dos veces")
+    void ningunMontajeSobreviveASuPrueba() {
+        assertEquals(0, tareasDelMontaje(),
+                "control de entrada: al empezar no puede haber rastro de un montaje anterior. Si "
+                        + "lo hay, una corrida previa lo dejo escrito y esta clase ya no es "
+                        + "re-ejecutable");
+
+        conElAsuntoQueEsperaAOtro(() -> assertEquals(1, tareasDelMontaje(),
+                "durante la prueba el montaje SI tiene que existir, o no estaria montando nada"));
+
+        assertEquals(0, tareasDelMontaje(),
+                "y al salir no puede quedar rastro. Este es el defecto exacto que la auditoria "
+                        + "reprodujo: la fila sobrevivia, y la SEGUNDA corrida contra la misma "
+                        + "base veia un asunto que el interprete no sabe describir");
+
+        // Y la bandeja queda sana, que es lo que la segunda corrida veria. Es la
+        // misma exigencia que `todoAsuntoLlevaCuatroRenglones`, repetida aqui a
+        // proposito: comprobar solo que la fila se borro no diria nada sobre el
+        // efecto que tenia.
+        List<String> sinExpediente = new ArrayList<>();
+        for (FichaTarea asunto : tareas.bandejaDe(actorAgente())) {
+            if (asunto.interpretacion().expediente().size()
+                    != InterpretacionDelAsunto.RENGLONES_DEL_EXPEDIENTE) {
+                sinExpediente.add(asunto.entidadTipo() + "#" + asunto.entidadId());
+            }
+        }
+        assertEquals(List.of(), sinExpediente,
+                "tras el montaje la bandeja tiene que quedar como estaba. Si aparece un asunto "
+                        + "sin expediente, la proxima corrida sobre esta base sera roja");
     }
 
     @Test
@@ -493,28 +554,29 @@ class InterpretacionDelInicioIntegrationTest {
      * truco para esquivar la reconciliacion: es el estado que corresponde a un
      * asunto que ya no espera trabajo del agente.
      *
-     * <p>Idempotente por la <b>misma</b> clave con la que escribe, y sin filtrar
-     * por estado: si una corrida anterior dejo la fila cerrada, esta la vuelve a
-     * abrir en vez de insertar otra. Buscar por un criterio y escribir por otro
-     * es exactamente el defecto que se corrigio en
-     * {@code unaProspeccionSinContacto}.
+     * <h2>Y NO SOBREVIVE, que es lo que costo un rechazo</h2>
+     * La version anterior escribia la fila y la dejaba puesta. Funcionaba en la
+     * primera corrida —la victima se ejecuta antes que el inyector— y rompia la
+     * <b>segunda</b> contra la misma base: la bandeja pasaba a tener un asunto
+     * cuya entidad no existe, el interprete no podia describirlo y devolvia un
+     * expediente de <b>0</b> renglones donde
+     * {@link #todoAsuntoLlevaCuatroRenglones} exige cuatro. Y
+     * {@code Verificar-Cierre.ps1} <b>no recrea la base</b>, asi que la segunda
+     * corrida es la normal.
+     *
+     * <p>Asi que el montaje es <b>acotado</b>: limpia <b>antes</b> —por si una
+     * corrida murio a mitad y no llego a limpiar, que es justo cuando esto
+     * importa—, monta, ejecuta y <b>retira en {@code finally}</b>. La alternativa
+     * era colgar la tarea de un contrato real, y eso obliga a fabricar la
+     * cascada comercial entera para medir una regla de presentacion.
+     *
+     * <p>La regla general, que ya estaba escrita en N15 y en N27: <b>todo
+     * montaje que sobreviva a su prueba es un productor</b>. Lo vigila
+     * {@link #ningunMontajeSobreviveASuPrueba}.
      */
-    private void unAsuntoQueEsperaAOtro() {
+    private void conElAsuntoQueEsperaAOtro(Runnable cuerpo) {
+        retirarElAsuntoQueEsperaAOtro();
         Actor agente = actorAgente();
-        // La MISMA clave para buscar y para escribir -- sin filtrar por estado.
-        // Filtrando por `estado in ('P','E')` la fila cerrada dejaba de verse y
-        // cada corrida insertaba otra: la busqueda y la escritura tienen que
-        // mirar lo mismo o la idempotencia es aparente.
-        int actualizadas = jdbc.update("""
-                update tarea set estado = 'E', fecha_completada = null,
-                                 fecha_actualizacion = now()
-                 where organizacion_id = ? and id_rol_agente = ?
-                   and entidad_tipo = 'CONTRATO_ALQUILER' and entidad_id = ?
-                """, agente.idOrganizacion(), agente.idRolOperativo(),
-                ENTIDAD_DEL_ASUNTO_QUE_ESPERA);
-        if (actualizadas > 0) {
-            return;
-        }
         jdbc.update("""
                 insert into tarea (organizacion_id, tipo, entidad_tipo, entidad_id, id_rol_agente,
                                    descripcion, estado, prioridad)
@@ -522,6 +584,28 @@ class InterpretacionDelInicioIntegrationTest {
                         'Comision lista para cobro: la registra el broker', 'E', 'ALTA')
                 """, agente.idOrganizacion(), ENTIDAD_DEL_ASUNTO_QUE_ESPERA,
                 agente.idRolOperativo());
+        try {
+            cuerpo.run();
+        } finally {
+            // En `finally` y no al final del cuerpo: si la asercion falla -que es
+            // cuando mas falta hace- la limpieza tiene que ocurrir igual, o un
+            // rojo dejaria la base envenenada para las siguientes.
+            retirarElAsuntoQueEsperaAOtro();
+        }
+    }
+
+    /** Retira el montaje. Por la MISMA clave con la que se escribe. */
+    private void retirarElAsuntoQueEsperaAOtro() {
+        jdbc.update("delete from tarea where entidad_tipo = 'CONTRATO_ALQUILER' "
+                + "and entidad_id = ?", ENTIDAD_DEL_ASUNTO_QUE_ESPERA);
+    }
+
+    /** Cuantas filas del montaje hay ahora mismo. Cero, salvo dentro del cuerpo. */
+    private int tareasDelMontaje() {
+        Integer n = jdbc.queryForObject(
+                "select count(*) from tarea where entidad_tipo = 'CONTRATO_ALQUILER' "
+                        + "and entidad_id = ?", Integer.class, ENTIDAD_DEL_ASUNTO_QUE_ESPERA);
+        return n == null ? 0 : n;
     }
 
     private Actor actorAgente() {

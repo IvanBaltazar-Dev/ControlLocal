@@ -127,16 +127,30 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("cada asunto del broker llega interpretado, con la misma capa del agente")
     void cadaAsuntoLlegaInterpretado() {
-        List<AsuntoDelBroker> asuntos = focoDelBroker.de(broker());
+        Actor elBroker = broker();
+
         // Antes esto era `if (asuntos.isEmpty()) return;` y la prueba pasaba en
-        // verde sin recorrer nada. El foco de un broker con equipo NO puede
-        // estar vacio en la base del cierre: medido el 2026-08-31 sobre la
-        // instancia dedicada habia 216 captaciones en estado P esperando
-        // revision, que es justo lo que alimenta este foco.
+        // verde sin recorrer nada.
+        //
+        // Lo que sostiene que el foco NO puede venir vacio se MIDE aqui, en la
+        // corrida, en vez de escribirse como cifra en un comentario. La primera
+        // version decia "216 captaciones en estado P": al dia siguiente eran
+        // 217, y ademas la mayoria las crea la propia suite, asi que esa cifra
+        // no era la razon por la que la asercion aguanta. La razon es que este
+        // broker supervisa agentes con captaciones pendientes de revision, y
+        // eso es lo que se pregunta.
+        long pendientesEnSuEquipo = captacionesPendientesDeSuEquipo(elBroker);
+        assertTrue(pendientesEnSuEquipo > 0,
+                "el escenario desaparecio: este broker no supervisa a nadie con captaciones "
+                        + "pendientes, asi que su foco puede venir vacio con razon y esta prueba "
+                        + "ya no mide lo que cree medir");
+
+        List<AsuntoDelBroker> asuntos = focoDelBroker.de(elBroker);
         assertFalse(asuntos.isEmpty(),
-                "el foco del broker salio vacio, asi que el bucle de abajo no comprobaria nada. "
-                        + "O el escenario dejo de existir o el servicio dejo de producirlo: las "
-                        + "dos cosas hay que verlas, no saltarlas");
+                "el foco del broker salio vacio y sin embargo su equipo tiene "
+                        + pendientesEnSuEquipo + " captaciones pendientes de revision: el "
+                        + "escenario esta, asi que lo que fallo es el servicio. Antes esto se "
+                        + "saltaba con un `return`");
         for (AsuntoDelBroker asunto : asuntos) {
             assertNotNull(asunto.interpretacion(), asunto.tipo());
             assertFalse(asunto.interpretacion().comoEsta().hechos().isEmpty(),
@@ -273,6 +287,30 @@ class FocoDelBrokerIntegrationTest {
      * esos el foco esta vacio con toda razon. Los disparadores solo se pueden
      * ejercer sobre un broker que de verdad supervise a alguien.
      */
+    /**
+     * <b>Cuantas captaciones pendientes tiene el equipo de ese broker.</b>
+     *
+     * <p>Es la medida que sostiene «su foco no puede venir vacio», y se hace en
+     * la corrida a proposito: escrita como cifra en un comentario caduca sola —
+     * pasó de 216 a 217 en un dia— y ademas la mayoria las crea la propia
+     * suite, asi que el numero nunca fue el argumento. El argumento es la
+     * relacion: <b>si su equipo tiene trabajo pendiente, su foco tiene
+     * asuntos</b>.
+     *
+     * <p>No reimplementa el alcance del servicio: pregunta por la supervision
+     * vigente, que es un hecho de la base, no una decision de autoridad.
+     */
+    private long captacionesPendientesDeSuEquipo(Actor unBroker) {
+        Long total = jdbc.queryForObject("""
+                select count(*)
+                  from captacion c
+                  join supervision_agente s on s.id_rol_agente = c.id_rol_agente
+                                           and s.fecha_fin is null
+                 where s.id_rol_broker = ? and c.estado = 'P'
+                """, Long.class, unBroker.idRolOperativo());
+        return total == null ? 0 : total;
+    }
+
     private Actor broker() {
         return actorCon("""
                 select r.id_persona_rol, r.organizacion_id, r.id_persona
@@ -283,7 +321,8 @@ class FocoDelBrokerIntegrationTest {
                                   and s.fecha_fin is null)
                  order by (select count(*) from supervision_agente s2
                             where s2.id_rol_broker = b.id_persona_rol
-                              and s2.fecha_fin is null) desc
+                              and s2.fecha_fin is null) desc,
+                          b.id_persona_rol
                  limit 1
                 """, Actor.BROKER);
     }

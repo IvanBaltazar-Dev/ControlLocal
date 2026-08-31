@@ -115,8 +115,28 @@ class OcupacionInmuebleIntegrationTest {
                     "no hay contrato vivo que duplicar Y ademas ha desaparecido el indice que "
                             + "impide la duplicacion. Sin ninguna de las dos cosas, esta prueba "
                             + "no sostiene el invariante");
-            assertTrue(definicion.toUpperCase().contains("UNIQUE"),
+            String normalizada = definicion.toUpperCase().replaceAll("\\s+", " ");
+            assertTrue(normalizada.contains("UNIQUE"),
                     "el guardian tiene que seguir siendo UNIQUE: " + definicion);
+            // Y PARCIAL, que es la mitad que de verdad decide. Comprobar solo
+            // que existe y que dice UNIQUE dejaba pasar una migracion futura que
+            // tocara el WHERE: un unico sobre (organizacion, propiedad) SIN
+            // predicado prohibiria tambien los contratos ya terminados, y uno
+            // con el predicado estrechado dejaria de prohibir los vivos. El
+            // invariante no es "hay un unique": es "hay un unique que aplica
+            // exactamente a los contratos vivos".
+            assertTrue(normalizada.contains("WHERE"),
+                    "el guardian tiene que ser PARCIAL, o estaria prohibiendo tambien dos "
+                            + "contratos terminados sobre la misma propiedad: " + definicion);
+            assertTrue(normalizada.contains("ESTADO_CONTRATO"),
+                    "y su predicado tiene que mirar el estado del contrato: " + definicion);
+            for (String vivo : List.of("'D'", "'V'")) {
+                assertTrue(normalizada.contains(vivo),
+                        "el predicado tiene que seguir cubriendo el estado vivo " + vivo
+                                + ": si un estado vivo se cae del WHERE, dos contratos de ese "
+                                + "estado caben sobre la misma propiedad y nadie lo impide. "
+                                + definicion);
+            }
             return;
         }
         // Clonar la fila cambiando solo la clave: colisiona en la propiedad.

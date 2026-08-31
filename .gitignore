@@ -353,3 +353,51 @@ generated/
 !/backend-spring/README.md
 !/frontend-angular/README.md
 !/kairos-service/README.md
+# ============================================================
+# BROX � Canonical repository verification sources
+# Added before main integration
+# ============================================================
+
+# Todas las suites E2E son c�digo de verificaci�n y deben viajar.
+!backend-spring/verificacion/e2e-*.ps1
+
+# Fuentes auxiliares de verificaci�n.
+!backend-spring/verificacion/generar-datos-demo.sh
+!backend-spring/verificacion/sanear-residuo-de-pruebas.sql
+!backend-spring/verificacion/v6-dos-organizaciones.sql
+!backend-spring/verificacion/v6-rollback.sql
+
+# README de verificaci�n.
+!backend-spring/verificacion/README.md
+
+# Herramientas reales del frontend, no output generado.
+!frontend-angular/tools/
+frontend-angular/tools/*
+!frontend-angular/tools/diagnostico-visual/
+!frontend-angular/tools/diagnostico-visual/**
+
+# Estas excepciones deben quedar despu�s de **/README.md.
+!/backend-spring/verificacion/README.md
+!/frontend-angular/tools/diagnostico-visual/README.md
+
+
+# ============================================================
+# BROX � Operational source
+# ============================================================
+
+!backend-spring/operacion/
+backend-spring/operacion/*
+
+!backend-spring/operacion/respaldo.ps1
+!backend-spring/operacion/restaurar-verificar.ps1
+
+# README exception; this block is at the end so it wins over **/README.md
+!backend-spring/operacion/README.md
+
+
+# ============================================================
+# BROX � Canonical agent instructions
+# ============================================================
+
+!AGENTS.md
+!CLAUDE.md

@@ -1,0 +1,261 @@
+# =====================================================================
+# E2E del flujo F2 sobre el nucleo multi-tenant (V6).
+#
+# Recorre oferta + prospeccion + captacion contra el API v2 y comprueba,
+# fila por fila, que todo lo que se crea nace con el tenant de legado.
+# Cubre los criterios #1, #2, #5, #6 y #9 del gate de
+# docs/ai/plan-migracion-v6-tenancy.md.
+#
+# Uso: powershell -File backend-spring/verificacion/Invoke-E2E.ps1 -Suite v6
+# Uso:        pwsh backend-spring/verificacion/e2e-v6.ps1
+# =====================================================================
+$ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/e2e-context.ps1"
+$e2e = Assert-ControlLocalE2EContext
+$base = $e2e.BaseUrl
+$ok = 0; $fail = 0
+
+function Check($nombre, $condicion, $detalle) {
+    if ($condicion) { $script:ok++; Write-Host "  OK   $nombre" -ForegroundColor Green }
+    else { $script:fail++; Write-Host "  FALLA $nombre -> $detalle" -ForegroundColor Red }
+}
+
+function Api($metodo, $ruta, $token, $cuerpo) {
+    $headers = @{}
+    if ($token) { $headers['Authorization'] = "Bearer $token" }
+    $parametros = @{ Method = $metodo; Uri = "$base$ruta"; Headers = $headers; TimeoutSec = 30 }
+    if ($null -ne $cuerpo) {
+        $parametros['Body'] = ($cuerpo | ConvertTo-Json -Depth 6)
+        $parametros['ContentType'] = 'application/json'
+    }
+    Invoke-RestMethod @parametros
+}
+
+function Sql($consulta) {
+    (docker exec $e2e.PostgresContainer psql -U controllocal -d $e2e.Database -t -A -c $consulta) -join "`n"
+}
+
+Write-Host "`n== 1. Login (contrato de token CONGELADO) ==" -ForegroundColor Cyan
+$agente = Api POST '/auth/login' $null @{ usuario = 'vmora'; contrasena = 'Agente2026' }
+Check 'login agente devuelve token' ($agente.token.Length -gt 40) $agente.token
+Check 'rol AGENTE' ($agente.rol -eq 'AGENTE') $agente.rol
+Check 'el token sigue teniendo 3 partes HS256' ($agente.token.Split('.').Count -eq 3) 'formato'
+$claims = $agente.token.Split('.')[1]
+$claims = $claims.PadRight([int](([math]::Ceiling($claims.Length / 4.0)) * 4), '=').Replace('-', '+').Replace('_', '/')
+$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($claims)) | ConvertFrom-Json
+# El tenant lo resuelve el backend por request (D-20): si algun dia aparece
+# en el token, es que el contrato dejo de estar congelado.
+Check 'el token NO lleva la organizacion (gate #5)' ($null -eq $payload.idOrganizacion) 'el token debe seguir congelado'
+
+$broker = Api POST '/auth/login' $null @{ usuario = 'rsalas'; contrasena = 'Broker2026' }
+Check 'login broker' ($broker.rol -eq 'BROKER') $broker.rol
+$admin = Connect-ControlLocalE2E $base 'admin@controllocal.test' 'Admin2026'
+Check 'login admin' ($admin.rol -eq 'ADMIN') $admin.rol
+$hoy = (Get-Date).ToString('yyyy-MM-dd')
+$finEncargo = (Get-Date).AddDays(90).ToString('yyyy-MM-dd')
+
+Write-Host "`n== 2. Lectura de la cartera (scope por tenant) ==" -ForegroundColor Cyan
+$locales = Api GET '/locales?pagina=1&tamano=10' $agente.token
+$totalPrevio = $locales.totalRecords
+Check 'GET /locales responde el total del tenant' ($totalPrevio -ge 2) "total=$totalPrevio"
+$localesAdmin = Api GET '/locales?pagina=1&tamano=10' $admin.token
+Check 'el ADMIN ve el mismo universo (su organizacion)' ($localesAdmin.totalRecords -eq $totalPrevio) "$($localesAdmin.totalRecords) vs $totalPrevio"
+
+Write-Host "`n== 3. Alta universal (estampa el tenant en todo lo que crea) ==" -ForegroundColor Cyan
+$sufijo = Get-Random -Minimum 1000 -Maximum 9999
+# `POST /locales` se retiro en el Corte 0A. Hacia tres cosas -registrar, abrir
+# prospeccion y crear anuncio-; el alta universal hace UNA, y las otras dos se
+# declaran. Lo que esta suite verifica sigue siendo lo mismo: que el tenant se
+# estampa en todo lo que nace.
+$nuevoLocal = NuevoInmuebleConEncargo -Token $agente.token `
+    -Direccion 'Av. Multi-tenant 456' -IdPropietario 43 -Codigo "LOC-V6$sufijo" -Metraje 150.5 -Rubro 'Cafeteria' `
+    -Importe 9200 -Moneda 'PEN' -Descripcion "Alta multi-tenant V6 $sufijo"
+$idLocal = $nuevoLocal.id
+Check 'el alta universal crea con los defaults del modelo' `
+    ((Sql "select tipo_inmueble||'/'||uso from propiedad where id_propiedad=$idLocal") -eq 'L/C') 'tipo/uso'
+Check 'la propiedad nace en BROX_LEGACY' ((Sql "select organizacion_id from propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
+Check 'el atributo gobernado hereda el tenant' ((Sql "select distinct organizacion_id from atributo_propiedad where id_propiedad=$idLocal") -eq '1') 'organizacion_id'
+Check 'el encargo hereda el tenant' ((Sql "select count(*) from captacion where id_propiedad=$idLocal and organizacion_id=1") -eq '1') 'captacion'
+# El encargo la pone EN OFERTA: registrar no es encargar, pero encargar si es
+# ofrecer (V75).
+Check 'abrir el encargo deja la propiedad disponible' ((Sql "select disponibilidad_comercial from propiedad where id_propiedad=$idLocal") -eq 'D') 'disponibilidad'
+Check 'y lo deja dicho en su expediente' ((Sql "select count(*) from historial_estado where entidad_tipo='DISPONIBILIDAD_PROPIEDAD' and id_entidad=$idLocal") -eq '1') 'historial'
+
+$totalNuevo = (Api GET '/locales?pagina=1&tamano=10' $agente.token).totalRecords
+Check 'el total del tenant subio en 1' ($totalNuevo -eq $totalPrevio + 1) "$totalNuevo vs $totalPrevio"
+
+Write-Host "`n== 4. Ficha, edicion y precios ==" -ForegroundColor Cyan
+$ficha = Api GET "/locales/$idLocal" $agente.token
+Check 'GET /locales/{id} devuelve la ficha' ($ficha.codigoLocal -eq "LOC-V6$sufijo") $ficha.codigoLocal
+Check 'la ficha trae el propietario resuelto' ($null -ne $ficha.propietarioNombre) 'propietarioNombre'
+
+# `PUT /locales/{id}` se retiro en el Corte 0A. El precio se cambia donde vive:
+# en el ENCARGO, y cambiarlo ANADE un hito 'U' -no sobrescribe el anterior-.
+Api PUT "/propiedades/$idLocal" $agente.token @{
+    operaciones = @(@{ operacion = 'ALQUILER'; importe = 9900; moneda = 'PEN' })
+} | Out-Null
+$editado = Api GET "/locales/$idLocal" $agente.token
+Check 'editar el encargo actualiza el precio de la ficha' ($editado.precioReferencial -eq 9900) $editado.precioReferencial
+# E0.1 (2026-08-10): la serie de precios es APPEND-ONLY y el alta ya deja su
+# PRIMER hito 'U' con el precio autorizado de salida. Esta comprobacion exigia
+# UNA sola fila, y era correcta mientras el unico productor de 'U' fuera la
+# edicion. Ahora tienen que convivir los dos, en orden y sin pisarse: 9200 al
+# alta y 9900 al editar. Volver a ver un solo hito significaria que la edicion
+# machaca el precio de salida, que es exactamente lo que E0.1 vino a impedir
+# —ese primer numero es el que mide cuanto cedio el propietario hasta el cierre
+# y no se reconstruye desde ninguna otra tabla—.
+$serieU = Sql "select string_agg(monto::int::text, '>' order by id_precio) from precio_propiedad where id_propiedad=$idLocal and hito='U' and organizacion_id=1"
+Check 'el alta y la edicion dejan sus dos hitos U con tenant, sin pisarse' `
+    ($serieU -eq '9200>9900') $serieU
+
+# D-E4-1 (2026-08-18): un hito de precio declara de que OPERACION es. Antes se
+# suponia alquiler cuando el cuerpo no lo decia, y con la venta en el modelo esa
+# suposicion archiva un precio de venta en la serie de alquiler sin que ningun
+# CHECK pueda notarlo. Si la propiedad tiene un unico encargo vivo, el servidor
+# lo deduce de ahi; esta no lo tiene todavia, asi que se declara.
+$precio = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9500; operacion = 'ALQUILER' }
+Check 'POST /precios registra el hito' ($precio.hito -eq 'O') $precio.hito
+Check 'el hito declara su operacion' ($precio.operacion -eq 'ALQUILER') $precio.operacion
+Check 'el precio manual lleva tenant' ((Sql "select organizacion_id from precio_propiedad where id_precio=$($precio.id)") -eq '1') 'organizacion_id'
+
+# Sin operacion declarada, el servidor la DEDUCE cuando no hay ambiguedad: esta
+# propiedad tiene un unico encargo vivo -el de alquiler que abrio el alta-, asi
+# que el hito se archiva en su serie sin suponer nada.
+$deducido = Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9600 }
+Check 'con un solo encargo vivo, la operacion se deduce de el' ($deducido.operacion -eq 'ALQUILER') $deducido.operacion
+
+$publicacion = Api POST "/encargos/$($nuevoLocal.idEncargo)/publicaciones" $agente.token @{ canal = 'URBANIA'; importePublicado = 9900; moneda = 'PEN'; estado = 'P' }
+Check 'POST /publicaciones crea el anuncio' ($publicacion.estado -eq 'P') $publicacion.estado
+Check 'la publicacion nueva lleva tenant' ((Sql "select organizacion_id from publicacion where id_publicacion=$($publicacion.id)") -eq '1') 'organizacion_id'
+
+Write-Host "`n== 5. Prospeccion: maquina de estados + auditoria ==" -ForegroundColor Cyan
+# La prospeccion se declara. `POST /locales` la abria de rebote y por eso esta
+# suite la encontraba hecha; el alta universal no crea prospecciones -lo dice su
+# propia documentacion- porque prospectar es una decision, no un efecto de
+# registrar.
+$idProspeccion = NuevaProspeccion -Token $agente.token -IdPropiedad $idLocal `
+    -Observaciones "Prospeccion multi-tenant V6 $sufijo"
+$prospecciones = Api GET "/prospecciones?idLocal=$idLocal" $agente.token
+Check 'la prospeccion nace en P' ($prospecciones.items[0].estado -eq 'P') $prospecciones.items[0].estado
+Check 'y hereda el tenant' ((Sql "select organizacion_id from prospeccion where id_prospeccion=$idProspeccion") -eq '1') 'organizacion_id'
+Check 'el correlativo sigue el formato PRO-####' ($prospecciones.items[0].codigoProspeccion -match '^PRO-\d{4}$') $prospecciones.items[0].codigoProspeccion
+
+$p = Api POST "/prospecciones/$idProspeccion/contactar" $agente.token $null
+Check 'contactar -> C' ($p.estado -eq 'C') $p.estado
+$p = Api POST "/prospecciones/$idProspeccion/reunion" $agente.token $null
+Check 'reunion -> R' ($p.estado -eq 'R') $p.estado
+$p = Api POST "/prospecciones/$idProspeccion/propuesta" $agente.token $null
+# Cable real de la v1: entregar propuesta deja S, nunca emite el estado E.
+Check 'propuesta deja S (la v1 nunca emite E)' ($p.estado -eq 'S') $p.estado
+Check 'resultadoPropuesta = P' ($p.resultadoPropuesta -eq 'P') $p.resultadoPropuesta
+
+$historial = Sql "select count(*) from historial_estado where entidad_tipo='PROSPECCION' and id_entidad=$idProspeccion"
+Check 'las 3 transiciones quedaron auditadas' ($historial -eq '3') "filas=$historial"
+$historialSinTenant = Sql "select count(*) from historial_estado where entidad_tipo='PROSPECCION' and id_entidad=$idProspeccion and organizacion_id is null"
+Check 'ninguna fila de auditoria quedo sin tenant' ($historialSinTenant -eq '0') "sin tenant=$historialSinTenant"
+
+Write-Host "`n== 6. Captacion: alta desde la prospeccion y revision del broker ==" -ForegroundColor Cyan
+# La propiedad ya tiene un encargo de ALQUILER vivo, asi que captar declara
+# VENTA: la invariante `uq_captacion_viva_por_operacion` prohibe el segundo
+# vivo de la MISMA operacion, no un encargo de la otra (V75).
+$p = Api POST "/prospecciones/$idProspeccion/captar" $agente.token @{
+    operacion = 'VENTA'; importe = 350000; moneda = 'USD'; comisionPactada = 3
+}
+$idCaptacion = $p.idCaptacion
+Check 'captar -> T (captado)' ($p.estado -eq 'T') $p.estado
+Check 'se creo la captacion' ($null -ne $idCaptacion) 'idCaptacion'
+Check 'el correlativo sigue el formato CAP-####' ($p.captacionCodigo -match '^CAP-\d{4}$') $p.captacionCodigo
+Check 'la captacion nace con tenant' ((Sql "select organizacion_id from captacion where id_captacion=$idCaptacion") -eq '1') 'organizacion_id'
+
+# Y AHORA la propiedad tiene DOS encargos vivos -alquiler y venta-, asi que un
+# hito sin operacion ya no se puede deducir: se rechaza en vez de suponer.
+$rechazado = $false
+try {
+    Api POST "/locales/$idLocal/precios" $agente.token @{ hito = 'O'; moneda = 'PEN'; monto = 9700 } | Out-Null
+} catch {
+    $rechazado = $true
+}
+Check 'con venta y alquiler vivos, un hito sin operacion se rechaza' $rechazado 'rechazado'
+
+$pendientes = Api GET '/captaciones/pendientes?pagina=1&tamano=20' $broker.token
+Check 'la captacion aparece en la bandeja del broker' (@($pendientes.items | Where-Object { $PSItem.id -eq $idCaptacion }).Count -eq 1) "total=$($pendientes.totalRecords)"
+
+try {
+    Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'O'; observacion = '' } | Out-Null
+    Check 'observar sin observacion se rechaza (MEJ-03)' $false 'no lanzo error'
+} catch {
+    Check 'observar sin observacion se rechaza (MEJ-03)' $true 'ok'
+}
+
+$decidida = Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'O'; observacion = 'Falta el plano del local' }
+Check 'observar -> O' ($decidida.estado -eq 'O') $decidida.estado
+
+# Este encargo es de VENTA -lo abrio `captar` unas lineas mas arriba-, asi que
+# la subsanacion lo edita COMO VENTA. El cuerpo decia `motivoOperacion = 'A'` y
+# eso convertia el encargo de venta en uno de alquiler conservando su historico:
+# los 350 000 USD del precio de venta pasaban a leerse como renta mensual. Aqui
+# chocaba ademas contra `uq_captacion_viva_por_operacion` -la propiedad ya tenia
+# su alquiler vivo- y salia como un 409; sin ese choque habria pasado en
+# silencio. Desde V76 el backend lo rechaza de frente.
+$reenviada = Api PUT "/captaciones/$idCaptacion" $agente.token @{
+    fechaCaptacion = $hoy; fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
+    observaciones = 'Plano adjunto'; idLocal = $idLocal
+    motivoOperacion = 'V'; tipoOperacion = 'V'; urgencia = 3; exclusividad = $true
+    importeReferencia = 350000; monedaReferencia = 'USD'
+    tipoComision = 'P'; baseCalculo = 'V'; valorComision = 3; monedaComision = 'USD'
+    tratamientoIgv = 'N'
+}
+Check 'editar una observada la reenvia a P' ($reenviada.estado -eq 'P') $reenviada.estado
+Check 'y no cambia la operacion del encargo' ($reenviada.tipoOperacion -eq 'V') $reenviada.tipoOperacion
+
+# Y cambiarla se rechaza diciendo por que: la operacion es la identidad del
+# encargo, no uno de sus campos.
+$cambioDeOperacion = $false
+try {
+    Api PUT "/captaciones/$idCaptacion" $agente.token @{
+        fechaCaptacion = $hoy; fechaInicioVigencia = $hoy; fechaFinVigencia = $finEncargo
+        comisionPactada = 100; observaciones = 'Plano adjunto'; idLocal = $idLocal
+        motivoOperacion = 'A'; urgencia = 3; exclusividad = $true
+    } | Out-Null
+} catch {
+    $cambioDeOperacion = $true
+}
+Check 'la operacion de un encargo no se edita' $cambioDeOperacion 'rechazado'
+
+$aprobada = Api POST "/captaciones/$idCaptacion/decision" $broker.token @{ accion = 'A'; observacion = 'Conforme' }
+Check 'aprobar -> A (activa)' ($aprobada.estado -eq 'A') $aprobada.estado
+
+$auditoriaCaptacion = Sql "select count(*) from historial_estado where entidad_tipo='CAPTACION' and id_entidad=$idCaptacion and organizacion_id=1"
+Check 'las transiciones de captacion se auditaron con tenant' ($auditoriaCaptacion -eq '3') "filas=$auditoriaCaptacion"
+
+Write-Host "`n== 7. mis-locales, reasignacion y cierre ==" -ForegroundColor Cyan
+$mios = Api GET '/locales/mis-locales?pagina=1&tamano=50' $agente.token
+Check 'el local aparece en mis-locales del agente' (@($mios.items | Where-Object { $PSItem.id -eq $idLocal }).Count -eq 1) "total=$($mios.totalRecords)"
+
+# Agente 29 (Javier Ruiz), tambien supervisado por rsalas en el seed.
+$reasignada = Api POST "/captaciones/$idCaptacion/reasignar" $broker.token @{ idAgenteNuevo = 29; motivo = 'Balance de cartera' }
+Check 'reasignar cambia el responsable' ($reasignada.idAgente -eq 29) $reasignada.idAgente
+Check 'reasignar NO transiciona el estado' ($reasignada.estado -eq 'A') $reasignada.estado
+Check 'el evento de reasignacion lleva tenant' ((Sql "select count(*) from reasignacion_captacion where id_captacion=$idCaptacion and organizacion_id=1") -eq '1') 'reasignacion'
+
+$cerrada = Api POST "/captaciones/$idCaptacion/cierre" $broker.token @{ motivo = 'Contrato firmado' }
+Check 'cerrar -> C' ($cerrada.estado -eq 'C') $cerrada.estado
+
+Write-Host "`n== 8. Ninguna fila del tenant quedo huerfana ==" -ForegroundColor Cyan
+$huerfanas = Sql @"
+select coalesce(sum(nulos),0) from (
+  select (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I where organizacion_id is null', table_name), false, true, '')))[1]::text::int as nulos
+  from information_schema.columns
+   where column_name='organizacion_id' and table_schema='public'
+     -- catalogo_atributo es HIBRIDO a proposito (D-E4-1 M2, V48): sus filas
+     -- del sistema llevan organizacion_id NULL y son las MISMAS para toda
+     -- corredora. Son lo que permite que dos propiedades se comparen; si
+     -- llevaran tenant, el vocabulario dejaria de ser comun y el matcher
+     -- entre organizaciones no podria existir. Es la misma excepcion que
+     -- ArquitecturaTenancyTest ya declara, con la misma razon.
+     and table_name <> 'catalogo_atributo') t
+"@
+Check 'cero filas con organizacion_id NULL en toda la BD' ($huerfanas -eq '0') "nulos=$huerfanas"
+
+Write-Host "`n===== $ok OK / $fail FALLAS =====" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
+if ($fail -gt 0) { exit 1 }

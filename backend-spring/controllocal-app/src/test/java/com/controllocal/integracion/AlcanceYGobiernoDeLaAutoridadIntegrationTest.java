@@ -10,6 +10,7 @@ import com.controllocal.service.PropiedadUniversalService.Titular;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
 import com.controllocal.service.PropiedadUniversalService.ValorAtributo;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.junit.jupiter.api.DisplayName;
@@ -88,6 +89,9 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PropiedadUniversalService propiedades;
+    // Se inyecta para poder preguntarle DIRECTAMENTE por la rama que hoy
+    // ningun consumidor alcanza: ver `unAgenteNoAlcanzaElInventarioSinDueno`.
+    @Autowired Alcances alcances;
 
     private static final String MOTIVO =
             "Reasignacion por reparto de cartera del trimestre";
@@ -393,9 +397,22 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
                 () -> propiedades.traspasosDe(idPropiedad, duena),
                 "ni lee el expediente");
 
-        // Un broker de otro equipo: SI puede traspasar -la banda se lo permite y
-        // el alcance lo decide el agente que recibe- y NO lee este expediente,
-        // porque la propiedad responde ante alguien que no supervisa.
+        // Un broker de otro equipo: el CABLE le ofrece el traspaso -porque
+        // `puedeTraspasar` sale de la BANDA- y NO lee este expediente, porque la
+        // propiedad responde ante alguien que no supervisa.
+        //
+        // OJO con lo que el `assertTrue` de abajo NO dice. Aqui ponia que ese
+        // broker «SI puede traspasar, y el alcance lo decide el agente que
+        // recibe». Desde C6 eso es FALSO: con la propiedad respondiendo ante un
+        // agente de otro equipo, ese broker no la traspasa a NINGUN destino,
+        // porque tambien se comprueba el SALIENTE. Lo unico que se afirma es el
+        // booleano de banda que viaja en la ficha -- y por eso esta prueba no se
+        // puso en rojo al cerrar C6: mide el cable, no el resultado del POST.
+        //
+        // Que el boton se ofrezca y el POST rechace es exactamente la asimetria
+        // que C6 dejo ANOTADA y sin decidir. El dia que `puedeTraspasar`
+        // incorpore el alcance sobre el saliente, esta es la linea que cambia, y
+        // este comentario es donde consta por que.
         Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
         assertTrue(propiedades.consultar(idPropiedad, brokerAjeno).responsabilidad()
                         .puedeTraspasar(),
@@ -403,6 +420,63 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.traspasosDe(idPropiedad, brokerAjeno),
                 "y aun asi no lee el expediente: son dos preguntas distintas");
+    }
+
+    /**
+     * <b>«De nadie» no es «de todos»: un AGENTE no alcanza el inventario sin
+     * dueno</b> (C5, la tercera fila de la tabla).
+     *
+     * <h2>Por que hace falta, y por que en dos niveles</h2>
+     * {@code Alcances.alcanzaIncluidoSinDueno} responde {@code !esAgente()}
+     * cuando no hay dueno. Esa rama <b>no la alcanza hoy ningun consumidor</b>:
+     * los dos —{@code exigirLecturaDelExpediente} y {@code asignar}— cortan al
+     * agente por banda <b>antes</b> de preguntar. Consecuencia medida:
+     * sustituir ese {@code !esAgente()} por {@code return true} <b>no ponia
+     * ninguna prueba en rojo</b>. Una rama defensiva sin red es una rama que el
+     * dia que alguien la simplifique "porque no la cubre nada" se lleva por
+     * delante la mitad de C5 en silencio.
+     *
+     * <p>Por eso se mide en los dos niveles, y los dos hacen falta:
+     * <ol>
+     *   <li>el <b>comportamiento</b>, que es lo que le pasa al usuario: un
+     *       agente no lee el expediente de una FALTANTE. Esto lo sostiene la
+     *       guarda de banda, no la rama;</li>
+     *   <li>la <b>rama</b>, preguntandole a {@code Alcances} directamente. Es
+     *       el unico sitio donde {@code return true} se pone rojo.</li>
+     * </ol>
+     * Con solo el primero, la rama seguiria sin red; con solo el segundo, se
+     * estaria fijando una funcion sin decir que protege.
+     */
+    @Test
+    @DisplayName("C5: un AGENTE no alcanza el inventario sin dueno, ni por la puerta de atras")
+    void unAgenteNoAlcanzaElInventarioSinDueno() {
+        Actor duena = agenteDelEquipo(0);
+        long idPropiedad = registrar(duena);
+        dejarSinResponsable(idPropiedad);
+
+        // 1. El comportamiento. Ni quien la registro, ni un agente cualquiera.
+        for (Actor quien : List.of(duena, agenteDeOtroEquipo())) {
+            assertThrows(AccesoNoAutorizadoException.class,
+                    () -> propiedades.traspasosDe(idPropiedad, quien),
+                    "una propiedad sin responsable no pasa a ser de todos: el expediente sigue "
+                            + "siendo superficie de gobierno, y perder al dueno no lo abre");
+        }
+        // Control positivo: el broker SI entra en esta misma propiedad, asi que
+        // la negacion de arriba es por banda y no porque nadie alcance nada.
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, broker()).size(),
+                "y el broker si la alcanza: es inventario sin dueno de su tenant (C5)");
+
+        // 2. La rama, preguntada donde vive. Esto es lo unico que se pone rojo
+        //    si `alcanzaIncluidoSinDueno` pasa a devolver `true` sin mirar.
+        assertFalse(alcances.alcanzaIncluidoSinDueno(duena, null),
+                "sin dueno, un AGENTE no alcanza. Si esto pasa a ser cierto, la excepcion de C5 "
+                        + "deja de ser «lo gobierna el broker» y se convierte en «es de todos», "
+                        + "que es justo lo que NO se decidio");
+        assertTrue(alcances.alcanzaIncluidoSinDueno(broker(), null),
+                "el broker si, o la asercion de arriba se cumpliria con una funcion que niega "
+                        + "siempre");
+        assertTrue(alcances.alcanzaIncluidoSinDueno(tenantAdmin(), null),
+                "y el gobierno del tenant tambien");
     }
 
     // ==================================================================

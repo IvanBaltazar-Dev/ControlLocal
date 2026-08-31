@@ -90,6 +90,7 @@ class InterpretacionDelInicioIntegrationTest {
     @Test
     @DisplayName("un hecho resuelto sale verde aunque el asunto este en rojo")
     void elEstadoEsDelHechoYNoDelAsunto() {
+        unAsuntoQueEsperaAOtro();
         List<FichaTarea> bandeja = tareas.bandejaDe(actorAgente());
 
         // El asunto que espera al broker es de prioridad ALTA y aun asi su primer
@@ -99,9 +100,12 @@ class InterpretacionDelInicioIntegrationTest {
                 .filter(t -> !t.dependeDeMi())
                 .findFirst()
                 .orElse(null);
-        if (esperandoAOtro == null) {
-            return; // sin ese escenario no hay nada que comprobar
-        }
+        assertNotNull(esperandoAOtro,
+                "no hay ningun asunto que espere a otro, asi que esta prueba no habria medido "
+                        + "nada. Antes esto era un `return` y pasaba en verde SIN ejecutar una "
+                        + "sola asercion; ahora el escenario lo construye "
+                        + "`unAsuntoQueEsperaAOtro`, asi que si falta es que la construccion "
+                        + "dejo de funcionar");
         List<Hecho> hechos = esperandoAOtro.interpretacion().comoEsta().hechos();
         assertTrue(hechos.get(0).estado() == EstadoDelHecho.HECHO,
                 "lo que ya esta va primero, y va en verde: " + hechos);
@@ -346,13 +350,22 @@ class InterpretacionDelInicioIntegrationTest {
      *
      * <p>Antes esto era un {@code select … limit 1} y bastaba: en la base de
      * pruebas compartida había cientos, acumuladas por corridas anteriores.
-     * Contra una base <b>recién migrada</b> no hay ninguna, y no por casualidad:
-     * <b>la semilla no crea prospecciones</b> —{@code V6} siembra la
-     * organización, las personas, los roles y las supervisiones, y ahí acaba— y
-     * la única clase que crea una antes que ésta en el orden alfabético de
-     * surefire ({@code AutoridadDeEdicion…}) llama a {@code contactar()} acto
-     * seguido, así que la deja <b>con</b> fecha. Las que quedan sin contacto las
+     * Contra una base <b>recién migrada</b> no hay ninguna que sirva, y no por
+     * casualidad: <b>la semilla crea dos prospecciones y las dos nacen
+     * contactadas</b> —{@code V5} inserta {@code PRO-0001} con
+     * {@code fecha_contacto} 2026-06-20 y {@code PRO-0002} con 2026-07-01—, y la
+     * única clase que crea una antes que ésta en el orden alfabético de surefire
+     * ({@code AutoridadDeEdicion…}) llama a {@code contactar()} acto seguido,
+     * así que también la deja <b>con</b> fecha. Las que quedan sin contacto las
      * escriben clases que corren <b>después</b> (las de {@code Propiedad…}).
+     *
+     * <p>La primera versión de este comentario decía «la semilla no crea
+     * prospecciones». Era <b>falso</b> —y salió de un barrido en minúsculas
+     * sobre unas migraciones escritas en mayúsculas, que devolvió cero sin
+     * control positivo—. La conclusión operativa aguanta, porque lo que hace
+     * falta no es una prospección cualquiera sino una <b>sin contactar</b>, y de
+     * ésas la semilla no deja ninguna; pero la premisa escrita es la que usará
+     * quien lea, así que se corrige.
      *
      * <p>Medido el 2026-08-30 sobre una instancia dedicada construida por las
      * migraciones reales: en el momento en que corre esta clase había <b>0</b>
@@ -378,14 +391,35 @@ class InterpretacionDelInicioIntegrationTest {
         // Estado 'P' = abierta y sin contactar, que es exactamente el caso que
         // el renglón tiene que saber decir. Las tres fechas quedan NULL a
         // propósito: rellenarlas sería inventar el hecho que se está midiendo.
+        //
+        // `on conflict` sobre la MISMA clave con la que se inserta. La primera
+        // versión buscaba por `fecha_contacto is null` e insertaba por
+        // `codigo_prospeccion`, que es único por (organización, código): el día
+        // que algo contactara esta prospección, la búsqueda dejaría de verla, la
+        // inserción chocaría contra la unicidad y la clase moriría en @Test
+        // tras @Test sobre esa base. Hoy no ocurre, y por eso no se deja para
+        // luego: una idempotencia que sólo funciona mientras nadie toque la fila
+        // no es idempotencia, es una coincidencia con fecha de caducidad.
+        //
+        // Llegar aquí significa que la consulta de arriba no encontró NINGUNA
+        // sin contactar en esta organización — incluida ésta. Así que si la fila
+        // existe es porque fue contactada, y devolverla a su estado es correcto:
+        // es la fila de este montaje, identificada por su propio código, y no
+        // hay ningún otro dueño a quien pisarle nada.
         return jdbc.queryForObject("""
                 insert into prospeccion (codigo_prospeccion, estado, id_propiedad, id_rol_agente,
                                          organizacion_id)
                 values (?, 'P', ?, ?, ?)
+                on conflict (organizacion_id, codigo_prospeccion)
+                do update set estado = 'P', fecha_contacto = null
                 returning id_prospeccion
-                """, Long.class, "PR-SIN-CONTACTO", unaPropiedadDe(agente.idOrganizacion()),
+                """, Long.class, CODIGO_PROSPECCION_DEL_MONTAJE,
+                unaPropiedadDe(agente.idOrganizacion()),
                 agente.idRolOperativo(), agente.idOrganizacion());
     }
+
+    /** El código de la prospección que este montaje crea, busca y reutiliza. */
+    private static final String CODIGO_PROSPECCION_DEL_MONTAJE = "PR-SIN-CONTACTO";
 
     /**
      * Una propiedad de esa organización, creada si todavía no hay ninguna.
@@ -412,15 +446,86 @@ class InterpretacionDelInicioIntegrationTest {
                 """, Long.class, "INTERP-" + idOrganizacion, idOrganizacion);
     }
 
+    /**
+     * La entidad del asunto que espera a otro. Identificador <b>deliberadamente
+     * fuera de rango</b>: la tarea no se engancha a ningun contrato real, para
+     * que la prueba no dependa de que exista uno ni toque el estado de los que
+     * existan. {@code tarea.entidad_id} no tiene FK —la tiene
+     * {@code id_contrato_origen}, que se deja NULL—, asi que esto es legal y
+     * explicito.
+     */
+    private static final long ENTIDAD_DEL_ASUNTO_QUE_ESPERA = 9_000_000_001L;
+
+    /**
+     * <b>Un asunto de la bandeja cuya siguiente accion NO es del agente.</b>
+     *
+     * <p>De los siete disparadores hay exactamente <b>uno</b> que no depende del
+     * agente, y {@code NaturalezaDelAsunto} lo dice sin ambiguedad:
+     * {@code SEGUIMIENTO} sobre {@code CONTRATO_ALQUILER} — la comision lista
+     * para cobro, que registra el BROKER. Asi que el escenario no se busca: se
+     * escribe, y se escribe exactamente ese.
+     *
+     * <p><b>Por que hizo falta.</b> Antes la prueba hacia
+     * {@code findFirst().orElse(null)} y, si no habia ninguno, {@code return}:
+     * pasaba en verde <b>sin ejecutar una sola asercion</b>. Medido el
+     * 2026-08-31 sobre la instancia dedicada del cierre, al terminar una corrida
+     * completa: <b>0</b> tareas {@code SEGUIMIENTO} sobre
+     * {@code CONTRATO_ALQUILER}. La asercion no se ejecutaba <b>nunca</b>.
+     *
+     * <p>La fila se escribe por SQL y no por el caso de uso porque lo que se
+     * mide es el <b>interprete</b>: dado un asunto que espera a otro, su primer
+     * hecho tiene que salir en verde. {@code TareaServiceImpl.ficha} ya
+     * contempla la tarea abierta sin disparador vivo, asi que no hace falta
+     * montar la cascada comercial entera para medir una regla de presentacion.
+     *
+     * <h2>Por que nace EN_PROCESO y no PENDIENTE</h2>
+     * Porque {@code bandejaDe} <b>reconcilia antes de leer</b>: una tarea
+     * {@code PENDIENTE} cuya entidad esta en {@code ENTIDADES_AUTO} —y
+     * {@code CONTRATO_ALQUILER} lo esta— y que no tiene disparador vigente,
+     * <b>se completa sola</b> en esa misma llamada, antes de componer la lista.
+     * La primera version de este montaje insertaba en {@code PENDIENTE} y la
+     * fila aparecia en la base con {@code estado = 'C'}: el escenario se
+     * autodestruia y la asercion seguia sin ejecutarse.
+     *
+     * <p>{@code EN_PROCESO} es un estado <b>abierto</b> del vocabulario
+     * ({@code Tarea.ABIERTAS} = PENDIENTE, EN_PROCESO) y el reconcile no lo
+     * toca, precisamente porque significa que alguien ya esta en ello. No es un
+     * truco para esquivar la reconciliacion: es el estado que corresponde a un
+     * asunto que ya no espera trabajo del agente.
+     *
+     * <p>Idempotente por la <b>misma</b> clave con la que escribe, y sin filtrar
+     * por estado: si una corrida anterior dejo la fila cerrada, esta la vuelve a
+     * abrir en vez de insertar otra. Buscar por un criterio y escribir por otro
+     * es exactamente el defecto que se corrigio en
+     * {@code unaProspeccionSinContacto}.
+     */
+    private void unAsuntoQueEsperaAOtro() {
+        Actor agente = actorAgente();
+        // La MISMA clave para buscar y para escribir -- sin filtrar por estado.
+        // Filtrando por `estado in ('P','E')` la fila cerrada dejaba de verse y
+        // cada corrida insertaba otra: la busqueda y la escritura tienen que
+        // mirar lo mismo o la idempotencia es aparente.
+        int actualizadas = jdbc.update("""
+                update tarea set estado = 'E', fecha_completada = null,
+                                 fecha_actualizacion = now()
+                 where organizacion_id = ? and id_rol_agente = ?
+                   and entidad_tipo = 'CONTRATO_ALQUILER' and entidad_id = ?
+                """, agente.idOrganizacion(), agente.idRolOperativo(),
+                ENTIDAD_DEL_ASUNTO_QUE_ESPERA);
+        if (actualizadas > 0) {
+            return;
+        }
+        jdbc.update("""
+                insert into tarea (organizacion_id, tipo, entidad_tipo, entidad_id, id_rol_agente,
+                                   descripcion, estado, prioridad)
+                values (?, 'SEGUIMIENTO', 'CONTRATO_ALQUILER', ?, ?,
+                        'Comision lista para cobro: la registra el broker', 'E', 'ALTA')
+                """, agente.idOrganizacion(), ENTIDAD_DEL_ASUNTO_QUE_ESPERA,
+                agente.idRolOperativo());
+    }
+
     private Actor actorAgente() {
-                // `order by` y no un `limit 1` pelado: sin orden, el agente que sale
-        // depende del orden FISICO de la tabla, y `detalle_agente` tiene filas de
-        // varias organizaciones -- las que crean las pruebas que montan sus
-        // propios tenants. Un dia devuelve un agente de la semilla y otro dia uno
-        // de un tenant vecino sin cartera, y entonces esta clase falla por una
-        // consulta vacia que no tiene nada que ver con lo que mide. Paso el
-        // 2026-08-30 en `unaFechaAusenteSeDeclara`.
-Map<String, Object> fila = jdbc.queryForList("""
+        Map<String, Object> fila = jdbc.queryForList("""
                 select a.id_persona_rol, r.organizacion_id, r.id_persona
                   from detalle_agente a join persona_rol r on r.id_persona_rol = a.id_persona_rol
                  order by a.id_persona_rol limit 1

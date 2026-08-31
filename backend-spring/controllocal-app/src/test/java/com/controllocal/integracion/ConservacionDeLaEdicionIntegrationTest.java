@@ -1536,14 +1536,7 @@ class ConservacionDeLaEdicionIntegrationTest {
     }
 
     private Actor actor() {
-                // `order by` y no un `limit 1` pelado: sin orden, el agente que sale
-        // depende del orden FISICO de la tabla, y `detalle_agente` tiene filas de
-        // varias organizaciones -- las que crean las pruebas que montan sus
-        // propios tenants. Un dia devuelve un agente de la semilla y otro dia uno
-        // de un tenant vecino sin cartera, y entonces esta clase falla por una
-        // consulta vacia que no tiene nada que ver con lo que mide. Paso el
-        // 2026-08-30 en `unaFechaAusenteSeDeclara`.
-Map<String, Object> fila = jdbc.queryForList("""
+        Map<String, Object> fila = jdbc.queryForList("""
                 select a.id_persona_rol, r.organizacion_id, r.id_persona
                   from detalle_agente a join persona_rol r on r.id_persona_rol = a.id_persona_rol
                  order by a.id_persona_rol limit 1

@@ -128,9 +128,15 @@ class FocoDelBrokerIntegrationTest {
     @DisplayName("cada asunto del broker llega interpretado, con la misma capa del agente")
     void cadaAsuntoLlegaInterpretado() {
         List<AsuntoDelBroker> asuntos = focoDelBroker.de(broker());
-        if (asuntos.isEmpty()) {
-            return; // sin escenario no hay nada que comprobar
-        }
+        // Antes esto era `if (asuntos.isEmpty()) return;` y la prueba pasaba en
+        // verde sin recorrer nada. El foco de un broker con equipo NO puede
+        // estar vacio en la base del cierre: medido el 2026-08-31 sobre la
+        // instancia dedicada habia 216 captaciones en estado P esperando
+        // revision, que es justo lo que alimenta este foco.
+        assertFalse(asuntos.isEmpty(),
+                "el foco del broker salio vacio, asi que el bucle de abajo no comprobaria nada. "
+                        + "O el escenario dejo de existir o el servicio dejo de producirlo: las "
+                        + "dos cosas hay que verlas, no saltarlas");
         for (AsuntoDelBroker asunto : asuntos) {
             assertNotNull(asunto.interpretacion(), asunto.tipo());
             assertFalse(asunto.interpretacion().comoEsta().hechos().isEmpty(),
@@ -228,19 +234,33 @@ class FocoDelBrokerIntegrationTest {
     @Test
     @DisplayName("documentos por conformar lleva su avance contado, no estimado")
     void losDocumentosLlevanAvanceReal() {
-        AsuntoDelBroker conDocumentos = focoDelBroker.de(broker()).stream()
+        List<AsuntoDelBroker> foco = focoDelBroker.de(broker());
+        // Control de universo. Antes esto era `findFirst().orElse(null)` y, sin
+        // documentos pendientes, `return`: verde sin una sola asercion. El foco
+        // no puede venir vacio -- si lo esta, lo que sigue no mide nada, y eso
+        // hay que verlo.
+        assertFalse(foco.isEmpty(),
+                "el foco del broker salio vacio: sin asuntos no se puede afirmar nada sobre el "
+                        + "avance de ninguno");
+
+        List<AsuntoDelBroker> conDocumentos = foco.stream()
                 .filter(a -> FocoDelBrokerService.DOCUMENTOS_POR_CONFORMAR.equals(a.tipo()))
-                .findFirst()
-                .orElse(null);
-        if (conDocumentos == null) {
-            return; // sin documentos pendientes no hay nada que comprobar
+                .toList();
+
+        // Y la afirmacion que SIEMPRE se ejecuta, haya o no asuntos de este
+        // tipo: NINGUN asunto de documentos puede venir sin avance. Con la lista
+        // vacia el bucle no da vueltas, pero la de arriba ya comprobo que el
+        // servicio produjo algo; el defecto que se persigue -- una barra que
+        // falta -- solo puede aparecer en estos, y aqui se miran todos, no el
+        // primero.
+        for (AsuntoDelBroker conDocumento : conDocumentos) {
+            var avance = conDocumento.interpretacion().comoEsta().avance();
+            assertNotNull(avance, "un asunto de documentos SIN avance seria una barra que falta");
+            assertTrue(avance.total() > 0, "contar sobre cero no es contar");
+            assertTrue(avance.hechos() >= 0 && avance.hechos() <= avance.total(),
+                    "conformados nunca puede pasar del total: "
+                            + avance.hechos() + "/" + avance.total());
         }
-        var avance = conDocumentos.interpretacion().comoEsta().avance();
-        assertNotNull(avance, "un asunto de documentos SIN avance seria una barra que falta");
-        assertTrue(avance.total() > 0, "contar sobre cero no es contar");
-        assertTrue(avance.hechos() >= 0 && avance.hechos() <= avance.total(),
-                "conformados nunca puede pasar del total: "
-                        + avance.hechos() + "/" + avance.total());
     }
 
     // ------------------------------------------------------------------
@@ -272,7 +292,7 @@ class FocoDelBrokerIntegrationTest {
         return actorCon("""
                 select a.id_persona_rol, r.organizacion_id, r.id_persona
                   from detalle_agente a join persona_rol r on r.id_persona_rol = a.id_persona_rol
-                 limit 1
+                 order by a.id_persona_rol limit 1
                 """, Actor.AGENTE);
     }
 

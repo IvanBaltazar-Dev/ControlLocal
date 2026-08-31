@@ -15,6 +15,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -89,11 +90,33 @@ class OcupacionInmuebleIntegrationTest {
     void dosContratosVivosNoCaben() {
         Long id = jdbc.query("""
                 select id_contrato_alquiler from contrato_alquiler
-                 where estado_contrato in ('D', 'V') limit 1
+                 where estado_contrato in ('D', 'V')
+                 order by id_contrato_alquiler limit 1
                 """, rs -> rs.next() ? rs.getLong(1) : null);
         if (id == null) {
-            // Sin datos vivos no hay nada que duplicar: el invariante lo cubren
-            // los otros dos tests y el E2E, que si monta la cascada.
+            // Sin contrato vivo no hay fila que clonar. Antes esto era un
+            // `return` a secas: la prueba pasaba en verde SIN comprobar nada, y
+            // no de vez en cuando -- medido el 2026-08-31 sobre la instancia
+            // dedicada, al terminar una corrida completa habia 0 contratos
+            // vivos, asi que esta rama es la que se toma SIEMPRE en el reactor.
+            //
+            // Montar la cascada comercial entera aqui seria construir el caso de
+            // uso para probar el guardian, que es justo lo que esta clase dice
+            // que no hace. Lo que si se puede afirmar sin montarla -- y se
+            // afirma, en vez de no afirmar nada -- es que el candado sigue
+            // puesto: si el indice parcial desapareciera, el invariante no lo
+            // estaria sosteniendo nadie y este verde seria una mentira.
+            String definicion = jdbc.query("""
+                    select indexdef from pg_indexes
+                     where schemaname = 'public'
+                       and indexname = 'uq_contrato_vivo_por_propiedad'
+                    """, rs -> rs.next() ? rs.getString(1) : null);
+            assertNotNull(definicion,
+                    "no hay contrato vivo que duplicar Y ademas ha desaparecido el indice que "
+                            + "impide la duplicacion. Sin ninguna de las dos cosas, esta prueba "
+                            + "no sostiene el invariante");
+            assertTrue(definicion.toUpperCase().contains("UNIQUE"),
+                    "el guardian tiene que seguir siendo UNIQUE: " + definicion);
             return;
         }
         // Clonar la fila cambiando solo la clave: colisiona en la propiedad.

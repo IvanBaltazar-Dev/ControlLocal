@@ -1181,7 +1181,7 @@ class OcupacionYServiciosIntegrationTest {
         Map<String, Object> fila = jdbc.queryForList("""
                 select a.id_persona_rol, r.organizacion_id, r.id_persona
                   from detalle_agente a join persona_rol r on r.id_persona_rol = a.id_persona_rol
-                 limit 1
+                 order by a.id_persona_rol limit 1
                 """).stream().findFirst().orElseThrow();
         return new Actor(((Number) fila.get("organizacion_id")).longValue(),
                 ((Number) fila.get("id_persona")).longValue(),

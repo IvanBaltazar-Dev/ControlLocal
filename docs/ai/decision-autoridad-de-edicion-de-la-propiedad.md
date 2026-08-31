@@ -107,8 +107,13 @@ para decidir a quién asignarlo. La regla «sus supervisados vigentes» existe p
 regla no tiene sobre qué aplicarse y el límite efectivo vuelve a ser el que va
 siempre delante: **el tenant**.
 
-**La asignación no cambia**: su alcance ya se calcula sobre el agente que
-**recibe**, no sobre el que no hay.
+> **Corregido por C6 (2026-08-30).** Aquí decía «**la asignación no cambia**: su
+> alcance ya se calcula sobre el agente que **recibe**, no sobre el que no hay».
+> Eso era cierto de la lectura del expediente y **falso** de la asignación: mirar
+> sólo al que recibe dejaba abierta la puerta del que sale. C6 comprueba **los
+> dos extremos**, y es entonces cuando la frase se vuelve verdadera en su forma
+> completa — sin saliente no hay nada que comprobar por ese lado, que es
+> exactamente lo que C5 dice.
 
 **Dónde vive.** En `Alcances.alcanzaIncluidoSinDueno`, junto a `alcanza` y con la
 diferencia escrita entre las dos. No en una rama del llamador: `alcanza` devuelve
@@ -118,8 +123,73 @@ sitio que decide alcances, o la siguiente superficie que pregunte por un recurso
 sin dueño volverá a heredar la equivocada, en silencio.
 
 **Y no es la misma pregunta que `puedeTraspasar`.** Ofrecer el traspaso sale de
-la banda; leer el expediente, del alcance sobre el responsable. Un bróker de otro
-equipo puede traspasar una propiedad y **no** leer su expediente.
+la **banda**; leer el expediente, del **alcance sobre el responsable**. Siguen
+siendo dos preguntas y el booleano del cable sigue saliendo de la banda.
+
+> **Matizado por C6 (2026-08-30).** Aquí se ilustraba con «un bróker de otro
+> equipo **puede traspasar** una propiedad y no leer su expediente», y ese
+> ejemplo ya **no es cierto** de una propiedad **con** responsable: desde C6 ese
+> bróker tampoco la traspasa. El ejemplo que sigue siendo cierto es el de la
+> propiedad **FALTANTE**, donde sí entra por las dos puertas. Y lo que no
+> cambió es el booleano: `puedeTraspasar` es de banda, así que puede ofrecerse
+> y el POST rechazar. Ver «Lo que C6 deja anotado».
+
+---
+
+### C6 · Un traspaso tiene DOS extremos, y los dos se comprueban *(titular, 2026-08-30)*
+
+Hasta aquí, `asignar` sólo miraba **a dónde iba** la propiedad. Eso dejaba
+abierta la puerta de **dónde salía**: un BROKER que supervisara al **destino**
+podía **sacar una propiedad del equipo de otro bróker** con sólo elegir un
+destino suyo — un traspaso **entre** equipos disfrazado de movimiento interno.
+
+- propiedad **con** responsable → el **BROKER** sólo la traspasa si supervisa de
+  forma vigente al **saliente** **y** al **destino**. Si cualquiera de los dos
+  pertenece a otro equipo, el traspaso es organizativo y **corresponde al
+  TENANT_ADMIN**;
+- propiedad **FALTANTE** → **C5 permanece intacto**: no hay saliente a quien
+  supervisar, así que **cualquier BROKER del tenant la gobierna para
+  asignarla** — **pero únicamente a uno de sus supervisados vigentes**. La
+  excepción abre **qué** propiedades gobierna, **no a quién** puede
+  entregarlas;
+- **después de la asignación la excepción desaparece** y vuelve el alcance
+  **EQUIPO**, sin que nadie ejecute nada más;
+- **otro tenant** → **nunca**, y como **recurso inexistente**. La frontera va
+  delante de las dos comprobaciones y no se levanta porque las supervisiones del
+  actor estén en regla.
+
+**Un solo algoritmo de supervisión.** Las dos preguntas salen del **mismo**
+`Alcances` que ya decide la lectura del expediente: `alcanza` para el destino y
+`alcanzaIncluidoSinDueno` para el saliente. No se escribió una segunda
+comparación — dos sitios donde se compare lo mismo son dos sitios que después
+divergen, y divergen hacia el lado que concede de más. Y la distinción «hay
+responsable / no hay responsable» se conserva tal cual: es la que hace que C5
+siga siendo una excepción **por ausencia de dueño** y no alcance de tenant para
+cualquier bróker.
+
+**Efecto lateral que sí conviene ver:** desde C6, «¿puedo traspasar esta
+propiedad?» por el lado del saliente y «¿puedo leer su expediente?» son **el
+mismo predicado**. Las dos superficies convergieron, y por eso el ejemplo de
+arriba dejó de ser cierto.
+
+#### Lo que C6 deja anotado
+
+`responsabilidad.puedeTraspasar` **no se estrechó**. Sigue valiendo
+`!actor.esAgente()` —la primera guarda de `asignar`— y por tanto ya **nunca fue**
+la condición completa: el alcance sobre el **destino** no se puede resolver en la
+ficha porque ahí todavía no hay destino elegido. Lo que cambia con C6 es que
+ahora tampoco es completa **por el lado del saliente**, y ése **sí** sería
+resoluble en la ficha.
+
+- **Coste medido:** para una propiedad cuyo responsable es de otro equipo, el
+  botón se ofrece y el POST responde 403 con el motivo escrito por el Core. No
+  es un permiso de más — se deniega igual —, es un botón que en ese caso ya no
+  lleva a ningún destino válido.
+- **Por qué no se cambió aquí:** estrecharlo cambia el cable de la ficha y una
+  respuesta que **C5 dejó medida** (`traspasarYLeerElExpedienteSiguenSiendoDosPreguntas`),
+  y el encargo de este corte era C6 **sin estrechar ni ensanchar C5**. Es una
+  decisión funcional del titular, no una consecuencia mecánica: queda
+  **inventariada**, no resuelta por omisión.
 
 ## Las tres autoridades, que pueden ser tres personas
 

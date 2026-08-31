@@ -303,11 +303,7 @@ class InterpretacionDelInicioIntegrationTest {
     @Test
     @DisplayName("una fecha que falta se declara ausente, nunca se rellena")
     void unaFechaAusenteSeDeclara() {
-        long idSinContacto = jdbc.queryForObject("""
-                select p.id_prospeccion from prospeccion p
-                 where p.fecha_contacto is null and p.organizacion_id = ?
-                 limit 1
-                """, Long.class, organizacionDelAgente());
+        long idSinContacto = unaProspeccionSinContacto();
 
         List<Renglon> expediente = interprete.de(
                 new InterpreteDeLaBandeja.AsuntoADescribir("RECONTACTO", "PROSPECCION",
@@ -345,11 +341,89 @@ class InterpretacionDelInicioIntegrationTest {
 
     // ------------------------------------------------------------------
 
+    /**
+     * <b>Una prospección sin fecha de contacto — construida, no heredada.</b>
+     *
+     * <p>Antes esto era un {@code select … limit 1} y bastaba: en la base de
+     * pruebas compartida había cientos, acumuladas por corridas anteriores.
+     * Contra una base <b>recién migrada</b> no hay ninguna, y no por casualidad:
+     * <b>la semilla no crea prospecciones</b> —{@code V6} siembra la
+     * organización, las personas, los roles y las supervisiones, y ahí acaba— y
+     * la única clase que crea una antes que ésta en el orden alfabético de
+     * surefire ({@code AutoridadDeEdicion…}) llama a {@code contactar()} acto
+     * seguido, así que la deja <b>con</b> fecha. Las que quedan sin contacto las
+     * escriben clases que corren <b>después</b> (las de {@code Propiedad…}).
+     *
+     * <p>Medido el 2026-08-30 sobre una instancia dedicada construida por las
+     * migraciones reales: en el momento en que corre esta clase había <b>0</b>
+     * prospecciones sin contacto, y el {@code queryForObject} moría con
+     * {@code EmptyResultDataAccessException} — un rojo que no hablaba de lo que
+     * la prueba mide. En la base compartida había 825, todas residuo.
+     *
+     * <p>Así que se construye. El hecho que la prueba necesita es «una
+     * prospección abierta que todavía no se ha contactado», y eso se puede
+     * escribir; heredarlo hacía que la prueba sólo midiera cuando alguien
+     * hubiera pasado antes.
+     */
+    private long unaProspeccionSinContacto() {
+        List<Long> existentes = jdbc.queryForList("""
+                select p.id_prospeccion from prospeccion p
+                 where p.fecha_contacto is null and p.organizacion_id = ?
+                 order by p.id_prospeccion limit 1
+                """, Long.class, organizacionDelAgente());
+        if (!existentes.isEmpty()) {
+            return existentes.get(0);
+        }
+        Actor agente = actorAgente();
+        // Estado 'P' = abierta y sin contactar, que es exactamente el caso que
+        // el renglón tiene que saber decir. Las tres fechas quedan NULL a
+        // propósito: rellenarlas sería inventar el hecho que se está midiendo.
+        return jdbc.queryForObject("""
+                insert into prospeccion (codigo_prospeccion, estado, id_propiedad, id_rol_agente,
+                                         organizacion_id)
+                values (?, 'P', ?, ?, ?)
+                returning id_prospeccion
+                """, Long.class, "PR-SIN-CONTACTO", unaPropiedadDe(agente.idOrganizacion()),
+                agente.idRolOperativo(), agente.idOrganizacion());
+    }
+
+    /**
+     * Una propiedad de esa organización, creada si todavía no hay ninguna.
+     *
+     * <p>Nace <b>FALTANTE</b>: se inserta por SQL y no por el caso de uso, así
+     * que no hay actor del alta a quien atribuirla, y un responsable inventado
+     * sería justo la procedencia falsa que el P0 vino a quitar. La prospección
+     * sólo necesita colgar de un inmueble; quién responda por él no entra en lo
+     * que esta prueba mide.
+     */
+    private long unaPropiedadDe(long idOrganizacion) {
+        List<Long> ids = jdbc.queryForList("""
+                select id_propiedad from propiedad where organizacion_id = ?
+                 order by id_propiedad limit 1
+                """, Long.class, idOrganizacion);
+        if (!ids.isEmpty()) {
+            return ids.get(0);
+        }
+        return jdbc.queryForObject("""
+                insert into propiedad (codigo, direccion, distrito, metraje, tipo_inmueble, uso,
+                                       organizacion_id, estado_registro, origen_incorporacion)
+                values (?, 'Av. Interpretacion 1', 'Miraflores', 70.00, 'D', 'C', ?, 'A', 'SEMILLA')
+                returning id_propiedad
+                """, Long.class, "INTERP-" + idOrganizacion, idOrganizacion);
+    }
+
     private Actor actorAgente() {
-        Map<String, Object> fila = jdbc.queryForList("""
+                // `order by` y no un `limit 1` pelado: sin orden, el agente que sale
+        // depende del orden FISICO de la tabla, y `detalle_agente` tiene filas de
+        // varias organizaciones -- las que crean las pruebas que montan sus
+        // propios tenants. Un dia devuelve un agente de la semilla y otro dia uno
+        // de un tenant vecino sin cartera, y entonces esta clase falla por una
+        // consulta vacia que no tiene nada que ver con lo que mide. Paso el
+        // 2026-08-30 en `unaFechaAusenteSeDeclara`.
+Map<String, Object> fila = jdbc.queryForList("""
                 select a.id_persona_rol, r.organizacion_id, r.id_persona
                   from detalle_agente a join persona_rol r on r.id_persona_rol = a.id_persona_rol
-                 limit 1
+                 order by a.id_persona_rol limit 1
                 """).stream().findFirst().orElseThrow();
         return new Actor(((Number) fila.get("organizacion_id")).longValue(),
                 ((Number) fila.get("id_persona")).longValue(),

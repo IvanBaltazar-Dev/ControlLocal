@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -90,6 +91,14 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
 
     private static final String MOTIVO =
             "Reasignacion por reparto de cartera del trimestre";
+
+    /**
+     * El tenant vecino que estas pruebas <b>construyen</b> para medir la
+     * frontera de organizacion. Ver {@link #otroTenant()}: las migraciones
+     * crean una sola organizacion, asi que heredarlo de otra suite hacia que la
+     * frontera solo se midiera cuando alguien hubiera pasado antes.
+     */
+    private static final String CODIGO_TENANT_VECINO = "ALCANCE-TENANT-VECINO";
 
     // ==================================================================
     // C1. El alcance del traspaso
@@ -175,12 +184,11 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
     @Test
     @DisplayName("D/BOLA: cambiar el id de la propiedad por uno de otro tenant da INEXISTENTE")
     void unaPropiedadDeOtroTenantNoExisteParaEsteBroker() {
-        Long ajena = unaPropiedadDeOtraOrganizacion(broker().idOrganizacion());
-        if (ajena == null) {
-            // Sin propiedades de otro tenant no hay nada que medir, y decirlo es
-            // mejor que dar un verde que no ha mirado nada.
-            return;
-        }
+        // Ya no admite «si no hay, no mido»: el tenant vecino lo construye la
+        // propia prueba (ver otroTenant()), asi que este caso se ejercita
+        // SIEMPRE. Antes dependia de que otra suite hubiera dejado su tenant, y
+        // contra una base recien migrada este verde no habia mirado nada.
+        long ajena = unaPropiedadDeOtroTenant();
         assertThrows(NoEncontradoException.class,
                 () -> propiedades.traspasosDe(ajena, broker()),
                 "el expediente de una propiedad de otra corredora responde INEXISTENTE");
@@ -323,10 +331,7 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
     @Test
     @DisplayName("C5: pero una FALTANTE de OTRO tenant sigue siendo inexistente")
     void loFaltanteDeOtroTenantSigueSiendoInexistente() {
-        Long ajena = unaPropiedadDeOtraOrganizacion(broker().idOrganizacion());
-        if (ajena == null) {
-            return;
-        }
+        long ajena = unaPropiedadDeOtroTenant();
         jdbc.update("update propiedad set id_rol_responsable = null where id_propiedad = ?", ajena);
 
         assertThrows(NoEncontradoException.class,
@@ -398,6 +403,292 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.traspasosDe(idPropiedad, brokerAjeno),
                 "y aun asi no lee el expediente: son dos preguntas distintas");
+    }
+
+    // ==================================================================
+    // C6. Un traspaso tiene DOS extremos, y los dos se comprueban
+    // ==================================================================
+
+    /**
+     * <b>El caso permitido, primero.</b>
+     *
+     * <p>Va delante de las cinco negaciones a proposito: sin el, todas ellas
+     * seguirian en verde en un sistema que no dejara traspasar <b>a nadie</b>, y
+     * una regla que niega siempre no es la regla que se decidio.
+     */
+    @Test
+    @DisplayName("C6/1: supervisa al SALIENTE y al DESTINO -> traspasa")
+    void c6ElBrokerTraspasaDentroDeSuEquipo() {
+        Actor saliente = agenteDelEquipo(0);
+        Actor destino = agenteDelEquipo(1);
+        long idPropiedad = registrar(saliente);
+
+        propiedades.asignarResponsable(idPropiedad, destino.idRolOperativo(), MOTIVO, broker());
+
+        assertEquals(destino.idRolOperativo(), responsableDe(idPropiedad),
+                "los dos extremos estan en su equipo: es un movimiento interno, y ese si lo "
+                        + "decide el broker del equipo");
+    }
+
+    /**
+     * <b>Supervisa el DESTINO pero no el SALIENTE.</b> Es exactamente el hueco
+     * que C6 cierra, y el unico de los ocho casos que <b>pasaba</b> antes de
+     * este corte: comprobar solo a donde va la propiedad dejaba abierta la
+     * puerta de donde sale, asi que un broker podia <b>sacarla del equipo de
+     * otro</b> con solo elegir un destino suyo.
+     */
+    @Test
+    @DisplayName("C6/2: supervisa el DESTINO pero NO el SALIENTE -> denegado")
+    void c6SupervisarSoloElDestinoNoBasta() {
+        Actor salienteAjeno = agenteDeOtroEquipo();
+        long idPropiedad = registrar(salienteAjeno);
+
+        Actor brokerPropio = brokerQueNoSupervisaA(salienteAjeno.idRolOperativo());
+        Actor destinoSuyo = unSupervisadoDe(brokerPropio);
+
+        AccesoNoAutorizadoException fallo = assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.asignarResponsable(idPropiedad, destinoSuyo.idRolOperativo(),
+                        MOTIVO, brokerPropio),
+                "sacar una propiedad del equipo de otro broker es un traspaso ENTRE equipos, y "
+                        + "eso no lo decide un broker por elegir un destino propio");
+        assertTrue(fallo.getMessage().contains("Sacarla de su equipo"),
+                "y el rechazo tiene que hablar del SALIENTE, no del destino: los dos mensajes "
+                        + "dicen «supervisas», asi que sin esta comprobacion la prueba no "
+                        + "distinguiria cual de las dos guardas actuo. Dijo: "
+                        + fallo.getMessage());
+
+        assertEquals(salienteAjeno.idRolOperativo(), responsableDe(idPropiedad),
+                "y no cambio nada: un traspaso rechazado no deja la propiedad a medias");
+    }
+
+    /**
+     * <b>Supervisa el SALIENTE pero no el DESTINO.</b> La otra mitad, ya cubierta
+     * por C1 y repetida aqui a proposito: las dos negaciones tienen que seguir
+     * siendo ciertas <b>a la vez</b>, o cerrar una habria abierto la otra.
+     */
+    @Test
+    @DisplayName("C6/3: supervisa el SALIENTE pero NO el DESTINO -> denegado")
+    void c6SupervisarSoloElSalienteNoBasta() {
+        Actor saliente = agenteDelEquipo(0);
+        Actor destinoAjeno = agenteDeOtroEquipo();
+        long idPropiedad = registrar(saliente);
+
+        AccesoNoAutorizadoException fallo = assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.asignarResponsable(idPropiedad, destinoAjeno.idRolOperativo(),
+                        MOTIVO, broker()),
+                "meter en la cartera de otro equipo sigue siendo alcanzar el equipo de otro");
+        assertTrue(fallo.getMessage().contains("ponerlo a responder"),
+                "y aqui el rechazo es el del DESTINO: " + fallo.getMessage());
+
+        assertEquals(saliente.idRolOperativo(), responsableDe(idPropiedad));
+    }
+
+    /**
+     * <b>Ni el uno ni el otro.</b> El caso que no aporta un mecanismo nuevo pero
+     * si descarta el fallo mas tonto: que las dos guardas se anularan entre si.
+     */
+    @Test
+    @DisplayName("C6/4: no supervisa a NINGUNO de los dos -> denegado")
+    void c6NoSupervisarANingunoDeLosDos() {
+        Actor salienteAjeno = agenteDeOtroEquipo();
+        long idPropiedad = registrar(salienteAjeno);
+
+        Actor brokerPropio = brokerQueNoSupervisaA(salienteAjeno.idRolOperativo());
+        // Destino: otro agente que ESE broker tampoco supervisa. Se resuelve
+        // contra la base, no a mano: fijarlo haria que la prueba dejara de medir
+        // la regla el dia que cambie el organigrama de la semilla.
+        Actor destinoAjeno = unAgenteQueNoSupervisa(brokerPropio, salienteAjeno.idRolOperativo());
+
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.asignarResponsable(idPropiedad, destinoAjeno.idRolOperativo(),
+                        MOTIVO, brokerPropio),
+                "sin ninguno de los dos extremos en su equipo no queda nada que lo autorice");
+
+        assertEquals(salienteAjeno.idRolOperativo(), responsableDe(idPropiedad));
+    }
+
+    @Test
+    @DisplayName("C6/5: el TENANT_ADMIN cruza equipos DENTRO de su tenant -> permitido")
+    void c6ElGobiernoDelTenantCruzaEquipos() {
+        Actor saliente = agenteDelEquipo(0);
+        Actor destinoAjeno = agenteDeOtroEquipo();
+        long idPropiedad = registrar(saliente);
+
+        // Control: para el broker del equipo del saliente, este mismo traspaso
+        // esta cerrado. Sin esta linea, el verde de abajo podria significar
+        // «cualquiera puede» en vez de «el gobierno del tenant puede».
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.asignarResponsable(idPropiedad, destinoAjeno.idRolOperativo(),
+                        MOTIVO, broker()));
+
+        propiedades.asignarResponsable(idPropiedad, destinoAjeno.idRolOperativo(),
+                MOTIVO, tenantAdmin());
+
+        assertEquals(destinoAjeno.idRolOperativo(), responsableDe(idPropiedad),
+                "un traspaso entre equipos es exactamente lo que el gobierno del tenant existe "
+                        + "para decidir; esta exento del EQUIPO, nunca del TENANT");
+    }
+
+    /**
+     * <b>C6 x C5: el broker saca de FALTANTE hacia su propio equipo.</b>
+     *
+     * <p>Es la excepcion congelada y su limite en una sola prueba: sin saliente
+     * no hay equipo que respetar, asi que gobierna cualquier broker del
+     * tenant — y el destino sigue siendo cosa suya.
+     */
+    @Test
+    @DisplayName("C6/6: el BROKER asigna una FALTANTE a un supervisado suyo -> permitido")
+    void c6ElBrokerAsignaLaFaltanteDentroDeSuEquipo() {
+        Actor duena = agenteDelEquipo(0);
+        long idPropiedad = registrar(duena);
+        dejarSinResponsable(idPropiedad);
+
+        // Un broker que NO supervisaba a la saliente. Antes de dejarla sin
+        // responsable este mismo traspaso estaria cerrado para el (C6/2).
+        Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
+        Actor suyo = unSupervisadoDe(brokerAjeno);
+
+        propiedades.asignarResponsable(idPropiedad, suyo.idRolOperativo(), MOTIVO, brokerAjeno);
+
+        assertEquals(suyo.idRolOperativo(), responsableDe(idPropiedad),
+                "gobernar el inventario sin dueno es trabajo de broker, y sacarlo de FALTANTE "
+                        + "es justo el acto para el que lo mira");
+    }
+
+    @Test
+    @DisplayName("C6/7: el BROKER NO asigna una FALTANTE fuera de su equipo -> denegado")
+    void c6ElBrokerNoAsignaLaFaltanteFueraDeSuEquipo() {
+        Actor duena = agenteDelEquipo(0);
+        Actor ajena = agenteDeOtroEquipo();
+        long idPropiedad = registrar(duena);
+        dejarSinResponsable(idPropiedad);
+
+        Actor brokerAjeno = brokerQueNoSupervisaA(ajena.idRolOperativo());
+        // CONTROL POSITIVO: la alcanza. Sin esto, la negacion de abajo podria
+        // deberse a que ese broker nunca entro a esta propiedad.
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, brokerAjeno).size(),
+                "la alcanza: es inventario sin dueno de SU tenant");
+
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.asignarResponsable(idPropiedad, ajena.idRolOperativo(),
+                        MOTIVO, brokerAjeno),
+                "la excepcion FALTANTE abre QUE propiedades gobierna, no A QUIEN puede "
+                        + "entregarlas: mirar el inventario sin dueno no es repartirlo");
+
+        assertNull(responsableDe(idPropiedad),
+                "y sigue FALTANTE: un traspaso rechazado no la deja a medias");
+    }
+
+    /**
+     * <b>Otro tenant: nunca, y como recurso inexistente.</b>
+     *
+     * <p>La frontera va delante de las dos comprobaciones de C6 y <b>no se
+     * levanta porque las supervisiones del actor esten en regla</b>. Responde
+     * INEXISTENTE y no 403, porque un 403 ya confirmaria que esa propiedad
+     * existe en alguna parte.
+     */
+    @Test
+    @DisplayName("C6/8: otro tenant, NUNCA, y como recurso inexistente")
+    void c6OtroTenantNuncaYComoInexistente() {
+        long ajena = unaPropiedadDeOtroTenant();
+        Actor destino = agenteDelEquipo(0);
+
+        for (Actor quien : List.of(broker(), tenantAdmin())) {
+            assertThrows(NoEncontradoException.class,
+                    () -> propiedades.asignarResponsable(ajena, destino.idRolOperativo(),
+                            MOTIVO, quien),
+                    quien.rolEfectivo() + " no traspasa una propiedad de otra corredora, y la "
+                            + "respuesta es INEXISTENTE: la frontera de tenant va antes que "
+                            + "cualquier alcance de equipo y antes que el gobierno");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // C6 x C5. La excepcion no se estrecho ni se ensancho
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>C5 sigue diciendo exactamente lo mismo, en sus cuatro respuestas.</b>
+     *
+     * <p>C6 toca la misma pregunta —el alcance del broker sobre el
+     * responsable— asi que la forma de comprobar que no la desplazo es medir
+     * las cuatro respuestas de C5 <b>sobre la misma propiedad</b>: sin dueno
+     * entra cualquier broker del tenant, con dueno solo quien lo supervisa, el
+     * gobierno del tenant siempre, y otro tenant nunca.
+     */
+    @Test
+    @DisplayName("C6 x C5: la excepcion FALTANTE no se estrecho ni se ensancho")
+    void c6NoEstrechoNiEnsanchoC5() {
+        Actor duena = agenteDelEquipo(0);
+        long idPropiedad = registrar(duena);
+        Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
+
+        // 1. CON responsable: solo quien lo supervisa. C5 no se ensancho.
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, broker()).size());
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.traspasosDe(idPropiedad, brokerAjeno),
+                "con responsable manda el EQUIPO: si C6 hubiera ensanchado C5, este broker "
+                        + "entraria");
+
+        // 2. SIN responsable: cualquier broker del tenant. C5 no se estrecho.
+        dejarSinResponsable(idPropiedad);
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, brokerAjeno).size(),
+                "sin dueno no hay a quien supervisar, asi que la regla de equipo no tiene "
+                        + "sobre que aplicarse. Si C6 hubiera estrechado C5, esto seria 403");
+
+        // 3. El gobierno del tenant, en los dos estados. Sin cambio.
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, tenantAdmin()).size());
+
+        // 4. Y el tenant sigue siendo el limite tambien para lo FALTANTE.
+        long ajena = unaPropiedadDeOtroTenant();
+        jdbc.update("update propiedad set id_rol_responsable = null where id_propiedad = ?", ajena);
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.traspasosDe(ajena, broker()),
+                "sin dueno y de otra corredora: INEXISTENTE, no 403");
+    }
+
+    /**
+     * <b>Y la excepcion se cierra sola al asignar.</b>
+     *
+     * <p>Las otras pruebas miden los dos <b>estados</b>. Esta mide el
+     * <b>transito</b> entre ellos, que es donde una excepcion mal cerrada se
+     * queda pegada: el broker que entro <i>porque</i> no habia dueno tiene que
+     * dejar de entrar en cuanto lo hay, <b>en las dos superficies</b> —leer el
+     * expediente y traspasar— y sin que nadie ejecute nada mas.
+     */
+    @Test
+    @DisplayName("C6 x C5: asignada la FALTANTE, la excepcion desaparece y vuelve el EQUIPO")
+    void c6LaExcepcionFaltanteSeCierraAlAsignar() {
+        Actor duena = agenteDelEquipo(0);
+        long idPropiedad = registrar(duena);
+        dejarSinResponsable(idPropiedad);
+
+        Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
+        Actor suyo = unSupervisadoDe(brokerAjeno);
+
+        // CONTROL POSITIVO, mientras esta FALTANTE: la lee y la puede traspasar.
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, brokerAjeno).size(),
+                "entra por C5: no hay a quien supervisar");
+
+        // El broker que SI supervisa a la agente se la asigna a ella.
+        propiedades.asignarResponsable(idPropiedad, duena.idRolOperativo(), MOTIVO, broker());
+        assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad));
+
+        // Y a partir de aqui, el mismo broker ajeno ya no entra por ninguna de
+        // las dos puertas.
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.traspasosDe(idPropiedad, brokerAjeno),
+                "en cuanto hay responsable vuelve a mandar el EQUIPO. Si siguiera entrando, C5 "
+                        + "no seria una excepcion por ausencia de dueno: seria alcance de tenant "
+                        + "para cualquier broker, que es justo lo que NO se decidio");
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.asignarResponsable(idPropiedad, suyo.idRolOperativo(),
+                        MOTIVO, brokerAjeno),
+                "y tampoco la traspasa ya, ni siquiera a uno de los suyos: ahora hay saliente, "
+                        + "y no lo supervisa");
+
+        assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
+                "y la propiedad se quedo donde el broker de su equipo la puso");
     }
 
     // ==================================================================
@@ -650,6 +941,59 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
         return actorAgente(filas.get(0));
     }
 
+    /**
+     * Un agente que <b>ese</b> broker supervisa hoy.
+     *
+     * <p>Se resuelve contra la base y no con un id escrito a mano: el destino
+     * legitimo de un traspaso depende de quien lo firma, y fijarlo aqui haria
+     * que la prueba dejara de medir la regla el dia que cambie el organigrama de
+     * la semilla.
+     */
+    private Actor unSupervisadoDe(Actor unBroker) {
+        List<Map<String, Object>> filas = jdbc.queryForList("""
+                select a.id_persona_rol, r.organizacion_id, r.id_persona
+                  from detalle_agente a
+                  join persona_rol r on r.id_persona_rol = a.id_persona_rol
+                  join supervision_agente s on s.id_rol_agente = a.id_persona_rol
+                                           and s.fecha_fin is null
+                 where s.id_rol_broker = ?
+                 order by a.id_persona_rol limit 1
+                """, unBroker.idRolOperativo());
+        assertTrue(!filas.isEmpty(),
+                "ese broker no supervisa a nadie, asi que la prueba no podria medir un destino "
+                        + "legitimo suyo");
+        return actorAgente(filas.get(0));
+    }
+
+    /**
+     * Un agente del MISMO tenant que ese broker <b>no</b> supervisa, distinto de
+     * uno dado.
+     *
+     * <p>Es la pieza del caso «no supervisa a ninguno de los dos extremos»: sin
+     * ella habria que reutilizar el saliente como destino, y entonces el rechazo
+     * podria venir de la regla «ese agente ya responde por esta propiedad» en
+     * vez de la de alcance.
+     */
+    private Actor unAgenteQueNoSupervisa(Actor unBroker, long distintoDe) {
+        List<Map<String, Object>> filas = jdbc.queryForList("""
+                select a.id_persona_rol, r.organizacion_id, r.id_persona
+                  from detalle_agente a
+                  join persona_rol r on r.id_persona_rol = a.id_persona_rol
+                 where r.organizacion_id = (select organizacion_id from persona_rol
+                                             where id_persona_rol = ?)
+                   and a.id_persona_rol <> ?
+                   and not exists (select 1 from supervision_agente s
+                                    where s.id_rol_broker = ?
+                                      and s.id_rol_agente = a.id_persona_rol
+                                      and s.fecha_fin is null)
+                 order by a.id_persona_rol limit 1
+                """, unBroker.idRolOperativo(), distintoDe, unBroker.idRolOperativo());
+        assertTrue(!filas.isEmpty(),
+                "hace falta un agente del tenant que ese broker NO supervise y que no sea el "
+                        + "saliente: sin el, el caso «ninguno de los dos» no se puede montar");
+        return actorAgente(filas.get(0));
+    }
+
     private static Actor actorAgente(Map<String, Object> fila) {
         return new Actor(((Number) fila.get("organizacion_id")).longValue(),
                 ((Number) fila.get("id_persona")).longValue(),
@@ -725,20 +1069,144 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
     }
 
     private Long unAgenteDeOtraOrganizacion(long idOrganizacion) {
-        List<Long> ids = jdbc.queryForList("""
-                select a.id_persona_rol from detalle_agente a
-                  join persona_rol r on r.id_persona_rol = a.id_persona_rol
-                 where r.organizacion_id <> ? order by a.id_persona_rol limit 1
-                """, Long.class, idOrganizacion);
-        return ids.isEmpty() ? null : ids.get(0);
+        long vecino = otroTenant();
+        assertNotEquals(idOrganizacion, vecino, "el tenant vecino no puede ser el propio");
+        return unAgenteDe(vecino);
     }
 
     private Long unaPropiedadDeOtraOrganizacion(long idOrganizacion) {
+        long vecino = otroTenant();
+        assertNotEquals(idOrganizacion, vecino, "el tenant vecino no puede ser el propio");
+        return unaPropiedadDe(vecino);
+    }
+
+    /** La misma, cuando el caso exige que exista y no admite saltarse. */
+    private long unaPropiedadDeOtroTenant() {
+        Long id = unaPropiedadDeOtraOrganizacion(broker().idOrganizacion());
+        assertNotNull(id, "sin una propiedad de OTRO tenant no hay frontera que medir");
+        return id;
+    }
+
+    // ==================================================================
+    // El tenant vecino, construido y no heredado
+    // ==================================================================
+
+    /**
+     * <b>La segunda organizacion la crea esta prueba, no la hereda.</b>
+     *
+     * <p>Antes estos tres ayudantes buscaban «cualquier organizacion distinta de
+     * la mia», y en la base compartida siempre encontraban una: los tenants que
+     * {@code PropiedadUniversalIntegrationTest} y
+     * {@code SimulacroRecuperacionIntegrationTest} <b>dejan escritos</b> al
+     * terminar. Las migraciones crean <b>una sola</b> organizacion, asi que
+     * contra una base recien migrada —la de un clon limpio, o la primera corrida
+     * de una instancia nueva— no habia vecino y las dos pruebas de frontera de
+     * tenant caian con «hacen falta dos organizaciones para medir esto».
+     *
+     * <p>Medido el 2026-08-30 sobre una instancia virgen construida por las
+     * migraciones reales: {@code organizacion} tenia 1 fila. En la compartida
+     * tenia 4, y las otras 3 eran residuo de otras suites. Ademas el orden
+     * alfabetico de surefire pone esta clase (A) <b>antes</b> que las que crean
+     * esos tenants (P, S), asi que la primera corrida de cualquier base nueva
+     * habria sido roja aunque la base fuera correcta.
+     *
+     * <p>Depender de eso es depender de que otra prueba haya corrido antes y
+     * haya dejado su rastro. Aqui se construye lo que hace falta —idempotente,
+     * por {@code codigo}, como ya hace {@code PropiedadUniversalIntegrationTest}
+     * con los suyos— para que la frontera se mida <b>siempre</b> y no solo
+     * cuando alguien paso por delante.
+     */
+    private long otroTenant() {
+        List<Long> ids = jdbc.queryForList(
+                "select id_organizacion from organizacion where codigo = ?",
+                Long.class, CODIGO_TENANT_VECINO);
+        if (!ids.isEmpty()) {
+            return ids.get(0);
+        }
+        return jdbc.queryForObject("""
+                insert into organizacion (codigo, nombre, estado) values (?, ?, 'A')
+                returning id_organizacion
+                """, Long.class, CODIGO_TENANT_VECINO,
+                "Tenant vecino de las pruebas de alcance");
+    }
+
+    /** Un AGENTE del tenant vecino; se crea la primera vez y se reutiliza. */
+    private long unAgenteDe(long idOrganizacion) {
+        List<Long> conDetalle = jdbc.queryForList("""
+                select d.id_persona_rol from detalle_agente d
+                 where d.organizacion_id = ? order by d.id_persona_rol limit 1
+                """, Long.class, idOrganizacion);
+        if (!conDetalle.isEmpty()) {
+            return conDetalle.get(0);
+        }
+        long idPersona = unaPersonaDe(idOrganizacion);
+        // Se busca el rol aparte del detalle: cada sentencia de JdbcTemplate
+        // confirma por su cuenta, asi que una corrida que creara el rol y
+        // muriera antes del detalle dejaria un rol huerfano, y buscar por rol lo
+        // daria por bueno para siempre con el detalle sin existir nunca.
+        List<Long> soloRol = jdbc.queryForList("""
+                select id_persona_rol from persona_rol
+                 where organizacion_id = ? and id_persona = ? and tipo_rol = 'AGENTE'
+                   and vigencia_hasta is null
+                """, Long.class, idOrganizacion, idPersona);
+        Long idRol = soloRol.isEmpty()
+                ? jdbc.queryForObject("""
+                        insert into persona_rol (organizacion_id, id_persona, tipo_rol,
+                                                 vigencia_desde)
+                        values (?, ?, 'AGENTE', current_date)
+                        returning id_persona_rol
+                        """, Long.class, idOrganizacion, idPersona)
+                : soloRol.get(0);
+        // `estado_operativo` admite D/L/N y no 'A': el vocabulario de esta
+        // columna no es el de `estado`, aunque las dos lleven una sola letra.
+        jdbc.update("""
+                insert into detalle_agente (id_persona_rol, organizacion_id, codigo_agente,
+                                            fecha_ingreso, estado_operativo)
+                values (?, ?, ?, current_date, 'D')
+                """, idRol, idOrganizacion, "AG-VECINO-" + idRol);
+        return idRol;
+    }
+
+    private long unaPersonaDe(long idOrganizacion) {
+        String correo = "vecino-" + idOrganizacion + "@alcance.test";
+        List<Long> ids = jdbc.queryForList(
+                "select id_persona from persona where organizacion_id = ? and correo = ?",
+                Long.class, idOrganizacion, correo);
+        if (!ids.isEmpty()) {
+            return ids.get(0);
+        }
+        return jdbc.queryForObject("""
+                insert into persona (organizacion_id, tipo_persona, tipo_documento,
+                                     numero_documento, nombres_o_razon_social, correo, estado)
+                values (?, 'N', 'D', ?, ?, ?, 'A')
+                returning id_persona
+                """, Long.class, idOrganizacion, "9" + (70000000L + idOrganizacion),
+                "Agente del tenant vecino", correo);
+    }
+
+    /**
+     * Una PROPIEDAD del tenant vecino.
+     *
+     * <p>Nace <b>FALTANTE</b> a proposito: se inserta por SQL y no por el caso
+     * de uso, asi que no hay actor del alta a quien atribuirla, y un responsable
+     * inventado seria justo la procedencia falsa que este P0 vino a quitar. Para
+     * lo que la usan las pruebas de frontera da igual: la respuesta tiene que
+     * ser INEXISTENTE antes de mirar quien responde.
+     */
+    private long unaPropiedadDe(long idOrganizacion) {
         List<Long> ids = jdbc.queryForList("""
-                select id_propiedad from propiedad where organizacion_id <> ?
+                select id_propiedad from propiedad where organizacion_id = ?
                  order by id_propiedad limit 1
                 """, Long.class, idOrganizacion);
-        return ids.isEmpty() ? null : ids.get(0);
+        if (!ids.isEmpty()) {
+            return ids.get(0);
+        }
+        return jdbc.queryForObject("""
+                insert into propiedad (codigo, direccion, distrito, metraje, tipo_inmueble, uso,
+                                       organizacion_id, estado_registro, origen_incorporacion)
+                values (?, 'Av. Frontera 100', 'Miraflores', 80.00, 'D', 'C', ?, 'A', 'SEMILLA')
+                returning id_propiedad
+                """, Long.class, "VECINO-" + idOrganizacion, idOrganizacion);
     }
 
     private Long responsableDe(long idPropiedad) {
@@ -753,11 +1221,9 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
     }
 
     private Long otraOrganizacion(long idOrganizacion) {
-        List<Long> ids = jdbc.queryForList(
-                "select id_organizacion from organizacion where id_organizacion <> ? "
-                        + "order by id_organizacion limit 1", Long.class, idOrganizacion);
-        assertTrue(ids.isEmpty() || !ids.get(0).equals(idOrganizacion));
-        return ids.isEmpty() ? null : ids.get(0);
+        long vecino = otroTenant();
+        assertNotEquals(idOrganizacion, vecino, "el tenant vecino no puede ser el propio");
+        return vecino;
     }
 
     /**

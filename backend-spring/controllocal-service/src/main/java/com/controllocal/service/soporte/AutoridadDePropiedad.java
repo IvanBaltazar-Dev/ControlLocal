@@ -315,6 +315,37 @@ public class AutoridadDePropiedad {
      * Es el mismo {@link Alcances#alcanza} que usa {@code reasignar} para el
      * encargo, y a proposito: dos implementaciones del mismo alcance divergen,
      * y divergen hacia el lado que concede de mas.
+     *
+     * <h2>Un traspaso tiene DOS extremos, y los dos se comprueban (C6)</h2>
+     * Comprobar solo <b>a donde va</b> la propiedad dejaba abierta la puerta de
+     * <b>donde sale</b>: un BROKER que supervisara al destino podia sacar una
+     * propiedad del equipo de otro broker sin ser el gobierno del tenant.
+     * <pre>
+     *   propiedad CON responsable -&gt; el BROKER tiene que supervisar de forma
+     *                                vigente al SALIENTE **y** al DESTINO. Solo
+     *                                mueve dentro de su propio equipo; si
+     *                                cualquiera de los dos extremos es de otro
+     *                                equipo, es un traspaso ENTRE equipos y lo
+     *                                decide el TENANT_ADMIN.
+     *   propiedad FALTANTE (C5)   -&gt; no hay saliente a quien supervisar, asi
+     *                                que la regla de equipo no tiene sobre que
+     *                                aplicarse por ese lado: cualquier BROKER
+     *                                del tenant la gobierna para asignarla. El
+     *                                DESTINO sigue teniendo que ser un
+     *                                supervisado vigente suyo, asi que la
+     *                                excepcion abre **que** propiedades
+     *                                gobierna, no **a quien** puede
+     *                                entregarlas. Asignada, la excepcion se
+     *                                cierra sola y vuelve a mandar el EQUIPO,
+     *                                sin que nadie ejecute nada mas.
+     * </pre>
+     * <b>La frontera del tenant va delante de las dos</b> y no cambia: otro
+     * tenant, nunca, y como recurso inexistente.
+     *
+     * <p>Las dos preguntas salen del <b>mismo</b> {@code Alcances} que ya
+     * resuelve la lectura del expediente. No hay una segunda comparacion de
+     * supervision escrita aqui: dos sitios donde se compare lo mismo son dos
+     * sitios que despues divergen, y divergen hacia el lado que concede de mas.
      */
     public AsignacionResponsablePropiedad asignar(Actor actor, Propiedad propiedad,
                                                   long idRolAgenteNuevo, String motivo) {
@@ -353,6 +384,36 @@ public class AutoridadDePropiedad {
         }
 
         Long anterior = propiedad.getIdRolResponsable();
+
+        // Y EL SALIENTE, que es la mitad que faltaba (C6). Un traspaso tiene dos
+        // extremos: sin esto, un BROKER que supervisara al DESTINO podia SACAR
+        // la propiedad del equipo de otro broker con solo elegir un destino
+        // suyo, que es un traspaso ENTRE equipos disfrazado de movimiento
+        // interno.
+        //
+        // Se pregunta `alcanzaIncluidoSinDueno` y no `alcanza` porque las dos
+        // reglas congeladas se encuentran justo en esta linea:
+        //
+        //   CON responsable  -> se comporta como `alcanza`: el BROKER tiene que
+        //                       supervisar tambien al saliente, o esto lo decide
+        //                       el gobierno del tenant y no el.
+        //   SIN responsable  -> no hay saliente a quien supervisar, asi que la
+        //                       excepcion FALTANTE (C5) deja pasar a cualquier
+        //                       BROKER del tenant. El destino ya quedo acotado
+        //                       arriba por `alcanza`, de modo que lo que la
+        //                       excepcion abre es QUE propiedades gobierna, no
+        //                       A QUIEN puede entregarlas.
+        //
+        // Las dos salen del MISMO metodo que ya decide el alcance en la lectura
+        // del expediente. Una tercera forma de preguntar por la supervision es
+        // una tercera forma de que la respuesta diverja.
+        if (!alcances.alcanzaIncluidoSinDueno(actor, anterior)) {
+            throw new AccesoNoAutorizadoException(
+                    "De esta propiedad responde hoy un agente al que no supervisas. Sacarla de "
+                            + "su equipo es un traspaso entre equipos, y eso lo decide el "
+                            + "gobierno de la organizacion, no un broker.");
+        }
+
         if (Objects.equals(anterior, nuevo.getId())) {
             throw new ReglaNegocioException(
                     "Ese agente ya responde por esta propiedad. Un traspaso que no traspasa no es "
@@ -473,10 +534,25 @@ public class AutoridadDePropiedad {
                 motivo == null,
                 motivo,
                 motivo == null ? null : explicacion(motivo),
-                // Quien puede decidir QUIEN responde. Es la misma condicion que
-                // abre `asignar` -- no ser agente -- y por eso se lee de aqui y
-                // no de una segunda tabla: la ficha no puede ofrecer un boton
-                // que el POST vaya a rechazar por banda.
+                // Quien puede decidir QUIEN responde, POR BANDA. Es la primera
+                // guarda de `asignar` -- no ser agente -- y por eso se lee de
+                // aqui y no de una segunda tabla: la ficha no puede ofrecer un
+                // boton que el POST vaya a rechazar POR BANDA.
+                //
+                // No es todo lo que `asignar` exige, y nunca lo fue: el alcance
+                // sobre el DESTINO no se puede resolver aqui porque en la ficha
+                // todavia no hay destino elegido. Desde C6 tampoco es todo por
+                // el lado del SALIENTE -- `asignar` exige ademas
+                // `alcanzaIncluidoSinDueno(actor, responsable)`, que la ficha SI
+                // podria resolver--, asi que este booleano dice hoy "tu banda
+                // decide responsables", no "puedes traspasar ESTA propiedad".
+                //
+                // Estrecharlo cambiaria el cable de la ficha y una respuesta que
+                // C5 dejo medida, asi que no se hace aqui: queda ANOTADO. El
+                // coste medido es acotado y no es un permiso de mas -- el POST
+                // deniega igual, con su motivo escrito por el Core-- sino un
+                // boton que en el caso "responsable de otro equipo" ya no lleva
+                // a ningun destino valido.
                 !actor.esAgente());
     }
 

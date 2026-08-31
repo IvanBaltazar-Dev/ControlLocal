@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -278,36 +279,125 @@ class AlcanceYGobiernoDeLaAutoridadIntegrationTest {
     }
 
     /**
-     * <b>Una propiedad FALTANTE no responde ante nadie, asi que ningun broker la
-     * alcanza.</b>
+     * <b>El inventario sin dueno lo gobierna cualquier broker del tenant</b> (C5).
      *
-     * <p>Es consecuencia de C1+C2 y no una regla aparte, pero se escribe porque
-     * es el caso que hoy manda: medido el 2026-08-30, las <b>26</b> propiedades
-     * de {@code dev} estan FALTANTE. Se deniega por el lado seguro y no se
-     * pierde nada — el TENANT_ADMIN lo lee, y el broker lo leera en cuanto
-     * asigne a alguien de su equipo.
+     * <p>Gobernar lo que no tiene responsable es trabajo de broker: es justo lo
+     * que tiene que mirar para decidir a quien asignarlo. La regla "sus
+     * supervisados vigentes" existe para no cruzar equipos, y sin responsable no
+     * hay a quien supervisar — la regla no tiene sobre que aplicarse y el limite
+     * vuelve a ser el tenant.
+     *
+     * <p>Es el caso que hoy manda: medido el 2026-08-30, las <b>26</b>
+     * propiedades de {@code dev} estan FALTANTE.
      */
     @Test
-    @DisplayName("C2: una propiedad FALTANTE es gobierno del tenant, no de un broker")
-    void unaPropiedadSinResponsableSoloLaLeeElGobierno() {
+    @DisplayName("C5: una propiedad FALTANTE la alcanza CUALQUIER broker de su tenant")
+    void elInventarioSinDuenoLoGobiernaCualquierBrokerDelTenant() {
         Actor duena = agenteDelEquipo(0);
         long idPropiedad = registrar(duena);
         dejarSinResponsable(idPropiedad);
 
-        assertThrows(AccesoNoAutorizadoException.class,
-                () -> propiedades.traspasosDe(idPropiedad, broker()),
-                "sin responsable no hay a quien supervisar, asi que el alcance del broker no "
-                        + "llega. Se deniega por el lado seguro");
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, broker()).size(),
+                "el broker que la tenia en su equipo la sigue viendo cuando queda sin dueno");
+
+        // Y el de OTRO equipo tambien: es lo que cambia con C5. Sin responsable
+        // no hay equipo que respetar, y ese broker es tan capaz de asignarla
+        // como cualquier otro de la casa.
+        Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, brokerAjeno).size(),
+                "un broker que NO supervisaba al responsable saliente tambien alcanza el "
+                        + "inventario sin dueno de SU tenant: no hay a quien supervisar, asi "
+                        + "que la restriccion de equipo no tiene sobre que aplicarse");
 
         assertEquals(1, propiedades.traspasosDe(idPropiedad, tenantAdmin()).size(),
-                "y el gobierno del tenant si lo lee: la propiedad no queda sin nadie que "
-                        + "pueda mirarla");
+                "y el gobierno del tenant, sin cambio");
+    }
 
-        // Y en cuanto la asigna a alguien de su equipo, su broker vuelve a leerlo.
-        propiedades.asignarResponsable(idPropiedad, duena.idRolOperativo(), MOTIVO, broker());
-        assertEquals(2, propiedades.traspasosDe(idPropiedad, broker()).size(),
-                "asignada a un supervisado suyo, el broker recupera el expediente entero -- "
-                        + "el alta y el traspaso");
+    /**
+     * <b>Y el tenant sigue siendo el limite, tambien para lo FALTANTE</b> (C5).
+     *
+     * <p>La comprobacion que impide que C5 se lea como "el broker alcanza todo
+     * lo que no tiene dueno". La frontera va <b>antes</b> que el rol, y responde
+     * <b>inexistente</b>: un 403 confirmaria que esa propiedad existe.
+     */
+    @Test
+    @DisplayName("C5: pero una FALTANTE de OTRO tenant sigue siendo inexistente")
+    void loFaltanteDeOtroTenantSigueSiendoInexistente() {
+        Long ajena = unaPropiedadDeOtraOrganizacion(broker().idOrganizacion());
+        if (ajena == null) {
+            return;
+        }
+        jdbc.update("update propiedad set id_rol_responsable = null where id_propiedad = ?", ajena);
+
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.traspasosDe(ajena, broker()),
+                "sin dueno y de otra corredora: la frontera de tenant va primero y responde "
+                        + "INEXISTENTE, no 403");
+        assertThrows(NoEncontradoException.class,
+                () -> propiedades.traspasosDe(ajena, tenantAdmin()),
+                "y el gobierno de este tenant tampoco cruza a otro");
+    }
+
+    /**
+     * <b>C5 no abrio de paso la propiedad CON responsable.</b>
+     *
+     * <p>La otra mitad, y la que evita que la excepcion se coma la regla: lo que
+     * cambia es el caso <b>sin dueno</b>. Con dueno, el broker sigue necesitando
+     * supervisarlo.
+     */
+    @Test
+    @DisplayName("C5: con responsable, el broker que no lo supervisa sigue sin entrar")
+    void conResponsableElAlcanceDeEquipoSigueIntacto() {
+        Actor duena = agenteDelEquipo(0);
+        long idPropiedad = registrar(duena);
+
+        Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.traspasosDe(idPropiedad, brokerAjeno),
+                "esta propiedad SI responde ante alguien, y ese alguien no es de su equipo: "
+                        + "C5 no toca este caso");
+
+        // Y en cuanto pierde al responsable, el mismo broker si entra. Las dos
+        // mitades de C5 en la misma prueba, sobre la misma propiedad.
+        dejarSinResponsable(idPropiedad);
+        assertEquals(1, propiedades.traspasosDe(idPropiedad, brokerAjeno).size(),
+                "sin dueno, el mismo broker que no entraba ahora si: lo que decide no es "
+                        + "quien es el broker, es si hay a quien supervisar");
+    }
+
+    /**
+     * <b>Y `puedeTraspasar` no es la misma pregunta que el expediente.</b>
+     *
+     * <p>Se comprueba explicitamente porque las dos superficies se tocan y seria
+     * facil que una arrastrara a la otra: ofrecer el boton de traspasar no
+     * concede leer los motivos por los que la propiedad cambio de manos, ni al
+     * reves.
+     */
+    @Test
+    @DisplayName("C5: ver que puedes traspasar no es poder leer el expediente")
+    void traspasarYLeerElExpedienteSiguenSiendoDosPreguntas() {
+        Actor duena = agenteDelEquipo(0);
+        long idPropiedad = registrar(duena);
+
+        // El responsable vigente: puede editar, NO puede traspasar y NO lee el
+        // expediente. Tres respuestas distintas para la misma persona.
+        var suya = propiedades.consultar(idPropiedad, duena).responsabilidad();
+        assertTrue(suya.puedeEditar(), "responde por ella");
+        assertFalse(suya.puedeTraspasar(), "pero no decide quien responde");
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.traspasosDe(idPropiedad, duena),
+                "ni lee el expediente");
+
+        // Un broker de otro equipo: SI puede traspasar -la banda se lo permite y
+        // el alcance lo decide el agente que recibe- y NO lee este expediente,
+        // porque la propiedad responde ante alguien que no supervisa.
+        Actor brokerAjeno = brokerQueNoSupervisaA(duena.idRolOperativo());
+        assertTrue(propiedades.consultar(idPropiedad, brokerAjeno).responsabilidad()
+                        .puedeTraspasar(),
+                "puedeTraspasar sale de la banda, no del alcance sobre el responsable");
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> propiedades.traspasosDe(idPropiedad, brokerAjeno),
+                "y aun asi no lee el expediente: son dos preguntas distintas");
     }
 
     // ==================================================================

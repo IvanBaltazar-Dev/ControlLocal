@@ -89,6 +89,38 @@ Esto vale **única y exclusivamente cuando nace una fila de `propiedad`**.
 
 ---
 
+### C5 · El inventario sin dueño lo gobierna cualquier bróker del tenant *(titular, 2026-08-30)*
+
+**Quién lee el expediente de una propiedad FALTANTE**, y por extensión cualquier
+superficie donde el alcance del bróker se calcule **sobre el responsable**:
+
+- propiedad **con** responsable → BROKER **sólo si supervisa a ese responsable**;
+- propiedad **FALTANTE** → **cualquier BROKER del mismo tenant**;
+- **TENANT_ADMIN** → cualquier propiedad de su tenant, sin cambio;
+- **otro tenant** → **recurso inexistente**, y esa frontera se pregunta **antes**
+  que el rol, sin cambio.
+
+**El porqué, que es lo que evita que se lea como una excepción:** gobernar el
+inventario sin dueño **es trabajo de bróker** — es justo lo que tiene que mirar
+para decidir a quién asignarlo. La regla «sus supervisados vigentes» existe para
+**no cruzar equipos**; sin responsable **no hay a quien supervisar**, así que esa
+regla no tiene sobre qué aplicarse y el límite efectivo vuelve a ser el que va
+siempre delante: **el tenant**.
+
+**La asignación no cambia**: su alcance ya se calcula sobre el agente que
+**recibe**, no sobre el que no hay.
+
+**Dónde vive.** En `Alcances.alcanzaIncluidoSinDueno`, junto a `alcanza` y con la
+diferencia escrita entre las dos. No en una rama del llamador: `alcanza` devuelve
+`false` ante un dueño nulo **antes** de mirar la banda —y cinco llamadores
+dependen de ello a propósito—, así que la respuesta correcta tiene que salir del
+sitio que decide alcances, o la siguiente superficie que pregunte por un recurso
+sin dueño volverá a heredar la equivocada, en silencio.
+
+**Y no es la misma pregunta que `puedeTraspasar`.** Ofrecer el traspaso sale de
+la banda; leer el expediente, del alcance sobre el responsable. Un bróker de otro
+equipo puede traspasar una propiedad y **no** leer su expediente.
+
 ## Las tres autoridades, que pueden ser tres personas
 
 ```

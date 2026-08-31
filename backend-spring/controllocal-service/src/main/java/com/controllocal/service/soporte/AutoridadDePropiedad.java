@@ -391,15 +391,21 @@ public class AutoridadDePropiedad {
      * <p><b>Ver quien responde no es ver por que cambio de manos</b>: son dos
      * preguntas distintas y solo la segunda es un expediente.
      *
-     * <h2>Una propiedad FALTANTE y el broker</h2>
-     * Sin responsable no hay a quien supervisar, asi que
-     * {@link Alcances#alcanza} dice {@code false} y el broker <b>no</b> lo lee:
-     * un inmueble que no responde ante nadie es gobierno del tenant hasta que
-     * alguien lo asigne. Se deniega por el lado seguro y no se pierde nada — el
-     * TENANT_ADMIN lo lee, y el broker lo leera en cuanto asigne a alguien de
-     * su equipo. Medido el 2026-08-30: hoy las 26 propiedades de {@code dev}
-     * estan FALTANTE, asi que en la practica solo el gobierno del tenant abre
-     * un expediente. Es consecuencia de C1+C2, no una regla aparte.
+     * <h2>Una propiedad FALTANTE y el broker (C5)</h2>
+     * <b>Cualquier BROKER del tenant la alcanza.</b> Gobernar el inventario sin
+     * dueno es trabajo de broker: es justo lo que tiene que mirar para decidir a
+     * quien asignarlo. La regla "sus supervisados vigentes" existe para <b>no
+     * cruzar equipos</b>, y sin responsable no hay a quien supervisar — asi que
+     * esa regla no tiene sobre que aplicarse, y el limite efectivo vuelve a ser
+     * el que va siempre delante: <b>el tenant</b>.
+     *
+     * <p>Lo decide {@link Alcances#alcanzaIncluidoSinDueno}, no una rama aqui.
+     * La version anterior de este corte denegaba —heredando el {@code false}
+     * que {@link Alcances#alcanza} devuelve ante un dueno nulo <b>antes</b> de
+     * mirar la banda—, y con las 26 propiedades de {@code dev} en FALTANTE eso
+     * dejaba el expediente practicamente sin lectores. Que no vuelva a pasar en
+     * la siguiente superficie depende de que la respuesta salga <b>del sitio que
+     * decide alcances</b>, y no de un caso especial en el borde.
      *
      * <p>Si el nuevo responsable necesita contexto, la respuesta <b>no</b> es
      * abrirle el expediente: seria una nota de traspaso operativa, distinta del
@@ -413,24 +419,19 @@ public class AutoridadDePropiedad {
                             + "responsables anteriores y los motivos de cada cambio los consulta "
                             + "quien supervisa.");
         }
-        if (actor.esTenantAdmin()) {
-            // Su alcance ES el tenant, y el tenant ya se comprobo antes de
-            // llegar aqui (un id de otra corredora responde 404). No se le
-            // pregunta a `alcances.alcanza` a proposito: ese metodo responde
-            // otra cosa —"¿alcanzas un recurso cuyo dueno es ESTE agente?"— y
-            // ante un dueno NULL contesta `false` <b>antes</b> de mirar la
-            // banda. Con una propiedad FALTANTE eso habria dejado el expediente
-            // sin ningun lector: ni el broker, por no supervisar a nadie, ni el
-            // gobierno, por una guarda que ni siquiera le estaba preguntando a
-            // el. Reutilizar la funcion que "suena bien" en vez de la que
-            // responde la pregunta es la forma de fallo que este corte lleva
-            // toda la auditoria persiguiendo.
-            return;
-        }
-        if (!alcances.alcanza(actor, propiedad.getIdRolResponsable())) {
+        // Y el alcance lo decide `Alcances`, que es quien decide alcances. Se
+        // pregunta `alcanzaIncluidoSinDueno` y no `alcanza` porque son dos
+        // preguntas distintas: aquella niega cuando no hay dueno -y cinco
+        // llamadores dependen de eso-, y aqui una propiedad FALTANTE es
+        // justamente la que el broker tiene que poder mirar para decidir a
+        // quien asignarla (C5).
+        //
+        // La frontera de tenant ya se comprobo ANTES de llegar aqui: la fila se
+        // cargo por (organizacion, id) y un id de otra corredora respondio 404.
+        if (!alcances.alcanzaIncluidoSinDueno(actor, propiedad.getIdRolResponsable())) {
             throw new AccesoNoAutorizadoException(
-                    "Esta propiedad no responde ante ninguno de tus agentes, asi que su "
-                            + "expediente de traspasos no esta en tu alcance de supervision.");
+                    "Esta propiedad responde ante un agente que no supervisas, asi que su "
+                            + "expediente de traspasos no esta en tu alcance.");
         }
     }
 

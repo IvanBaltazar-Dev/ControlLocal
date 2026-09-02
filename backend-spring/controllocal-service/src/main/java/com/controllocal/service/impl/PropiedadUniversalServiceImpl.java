@@ -47,6 +47,7 @@ import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.ComandosIdempotentes;
 import com.controllocal.service.soporte.CondicionesEconomicas;
 import com.controllocal.service.soporte.Documentos;
+import com.controllocal.service.soporte.ElegibilidadDeResponsable;
 import com.controllocal.service.soporte.PoliticaComercial;
 import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.service.soporte.ProcedenciaDelValor;
@@ -144,6 +145,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private final AnunciosDeLosEncargos publicaciones;
     /** Quien puede escribir la propiedad, y quien cada encargo (P0). */
     private final AutoridadDePropiedad autoridad;
+    /** Y quien puede RECIBIRLA: los candidatos que el Core ofrece (D-P0-7/D-P0-12). */
+    private final ElegibilidadDeResponsable elegibilidad;
 
     // Las cuatro tablas de valor gobernado ya no se inyectan aqui (4.P). Este
     // caso de uso ORQUESTA -- decide que se escribe, en que orden y dentro de
@@ -167,7 +170,8 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          Transiciones transiciones,
                                          ActividadDeLaPropiedad actividad,
                                          AnunciosDeLosEncargos publicaciones,
-                                         AutoridadDePropiedad autoridad) {
+                                         AutoridadDePropiedad autoridad,
+                                         ElegibilidadDeResponsable elegibilidad) {
         this.propiedades = propiedades;
         this.roles = roles;
         this.agentes = agentes;
@@ -187,6 +191,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         this.actividad = actividad;
         this.publicaciones = publicaciones;
         this.autoridad = autoridad;
+        this.elegibilidad = elegibilidad;
     }
 
     // ==================================================================
@@ -465,8 +470,19 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         if (comando == null) {
             throw new ReglaNegocioException("El comando de edicion es obligatorio.");
         }
+        // LA FILA, TOMADA (F2.10). Es la misma carga de siempre —mismo tenant,
+        // mismo 404— con el candado puesto: la autoridad de mas abajo tiene que
+        // comprobarse sobre el estado que seguira siendo verdad cuando esto
+        // escriba. Sin el, entre `exigirEdicion` y el flush cabia un traspaso
+        // entero, y la edicion del saliente aterrizaba sobre una propiedad que
+        // ya era de otro.
+        //
+        // Va aqui, ANTES de nada, y no despues de `tocaLaFicha`: es la primera
+        // carga de esta fila en la transaccion, y tiene que serlo. Hibernate
+        // devuelve la instancia ya cargada sin refrescarla, asi que un candado
+        // tomado despues comprobaria la autoridad sobre el valor viejo.
         Propiedad propiedad = propiedades
-                .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+                .bloquearParaEscritura(actor.idOrganizacion(), idPropiedad)
                 .orElseThrow(() -> new NoEncontradoException("Propiedad"));
         Procedencia procedencia = Procedencia.oPantalla(comando.procedencia());
 
@@ -574,17 +590,35 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
      * transaccion, ademas de la fila del expediente: la fila es el rastro
      * dirigido —"de quien a quien"— y el evento es el que ve la auditoria
      * transversal.
+     *
+     * <h2>UN solo hecho, o ninguno (D-P0-10)</h2>
+     * Cambiar el responsable, dejar el saliente y el destino en el expediente
+     * con su actor, su rol y su motivo, y anotar el evento son <b>partes de un
+     * mismo hecho</b>, no tres efectos que se puedan dar por separado. Van en
+     * esta transaccion y si cualquiera falla se deshacen todas: un responsable
+     * cambiado sin traza deja una autoridad que nadie puede explicar, y una
+     * traza sin cambio afirma un traspaso que no ocurrio. Que sea verdad no lo
+     * dice el {@code @Transactional} sino {@code CausalidadDelTraspaso}
+     * {@code IntegrationTest}, que rompe a proposito cada una de las escrituras
+     * y comprueba que no queda ninguna de las otras.
+     *
+     * <h2>Y parte del estado que el actor vio (D-P0-9)</h2>
+     * El {@link ResponsableObservado} entra desde el comando y llega intacto a
+     * la autoridad: este metodo <b>no lo deduce de la fila que acaba de
+     * cargar</b>, que es precisamente el estado nuevo que puede haber escrito
+     * otro. Deducirlo aqui haria que el 409 no ocurriera nunca.
      */
     @Override
     @Transactional
     public TraspasoDeResponsable asignarResponsable(long idPropiedad, long idRolAgente,
-                                                    String motivo, Actor actor) {
+                                                    String motivo, ResponsableObservado observado,
+                                                    Actor actor) {
         Propiedad propiedad = propiedades
                 .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
                 .orElseThrow(() -> new NoEncontradoException("Propiedad"));
 
         AsignacionResponsablePropiedad fila =
-                autoridad.asignar(actor, propiedad, idRolAgente, motivo);
+                autoridad.asignar(actor, propiedad, idRolAgente, motivo, observado);
         propiedades.save(propiedad);
 
         anotarEvento(actor, EVENTO_RESPONSABLE, Propiedad.ENTIDAD_TIPO, propiedad.getId(),
@@ -616,6 +650,51 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         return autoridad.historial(actor.idOrganizacion(), idPropiedad).stream()
                 .map(this::traspaso)
                 .toList();
+    }
+
+    /**
+     * <b>Los destinos elegibles para ESTA propiedad y ESTE actor</b> (D-P0-12).
+     *
+     * <p>Tres pasos, y el orden es la mitad de la decision:
+     * <ol>
+     *   <li>la <b>frontera de tenant</b>, cargando la fila por
+     *       {@code (organizacion, id)} — un id de otra corredora es 404 y no una
+     *       lista vacia;</li>
+     *   <li>la <b>misma pregunta que apaga el boton</b> en la ficha
+     *       ({@code puedeIniciarTraspaso}). Si el actor no puede iniciar el
+     *       traspaso de esta propiedad, tampoco tiene que ver a quien se la
+     *       podria dar: seria ofrecerle el paso siguiente de algo que no puede
+     *       empezar. Y es 403, no una lista vacia — "no hay candidatos" y "no te
+     *       corresponde" son dos respuestas distintas;</li>
+     *   <li>y los candidatos, resueltos en la base con las cinco condiciones de
+     *       D-P0-7.</li>
+     * </ol>
+     *
+     * <p>El POST revalida <b>todo</b> despues: esta lista no autoriza nada, y
+     * entre pedirla y usarla un agente puede quedar desactivado.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Pagina<CandidatoResponsable> candidatosAResponsable(long idPropiedad, String texto,
+                                                               int pagina, int tamano,
+                                                               Actor actor) {
+        Propiedad propiedad = propiedades
+                .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+                .orElseThrow(() -> new NoEncontradoException("Propiedad"));
+        if (!autoridad.puedeIniciarTraspaso(actor, propiedad)) {
+            throw new AccesoNoAutorizadoException(
+                    "No puedes cambiar quien responde por esta propiedad, asi que tampoco hay "
+                            + "destinos que ofrecerte. Es el mismo motivo por el que su ficha no "
+                            + "te ofrece el traspaso: o no es tu banda, o responde hoy ante un "
+                            + "agente que no supervisas.");
+        }
+        Page<DetalleAgente> page = elegibilidad.candidatos(actor, propiedad, texto,
+                PageRequest.of(Math.max(0, pagina - 1), Math.max(1, Math.min(100, tamano))));
+        return new Pagina<>(page.getContent().stream()
+                .map(agente -> new CandidatoResponsable(agente.getId(),
+                        nombreDe(agente.getRol()), agente.getCodigoAgente(),
+                        agente.getZonaAsignada()))
+                .toList(), page.getTotalElements());
     }
 
     private TraspasoDeResponsable traspaso(AsignacionResponsablePropiedad fila) {
@@ -703,8 +782,13 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // comprobacion, un id ajeno escribiria condiciones en la cartera de otra
         // corredora -- y la FK compuesta lo dejaria pasar, porque la organizacion
         // que viaja es la del actor.
-        Captacion encargo = captaciones.findById(bloque.idEncargo())
-                .filter(c -> c.getOrganizacionId() == actor.idOrganizacion())
+        //
+        // Y se carga TOMANDO la fila (F2.10): las condiciones pactadas son
+        // hechos del trato, asi que la autoridad de abajo tiene que decidirse
+        // sobre el agente que seguira siendo verdad al escribirlas. El filtro
+        // de organizacion se resuelve ahora en la consulta -- mismo 404.
+        Captacion encargo = captaciones
+                .bloquearParaEscritura(actor.idOrganizacion(), bloque.idEncargo())
                 .filter(c -> c.getPropiedad() != null
                         && Objects.equals(c.getPropiedad().getId(), propiedad.getId()))
                 .orElseThrow(() -> new NoEncontradoException("Encargo"));
@@ -1089,6 +1173,21 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     private void actualizarEncargo(Actor actor, Propiedad propiedad, OperacionSolicitada solicitada,
                                    Procedencia procedencia) {
         OperacionInmobiliaria operacion = OperacionInmobiliaria.desde(solicitada.operacion());
+        // Las filas de los encargos VIVOS, tomadas antes de elegir cual (F2.10).
+        // Se bloquea el conjunto y no la fila elegida por dos razones:
+        //
+        //   1. tiene que ser la PRIMERA carga de esa fila en la transaccion --
+        //      un candado tomado despues devolveria la instancia ya cargada sin
+        //      refrescar, o sea la autoridad decidida sobre el valor viejo;
+        //   2. una peticion puede traer VENTA y ALQUILER, y el orden en que
+        //      llegan lo decide el cliente. El conjunto se toma SIEMPRE en
+        //      orden de id, asi que dos peticiones con las operaciones al reves
+        //      no pueden bloquearse entre ellas.
+        //
+        // El resultado se descarta a proposito: lo que hace falta es el
+        // bloqueo. La consulta de abajo devuelve la misma instancia gestionada,
+        // ya cargada bajo el.
+        captaciones.bloquearEncargosVivosParaEscritura(actor.idOrganizacion(), propiedad.getId());
         Captacion encargo = captaciones
                 .encargoVivoDe(actor.idOrganizacion(), propiedad.getId(), operacion.codigo())
                 .orElseThrow(() -> new ReglaNegocioException(
@@ -1098,7 +1197,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
         // El encargo lo edita SU agente (P0-4). Va antes de tocar la condicion
         // economica a proposito: el efecto que hay que impedir no es solo el
         // cambio de importe, es el hito `U` que ese cambio anade a la serie
-        // economica de un encargo que no es del actor.
+        // economica de un encargo que no es del actor. Y va bajo el candado de
+        // arriba, para que el agente que se comprueba sea el que seguira siendo
+        // verdad al escribir el hito.
         autoridad.exigirEdicionDelEncargo(actor, encargo);
 
         CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
@@ -1259,6 +1360,30 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 gobierno.faltantesDePropiedadParaPublicar(idOrganizacion, propiedad)
                         .stream().map(conRotulo).toList();
 
+        // ------------------------------------------------------------------
+        // D-P0-6: que HISTORIA puede leer quien pregunta
+        // ------------------------------------------------------------------
+        //
+        // La ficha no se recorta entera: lo que se recorta es la informacion
+        // COMERCIAL HISTORICA --el historico de cada encargo, la historia del
+        // inmueble y su actividad--. El resto sigue llegando igual para todos:
+        // la cosa fisica, los titulares, los atributos, los importes vigentes de
+        // cada encargo y la responsabilidad. Ver la propiedad y ver lo que se
+        // pidio por ella en 2023 son dos preguntas, y solo la segunda es
+        // historia.
+        //
+        // Jackson esta configurado NON_NULL, asi que un bloque nulo NO VIAJA por
+        // el cable: en el SPA llega como `undefined`. Eso es lo que el cliente
+        // tiene que leer como «no disponible para ti», y NO como «vacio» -- una
+        // propiedad sin historia y una propiedad cuya historia no te corresponde
+        // se pintan distinto, y la diferencia esta en que el campo exista.
+        List<Captacion> visibles = todos.stream()
+                .filter(encargo -> autoridad.puedeLeerHistoricoDelEncargo(actor, encargo))
+                .toList();
+        Set<Long> idsVisibles = visibles.stream().map(Captacion::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        boolean leeLaHistoria = autoridad.puedeLeerHistoriaDeLaPropiedad(actor, propiedad);
+
         // Los encargos se arman DESPUES de esas dos listas y no antes: la
         // capacidad `publicacionGestionable` de cada bloque necesita la deuda de
         // la PROPIEDAD --que es una sola para todos-- ademas de la suya. Es la
@@ -1268,10 +1393,42 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                         anuncios.getOrDefault(encargo.getId(), List.of()),
                         idOrganizacion, tipo,
                         pactadas.getOrDefault(encargo.getId(), ValoresGobernados.vacio()),
-                        faltanParaPublicar))
+                        faltanParaPublicar,
+                        idsVisibles.contains(encargo.getId())))
                 .toList();
 
         boolean seOfrece = encargos.stream().anyMatch(EncargoFicha::vivo);
+
+        // La HISTORIA del inmueble se compone de los encargos que este actor
+        // puede ver, y de nada mas. Es la lectura CONJUNTA de las dos filas de
+        // D-P0-6: la fila de la propiedad dice si puede leer historia, y la del
+        // encargo dice de cuales. Un responsable que solo tiene el alquiler no
+        // puede leer «a cuanto se intento vender» por la puerta de la historia
+        // agregada, que es justo la puerta que un bloque agregado abre sin que
+        // se note.
+        //
+        // Y la serie se filtra a esos encargos antes de agregarla: un hito SIN
+        // encargo no entra en la historia por su cuenta (`historiaDe` ya lo
+        // descarta, porque sin episodio no se puede decir de que operacion era).
+        HistoriaComercial historia = null;
+        if (leeLaHistoria && !visibles.isEmpty()) {
+            List<PrecioPropiedad> serieVisible = serie.stream()
+                    .filter(precio -> idsVisibles.contains(precio.getIdCaptacion()))
+                    .toList();
+            HistoriaComercial candidata = historiaDe(visibles, serieVisible);
+            // Sin ningun episodio no hay historia que contar: devolver un bloque
+            // con dos listas vacias diria «esta propiedad no tiene pasado», que
+            // es una afirmacion, no una ausencia.
+            historia = candidata.porOperacion().isEmpty() && candidata.linea().isEmpty()
+                    ? null : candidata;
+        }
+
+        // La ACTIVIDAD son los hechos DE SUS ENCARGOS, asi que se pide sobre los
+        // encargos visibles y no sobre todos: filtrar despues traeria de la base
+        // filas que despues se tiran, y las cinco consultas ya van por
+        // `id in (...)`. Sin ningun encargo visible el bloque entero no viaja.
+        ActividadPropiedad actividadVisible = visibles.isEmpty()
+                ? null : actividad.de(idOrganizacion, visibles);
 
         return new FichaPropiedadUniversal(idPropiedad, propiedad.getCodigo(),
                 AtributosGobernados.nombreDelTipo(tipo), AtributosGobernados.rotuloDelTipo(tipo),
@@ -1296,9 +1453,10 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                 seOfrece ? rotuloDe(propiedad.disponibilidadComercialTipada()) : null,
                 ubicacionDe(propiedad), titulares, valores, encargos, faltan, faltanParaPublicar,
                 // La misma materia prima, leida como continuidad del inmueble en
-                // vez de como episodios sueltos. Sin consultas de mas.
-                historiaDe(todos, serie),
-                actividad.de(idOrganizacion, todos),
+                // vez de como episodios sueltos. Sin consultas de mas, y acotada
+                // a lo que este actor puede leer (D-P0-6).
+                historia,
+                actividadVisible,
                 Fechas.local(propiedad.getFechaRegistro()),
                 responsabilidadDe(actor, propiedad));
     }
@@ -1466,14 +1624,22 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                         List<PublicacionService.FichaPublicacion> anuncios,
                                         long idOrganizacion, String tipoPropiedad,
                                         ValoresGobernados pactadas,
-                                        List<AtributoQueFalta> faltanDeLaPropiedad) {
+                                        List<AtributoQueFalta> faltanDeLaPropiedad,
+                                        boolean historicoVisible) {
         CondicionEconomicaCaptacion condicion = encargo.getCondicionEconomica();
         // Se calcula UNA vez y se usa dos: para publicarla en el bloque y para
         // decidir la capacidad. Pedirla dos veces abriria la puerta a que las dos
         // respuestas se separaran.
         List<AtributoQueFalta> faltanDelEncargo =
                 faltanEnElEncargo(idOrganizacion, encargo, tipoPropiedad);
-        List<HitoFicha> historico = serie.stream()
+        // El HISTORICO es lo unico del bloque que D-P0-6 acota: cuando el actor
+        // no puede leerlo, el campo llega NULO y por NON_NULL no viaja --
+        // «no disponible para ti», que no es lo mismo que una lista vacia--.
+        // Todo lo demas del encargo sigue viajando igual: el importe VIGENTE, sus
+        // condiciones, sus anuncios y `puedeEditar`. Ocultar el bloque entero
+        // seria confundir «no puedes ver lo que se pidio en 2023» con «este
+        // encargo no existe», y hay pantallas que necesitan saber que existe.
+        List<HitoFicha> historico = !historicoVisible ? null : serie.stream()
                 .filter(precio -> Objects.equals(precio.getIdCaptacion(), encargo.getId()))
                 .map(precio -> new HitoFicha(precio.getHito(),
                         PrecioPropiedad.rotuloDelHito(precio.getHito()),

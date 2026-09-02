@@ -184,8 +184,22 @@ export interface EncargoPropiedad {
   agenteNombre?: string | null;
   inicio?: string | null;
   fin?: string | null;
-  /** **Sólo el suyo.** Dos encargos nunca comparten serie. */
-  historico: HitoEncargo[];
+  /**
+   * **Sólo el suyo.** Dos encargos nunca comparten serie.
+   *
+   * **Puede no viajar** (D-P0-6). La serie económica de un encargo la leen su
+   * propio agente y el bróker que lo alcanza; el TENANT_ADMIN no, porque
+   * gobernar no es operar. Jackson va `NON_NULL`, así que ausente llega como
+   * `undefined` y **la comparación correcta es `== null`**.
+   *
+   * **Ausente significa «no disponible para ti», nunca «vacío».** Una serie sin
+   * movimientos y una serie que no corresponde son dos hechos distintos, y
+   * pintarlas igual afirmaría que este encargo no ha tenido ninguno. El resto
+   * del bloque —importe vigente, exclusividad, condiciones, anuncios y
+   * `puedeEditar`— viaja siempre: no poder ver lo que se pidió en 2023 no es
+   * que el encargo no exista.
+   */
+  historico?: HitoEncargo[] | null;
   /**
    * **Sus anuncios.** Igual que el histórico: son de este encargo, no de la
    * propiedad. El de la venta no aparece ni se modifica desde el del alquiler.
@@ -523,9 +537,29 @@ export interface FichaPropiedad {
    * ENCARGO. Cada sujeto reporta la suya bajo el mismo nombre.
    */
   faltanParaPublicar: AtributoQueFalta[];
-  /** La memoria del inmueble, agregada sobre TODOS sus encargos. */
-  historia: HistoriaComercial;
-  actividad: ActividadPropiedad;
+  /**
+   * La memoria del inmueble, agregada sobre los encargos que **este actor
+   * puede ver**.
+   *
+   * **Puede no viajar** (D-P0-6): la lee el responsable de la propiedad y el
+   * bróker que lo alcanza; el TENANT_ADMIN no, y un agente que no responde por
+   * ella tampoco. Si no queda ningún encargo visible, el bloque entero se
+   * queda fuera. Con `NON_NULL` llega como `undefined`, así que se compara con
+   * **`== null`**.
+   *
+   * **Ausente significa «no disponible para ti», nunca «no ha pasado nada».**
+   * Es la razón de que la pantalla no escriba «sin historia» cuando el bloque
+   * no vino: sería afirmar un hecho comercial que nadie midió.
+   */
+  historia?: HistoriaComercial | null;
+  /**
+   * Los hechos de **esos mismos encargos visibles** (D-P0-6).
+   *
+   * Mismo contrato que `historia`: **puede no viajar**, ausente es `undefined`,
+   * se compara con **`== null`** y significa «no disponible para ti», no «esta
+   * propiedad no tiene actividad».
+   */
+  actividad?: ActividadPropiedad | null;
   fechaRegistro?: string | null;
   /**
    * **Quién responde por la propiedad, y qué puede hacer quien está mirando**
@@ -570,15 +604,28 @@ export interface Responsabilidad {
   /** El motivo **en palabras, escrito por el Core**. Es lo que se pinta. */
   motivoTexto?: string | null;
   /**
-   * Si **este** usuario puede cambiar quién responde por la propiedad (C3).
+   * Si **este** usuario puede **iniciar ahora** el cambio de responsable de
+   * **esta** propiedad, considerando su responsable actual (C7).
    *
    * Viaja resuelto por la misma razón que `puedeEditar`. Sin él, esta pantalla
-   * tendría que preguntar `sesion()?.rol !== 'AGENTE'`, que es exactamente la
-   * copia de la regla en el cliente que este P0 vino a quitar.
+   * tendría que llevar su propia copia de la regla de autoridad, que es
+   * exactamente lo que este P0 vino a quitar.
    *
-   * Dice si la acción **se ofrece**, no si un traspaso concreto se permite: a
-   * qué agentes puede pasársela lo acota `GET /agentes`, que ya viene limitado
-   * a quien el actor supervisa.
+   * Lo resuelve el Core con las dos guardas del POST que la ficha **sí** puede
+   * mirar: la **banda** —no ser AGENTE— y el alcance sobre el responsable
+   * **saliente** (`alcanzaIncluidoSinDueno`), que es el **mismo** predicado que
+   * pregunta el POST, y por eso la ficha no promete lo que el POST va a negar.
+   * De ahí salen, sin regla nueva, los dos casos que sorprenden: TENANT_ADMIN
+   * responde `true` por **autoridad de gobierno del tenant**, no como
+   * super-broker —no gana edición de hechos—, y una propiedad **FALTANTE**
+   * responde `true` a cualquier BROKER del tenant, porque no hay saliente a
+   * quien supervisar.
+   *
+   * **No conoce el destino y no autoriza nada**: aquí todavía no hay destino
+   * elegido, a qué agentes puede pasársela lo acota
+   * `GET /propiedades/{id}/responsable/candidatos` —que ya llega depurado para
+   * esta propiedad y este actor— y el POST sigue siendo la autoridad final,
+   * donde se vuelven a comprobar la banda, el saliente y el destino.
    */
   puedeTraspasar?: boolean;
 }
@@ -683,9 +730,74 @@ export class PropiedadesService {
    * después, y por eso el Core exige el mismo mínimo que la reasignación de un
    * encargo. La pantalla avisa antes de enviar porque es mejor experiencia, no
    * porque sea ella quien lo hace cumplir.
+   *
+   * **El comando declara sobre qué responsable actúa** (D-P0-9). Un traspaso no
+   * es «pon a B», es «cambia A por B»: sin decirlo, dos traspasos que salieran
+   * del mismo A —uno hacia B y otro hacia C— terminarían con la última
+   * escritura ganando, y el segundo se habría reinterpretado en silencio como
+   * «de B a C». Por eso `idResponsableActual` es **obligatorio** y `null` **no
+   * es omitirlo**: viaja como `sinResponsableActual: true`, que dice «la vi
+   * FALTANTE». Un cuerpo sin ninguna de las dos declaraciones es **400**.
+   *
+   * Si al ejecutarse el responsable ya no es ese, el Core responde **409** y
+   * **no ha escrito nada**: hay que **volver a cargar la ficha** y decidir
+   * sobre el estado actual. El traspaso no se reintenta tal cual — sería
+   * ejecutar sobre un estado que nadie miró.
+   *
+   * @param idResponsableActual el responsable que el usuario **vio en la
+   *        ficha**, o `null` si la vio sin responsable. No se deduce aquí ni se
+   *        vuelve a leer: lo que importa es lo que se estaba mirando al decidir.
    */
-  asignarResponsable(id: number, idAgente: number, motivo: string): Promise<Traspaso> {
-    return this.api.post<Traspaso>(`propiedades/${id}/responsable`, { idAgente, motivo });
+  asignarResponsable(
+    id: number,
+    idAgente: number,
+    motivo: string,
+    idResponsableActual: number | null,
+  ): Promise<Traspaso> {
+    return this.api.post<Traspaso>(`propiedades/${id}/responsable`, {
+      idAgente,
+      motivo,
+      idResponsableActual,
+      sinResponsableActual: idResponsableActual == null,
+    });
+  }
+
+  /**
+   * **A quién puedo traspasarla**: los destinos ya elegibles para ESTA
+   * propiedad y ESTE actor (D-P0-7 + D-P0-12).
+   *
+   * El Core devuelve la lista **depurada**: mismo tenant, rol AGENTE vigente,
+   * cuenta habilitada, relación organizacional viva, estado operativo y —si
+   * quien pregunta es un BROKER— supervisión vigente; y sin el responsable
+   * actual, porque un traspaso «de A a A» no cuenta ningún hecho. **Aquí no se
+   * filtra nada**: depurar en el cliente sería la lista de condiciones de
+   * D-P0-7 escrita por segunda vez, y una copia de una regla de autoridad
+   * diverge hacia el lado que ofrece lo que el POST va a rechazar.
+   *
+   * Se **pagina y se busca en el servidor** por la misma razón: la lista es
+   * del tenant, no del formulario, así que acotar en el cliente sobre una
+   * página devuelve resultados incompletos en cuanto haya más agentes que
+   * sitio.
+   *
+   * **No autoriza nada.** `POST /propiedades/{id}/responsable` revalida banda,
+   * tenant, saliente, destino y elegibilidad —entre pedir esta lista y usarla
+   * una cuenta se puede suspender—, y por eso las dos preguntas comparten el
+   * mismo predicado en el Core.
+   *
+   * Un actor que no puede iniciar el traspaso recibe **403** y no una lista
+   * vacía: «no hay candidatos» y «no te corresponde» son dos respuestas
+   * distintas. Una propiedad de otra corredora, **404**.
+   */
+  candidatos(
+    idPropiedad: number,
+    texto?: string,
+    pagina = 1,
+    tamano = 50,
+  ): Promise<PageResponse<CandidatoResponsable>> {
+    return this.api.get<PageResponse<CandidatoResponsable>>(
+      `propiedades/${idPropiedad}/responsable/candidatos`,
+      { texto, page: pagina, page_size: tamano },
+    );
   }
 }
 
@@ -710,4 +822,23 @@ export interface Traspaso {
   origen: string;
   motivo: string;
   fecha: string;
+}
+
+/**
+ * **Un destino ya elegible para el traspaso** (D-P0-7 + D-P0-12).
+ *
+ * Lleva lo justo para elegir en una lista —quién es, su código y su zona— y
+ * **ningún estado administrativo**, que no es un olvido: quien aparece cumple
+ * las cinco condiciones de elegibilidad, y de quien no aparece no se publica el
+ * motivo. Que una cuenta ajena esté suspendida no es dato de un selector de
+ * traspaso.
+ *
+ * `idAgente` es el **`persona_rol.id` del rol AGENTE**, el mismo identificador
+ * que espera `asignarResponsable`.
+ */
+export interface CandidatoResponsable {
+  idAgente: number;
+  nombre: string;
+  codigoAgente?: string;
+  zonaAsignada?: string | null;
 }

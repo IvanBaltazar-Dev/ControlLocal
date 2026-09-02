@@ -160,9 +160,19 @@ public class LocalesController {
     // Precios del local (historico)
     // =========================================================
 
+    /**
+     * <b>La serie economica del inmueble, filtrada por quien pregunta</b>
+     * (D-P0-6).
+     *
+     * <p>El actor viaja al servicio y no se queda aqui: hasta este corte esta
+     * llamada no lo pasaba, y la coleccion no filtraba ni por tenant — la fila
+     * de la matriz decia «se alcanza por el id del padre, que si va filtrado por
+     * tenant» y el padre <b>no se cargaba</b>. Cualquier usuario autenticado de
+     * otra corredora leia la serie de precios de cualquier propiedad por su id.
+     */
     @GetMapping("{id}/precios")
     public List<PrecioResponse> listarPrecios(@PathVariable long id) {
-        return precios.listarPorLocal(id).stream()
+        return precios.listarPorLocal(id, SesionActual.actor()).stream()
                 .map(PrecioResponse::desde)
                 .toList();
     }

@@ -25,13 +25,16 @@ import java.util.Set;
  * publicacion atada solo a {@code id_propiedad} no puede decir cual de las dos
  * publica -- y el hito de precio publicado que genera tampoco.
  *
- * <p>{@code idEncargo} es nullable porque hay anuncios anteriores a V70 cuya
- * propiedad tiene varios encargos candidatos: elegir uno seria inventar de
- * cual era. Se exige al CREAR; lo que ya existia no se falsea hacia atras.
+ * <p><b>{@code idEncargo} es OBLIGATORIO desde V89</b> (D-P0-11). En V70 nacio
+ * nullable porque habia anuncios anteriores cuya propiedad tenia varios
+ * encargos candidatos y elegir uno habria sido inventar de cual era; el
+ * backfill demostrable de V70 los resolvio todos (medido el 2026-09-02: cero
+ * nulos en desarrollo y en pruebas) y la columna se cerro en el esquema. Sin
+ * encargo un anuncio no sabe que operacion publica, como se llama su importe
+ * ni quien responde por el.
  *
  * <p>{@code idPropiedad} se conserva y no es redundante: el listado heredado y
- * el estado de publicacion del local siguen preguntando por inmueble, y una
- * publicacion sin encargo resuelto todavia sabe de que propiedad es.
+ * el estado de publicacion del local siguen preguntando por inmueble.
  *
  * <p>La publicacion mas reciente por {@code fecha_publicacion} es la
  * "principal": su estado es el {@code estadoPublicacion} del cable heredado
@@ -65,9 +68,11 @@ public class Publicacion extends EntidadDeOrganizacion {
     /**
      * El encargo que se anuncia. Es lo que dice si este anuncio publica la
      * venta o el alquiler -- y, cuando hay varios encargos de la misma
-     * operacion a lo largo del tiempo, <b>cual</b> de ellos.
+     * operacion a lo largo del tiempo, <b>cual</b> de ellos. Obligatorio
+     * (V89, D-P0-11): un anuncio sin encargo no tiene operacion, ni rotulo de
+     * importe, ni autoridad que decida quien lo puede tocar.
      */
-    @Column(name = "id_captacion")
+    @Column(name = "id_captacion", nullable = false)
     private Long idEncargo;
 
     @Column(name = "canal", nullable = false, length = 30)

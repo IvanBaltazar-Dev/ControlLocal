@@ -502,11 +502,110 @@ describe('PropiedadDetail', () => {
     expect(filas[0].textContent).toContain('Marco Díaz');
   });
 
+  // Éste es el lado «VACÍO» de la simetría: el bloque SÍ viajó y no trae nada.
   it('sin actividad lo dice con palabras, no con un cero', async () => {
     await montar(PROP_0022);
 
     expect(html()).toContain('Todavía no hay oportunidades');
     expect(html()).not.toContain('0 visitas');
+  });
+
+  // ------------------------------------------------------------------
+  // Lo que NO viajó: ausente no es vacío (D-P0-6)
+  //
+  // Jackson va `NON_NULL`, así que `historia`, `actividad` y el `historico` de
+  // cada encargo **pueden no llegar** cuando quien mira no puede leerlos: el
+  // TENANT_ADMIN nunca, un agente sólo lo suyo, el bróker dentro de su alcance.
+  // Ausente significa «no disponible para ti», y escribir «todavía no hay
+  // actividad» sobre esa ausencia afirmaría un hecho comercial que nadie midió.
+  // ------------------------------------------------------------------
+
+  function titulosDeSeccion(): (string | undefined)[] {
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('h2')).map((h) =>
+      h.textContent?.trim(),
+    );
+  }
+
+  it('una ficha sin historia, sin actividad y con un encargo sin historico se pinta igual', async () => {
+    await montar(
+      ficha({
+        historia: undefined,
+        actividad: undefined,
+        encargos: [encargo({ historico: undefined })],
+      }),
+    );
+
+    // La propiedad y su encargo siguen enteros: lo que no viaja es el pasado.
+    expect(html()).toContain('PROP-0022');
+    expect(bloques().length).toBe(1);
+    expect(bloques()[0].textContent).toContain('USD 4,800');
+    expect(bloques()[0].textContent).toContain('renta mensual');
+  });
+
+  it('sin actividad no se pinta la seccion, ni su acotador, ni un texto que lo niegue', async () => {
+    await montar(
+      ficha({
+        actividad: undefined,
+        encargos: PROP_0022.encargos,
+      }),
+    );
+
+    expect(titulosDeSeccion()).not.toContain('Actividad');
+    expect((fixture.nativeElement as HTMLElement).querySelector('.acotar')).toBeNull();
+    // Y sobre todo: nada que afirme que no ha pasado nada.
+    expect(html()).not.toContain('Todavía no hay oportunidades');
+  });
+
+  it('sin historia no se pinta la memoria del inmueble', async () => {
+    await montar(ficha({ historia: undefined, encargos: [encargo({})] }));
+
+    expect(titulosDeSeccion()).not.toContain('Historia comercial');
+    expect((fixture.nativeElement as HTMLElement).querySelector('.episodio')).toBeNull();
+  });
+
+  /**
+   * **La pareja que separa los dos casos.** El mismo bloque, dos respuestas
+   * distintas del cable: sin `historico` no hay ni cabecera; con `historico`
+   * vacío hay cabecera y se dice que no hubo movimientos.
+   */
+  it('un encargo sin historico no enseña ni la cabecera del historico', async () => {
+    await montar(ficha({ encargos: [encargo({ historico: undefined })] }));
+
+    const caja = bloques()[0];
+    expect(caja.textContent).not.toContain('Histórico económico');
+    expect(caja.textContent).not.toContain('Sin movimientos registrados');
+    expect(caja.querySelector('.historico')).toBeNull();
+  });
+
+  it('y un encargo con el historico vacio sí lo enseña, y dice que no hubo movimientos', async () => {
+    await montar(ficha({ encargos: [encargo({ historico: [] })] }));
+
+    const caja = bloques()[0];
+    expect(caja.textContent).toContain('Histórico económico');
+    expect(caja.textContent).toContain('Sin movimientos registrados');
+  });
+
+  it('el historico de un encargo puede faltar sin arrastrar al del otro', async () => {
+    // Es el caso del agente que lleva el alquiler y no la venta: su encargo se
+    // lee entero, el ajeno conserva importe, estado y anuncios y pierde sólo la
+    // serie. «No puedes ver lo que se pidió» no es «este encargo no existe».
+    await montar(
+      ficha({
+        encargos: [
+          encargo({
+            idEncargo: 90, codigo: 'ENC-0090', operacion: 'VENTA', operacionRotulo: 'Venta',
+            importe: 320000, importeRotulo: 'precio de venta', historico: undefined,
+          }),
+          encargo({ idEncargo: 91, codigo: 'ENC-0091', importe: 4800 }),
+        ],
+      }),
+    );
+
+    const [venta, alquiler] = bloques();
+    expect(venta.textContent).toContain('USD 320,000');
+    expect(venta.textContent).not.toContain('Histórico económico');
+    expect(alquiler.textContent).toContain('Histórico económico');
+    expect(alquiler.textContent).toContain('Autorizado');
   });
 
   // ------------------------------------------------------------------
@@ -845,8 +944,8 @@ describe('PropiedadDetail', () => {
   /**
    * **El botón de editar sale del cable, no del rol** (P0).
    *
-   * Esta prueba decía «sólo el AGENTE ve el botón» y comprobaba
-   * `sesion()?.rol === 'AGENTE'`. Dejó de ser cierto con V87: la autoridad
+   * Esta prueba decía «sólo el AGENTE ve el botón» y comprobaba el rol de la
+   * sesión contra «AGENTE». Dejó de ser cierto con V87: la autoridad
    * ya no es «ser agente», es **ser el responsable de esta propiedad**, y con
    * la regla vieja todo agente del tenant veía «Editar» en toda propiedad y se
    * llevaba un 403 al guardar.

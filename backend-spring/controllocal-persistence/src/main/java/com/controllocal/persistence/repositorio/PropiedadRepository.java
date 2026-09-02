@@ -5,9 +5,12 @@ import com.controllocal.persistence.query.ConteoPorEstado;
 import com.controllocal.persistence.query.ConteoPorPropietario;
 import com.controllocal.persistence.query.LocalListado;
 import com.controllocal.persistence.query.PropiedadListado;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -389,6 +392,122 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
 
     /** Carga sin fetch joins, ya acotada al tenant (para los casos de uso que solo mutan). */
     Optional<Propiedad> findByOrganizacionIdAndId(long idOrganizacion, long id);
+
+    // ------------------------------------------------------------------
+    // F2.10: la autoridad de EDICION se comprueba sobre la fila tomada
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>Toma la fila de la propiedad para que su autoridad de edicion no
+     * cambie entre comprobarla y escribir</b> (F2.10, 2026-09-02).
+     *
+     * <h2>Que defecto cierra</h2>
+     * Es el TOCTOU de D-P0-13 dicho sobre la <b>otra</b> autoridad. Los comandos
+     * que escriben hechos de la propiedad cargaban la fila, preguntaban
+     * {@code AutoridadDePropiedad.exigirEdicion} sobre lo que acababan de leer y
+     * escribian <b>despues</b>, sin nada que sujetara la fila entre las dos
+     * cosas. En esa ventana cabe un traspaso entero —su compare-and-set toma la
+     * fila un instante y la suelta al comitear—, y la edicion del agente
+     * <b>saliente</b> aterrizaba sobre una propiedad que ya era de otro. Ninguna
+     * guarda mentia: cada una dijo la verdad en el instante en que se pregunto.
+     *
+     * <p><b>No es lo que arreglo F2.1.</b> {@code updatable = false} sobre
+     * {@code id_rol_responsable} impide que esa edicion tardia <b>revierta</b> la
+     * autoridad; nunca impidio que <b>se escriba</b>.
+     *
+     * <h2>Quien tiene que tomarlo</h2>
+     * Lo toman los comandos que <b>ESCRIBEN</b> hechos de la propiedad, para que
+     * la autoridad se compruebe sobre el estado que seguira siendo verdad al
+     * escribir: el traspaso espera a que la edicion termine, o la edicion espera
+     * al traspaso y entonces <b>ve al nuevo responsable</b> y recibe el 403 que
+     * el Core ya produce ({@code OTRO_RESPONSABLE}). No hay regla nueva: hay una
+     * regla vieja comprobada a tiempo.
+     *
+     * <p>Las lecturas <b>no</b> lo toman —ni pueden: una transaccion
+     * {@code readOnly} no ejecuta {@code SELECT ... FOR UPDATE}—, y por eso
+     * {@link #findByOrganizacionIdAndId} y {@link #buscarFicha} siguen ahi.
+     *
+     * <h2>La regla que hace que esto funcione, y que es facil romper</h2>
+     * <b>Esta tiene que ser la PRIMERA carga de esa fila en la transaccion.</b>
+     * Hibernate devuelve la instancia que ya esta en el contexto de persistencia
+     * <b>sin refrescar su estado</b>: si el caso de uso cargo la propiedad antes
+     * sin candado, este metodo tomaria el bloqueo de verdad y la autoridad se
+     * comprobaria igualmente sobre el valor viejo — el defecto intacto y con
+     * aspecto de arreglado. Cargar primero y bloquear despues no vale.
+     *
+     * <h2>Orden de candados (para que no haya interbloqueo)</h2>
+     * <pre>
+     *   detalle_agente  -&gt;  propiedad  -&gt;  captacion
+     * </pre>
+     * <ul>
+     *   <li><b>traspaso</b>: {@code detalle_agente} del destino (D-P0-13) y
+     *       despues la fila {@code propiedad} (el compare-and-set);</li>
+     *   <li><b>edicion de la propiedad</b>: la fila {@code propiedad} —esta— y,
+     *       si la misma peticion toca encargos, sus filas {@code captacion}
+     *       despues. No toma agentes;</li>
+     *   <li><b>reasignacion del encargo</b>: {@code detalle_agente} del destino
+     *       y despues la fila {@code captacion}.</li>
+     * </ul>
+     * Nadie va en sentido contrario —ninguna via toma {@code captacion} y
+     * despues {@code propiedad}—, asi que no hay ciclo.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Propiedad p where p.organizacionId = :idOrganizacion and p.id = :id")
+    Optional<Propiedad> bloquearParaEscritura(@Param("idOrganizacion") long idOrganizacion,
+                                              @Param("id") long id);
+
+    /**
+     * <b>Compare-and-set del responsable: exactamente UNA transicion legitima
+     * puede partir de un estado concreto</b> (D-P0-9).
+     *
+     * <p>Mueve {@code id_rol_responsable} <b>solo si</b> hoy vale lo que el
+     * actor observo cuando decidio. Devuelve las filas afectadas: {@code 1} el
+     * traspaso que gano, {@code 0} el que llego tarde.
+     *
+     * <p><b>Por que esto y no una comprobacion en memoria.</b> Comprobar en
+     * Java «¿sigue siendo A?» y escribir despues deja una ventana entre la
+     * lectura y la escritura, y esa ventana es justo donde vive la carrera: dos
+     * transacciones que arranquen de A leen A las dos, las dos deciden que
+     * pueden, y la segunda pisa a la primera. La comprobacion tiene que ocurrir
+     * <b>dentro</b> de la escritura, y eso solo lo hace la base.
+     *
+     * <p><b>Por que funciona bajo READ COMMITTED de PostgreSQL</b>, que es el
+     * nivel por defecto: un UPDATE que encuentra la fila bloqueada por otra
+     * transaccion <b>espera y re-evalua el WHERE sobre la fila ya
+     * actualizada</b>; por eso el segundo comando A&rarr;C ve B y afecta 0
+     * filas. No hace falta {@code SERIALIZABLE}, ni {@code SELECT ... FOR
+     * UPDATE} previo, ni una columna {@code @Version} nueva —que ademas seria
+     * una migracion—: el predicado del propio UPDATE es el candado.
+     *
+     * <p>{@code esperado} nulo es <b>FALTANTE observado</b> y se compara como
+     * tal: en SQL {@code null = null} es UNKNOWN, asi que la rama nula va
+     * escrita aparte. Sin ella, asignar una propiedad sin responsable no
+     * afectaria nunca ninguna fila.
+     *
+     * <p>Va {@code flushAutomatically} para que cualquier cambio pendiente de
+     * la propiedad llegue a la base antes del candado, y <b>no</b> lleva
+     * {@code clearAutomatically}: el llamador necesita seguir con la MISMA
+     * instancia gestionada para que el rastro, el evento y la ficha devuelta
+     * lean el mismo valor.
+     *
+     * <p><b>Solo la escribe {@code AutoridadDePropiedad}</b>, y lo comprueba
+     * {@code AutoridadDeLaPropiedadTest}: es una escritura de
+     * {@code id_rol_responsable}, o sea la autoridad misma.
+     *
+     * @return 1 si el responsable seguia siendo el observado; 0 si cambio.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            update Propiedad p set p.idRolResponsable = :nuevo
+             where p.organizacionId = :idOrganizacion
+               and p.id = :idPropiedad
+               and ((:esperado is null and p.idRolResponsable is null)
+                    or p.idRolResponsable = :esperado)
+            """)
+    int cambiarResponsableSi(@Param("idOrganizacion") long idOrganizacion,
+                             @Param("idPropiedad") long idPropiedad,
+                             @Param("esperado") Long esperado,
+                             @Param("nuevo") long nuevo);
 
     /**
      * Candidatos del mismo propietario para la advertencia de posible

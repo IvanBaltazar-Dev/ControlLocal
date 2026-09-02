@@ -6,6 +6,7 @@ import com.controllocal.web.seguridad.ProcedenciaDeCabeceras;
 import jakarta.servlet.http.HttpServletRequest;
 import com.controllocal.web.http.PageResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.AsignarResponsableRequest;
+import com.controllocal.web.dto.PropiedadUniversalDtos.CandidatoResponsableResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.EdicionRequest;
 import com.controllocal.web.dto.PropiedadUniversalDtos.FilaPropiedadResponse;
 import com.controllocal.web.dto.PropiedadUniversalDtos.PropiedadResponse;
@@ -218,6 +219,15 @@ public class PropiedadesUniversalesController {
      * <p>No reasigna ningun encargo. El de venta y el de alquiler siguen siendo
      * de quien eran: para eso esta {@code POST /captaciones/{id}/reasignar},
      * que es otra decision y otro hecho.
+     *
+     * <p><b>El cuerpo declara sobre que responsable se actua</b> (D-P0-9):
+     * {@code idResponsableActual} —el que se vio en la ficha— o
+     * {@code sinResponsableActual: true} si estaba FALTANTE, <b>exactamente
+     * una</b> de las dos. Si al ejecutarse el responsable ya no es ese, la
+     * respuesta es <b>409</b> y no se ha escrito nada: el traspaso no se
+     * reinterpreta sobre un estado que el actor no vio. La validacion de la
+     * declaracion vive en el propio DTO para que sea la misma por cualquier
+     * canal.
      */
     @PostMapping("{id}/responsable")
     @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
@@ -229,7 +239,46 @@ public class PropiedadesUniversalesController {
                     "Hay que decir a que agente se le asigna: no se deduce de sus captaciones.");
         }
         return TraspasoResponse.desde(propiedades.asignarResponsable(
-                id, dto.idAgente(), dto.motivo(), SesionActual.actor()));
+                id, dto.idAgente(), dto.motivo(), dto.observado(), SesionActual.actor()));
+    }
+
+    /**
+     * <b>A quien puedo traspasarla</b> — los candidatos ya elegibles para ESTE
+     * recurso y ESTE actor (D-P0-7 + D-P0-12).
+     *
+     * <p><b>Existe para que Angular no decida autoridad.</b> Sin esta
+     * superficie, la pantalla del traspaso tendria que pedir la lista de agentes
+     * del tenant y depurarla con su propia copia de las cinco condiciones de
+     * elegibilidad —que es una lista de permisos viviendo en el cliente— o
+     * dejar que el broker eligiera a ciegas y descubriera el rechazo despues.
+     * Las dos salidas son la misma: la regla escrita dos veces.
+     *
+     * <p>Paginado y buscable porque la lista es del <b>tenant</b>, no del
+     * formulario: filtrar en el cliente sobre una pagina devuelve resultados
+     * incompletos en cuanto haya mas agentes que sitio.
+     *
+     * <p><b>Y no autoriza nada.</b> El POST de al lado revalida banda, tenant,
+     * saliente, destino y elegibilidad: entre pedir esta lista y usarla, un
+     * agente puede quedar desactivado. Las dos preguntas comparten el mismo
+     * predicado SQL justamente para que no puedan responder cosas distintas.
+     */
+    @GetMapping("{id}/responsable/candidatos")
+    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    public PageResponse<CandidatoResponsableResponse> candidatosAResponsable(
+            @PathVariable long id,
+            @RequestParam(required = false) String texto,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(name = "page_size", required = false) Integer pageSize,
+            @RequestParam(required = false) Integer tamano) {
+        int paginaSolicitada = ClientesController.paginaSolicitada(page, pagina);
+        int tamanoSolicitado = pageSize != null ? pageSize : tamano != null ? tamano : 20;
+        var resultado = propiedades.candidatosAResponsable(id, texto, paginaSolicitada,
+                tamanoSolicitado, SesionActual.actor());
+        return new PageResponse<>(
+                resultado.items().stream().map(CandidatoResponsableResponse::desde).toList(),
+                resultado.total(), Math.max(1, paginaSolicitada),
+                Math.max(1, Math.min(100, tamanoSolicitado)));
     }
 
     /**

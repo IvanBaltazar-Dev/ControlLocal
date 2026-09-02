@@ -7,7 +7,6 @@ import { Captacion, CaptacionesService } from '../../core/api/captaciones.servic
 import { describir, ESTADO_CAPTACION, RESULTADO_PROPUESTA } from '../../core/api/codigos';
 import { Local, LocalesService } from '../../core/api/locales.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
-import { AuthService } from '../../core/auth/auth.service';
 import { calcularCondicionComision, descripcionCondicionComision, importeTexto } from '../../core/comision';
 import { fechaCorta, monto, numero, siNo, SIN_DATO, texto } from '../../core/formato';
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
@@ -24,7 +23,6 @@ export class CaptacionDetail implements OnInit {
   private readonly api = inject(CaptacionesService);
   private readonly locales = inject(LocalesService);
   private readonly prospecciones = inject(ProspeccionesService);
-  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -42,15 +40,27 @@ export class CaptacionDetail implements OnInit {
     validators: [Validators.required, Validators.maxLength(1000)],
   });
 
-  protected readonly rol = computed(() => this.auth.sesion()?.rol);
+  /**
+   * **Las tres capacidades las publica el Core** (D-P0-12), resueltas con las
+   * mismas guardas que después deniegan el comando.
+   *
+   * Antes se deducían aquí cruzando el rol de la sesión con el estado del
+   * encargo, y era una regla de autoridad escrita por segunda vez: le ofrecía
+   * «Editar» a **cualquier** agente del tenant sobre una captación ajena —el
+   * dueño del encargo es su agente, no su banda— y «Revisar» al TENANT_ADMIN,
+   * que no revisa porque gobernar no es operar.
+   *
+   * El defecto ante la ausencia es **`false`**: en un listado la capacidad no
+   * viaja, y si el Core no ha dicho que se puede, no se ofrece.
+   */
   protected readonly puedeEditar = computed(
-    () => this.rol() === 'AGENTE' && ['P', 'O'].includes(this.captacion()?.estado ?? ''),
+    () => this.captacion()?.capacidades?.puedeEditar ?? false,
   );
   protected readonly puedeRevisar = computed(
-    () => this.rol() !== 'AGENTE' && ['P', 'O'].includes(this.captacion()?.estado ?? ''),
+    () => this.captacion()?.capacidades?.puedeRevisar ?? false,
   );
   protected readonly puedeCerrar = computed(
-    () => this.rol() !== 'AGENTE' && this.captacion()?.estado === 'A',
+    () => this.captacion()?.capacidades?.puedeCerrar ?? false,
   );
 
   ngOnInit(): void {

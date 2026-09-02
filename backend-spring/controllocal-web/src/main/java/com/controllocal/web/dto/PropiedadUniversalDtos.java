@@ -16,6 +16,7 @@ import com.controllocal.service.PropiedadUniversalService.HitoFicha;
 import com.controllocal.service.PropiedadUniversalService.ResultadoRegistro;
 import com.controllocal.service.PropiedadUniversalService.TitularFicha;
 import com.controllocal.service.PropiedadUniversalService.Ubicacion;
+import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.web.dto.PublicacionDtos.PublicacionResponse;
 
@@ -551,10 +552,62 @@ public final class PropiedadUniversalDtos {
     }
 
     /**
-     * A quien se le asigna, y por que. El motivo no es opcional: sin el, el
-     * expediente dice que la propiedad cambio de manos y no dice por que.
+     * A quien se le asigna, por que, y <b>sobre que responsable se actua</b>.
+     *
+     * <p>El motivo no es opcional: sin el, el expediente dice que la propiedad
+     * cambio de manos y no dice por que.
+     *
+     * <p>Y la <b>declaracion del estado observado</b> tampoco (D-P0-9). Un
+     * traspaso no es «pon a B», es «cambia A por B»: sin decir de que estado se
+     * parte, dos comandos que salieran del mismo A —uno hacia B y otro hacia
+     * C— terminarian con la ultima escritura ganando, y el segundo se habria
+     * reinterpretado en silencio como «de B a C». Por eso el cuerpo lleva
+     * <b>exactamente una</b> de estas dos:
+     * <pre>
+     *   idResponsableActual: 30    "vi que respondia el agente 30"
+     *   sinResponsableActual: true "vi que estaba FALTANTE"
+     * </pre>
+     *
+     * <p><b>Las dos son declaraciones, no ausencias.</b> Un cuerpo sin ninguna
+     * de las dos no dice «estaba FALTANTE»: dice que nadie miro, y un traspaso
+     * no puede partir de un estado que nadie miro. Un cuerpo con las dos se
+     * contradice. Los dos casos son 400, y no se resuelven eligiendo el mas
+     * probable — que es la inferencia que este P0 vino a quitar.
      */
-    public record AsignarResponsableRequest(Long idAgente, String motivo) {
+    public record AsignarResponsableRequest(Long idAgente, String motivo,
+                                            Long idResponsableActual,
+                                            Boolean sinResponsableActual) {
+
+        /**
+         * <b>Traduce la declaracion del cuerpo al vocabulario del Core</b>, o
+         * la rechaza.
+         *
+         * <p>Vive aqui y no en el controlador para que la regla —«exactamente
+         * una de las dos»— tenga <b>un solo</b> sitio: BROX Web y KAIROS entran
+         * por el mismo endpoint con el mismo cuerpo, y una comprobacion escrita
+         * en la puerta se reescribe para cada puerta nueva.
+         */
+        public PropiedadUniversalService.ResponsableObservado observado() {
+            boolean declaraFaltante = Boolean.TRUE.equals(sinResponsableActual);
+            if (idResponsableActual != null && declaraFaltante) {
+                throw new ReglaNegocioException(
+                        "El traspaso declara dos cosas a la vez: que responde el agente "
+                                + idResponsableActual + " y que no responde nadie. Declara solo "
+                                + "una: el responsable que viste en la ficha "
+                                + "(`idResponsableActual`) o que estaba FALTANTE "
+                                + "(`sinResponsableActual: true`).");
+            }
+            if (idResponsableActual == null && !declaraFaltante) {
+                throw new ReglaNegocioException(
+                        "Falta decir sobre que responsable se actua. Un traspaso no puede partir "
+                                + "de un estado que nadie miro: declara el responsable que viste "
+                                + "en la ficha (`idResponsableActual`) o que estaba FALTANTE "
+                                + "(`sinResponsableActual: true`).");
+            }
+            return declaraFaltante
+                    ? PropiedadUniversalService.ResponsableObservado.faltante()
+                    : PropiedadUniversalService.ResponsableObservado.de(idResponsableActual);
+        }
     }
 
     /** Un traspaso ya escrito, tal como se lee en el expediente. */
@@ -569,6 +622,23 @@ public final class PropiedadUniversalDtos {
                     t.idResponsableNuevo(), t.responsableNuevo(),
                     t.idPersonaActor(), t.rolActor(), t.origen(),
                     t.motivo(), t.fecha());
+        }
+    }
+
+    /**
+     * <b>Un destino ya elegible para el traspaso</b> (D-P0-12).
+     *
+     * <p>Lleva lo justo para elegir en una lista. <b>No lleva estado
+     * administrativo</b> y no es un olvido: quien esta aqui cumple las cinco
+     * condiciones de D-P0-7, y de quien no esta no se publica el motivo — la
+     * suspension de una cuenta ajena no es dato de un selector de traspaso.
+     */
+    public record CandidatoResponsableResponse(Long idAgente, String nombre, String codigoAgente,
+                                               String zonaAsignada) {
+        public static CandidatoResponsableResponse desde(
+                PropiedadUniversalService.CandidatoResponsable c) {
+            return new CandidatoResponsableResponse(c.idAgente(), c.nombre(), c.codigoAgente(),
+                    c.zonaAsignada());
         }
     }
 

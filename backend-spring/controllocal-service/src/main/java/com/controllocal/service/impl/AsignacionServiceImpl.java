@@ -144,6 +144,14 @@ public class AsignacionServiceImpl implements AsignacionService {
                         actor.idOrganizacion(), datos.idAgente())
                 .orElseThrow(() -> new ReglaNegocioException(
                         "Agente no encontrado."));
+        // D-P0-13. Cambiar de supervisor cambia la ELEGIBILIDAD del agente para
+        // un BROKER -la sexta condicion de D-P0-7 es «lo supervisas hoy»-, asi
+        // que esto se serializa con los traspasos que esten mirandolo por la
+        // MISMA fila que bloquea `exigirElegible`. Va antes de comprobar sus
+        // estados para que lo que se lea aqui sea lo que siga siendo verdad al
+        // escribir las supervisiones.
+        agentes.bloquearParaGobierno(actor.idOrganizacion(), agente.getId())
+                .orElseThrow(() -> new ReglaNegocioException("Agente no encontrado."));
         CredencialUsuario credencialAgente = usuarios.credencial(
                 actor.idOrganizacion(), agente.getRol().getPersona().getId());
         if (!"A".equals(credencialAgente.getEstadoAdministrativo())) {

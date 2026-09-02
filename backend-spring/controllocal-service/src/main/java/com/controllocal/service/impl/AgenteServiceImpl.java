@@ -403,6 +403,26 @@ public class AgenteServiceImpl implements AgenteService {
         exigirGobierno(actor);
         DetalleAgente agente = agentes.buscarFicha(actor.idOrganizacion(), id)
                 .orElseThrow(() -> new NoEncontradoException("Agente"));
+        // D-P0-13. Si este cuerpo cambia la ELEGIBILIDAD del agente -su cuenta o
+        // su disponibilidad-, esta operacion se serializa con los traspasos que
+        // esten mirandola: toma la MISMA fila que `exigirElegible` bloquea.
+        //
+        // Sin esto, una baja podia colarse entre el «este destino vale» de un
+        // traspaso y su escritura, y la propiedad -o el encargo- acababa en
+        // manos de alguien que ya no podia recibirlo, con todas las guardas
+        // verdes. El candado no decide el orden: decide que haya uno. Si la baja
+        // llega primero, el traspaso se rechaza; si llega despues, queda un
+        // agente desactivado que lleva cartera, que es la situacion legitima que
+        // D-P0-8 describe y que un traspaso explicito tiene que resolver.
+        //
+        // Solo cuando el cuerpo los trae: cambiar el telefono o la zona no mueve
+        // la elegibilidad, y bloquear siempre convertiria una edicion inocua en
+        // un punto de espera de los traspasos en curso.
+        if (datos != null && (!UsuariosInternos.vacio(datos.estado())
+                || !UsuariosInternos.vacio(datos.estadoOperativo()))) {
+            agentes.bloquearParaGobierno(actor.idOrganizacion(), id)
+                    .orElseThrow(() -> new NoEncontradoException("Agente"));
+        }
 
         CredencialUsuario credencial = usuarios.credencial(actor.idOrganizacion(),
                 agente.getRol().getPersona().getId());

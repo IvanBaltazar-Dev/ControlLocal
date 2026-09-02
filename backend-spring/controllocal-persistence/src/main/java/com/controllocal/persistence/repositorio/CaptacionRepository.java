@@ -9,9 +9,12 @@ import com.controllocal.persistence.query.ConteoPorEstado;
 import com.controllocal.persistence.query.IndicadorCaptacion;
 import com.controllocal.persistence.query.PropiedadDeEquipo;
 import com.controllocal.persistence.query.ResumenPropiedadesEquipo;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -183,6 +186,29 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
                                     @Param("texto") String texto,
                                     @Param("distrito") String distrito);
 
+    /**
+     * La ficha del encargo en una sola consulta.
+     *
+     * <p><b>La condicion economica va aqui desde F2.10</b>, y no es una
+     * optimizacion suelta: {@code CaptacionServiceImpl.ficha} lee <b>nueve</b>
+     * campos suyos —tipo de operacion, importe y moneda de referencia, tipo y
+     * base de comision, valor, moneda, tratamiento de IGV y motivo sin
+     * comision— en <b>todas</b> las fichas. No es un dato opcional del encargo:
+     * es parte de lo que la ficha ES, asi que se carga con ella.
+     *
+     * <p>Y tiene un segundo efecto, que es el que la trajo: {@code PUT
+     * /captaciones/&#123;id&#125;} <b>sustituye</b> la fila de
+     * {@code condicion_economica_captacion} en cada edicion —la asociacion es
+     * {@code orphanRemoval}, asi que la anterior se borra—, de modo que una
+     * transaccion que cargara el encargo y leyera su condicion <b>despues</b> se
+     * encontraba un proxy apuntando a una fila que ya no existe y estallaba con
+     * {@code EntityNotFoundException}. Le pasa a los casos de uso que
+     * <b>no</b> toman el candado de F2.10 y aun asi pueden quedarse esperando a
+     * una edicion: {@code reasignar} —cuyo compare-and-set espera— y, por el
+     * mismo camino, {@code decidir}, {@code cerrar} y {@code cerrarPorContrato}.
+     * Materializada al cargar, la ficha informa lo que <b>leyo</b>, que es lo
+     * que una ficha hace.
+     */
     String FICHA = """
             select cap from Captacion cap
               join fetch cap.propiedad prop
@@ -192,6 +218,7 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
               join fetch ag.rol agr
               join fetch agr.persona
               left join fetch cap.brokerRevisor
+              left join fetch cap.condicionEconomica
             """;
 
     @Query(FICHA + " where cap.organizacionId = :idOrganizacion and cap.id = :id")
@@ -207,6 +234,137 @@ public interface CaptacionRepository extends JpaRepository<Captacion, Long> {
             + " and lower(cap.codigoCaptacion) = lower(:codigo)")
     Optional<Captacion> buscarFichaPorCodigoIgnorandoMayusculas(
             @Param("idOrganizacion") long idOrganizacion, @Param("codigo") String codigo);
+
+    // ------------------------------------------------------------------
+    // F2.10: la autoridad de EDICION del encargo se comprueba sobre la fila
+    // tomada
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>Toma la fila del encargo para que su autoridad de edicion no cambie
+     * entre comprobarla y escribir</b> (F2.10, 2026-09-02).
+     *
+     * <p>Es el gemelo de {@code PropiedadRepository.bloquearParaEscritura} sobre
+     * la otra autoridad de P0. Los comandos que escriben hechos del ENCARGO
+     * —importe, exclusividad, vigencia, condiciones pactadas y los hitos que
+     * caen en su serie economica— cargaban la fila, preguntaban
+     * {@code AutoridadDePropiedad.exigirEdicionDelEncargo} sobre lo que acababan
+     * de leer y escribian <b>despues</b>. En esa ventana cabe una reasignacion
+     * entera —su compare-and-set toma la fila un instante y la suelta al
+     * comitear— y la edicion del agente <b>saliente</b> aterrizaba sobre un
+     * encargo que ya lleva otro.
+     *
+     * <p><b>No es lo que arreglo F2.2.</b> {@code updatable = false} sobre
+     * {@code id_rol_agente} impide que esa edicion tardia <b>revierta</b> la
+     * autoridad; nunca impidio que <b>se escriba</b>.
+     *
+     * <p>Con la fila tomada, la reasignacion espera a que la edicion termine, o
+     * la edicion espera a la reasignacion y entonces <b>ve al nuevo agente</b> y
+     * recibe el 403 que el Core ya produce. No hay regla nueva.
+     *
+     * <p><b>Tiene que ser la PRIMERA carga de esa fila en la transaccion.</b>
+     * Hibernate devuelve la instancia que ya esta en el contexto de persistencia
+     * sin refrescar su estado: cargar primero y bloquear despues tomaria el
+     * candado de verdad y comprobaria la autoridad sobre el valor viejo — el
+     * defecto intacto y con aspecto de arreglado.
+     *
+     * <p>Las lecturas <b>no</b> lo toman, ni pueden: una transaccion
+     * {@code readOnly} no ejecuta {@code SELECT ... FOR UPDATE}. Por eso
+     * {@link #buscarFicha} sigue siendo la carga de las consultas.
+     *
+     * <p>Orden de candados, el mismo que documenta el gemelo:
+     * {@code detalle_agente} &rarr; {@code propiedad} &rarr; {@code captacion}.
+     * La reasignacion toma el agente destino y despues esta fila; la edicion de
+     * la propiedad toma la propiedad y despues esta. Ninguna via va al reves.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select cap from Captacion cap"
+            + " where cap.organizacionId = :idOrganizacion and cap.id = :id")
+    Optional<Captacion> bloquearParaEscritura(@Param("idOrganizacion") long idOrganizacion,
+                                              @Param("id") long id);
+
+    /**
+     * <b>Los encargos VIVOS de una propiedad, ya tomados para escribir</b>
+     * (F2.10).
+     *
+     * <p>Existe por un caso concreto: {@code POST /locales/{id}/precios} no sabe
+     * <b>en que encargo</b> va a escribir hasta despues de resolver la operacion
+     * —que puede venir declarada o deducirse del unico encargo vivo (D-E4-1)—, y
+     * para entonces la fila ya estaria cargada sin candado, con lo que
+     * {@link #bloquearParaEscritura} llegaria tarde: tomaria el bloqueo y
+     * devolveria la instancia vieja. Asi que se toma antes el <b>conjunto
+     * candidato</b>, que como mucho son dos filas (V50: un encargo vivo por
+     * operacion).
+     *
+     * <p>El {@code order by cap.id} no es cosmetico: dos transacciones que
+     * bloqueen las dos filas tienen que hacerlo <b>en el mismo orden</b> o se
+     * bloquean entre ellas.
+     *
+     * <p>Mismo filtro de vivos que {@link #encargosVivosDe} —{@code P, O, A}—,
+     * porque es el mismo conjunto: si divergieran, el candado protegeria una
+     * fila distinta de la que se escribe.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select cap from Captacion cap
+            where cap.organizacionId = :idOrganizacion
+              and cap.propiedad.id = :idPropiedad
+              and cap.estado in ('P', 'O', 'A')
+            order by cap.id
+            """)
+    List<Captacion> bloquearEncargosVivosParaEscritura(
+            @Param("idOrganizacion") long idOrganizacion,
+            @Param("idPropiedad") long idPropiedad);
+
+    /**
+     * <b>El compare-and-set del AGENTE de un encargo</b> (D-P0-9, aplicado al
+     * ENCARGO).
+     *
+     * <p>Cambia {@code captacion.id_rol_agente} <b>solo si</b> sigue siendo el
+     * que el actor declaro haber visto. Es la mitad que resuelve la
+     * <b>carrera</b>: entre la precondicion en memoria del caso de uso y esta
+     * escritura cabe otra transaccion, y el unico sitio donde no cabe ninguna es
+     * <b>dentro del propio UPDATE</b>. Bajo {@code READ COMMITTED} —el nivel por
+     * defecto de PostgreSQL— un UPDATE que encuentra la fila bloqueada por otra
+     * transaccion <b>espera y re-evalua el WHERE sobre la fila ya
+     * actualizada</b>: por eso el segundo comando A&rarr;C ve B y afecta 0 filas.
+     * Ni {@code SERIALIZABLE}, ni {@code SELECT ... FOR UPDATE} previo, ni una
+     * columna {@code @Version} nueva —que ademas seria una migracion—: el
+     * predicado del propio UPDATE es el candado. Es la misma mecanica que
+     * {@code PropiedadRepository.cambiarResponsableSi}, dicha sobre la otra
+     * autoridad.
+     *
+     * <p><b>Es nativa y no JPQL</b>, y no por gusto: en el modelo,
+     * {@code id_rol_agente} no es una columna sino la <b>asociacion</b>
+     * {@code Captacion.agente}, asi que un {@code update} JPQL tendria que
+     * asignar una entidad {@code DetalleAgente} —obligando a cargarla solo para
+     * escribir su id— y comparar otra en el {@code where}. La sentencia nativa
+     * dice exactamente lo que la fila necesita. No hay rama para {@code esperado}
+     * nulo porque {@code id_rol_agente} es <b>NOT NULL desde V5</b>: un encargo
+     * sin agente no existe, y FALTANTE no es un estado posible aqui —al
+     * contrario que en la propiedad.
+     *
+     * <p>Va {@code flushAutomatically} para que cualquier cambio pendiente del
+     * encargo llegue a la base antes del candado, y <b>no</b> lleva
+     * {@code clearAutomatically}: el llamador sigue con la MISMA instancia
+     * gestionada para que el rastro y la ficha devuelta lean el mismo valor.
+     *
+     * <p><b>Solo la escribe {@code CaptacionServiceImpl.reasignar}</b>, y lo
+     * comprueba {@code AutoridadDeLaPropiedadTest}: es una escritura de
+     * {@code id_rol_agente}, o sea la autoridad del encargo misma.
+     *
+     * @return 1 si el agente seguia siendo el observado; 0 si cambio.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = "update captacion set id_rol_agente = :nuevo"
+            + " where organizacion_id = :idOrganizacion"
+            + "   and id_captacion = :idCaptacion"
+            + "   and id_rol_agente = :esperado",
+            nativeQuery = true)
+    int cambiarAgenteSi(@Param("idOrganizacion") long idOrganizacion,
+                        @Param("idCaptacion") long idCaptacion,
+                        @Param("esperado") long esperado,
+                        @Param("nuevo") long nuevo);
 
     /** Invariante v1 (uq_captacion_activa_por_local): una sola ACTIVA por local. */
     boolean existsByOrganizacionIdAndPropiedadIdAndEstado(Long idOrganizacion, Long idPropiedad, String estado);

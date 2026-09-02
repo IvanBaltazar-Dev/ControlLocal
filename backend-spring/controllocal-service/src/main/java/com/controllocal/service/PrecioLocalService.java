@@ -34,7 +34,20 @@ public interface PrecioLocalService {
                        LocalDate fecha, LocalDateTime fechaCreacion, String operacion) {
     }
 
-    List<FichaPrecio> listarPorLocal(long idPropiedad);
+    /**
+     * <b>La serie economica de una propiedad, filtrada por quien pregunta</b>
+     * (D-P0-6).
+     *
+     * <p>El {@code actor} no es decorativo y no se puede omitir: cada hito nace
+     * de un ENCARGO, asi que leerlo es leer el historico de ese encargo, y eso
+     * lo gobierna la misma tabla de D-P0-6 que decide el bloque {@code historico}
+     * de la ficha. Un hito <b>sin</b> encargo (legado) sigue la regla de la
+     * PROPIEDAD.
+     *
+     * <p>La lista puede quedar <b>vacia</b>, y vacia significa "de esta serie no
+     * te corresponde nada", no "esta propiedad no tiene precios".
+     */
+    List<FichaPrecio> listarPorLocal(long idPropiedad, Actor actor);
 
     /** El {@code actor} aporta la organizacion que se estampa en el hito nuevo (D-20). */
     FichaPrecio registrar(long idPropiedad, DatosPrecio datos, Actor actor);

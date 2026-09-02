@@ -357,7 +357,9 @@ Check 'la nueva fecha quedo guardada' ($reprogramada.fechaVisita -match $visitaR
 $proximas = Api GET '/visitas/proximas?tamano=8' $agente.token
 Check 'la agenda proximas incluye la visita viva' `
     (@($proximas.items | Where-Object { $PSItem.id -eq $idVisita }).Count -eq 1) "total=$($proximas.totalRecords)"
-$mes = Api GET '/visitas/mes?anio=2026&mes=8' $agente.token
+# El calendario se pregunta por el mes de la visita, no por un mes fijo.
+$fechaRe = [datetime]::ParseExact($visitaReprogramada, 'yyyy-MM-dd', $null)
+$mes = Api GET "/visitas/mes?anio=$($fechaRe.Year)&mes=$($fechaRe.Month)" $agente.token
 Check 'el calendario del mes la trae' `
     (@($mes.items | Where-Object { $PSItem.id -eq $idVisita }).Count -eq 1) "items=$($mes.items.Count)"
 

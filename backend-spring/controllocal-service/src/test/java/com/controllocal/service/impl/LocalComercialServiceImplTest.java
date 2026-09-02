@@ -94,7 +94,19 @@ class LocalComercialServiceImplTest {
             mock(com.controllocal.persistence.repositorio.DetalleAgenteRepository.class),
             mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class),
             new com.controllocal.service.soporte.Alcances(
-                    mock(com.controllocal.persistence.repositorio.SupervisionAgenteRepository.class)));
+                    mock(com.controllocal.persistence.repositorio.SupervisionAgenteRepository.class)),
+            // Idem con la elegibilidad del destino (D-P0-7): el codigo real, con
+            // su repositorio mockeado. Estas pruebas no traspasan, asi que no la
+            // ejercitan; ponerla de mock permisivo seria dejar apagada una regla
+            // que este mismo fichero declara que corre de verdad.
+            new com.controllocal.service.soporte.ElegibilidadDeResponsable(
+                    mock(com.controllocal.persistence.repositorio.DetalleAgenteRepository.class)),
+            // El repositorio del compare-and-set del responsable (D-P0-9). Va
+            // mockeado por la misma razon que los otros: estas pruebas no
+            // traspasan, asi que no lo ejercitan. Que el CAS haga lo que dice se
+            // prueba con dos transacciones reales en
+            // CausalidadDelTraspasoIntegrationTest, no con un mock.
+            propiedades);
 
     private final LocalComercialServiceImpl service = new LocalComercialServiceImpl(
             propiedades, roles, distritos, fotos, precios, publicaciones, prospecciones,
@@ -155,7 +167,9 @@ class LocalComercialServiceImplTest {
         // haberla prospectado, y esa era la regla que dejaba a dos agentes
         // distintos ser "duenos" del mismo inmueble a la vez.
         propiedad.responsable(30L);
-        when(propiedades.findByOrganizacionIdAndId(ORG, 7L)).thenReturn(Optional.of(propiedad));
+        // Con la fila TOMADA (F2.10): `desactivar` escribe, asi que la carga que
+        // hace es la del candado y no la de lectura.
+        when(propiedades.bloquearParaEscritura(ORG, 7L)).thenReturn(Optional.of(propiedad));
 
         service.desactivar(7L, agente);
 

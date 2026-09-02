@@ -259,7 +259,12 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     @Transactional
     public boolean desactivar(long id, Actor actor) {
         validarId(id, "El id de local comercial");
-        Propiedad propiedad = propiedades.findByOrganizacionIdAndId(actor.idOrganizacion(), id)
+        // Con la fila TOMADA (F2.10): retirar del registro es una escritura, y
+        // la autoridad de abajo tiene que comprobarse sobre el responsable que
+        // seguira siendo verdad cuando esta transaccion escriba. Es la primera
+        // carga de la fila en esta transaccion, que es lo que hace valido el
+        // candado.
+        Propiedad propiedad = propiedades.bloquearParaEscritura(actor.idOrganizacion(), id)
                 .orElseThrow(() -> new ReglaNegocioException("Local no encontrado"));
 
         // Retirar del registro es el hecho mas irreversible de la ficha, asi
@@ -334,9 +339,12 @@ public class LocalComercialServiceImpl implements LocalComercialService {
         // responde por el (P0-1). Hasta V87 esto solo miraba el tenant: la
         // portada de cualquier propiedad de la corredora la ponia cualquiera.
         // Se carga la entidad en vez de preguntar `exists` porque la autoridad
-        // necesita la fila, no su existencia.
+        // necesita la fila, no su existencia. Y se carga TOMANDOLA (F2.10): la
+        // foto es un hecho de la ficha, asi que la autoridad tiene que valer
+        // tambien en el instante en que la fila de foto_propiedad se inserta,
+        // no solo cuando se leyo la propiedad.
         Propiedad propiedad = propiedades
-                .findByOrganizacionIdAndId(actor.idOrganizacion(), idPropiedad)
+                .bloquearParaEscritura(actor.idOrganizacion(), idPropiedad)
                 .orElseThrow(() -> new ReglaNegocioException("El local no existe."));
         autoridad.exigirEdicion(actor, propiedad);
 
@@ -366,9 +374,12 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                     // foto no tiene dueno propio y llegar por su id no puede ser
                     // una puerta mas barata que llegar por el del inmueble
                     // (P0-1). Si la propiedad no aparece —imposible por la FK—
-                    // se deniega, que es el lado seguro.
+                    // se deniega, que es el lado seguro. Y se toma la fila
+                    // (F2.10): borrar una foto es la escritura mas
+                    // irreversible de la ficha, y tiene que decidirse sobre el
+                    // responsable que seguira siendo verdad al borrarla.
                     Propiedad propiedad = propiedades
-                            .findByOrganizacionIdAndId(actor.idOrganizacion(), foto.getIdPropiedad())
+                            .bloquearParaEscritura(actor.idOrganizacion(), foto.getIdPropiedad())
                             .orElseThrow(() -> new ReglaNegocioException("El local no existe."));
                     autoridad.exigirEdicion(actor, propiedad);
                     fotos.delete(foto);

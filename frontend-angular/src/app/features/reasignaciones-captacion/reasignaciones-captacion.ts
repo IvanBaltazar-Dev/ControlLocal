@@ -13,9 +13,9 @@ import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import {
   catchError,
   combineLatest,
+  debounceTime,
   distinctUntilChanged,
   EMPTY,
-  forkJoin,
   map,
   Observable,
   of,
@@ -28,12 +28,12 @@ import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 
 import { ApiError, paginaVacia, PageResponse } from '../../core/api/api.types';
 import {
+  CandidatoAgente,
   Captacion,
   CaptacionesService,
   FiltrosCaptacionesReasignables,
   ReasignacionCaptacion,
 } from '../../core/api/captaciones.service';
-import { AgenteOpcion, PersonalService } from '../../core/api/personal.service';
 import { descargarCsv } from '../../core/csv';
 import { fechaHora, SIN_DATO, texto } from '../../core/formato';
 import { POLITICA_COMERCIAL } from '../../core/politica-comercial';
@@ -86,11 +86,15 @@ type ResultadoCaptaciones = PageResponse<Captacion> | { error: string };
 })
 export class ReasignacionesCaptacion implements OnInit {
   private readonly api = inject(CaptacionesService);
-  private readonly personal = inject(PersonalService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly recargarCaptaciones$ = new Subject<void>();
+  /**
+   * El texto del buscador de agentes, antes del `debounce`. Va al Core como
+   * `texto` y no se resuelve aquí: la lista es del tenant y está paginada.
+   */
+  private readonly busquedaAgente$ = new Subject<string>();
 
   protected readonly cargando = signal(true);
   protected readonly cargandoGobierno = signal(true);
@@ -102,7 +106,15 @@ export class ReasignacionesCaptacion implements OnInit {
   protected readonly avisoExportacion = signal<string | null>(null);
   protected readonly dialogo = signal(false);
   protected readonly paginaDatos = signal<PageResponse<Captacion>>(paginaVacia(POR_PAGINA));
-  protected readonly agentes = signal<AgenteOpcion[]>([]);
+  /**
+   * **Los destinos que el Core dice** para la captación seleccionada
+   * (D-P0-12). No es «los agentes del tenant»: llega ya depurada por las seis
+   * condiciones de elegibilidad y sin el agente actual, y esta pantalla la
+   * pinta tal cual.
+   */
+  protected readonly candidatos = signal<CandidatoAgente[]>([]);
+  protected readonly cargandoCandidatos = signal(false);
+  protected readonly errorCandidatos = signal<string | null>(null);
   protected readonly historial = signal<ReasignacionCaptacion[]>([]);
   protected readonly filtros = signal<FiltrosReasignacionUrl>({ texto: '', page: 1 });
   protected readonly idCaptacion = signal<number | null>(null);
@@ -121,23 +133,22 @@ export class ReasignacionesCaptacion implements OnInit {
   protected readonly captacionSeleccionada = computed(() =>
     this.paginaDatos().items.find((captacion) => captacion.id === this.idCaptacion()) ?? null,
   );
-  protected readonly agentesDestino = computed(() => {
-    const actual = this.captacionSeleccionada()?.idAgente;
-    const q = normalizar(this.busquedaAgente());
-    return this.agentes().filter((agente) =>
-      agente.id !== actual
-      && agente.estadoAdministrativo === 'A'
-      && agente.estadoOperativo === 'D'
-      && (!q || normalizar([
-        agente.nombre,
-        agente.codigoAgente,
-        agente.numeroDocumento,
-        agente.zona,
-      ].join(' ')).includes(q)),
-    );
-  });
+  /**
+   * **Los destinos, tal como los devuelve el Core** (D-P0-12).
+   *
+   * Hasta el 2026-09-01 esto era un `computed` que pedía `GET /agentes` y
+   * depuraba en el cliente por `estadoAdministrativo === 'A'` y
+   * `estadoOperativo === 'D'`: **dos** de las seis condiciones de elegibilidad,
+   * resueltas sobre **una página** de cien agentes. Ofrecía a gente que el POST
+   * rechaza —sin rol vigente, sin membresía viva, del equipo de otro bróker— y
+   * escondía a candidatos válidos en cuanto la organización pasara de cien.
+   *
+   * Ahora **no se filtra nada aquí**: la lista llega ya depurada por las seis
+   * condiciones y sin el agente actual, y esta pantalla la pinta tal cual.
+   */
+  protected readonly agentesDestino = computed(() => this.candidatos());
   protected readonly agenteSeleccionado = computed(() =>
-    this.agentesDestino().find((agente) => agente.id === this.idAgente()) ?? null,
+    this.candidatos().find((agente) => agente.idAgente === this.idAgente()) ?? null,
   );
   protected readonly historialFiltrado = computed(() => {
     const q = normalizar(this.busquedaHistorial());
@@ -191,6 +202,16 @@ export class ReasignacionesCaptacion implements OnInit {
 
   ngOnInit(): void {
     this.cargarGobierno();
+    // Los candidatos los decide el CORE, y se piden cuando cambia la captación
+    // seleccionada o el texto de búsqueda. El `debounce` es de la búsqueda, no
+    // de la selección: cambiar de expediente tiene que recargar la lista al
+    // instante, porque los destinos válidos dependen de quién lo lleva hoy.
+    this.busquedaAgente$
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe((texto) => {
+        this.busquedaAgente.set(texto);
+        void this.cargarCandidatos();
+      });
     const filtrosUrl$ = this.route.queryParamMap.pipe(
       map(filtrosReasignacionesDesdeUrl),
       distinctUntilChanged((a, b) => a.texto === b.texto && a.page === b.page),
@@ -232,6 +253,10 @@ export class ReasignacionesCaptacion implements OnInit {
     this.idAgente.set(null);
     this.errorAccion.set(null);
     this.exito.set(null);
+    // Cada encargo tiene SUS destinos: la lista excluye a quien ya lo lleva y
+    // depende del alcance del actor sobre ese agente. Reutilizar la del
+    // expediente anterior ofrecería al agente actual de éste.
+    void this.cargarCandidatos();
   }
 
   protected seleccionarAgente(id: number): void {
@@ -240,7 +265,10 @@ export class ReasignacionesCaptacion implements OnInit {
   }
 
   protected cambiarBusquedaAgente(valor: string): void {
-    this.busquedaAgente.set(valor);
+    // El texto viaja al Core como `texto`: la lista es del tenant y está
+    // paginada, así que acotar en el cliente devolvería resultados incompletos
+    // en cuanto haya más agentes que sitio en una página.
+    this.busquedaAgente$.next(valor);
   }
 
   protected prepararReasignacion(): void {
@@ -252,7 +280,7 @@ export class ReasignacionesCaptacion implements OnInit {
       return;
     }
     if (!agente) {
-      this.errorAccion.set('Selecciona un agente activo y disponible de tu alcance.');
+      this.errorAccion.set('Selecciona uno de los agentes que el sistema ofrece como destino.');
       return;
     }
     if (motivo.length < MINIMO_MOTIVO) {
@@ -270,17 +298,29 @@ export class ReasignacionesCaptacion implements OnInit {
     if (!this.procesando()) this.dialogo.set(false);
   }
 
+  /**
+   * **Declara sobre qué agente se actúa** (D-P0-9).
+   *
+   * `idAgenteActual` es el agente que se estaba **viendo** en la fila cuando se
+   * decidió, no el que haya ahora: si otro bróker lo movió mientras tanto, el
+   * Core responde **409** y no escribe nada. Ante ese 409 esta pantalla **no
+   * reintenta** —sería ejecutar sobre un estado que nadie miró—: muestra el
+   * mensaje del Core y **recarga la lista**, porque el expediente que se estaba
+   * mirando ya no está en ese estado.
+   */
   protected async confirmarReasignacion(): Promise<void> {
     const captacion = this.captacionSeleccionada();
     const agente = this.agenteSeleccionado();
     const motivo = this.motivo.value.trim();
-    if (!captacion || !agente || motivo.length < MINIMO_MOTIVO || this.procesando()) return;
+    const observado = captacion?.idAgente;
+    if (!captacion || !agente || observado == null
+      || motivo.length < MINIMO_MOTIVO || this.procesando()) return;
     this.procesando.set(true);
     this.errorAccion.set(null);
     this.exito.set(null);
     try {
-      await this.api.reasignar(captacion.id, agente.id, motivo);
-      this.exito.set(`${texto(captacion.codigoCaptacion)} fue reasignada a ${agente.nombre}.`);
+      await this.api.reasignar(captacion.id, agente.idAgente, motivo, observado);
+      this.exito.set(`${texto(captacion.codigoCaptacion)} fue reasignada a ${texto(agente.nombre)}.`);
       this.dialogo.set(false);
       this.idAgente.set(null);
       this.motivo.reset('');
@@ -288,6 +328,13 @@ export class ReasignacionesCaptacion implements OnInit {
       this.cargarHistorial();
     } catch (error) {
       this.errorAccion.set(mensajeError(error, 'No se pudo reasignar la captación.'));
+      if (error instanceof ApiError && error.conflicto) {
+        // El estado que se vio ya no existe. Se cierra el diálogo y se vuelve a
+        // pedir la lista para que la siguiente decisión parta de lo que hay.
+        this.dialogo.set(false);
+        this.idAgente.set(null);
+        this.recargarCaptaciones$.next();
+      }
     } finally {
       this.procesando.set(false);
     }
@@ -354,23 +401,67 @@ export class ReasignacionesCaptacion implements OnInit {
     return fechaHora(valor);
   }
 
+  /**
+   * El historial de gobierno. **Ya no trae agentes**: la lista de destinos
+   * dejó de ser «los del tenant, depurados aquí» y pasó a ser una pregunta por
+   * expediente que responde el Core (`cargarCandidatos`).
+   */
   private cargarGobierno(): void {
     this.cargandoGobierno.set(true);
     this.errorGobierno.set(null);
-    forkJoin({
-      agentes: this.personal.agentes$(),
-      historial: this.api.historialReasignaciones$(),
-    }).pipe(
+    this.api.historialReasignaciones$().pipe(
       catchError((error) => {
-        this.errorGobierno.set(mensajeError(error, 'No se pudieron cargar agentes e historial.'));
-        return of({ agentes: paginaVacia<AgenteOpcion>(100), historial: [] });
+        this.errorGobierno.set(mensajeError(error, 'No se pudo cargar el historial.'));
+        return of([] as ReasignacionCaptacion[]);
       }),
       takeUntilDestroyed(this.destroyRef),
-    ).subscribe(({ agentes, historial }) => {
-      this.agentes.set(agentes.items);
+    ).subscribe((historial) => {
       this.historial.set(historial);
       this.cargandoGobierno.set(false);
     });
+  }
+
+  /**
+   * **Los destinos elegibles para ESTE encargo, decididos por el Core**
+   * (D-P0-7 + D-P0-12).
+   *
+   * No filtra ni ordena nada de lo que llega: la lista ya viene depurada por
+   * las seis condiciones de elegibilidad y sin el agente actual. Un **403** aquí
+   * no es «no hay candidatos» sino «no te corresponde», y se muestra el mensaje
+   * del Core en vez de una lista vacía, que es lo que dejaría a alguien
+   * buscando un agente que no existe.
+   */
+  private async cargarCandidatos(): Promise<void> {
+    const captacion = this.captacionSeleccionada();
+    if (!captacion) {
+      this.candidatos.set([]);
+      this.errorCandidatos.set(null);
+      return;
+    }
+    const pedido = captacion.id;
+    this.cargandoCandidatos.set(true);
+    this.errorCandidatos.set(null);
+    try {
+      const pagina = await this.api.candidatosReasignacion(
+        pedido, this.busquedaAgente() || undefined,
+      );
+      // Si mientras tanto se seleccionó otro expediente, esta respuesta ya no
+      // es de lo que se está mirando: pintarla ofrecería destinos de otro.
+      if (this.idCaptacion() !== pedido) return;
+      this.candidatos.set(pagina.items);
+      if (!pagina.items.some((agente) => agente.idAgente === this.idAgente())) {
+        this.idAgente.set(null);
+      }
+    } catch (error) {
+      if (this.idCaptacion() !== pedido) return;
+      this.candidatos.set([]);
+      this.idAgente.set(null);
+      this.errorCandidatos.set(
+        mensajeError(error, 'No se pudieron cargar los destinos de esta captación.'),
+      );
+    } finally {
+      if (this.idCaptacion() === pedido) this.cargandoCandidatos.set(false);
+    }
   }
 
   private cargarHistorial(): void {
@@ -400,6 +491,7 @@ export class ReasignacionesCaptacion implements OnInit {
   }
 
   private publicarCaptaciones(resultado: ResultadoCaptaciones): void {
+    const anterior = this.expedienteMirado();
     if ('error' in resultado) {
       this.paginaDatos.set(paginaVacia(POR_PAGINA));
       this.error.set(resultado.error);
@@ -412,6 +504,24 @@ export class ReasignacionesCaptacion implements OnInit {
       }
     }
     this.cargando.set(false);
+    // Los destinos dependen de QUÉ expediente se está mirando y de quién lo
+    // lleva hoy, así que se vuelven a pedir cuando la selección cambia — y
+    // también tras una recarga por 409, que es justamente cuando el agente que
+    // se veía ya no es el que hay.
+    if (this.expedienteMirado() !== anterior) void this.cargarCandidatos();
+  }
+
+  /**
+   * **Qué expediente se está mirando, y en manos de quién.**
+   *
+   * Lleva el agente y no sólo el id a propósito: tras un 409 la captación sigue
+   * siendo la misma pero **la lleva otro**, y los destinos válidos cambian —el
+   * nuevo responsable sale de la lista y el anterior vuelve a entrar—. Comparar
+   * sólo el id dejaría en pantalla una lista que ya no corresponde.
+   */
+  private expedienteMirado(): string | null {
+    const captacion = this.captacionSeleccionada();
+    return captacion ? `${captacion.id}:${captacion.idAgente ?? ''}` : null;
   }
 
   private navegar(cambios: Partial<FiltrosReasignacionUrl>, replaceUrl = false): void {

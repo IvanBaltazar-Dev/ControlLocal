@@ -88,8 +88,43 @@ public class Captacion extends EntidadDeOrganizacion implements Transicionable {
     @JoinColumn(name = "id_propiedad", nullable = false)
     private Propiedad propiedad;
 
+    /**
+     * <b>Quien lleva este encargo — la autoridad, no un campo mas</b> (P0-4,
+     * D-P0-9).
+     *
+     * <h2>Por que la columna es de SOLO INSERCION para el ORM</h2>
+     * {@code Captacion} no lleva {@code @DynamicUpdate}, asi que el <i>flush</i>
+     * de una entidad gestionada escribe la fila <b>entera</b> con los valores
+     * que tiene en memoria — incluido este. Sin la marca habia una segunda
+     * puerta que nadie habia decidido: una edicion del encargo que hubiera
+     * cargado la fila con el agente A y guardara <b>despues</b> de que una
+     * reasignacion A&rarr;B comiteara devolvia la columna a A, dejando un agente
+     * cambiado <b>sin fila en {@code reasignacion_captacion}</b> y un historial
+     * que afirmaba «de A a B» sobre un encargo que respondia ante A.
+     *
+     * <p>Con {@code updatable = false} la columna la escriben exactamente dos
+     * cosas:
+     * <ul>
+     *   <li>el {@code INSERT} del alta —{@code CaptacionServiceImpl#registrar},
+     *       {@code ProspeccionServiceImpl#captar} y
+     *       {@code PropiedadUniversalServiceImpl#abrirEncargo}, los tres fijan
+     *       el agente <b>antes</b> del primer {@code save}—;</li>
+     *   <li>y en {@code UPDATE}, unicamente
+     *       {@code CaptacionRepository.cambiarAgenteSi}, que es SQL nativo y por
+     *       tanto no pasa por esta anotacion: el compare-and-set que exige el
+     *       agente observado (D-P0-9).</li>
+     * </ul>
+     *
+     * <p>{@link #setAgente(DetalleAgente)} sigue existiendo y sigue escribiendo
+     * el campo en memoria: el rastro y la ficha devuelta leen ese valor dentro
+     * de la misma transaccion. Lo que ya no hace es viajar a la base por su
+     * cuenta.
+     *
+     * <p>Lo mide {@code CausalidadDeLaReasignacionIntegrationTest}, caso
+     * <i>«el flush de una edicion concurrente no revierte la reasignacion»</i>.
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "id_rol_agente", nullable = false)
+    @JoinColumn(name = "id_rol_agente", nullable = false, updatable = false)
     private DetalleAgente agente;
 
     @ManyToOne(fetch = FetchType.LAZY)

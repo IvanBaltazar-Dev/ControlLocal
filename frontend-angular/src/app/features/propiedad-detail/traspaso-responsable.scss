@@ -58,6 +58,9 @@
     }
   }
 
+  // El buscador entra en la misma caja que el resto: la lista de candidatos la
+  // acota el Core y este campo es la forma de pedírsela.
+  input,
   select,
   textarea {
     width: 100%;

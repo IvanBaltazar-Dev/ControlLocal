@@ -233,7 +233,8 @@ $mios = Api GET '/locales/mis-locales?pagina=1&tamano=50' $agente.token
 Check 'el local aparece en mis-locales del agente' (@($mios.items | Where-Object { $PSItem.id -eq $idLocal }).Count -eq 1) "total=$($mios.totalRecords)"
 
 # Agente 29 (Javier Ruiz), tambien supervisado por rsalas en el seed.
-$reasignada = Api POST "/captaciones/$idCaptacion/reasignar" $broker.token @{ idAgenteNuevo = 29; motivo = 'Balance de cartera' }
+# D-P0-9: el comando declara sobre que agente actua -- el que devolvio la aprobacion, no un id fijo -- y el Core responde 409 si ya lo lleva otro.
+$reasignada = Api POST "/captaciones/$idCaptacion/reasignar" $broker.token @{ idAgenteNuevo = 29; motivo = 'Balance de cartera'; idAgenteActual = $aprobada.idAgente }
 Check 'reasignar cambia el responsable' ($reasignada.idAgente -eq 29) $reasignada.idAgente
 Check 'reasignar NO transiciona el estado' ($reasignada.estado -eq 'A') $reasignada.estado
 Check 'el evento de reasignacion lleva tenant' ((Sql "select count(*) from reasignacion_captacion where id_captacion=$idCaptacion and organizacion_id=1") -eq '1') 'reasignacion'

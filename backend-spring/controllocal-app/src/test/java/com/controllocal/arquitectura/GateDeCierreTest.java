@@ -85,6 +85,20 @@ class GateDeCierreTest {
                         "BusquedaLocalesIntegrationTest",
                         // Corte 0B - el catalogo aprende a hablar.
                         "CatalogoQueHablaIntegrationTest",
+                        // D-P0-9 / D-P0-10 / D-P0-7 sobre la SEGUNDA autoridad:
+                        // el agente de un encargo. La gemela de la de abajo,
+                        // dicha sobre captacion.id_rol_agente -- comando
+                        // obsoleto, dos transacciones vivas, fallo inyectado en
+                        // el rastro, dirty checking de la edicion y destino sin
+                        // elegibilidad.
+                        "CausalidadDeLaReasignacionIntegrationTest",
+                        // D-P0-9 / D-P0-10 - un traspaso parte del estado que
+                        // alguien miro, y ocurre entero o no ocurre. Va en el
+                        // cierre porque lo que prueba no se puede probar leyendo
+                        // el codigo: monta DOS transacciones vivas a la vez sobre
+                        // PostgreSQL y rompe cada escritura por separado para ver
+                        // si alguna sobrevive sola.
+                        "CausalidadDelTraspasoIntegrationTest",
                         // D0-3 - una clave retirada se lee, se distingue y no
                         // se edita: la mitad de la retirada que mira el usuario.
                         "ClaveRetiradaEnLaFichaIntegrationTest",
@@ -97,6 +111,14 @@ class GateDeCierreTest {
                         "IdentidadDelBrokerIntegrationTest",
                         "InterpretacionDelInicioIntegrationTest",
                         "InvariantesComisionIntegrationTest",
+                        // D-P0-6 (F1) — quien LEE la informacion comercial
+                        // historica. La otra mitad de P0: aquel decidio quien
+                        // escribe, este quien lee el pasado. Va en el cierre
+                        // porque lo que prueba es que la ficha, el bloque de cada
+                        // encargo y la serie de precios responden lo MISMO -- y
+                        // porque encontro una fuga de tenant que llevaba abierta
+                        // en `/locales/{id}/precios`.
+                        "LecturaHistoricaIntegrationTest",
                         // D-E4-1 — las tres piezas del nucleo universal contra
                         // PostgreSQL: titularidad, atributos gobernados y outbox.
                         "NucleoUniversalIntegrationTest",

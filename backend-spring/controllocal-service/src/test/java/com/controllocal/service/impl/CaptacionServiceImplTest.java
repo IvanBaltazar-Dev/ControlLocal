@@ -9,6 +9,7 @@ import com.controllocal.domain.persona.DetalleBroker;
 import com.controllocal.domain.persona.Persona;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.domain.persona.enums.TipoRol;
+import com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
 import com.controllocal.persistence.repositorio.DetalleBrokerRepository;
@@ -27,6 +28,8 @@ import com.controllocal.service.CaptacionService.FiltrosPendientes;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Alcances.Alcance;
+import com.controllocal.service.soporte.AutoridadDePropiedad;
+import com.controllocal.service.soporte.ElegibilidadDeResponsable;
 import com.controllocal.service.soporte.Transiciones;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -78,10 +81,40 @@ class CaptacionServiceImplTest {
     private final Alcances alcances = mock(Alcances.class);
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
 
+    /**
+     * La autoridad <b>de verdad</b>, no un mock.
+     *
+     * <p>Un {@code mock(AutoridadDePropiedad.class)} no lanzaria nunca, asi que
+     * la guarda que P0-4 exige en {@code actualizar} quedaria declarada y no
+     * ejercida: estas pruebas seguirian verdes con la comprobacion borrada. Sus
+     * dependencias si son mocks porque {@code exigirEdicionDelEncargo} no las
+     * usa — decide con el actor y con el agente del encargo, y nada mas.
+     */
+    /**
+     * La elegibilidad <b>de verdad</b>, no un mock, y compartida por la
+     * autoridad y el servicio.
+     *
+     * <p>Un mock permisivo dejaria pasar la reasignacion hacia un agente que no
+     * puede recibir, que es exactamente la guarda que este corte anade: la
+     * comprobacion quedaria escrita y no ejercida. Su repositorio si es un mock
+     * —es el mismo {@code agentes} de arriba—, asi que cada prueba declara si el
+     * destino esta en condiciones.
+     */
+    private final ElegibilidadDeResponsable elegibilidad = new ElegibilidadDeResponsable(agentes);
+
+    private final AutoridadDePropiedad autoridad = new AutoridadDePropiedad(
+            agentes, mock(AsignacionResponsablePropiedadRepository.class), alcances,
+            elegibilidad,
+            // Y el repositorio del compare-and-set del responsable (D-P0-9),
+            // tambien mockeado: `exigirEdicionDelEncargo` no lo toca, y el CAS
+            // solo se puede probar de verdad con dos transacciones reales
+            // (CausalidadDelTraspasoIntegrationTest).
+            propiedades);
+
     private final CaptacionServiceImpl service = new CaptacionServiceImpl(
             captaciones, reasignaciones, propiedades, agentes, brokers, fotos,
             alcances, new Transiciones(historial), mock(AlertaService.class),
-            lectorSinGobernados(), titularConocido());
+            lectorSinGobernados(), titularConocido(), autoridad, elegibilidad);
 
     /**
      * Un inmueble con titular conocido. Estas pruebas blindan las reglas del
@@ -298,13 +331,19 @@ class CaptacionServiceImplTest {
         DetalleAgente nuevo = detalleAgente(31L, "Javier Ruiz");
         when(agentes.findById(31L)).thenReturn(Optional.of(nuevo));
         when(alcances.alcanza(broker, 31L)).thenReturn(true);
+        destinoElegible(31L);
+        // La escritura de la autoridad es el compare-and-set, no el flush: si
+        // devolviera 0 no habria reasignacion, y por eso se declara aqui el
+        // camino en el que el agente observado seguia siendo el de la fila.
+        when(captaciones.cambiarAgenteSi(ORG, 9L, 30L, 31L)).thenReturn(1);
         when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
 
-        FichaCaptacion ficha = service.reasignar(9L, 31L, "Balance de cartera", broker);
+        FichaCaptacion ficha = service.reasignar(9L, 31L, "Balance de cartera", 30L, broker);
 
         assertEquals("A", ficha.estado());
         assertEquals(31L, ficha.idAgente());
         assertEquals(nuevo, cap.getAgente());
+        verify(captaciones).cambiarAgenteSi(ORG, 9L, 30L, 31L);
         ArgumentCaptor<ReasignacionCaptacion> evento = ArgumentCaptor.forClass(ReasignacionCaptacion.class);
         verify(reasignaciones).save(evento.capture());
         assertEquals(30L, evento.getValue().getAgenteAnterior().getId());
@@ -323,7 +362,7 @@ class CaptacionServiceImplTest {
         when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Lucia Torres")));
         when(alcances.alcanza(broker, 31L)).thenReturn(false);
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reasignar(9L, 31L, "Cambio de zona", broker));
+                () -> service.reasignar(9L, 31L, "Cambio de zona", 30L, broker));
         assertEquals("El broker no supervisa al agente responsable de esta operacion.", error.getMessage());
     }
 
@@ -332,8 +371,116 @@ class CaptacionServiceImplTest {
         captacionEnEstado(Captacion.ACTIVA);
         when(agentes.findById(30L)).thenReturn(Optional.of(detalleAgente(30L, "Valentina Mora")));
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
-                () -> service.reasignar(9L, 30L, "Sin cambio real", broker));
+                () -> service.reasignar(9L, 30L, "Sin cambio real", 30L, broker));
         assertEquals("La captacion ya esta asignada a ese agente.", error.getMessage());
+    }
+
+    /**
+     * <b>Un agente de OTRA corredora se comporta como inexistente</b>.
+     *
+     * <p>{@code findById} no filtra por organizacion, asi que hasta el
+     * 2026-09-01 un id de otro tenant llegaba a la comprobacion de alcance y
+     * salia por «el broker no supervisa a ese agente» — un mensaje que habla de
+     * supervision sobre alguien que no existe en esta organizacion, y que de
+     * paso confirma que el id existe en alguna parte.
+     */
+    @Test
+    void reasignarAUnAgenteDeOtraCorredoraNoLoDistingueDeUnoInexistente() {
+        captacionEnEstado(Captacion.ACTIVA);
+        DetalleAgente ajeno = detalleAgente(31L, "Agente de otra corredora");
+        ajeno.setOrganizacionId(99L);
+        when(agentes.findById(31L)).thenReturn(Optional.of(ajeno));
+
+        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
+                () -> service.reasignar(9L, 31L, "Cambio de zona", 30L, broker));
+        assertEquals("Agente no encontrado.", error.getMessage());
+        verify(captaciones, org.mockito.Mockito.never())
+                .cambiarAgenteSi(anyLong(), anyLong(), anyLong(), anyLong());
+        verifyNoInteractions(reasignaciones);
+    }
+
+    /**
+     * <b>D-P0-7 en toda reasignacion de autoridad</b>: alcanzar a un agente no
+     * es que ese agente pueda operar.
+     *
+     * <p>El destino esta supervisado por el broker —pasa {@code alcanza}— y aun
+     * asi no puede recibir el encargo. Sin esta guarda, un encargo se podia
+     * entregar a alguien suspendido, de baja o fuera de la organizacion.
+     */
+    @Test
+    void reasignarAUnDestinoNoElegibleNoEscribeNada() {
+        captacionEnEstado(Captacion.ACTIVA);
+        when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
+        when(alcances.alcanza(broker, 31L)).thenReturn(true);
+        // Bloqueo tomado -- el agente existe-- pero la elegibilidad dice que no.
+        when(agentes.bloquearParaGobierno(ORG, 31L))
+                .thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
+        when(agentes.esCandidatoAResponsable(anyLong(), anyBoolean(), anyLong(), anyLong(),
+                any(), eq(31L))).thenReturn(false);
+
+        assertThrows(com.controllocal.service.excepcion.AccesoNoAutorizadoException.class,
+                () -> service.reasignar(9L, 31L, "Balance de cartera", 30L, broker));
+        verify(captaciones, org.mockito.Mockito.never())
+                .cambiarAgenteSi(anyLong(), anyLong(), anyLong(), anyLong());
+        verifyNoInteractions(reasignaciones);
+    }
+
+    /**
+     * <b>D-P0-9 en el ENCARGO: el comando que perdio la carrera es 409</b>.
+     *
+     * <p>La precondicion en memoria pasa —el agente cargado sigue siendo el
+     * observado— y aun asi el compare-and-set afecta cero filas, que es lo que
+     * ocurre cuando otra transaccion comiteo su reasignacion en medio. No se
+     * reinterpreta: no se escribe fila ninguna.
+     */
+    @Test
+    void reasignarQuePierdeElCompareAndSetEs409YNoDejaRastro() {
+        captacionEnEstado(Captacion.ACTIVA);
+        when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
+        when(alcances.alcanza(broker, 31L)).thenReturn(true);
+        destinoElegible(31L);
+        when(captaciones.cambiarAgenteSi(ORG, 9L, 30L, 31L)).thenReturn(0);
+        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
+
+        com.controllocal.service.excepcion.ConflictoException error = assertThrows(
+                com.controllocal.service.excepcion.ConflictoException.class,
+                () -> service.reasignar(9L, 31L, "Balance de cartera", 30L, broker));
+        assertTrue(error.getMessage().contains("NO se reinterpreta"), error.getMessage());
+        verifyNoInteractions(reasignaciones);
+    }
+
+    /**
+     * <b>Y el comando que declara un agente que no es el actual tampoco entra</b>.
+     *
+     * <p>Aqui no hay carrera: el comando simplemente sale de un estado que no
+     * es. Se corta ANTES de tocar la base —el compare-and-set ni se ejecuta— y
+     * el mensaje nombra a quien lo lleva hoy, que es lo unico que permite volver
+     * a decidir.
+     */
+    @Test
+    void reasignarDeclarandoOtroAgenteEs409YNiSiquieraIntentaEscribir() {
+        captacionEnEstado(Captacion.ACTIVA);
+        when(agentes.findById(31L)).thenReturn(Optional.of(detalleAgente(31L, "Javier Ruiz")));
+        when(alcances.alcanza(broker, 31L)).thenReturn(true);
+        destinoElegible(31L);
+        when(brokers.findById(23L)).thenReturn(Optional.of(detalleBroker(23L)));
+
+        com.controllocal.service.excepcion.ConflictoException error = assertThrows(
+                com.controllocal.service.excepcion.ConflictoException.class,
+                () -> service.reasignar(9L, 31L, "Balance de cartera", 999L, broker));
+        assertTrue(error.getMessage().contains("30"),
+                "el 409 tiene que nombrar al agente actual: " + error.getMessage());
+        verify(captaciones, org.mockito.Mockito.never())
+                .cambiarAgenteSi(anyLong(), anyLong(), anyLong(), anyLong());
+        verifyNoInteractions(reasignaciones);
+    }
+
+    /** El destino pasa las cinco condiciones de D-P0-7, con su fila ya tomada. */
+    private void destinoElegible(long idRolDestino) {
+        when(agentes.bloquearParaGobierno(ORG, idRolDestino))
+                .thenReturn(Optional.of(detalleAgente(idRolDestino, "Destino elegible")));
+        when(agentes.esCandidatoAResponsable(anyLong(), anyBoolean(), anyLong(), anyLong(),
+                any(), eq(idRolDestino))).thenReturn(true);
     }
 
     // ------------------------------------------------------------------
@@ -392,6 +539,12 @@ class CaptacionServiceImplTest {
         new Transiciones(mock(HistorialEstadoRepository.class)).iniciar(cap, estado);
         ReflectionTestUtils.setField(cap, "id", 9L);
         when(captaciones.buscarFicha(ORG, 9L)).thenReturn(Optional.of(cap));
+        // La MISMA fila, cargada con el candado (F2.10). `actualizar` la pide
+        // asi porque escribe hechos del trato; el resto de los casos de uso
+        // sigue con `buscarFicha`. Son dos consultas y una sola fila: si el
+        // montaje solo respondiera a una, la mitad de las pruebas mediria un
+        // encargo inexistente.
+        when(captaciones.bloquearParaEscritura(ORG, 9L)).thenReturn(Optional.of(cap));
         when(alcances.alcanza(actor, 30L)).thenReturn(true);
         when(fotos.findByIdPropiedadOrderByOrdenAscIdAsc(anyLong())).thenReturn(List.of());
         return cap;
@@ -430,6 +583,11 @@ class CaptacionServiceImplTest {
 
     private static DetalleAgente detalleAgente(long idRol, String nombre) {
         DetalleAgente detalle = new DetalleAgente();
+        // El tenant, que antes no se ponia: desde el 2026-09-01 `reasignar`
+        // filtra el destino por organizacion -- `findById` no lo hace-- asi que
+        // un agente de fixture sin tenant se comportaria como uno de otra
+        // corredora, que es justo lo que la guarda nueva rechaza.
+        detalle.setOrganizacionId(ORG);
         detalle.setRol(rolConPersona(nombre, TipoRol.AGENTE));
         detalle.setCodigoAgente("AGE-001");
         ReflectionTestUtils.setField(detalle, "id", idRol);

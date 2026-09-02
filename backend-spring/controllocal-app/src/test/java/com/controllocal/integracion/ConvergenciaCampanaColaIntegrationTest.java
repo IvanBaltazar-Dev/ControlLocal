@@ -5,6 +5,7 @@ import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
 import com.controllocal.service.Actor;
 import com.controllocal.service.AlertaService;
 import com.controllocal.service.AlertaService.FichaAlerta;
+import com.controllocal.service.Pagina;
 import com.controllocal.service.TareaService;
 import com.controllocal.service.TareaService.FichaTarea;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * <b>La campana y la cola no pueden contradecirse</b> sobre el mismo hecho.
@@ -52,11 +54,45 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * al terminar, gane o pierda la prueba. Es la forma de recorrer el ciclo entero
  * —vence, se contacta, vuelve a vencer— sin depender de que el seed traiga por
  * casualidad las tres situaciones.
+ *
+ * <h2>El escenario es COMPARTIDO, y eso obliga a dos reglas</h2>
+ *
+ * <p>La base de pruebas no se recrea entre corridas, así que la segunda corrida
+ * es la normal: cada prueba empieza sobre lo que dejó la anterior. Medido el
+ * 2026-09-02 sobre {@code controllocal_repositorios}: el agente de la
+ * prospección sujeto acumulaba <b>517 alertas activas</b>, 476 de ellas
+ * {@code CAPTACION_CREADA} que emiten otras suites al registrar captaciones, y
+ * quedaba <b>un</b> aviso {@code SIN_RESPUESTA} activo de la prospección sujeto
+ * heredado de la corrida anterior de esta misma clase.
+ *
+ * <ol>
+ *   <li><b>La lectura de la campana se pagina hasta agotar el total.</b> El
+ *       camino real ordena por fecha de generación descendente, así que un
+ *       aviso emitido ayer sale de la primera página en cuanto hay cien más
+ *       nuevos. Preguntando solo por {@code listar(1, 100, …)}, el paso 1 de
+ *       {@link #campanaYColaConvergenEnElMismoHecho()} cayó el 2026-09-02
+ *       —«una prospeccion vencida tiene que avisar en la campana ==&gt; expected
+ *       true but was false»— y pasó al reintentar, sin ningún cambio de
+ *       producto entre medias. El {@code assertFalse} del paso 3 tenía el
+ *       defecto simétrico y más silencioso: se cumplía aunque el aviso siguiera
+ *       activo, con solo estar por debajo de la posición 100.</li>
+ *   <li><b>Ninguna de las dos pruebas sobrevive a su corrida.</b> Cada una
+ *       fotografía al entrar los avisos de recontacto activos del tenant y
+ *       retira en {@code finally} los que no estaban en esa foto. Lo que el
+ *       barrido <b>cierra</b> no se reabre: cerrar es la conducta que se mide,
+ *       no montaje que devolver.</li>
+ * </ol>
  */
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = ".+")
 @SpringBootTest(classes = ControlLocalApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ConvergenciaCampanaColaIntegrationTest {
+
+    /** El maximo que acepta el service: pedir mas lo capa en 100 igualmente. */
+    private static final int TAMANO_PAGINA = 100;
+
+    /** Tope del recorrido de la campana. 50 x 100 = 5.000 avisos activos. */
+    private static final int TOPE_PAGINAS = 50;
 
     @DynamicPropertySource
     static void datos(DynamicPropertyRegistry propiedades) {
@@ -73,7 +109,20 @@ class ConvergenciaCampanaColaIntegrationTest {
         Prospeccion sujeto = elegirProspeccion();
         LocalDate original = sujeto.fechaRecontacto();
         Actor actor = sujeto.actor();
+        List<Long> avisosDeEntrada = avisosDeRecontactoActivos(actor.idOrganizacion());
         try {
+            // 0) PRECONDICION, y no es teorica: el 2026-09-02 la prospeccion
+            //    sujeto (PRO-0002, recontacto 2026-07-01) entraba con UN aviso
+            //    activo heredado. No es un aviso equivocado —esa prospeccion
+            //    lleva meses vencida, y tenerlo activo es la conducta correcta—
+            //    pero mientras exista, `existeActivaDe` impide emitir y el paso
+            //    1 mediria un aviso ajeno en vez de la emision. El ciclo se
+            //    empieza desde cero, igual que el sistema lo empezo el dia que
+            //    esa prospeccion vencio por primera vez.
+            descartarAvisos(avisosActivosDe(sujeto.id()));
+            assertEquals(0, avisosActivos(sujeto.id()),
+                    "el ciclo se mide desde cero: aqui no puede quedar ningun aviso previo");
+
             // 1) VENCIDA: tiene que estar en los dos sitios.
             moverRecontacto(sujeto.id(), LocalDate.now().minusDays(30));
             alertas.sincronizarRecontacto(actor);
@@ -116,38 +165,56 @@ class ConvergenciaCampanaColaIntegrationTest {
                     "un vencimiento nuevo es un hecho nuevo, con su propio aviso");
             assertEquals("D", estadoDelAviso(primerAviso), "el del ciclo anterior sigue cerrado");
         } finally {
-            restaurar(sujeto.id(), original);
+            restaurar(sujeto, original, avisosDeEntrada);
         }
     }
 
+    /**
+     * <p>Esta prueba <b>no monta nada</b>: mide el tenant tal como está. Lo que
+     * sí hace es disparar el barrido, y el barrido escribe —por eso se retira
+     * lo que haya creado. Sin esa retirada dejaba vivo el aviso de la
+     * prospección sujeto y era ella quien hacía fallar a la otra prueba en la
+     * corrida siguiente (el aviso ya existía, no se emitía otro, y el viejo
+     * quedaba fuera de la primera página de la campana).
+     *
+     * <p>No se inventa un aviso previo para tener algo que medir: si el tenant
+     * no tiene ninguno, «ninguno huérfano» se cumple sobre cero y es la
+     * respuesta correcta. La prueba afirma una propiedad del conjunto, y un
+     * conjunto vacío la cumple sin mentir.
+     */
     @Test
     @DisplayName("ningun aviso activo de recontacto sobrevive a su motivo")
     void laCampanaNoGuardaAvisosQueYaNoAplican() {
         Actor actor = elegirProspeccion().actor();
-        alertas.sincronizarRecontacto(actor);
+        List<Long> avisosDeEntrada = avisosDeRecontactoActivos(actor.idOrganizacion());
+        try {
+            alertas.sincronizarRecontacto(actor);
 
-        // Todo aviso SIN_RESPUESTA activo del tenant tiene que tener detras una
-        // prospeccion que de verdad siga vencida. Es la comprobacion que la
-        // pantalla no puede hacer y que no debe hacer: el backend entrega el
-        // hecho ya reconciliado.
-        List<Map<String, Object>> huerfanos = jdbc.queryForList("""
-                select a.id_alerta, a.entidad_id
-                  from alerta a
-                 where a.organizacion_id = ?
-                   and a.estado = 'A'
-                   and a.tipo = 'SIN_RESPUESTA'
-                   and a.entidad_tipo = 'PROSPECCION'
-                   and not exists (
-                       select 1 from prospeccion p
-                        where p.id_prospeccion = a.entidad_id
-                          and p.organizacion_id = a.organizacion_id
-                          and p.fecha_recontacto is not null
-                          and p.fecha_recontacto <= ?
-                          and p.estado not in ('T', 'D'))
-                """, actor.idOrganizacion(), LocalDate.now().minusDays(7));
+            // Todo aviso SIN_RESPUESTA activo del tenant tiene que tener detras una
+            // prospeccion que de verdad siga vencida. Es la comprobacion que la
+            // pantalla no puede hacer y que no debe hacer: el backend entrega el
+            // hecho ya reconciliado.
+            List<Map<String, Object>> huerfanos = jdbc.queryForList("""
+                    select a.id_alerta, a.entidad_id
+                      from alerta a
+                     where a.organizacion_id = ?
+                       and a.estado = 'A'
+                       and a.tipo = 'SIN_RESPUESTA'
+                       and a.entidad_tipo = 'PROSPECCION'
+                       and not exists (
+                           select 1 from prospeccion p
+                            where p.id_prospeccion = a.entidad_id
+                              and p.organizacion_id = a.organizacion_id
+                              and p.fecha_recontacto is not null
+                              and p.fecha_recontacto <= ?
+                              and p.estado not in ('T', 'D'))
+                    """, actor.idOrganizacion(), LocalDate.now().minusDays(7));
 
-        assertTrue(huerfanos.isEmpty(),
-                "avisos activos sin motivo vivo: " + huerfanos);
+            assertTrue(huerfanos.isEmpty(),
+                    "avisos activos sin motivo vivo: " + huerfanos);
+        } finally {
+            descartarAvisos(creadosDesde(actor.idOrganizacion(), avisosDeEntrada));
+        }
     }
 
     // ------------------------------------------------------------------
@@ -186,27 +253,102 @@ class ConvergenciaCampanaColaIntegrationTest {
                 cuando, idProspeccion);
     }
 
-    /** Devuelve la fila como estaba, y limpia lo que la prueba haya abierto. */
-    private void restaurar(long idProspeccion, LocalDate original) {
+    /**
+     * Devuelve la fila como estaba y <b>retira lo que la prueba abrió</b>: los
+     * avisos de recontacto activos que no estaban en la foto de entrada.
+     *
+     * <p>Antes esto descartaba «todos los activos de la prospección», que es
+     * otra cosa: cerraba también lo heredado —y se quedaba corto con lo que el
+     * barrido, que recorre el tenant entero, pudiera haber emitido para otra
+     * prospección—. El 2026-09-02 solo PRO-0002 era recontactable en el tenant,
+     * así que hoy es un aviso; la retirada no depende de que siga siendo así.
+     */
+    private void restaurar(Prospeccion sujeto, LocalDate original, List<Long> avisosDeEntrada) {
         jdbc.update("update prospeccion set fecha_recontacto = ? where id_prospeccion = ?",
-                original, idProspeccion);
-        jdbc.update("""
-                update alerta set estado = 'D', fecha_resolucion = now()
-                 where entidad_tipo = 'PROSPECCION' and entidad_id = ?
-                   and tipo = 'SIN_RESPUESTA' and estado = 'A'
-                """, idProspeccion);
+                original, sujeto.id());
+        descartarAvisos(creadosDesde(sujeto.actor().idOrganizacion(), avisosDeEntrada));
+    }
+
+    /** Los avisos de recontacto ACTIVOS del tenant, ahora mismo. */
+    private List<Long> avisosDeRecontactoActivos(long idOrganizacion) {
+        return jdbc.queryForList("""
+                select id_alerta from alerta
+                 where organizacion_id = ?
+                   and entidad_tipo = 'PROSPECCION'
+                   and tipo = 'SIN_RESPUESTA'
+                   and estado = 'A'
+                 order by id_alerta
+                """, Long.class, idOrganizacion);
+    }
+
+    /** Los de UNA prospección, para la precondición del ciclo. */
+    private List<Long> avisosActivosDe(long idProspeccion) {
+        return jdbc.queryForList("""
+                select id_alerta from alerta
+                 where entidad_tipo = 'PROSPECCION'
+                   and entidad_id = ?
+                   and tipo = 'SIN_RESPUESTA'
+                   and estado = 'A'
+                 order by id_alerta
+                """, Long.class, idProspeccion);
+    }
+
+    /** Lo que hay activo ahora y no estaba al entrar: eso lo creó la prueba. */
+    private List<Long> creadosDesde(long idOrganizacion, List<Long> avisosDeEntrada) {
+        return avisosDeRecontactoActivos(idOrganizacion).stream()
+                .filter(id -> !avisosDeEntrada.contains(id))
+                .toList();
+    }
+
+    /**
+     * Los cierra como los cierra el sistema —DESCARTADA y con su fecha, que es
+     * lo que exige {@code ck_alerta_resolucion}—, no los borra: la tabla es
+     * append-only para la auditoría y una prueba no puede ser la excepción.
+     */
+    private void descartarAvisos(List<Long> ids) {
+        for (Long id : ids) {
+            jdbc.update("""
+                    update alerta set estado = 'D', fecha_resolucion = now()
+                     where id_alerta = ? and estado = 'A'
+                    """, id);
+        }
     }
 
     /**
      * Se pregunta por <b>el camino de lectura real</b> de la campana, no por la
-     * tabla: lo que se blinda es lo que el usuario ve. Cien caben de sobra en el
-     * escenario, y si algun dia no cupieran la prueba fallaria en vez de pasar
-     * por descuido.
+     * tabla: lo que se blinda es lo que el usuario ve.
+     *
+     * <p><b>Y se recorren las páginas hasta agotar el total</b>, porque cien ya
+     * no caben. El camino real ordena por fecha de generación descendente, y el
+     * agente de la prospección sujeto llevaba 517 avisos activos el 2026-09-02
+     * —476 {@code CAPTACION_CREADA} de otras suites—, así que un aviso emitido
+     * en una corrida anterior queda fuera de la primera página. Mirando solo la
+     * primera, esto respondía «no está» sobre un aviso que sí estaba: falso
+     * negativo en el paso 1 y, peor, {@code assertFalse} del paso 3 cumpliéndose
+     * por posición en vez de por estado. Paginar quita la dependencia de cuántos
+     * avisos ajenos acumule el agente, que es una cantidad que nadie controla.
      */
     private boolean enLaCampana(Actor actor, long idProspeccion) {
-        return alertas.listar(1, 100, actor).items().stream()
-                .anyMatch(f -> esDeRecontacto(f) && f.entidadId() != null
-                        && f.entidadId() == idProspeccion);
+        long vistos = 0;
+        for (int pagina = 1; pagina <= TOPE_PAGINAS; pagina++) {
+            Pagina<FichaAlerta> lote = alertas.listar(pagina, TAMANO_PAGINA, actor);
+            for (FichaAlerta ficha : lote.items()) {
+                if (esDeRecontacto(ficha) && ficha.entidadId() != null
+                        && ficha.entidadId() == idProspeccion) {
+                    return true;
+                }
+            }
+            vistos += lote.items().size();
+            if (lote.items().isEmpty() || vistos >= lote.total()) {
+                return false;
+            }
+        }
+        // Tope de seguridad: un bucle de lectura no puede quedarse dando vueltas
+        // en silencio. Si se llega aqui la prueba FALLA y dice por que, en vez
+        // de contestar "no esta" sin haber terminado de mirar.
+        return fail("la campana del agente pasa de " + (TOPE_PAGINAS * TAMANO_PAGINA)
+                + " avisos activos: el recorrido se corto antes de agotarla, asi que "
+                + "esta respuesta no significa nada");
     }
 
     private boolean esDeRecontacto(FichaAlerta ficha) {
@@ -214,6 +356,14 @@ class ConvergenciaCampanaColaIntegrationTest {
                 && "PROSPECCION".equals(ficha.entidadTipo());
     }
 
+    /**
+     * La cola <b>no</b> tiene el equivalente de la primera página, y se ha
+     * comprobado antes de darlo por bueno: {@code bandejaDe} devuelve TODAS las
+     * tareas abiertas del agente —{@code TareaRepository.porAgente} no recibe
+     * {@code Pageable} y {@code PoliticaDeDespacho.despachar} ordena y devuelve
+     * la lista entera—. El recorte a cinco asuntos vive en la pantalla, después
+     * de esta frontera.
+     */
     private boolean enLaCola(Actor actor, long idProspeccion) {
         List<FichaTarea> bandeja = tareas.bandejaDe(actor);
         return bandeja.stream().anyMatch(t -> "PROSPECCION".equals(t.entidadTipo())

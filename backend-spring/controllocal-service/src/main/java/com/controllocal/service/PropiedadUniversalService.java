@@ -446,6 +446,19 @@ public interface PropiedadUniversalService {
     record GestionDePublicacion(boolean permitida, String motivo) {
     }
 
+    /**
+     * @param historico la serie economica de ESTE encargo, o {@code null} si
+     *                  quien pregunta no puede leerla (D-P0-6): la lee su propio
+     *                  agente y el BROKER que lo supervisa hoy; el TENANT_ADMIN
+     *                  no, porque gobernar no es operar. <b>Nulo no es vacio</b>
+     *                  — con Jackson {@code NON_NULL} el campo no viaja, y eso
+     *                  es lo que el cliente debe leer como «no disponible para
+     *                  ti». Un encargo sin hitos manda una lista vacia.
+     *                  <p>Es lo <b>unico</b> del bloque que se acota: el importe
+     *                  vigente, la exclusividad, las condiciones, los anuncios y
+     *                  {@code puedeEditar} siguen viajando, porque «no puedes ver
+     *                  lo que se pidio en 2023» no es «este encargo no existe»
+     */
     record EncargoFicha(Long idEncargo, String codigo, String operacion, String operacionRotulo,
                         String estado, String estadoRotulo, boolean vivo,
                         BigDecimal importe, String moneda, String importeRotulo,
@@ -634,6 +647,22 @@ public interface PropiedadUniversalService {
      *                           {@code EncargoFicha.faltanParaPublicar}: cada
      *                           sujeto reporta su propia deuda bajo el mismo
      *                           nombre
+     * @param historia           la memoria del inmueble, o {@code null} si quien
+     *                           pregunta no puede leerla (D-P0-6). La leen el
+     *                           AGENTE responsable y el BROKER que lo alcanza; el
+     *                           TENANT_ADMIN no, porque gobernar no es operar.
+     *                           <p>Y cuando si puede, se compone <b>solo de los
+     *                           encargos que ese actor puede ver</b>: la historia
+     *                           agregada no puede convertirse en la puerta por la
+     *                           que se lee el importe de un encargo ajeno. Sin
+     *                           ningun episodio visible llega {@code null}
+     * @param actividad          los hechos comerciales de <b>sus encargos
+     *                           visibles</b> (D-P0-6). Sin ninguno, {@code null}.
+     *                           <p><b>Nulo no es vacio</b>: Jackson va
+     *                           {@code NON_NULL}, asi que el bloque no viaja, y
+     *                           el cliente tiene que leer su ausencia como «no
+     *                           disponible para ti» y no como «no ha pasado nada
+     *                           con esta propiedad»
      */
     record FichaPropiedadUniversal(Long id, String codigo, String tipoPropiedad, String tipoRotulo,
                                    String uso, String usoRotulo, String descripcion,
@@ -685,18 +714,30 @@ public interface PropiedadUniversalService {
      * @param motivoTexto     el mismo motivo en palabras, escrito por el Core.
      *                        El cliente pinta este texto y no traduce el codigo:
      *                        dos redacciones del mismo rechazo se separan
-     * @param puedeTraspasar  si <b>este</b> actor puede cambiar quien responde
-     *                        (C3). Viaja resuelto por la misma razon que
-     *                        {@code puedeEditar}: sin el, la pantalla tendria
-     *                        que preguntar por el rol de la sesion —
-     *                        {@code rol !== 'AGENTE'}— y eso es otra vez una
-     *                        copia de la regla en el cliente, la misma que este
-     *                        P0 acaba de quitar de dos pantallas.
-     *                        <p>Dice si la accion se <b>ofrece</b>, no si un
-     *                        traspaso concreto se permite: el alcance sobre el
-     *                        agente destino lo decide {@code asignar}, y la
-     *                        lista de destinos posibles ya la acota
-     *                        {@code GET /agentes}, que es scoped por supervision
+     * @param puedeTraspasar  si <b>este</b> actor puede <b>iniciar ahora</b> el
+     *                        cambio de responsable de <b>esta</b> propiedad,
+     *                        considerando su responsable actual (C7). Viaja
+     *                        resuelto por la misma razon que {@code puedeEditar}:
+     *                        sin el, la pantalla tendria que llevar su propia
+     *                        copia de la regla de autoridad.
+     *                        <p>Lo resuelven las dos guardas de {@code asignar}
+     *                        que la ficha <b>si</b> puede mirar: la <b>banda</b>
+     *                        —no ser AGENTE— y
+     *                        {@code Alcances.alcanzaIncluidoSinDueno} sobre el
+     *                        responsable <b>vigente</b>, que es el <b>mismo</b>
+     *                        predicado que pregunta el POST. De ahi salen, sin
+     *                        regla nueva, los dos casos que sorprenden:
+     *                        TENANT_ADMIN responde {@code true} por
+     *                        <b>autoridad de gobierno del tenant</b>, no como
+     *                        super-broker —no gana edicion de hechos—, y una
+     *                        propiedad <b>FALTANTE</b> responde {@code true} a
+     *                        cualquier BROKER del tenant (C5), porque no hay
+     *                        saliente a quien supervisar.
+     *                        <p><b>No conoce el destino y no autoriza nada</b>:
+     *                        en la ficha todavia no hay destino elegido, y el
+     *                        POST de asignacion sigue siendo la autoridad
+     *                        final, donde se vuelven a comprobar la banda, el
+     *                        saliente y el destino
      */
     record Responsabilidad(Long idResponsable, String nombre, boolean puedeEditar,
                            String motivo, String motivoTexto, boolean puedeTraspasar) {
@@ -800,6 +841,49 @@ public interface PropiedadUniversalService {
     }
 
     /**
+     * <b>El responsable que el actor vio en la ficha cuando decidio</b>
+     * (D-P0-9).
+     *
+     * <p>Un traspaso no es «pon a B»: es «cambia A por B». Sin decir de que
+     * estado se parte, dos comandos que salieran del <b>mismo</b> A —uno hacia
+     * B y otro hacia C— acabarian con la ultima escritura ganando, y el segundo
+     * se habria reinterpretado en silencio como «de B a C», que es una decision
+     * que nadie tomo. Por eso el estado observado entra en el comando y no se
+     * deduce de la fila: la fila dice como esta <b>ahora</b>, no como estaba
+     * cuando el broker miro.
+     *
+     * <p><b>FALTANTE se declara, no se infiere de una ausencia.</b>
+     * {@link #faltante()} significa «vi que no tenia responsable»; es un hecho
+     * observado, distinto de «no me consta» y distinto de «no lo mire». Donde
+     * eso se hace cumplir es en el <b>comando</b>, que es por donde entra un
+     * cliente: el cuerpo del POST tiene que traer o el responsable observado o
+     * la declaracion de que estaba FALTANTE, y un cuerpo que no traiga ninguna
+     * de las dos es 400 —no «FALTANTE», que seria justo la inferencia que este
+     * P0 vino a quitar—. Aqui dentro, ya traducido, el FALTANTE es un
+     * {@code idRol} nulo y nada mas.
+     *
+     * @param idRol {@code persona_rol.id} del responsable observado, o
+     *              {@code null} <b>solo</b> a traves de {@link #faltante()}.
+     */
+    record ResponsableObservado(Long idRol) {
+
+        /** «Lo mire y no tenia responsable»: FALTANTE observado, no supuesto. */
+        public static ResponsableObservado faltante() {
+            return new ResponsableObservado(null);
+        }
+
+        /** «Lo mire y respondia este agente». */
+        public static ResponsableObservado de(Long idRol) {
+            return new ResponsableObservado(idRol);
+        }
+
+        /** Si lo observado fue la ausencia de responsable. */
+        public boolean esFaltante() {
+            return idRol == null;
+        }
+    }
+
+    /**
      * <b>Asigna o cambia quien responde por la propiedad</b> (P0-2). Lo hace un
      * BROKER o el gobierno del tenant, nunca un agente.
      *
@@ -807,10 +891,56 @@ public interface PropiedadUniversalService {
      * forma de sacar a una propiedad de FALTANTE. <b>No</b> reasigna ningun
      * encargo, <b>no</b> modifica ningun atributo inmobiliario y <b>no</b>
      * cambia lo que nadie puede leer.
+     *
+     * <p><b>El comando declara sobre que responsable actua</b> (D-P0-9). Si al
+     * ejecutarse el responsable ya no es el observado, la respuesta es
+     * {@code ConflictoException} (409) y <b>no</b> se reinterpreta el traspaso
+     * sobre el estado nuevo. No hay sobrecarga sin {@code observado} a
+     * proposito: seria la misma «ultima escritura gana» entrando por la puerta
+     * de atras.
      */
     TraspasoDeResponsable asignarResponsable(long idPropiedad, long idRolAgente, String motivo,
-                                             Actor actor);
+                                             ResponsableObservado observado, Actor actor);
 
     /** El expediente de traspasos de una propiedad, el mas reciente primero. */
     List<TraspasoDeResponsable> traspasosDe(long idPropiedad, Actor actor);
+
+    /**
+     * <b>Un destino posible para el traspaso, ya elegible</b> (D-P0-12).
+     *
+     * <p>Lleva lo justo para elegir en una lista —quien es, su codigo y su
+     * zona— y <b>ningun estado administrativo</b>: si el agente aparece es que
+     * cumple las cinco condiciones de D-P0-7, y si no aparece no se publica por
+     * que. El motivo de una ausencia es informacion de la ficha del agente, no
+     * de un selector de traspaso.
+     */
+    record CandidatoResponsable(Long idAgente, String nombre, String codigoAgente,
+                                String zonaAsignada) {
+    }
+
+    /**
+     * <b>Los destinos que ESTE actor puede elegir para ESTA propiedad</b>
+     * (D-P0-12).
+     *
+     * <p>El Core responde «que destinos puedo seleccionar» ya resuelto, con las
+     * cinco condiciones de D-P0-7 aplicadas <b>en la base</b> y el responsable
+     * actual fuera. Angular no decide autoridad: sin esta superficie, la
+     * pantalla tendria que pedir la lista de agentes del tenant y depurarla con
+     * su propia copia de la regla —que es una lista de permisos en el cliente— o
+     * dejar que el broker descubra el rechazo despues de elegir.
+     *
+     * <p><b>No autoriza nada.</b> El {@code POST /propiedades/{id}/responsable}
+     * revalida todo: banda, tenant, alcance del destino, alcance del saliente y
+     * elegibilidad. Que la lista lo ofrezca no sustituye ni una de esas guardas
+     * —un agente puede quedar desactivado entre la lista y el POST—, y esa es
+     * exactamente la razon por la que las dos preguntas comparten el mismo
+     * predicado SQL en vez de tener cada una el suyo.
+     *
+     * <p>Un id de otra corredora responde <b>404</b>; un actor que no puede
+     * iniciar el traspaso de esta propiedad —el mismo predicado que apaga el
+     * boton en la ficha— responde <b>403</b>, y no una lista vacia: "no hay
+     * candidatos" y "no te corresponde" son dos respuestas distintas.
+     */
+    Pagina<CandidatoResponsable> candidatosAResponsable(long idPropiedad, String texto,
+                                                        int pagina, int tamano, Actor actor);
 }

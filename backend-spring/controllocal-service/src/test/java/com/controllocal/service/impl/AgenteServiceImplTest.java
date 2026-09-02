@@ -397,6 +397,12 @@ class AgenteServiceImplTest {
         CredencialUsuario credencial =
                 credencial(agente.getRol().getPersona(), "vmora", "A");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(agente));
+        // D-P0-13: este cuerpo trae `estado` y `estadoOperativo`, o sea cambia
+        // la ELEGIBILIDAD del agente (D-P0-7), asi que el caso de uso toma la
+        // fila `detalle_agente` para serializarse con los traspasos en curso.
+        // Sin declararlo, la edicion caeria en «Agente no encontrado.» y esta
+        // prueba mediria el candado en vez de los campos que dice medir.
+        when(agentes.bloquearParaGobierno(ORG, AGENTE)).thenReturn(Optional.of(agente));
         when(supervisiones.buscarActivaPorAgente(ORG, AGENTE))
                 .thenReturn(Optional.of(supervision(BROKER, AGENTE)));
         when(usuarios.credencial(ORG, 3L)).thenReturn(credencial);

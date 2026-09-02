@@ -1,13 +1,15 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../core/api/api.types';
-import { Captacion, CaptacionesService } from '../../core/api/captaciones.service';
+import {
+  CandidatoAgente,
+  Captacion,
+  CaptacionesService,
+} from '../../core/api/captaciones.service';
 import { describir, ESTADO_CAPTACION, RESULTADO_PROPUESTA } from '../../core/api/codigos';
 import { Local, LocalesService } from '../../core/api/locales.service';
-import { AgenteOpcion, PersonalService } from '../../core/api/personal.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
 import { calcularCondicionComision, descripcionCondicionComision, importeTexto } from '../../core/comision';
 import { fechaCorta, monto, numero, siNo, SIN_DATO, texto } from '../../core/formato';
@@ -27,7 +29,6 @@ export class CaptacionReview implements OnInit {
   private readonly api = inject(CaptacionesService);
   private readonly locales = inject(LocalesService);
   private readonly prospecciones = inject(ProspeccionesService);
-  private readonly personal = inject(PersonalService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -39,7 +40,18 @@ export class CaptacionReview implements OnInit {
   protected readonly captacion = signal<Captacion | null>(null);
   protected readonly local = signal<Local | null>(null);
   protected readonly prospeccion = signal<Prospeccion | null>(null);
-  protected readonly agentes = signal<AgenteOpcion[]>([]);
+  /**
+   * **Los destinos que el Core ofrece para ESTE encargo** (D-P0-7 + D-P0-12).
+   *
+   * Hasta el 2026-09-01 esta pantalla pedía `GET /agentes` y se quedaba con
+   * «todos menos el actual»: **ninguna** de las seis condiciones de
+   * elegibilidad, así que el `<select>` ofrecía agentes suspendidos, de baja o
+   * del equipo de otro bróker, y el rechazo llegaba después de escribir el
+   * motivo. Ahora la lista llega resuelta y aquí no se depura nada.
+   */
+  protected readonly candidatos = signal<CandidatoAgente[]>([]);
+  protected readonly cargandoCandidatos = signal(false);
+  protected readonly errorCandidatos = signal<string | null>(null);
   protected readonly decision = signal<Decision | null>(null);
   protected readonly dialogoReasignar = signal(false);
   protected readonly observacion = new FormControl('', {
@@ -56,9 +68,23 @@ export class CaptacionReview implements OnInit {
   });
 
   protected readonly revisable = computed(() => ['P', 'O'].includes(this.captacion()?.estado ?? ''));
-  protected readonly agentesDestino = computed(() =>
-    this.agentes().filter((agente) => agente.id !== this.captacion()?.idAgente),
+  /**
+   * **Si el Core deja mover este encargo a otro agente** (D-P0-12).
+   *
+   * Viaja resuelta en la ficha individual —esta pantalla la pide por código— y
+   * la produce **el mismo predicado que después deniega el comando**. Su
+   * ausencia significa «no calculado aquí», y el defecto es **no ofrecer**: un
+   * botón activo que el backend rechaza aparece cuando la persona ya escribió
+   * el motivo.
+   *
+   * Convive con `revisable()` sin mezclarse: aquélla dice en qué **momento**
+   * del flujo de revisión está esta pantalla —y sólo puede ofrecer de menos—,
+   * ésta dice **quién puede**, y es la única de las dos que es autoridad.
+   */
+  protected readonly puedeReasignar = computed(
+    () => this.captacion()?.capacidades?.puedeReasignar === true,
   );
+  protected readonly agentesDestino = computed(() => this.candidatos());
   protected decisionBloqueada(): boolean {
     const decision = this.decision();
     return (decision === 'O' || decision === 'R') && !this.observacion.value.trim();
@@ -103,11 +129,40 @@ export class CaptacionReview implements OnInit {
   }
 
   protected abrirReasignacion(): void {
-    if (!this.revisable()) return;
+    if (!this.revisable() || !this.puedeReasignar()) return;
     this.agenteNuevo.reset(0);
     this.motivoReasignacion.reset('');
     this.errorAccion.set(null);
     this.dialogoReasignar.set(true);
+    // Los destinos se piden al ABRIR y no al cargar la pantalla: entre una cosa
+    // y otra un agente puede quedar desactivado, y lo que tiene que estar al
+    // día es la lista que se va a usar. El POST revalida igualmente.
+    void this.cargarCandidatos();
+  }
+
+  /**
+   * **A quién puede pasarle este encargo**, resuelto por el Core.
+   *
+   * Un **403** aquí no es «no hay candidatos» sino «no te corresponde», y se
+   * muestra el mensaje del Core: una lista vacía dejaría a alguien buscando un
+   * agente que no existe.
+   */
+  private async cargarCandidatos(): Promise<void> {
+    const captacion = this.captacion();
+    if (!captacion) return;
+    this.cargandoCandidatos.set(true);
+    this.errorCandidatos.set(null);
+    try {
+      const pagina = await this.api.candidatosReasignacion(captacion.id);
+      this.candidatos.set(pagina.items);
+    } catch (error) {
+      this.candidatos.set([]);
+      this.errorCandidatos.set(
+        mensajeError(error, 'No se pudieron cargar los destinos de esta captación.'),
+      );
+    } finally {
+      this.cargandoCandidatos.set(false);
+    }
   }
 
   protected cerrarReasignacion(): void {
@@ -125,21 +180,42 @@ export class CaptacionReview implements OnInit {
     if (!this.errorAccion()) this.decision.set(null);
   }
 
+  /**
+   * **Declara sobre qué agente se actúa** (D-P0-9).
+   *
+   * `idAgenteActual` es el agente que esta pantalla estaba **mostrando**. Si
+   * otro bróker lo movió mientras tanto, el Core responde **409** y no escribe
+   * nada; entonces se recarga el expediente para que la siguiente decisión
+   * parta de quien lo lleva ahora, en vez de reintentar sobre un estado que ya
+   * no existe.
+   */
   protected async confirmarReasignacion(): Promise<void> {
     const captacion = this.captacion();
     const idAgente = this.agenteNuevo.value;
     const motivo = this.motivoReasignacion.value.trim();
     if (!captacion || this.procesando()) return;
-    if (idAgente <= 0 || !motivo) {
+    const observado = captacion.idAgente;
+    if (idAgente <= 0 || !motivo || observado == null) {
       this.agenteNuevo.markAsTouched();
       this.motivoReasignacion.markAsTouched();
       return;
     }
     await this.ejecutar(
-      () => this.api.reasignar(captacion.id, idAgente, motivo),
+      () => this.api.reasignar(captacion.id, idAgente, motivo, observado),
       'Captación reasignada. La revisión sigue pendiente.',
     );
-    if (!this.errorAccion()) this.dialogoReasignar.set(false);
+    if (!this.errorAccion()) {
+      this.dialogoReasignar.set(false);
+    } else if (this.ultimoFallo instanceof ApiError && this.ultimoFallo.conflicto) {
+      // Las dos cosas, y en este orden: recargar deja ver quién lo lleva ahora,
+      // y el mensaje se vuelve a poner DESPUÉS porque `cargar()` limpia los
+      // errores de acción — sin esto la pantalla se refrescaba en silencio y
+      // quien reasignó no llegaba a enterarse de por qué no se hizo.
+      const porQue = this.errorAccion();
+      this.dialogoReasignar.set(false);
+      await this.cargar();
+      this.errorAccion.set(porQue);
+    }
   }
 
   protected tituloDecision(): string {
@@ -194,12 +270,10 @@ export class CaptacionReview implements OnInit {
     try {
       const codigo = this.route.snapshot.paramMap.get('codigo');
       if (!codigo) throw new Error('El código de la captación es obligatorio.');
-      const [captacion, paginaAgentes] = await Promise.all([
-        this.api.obtenerPorCodigo(codigo),
-        firstValueFrom(this.personal.agentes$()),
-      ]);
+      // Ya no se piden los agentes del tenant: los destinos válidos de ESTE
+      // encargo los resuelve el Core cuando se abre la reasignación.
+      const captacion = await this.api.obtenerPorCodigo(codigo);
       this.captacion.set(captacion);
-      this.agentes.set(paginaAgentes.items);
       const [local, paginaProspeccion] = await Promise.all([
         captacion.idLocal ? this.locales.obtener(captacion.idLocal) : Promise.resolve(null),
         this.prospecciones.pagina({ idCaptacion: captacion.id, pagina: 1, tamano: 1 }),
@@ -214,14 +288,24 @@ export class CaptacionReview implements OnInit {
     }
   }
 
+  /**
+   * El último error de una acción, **con su tipo**. El texto ya viaja en
+   * `errorAccion`, pero un 409 hay que distinguirlo de un rechazo cualquiera:
+   * no significa «no se pudo», significa «el estado que veías ya no es», y eso
+   * obliga a recargar en vez de reintentar.
+   */
+  private ultimoFallo: unknown = null;
+
   private async ejecutar(operacion: () => Promise<Captacion>, mensaje: string): Promise<void> {
     this.procesando.set(true);
     this.errorAccion.set(null);
     this.mensaje.set(null);
+    this.ultimoFallo = null;
     try {
       this.captacion.set(await operacion());
       this.mensaje.set(mensaje);
     } catch (error) {
+      this.ultimoFallo = error;
       this.errorAccion.set(mensajeError(error, 'No se pudo registrar la decisión.'));
     } finally {
       this.procesando.set(false);

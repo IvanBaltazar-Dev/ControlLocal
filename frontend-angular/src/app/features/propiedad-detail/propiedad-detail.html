@@ -58,12 +58,19 @@
     Y la llave, donde ya se ve la propiedad (C3). Sólo aparece para quien puede
     ejecutarla, y eso lo dice el Core en `puedeTraspasar` — no un rol leído de
     la sesión.
+
+    Las dos salidas releen la ficha y aun así son dos: `traspasado` dice que la
+    autoridad cambió, `recargar` dice que NO cambió y que lo que había en
+    pantalla ya no es cierto (409, D-P0-9). Que aquí reaccionen igual no las
+    hace la misma cosa: fundirlas obligaría al componente a anunciar un traspaso
+    que no ocurrió.
   -->
   @if (p.responsabilidad?.puedeTraspasar) {
     <cl-traspaso-responsable
       [idPropiedad]="p.id"
       [responsabilidad]="p.responsabilidad"
       (traspasado)="cargar()"
+      (recargar)="cargar()"
     />
   }
 
@@ -344,7 +351,13 @@
        Cada hecho dice de qué encargo nace, y esa procedencia la pone el
        backend. El filtro es por ENCARGO y no por operación: con varios
        encargos de alquiler, «Alquiler» volvería a juntarlos.
+
+       La sección ENTERA —título y acotador incluidos— depende de que el
+       bloque viaje. Con `NON_NULL`, a quien no puede leerlo no le llega
+       (D-P0-6), y ausente significa «no disponible para ti»: pintar aquí
+       «todavía no hay oportunidades» afirmaría que no ha pasado nada.
        ================================================================ -->
+  @if (p.actividad != null) {
   <section class="bloque">
     <h2>Actividad</h2>
 
@@ -412,4 +425,5 @@
       </p>
     }
   </section>
+  }
 }

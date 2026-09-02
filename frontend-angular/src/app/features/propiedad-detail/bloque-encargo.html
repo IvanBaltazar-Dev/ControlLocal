@@ -115,19 +115,31 @@
     }
   </section>
 
-  <h4>Histórico económico</h4>
-  @if (e.historico.length > 0) {
-    <ol class="historico">
-      @for (hito of e.historico; track $index) {
-        <li>
-          <span class="fecha">{{ fecha(hito.fecha) }}</span>
-          <span class="que-paso">{{ hito.hitoRotulo }}</span>
-          <span class="monto">{{ hitoMonto(hito) }}</span>
-        </li>
-      }
-    </ol>
-  } @else {
-    <p class="vacio">Sin movimientos registrados en este encargo.</p>
+  <!-- ================================================================
+       Histórico económico: la CABECERA también depende de que viaje.
+
+       Con `NON_NULL`, un histórico que este actor no puede leer no llega
+       (D-P0-6). Una lista vacía es truthy, así que `@if (…; as …)` separa
+       exactamente los dos casos: `[]` entra y dice que no hubo movimientos;
+       ausente no pinta ni el título. Pintarlo con «sin movimientos» diría que
+       este encargo no tuvo ninguno, que es afirmar un hecho comercial que
+       nadie midió.
+       ================================================================ -->
+  @if (e.historico; as historico) {
+    <h4>Histórico económico</h4>
+    @if (historico.length > 0) {
+      <ol class="historico">
+        @for (hito of historico; track $index) {
+          <li>
+            <span class="fecha">{{ fecha(hito.fecha) }}</span>
+            <span class="que-paso">{{ hito.hitoRotulo }}</span>
+            <span class="monto">{{ hitoMonto(hito) }}</span>
+          </li>
+        }
+      </ol>
+    } @else {
+      <p class="vacio">Sin movimientos registrados en este encargo.</p>
+    }
   }
 </article>
 

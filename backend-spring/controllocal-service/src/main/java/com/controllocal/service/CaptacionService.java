@@ -33,6 +33,63 @@ public interface CaptacionService {
         }
     }
 
+    /**
+     * <b>Que puede hacer QUIEN PREGUNTA con este encargo</b> (D-P0-12).
+     *
+     * <p>Viaja resuelta por el Core y no la deduce el cliente. Sin esto, la
+     * pantalla del encargo tendria que escribir su propia version de tres reglas
+     * —«soy el agente y esta pendiente», «soy broker y lo superviso», «esta
+     * activa»— y una copia de una regla de autoridad diverge siempre hacia el
+     * lado que pinta un boton que el backend va a rechazar. Es el mismo motivo
+     * por el que {@code Responsabilidad.puedeEditar} viaja resuelta.
+     *
+     * <p>Cada booleano lo produce el <b>mismo</b> predicado que despues deniega
+     * el comando, no una segunda tabla de decision.
+     *
+     * <p><b>No autoriza nada</b>: el comando revalida. Y llega {@code null} en
+     * los listados —donde la pregunta no es «que puedo hacer con este» sino «que
+     * hay»—, asi que por NON_NULL el campo no viaja ahi.
+     *
+     * @param puedeEditar  {@code PUT /captaciones/{id}}: su propio agente, y
+     *                     solo mientras el encargo sea editable (P u O)
+     * @param puedeRevisar {@code POST /captaciones/{id}/decision}: el BROKER que
+     *                     supervisa a su agente, y solo mientras sea editable.
+     *                     El TENANT_ADMIN <b>no</b> — es operacion comercial y el
+     *                     gobierno no la hereda (D-S0-17 fila 5)
+     * @param puedeCerrar  {@code POST /captaciones/{id}/cierre}: el mismo BROKER,
+     *                     y solo si el encargo esta ACTIVO (D-S0-17 fila 7)
+     * @param puedeReasignar {@code POST /captaciones/{id}/reasignar}: el BROKER
+     *                     que supervisa hoy al agente que lo lleva, <b>y tambien
+     *                     el TENANT_ADMIN</b> — reasignar entre equipos es
+     *                     organigrama, no operacion comercial (D-S0-17 fila 6),
+     *                     asi que es la unica de las cuatro que el gobierno del
+     *                     tenant si hereda. Un AGENTE nunca, tampoco sobre el
+     *                     suyo. Son las guardas del comando <b>sin el
+     *                     destino</b>, que en la ficha todavia no existe: el
+     *                     comando revalida ademas el destino, su elegibilidad
+     *                     (D-P0-7) y el agente observado (D-P0-9)
+     */
+    record Capacidades(boolean puedeEditar, boolean puedeRevisar, boolean puedeCerrar,
+                       boolean puedeReasignar) {
+    }
+
+    /**
+     * <b>Un destino ya elegible para reasignar ESTE encargo</b> (D-P0-7 +
+     * D-P0-12).
+     *
+     * <p>Lleva lo justo para elegir en una lista —quien es, su codigo y su
+     * zona— y <b>ningun estado administrativo</b>: si el agente aparece es que
+     * cumple las cinco condiciones, y si no aparece no se publica por que. El
+     * motivo de una ausencia es informacion de la ficha del agente, no de un
+     * selector de reasignacion.
+     *
+     * <p>{@code idAgente} es el {@code persona_rol.id} del rol AGENTE, el mismo
+     * identificador que espera {@link #reasignar}.
+     */
+    record CandidatoAgente(Long idAgente, String nombre, String codigoAgente,
+                           String zonaAsignada) {
+    }
+
     /** Espejo de CaptacionResponse (idAgente/idBrokerRevisor = persona_rol.id de esos roles). */
     record FichaCaptacion(Long id, String codigoCaptacion, LocalDate fechaCaptacion,
                           LocalDate fechaInicioVigencia, LocalDate fechaFinVigencia,
@@ -45,7 +102,8 @@ public interface CaptacionService {
                           BigDecimal importeReferencia, String monedaReferencia,
                           String tipoComision, String baseCalculo, BigDecimal valorComision,
                           String monedaComision, String tratamientoIgv, String motivoSinComision,
-                          LocalDate fechaCierre, String motivoCierre, String detalleMotivoCierre) {
+                          LocalDate fechaCierre, String motivoCierre, String detalleMotivoCierre,
+                          Capacidades capacidades) {
     }
 
     /** Espejo de ReasignacionCaptacionResponse. */
@@ -119,7 +177,42 @@ public interface CaptacionService {
     /** Decision del broker: accion APROBAR/OBSERVAR/RECHAZAR (o A/O/R). */
     FichaCaptacion decidir(long id, String accion, String observacion, Actor actor);
 
-    FichaCaptacion reasignar(long id, Long idAgenteNuevo, String motivo, Actor actor);
+    /**
+     * <b>La unica puerta que mueve el agente de un encargo</b> (D-P0-9/D-P0-10
+     * aplicados al ENCARGO).
+     *
+     * <p>El comando declara <b>desde donde</b>: {@code idAgenteObservado} es el
+     * agente que quien decide <b>vio</b>. Si al ejecutarse ya no es ese, la
+     * respuesta es <b>409</b> y no se ha escrito nada — no se reinterpreta un
+     * «cambia A por C» en «cambia B por C», que seria una decision distinta de
+     * la que se firmo. De un estado concreto parte <b>exactamente una</b>
+     * reasignacion legitima.
+     *
+     * <p>No hay sobrecarga sin {@code idAgenteObservado} <b>a proposito</b>:
+     * una segunda firma seria la puerta por la que volveria a entrar una
+     * reasignacion que no declara de donde parte.
+     */
+    FichaCaptacion reasignar(long id, long idAgenteNuevo, String motivo,
+                             long idAgenteObservado, Actor actor);
+
+    /**
+     * <b>Los destinos que ESTE actor puede elegir para ESTE encargo</b>
+     * (D-P0-12).
+     *
+     * <p>El Core responde «que destinos puedo seleccionar» ya resuelto, con las
+     * cinco condiciones de D-P0-7 aplicadas <b>en la base</b> y el agente actual
+     * fuera. Angular no decide autoridad: sin esta superficie, la pantalla de
+     * reasignaciones tenia que pedir la lista de agentes del tenant y depurarla
+     * con su propia copia de la regla —dos condiciones de las seis, resueltas en
+     * el cliente sobre una pagina—, que es una lista de permisos viviendo fuera
+     * del Core.
+     *
+     * <p>Un id de otra corredora responde <b>404</b>; un actor que no puede
+     * reasignar este encargo —el mismo predicado que apaga la capacidad—
+     * responde <b>403</b>, y no una lista vacia.
+     */
+    Pagina<CandidatoAgente> candidatosAReasignacion(long id, String texto, int pagina,
+                                                    int tamano, Actor actor);
 
     FichaCaptacion cerrar(long id, String motivo, Actor actor);
 

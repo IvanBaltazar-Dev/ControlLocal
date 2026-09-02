@@ -1,11 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
-import { of } from 'rxjs';
 
-import { PageResponse } from '../../core/api/api.types';
-import { Captacion, CaptacionesService } from '../../core/api/captaciones.service';
+import { ApiError, PageResponse } from '../../core/api/api.types';
+import {
+  CandidatoAgente,
+  Captacion,
+  CaptacionesService,
+} from '../../core/api/captaciones.service';
 import { Local, LocalesService } from '../../core/api/locales.service';
-import { PersonalService } from '../../core/api/personal.service';
 import { Prospeccion, ProspeccionesService } from '../../core/api/prospecciones.service';
 import { CaptacionReview } from './captacion-review';
 
@@ -14,7 +16,13 @@ const CAPTACION: Captacion = {
   direccionLocal: 'Av. Larco 700', distritoLocal: 'Miraflores',
   propietarioNombre: 'Ana Torres', idAgente: 30, agenteNombre: 'Valentina Mora',
   comisionPactada: 100, fechaCaptacion: '2026-08-01',
+  capacidades: { puedeEditar: false, puedeRevisar: true, puedeCerrar: false, puedeReasignar: true },
 };
+
+/** Los destinos ya depurados por el Core: aquí no se filtra nada. */
+const CANDIDATOS: CandidatoAgente[] = [
+  { idAgente: 31, nombre: 'Javier Ruiz', codigoAgente: 'AGE-031', zonaAsignada: 'Lima Norte' },
+];
 const LOCAL: Local = { id: 7, codigoLocal: 'LOC-0007', direccion: 'Av. Larco 700', monedaReferencial: 'PEN' };
 const PROSPECCION: Prospeccion = { id: 4, codigoProspeccion: 'PRO-0004', estado: 'T' };
 
@@ -32,22 +40,20 @@ describe('CaptacionReview', () => {
   let api: jasmine.SpyObj<CaptacionesService>;
   let locales: jasmine.SpyObj<LocalesService>;
   let prospecciones: jasmine.SpyObj<ProspeccionesService>;
-  let personal: jasmine.SpyObj<PersonalService>;
   let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
-    api = jasmine.createSpyObj<CaptacionesService>('CaptacionesService', ['obtenerPorCodigo', 'decidir', 'reasignar']);
+    api = jasmine.createSpyObj<CaptacionesService>('CaptacionesService', [
+      'obtenerPorCodigo', 'decidir', 'reasignar', 'candidatosReasignacion',
+    ]);
     api.obtenerPorCodigo.and.resolveTo({ ...CAPTACION });
     api.decidir.and.resolveTo({ ...CAPTACION, estado: 'A' });
     api.reasignar.and.resolveTo({ ...CAPTACION, idAgente: 31, agenteNombre: 'Javier Ruiz' });
+    api.candidatosReasignacion.and.resolveTo(pagina(CANDIDATOS));
     locales = jasmine.createSpyObj<LocalesService>('LocalesService', ['obtener']);
     locales.obtener.and.resolveTo(LOCAL);
     prospecciones = jasmine.createSpyObj<ProspeccionesService>('ProspeccionesService', ['pagina']);
     prospecciones.pagina.and.resolveTo(pagina([PROSPECCION]));
-    personal = jasmine.createSpyObj<PersonalService>('PersonalService', ['agentes$']);
-    personal.agentes$.and.returnValue(of(pagina([
-      { id: 30, nombre: 'Valentina Mora' }, { id: 31, nombre: 'Javier Ruiz' },
-    ])));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
   });
@@ -73,13 +79,62 @@ describe('CaptacionReview', () => {
     expect(api.decidir).toHaveBeenCalledOnceWith(9, 'O', 'Precisar la vigencia');
   });
 
-  it('reasigna sin cambiar la decisión de revisión', async () => {
-    const acceso = (await montar()).componentInstance as unknown as AccesoReview;
+  it('pide los destinos al Core y reasigna declarando el agente observado', async () => {
+    const fixture = await montar();
+    const acceso = fixture.componentInstance as unknown as AccesoReview;
     acceso.abrirReasignacion();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Los destinos los decide el Core, para ESTE encargo. Esta pantalla ya no
+    // pide `GET /agentes` ni se queda con «todos menos el actual».
+    expect(api.candidatosReasignacion).toHaveBeenCalledOnceWith(9);
+    expect(texto(fixture)).toContain('Javier Ruiz');
+
     acceso.agenteNuevo.setValue(31);
     acceso.motivoReasignacion.setValue('Balance de cartera');
     await acceso.confirmarReasignacion();
-    expect(api.reasignar).toHaveBeenCalledOnceWith(9, 31, 'Balance de cartera');
+    // Y el cuarto argumento es el agente que la pantalla estaba MOSTRANDO
+    // (D-P0-9): sin él, la reasignación no sabría de dónde parte.
+    expect(api.reasignar).toHaveBeenCalledOnceWith(9, 31, 'Balance de cartera', 30);
+  });
+
+  /**
+   * El 409 no es «no se pudo»: es «el estado que veías ya no es». No se
+   * reintenta — se recarga el expediente para que la siguiente decisión parta
+   * de quien lo lleva ahora.
+   */
+  it('ante un 409 muestra el mensaje del Core y recarga el expediente', async () => {
+    api.reasignar.and.rejectWith(new ApiError(409,
+      'El agente de este encargo cambio desde que se miro: hoy lo lleva 31.'));
+    const fixture = await montar();
+    const acceso = fixture.componentInstance as unknown as AccesoReview;
+    acceso.abrirReasignacion();
+    await fixture.whenStable();
+    acceso.agenteNuevo.setValue(31);
+    acceso.motivoReasignacion.setValue('Balance de cartera');
+    await acceso.confirmarReasignacion();
+    fixture.detectChanges();
+
+    expect(texto(fixture)).toContain('hoy lo lleva 31');
+    expect(api.obtenerPorCodigo).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * La autoridad la dice el Core, no esta pantalla. Sin `puedeReasignar` no se
+   * ofrece la acción: el defecto seguro es no prometer una escritura que el
+   * backend va a rechazar.
+   */
+  it('no ofrece reasignar cuando el Core dice que este actor no puede', async () => {
+    api.obtenerPorCodigo.and.resolveTo({
+      ...CAPTACION,
+      capacidades: {
+        puedeEditar: false, puedeRevisar: true, puedeCerrar: false, puedeReasignar: false,
+      },
+    });
+    const fixture = await montar();
+    expect(texto(fixture)).toContain('Observar y devolver');
+    expect(texto(fixture)).not.toContain('Reasignar agente');
   });
 
   it('una captación ya activa se muestra sin botones de decisión', async () => {
@@ -101,7 +156,6 @@ describe('CaptacionReview', () => {
         { provide: CaptacionesService, useValue: api },
         { provide: LocalesService, useValue: locales },
         { provide: ProspeccionesService, useValue: prospecciones },
-        { provide: PersonalService, useValue: personal },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ codigo: 'CAP-0009' }) } } },
         { provide: Router, useValue: router },
       ],

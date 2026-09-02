@@ -89,7 +89,7 @@ public class PublicacionServiceImpl implements PublicacionService {
     @Override
     @Transactional
     public FichaPublicacion crearEnEncargo(long idEncargo, DatosPublicacion datos, Actor actor) {
-        Captacion encargo = encargoDelTenant(idEncargo, actor);
+        Captacion encargo = encargoDelTenantParaEscribir(idEncargo, actor);
         // Anunciar un encargo es un acto de SU agente (P0-4). Hasta aqui solo se
         // comprobaba el tenant, y no era solo un problema de permisos: publicar
         // escribe un hito `P` en la serie economica del encargo
@@ -227,15 +227,21 @@ public class PublicacionServiceImpl implements PublicacionService {
      *
      * <p>Lo que no se hace es dar por buenas sus condiciones comerciales -- no hay
      * ninguna que mirar, y eso no es lo mismo que estar completas.
+     *
+     * <p><b>Toma la fila</b> (F2.10). Sus dos llamadores son de escritura
+     * —{@code actualizar} y {@code cambiarEstado} del anuncio, que reescriben el
+     * hito {@code P} en la serie del encargo— y en los dos es la primera carga
+     * de esa fila en la transaccion, que es lo que hace valido el candado: la
+     * publicacion se carga antes, pero es otra tabla. Lo que se gana es que la
+     * autoridad de {@code exigirEncargoPropio} decida sobre el agente que
+     * seguira siendo verdad cuando el hito se escriba.
      */
     private Captacion encargoDe(Publicacion publicacion, Actor actor) {
         Long idEncargo = publicacion.getIdEncargo();
         if (idEncargo == null || idEncargo <= 0) {
             return null;
         }
-        return encargos.findById(idEncargo)
-                .filter(encargo -> encargo.getOrganizacionId() == actor.idOrganizacion())
-                .orElse(null);
+        return encargos.bloquearParaEscritura(actor.idOrganizacion(), idEncargo).orElse(null);
     }
 
     /**
@@ -249,8 +255,18 @@ public class PublicacionServiceImpl implements PublicacionService {
      *
      * <p>Una publicacion <b>sin encargo resuelto</b> no se deja tocar: sin
      * saber de quien es el anuncio no hay forma de decir si es tuyo, y suponer
-     * que si es la respuesta que este P0 vino a quitar. Son filas anteriores a
-     * V70, que no llevaban {@code id_captacion}.
+     * que si es la respuesta que este P0 vino a quitar.
+     *
+     * <p><b>Desde V89 (D-P0-11) esta rama es una guarda defensiva</b>, no un
+     * caso vivo: {@code publicacion.id_captacion} es NOT NULL y ninguna fila
+     * puede llegar aqui sin encargo. Se conserva a proposito y no se degrada a
+     * comentario por dos motivos comprobables: {@link #encargoDe} devuelve
+     * {@code null} tambien cuando el encargo existe pero <b>es de otro
+     * tenant</b> --- porque lo busca por {@code (organizacion, id)}--- y
+     * cuando el id es {@code <= 0}; en ambos casos la respuesta correcta sigue
+     * siendo negarse. Una guarda que solo se puede disparar por una via ya
+     * cerrada en el esquema es barata; quitarla convierte el fallo silencioso
+     * de esas dos vias en un {@code NullPointerException}.
      */
     private void exigirEncargoPropio(Publicacion publicacion, Actor actor) {
         Captacion encargo = encargoDe(publicacion, actor);
@@ -450,6 +466,24 @@ public class PublicacionServiceImpl implements PublicacionService {
     private Captacion encargoDelTenant(long idEncargo, Actor actor) {
         return encargos.findById(idEncargo)
                 .filter(encargo -> encargo.getOrganizacionId() == actor.idOrganizacion())
+                .orElseThrow(() -> new NoEncontradoException("Encargo"));
+    }
+
+    /**
+     * <b>El mismo encargo, con la fila tomada</b> (F2.10).
+     *
+     * <p>Mismo 404 y misma frontera de tenant —ahora resuelta en la consulta—;
+     * lo unico que cambia es el candado, para que la autoridad que se comprueba
+     * justo despues sea la que seguira siendo verdad cuando el anuncio y su hito
+     * se escriban.
+     *
+     * <p>Es un metodo aparte y no una bandera porque {@link #encargoDelTenant}
+     * lo usa tambien {@code listarDeEncargo}, que es {@code readOnly}: una
+     * transaccion de solo lectura no puede ejecutar {@code SELECT ... FOR
+     * UPDATE}.
+     */
+    private Captacion encargoDelTenantParaEscribir(long idEncargo, Actor actor) {
+        return encargos.bloquearParaEscritura(actor.idOrganizacion(), idEncargo)
                 .orElseThrow(() -> new NoEncontradoException("Encargo"));
     }
 

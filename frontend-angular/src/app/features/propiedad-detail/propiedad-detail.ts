@@ -96,14 +96,10 @@ export class PropiedadDetail implements OnInit {
   /**
    * **Si esta persona puede escribir esta propiedad** (P0).
    *
-   * Lo dice el backend en la ficha. Antes lo decidía esta línea:
-   *
-   * ```
-   * this.auth.sesion()?.rol === 'AGENTE'
-   * ```
-   *
-   * y era una copia del gate del backend que dejó de ser cierta con V87: la
-   * autoridad ya no es «ser agente», es **ser el responsable de esta
+   * Lo dice el backend en la ficha. Antes lo decidía una sola línea, que
+   * comparaba el rol de la sesión con «AGENTE»: era una copia del gate del
+   * backend que dejó de ser cierta con V87, porque la autoridad ya no es «ser
+   * agente», es **ser el responsable de esta
    * propiedad**. Con la copia vieja, todo agente del tenant veía el botón
    * «Editar» de toda propiedad y se llevaba un 403 al guardar.
    *
@@ -165,6 +161,11 @@ export class PropiedadDetail implements OnInit {
    *
    * El reparto por proceso lo hace el backend; aquí sólo se les pone orden y
    * nombre de sección, que es presentación.
+   *
+   * El bloque **puede no viajar** (D-P0-6). Sin él esto devuelve la lista
+   * vacía y no lanza; quien decide que la sección entera no se pinte —en vez
+   * de escribir «todavía no hay actividad», que sería afirmar un hecho— es la
+   * plantilla, que sí distingue ausente de vacío.
    */
   protected readonly carriles = computed<Carril[]>(() => {
     const actividad = this.ficha()?.actividad;

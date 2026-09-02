@@ -53,6 +53,76 @@ export interface Captacion {
   agenteNombre?: string;
   idBrokerRevisor?: number;
   fotoPortadaClave?: string;
+  /**
+   * **Qué puede hacer con este encargo quien lo está pidiendo** (D-P0-12).
+   *
+   * No es del contrato heredado: lo añade el Core v2 y **sólo en las fichas
+   * individuales** (`GET /captaciones/{id}` y `GET /captaciones/codigo/{codigo}`,
+   * que son dos puertas al mismo recurso). En los listados llega nula y con
+   * `NON_NULL` **no viaja**: allí la pregunta es «qué hay», no «qué puedo hacer
+   * con éste».
+   *
+   * Por eso su ausencia significa **«no calculado aquí»** y se compara con
+   * `== null`; el defecto seguro es no ofrecer la acción.
+   */
+  capacidades?: CapacidadesCaptacion | null;
+}
+
+/**
+ * Las tres capacidades del encargo, **resueltas por el Core** (D-P0-12).
+ *
+ * Cada booleano lo produce **el mismo predicado que después deniega el
+ * comando**, no una segunda tabla de decisión: sin esto la pantalla tenía que
+ * escribir su propia versión de tres reglas —«soy el agente y está pendiente»,
+ * «soy bróker y lo superviso», «está activa»— y una copia de una regla de
+ * autoridad diverge siempre hacia el lado que pinta un botón que el backend va
+ * a rechazar.
+ *
+ * **No autorizan nada**: el comando revalida.
+ */
+export interface CapacidadesCaptacion {
+  /** `PUT /captaciones/{id}`: su propio agente, mientras el encargo sea editable (P u O). */
+  puedeEditar: boolean;
+  /**
+   * `POST /captaciones/{id}/decision`: el BROKER que supervisa a ese agente,
+   * mientras el encargo sea editable. El TENANT_ADMIN **no**: es operación
+   * comercial y el gobierno no la hereda.
+   */
+  puedeRevisar: boolean;
+  /** `POST /captaciones/{id}/cierre`: el mismo BROKER, y sólo si está ACTIVO. */
+  puedeCerrar: boolean;
+  /**
+   * `POST /captaciones/{id}/reasignar`: el BRÓKER que supervisa hoy al agente
+   * que lo lleva, **y también el TENANT_ADMIN**.
+   *
+   * Es la única de las cuatro que el gobierno del tenant hereda —reasignar
+   * entre equipos es organigrama, no operación comercial (D-S0-17 fila 6)— y un
+   * AGENTE recibe `false` incluso sobre el encargo que lleva: quien lleva un
+   * encargo no decide dejar de llevarlo.
+   *
+   * Son las guardas del comando **sin el destino**, que en la ficha todavía no
+   * existe. El comando revalida además el destino, su elegibilidad y el agente
+   * observado.
+   */
+  puedeReasignar: boolean;
+}
+
+/**
+ * **Un destino ya elegible para reasignar un encargo** (D-P0-7 + D-P0-12).
+ *
+ * Lleva lo justo para elegir en una lista —quién es, su código y su zona— y
+ * **ningún estado administrativo**, que no es un olvido: quien aparece cumple
+ * las cinco condiciones de elegibilidad, y de quien no aparece no se publica el
+ * motivo.
+ *
+ * `idAgente` es el **`persona_rol.id` del rol AGENTE**, el mismo identificador
+ * que espera `reasignar`.
+ */
+export interface CandidatoAgente {
+  idAgente: number;
+  nombre?: string;
+  codigoAgente?: string;
+  zonaAsignada?: string;
 }
 
 export interface FiltrosCaptaciones {
@@ -195,7 +265,12 @@ export class CaptacionesService {
     });
   }
 
-  /** Historial completo congelado, ordenado del movimiento más reciente al más antiguo. */
+  /**
+   * Rastro de reasignaciones del encargo, del movimiento más reciente al más antiguo.
+   * **No es el historial completo**: el backend lo acota con el mismo alcance que el
+   * listado de captaciones (D-P0-6) — el TENANT_ADMIN ve todo su tenant, y el BRÓKER
+   * solo las filas de los encargos que **hoy** lleva un agente al que supervisa.
+   */
   historialReasignaciones$(): Observable<ReasignacionCaptacion[]> {
     return this.api.get$<ReasignacionCaptacion[]>('captaciones/reasignaciones');
   }
@@ -236,11 +311,66 @@ export class CaptacionesService {
     return this.api.post<Captacion>(`captaciones/${id}/decision`, { accion, observacion });
   }
 
-  reasignar(id: number, idAgenteNuevo: number, motivo: string): Promise<Captacion> {
+  /**
+   * **Mueve el encargo a otro agente** (D-S0-17 fila 6, D-P0-7 y D-P0-9).
+   *
+   * El cuerpo declara **desde dónde**: `idAgenteActual` es el agente que se
+   * estaba viendo en la lista cuando se decidió. Es **obligatorio** —un cuerpo
+   * sin él es **400**— y no se deduce aquí ni se vuelve a leer: lo que importa
+   * es lo que se estaba mirando al decidir.
+   *
+   * Si al ejecutarse el encargo ya **no** lo lleva ese agente, el Core responde
+   * **409** y **no ha escrito nada**: hay que **volver a cargar la lista** y
+   * decidir sobre el estado actual. La reasignación no se reintenta tal cual —
+   * sería ejecutar una decisión sobre un estado que nadie miró.
+   *
+   * El Core revalida además la banda, el tenant, el destino y su elegibilidad
+   * (D-P0-7), así que esta llamada no autoriza nada por haber salido de la
+   * lista de candidatos.
+   */
+  reasignar(
+    id: number,
+    idAgenteNuevo: number,
+    motivo: string,
+    idAgenteActual: number,
+  ): Promise<Captacion> {
     return this.api.post<Captacion>(`captaciones/${id}/reasignar`, {
       idAgenteNuevo,
       motivo,
+      idAgenteActual,
     });
+  }
+
+  /**
+   * **A quién puedo pasarle este encargo**: los destinos ya elegibles para ESTE
+   * encargo y ESTE actor (D-P0-7 + D-P0-12).
+   *
+   * El Core devuelve la lista **depurada**: mismo tenant, rol AGENTE vigente,
+   * cuenta habilitada, relación organizacional viva, estado operativo y —si
+   * quien pregunta es un BRÓKER— supervisión vigente; y sin el agente actual,
+   * porque una reasignación «de A a A» no cuenta ningún hecho. **Aquí no se
+   * filtra nada**: depurar en el cliente sería la lista de condiciones escrita
+   * por segunda vez, y una copia parcial de una regla de autoridad ofrece lo que
+   * el POST rechaza. Es exactamente lo que hacía esta pantalla hasta el
+   * 2026-09-01, con dos de las seis condiciones y sobre una sola página.
+   *
+   * Se **pagina y se busca en el servidor** por la misma razón: la lista es del
+   * tenant, no del formulario.
+   *
+   * Un actor que no puede reasignar este encargo recibe **403** y no una lista
+   * vacía: «no hay candidatos» y «no te corresponde» son dos respuestas
+   * distintas. Un encargo de otra corredora, **404**.
+   */
+  candidatosReasignacion(
+    id: number,
+    texto?: string,
+    pagina = 1,
+    tamano = 50,
+  ): Promise<PageResponse<CandidatoAgente>> {
+    return this.api.get<PageResponse<CandidatoAgente>>(
+      `captaciones/${id}/reasignacion/candidatos`,
+      { texto, page: pagina, page_size: tamano },
+    );
   }
 
   cerrar(id: number, motivo: string): Promise<Captacion> {

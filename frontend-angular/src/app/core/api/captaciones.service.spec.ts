@@ -108,13 +108,26 @@ describe('CaptacionesService', () => {
 
   it('envía decisión, reasignación y cierre por las rutas congeladas', async () => {
     await service.decidir(9, 'O', 'Corregir vigencia');
-    await service.reasignar(9, 31, 'Balance de cartera');
+    await service.reasignar(9, 31, 'Balance de cartera', 30);
     await service.cerrar(9, 'Fin del encargo');
 
     expect(api.post.calls.allArgs()).toEqual([
       ['captaciones/9/decision', { accion: 'O', observacion: 'Corregir vigencia' }],
-      ['captaciones/9/reasignar', { idAgenteNuevo: 31, motivo: 'Balance de cartera' }],
+      // `idAgenteActual` es el agente que se vio (D-P0-9). Es obligatorio: un
+      // cuerpo sin él es 400, para que la reasignación no pueda partir de un
+      // estado que nadie miró.
+      ['captaciones/9/reasignar',
+        { idAgenteNuevo: 31, motivo: 'Balance de cartera', idAgenteActual: 30 }],
       ['captaciones/9/cierre', { motivo: 'Fin del encargo' }],
+    ]);
+  });
+
+  it('pide los candidatos de reasignación al Core, paginados y con texto', async () => {
+    await service.candidatosReasignacion(9, 'ruiz');
+
+    expect(api.get.calls.mostRecent().args).toEqual([
+      'captaciones/9/reasignacion/candidatos',
+      { texto: 'ruiz', page: 1, page_size: 50 },
     ]);
   });
 });

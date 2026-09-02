@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -795,6 +796,75 @@ class PropiedadUniversalIntegrationTest {
         assertEquals(1, porId(ficha, anterior).publicaciones().size());
         assertEquals("URBANIA", porId(ficha, vigente).publicaciones().get(0).canal());
         assertEquals("ADONDEVIVIR", porId(ficha, anterior).publicaciones().get(0).canal());
+    }
+
+    /**
+     * <b>Un anuncio sin encargo no entra, y no lo impide el servicio: lo impide
+     * la base</b> (V89, D-P0-11).
+     *
+     * <p>Hasta V89 la regla vivia solo en {@code PublicacionServiceImpl}: el
+     * alta exigia el encargo, pero la columna era nullable, asi que un INSERT
+     * directo --una carga, un script, un productor nuevo-- dejaba un anuncio
+     * del que nadie podia decir que operacion publica ni quien responde por el.
+     * Esta prueba entra <b>por SQL crudo</b>, saltandose el servicio a
+     * proposito: es la unica forma de comprobar que la invariante esta donde no
+     * se puede rodear.
+     *
+     * <p>El backfill de V70 dejo cero filas huerfanas en las dos bases (medido
+     * el 2026-09-02), asi que la migracion no reinterpreto ningun dato: solo
+     * cerro la puerta.
+     */
+    @Test
+    @DisplayName("un anuncio sin encargo lo rechaza el esquema, no el servicio")
+    void unAnuncioSinEncargoNoEntraNiPorSql() {
+        ResultadoRegistro alta = propiedades.registrar(comando("LOCAL", "ALQUILER",
+                new BigDecimal("2600"), "PEN",
+                List.of(new Titular(propietarioAna, null, null)),
+                List.of(new ValorAtributo("metraje_total", "90"))), agenteA);
+
+        // Identico al INSERT de historia de la prueba anterior --que SI entra--
+        // salvo por el encargo. La unica diferencia es el NULL.
+        assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
+                insert into publicacion (organizacion_id, id_propiedad, id_captacion, canal,
+                                         version_anuncio, titulo_anuncio, importe_publicado,
+                                         moneda, codigo_origen, fecha_publicacion, estado)
+                values (?, ?, null, 'ADONDEVIVIR', 1, 'Anuncio huerfano', 2400, 'PEN', 'HUERFANO',
+                        cast('2025-01-15' as timestamptz), 'C')
+                """, agenteA.idOrganizacion(), alta.idPropiedad()),
+                "la base acepto un anuncio sin encargo: V89 no esta aplicada");
+
+        // Y no queda rastro del intento: el rechazo es previo a la escritura.
+        assertEquals(0, (int) jdbc.queryForObject(
+                "select count(*) from publicacion where codigo_origen = 'HUERFANO'",
+                Integer.class));
+
+        // La invariante, leida del catalogo y no de la excepcion: una prueba
+        // que solo mira el error no distingue "NOT NULL" de "fallo por otra
+        // cosa" (la FK, un CHECK, un trigger).
+        assertEquals("NO", jdbc.queryForObject("""
+                select is_nullable from information_schema.columns
+                 where table_name = 'publicacion' and column_name = 'id_captacion'
+                """, String.class),
+                "publicacion.id_captacion sigue siendo nullable");
+
+        // Control positivo del propio catalogo: si la consulta estuviera mal
+        // escrita, la asercion de arriba pasaria por casualidad sobre otra
+        // columna. `id_propiedad` es NOT NULL desde V4 y `url_publicacion` no.
+        assertEquals("YES", jdbc.queryForObject("""
+                select is_nullable from information_schema.columns
+                 where table_name = 'publicacion' and column_name = 'url_publicacion'
+                """, String.class),
+                "el control positivo fallo: la consulta al catalogo no mide lo que dice");
+    }
+
+    /** V89 esta realmente aplicada en la base contra la que corre la suite. */
+    @Test
+    @DisplayName("V89 consta como aplicada y con exito en el historial de Flyway")
+    void v89ConstaAplicada() {
+        assertEquals(Boolean.TRUE, jdbc.queryForObject(
+                "select success from flyway_schema_history where version = '89'",
+                Boolean.class),
+                "V89 no aparece aplicada con exito en flyway_schema_history");
     }
 
     /**

@@ -61,6 +61,18 @@ $integracion = @(
     'BusquedaLocalesIntegrationTest',
     # Corte 0B: los tres tipos nuevos, el vocabulario y la exigencia PUB.
     'CatalogoQueHablaIntegrationTest',
+    # D-P0-9 / D-P0-10 / D-P0-7 sobre la SEGUNDA autoridad mutable de P0: el
+    # agente de un ENCARGO. La gemela de la de abajo dicha sobre
+    # captacion.id_rol_agente: comando obsoleto, dos transacciones vivas con
+    # sondeo de pg_stat_activity, fallo inyectado en el rastro, el dirty
+    # checking de una edicion concurrente y un destino que no puede recibir.
+    'CausalidadDeLaReasignacionIntegrationTest',
+    # D-P0-9 / D-P0-10: un traspaso parte del estado que alguien miro y ocurre
+    # entero o no ocurre. Monta DOS transacciones vivas sobre PostgreSQL -con
+    # sondeo de pg_stat_activity para no dar por buena una carrera que no
+    # ocurrio- e inyecta fallos en el rastro y en el evento para ver si alguna
+    # escritura sobrevive sola.
+    'CausalidadDelTraspasoIntegrationTest',
     # D0-3: retirar la pregunta no retira el dato, y ahora ademas se NOTA. El
     # valor historico llega marcado por el cable en vez de indistinguible del
     # que si se puede corregir.
@@ -79,6 +91,10 @@ $integracion = @(
     # el expediente de cuatro renglones y la lectura que los sintetiza.
     'InterpretacionDelInicioIntegrationTest',
     'InvariantesComisionIntegrationTest',
+    # D-P0-6 (F1): quien LEE la informacion comercial historica. La otra mitad de
+    # P0 -aquel decidio quien escribe- y la que encontro la fuga de tenant de
+    # /locales/{id}/precios, abierta a cualquier usuario de otra corredora.
+    'LecturaHistoricaIntegrationTest',
     # D-E4-1: las piezas del nucleo universal (titularidad, atributos, outbox).
     'NucleoUniversalIntegrationTest',
     'OcupacionInmuebleIntegrationTest',

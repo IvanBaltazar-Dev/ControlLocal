@@ -225,8 +225,36 @@ public class Propiedad extends EntidadDeOrganizacion implements Transicionable {
      *
      * <p><b>NULL es FALTANTE</b>, no "de todos": la propiedad se ve y no se
      * edita hasta que un BROKER asigne. Sin defecto y sin relleno.
+     *
+     * <h2>Por que la columna es de SOLO INSERCION para el ORM</h2>
+     * {@code updatable = false} no es una optimizacion: es la mitad estructural
+     * de D-P0-10. {@code Propiedad} no lleva {@code @DynamicUpdate}, asi que el
+     * flush de una entidad gestionada escribe la fila <b>entera</b> con los
+     * valores que tiene en memoria. Sin esta marca, cualquier caso de uso que
+     * cargue la propiedad y la guarde despues —{@code PUT /propiedades/&#123;id&#125;}
+     * es el mas directo— reescribe {@code id_rol_responsable} con el valor que
+     * leyo al cargar. Si entre la carga y el flush otro comitea un traspaso
+     * A&rarr;B, la edicion lo pisa y devuelve la autoridad a A <b>sin fila en el
+     * expediente</b>: exactamente el «responsable cambiado sin traza» que
+     * D-P0-10 prohibe, y por una puerta que no pidio moverlo.
+     *
+     * <p>Con la marca puesta, la columna tiene <b>dos</b> escritores y ninguno
+     * mas: el {@code INSERT} del alta —{@code AutoridadDePropiedad.fijarAlAlta}
+     * la pone <b>antes</b> del primer {@code save}, y {@code insertable} sigue
+     * siendo {@code true}— y, en {@code UPDATE},
+     * {@code PropiedadRepository.cambiarResponsableSi}, que es un {@code UPDATE}
+     * JPQL y por tanto <b>no</b> pasa por esta anotacion. Es decir: el
+     * compare-and-set del traspaso, que exige el estado observado (D-P0-9).
+     *
+     * <p>{@link #responsable(Long)} sigue existiendo y sigue escribiendo el
+     * campo en memoria: el rastro, el evento y la ficha devuelta leen ese valor
+     * dentro de la misma transaccion. Lo que ya no hace es viajar a la base por
+     * su cuenta.
+     *
+     * <p>Lo mide {@code CausalidadDelTraspasoIntegrationTest}, caso
+     * <i>«una edicion concurrente no revierte un traspaso»</i>.
      */
-    @Column(name = "id_rol_responsable")
+    @Column(name = "id_rol_responsable", updatable = false)
     private Long idRolResponsable;
 
     @Column(name = "fecha_registro", insertable = false, updatable = false)

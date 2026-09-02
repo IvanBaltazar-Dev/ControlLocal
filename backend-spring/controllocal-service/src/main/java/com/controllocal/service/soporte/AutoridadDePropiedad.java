@@ -6,9 +6,12 @@ import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.DetalleAgente;
 import com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository;
 import com.controllocal.persistence.repositorio.DetalleAgenteRepository;
+import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.service.Actor;
 import com.controllocal.service.PropiedadUniversalService;
+import com.controllocal.service.PropiedadUniversalService.ResponsableObservado;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
+import com.controllocal.service.excepcion.ConflictoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 import org.springframework.stereotype.Component;
 
@@ -70,6 +73,20 @@ import java.util.Objects;
  * omision: es la diferencia entre decidir y registrar. El broker decide sobre
  * la propiedad cambiando <b>quien</b> responde por ella, que es lo que hace
  * {@link #asignar}.
+ *
+ * <h2>Y gobernar tampoco concede LEER lo comercial (D-P0-6)</h2>
+ * Desde el 2026-09-01 este componente publica ademas dos predicados de
+ * <b>lectura</b> —{@link #puedeLeerHistoriaDeLaPropiedad} y
+ * {@link #puedeLeerHistoricoDelEncargo}— para la informacion comercial
+ * historica. La regla que los une es la misma frase por el otro lado:
+ * <b>gobernar no es operar</b>. El TENANT_ADMIN gobierna responsables y lee el
+ * expediente de traspasos —que es organigrama— y <b>no</b> hereda por eso los
+ * importes, los cierres ni la actividad comercial de ningun encargo. Quien
+ * gobierne y ademas opere lo obtiene actuando con su banda BROKER.
+ *
+ * <p>Son LECTURAS y no guardas: no deniegan una escritura, asi que no entran en
+ * las listas {@code GUARDAS_*} del gate de autoridad, que inventaria justamente
+ * lo contrario.
  */
 @Component
 public class AutoridadDePropiedad {
@@ -96,12 +113,30 @@ public class AutoridadDePropiedad {
      */
     private final Alcances alcances;
 
+    /** Y si el DESTINO puede recibir una propiedad hoy (D-P0-7). */
+    private final ElegibilidadDeResponsable elegibilidad;
+
+    /**
+     * <b>Solo para el compare-and-set del responsable</b> (D-P0-9).
+     *
+     * <p>Esta clase no carga propiedades ni las guarda —eso es de los casos de
+     * uso—; usa este repositorio para <b>una sola</b> sentencia:
+     * {@link PropiedadRepository#cambiarResponsableSi}, que es la escritura
+     * condicional donde se resuelve la carrera. Que sea la unica que la llama
+     * lo comprueba {@code AutoridadDeLaPropiedadTest}.
+     */
+    private final PropiedadRepository propiedades;
+
     public AutoridadDePropiedad(DetalleAgenteRepository agentes,
                                 AsignacionResponsablePropiedadRepository asignaciones,
-                                Alcances alcances) {
+                                Alcances alcances,
+                                ElegibilidadDeResponsable elegibilidad,
+                                PropiedadRepository propiedades) {
         this.agentes = agentes;
         this.asignaciones = asignaciones;
         this.alcances = alcances;
+        this.elegibilidad = elegibilidad;
+        this.propiedades = propiedades;
     }
 
     // ==================================================================
@@ -346,9 +381,70 @@ public class AutoridadDePropiedad {
      * resuelve la lectura del expediente. No hay una segunda comparacion de
      * supervision escrita aqui: dos sitios donde se compare lo mismo son dos
      * sitios que despues divergen, y divergen hacia el lado que concede de mas.
+     *
+     * <h2>Y el DESTINO tiene que poder RECIBIRLA (D-P0-7)</h2>
+     * Alcanzar a un agente no es lo mismo que ese agente pueda operar. La ultima
+     * guarda —{@link ElegibilidadDeResponsable#exigirElegible}— exige las cinco
+     * condiciones del destino, cada una contra la autoridad que ya decide ese
+     * hecho: rol AGENTE vigente, cuenta habilitada, membresia vigente en la
+     * organizacion, disponibilidad operativa y —solo si el actor es BROKER—
+     * supervision vigente.
+     *
+     * <p><b>Supervision y operatividad son invariantes distintas.</b> Un agente
+     * supervisado pero de baja no recibe; uno disponible pero de otro equipo
+     * tampoco. Por eso el {@code alcances.alcanza} de arriba <b>no</b> se
+     * sustituye por esto: son dos preguntas y las dos tienen que responder que
+     * si.
+     *
+     * <p>Va la <b>ultima</b> de las guardas a proposito. Las anteriores —banda,
+     * tenant, alcance del destino, alcance del saliente, mismo agente— tienen
+     * mensajes y tipos de excepcion que ya estan medidos: colocar esta delante
+     * cambiaria el rechazo de casos que hoy fallan por otra razon, y un cambio
+     * de motivo es un cambio de contrato aunque el codigo HTTP coincida.
+     *
+     * <p><b>Lo que esta guarda NO hace</b> (D-P0-8): no reasigna nada al
+     * desactivar. Un agente dado de baja deja de poder <b>recibir</b>; las
+     * propiedades que ya lleva se quedan donde estan, y sacarlas de ahi es un
+     * traspaso explicito y trazable que decide el gobierno del tenant o el
+     * broker que lo supervisa.
+     *
+     * <h2>Y el traspaso parte de un estado que alguien MIRO (D-P0-9)</h2>
+     * Todo lo de arriba decide <b>quien</b> puede traspasar y <b>a quien</b>.
+     * Nada de eso decidia <b>desde donde</b>: dos comandos que salieran del
+     * mismo responsable A —uno hacia B y otro hacia C— pasaban las mismas
+     * guardas y acababan con la ultima escritura ganando, sin que nadie hubiera
+     * decidido «de B a C». Por eso el comando trae el
+     * {@link ResponsableObservado} y esto se comprueba <b>dos veces</b>, que no
+     * es redundancia sino dos preguntas distintas:
+     * <pre>
+     *   (a) EN MEMORIA, antes de tocar nada -&gt; el comando llego obsoleto o
+     *       equivocado: el actor decidio sobre un estado que ya no es. Se corta
+     *       sin escribir y con el estado de HOY en el mensaje, para que se pueda
+     *       volver a decidir.
+     *   (b) EN LA BASE, dentro de la propia escritura -&gt; la carrera. Entre (a)
+     *       y el UPDATE cabe otra transaccion; el unico sitio donde eso no cabe
+     *       es dentro del UPDATE.
+     * </pre>
+     * Las dos responden lo mismo al cliente —{@code ConflictoException}, 409—
+     * porque para quien traspasa el hecho es el mismo: <b>el estado cambio y hay
+     * que volver a mirar</b>. Lo que cambia es cuanta informacion se puede dar,
+     * y por eso (a) nombra al responsable de hoy y (b) no: la transaccion que
+     * pierde la carrera no puede afirmar quien gano.
+     *
+     * <p><b>El traspaso NO se reinterpreta.</b> Un «cambia A por C» que llega
+     * cuando ya responde B no se convierte en «cambia B por C»: seria una
+     * decision distinta de la que se tomo, tomada por el sistema y firmada por
+     * una persona que nunca la vio.
+     *
+     * <h2>Y es UN solo hecho (D-P0-10)</h2>
+     * Responsable, saliente, destino, actor, rol, motivo, fila del expediente y
+     * evento de dominio se escriben en la <b>misma transaccion</b> —la que abre
+     * el caso de uso— y ninguna de esas partes sobrevive sola. No se acepta
+     * responsable cambiado sin traza, ni traza de un cambio que no ocurrio.
      */
     public AsignacionResponsablePropiedad asignar(Actor actor, Propiedad propiedad,
-                                                  long idRolAgenteNuevo, String motivo) {
+                                                  long idRolAgenteNuevo, String motivo,
+                                                  ResponsableObservado observado) {
         if (actor.esAgente()) {
             throw new AccesoNoAutorizadoException(
                     "Quien responde por una propiedad lo decide un broker. Un agente no puede "
@@ -420,12 +516,58 @@ public class AutoridadDePropiedad {
                             + "un hecho, y dejaria una linea \"de A a A\" en su expediente.");
         }
 
+        // Y LA ULTIMA: que el destino pueda RECIBIRLA hoy (D-P0-7). Va aqui,
+        // despues de todas las que ya estaban medidas y ANTES de escribir nada:
+        // adelantarla cambiaria el motivo del rechazo en casos que hoy fallan por
+        // otra razon, y retrasarla la dejaria fuera del "todo o nada".
+        //
+        // Es una pregunta DISTINTA de `alcanza`: aquella dice si el actor llega
+        // hasta ese agente, esta dice si ese agente esta en condiciones de
+        // responder por una propiedad. Un supervisado de baja falla la segunda y
+        // pasa la primera.
+        elegibilidad.exigirElegible(actor, nuevo.getId());
+
+        // ------------------------------------------------------------------
+        // D-P0-9. Y AHORA, DESDE DONDE (todas las guardas de arriba ya pasaron).
+        // ------------------------------------------------------------------
+
+        // (a) La precondicion EN MEMORIA. No resuelve la carrera -- para eso
+        //     esta el CAS de abajo-- y no esta aqui por eso: esta para cortar el
+        //     comando obsoleto ANTES de tocar la base y para poder decir en que
+        //     estado esta HOY la propiedad, que es lo unico que permite volver a
+        //     decidir. El CAS, cuando pierde, no puede afirmar quien gano.
+        if (!Objects.equals(anterior, observado.idRol())) {
+            throw new ConflictoException(estadoCambiado(anterior));
+        }
+
+        // (b) Y el COMPARE-AND-SET, que es lo que resuelve la carrera real.
+        //     Entre la linea de arriba y esta cabe otra transaccion; dentro del
+        //     UPDATE no cabe ninguna. Bajo READ COMMITTED de PostgreSQL, un
+        //     UPDATE que encuentra la fila bloqueada por otra transaccion espera
+        //     y re-evalua el WHERE sobre la fila ya actualizada: por eso el
+        //     segundo comando A->C ve B y afecta 0 filas.
+        if (propiedades.cambiarResponsableSi(actor.idOrganizacion(), propiedad.getId(),
+                observado.idRol(), nuevo.getId()) == 0) {
+            throw new ConflictoException(
+                    "El responsable de esta propiedad cambio mientras se ejecutaba este "
+                            + "traspaso, asi que no se ha hecho nada. Vuelve a cargar la ficha y "
+                            + "decide sobre el responsable actual: este traspaso NO se "
+                            + "reinterpreta sobre un estado que no es el que miraste.");
+        }
+
+        // (c) Y solo entonces la instancia en memoria, para que el rastro, el
+        //     evento y la ficha devuelta lean el MISMO valor que acaba de quedar
+        //     en la fila. Si esto fuera antes del CAS, un rechazo dejaria la
+        //     entidad gestionada diciendo una cosa y la base otra.
         propiedad.responsable(nuevo.getId());
 
         AsignacionResponsablePropiedad fila = new AsignacionResponsablePropiedad();
         fila.setOrganizacionId(actor.idOrganizacion());
         fila.setIdPropiedad(propiedad.getId());
-        fila.setIdRolResponsableAnterior(anterior);
+        // El predecesor es EL OBSERVADO, y despues de (a) y (b) es exactamente
+        // el mismo valor que tenia la fila: el expediente dice de donde salio el
+        // traspaso que de verdad ocurrio, no de donde estaba cuando se cargo.
+        fila.setIdRolResponsableAnterior(observado.idRol());
         fila.setIdRolResponsableNuevo(nuevo.getId());
         fila.setIdPersonaActor(actor.idPersona());
         fila.setTipoRolActor(actor.tipoRolOperativo());
@@ -534,26 +676,136 @@ public class AutoridadDePropiedad {
                 motivo == null,
                 motivo,
                 motivo == null ? null : explicacion(motivo),
-                // Quien puede decidir QUIEN responde, POR BANDA. Es la primera
-                // guarda de `asignar` -- no ser agente -- y por eso se lee de
-                // aqui y no de una segunda tabla: la ficha no puede ofrecer un
-                // boton que el POST vaya a rechazar POR BANDA.
+                // C7 (CONTROL, 2026-09-01): "puedes INICIAR ahora el cambio de
+                // responsable de ESTA propiedad, considerando el responsable
+                // actual". Lo resuelven las dos guardas de `asignar` que la
+                // ficha si puede mirar, y ninguna mas:
                 //
-                // No es todo lo que `asignar` exige, y nunca lo fue: el alcance
-                // sobre el DESTINO no se puede resolver aqui porque en la ficha
-                // todavia no hay destino elegido. Desde C6 tampoco es todo por
-                // el lado del SALIENTE -- `asignar` exige ademas
-                // `alcanzaIncluidoSinDueno(actor, responsable)`, que la ficha SI
-                // podria resolver--, asi que este booleano dice hoy "tu banda
-                // decide responsables", no "puedes traspasar ESTA propiedad".
+                //   - la BANDA: no ser AGENTE (C7-A). Un agente nunca gobierna
+                //     quien responde, ni siquiera siendo el responsable.
+                //   - el SALIENTE: `alcanzaIncluidoSinDueno` sobre el responsable
+                //     actual -- el MISMO metodo que el POST pregunta por el
+                //     saliente, y por eso la ficha no puede prometer lo que el
+                //     POST va a negar. Sin reglas nuevas resuelve C7-B (FALTANTE:
+                //     no hay saliente a quien supervisar, cualquier BROKER del
+                //     tenant), C7-C (saliente supervisado), C7-D (saliente de
+                //     otro equipo: false) y C7-E (TENANT_ADMIN: por autoridad de
+                //     gobierno del tenant, no como super-broker -- no gana
+                //     edicion, lo dice `motivoNoEditable` arriba).
                 //
-                // Estrecharlo cambiaria el cable de la ficha y una respuesta que
-                // C5 dejo medida, asi que no se hace aqui: queda ANOTADO. El
-                // coste medido es acotado y no es un permiso de mas -- el POST
-                // deniega igual, con su motivo escrito por el Core-- sino un
-                // boton que en el caso "responsable de otro equipo" ya no lleva
-                // a ningun destino valido.
-                !actor.esAgente());
+                // El DESTINO sigue sin poder resolverse aqui -- en la ficha
+                // todavia no hay destino elegido -- y este booleano NO autoriza
+                // nada: `puedeTraspasar=true` significa "puedes iniciar desde
+                // este estado", y el POST sigue siendo la autoridad final, donde
+                // se vuelven a comprobar la banda, el saliente, el destino y la
+                // elegibilidad de ese destino (D-P0-7).
+                puedeIniciarTraspaso(actor, propiedad));
+    }
+
+    /**
+     * <b>¿Puede este actor INICIAR ahora el cambio de responsable de esta
+     * propiedad?</b> (C7, y desde D-P0-12 tambien la puerta de los candidatos.)
+     *
+     * <p>Es exactamente el par de guardas de {@link #asignar} que se pueden
+     * responder <b>sin destino</b>: la <b>banda</b> —no ser AGENTE— y el alcance
+     * sobre el <b>saliente</b>, con {@link Alcances#alcanzaIncluidoSinDueno},
+     * que es el mismo metodo que el POST pregunta.
+     *
+     * <p>Existe como metodo publico —y no repetido en dos sitios— porque tiene
+     * <b>dos</b> consumidores: el booleano {@code puedeTraspasar} de la ficha y
+     * el endpoint que ofrece los candidatos. Dos copias de este predicado se
+     * separarian, y se separarian hacia el lado que ofrece una lista de destinos
+     * para un traspaso que el POST va a negar entero.
+     *
+     * <p><b>No conoce el destino y no autoriza nada.</b> Que responda
+     * {@code true} significa "desde este estado puedes empezar"; quien autoriza
+     * es {@link #asignar}.
+     */
+    public boolean puedeIniciarTraspaso(Actor actor, Propiedad propiedad) {
+        return propiedad != null && !actor.esAgente()
+                && alcances.alcanzaIncluidoSinDueno(actor, propiedad.getIdRolResponsable());
+    }
+
+    // ==================================================================
+    // Lo que se puede LEER de la historia (D-P0-6)
+    // ==================================================================
+
+    /**
+     * <b>Quien lee la HISTORIA COMERCIAL de la propiedad</b> (D-P0-6, N39).
+     *
+     * <pre>
+     *   AGENTE responsable      -&gt; SI
+     *   AGENTE no responsable   -&gt; no
+     *   BROKER                  -&gt; si alcanza al responsable (alcanzaIncluidoSinDueno,
+     *                              el MISMO predicado que C5 usa para el inventario
+     *                              sin dueno)
+     *   TENANT_ADMIN            -&gt; NO por ser admin
+     *   otro tenant             -&gt; nunca (404 antes, al cargar la fila)
+     * </pre>
+     *
+     * <h2>Por que el gobierno del tenant NO la lee</h2>
+     * <b>Gobernar no es operar.</b> Poder decidir quien responde por una
+     * propiedad —y poder leer el expediente de traspasos, que es informacion de
+     * organigrama— no concede la informacion <b>comercial</b> historica: a
+     * cuanto se pidio, a cuanto se cerro, cuantas veces estuvo en venta. Eso es
+     * el negocio, y el TENANT_ADMIN no firma hechos del negocio (D-S0-7,
+     * D-S0-17). Una persona que gobierna <b>y</b> opera lo obtiene actuando con
+     * su banda BROKER: el {@link Actor} llega con una sola banda por peticion, y
+     * la auditoria dice cual uso.
+     *
+     * <h2>Es una LECTURA, no una guarda de escritura</h2>
+     * Por eso no entra en las listas {@code GUARDAS_*} del gate de autoridad:
+     * aquellas inventarian los metodos que <b>deniegan una escritura</b>, y
+     * aceptar aqui un predicado de lectura convertiria "responder" en
+     * "proteger", que es el error que ese gate ya cometio una vez con
+     * {@code puedeEditar}.
+     */
+    public boolean puedeLeerHistoriaDeLaPropiedad(Actor actor, Propiedad propiedad) {
+        if (propiedad == null) {
+            return false;
+        }
+        if (actor.esAgente()) {
+            return Objects.equals(propiedad.getIdRolResponsable(), actor.idRolOperativo());
+        }
+        if (actor.esBroker()) {
+            return alcances.alcanzaIncluidoSinDueno(actor, propiedad.getIdRolResponsable());
+        }
+        // TENANT_ADMIN y cualquier banda futura: no por ser gobierno.
+        return false;
+    }
+
+    /**
+     * <b>Quien lee el HISTORICO de un ENCARGO</b> (D-P0-6, N39).
+     *
+     * <pre>
+     *   AGENTE del encargo   -&gt; SI, sea o no responsable de la propiedad
+     *   otro AGENTE          -&gt; no, aunque responda por la propiedad
+     *   BROKER               -&gt; si supervisa hoy al agente del encargo (alcances.alcanza)
+     *   TENANT_ADMIN         -&gt; NO por ser admin
+     * </pre>
+     *
+     * <p>Se pregunta {@link Alcances#alcanza} y no {@code alcanzaIncluidoSinDueno}
+     * porque un encargo <b>siempre</b> tiene agente: si llegara sin el, no habria
+     * a quien atribuirlo y el lado seguro es negar — que es justo lo que ese
+     * metodo hace ante un dueno nulo.
+     *
+     * <p><b>Es el gemelo lector de {@link #exigirEdicionDelEncargo}</b>, y no el
+     * mismo metodo: escribir el encargo lo hace solo su agente, pero leerlo lo
+     * hace ademas el broker que lo supervisa. Fundirlos daria al broker la
+     * escritura o le quitaria la lectura, y ninguna de las dos es la decision.
+     */
+    public boolean puedeLeerHistoricoDelEncargo(Actor actor, Captacion encargo) {
+        if (encargo == null) {
+            return false;
+        }
+        Long idAgente = encargo.getAgente() == null ? null : encargo.getAgente().getId();
+        if (actor.esAgente()) {
+            return Objects.equals(idAgente, actor.idRolOperativo());
+        }
+        if (actor.esBroker()) {
+            return alcances.alcanza(actor, idAgente);
+        }
+        return false;
     }
 
     /** Nombre del responsable actual, o {@code null} si esta FALTANTE. */
@@ -571,5 +823,30 @@ public class AutoridadDePropiedad {
             return null;
         }
         return agente.getRol().getPersona().getNombresORazonSocial();
+    }
+
+    /**
+     * <b>El rechazo del comando obsoleto, con el estado de HOY dentro</b>
+     * (D-P0-9).
+     *
+     * <p>El estado actual va en el mensaje a proposito. Un «no se pudo» a secas
+     * obliga a adivinar si la propiedad la cogio otro, si se quedo sin
+     * responsable o si el comando salio mal, y la unica salida seria reintentar
+     * a ciegas — que es exactamente como se pisan dos traspasos. Diciendo quien
+     * responde ahora, la decision se vuelve a tomar sobre lo que hay.
+     *
+     * <p>Se nombra por <b>identificador de rol</b> y no por el nombre de la
+     * persona: quien recibe este 409 es un BROKER o el gobierno del tenant
+     * —bandas que ya pueden leer el expediente de la propiedad—, y el id es lo
+     * que la pantalla necesita para recargar y comparar. El nombre lo trae la
+     * ficha al recargarse.
+     */
+    private static String estadoCambiado(Long responsableDeHoy) {
+        return "El responsable de esta propiedad cambio desde que lo miraste: "
+                + (responsableDeHoy == null
+                        ? "ahora esta FALTANTE, no responde ningun agente por ella."
+                        : "hoy responde el agente " + responsableDeHoy + ".")
+                + " Vuelve a cargar la ficha y decide sobre el estado actual. Este traspaso NO "
+                + "se reinterpreta sobre un responsable que no es el que viste.";
     }
 }

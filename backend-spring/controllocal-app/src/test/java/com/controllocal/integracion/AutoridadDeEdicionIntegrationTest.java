@@ -220,6 +220,19 @@ class AutoridadDeEdicionIntegrationTest {
                     () -> publicaciones.crearEnEncargo(unEncargoDe(idPropiedad, "A"),
                             anuncio(), quien),
                     banda + " no publica el encargo de un agente -- y publicar escribe hito `P`");
+
+            // La via mas directa al trato, y la que faltaba: `PUT
+            // /captaciones/{id}` reescribe importe, exclusividad, vigencia,
+            // urgencia y observaciones del ENCARGO. Su unica guarda era
+            // `cargarConAcceso`, que para el broker supervisor y para el
+            // gobierno del tenant responde SI -- solo la anotacion del
+            // controlador los frenaba, y la autoridad no vive en la anotacion.
+            assertThrows(AccesoNoAutorizadoException.class,
+                    () -> captaciones.actualizar(unEncargoDe(idPropiedad, "A"),
+                            edicionDeEncargoDeAlquiler(idPropiedad, duena,
+                                    new BigDecimal("9999"), Boolean.TRUE),
+                            quien),
+                    banda + " no edita el encargo por PUT /captaciones/{id}");
         }
 
         assertEquals(0, hitosDe(idPropiedad, "U") - 1,
@@ -248,7 +261,8 @@ class AutoridadDeEdicionIntegrationTest {
         int filasAntes = filasDeTraspaso();
 
         TraspasoDeResponsable traspaso = propiedades.asignarResponsable(idPropiedad,
-                otra.idRolOperativo(), "Rotacion de cartera del equipo", broker());
+                otra.idRolOperativo(), "Rotacion de cartera del equipo",
+                observado(idPropiedad), broker());
 
         // 1) El rastro existe y esta completo. Un traspaso sin fila seria un
         //    cambio de manos que nadie puede auditar -- y es uno de los ataques
@@ -284,7 +298,7 @@ class AutoridadDeEdicionIntegrationTest {
 
         assertThrows(ReglaNegocioException.class,
                 () -> propiedades.asignarResponsable(idPropiedad, otra.idRolOperativo(), "  ",
-                        broker()));
+                        observado(idPropiedad), broker()));
         assertEquals(filasAntes, filasDeTraspaso(), "y no deja fila a medias");
         assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad),
                 "ni mueve la columna sin dejar rastro, que seria lo peor de los dos mundos");
@@ -293,7 +307,7 @@ class AutoridadDeEdicionIntegrationTest {
         // autoridad seria autoservicio y no seria autoridad.
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.asignarResponsable(idPropiedad, otra.idRolOperativo(),
-                        "Me la quedo yo, que para eso la veo", otra));
+                        "Me la quedo yo, que para eso la veo", observado(idPropiedad), otra));
         assertEquals(duena.idRolOperativo(), responsableDe(idPropiedad));
     }
 
@@ -383,7 +397,8 @@ class AutoridadDeEdicionIntegrationTest {
         // Y el broker la saca de FALTANTE. La primera asignacion no tiene
         // anterior, y ese NULL es informacion.
         TraspasoDeResponsable primera = propiedades.asignarResponsable(idPropiedad,
-                otra.idRolOperativo(), "Asignacion inicial tras la migracion", broker());
+                otra.idRolOperativo(), "Asignacion inicial tras la migracion",
+                observado(idPropiedad), broker());
         assertNull(primera.idResponsableAnterior(),
                 "no habia predecesor. Rellenarlo con el agente del encargo seria inventarle "
                         + "una procedencia al permiso");
@@ -431,7 +446,8 @@ class AutoridadDeEdicionIntegrationTest {
 
         propiedades.editar(idPropiedad, edicionDeFicha("Antes del traspaso"), antigua);
         propiedades.asignarResponsable(idPropiedad, nueva.idRolOperativo(),
-                "La agente anterior sale del equipo", broker());
+                "La agente anterior sale del equipo",
+                observado(idPropiedad), broker());
 
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.editar(idPropiedad, edicionDeFicha("Despues del traspaso"),
@@ -470,7 +486,8 @@ class AutoridadDeEdicionIntegrationTest {
         Map<String, Long> antes = agentesDeLosEncargos(idPropiedad);
 
         propiedades.asignarResponsable(idPropiedad, nueva.idRolOperativo(),
-                "Cambio de responsable, los encargos siguen donde estaban", broker());
+                "Cambio de responsable, los encargos siguen donde estaban",
+                observado(idPropiedad), broker());
 
         assertEquals(antes, agentesDeLosEncargos(idPropiedad),
                 "cambiar quien responde por el inmueble no cambia quien negocio cada encargo: "
@@ -487,7 +504,7 @@ class AutoridadDeEdicionIntegrationTest {
         Long responsableAntes = responsableDe(idPropiedad);
 
         captaciones.reasignar(idEncargo, nueva.idRolOperativo(),
-                "El encargo pasa a otra agente", broker());
+                "El encargo pasa a otra agente", antigua.idRolOperativo(), broker());
 
         assertEquals(responsableAntes, responsableDe(idPropiedad),
                 "reasignar el encargo movio el encargo. Si ademas moviera al responsable de la "
@@ -516,11 +533,12 @@ class AutoridadDeEdicionIntegrationTest {
         long idPropiedad = registrarConVentaYAlquiler(deVenta);
         long idAlquiler = unEncargoDe(idPropiedad, "A");
         captaciones.reasignar(idAlquiler, deAlquiler.idRolOperativo(),
-                "El alquiler lo lleva otra agente", broker());
+                "El alquiler lo lleva otra agente", deVenta.idRolOperativo(), broker());
         // Y que la propiedad responda a UNA de las dos no puede decidir nada
         // sobre el encargo de la otra: es justo lo que se esta probando.
         propiedades.asignarResponsable(idPropiedad, deAlquiler.idRolOperativo(),
-                "Responsable del inmueble", broker());
+                "Responsable del inmueble",
+                observado(idPropiedad), broker());
 
         int hitosVentaAntes = hitosDeEncargo(unEncargoDe(idPropiedad, "V"), "U");
 
@@ -543,12 +561,205 @@ class AutoridadDeEdicionIntegrationTest {
         long idVenta = unEncargoDe(idPropiedad, "V");
         long idAlquiler = unEncargoDe(idPropiedad, "A");
         captaciones.reasignar(idAlquiler, deAlquiler.idRolOperativo(),
-                "Reparto del equipo: el alquiler pasa a otra agente", broker());
+                "Reparto del equipo: el alquiler pasa a otra agente", deVenta.idRolOperativo(),
+                broker());
 
         assertThrows(AccesoNoAutorizadoException.class,
                 () -> propiedades.editar(idPropiedad, edicionDeCondiciones(idVenta), deAlquiler),
                 "las condiciones gobernadas son datos del ENCARGO tanto como el importe: sin "
                         + "esto, nombrar un id ajeno bastaba para escribir en el");
+    }
+
+    /**
+     * <b>Y por la OTRA puerta del mismo hecho</b>: {@code PUT /captaciones/{id}}.
+     *
+     * <p>Las pruebas de arriba entran al encargo por {@code PUT
+     * /propiedades/{id}}, que si preguntaba. Esta entra por el recurso del
+     * encargo, que escribe exactamente lo mismo —importe, exclusividad,
+     * vigencia, urgencia y observaciones— y cuya unica guarda era
+     * {@code cargarConAcceso}: el alcance de LECTURA. Alcanzar para ver no es
+     * alcanzar para escribir, y por eso un agente del mismo equipo quedaba
+     * fuera solo porque el alcance del agente es el mismo, no porque nadie lo
+     * hubiera decidido.
+     *
+     * <p>El control positivo va <b>primero</b> y a proposito: el cuerpo de esta
+     * peticion tiene tres validaciones que rechazan antes de mirar la autoridad
+     * —la operacion no se edita, la vigencia es obligatoria, y la comision de un
+     * alquiler se calcula sobre la renta mensual—, asi que sin demostrar antes
+     * que ESE cuerpo escribe, el 403 del ajeno podria ser un 400 disfrazado.
+     */
+    @Test
+    @DisplayName("otro AGENTE no edita un encargo ajeno por PUT /captaciones/{id}; su propio agente si")
+    void elEncargoNoLoEditaOtroAgentePorLaPuertaDeCaptaciones() {
+        Actor duena = agente(0);
+        Actor ajena = agente(1);
+        long idPropiedad = registrar(duena, "ALQUILER");
+        long idEncargo = unEncargoDe(idPropiedad, "A");
+
+        assertEquals(Boolean.FALSE, exclusividadDe(idEncargo),
+                "el encargo nace sin exclusividad: es el valor que la edicion tiene que mover");
+
+        // CONTROL POSITIVO: su propio agente si escribe, y se comprueba en la
+        // base -- no en la ficha que devuelve el propio caso de uso.
+        captaciones.actualizar(idEncargo,
+                edicionDeEncargoDeAlquiler(idPropiedad, duena, new BigDecimal("4321"),
+                        Boolean.TRUE),
+                duena);
+        assertEquals(0, new BigDecimal("4321").compareTo(importeVivoDe(idPropiedad, "A")),
+                "el agente del encargo lo edita: sin esta mitad, la negacion de abajo pasaria "
+                        + "igual en un sistema que no dejara editar a nadie");
+        assertEquals(Boolean.TRUE, exclusividadDe(idEncargo));
+
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> captaciones.actualizar(idEncargo,
+                        edicionDeEncargoDeAlquiler(idPropiedad, ajena, new BigDecimal("999999"),
+                                Boolean.FALSE),
+                        ajena),
+                "el encargo lo edita quien lo negocio (P0-4): llegar por /captaciones/{id} no "
+                        + "puede ser una puerta mas barata que llegar por PUT /propiedades/{id}");
+
+        assertEquals(0, new BigDecimal("4321").compareTo(importeVivoDe(idPropiedad, "A")),
+                "y el rechazo no puede haber escrito el importe: el permiso importa, el "
+                        + "importe escrito por quien no lo negocio importa mas");
+        assertEquals(Boolean.TRUE, exclusividadDe(idEncargo),
+                "ni la exclusividad, que se pacta con el titular y no la revoca un tercero");
+    }
+
+    // ==================================================================
+    // 8 bis. D-P0-12: las capacidades del encargo las resuelve el Core,
+    //        y la banda comercial se exige TAMBIEN en el Core
+    // ==================================================================
+
+    /**
+     * <b>Decidir y cerrar son operaciones COMERCIALES: el gobierno no las
+     * hereda</b> (D-S0-17, filas 5 y 7).
+     *
+     * <h2>Que estaba a medias</h2>
+     * La regla estaba <b>congelada y escrita</b> —la matriz declara BROKER en
+     * las dos filas— pero lo unico que la sostenia era el {@code @PreAuthorize}
+     * del controlador. Una anotacion protege <b>una puerta</b>; KAIROS entra por
+     * este mismo caso de uso, y {@code cargarConAcceso} le dice que si al
+     * gobierno del tenant, porque para <b>leer</b> si alcanza el encargo. Es
+     * exactamente la misma forma del defecto que P0-4 cerro en
+     * {@code actualizar}.
+     *
+     * <p>Se ataca el <b>servicio</b> y no el controlador a proposito: un 403 que
+     * solo existiera en la anotacion no aparece en esta prueba, y ese es el
+     * punto.
+     */
+    @Test
+    @DisplayName("D-P0-12: el TENANT_ADMIN no decide ni cierra un encargo, tampoco por el Core")
+    void elGobiernoDelTenantNoDecideNiCierraEncargos() {
+        Actor duena = agente(0);
+        long idPropiedad = registrar(duena, "ALQUILER");
+        long idEncargo = captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, duena), duena).id();
+        Actor gobierno = tenantAdmin();
+
+        AccesoNoAutorizadoException alDecidir = assertThrows(AccesoNoAutorizadoException.class,
+                () -> captaciones.decidir(idEncargo, "APROBAR", null, gobierno),
+                "aprobar un encargo es el juicio profesional sobre quien entra a cartera, y lo "
+                        + "firma el broker");
+        assertTrue(alDecidir.getMessage().toLowerCase().contains("broker"),
+                "y el motivo lo dice: es cuestion de banda. Dijo: " + alDecidir.getMessage());
+        assertEquals("P", estadoDelEncargo(idEncargo),
+                "y el encargo no se movio de PENDIENTE");
+
+        // Para poder intentar el cierre hace falta una ACTIVA, y activarla es
+        // justo lo que el broker si puede: sirve de control positivo de que la
+        // via funciona cuando la banda es la correcta.
+        captaciones.decidir(idEncargo, "APROBAR", null, broker());
+        assertEquals("A", estadoDelEncargo(idEncargo),
+                "control positivo: con la banda BROKER la misma llamada entra");
+
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> captaciones.cerrar(idEncargo, "Cierre solicitado por el propietario",
+                        gobierno),
+                "cerrar tiene efecto sobre disponibilidad y cartera: tambien es comercial");
+        assertEquals("A", estadoDelEncargo(idEncargo), "y sigue ACTIVA");
+    }
+
+    /**
+     * <b>Las tres capacidades, calculadas con las MISMAS guardas que los
+     * comandos</b> (D-P0-12).
+     *
+     * <p>Se miden sobre el <b>mismo</b> encargo en sus dos estados —PENDIENTE y
+     * ACTIVA— y para las cuatro identidades que lo miran. Un segundo criterio
+     * "solo para pintar" es como se llega a un boton activo que el backend
+     * rechaza cuando la persona ya escribio.
+     *
+     * <p><b>El bróker sale {@code puedeEditar=false} incluso sobre una
+     * PENDIENTE</b>, y no es un olvido: por P0-4 el encargo lo edita <b>su
+     * propio agente</b> —importe, exclusividad, vigencia y condiciones las
+     * cambia quien las negocio—, y el bróker decide sobre el, que es otra cosa
+     * y por eso es otro booleano.
+     *
+     * <p><b>Y la cuarta, {@code puedeReasignar}, rompe el patron de las otras
+     * tres a proposito</b>: el TENANT_ADMIN <b>si</b> la tiene. Reasignar entre
+     * equipos es organigrama y no operacion comercial (D-S0-17 fila 6), asi que
+     * es la unica de las cuatro que el gobierno del tenant hereda — y el AGENTE
+     * no la tiene ni sobre el encargo que lleva, porque quien lleva un encargo
+     * no decide dejar de llevarlo.
+     */
+    @Test
+    @DisplayName("D-P0-12: las capacidades del encargo salen del mismo predicado que los comandos")
+    void lasCapacidadesDelEncargoLasResuelveElCore() {
+        Actor duena = agente(0);
+        Actor otra = agente(1);
+        long idPropiedad = registrar(duena, "ALQUILER");
+        long idEncargo = captaciones.registrar(nuevoEncargoDeVenta(idPropiedad, duena), duena).id();
+
+        // --- PENDIENTE ---
+        assertEquals(new CaptacionService.Capacidades(true, false, false, false),
+                captaciones.obtener(idEncargo, duena).capacidades(),
+                "su agente lo edita mientras esta pendiente; ni lo revisa ni lo cierra, que son "
+                        + "decisiones del broker; y no se lo reasigna a nadie, que es gobierno "
+                        + "de quien lo supervisa");
+        assertEquals(new CaptacionService.Capacidades(false, true, false, true),
+                captaciones.obtener(idEncargo, broker()).capacidades(),
+                "el broker que lo supervisa lo REVISA y puede REASIGNARLO. No lo edita: por P0-4 "
+                        + "el importe y la exclusividad los cambia quien los negocio. Y no lo "
+                        + "cierra: todavia no esta activo");
+        assertEquals(new CaptacionService.Capacidades(false, false, false, true),
+                captaciones.obtener(idEncargo, tenantAdmin()).capacidades(),
+                "el gobierno del tenant lo alcanza para leerlo y lo unico que puede hacer con el "
+                        + "es REASIGNARLO -- entre equipos es organigrama (D-S0-17 fila 6). Ni "
+                        + "lo revisa ni lo cierra ni lo edita: gobernar no es operar");
+        // Y otro agente del mismo equipo NO LLEGA A LAS CAPACIDADES: el alcance
+        // de LECTURA le niega el recurso antes (`cargarConAcceso`), que es una
+        // respuesta mas fuerte que un (false,false,false) -- no ve el encargo
+        // en absoluto. Se comprueba asi y no esperando la terna porque afirmar
+        // la terna exigiria abrirle la lectura para poder negarle las acciones.
+        assertThrows(AccesoNoAutorizadoException.class,
+                () -> captaciones.obtener(idEncargo, otra),
+                "un agente que no lleva el encargo no lo alcanza siquiera para leerlo, asi que "
+                        + "la pregunta «que puede hacer con el» no llega a plantearse");
+
+        // --- ACTIVA ---
+        captaciones.decidir(idEncargo, "APROBAR", null, broker());
+        assertEquals(new CaptacionService.Capacidades(false, false, true, true),
+                captaciones.obtener(idEncargo, broker()).capacidades(),
+                "activo, ya no se revisa ni se edita: lo que queda es cerrarlo -- y reasignarlo, "
+                        + "que no depende del estado del encargo sino de quien lo lleva");
+        assertEquals(new CaptacionService.Capacidades(false, false, false, false),
+                captaciones.obtener(idEncargo, duena).capacidades(),
+                "y su agente deja de poder editarlo, que es lo que dice `editable()`");
+
+        // Y la SEGUNDA PUERTA al mismo recurso publica lo mismo: si una lo
+        // trajera y la otra no, el SPA acabaria con la regla escrita en la que
+        // se olvida.
+        String codigo = captaciones.obtener(idEncargo, broker()).codigoCaptacion();
+        assertEquals(captaciones.obtener(idEncargo, broker()).capacidades(),
+                captaciones.obtenerPorCodigo(codigo, broker()).capacidades(),
+                "GET por id y GET por codigo son dos puertas al mismo encargo, asi que publican "
+                        + "la misma forma");
+
+        // Y los LISTADOS no las traen: alli la pregunta es «que hay», no «que
+        // puedo hacer con este». Nulo -> con NON_NULL no viaja.
+        assertTrue(captaciones.listar(
+                        new CaptacionService.FiltrosCaptacion(null, null, null, 1, 20), broker())
+                        .items().stream().allMatch(f -> f.capacidades() == null),
+                "el listado no calcula tres alcances por fila: su ausencia significa «no "
+                        + "calculado aqui», no «no puedes»");
     }
 
     // ==================================================================
@@ -846,7 +1057,8 @@ class AutoridadDeEdicionIntegrationTest {
 
         // Puerta 3: la unica que si.
         propiedades.asignarResponsable(idPropiedad, otra.idRolOperativo(),
-                "Traspaso autorizado por el broker del equipo", broker());
+                "Traspaso autorizado por el broker del equipo",
+                observado(idPropiedad), broker());
         assertEquals(otra.idRolOperativo(), responsableDe(idPropiedad));
 
         assertEquals(List.of("TRASPASO", "ALTA"),
@@ -939,6 +1151,29 @@ class AutoridadDeEdicionIntegrationTest {
                 idPropiedad, deQuien.idRolOperativo(), "VENTA", 3, Boolean.FALSE,
                 "VENTA", new BigDecimal("400000"), "USD",
                 "P", "V", new BigDecimal("3"), "USD", "I", null);
+    }
+
+    /**
+     * Un cuerpo <b>valido</b> para editar un encargo de ALQUILER por
+     * {@code PUT /captaciones/{id}}.
+     *
+     * <p>Se construye completo a proposito, porque este caso de uso valida
+     * antes de escribir y cualquier hueco convertiria un rechazo de AUTORIDAD
+     * en uno de validacion: la operacion no se edita
+     * ({@code exigirMismaOperacion}, por eso viaja ALQUILER), la vigencia es
+     * obligatoria y el fin posterior al inicio ({@code validarEncargo}), y la
+     * comision de un alquiler se calcula sobre la renta mensual y en su misma
+     * moneda ({@code CondicionesEconomicas.exigirBaseCoherente}).
+     */
+    private CaptacionService.DatosCaptacion edicionDeEncargoDeAlquiler(
+            long idPropiedad, Actor deQuien, BigDecimal importe, Boolean exclusividad) {
+        return new CaptacionService.DatosCaptacion(
+                "CAP-P0-" + UUID.randomUUID().toString().substring(0, 8),
+                LocalDate.now(), LocalDate.now(), LocalDate.now().plusMonths(6),
+                null, "Edicion del encargo de alquiler",
+                idPropiedad, deQuien.idRolOperativo(), "ALQUILER", 4, exclusividad,
+                "ALQUILER", importe, "PEN",
+                "P", "R", new BigDecimal("5"), "PEN", "I", null);
     }
 
     /** Las condiciones con las que se capta una prospeccion, en VENTA. */
@@ -1105,6 +1340,21 @@ class AutoridadDeEdicionIntegrationTest {
                 Long.class, idPropiedad);
     }
 
+    /**
+     * <b>Lo que la prueba «vio» justo antes de mandar el comando</b> (D-P0-9).
+     *
+     * <p>El traspaso declara sobre que responsable actua, y aqui se lee de la
+     * base en el mismo instante en que se decide, que es lo que hace una
+     * pantalla: cargar la ficha y decidir sobre lo que muestra. Fijarlo a mano
+     * haria que estas pruebas midieran el 409 en vez de la regla que estan
+     * midiendo; y pasar «lo que hay ahora» automaticamente dentro del servicio
+     * seria justo la reinterpretacion que D-P0-9 prohibe -- por eso el
+     * observado entra por el comando y no lo deduce el Core.
+     */
+    private PropiedadUniversalService.ResponsableObservado observado(long idPropiedad) {
+        return PropiedadUniversalService.ResponsableObservado.de(responsableDe(idPropiedad));
+    }
+
     private Long incorporoDe(long idPropiedad) {
         return jdbc.queryForObject(
                 "select id_rol_incorporo from propiedad where id_propiedad = ?",
@@ -1119,6 +1369,11 @@ class AutoridadDeEdicionIntegrationTest {
     private String descripcionDe(long idPropiedad) {
         return jdbc.queryForObject("select descripcion from propiedad where id_propiedad = ?",
                 String.class, idPropiedad);
+    }
+
+    private String estadoDelEncargo(long idEncargo) {
+        return jdbc.queryForObject("select estado from captacion where id_captacion = ?",
+                String.class, idEncargo);
     }
 
     private long unEncargoDe(long idPropiedad, String operacion) {
@@ -1152,6 +1407,12 @@ class AutoridadDeEdicionIntegrationTest {
                  where cap.id_propiedad = ? and cap.motivo_operacion = ? and cap.estado <> 'C'
                  order by cap.id_captacion desc limit 1
                 """, BigDecimal.class, idPropiedad, operacion);
+    }
+
+    /** La exclusividad pactada, leida de la base y no de la ficha que devuelve el caso de uso. */
+    private Boolean exclusividadDe(long idEncargo) {
+        return jdbc.queryForObject("select exclusividad from captacion where id_captacion = ?",
+                Boolean.class, idEncargo);
     }
 
     private int hitosDe(long idPropiedad, String hito) {

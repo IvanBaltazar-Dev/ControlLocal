@@ -73,7 +73,16 @@ class PublicacionServiceImplTest {
                     mock(com.controllocal.persistence.repositorio.DetalleAgenteRepository.class),
                     mock(com.controllocal.persistence.repositorio.AsignacionResponsablePropiedadRepository.class),
                     new com.controllocal.service.soporte.Alcances(mock(
-                            com.controllocal.persistence.repositorio.SupervisionAgenteRepository.class)));
+                            com.controllocal.persistence.repositorio.SupervisionAgenteRepository.class)),
+                    // Y la elegibilidad del destino (D-P0-7), tambien de verdad.
+                    // Publicar no traspasa nada, asi que aqui no se ejercita.
+                    new com.controllocal.service.soporte.ElegibilidadDeResponsable(mock(
+                            com.controllocal.persistence.repositorio.DetalleAgenteRepository.class)),
+                    // El repositorio del compare-and-set del responsable (D-P0-9),
+                    // mockeado: publicar no mueve la autoridad. Que el CAS haga lo
+                    // que dice solo se puede probar con dos transacciones reales
+                    // (CausalidadDelTraspasoIntegrationTest).
+                    mock(com.controllocal.persistence.repositorio.PropiedadRepository.class));
 
     private final PublicacionServiceImpl service = new PublicacionServiceImpl(
             publicaciones, precios, encargos, propiedades, gobierno, condiciones, autoridad);
@@ -127,6 +136,11 @@ class PublicacionServiceImplTest {
     void elEncargoExiste() {
         Captacion encargo = encargoVivo();
         when(encargos.findById(ENCARGO)).thenReturn(Optional.of(encargo));
+        // La MISMA fila, cargada con el candado (F2.10): las tres puertas que
+        // escriben la serie del encargo -crear en el encargo, editar el anuncio
+        // y cambiar su estado- la piden asi, para que la autoridad se compruebe
+        // sobre el agente que seguira siendo verdad al escribir el hito.
+        when(encargos.bloquearParaEscritura(ORG, ENCARGO)).thenReturn(Optional.of(encargo));
         // Y tambien por propiedad: `operacionDe` resuelve asi el encargo de una
         // publicacion que no lo lleva escrito -- los anuncios anteriores a V70.
         when(encargos.encargosDe(ORG, PROPIEDAD)).thenReturn(List.of(encargo));
@@ -223,7 +237,7 @@ class PublicacionServiceImplTest {
     void noSePublicaUnEncargoCerrado() {
         Captacion cerrado = encargoVivo();
         cerrado.transicionarA(Captacion.CERRADA);
-        when(encargos.findById(ENCARGO)).thenReturn(Optional.of(cerrado));
+        when(encargos.bloquearParaEscritura(ORG, ENCARGO)).thenReturn(Optional.of(cerrado));
 
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
                 () -> service.crearEnEncargo(ENCARGO, datos(new BigDecimal("5200.00"), "PEN",

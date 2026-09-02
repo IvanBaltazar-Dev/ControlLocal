@@ -230,7 +230,8 @@ $reasignables = Api GET '/captaciones/reasignables?pagina=1&tamano=1' $admin.tok
 Check 'ahora el admin la ve reasignable (fila 2)' ($reasignables.items.Count -gt 0) "items=$($reasignables.items.Count)"
 
 $otroAgente = [int](Sql "SELECT da.id_persona_rol FROM detalle_agente da WHERE da.id_persona_rol <> $($captacion.idAgente) ORDER BY da.id_persona_rol LIMIT 1")
-$reasignada = Api POST "/captaciones/$($captacion.id)/reasignar" $admin.token @{ idAgenteNuevo = $otroAgente; motivo = 'E2E gobierno' }
+# D-P0-9: el comando declara sobre que agente actua -- el que se vio en la bandeja, que aprobar no mueve -- y el Core responde 409 si ya lo lleva otro.
+$reasignada = Api POST "/captaciones/$($captacion.id)/reasignar" $admin.token @{ idAgenteNuevo = $otroAgente; motivo = 'E2E gobierno'; idAgenteActual = $captacion.idAgente }
 Check 'el TENANT_ADMIN reasigna entre equipos (fila 6)' ($null -ne $reasignada) 'sin respuesta'
 
 $evento = Sql "SELECT coalesce(tipo_rol_actor,'?')||'|'||coalesce(id_rol_broker::text,'sin-broker') FROM reasignacion_captacion ORDER BY id_reasignacion DESC LIMIT 1"

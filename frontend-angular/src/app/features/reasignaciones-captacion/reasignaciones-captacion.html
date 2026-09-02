@@ -47,21 +47,22 @@
   </article>
 
   <article class="cl-panel paso agentes">
-    <header><span class="numero-paso">2</span><div><h2>Nuevo responsable</h2><p>Solo agentes activos y disponibles.</p></div></header>
-    <label class="buscador"><span>Buscar agente</span><input type="search" placeholder="Nombre, código, documento o zona" [value]="busquedaAgente()" (input)="cambiarBusquedaAgente($any($event.target).value)" /></label>
-    @if (cargandoGobierno()) {
-      <p class="cl-menudo">Cargando agentes…</p>
-    } @else if (errorGobierno()) {
-      <p class="cl-aviso error">{{ errorGobierno() }}</p>
+    <header><span class="numero-paso">2</span><div><h2>Nuevo responsable</h2><p>Los destinos que el sistema admite para este expediente.</p></div></header>
+    <label class="buscador"><span>Buscar agente</span><input type="search" placeholder="Nombre o código" [value]="busquedaAgente()" (input)="cambiarBusquedaAgente($any($event.target).value)" /></label>
+    @if (cargandoCandidatos()) {
+      <p class="cl-menudo">Cargando destinos…</p>
+    } @else if (errorCandidatos()) {
+      <p class="cl-aviso error">{{ errorCandidatos() }}</p>
+    } @else if (!captacionSeleccionada()) {
+      <p class="cl-vacio">Elige primero una captación para ver a quién puedes pasársela.</p>
     } @else if (agentesDestino().length === 0) {
-      <p class="cl-vacio">No hay otro agente activo y disponible que coincida.</p>
+      <p class="cl-vacio">No hay ningún agente al que puedas pasarle esta captación con esta búsqueda.</p>
     } @else {
       <div class="opciones agentes-lista">
-        @for (agente of agentesDestino(); track agente.id) {
-          <label class="opcion" [class.seleccionada]="idAgente() === agente.id">
-            <input type="radio" name="agente" [checked]="idAgente() === agente.id" (change)="seleccionarAgente(agente.id)" />
-            <span><strong>{{ agente.nombre }}</strong><small>{{ valor(agente.codigoAgente) }} · {{ valor(agente.zona) }}</small></span>
-            <span class="cl-badge bien">Disponible</span>
+        @for (agente of agentesDestino(); track agente.idAgente) {
+          <label class="opcion" [class.seleccionada]="idAgente() === agente.idAgente">
+            <input type="radio" name="agente" [checked]="idAgente() === agente.idAgente" (change)="seleccionarAgente(agente.idAgente)" />
+            <span><strong>{{ valor(agente.nombre) }}</strong><small>{{ valor(agente.codigoAgente) }} · {{ valor(agente.zonaAsignada) }}</small></span>
           </label>
         }
       </div>

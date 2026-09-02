@@ -3,6 +3,8 @@ package com.controllocal.web.controlador;
 import com.controllocal.service.CaptacionService;
 import com.controllocal.service.CoincidenciaService;
 import com.controllocal.service.Pagina;
+import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.web.dto.CandidatoAgenteResponse;
 import com.controllocal.web.dto.CaptacionRequest;
 import com.controllocal.web.dto.CaptacionResponse;
 import com.controllocal.web.dto.CierreRequest;
@@ -168,13 +170,73 @@ public class CaptacionesController {
         return CaptacionResponse.desde(captaciones.decidir(id, accion, observacion, SesionActual.actor()));
     }
 
+    /**
+     * <b>El traspaso de la autoridad del ENCARGO</b> (D-S0-17 fila 6, D-P0-7 y
+     * D-P0-9).
+     *
+     * <p><b>El cuerpo declara sobre que agente se actua</b>:
+     * {@code idAgenteActual} —el que se vio en la lista— es obligatorio, y su
+     * ausencia es <b>400</b>. Si al ejecutarse el encargo ya no lo lleva ese
+     * agente, la respuesta es <b>409</b> y no se ha escrito nada: la
+     * reasignacion no se reinterpreta sobre un estado que el actor no vio. La
+     * validacion de la declaracion vive en el propio DTO para que sea la misma
+     * por cualquier canal.
+     *
+     * <p>Quien puede <b>no cambia</b> con esto: BROKER dentro de su equipo,
+     * TENANT_ADMIN entre equipos. Lo que se anade es que el <b>destino</b> tiene
+     * que poder recibirlo hoy (D-P0-7, las mismas cinco condiciones que el
+     * traspaso de una propiedad) y que la escritura es un compare-and-set sobre
+     * el agente observado.
+     */
     @PostMapping("{id}/reasignar")
     @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
     public CaptacionResponse reasignar(@PathVariable long id,
                                        @RequestBody(required = false) ReasignacionRequest dto) {
-        Long idAgenteNuevo = dto != null ? dto.idAgenteNuevo() : null;
-        String motivo = dto != null ? dto.motivo() : null;
-        return CaptacionResponse.desde(captaciones.reasignar(id, idAgenteNuevo, motivo, SesionActual.actor()));
+        if (dto == null) {
+            throw new ReglaNegocioException("El agente destino es obligatorio.");
+        }
+        return CaptacionResponse.desde(captaciones.reasignar(id, dto.destino(), dto.motivo(),
+                dto.observado(), SesionActual.actor()));
+    }
+
+    /**
+     * <b>A quien puedo pasarle este encargo</b> — los candidatos ya elegibles
+     * para ESTE encargo y ESTE actor (D-P0-7 + D-P0-12).
+     *
+     * <p><b>Existe para que Angular no decida autoridad.</b> Hasta aqui la
+     * pantalla de reasignaciones pedia {@code GET /agentes} y depuraba la lista
+     * en el cliente con dos de las seis condiciones —cuenta activa y
+     * disponibilidad— resueltas sobre <b>una pagina</b> de cien agentes: una
+     * copia parcial de una regla de autoridad, que ofrecia agentes que el POST
+     * rechaza y escondia a otros perfectamente validos en cuanto la organizacion
+     * pasara de cien.
+     *
+     * <p>Sale del <b>mismo</b> componente y del <b>mismo</b> predicado SQL que
+     * los candidatos de una propiedad: quien puede recibir una propiedad y quien
+     * puede recibir un encargo responden a las mismas condiciones, y lo unico
+     * que cambia es a quien se excluye —alli el responsable actual, aqui el
+     * agente actual del encargo.
+     *
+     * <p>Paginado y buscable en el servidor por la misma razon que el de la
+     * propiedad. <b>Y no autoriza nada</b>: el POST revalida.
+     */
+    @GetMapping("{id}/reasignacion/candidatos")
+    @PreAuthorize("hasAnyRole('BROKER', 'TENANT_ADMIN')")
+    public PageResponse<CandidatoAgenteResponse> candidatosAReasignacion(
+            @PathVariable long id,
+            @RequestParam(required = false) String texto,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(name = "page_size", required = false) Integer pageSize,
+            @RequestParam(required = false) Integer tamano) {
+        int paginaSolicitada = ClientesController.paginaSolicitada(page, pagina);
+        int tamanoSolicitado = pageSize != null ? pageSize : tamano != null ? tamano : 20;
+        var resultado = captaciones.candidatosAReasignacion(id, texto, paginaSolicitada,
+                tamanoSolicitado, SesionActual.actor());
+        return new PageResponse<>(
+                resultado.items().stream().map(CandidatoAgenteResponse::desde).toList(),
+                resultado.total(), Math.max(1, paginaSolicitada),
+                Math.max(1, Math.min(100, tamanoSolicitado)));
     }
 
     @PostMapping("{id}/cierre")

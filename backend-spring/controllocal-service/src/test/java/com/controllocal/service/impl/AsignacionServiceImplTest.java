@@ -190,6 +190,7 @@ class AsignacionServiceImplTest {
         prepararDestino();
         DetalleAgente inactivo = agente("D", "I");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(inactivo));
+        bloqueoDelAgente(inactivo);
         when(usuarios.credencial(ORG, 3L))
                 .thenReturn(credencial(inactivo.getRol().getPersona(), "vmora", "I"));
 
@@ -199,6 +200,7 @@ class AsignacionServiceImplTest {
 
         DetalleAgente licencia = agente("L", "A");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(licencia));
+        bloqueoDelAgente(licencia);
         when(usuarios.credencial(ORG, 3L))
                 .thenReturn(credencial(licencia.getRol().getPersona(), "vmora", "A"));
 
@@ -292,9 +294,23 @@ class AsignacionServiceImplTest {
     private DetalleAgente prepararAgenteDisponible() {
         DetalleAgente agente = agente("D", "A");
         when(agentes.buscarFicha(ORG, AGENTE)).thenReturn(Optional.of(agente));
+        bloqueoDelAgente(agente);
         when(usuarios.credencial(ORG, 3L))
                 .thenReturn(credencial(agente.getRol().getPersona(), "vmora", "A"));
         return agente;
+    }
+
+    /**
+     * <b>El candado de gobierno del agente</b> (D-P0-13, 2026-09-01).
+     *
+     * <p>Cambiar de supervisor cambia la sexta condicion de D-P0-7 —«¿lo
+     * supervisas hoy?»—, asi que este caso de uso toma la fila
+     * {@code detalle_agente} antes de tocar las supervisiones. Si el mock no lo
+     * declarara, la reasignacion caeria en «Agente no encontrado.» y estas
+     * pruebas medirian el candado en vez de la regla que dicen medir.
+     */
+    private void bloqueoDelAgente(DetalleAgente agente) {
+        when(agentes.bloquearParaGobierno(ORG, AGENTE)).thenReturn(Optional.of(agente));
     }
 
     private static AsignacionService.DatosReasignacion datos(long destino) {

@@ -58,7 +58,7 @@
           <button type="button" class="cl-btn aprobar" [disabled]="procesando()" (click)="abrirDecision('A')">Aprobar captación</button>
           <button type="button" class="cl-btn observar" [disabled]="procesando()" (click)="abrirDecision('O')">Observar y devolver</button>
           <button type="button" class="cl-btn rechazar" [disabled]="procesando()" (click)="abrirDecision('R')">Rechazar captación</button>
-          <button type="button" class="cl-btn" [disabled]="procesando()" (click)="abrirReasignacion()">Reasignar agente</button>
+          @if (puedeReasignar()) { <button type="button" class="cl-btn" [disabled]="procesando()" (click)="abrirReasignacion()">Reasignar agente</button> }
         } @else {
           <p class="cl-vacio">La revisión ya fue registrada. Consulta el expediente para continuar.</p>
         }
@@ -74,7 +74,8 @@
 
 <cl-confirmacion [abierto]="dialogoReasignar()" titulo="Reasignar captación" descripcion="Selecciona al agente que continuará el expediente. La reasignación no cambia el estado." tono="azul" etiquetaConfirmar="Reasignar" [ocupado]="procesando()" [bloqueado]="agenteNuevo.value <= 0 || !motivoReasignacion.value.trim()" (cerrar)="cerrarReasignacion()" (confirmar)="confirmarReasignacion()">
   <div class="campos-dialogo">
-    <label class="campo-dialogo"><span>Nuevo agente *</span><select [formControl]="agenteNuevo"><option [ngValue]="0">Selecciona un agente</option>@for (agente of agentesDestino(); track agente.id) { <option [ngValue]="agente.id">{{ agente.nombre }}</option> }</select></label>
+    <label class="campo-dialogo"><span>Nuevo agente *</span><select [formControl]="agenteNuevo"><option [ngValue]="0">{{ cargandoCandidatos() ? "Cargando destinos…" : "Selecciona un agente" }}</option>@for (agente of agentesDestino(); track agente.idAgente) { <option [ngValue]="agente.idAgente">{{ agente.nombre }}</option> }</select></label>
+    @if (errorCandidatos()) { <p class="cl-aviso error">{{ errorCandidatos() }}</p> }
     <label class="campo-dialogo"><span>Motivo *</span><textarea rows="3" maxlength="1000" [formControl]="motivoReasignacion"></textarea></label>
   </div>
 </cl-confirmacion>

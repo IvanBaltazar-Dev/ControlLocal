@@ -83,6 +83,64 @@ describe('acceso (mapa módulo→rol)', () => {
     expect(alcanzables('AGENTE')).not.toContain('Captaciones por revisar');
   });
 
+  /**
+   * <b>Las dos uniones de D-E3-1 §4.</b> Eran las dos entradas que sobraban en
+   * los tres roles y las que dejaban el menú en 15/17/19 en vez de 13/15/17:
+   *
+   * <ul>
+   *   <li><b>Interacciones</b> pertenece al EXPEDIENTE (§4.1). Había dos
+   *       superficies para lo mismo — esta bandeja y la bitácora del cliente—,
+   *       y a la bandeja se llega desde Seguimiento, que es la transversal.</li>
+   *   <li><b>El avance por propiedad</b> (RF-017) es una PESTAÑA de
+   *       Indicadores (§4.3): una mide por actor y la otra por inmueble, pero
+   *       es la misma pregunta analítica.</li>
+   * </ul>
+   *
+   * Lo que esta prueba impide es la media unión: quitarlas del menú <b>y</b>
+   * de las rutas dejaría muertos los enlaces guardados, que es lo contrario de
+   * lo que se decidió.
+   */
+  it('une Interacciones al expediente y el avance a Indicadores sin perder sus rutas', () => {
+    for (const rol of ROLES) {
+      expect(enMenu(rol)).not.toContain('Interacciones');
+      expect(enMenu(rol)).not.toContain('Avance por propiedad');
+      expect(enMenu(rol)).not.toContain('Reportes');
+
+      // Y siguen abriéndose: la ruta se conserva entera.
+      expect(alcanzables(rol)).toContain('Interacciones');
+      expect(alcanzables(rol)).toContain('Avance por propiedad');
+    }
+    expect(moduloDeRuta('interacciones')).toBeDefined();
+    expect(moduloDeRuta('reportes')).toBeDefined();
+  });
+
+  /**
+   * La cuenta de entradas que dejan las dos uniones, por rol. Es la medida que
+   * `pendientes-brox.md` §4.2 usaba para saber si 4.8 estaba hecho, y aquí
+   * queda fijada para que no se deshaga sin que nadie lo note.
+   *
+   * El agente ve las 13 comunes; el broker suma Agentes y Brokers; el
+   * administrador suma además Asignaciones y Seguridad y accesos.
+   */
+  it('deja el menú en 13 · 15 · 17 entradas', () => {
+    const entradas = (rol: RolSesion) =>
+      cuerpoDelMenu(rol).reduce((total, grupo) => total + grupo.modulos.length, 0);
+
+    expect(entradas('AGENTE')).toBe(13);
+    expect(entradas('BROKER')).toBe(15);
+    expect(entradas('TENANT_ADMIN')).toBe(17);
+  });
+
+  /**
+   * Cada entrada trae su icono. Antes eran 26 puntos de 6 px idénticos, que no
+   * distinguen nada y desaparecen en el cajón del móvil (D-E3-1 §6.1). El tipo
+   * ya lo obliga en compilación; esto lo vigila también en el mapa, que es
+   * donde se añade una entrada nueva.
+   */
+  it('da icono a todas las entradas del mapa', () => {
+    expect(MODULOS.every((m) => !!m.icono)).toBeTrue();
+  });
+
   it('usa las cinco secciones de negocio y ninguna llamada «Proceso»', () => {
     const secciones = new Set(MODULOS.map((m) => m.seccion));
     expect(secciones.has('Oferta')).toBeTrue();

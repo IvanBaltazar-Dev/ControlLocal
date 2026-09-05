@@ -18,6 +18,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { OpcionFiltro } from '../../shared/filtro-select/filtro-select';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const CANDIDATOS = 20;
 
@@ -64,7 +65,7 @@ const PARAMETRO_DE_CONTEXTO: Readonly<Record<string, string>> = {
  */
 @Component({
   selector: 'app-interaccion-form',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './interaccion-form.html',
   styleUrl: './interaccion-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

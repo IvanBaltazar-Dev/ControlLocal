@@ -1,0 +1,21 @@
+// Aquí solo lo que este componente dibuja de su puño. La anatomía de la
+// cabecera (`.cl-cabecera`, `.miga`, `h1`, `.sub`, `.acciones`) vive en
+// `styles.scss` porque tiene que alcanzar también al contenido proyectado, y
+// una regla encapsulada no lo alcanza.
+
+:host {
+  display: block;
+}
+
+// El aire entre pasos va por margen y no por un espacio escrito: Angular
+// borra los nodos de texto en blanco, así que un `·` con espacios alrededor
+// en la plantilla se pinta pegado a las dos palabras.
+.sep {
+  margin: 0 0.3em;
+}
+
+// En la variante del prototipo la miga es una fila con `gap`, así que el
+// margen sobraría y descuadraría el hueco.
+.cl-cabecera-proto .sep {
+  margin: 0;
+}

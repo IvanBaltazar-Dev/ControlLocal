@@ -1,13 +1,14 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Demanda · Interacciones · Nueva</p>
-    <h1>Registrar interacción</h1>
-    <p class="sub">Un contacto comercial queda anotado sobre la entidad que le da sentido.</p>
+<brox-page-header
+  [miga]="['Demanda', 'Interacciones', 'Nueva']"
+  titulo="Registrar interacción"
+  sub="Un contacto comercial queda anotado sobre la entidad que le da sentido."
+>
+  <div acciones class="acciones">
+    <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+      Cancelar
+    </button>
   </div>
-  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
-    Cancelar
-  </button>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

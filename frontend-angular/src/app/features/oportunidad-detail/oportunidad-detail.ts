@@ -27,6 +27,7 @@ import {
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { OpcionFiltro } from '../../shared/filtro-select/filtro-select';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 interface Etapa {
   clave: string;
@@ -71,7 +72,7 @@ const ETAPAS: readonly Etapa[] = [
  */
 @Component({
   selector: 'app-oportunidad-detail',
-  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule],
+  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './oportunidad-detail.html',
   styleUrl: './oportunidad-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

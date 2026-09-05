@@ -1,20 +1,17 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Demanda · Oportunidades</p>
-    <h1>Oportunidades comerciales</h1>
-    <p class="sub">
-      Clientes interesados vinculados a una propiedad captada. Los indicadores filtran la lista al
-      pulsarlos.
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Demanda', 'Oportunidades']"
+  titulo="Oportunidades comerciales"
+  sub="Clientes interesados vinculados a una propiedad captada. Los indicadores filtran la lista al
+       pulsarlos."
+>
+  <div acciones class="acciones">
     @if (puedeOperar()) {
       <button type="button" class="cl-btn primario" (click)="nueva()">Nueva oportunidad</button>
     } @else {
       <span class="solo-lectura">Solo lectura</span>
     }
   </div>
-</header>
+</brox-page-header>
 
 <section class="kpis">
   <cl-kpi

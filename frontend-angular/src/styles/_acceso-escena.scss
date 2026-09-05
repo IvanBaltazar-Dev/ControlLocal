@@ -1,0 +1,80 @@
+// ====================================================================
+// LA PUERTA DE ENTRADA · el fondo, la tarjeta y la marca
+// --------------------------------------------------------------------
+// Las cuatro pantallas de acceso —entrar, recuperar el acceso, cambiar la
+// contraseña y configurar el segundo factor— viven FUERA del cascarón a
+// propósito: la sesión aún está capada y el lateral no debe ofrecer un menú
+// que todavía no se puede usar.
+//
+// Pero eso las dejó copiándose el SCSS. La auditoría de UI (§7.2) midió que
+// `recuperar-acceso.scss` y `cambiar-contrasena.scss` eran **el mismo archivo
+// byte a byte** —180 líneas—, que `login.scss` traía las mismas con cuatro
+// variaciones y que `enrolar-mfa.scss` repetía el degradado. Cuatro copias de
+// una escena que tiene que verse idéntica: si la puerta cambia de aspecto
+// entre una y otra, el usuario duda de si el enlace lo llevó al sitio
+// correcto.
+//
+// Aquí vive lo que las cuatro comparten **carácter a carácter**. Lo que cada
+// una tiene de suyo se queda en su hoja, escrito DESPUÉS de este `@use`, que
+// es donde gana.
+//
+// El fondo oscuro es deliberado y es el único del producto junto al lateral:
+// la puerta de entrada es chrome, no contenido. Donde vive la información el
+// fondo es claro.
+// ====================================================================
+
+.escena {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(60rem 30rem at 110% -10%, rgba(217, 164, 65, 0.18), transparent 60%),
+    linear-gradient(160deg, #0e3a4c 0%, #0a2a38 55%, #071e29 100%);
+}
+
+// El ancho es el del formulario corto. `enrolar-mfa` lo ensancha en su hoja:
+// allí conviven el QR, la clave manual y los ocho códigos de respaldo.
+.panel {
+  width: min(26rem, 100%);
+  background: var(--cl-superficie);
+  border-radius: 18px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+  animation: aparecer 0.45s ease-out both;
+}
+
+// Las `@keyframes` no se scopean con encapsulación emulada: se emiten al
+// documento. Que las cuatro hojas la declaren idéntica deja de ser una
+// coincidencia frágil y pasa a ser el mismo texto.
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+// La marca, con la métrica de las tres pantallas cortas. El login la agranda
+// en su hoja: allí es el rótulo principal, no una cabecera de apoyo.
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.5rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    color: var(--cl-primario);
+  }
+
+  p {
+    margin: 0.1rem 0 0;
+    font-size: 0.85rem;
+    color: var(--cl-tinta-suave);
+  }
+}

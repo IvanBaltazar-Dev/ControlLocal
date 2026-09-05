@@ -1,20 +1,17 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Cierre · Solicitudes</p>
-    <h1>Solicitudes de alquiler</h1>
-    <p class="sub">
-      La oferta formal del cliente sobre una oportunidad: condiciones, expediente documental y
-      decisión del broker. Los indicadores filtran la lista al pulsarlos.
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Cierre', 'Solicitudes']"
+  titulo="Solicitudes de alquiler"
+  sub="La oferta formal del cliente sobre una oportunidad: condiciones, expediente documental y
+       decisión del broker. Los indicadores filtran la lista al pulsarlos."
+>
+  <div acciones class="acciones">
     @if (esAgente()) {
       <button type="button" class="cl-btn primario" (click)="nueva()">Nueva solicitud</button>
     } @else {
       <span class="solo-lectura">Consulta</span>
     }
   </div>
-</header>
+</brox-page-header>
 
 <section class="kpis">
   <cl-kpi

@@ -40,6 +40,7 @@ import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-se
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
 import { RESUMEN_SOLICITUDES_VACIO } from '../solicitudes/solicitudes';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 /** Los tres cubos que la cola ofrece; `PENDIENTES` es el defecto. */
@@ -79,7 +80,7 @@ type ResultadoCarga = CargaCorrecta | { error: string };
  */
 @Component({
   selector: 'app-solicitudes-revisar',
-  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi],
+  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi, BroxPageHeader],
   templateUrl: './solicitudes-revisar.html',
   styleUrl: './solicitudes-revisar.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

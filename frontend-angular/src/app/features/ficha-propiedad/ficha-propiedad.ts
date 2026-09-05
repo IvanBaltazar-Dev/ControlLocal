@@ -63,6 +63,7 @@ import {
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { ImagenSegura } from '../../shared/imagen-segura/imagen-segura';
 import { SubidaArchivo } from '../../shared/subida-archivo/subida-archivo';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Tope de fotos por local; lo impone el backend y aquí solo se anticipa. */
 export const MAXIMO_FOTOS = 6;
@@ -105,7 +106,7 @@ interface Complementos {
  */
 @Component({
   selector: 'app-ficha-propiedad',
-  imports: [EstadoListado, ImagenSegura, SubidaArchivo],
+  imports: [EstadoListado, ImagenSegura, SubidaArchivo, BroxPageHeader],
   templateUrl: './ficha-propiedad.html',
   styleUrl: './ficha-propiedad.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

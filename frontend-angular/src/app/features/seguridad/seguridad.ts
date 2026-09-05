@@ -12,6 +12,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MFA_CODIGO_REUTILIZADO } from '../../core/auth/codigos-mfa';
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Lo que se enseña de cada tipo de evento, para no mostrar el enum crudo. */
 const ETIQUETA_EVENTO: Readonly<Record<string, string>> = {
@@ -54,7 +55,7 @@ const ETIQUETA_EVENTO: Readonly<Record<string, string>> = {
  */
 @Component({
   selector: 'cl-seguridad',
-  imports: [EstadoListado, ReactiveFormsModule, DialogoConfirmacion],
+  imports: [EstadoListado, ReactiveFormsModule, DialogoConfirmacion, BroxPageHeader],
   templateUrl: './seguridad.html',
   styleUrl: './seguridad.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

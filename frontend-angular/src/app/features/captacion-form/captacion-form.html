@@ -1,13 +1,18 @@
-<header class="cabecera">
-  <div>
-    <p class="miga">Proceso · Captaciones · {{ esEdicion() ? 'Editar' : 'Nueva' }}</p>
-    <h1>{{ titulo() }}</h1>
-    <p>
-      {{ esSubsanacion() ? 'Corrige lo observado por el broker y reenvía el expediente.' : 'Registra las condiciones del encargo para enviarlas a revisión.' }}
-    </p>
+<brox-page-header
+  [miga]="['Oferta', 'Captaciones', esEdicion() ? 'Editar' : 'Nueva']"
+  [titulo]="titulo()"
+  [sub]="
+    esSubsanacion()
+      ? 'Corrige lo observado por el broker y reenvía el expediente.'
+      : 'Registra las condiciones del encargo para enviarlas a revisión.'
+  "
+>
+  <div acciones class="acciones">
+    <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">
+      Cancelar
+    </button>
   </div>
-  <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

@@ -1,11 +1,12 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Proceso · Supervisión</p>
-    <h1>Reasignaciones de captaciones</h1>
-    <p class="sub">Mueve expedientes activos entre agentes de tu alcance y consulta la trazabilidad del cambio.</p>
+<brox-page-header
+  [miga]="['Oferta', 'Captaciones']"
+  titulo="Reasignaciones de captaciones"
+  sub="Mueve expedientes activos entre agentes de tu alcance y consulta la trazabilidad del cambio."
+>
+  <div acciones class="acciones">
+    <button type="button" class="cl-btn" (click)="recargar()">Actualizar</button>
   </div>
-  <button type="button" class="cl-btn" (click)="recargar()">Actualizar</button>
-</header>
+</brox-page-header>
 
 <p class="cl-aviso">La reasignación cambia al agente responsable, pero no cambia el estado comercial de la captación.</p>
 @if (exito()) { <p class="cl-ok" role="status">{{ exito() }}</p> }

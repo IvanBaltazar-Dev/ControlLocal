@@ -1,16 +1,13 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Proceso · Prospecciones · Seguimiento</p>
-    <h1>Seguimiento de {{ valor(prospeccion()?.codigoProspeccion) }}</h1>
-    <p class="sub">
-      {{ valor(prospeccion()?.direccion) }} · {{ valor(prospeccion()?.distrito) }}
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Oferta', 'Prospecciones', 'Seguimiento']"
+  [titulo]="'Seguimiento de ' + valor(prospeccion()?.codigoProspeccion)"
+  [sub]="valor(prospeccion()?.direccion) + ' · ' + valor(prospeccion()?.distrito)"
+>
+  <div acciones class="acciones">
     @if (!puedeOperar()) { <span class="solo-lectura">Solo lectura</span> }
     <button type="button" class="cl-btn" (click)="volver()">Volver</button>
   </div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

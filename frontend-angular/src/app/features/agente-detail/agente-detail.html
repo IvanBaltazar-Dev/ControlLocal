@@ -1,12 +1,9 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">
-      <button type="button" class="enlace" (click)="volver()">Agentes</button> · Ficha
-    </p>
-    <h1>{{ texto(agente()?.nombre) }}</h1>
-    <p class="sub">{{ texto(agente()?.codigoAgente) }} · {{ documento() }}</p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="[{ etiqueta: 'Agentes', ruta: '/agentes' }, { etiqueta: 'Ficha' }]"
+  [titulo]="texto(agente()?.nombre)"
+  [sub]="texto(agente()?.codigoAgente) + ' · ' + documento()"
+>
+  <div acciones class="acciones">
     @if (puedeEditar() && ficha()) {
       <button type="button" class="cl-btn" (click)="editar()">Editar datos</button>
       <!-- Esta ficha es el expediente COMERCIAL y se identifica por el id del
@@ -16,7 +13,7 @@
       <a class="cl-btn" routerLink="/seguridad">Gestionar acceso</a>
     }
   </div>
-</header>
+</brox-page-header>
 
 @if (fueraDeAlcance()) {
   <p class="aviso-alcance" role="status">

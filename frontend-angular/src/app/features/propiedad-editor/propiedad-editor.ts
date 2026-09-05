@@ -34,6 +34,7 @@ import { Propietario, PropietariosService } from '../../core/api/propietarios.se
 import { texto } from '../../core/formato';
 import { CampoGobernado } from '../../shared/campo-gobernado/campo-gobernado';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const PROPIETARIOS_POR_PAGINA = 50;
 
@@ -127,7 +128,7 @@ type RetiradoPorEncargo = Readonly<Record<number, ReadonlySet<string>>>;
  */
 @Component({
   selector: 'app-propiedad-editor',
-  imports: [CampoGobernado, EstadoListado, LowerCasePipe, RouterLink],
+  imports: [CampoGobernado, EstadoListado, LowerCasePipe, RouterLink, BroxPageHeader],
   templateUrl: './propiedad-editor.html',
   styleUrl: './propiedad-editor.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

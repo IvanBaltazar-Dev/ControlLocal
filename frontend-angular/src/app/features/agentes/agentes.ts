@@ -31,6 +31,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
@@ -93,7 +94,15 @@ type ResultadoCarga =
  */
 @Component({
   selector: 'cl-agentes',
-  imports: [BarraFiltros, DialogoConfirmacion, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi],
+  imports: [
+    BarraFiltros,
+    BroxPageHeader,
+    DialogoConfirmacion,
+    EstadoListado,
+    FiltroSelect,
+    Paginacion,
+    TarjetaKpi,
+  ],
   templateUrl: './agentes.html',
   styleUrl: './agentes.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

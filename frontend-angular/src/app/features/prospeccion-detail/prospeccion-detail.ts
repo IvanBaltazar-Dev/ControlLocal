@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { fechaCorta, monto, numero, SIN_DATO, texto } from '../../core/formato';
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const ACTIVAS = new Set(['P', 'C', 'R', 'E', 'S']);
 
@@ -22,7 +23,7 @@ interface HitoProspeccion {
 
 @Component({
   selector: 'app-prospeccion-detail',
-  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule],
+  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './prospeccion-detail.html',
   styleUrl: './prospeccion-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -14,6 +14,9 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { RESULTADOS_POR_PAGINA } from '../../shared/paginacion/tamano-pagina';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
+import { PestanasRuta } from '../../shared/pestanas/pestanas-ruta';
+import { PESTANAS_INDICADORES } from '../indicadores/pestanas';
 
 /**
  * Avance comercial por propiedad (RF-017): una fila por captación **activa**,
@@ -45,13 +48,15 @@ import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
  */
 @Component({
   selector: 'app-reportes',
-  imports: [EstadoListado, Paginacion, TarjetaKpi],
+  imports: [BroxPageHeader, EstadoListado, Paginacion, PestanasRuta, TarjetaKpi],
   templateUrl: './reportes.html',
   styleUrl: './reportes.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Reportes implements OnInit {
   private readonly api = inject(IndicadoresService);
+
+  protected readonly pestanas = PESTANAS_INDICADORES;
 
   protected readonly datos = signal<AvanceComercial | null>(null);
   protected readonly cargando = signal(true);

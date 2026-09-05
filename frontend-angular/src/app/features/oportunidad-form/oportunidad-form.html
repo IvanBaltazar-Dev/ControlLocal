@@ -1,15 +1,14 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Demanda · Oportunidades · Nueva</p>
-    <h1>Nueva oportunidad comercial</h1>
-    <p class="sub">
-      Vincula un cliente interesado con una captación activa para iniciar el seguimiento.
-    </p>
+<brox-page-header
+  [miga]="['Demanda', 'Oportunidades', 'Nueva']"
+  titulo="Nueva oportunidad comercial"
+  sub="Vincula un cliente interesado con una captación activa para iniciar el seguimiento."
+>
+  <div acciones class="acciones">
+    <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+      Cancelar
+    </button>
   </div>
-  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
-    Cancelar
-  </button>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

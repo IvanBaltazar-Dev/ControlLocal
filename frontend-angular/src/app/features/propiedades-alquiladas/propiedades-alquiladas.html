@@ -1,10 +1,9 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Operación · Cierres exitosos</p>
-    <h1>Cierres exitosos</h1>
-    <p class="sub">Locales alquilados con contrato registrado</p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Cierre', 'Contratos']"
+  titulo="Contratos"
+  sub="Propiedades con contrato registrado"
+>
+  <div acciones class="acciones">
     <button
       type="button"
       class="cl-btn"
@@ -14,11 +13,11 @@
       {{ exportando() ? 'Exportando…' : 'Exportar CSV' }}
     </button>
   </div>
-</header>
+</brox-page-header>
 
 <section class="kpis">
   <cl-kpi
-    etiqueta="Cierres exitosos"
+    etiqueta="Contratos"
     [valor]="resumen().cierres"
     tono="verde"
     pie="Contratos registrados"
@@ -92,7 +91,7 @@
   [cargando]="cargando()"
   [error]="error()"
   [vacio]="!cargando() && !error() && paginaDatos().items.length === 0"
-  mensajeCarga="Cargando cierres exitosos…"
+  mensajeCarga="Cargando contratos…"
   [mensajeVacio]="mensajeVacio()"
   (reintentar)="recargar()"
 />

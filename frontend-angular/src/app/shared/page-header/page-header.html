@@ -1,0 +1,30 @@
+<header class="cl-cabecera" [class.cl-cabecera-proto]="variante() === 'prototipo'">
+  <div>
+    @if (pasos().length) {
+      <p class="miga">
+        @for (paso of pasos(); track $index) {
+          @if (paso.ruta) {
+            <a [routerLink]="paso.ruta">{{ paso.etiqueta }}</a>
+          } @else {
+            <span>{{ paso.etiqueta }}</span>
+          }
+          @if (!$last) {
+            <span class="sep" aria-hidden="true">{{ separador() }}</span>
+          }
+        }
+      </p>
+    }
+
+    @if (titulo()) {
+      <h1>{{ titulo() }}</h1>
+    }
+    <ng-content select="[titulo]" />
+
+    @if (sub()) {
+      <p class="sub">{{ sub() }}</p>
+    }
+    <ng-content />
+  </div>
+
+  <ng-content select="[acciones]" />
+</header>

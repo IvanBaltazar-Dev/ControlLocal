@@ -1,19 +1,16 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Demanda · Interacciones</p>
-    <h1>Bitácora comercial</h1>
-    <p class="sub">
-      Historial de contacto separado por lado de la relación: quien busca local y quien lo tiene.
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Demanda', 'Interacciones']"
+  titulo="Bitácora comercial"
+  sub="Historial de contacto separado por lado de la relación: quien busca local y quien lo tiene."
+>
+  <div acciones class="acciones">
     @if (puedeOperar()) {
       <button type="button" class="cl-btn primario" (click)="nueva()">Nueva interacción</button>
     } @else {
       <span class="solo-lectura">Solo lectura</span>
     }
   </div>
-</header>
+</brox-page-header>
 
 <nav class="cl-pestanas" role="tablist">
   @for (pestana of pestanas; track pestana.clave) {

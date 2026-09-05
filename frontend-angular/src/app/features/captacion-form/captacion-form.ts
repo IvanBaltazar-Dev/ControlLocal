@@ -26,6 +26,7 @@ import {
 import { monto, numero, SIN_DATO, texto } from '../../core/formato';
 import { POLITICA_COMERCIAL } from '../../core/politica-comercial';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const LOCALES_POR_BUSQUEDA = 20;
 type ModalidadComision = 'E05' | 'E1' | 'E15' | 'E2' | 'P' | 'F' | 'S';
@@ -64,7 +65,7 @@ const MODALIDAD_HABITUAL: Readonly<Record<'A' | 'V', ModalidadComision>> = { A: 
 
 @Component({
   selector: 'app-captacion-form',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './captacion-form.html',
   styleUrl: './captacion-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

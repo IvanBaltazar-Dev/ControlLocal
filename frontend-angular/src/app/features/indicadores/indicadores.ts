@@ -36,7 +36,11 @@ import {
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { GraficoSerie, SerieGrafico } from '../../shared/grafico-serie/grafico-serie';
 import { Icono } from '../../shared/icono/icono';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 import { Esfera } from './partes/esfera';
+
+import { PestanasRuta } from '../../shared/pestanas/pestanas-ruta';
+import { PESTANAS_INDICADORES } from './pestanas';
 
 /**
  * La rampa de identidad del proceso: un tono por paso del embudo.
@@ -180,7 +184,15 @@ const METRICAS_EVO: readonly OpcionEvo[] = [
  */
 @Component({
   selector: 'app-indicadores',
-  imports: [EstadoListado, Esfera, GraficoSerie, Icono, RouterLink],
+  imports: [
+    BroxPageHeader,
+    EstadoListado,
+    Esfera,
+    GraficoSerie,
+    Icono,
+    PestanasRuta,
+    RouterLink,
+  ],
   templateUrl: './indicadores.html',
   styleUrl: './indicadores.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -191,6 +203,7 @@ export class Indicadores implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
+  protected readonly pestanas = PESTANAS_INDICADORES;
   protected readonly periodos = PERIODOS_INDICADORES;
   protected readonly metricasEvo = METRICAS_EVO;
 

@@ -7,6 +7,7 @@ import { iniciales as inicialesDe } from '../core/formato';
 import { ETIQUETA_ROL } from '../core/auth/sesion.model';
 import { altasDe, cuentaDe, cuerpoDelMenu } from '../core/auth/acceso';
 import { CampanaAlertas } from '../shared/campana-alertas/campana-alertas';
+import { Icono } from '../shared/icono/icono';
 import { ImagenSegura } from '../shared/imagen-segura/imagen-segura';
 
 /**
@@ -21,9 +22,13 @@ import { ImagenSegura } from '../shared/imagen-segura/imagen-segura';
  */
 @Component({
   selector: 'app-shell',
-  imports: [CampanaAlertas, ImagenSegura, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CampanaAlertas, Icono, ImagenSegura, RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
+  // Escape cierra el cajón, el menú de la cuenta y el de registro. Va en el
+  // documento y no en el `<aside>` porque cuando el cajón se abre el foco
+  // sigue en el botón que lo abrió, y un `keydown` en el aside no llegaría.
+  host: { '(document:keydown.escape)': 'cerrarTodo()' },
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
@@ -54,6 +59,31 @@ export class Shell {
 
   protected cerrarCuenta(): void {
     this.cuentaAbierta.set(false);
+  }
+
+  /**
+   * El cajón del móvil. Por debajo de 900 px el lateral no se comprime: se
+   * convierte en cajón (D-E3-1 §6.4). Por encima no estorba —el CSS lo deja
+   * siempre visible— así que este estado solo manda en pantalla estrecha.
+   *
+   * Se cierra al pulsar una entrada: dejarlo abierto taparía justo la pantalla
+   * a la que se acaba de entrar.
+   */
+  protected readonly menuAbierto = signal(false);
+
+  protected alternarMenu(): void {
+    this.menuAbierto.update((abierto) => !abierto);
+  }
+
+  protected cerrarMenu(): void {
+    this.menuAbierto.set(false);
+  }
+
+  /** Lo que hace Escape: cerrar lo que esté abierto encima del contenido. */
+  protected cerrarTodo(): void {
+    this.cerrarMenu();
+    this.cerrarCuenta();
+    this.cerrarRegistro();
   }
 
   /**

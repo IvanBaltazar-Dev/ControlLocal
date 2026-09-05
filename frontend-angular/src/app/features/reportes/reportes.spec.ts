@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import {
   AvanceComercial,
@@ -63,7 +64,10 @@ describe('Reportes (avance comercial)', () => {
   async function montar(): Promise<Reportes> {
     await TestBed.configureTestingModule({
       imports: [Reportes],
-      providers: [{ provide: IndicadoresService, useValue: api }],
+      // El router hace falta desde que esta pantalla es una PESTAÑA de
+      // Indicadores: `cl-pestanas-ruta` dibuja enlaces, y un `routerLink` sin
+      // `ActivatedRoute` no se puede instanciar.
+      providers: [{ provide: IndicadoresService, useValue: api }, provideRouter([])],
     }).compileComponents();
     fixture = TestBed.createComponent(Reportes);
     fixture.detectChanges();

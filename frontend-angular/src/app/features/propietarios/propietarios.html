@@ -1,20 +1,17 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Gestión · Personas</p>
-    <h1>Propietarios</h1>
-    <p class="sub">
-      Personas y empresas dueñas de los locales de la cartera. El número de locales se cuenta
-      según tu alcance.
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Oferta', 'Propietarios']"
+  titulo="Propietarios"
+  sub="Personas y empresas dueñas de los locales de la cartera. El número de locales se cuenta
+       según tu alcance."
+>
+  <div acciones class="acciones">
     @if (puedeEditar()) {
       <button type="button" class="cl-btn primario" (click)="nuevo()">Registrar propietario</button>
     } @else {
       <span class="cl-badge">Solo lectura</span>
     }
   </div>
-</header>
+</brox-page-header>
 
 @if (avisoAlcance(); as aviso) {
   <p class="aviso-alcance">{{ aviso }}</p>

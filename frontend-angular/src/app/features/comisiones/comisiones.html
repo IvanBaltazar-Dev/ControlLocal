@@ -1,15 +1,11 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Cierre · Comisiones</p>
-    <h1>Liquidación de comisiones</h1>
-    <p class="sub">
-      Lo generado, lo cobrado y lo pagado al agente, por cierre.
-      @if (!puedeLiquidar()) {
-        <span class="solo-lectura">Solo lectura</span>
-      }
-    </p>
-  </div>
-</header>
+<brox-page-header [miga]="['Cierre', 'Comisiones']" titulo="Liquidación de comisiones">
+  <p class="sub">
+    Lo generado, lo cobrado y lo pagado al agente, por cierre.
+    @if (!puedeLiquidar()) {
+      <span class="solo-lectura">Solo lectura</span>
+    }
+  </p>
+</brox-page-header>
 
 <!--
   Tres magnitudes separadas, nunca sumadas: facturado no es cobrado, y cobrado

@@ -43,6 +43,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const DIAS_RECONTACTO = 7;
@@ -89,7 +90,7 @@ const METRICAS_VACIAS: MetricasProspecciones = {
  */
 @Component({
   selector: 'app-prospecciones',
-  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi],
+  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi, BroxPageHeader],
   templateUrl: './prospecciones.html',
   styleUrl: './prospecciones.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

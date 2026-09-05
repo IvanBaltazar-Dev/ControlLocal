@@ -23,6 +23,7 @@ import { CodigosRespaldo } from '../../shared/codigos-respaldo/codigos-respaldo'
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { ImagenSegura } from '../../shared/imagen-segura/imagen-segura';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Qué está haciendo el usuario en el bloque de seguridad. */
 type AccionMfa = 'regenerar' | 'reemplazar';
@@ -59,6 +60,7 @@ const DURACION_AVISO_MS = 4000;
     RouterLink,
     DialogoConfirmacion,
     CodigosRespaldo,
+    BroxPageHeader,
   ],
   templateUrl: './perfil.html',
   styleUrl: './perfil.scss',

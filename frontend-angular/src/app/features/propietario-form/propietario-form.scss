@@ -1,9 +1,5 @@
 :host { display: block; }
 
-.cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.2rem; }
-.cabecera h1 { margin: 0.2rem 0; color: var(--cl-primario); font-size: 1.4rem; }
-.cabecera p { margin: 0; color: var(--cl-tinta-suave); }
-.miga { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 
 form { display: grid; gap: 0.9rem; max-width: 56rem; }
 .seccion { padding: 1.15rem; border: 1px solid var(--cl-borde); border-radius: var(--cl-radio); background: var(--cl-superficie); }
@@ -47,6 +43,5 @@ input:disabled, select:disabled { background: var(--cl-fondo); color: var(--cl-t
 button:disabled { opacity: 0.55; cursor: default; }
 
 @media (max-width: 46rem) {
-  .cabecera { flex-direction: column; }
   .grid.dos { grid-template-columns: 1fr; }
 }

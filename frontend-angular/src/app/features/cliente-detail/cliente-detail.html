@@ -1,10 +1,9 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Demanda · Clientes · Ficha</p>
-    <h1>{{ valor(cliente()?.nombre) }}</h1>
-    <p>Historia comercial visible en tu alcance.</p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Demanda', 'Clientes', 'Ficha']"
+  [titulo]="valor(cliente()?.nombre)"
+  sub="Historia comercial visible en tu alcance."
+>
+  <div acciones class="acciones">
     <button type="button" class="cl-btn" (click)="volver()">Volver a la bandeja</button>
     @if (!cargando() && !error()) {
       <button type="button" class="cl-btn" (click)="verBitacora()">Bitácora de contacto</button>
@@ -13,7 +12,7 @@
       <button type="button" class="cl-btn primario" (click)="editar()">Editar cliente</button>
     }
   </div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

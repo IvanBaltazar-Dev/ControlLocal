@@ -18,6 +18,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { Paginacion } from '../../shared/paginacion/paginacion';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
@@ -40,7 +41,7 @@ type ResultadoCarga = { pagina: PageResponse<Broker> } | { error: string };
  */
 @Component({
   selector: 'cl-brokers',
-  imports: [EstadoListado, Paginacion],
+  imports: [EstadoListado, Paginacion, BroxPageHeader],
   templateUrl: './brokers.html',
   styleUrl: './brokers.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

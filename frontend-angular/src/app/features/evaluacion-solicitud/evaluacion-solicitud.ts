@@ -25,6 +25,7 @@ import { fechaCorta, fechaHora, monto as montoDe, SIN_DATO, texto as textoDe } f
 import { DialogoConfirmacion, TonoAccion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { VisorDocumento } from '../../shared/visor-documento/visor-documento';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Las tres decisiones del broker. `A` y `R` son finales; `O` devuelve. */
 type Decision = 'A' | 'O' | 'R';
@@ -50,7 +51,7 @@ type Decision = 'A' | 'O' | 'R';
  */
 @Component({
   selector: 'app-evaluacion-solicitud',
-  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, VisorDocumento],
+  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, VisorDocumento, BroxPageHeader],
   templateUrl: './evaluacion-solicitud.html',
   styleUrl: './evaluacion-solicitud.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

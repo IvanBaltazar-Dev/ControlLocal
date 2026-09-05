@@ -1,13 +1,15 @@
 <article class="privacidad">
-  <header>
-    <p class="miga">BROX</p>
-    <h1>Privacidad y protección de datos</h1>
+  <!-- El `<h1>` lo pone la página y no el componente: éste es un documento
+       legal, y su título se lee en tamaño de documento, no en tamaño de
+       pantalla de trabajo. -->
+  <brox-page-header miga="BROX">
+    <h1 titulo>Privacidad y protección de datos</h1>
     <p class="version">Versión {{ version() }} · Vigente desde el {{ vigenteDesde() }}</p>
     <p class="entrada">
       En BROX tratamos la información personal de manera responsable, segura y exclusivamente para
       brindar y mejorar la gestión inmobiliaria de la organización que atiende a cada persona.
     </p>
-  </header>
+  </brox-page-header>
 
   <section>
     <h2>Nuestro compromiso</h2>

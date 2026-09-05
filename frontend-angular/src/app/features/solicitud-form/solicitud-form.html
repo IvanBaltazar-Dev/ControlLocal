@@ -1,14 +1,15 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Cierre · Solicitudes · Nueva</p>
-    <h1>Nueva solicitud de alquiler</h1>
-    <p class="sub">
-      Formaliza la oferta del cliente sobre una oportunidad abierta. Estas condiciones son las que
-      evalúa el broker y las que hereda el contrato al cerrar.
-    </p>
+<brox-page-header
+  [miga]="['Cierre', 'Solicitudes', 'Nueva']"
+  titulo="Nueva solicitud de alquiler"
+  sub="Formaliza la oferta del cliente sobre una oportunidad abierta. Estas condiciones son las que
+       evalúa el broker y las que hereda el contrato al cerrar."
+>
+  <div acciones class="acciones">
+    <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+      Cancelar
+    </button>
   </div>
-  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

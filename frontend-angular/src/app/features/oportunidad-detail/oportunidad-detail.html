@@ -1,14 +1,13 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Demanda · Oportunidades · Seguimiento</p>
-    <h1>{{ valor(oportunidad()?.clienteNombre) }}</h1>
-    <p class="sub">
-      {{ valor(oportunidad()?.codigoOportunidad) }} ·
-      {{ valor(oportunidad()?.direccionLocal) }} ·
-      {{ valor(oportunidad()?.codigoCaptacion) }}
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Demanda', 'Oportunidades', 'Seguimiento']"
+  [titulo]="valor(oportunidad()?.clienteNombre)"
+>
+  <p class="sub">
+    {{ valor(oportunidad()?.codigoOportunidad) }} ·
+    {{ valor(oportunidad()?.direccionLocal) }} ·
+    {{ valor(oportunidad()?.codigoCaptacion) }}
+  </p>
+  <div acciones class="acciones">
     @if (!puedeOperar()) { <span class="solo-lectura">Solo lectura</span> }
     @if (oportunidad()) {
       <button type="button" class="cl-btn" (click)="verCliente()">Bitácora del cliente</button>
@@ -23,7 +22,7 @@
     }
     <button type="button" class="cl-btn" (click)="volver()">Volver</button>
   </div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

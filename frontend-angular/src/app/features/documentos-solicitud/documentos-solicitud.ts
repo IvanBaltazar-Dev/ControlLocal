@@ -23,6 +23,7 @@ import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-c
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { SubidaArchivo } from '../../shared/subida-archivo/subida-archivo';
 import { VisorDocumento } from '../../shared/visor-documento/visor-documento';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Una fila del checklist: el tipo requerido y el documento real, si existe. */
 export interface FilaDocumento {
@@ -55,7 +56,7 @@ export interface FilaDocumento {
  */
 @Component({
   selector: 'app-documentos-solicitud',
-  imports: [DialogoConfirmacion, EstadoListado, SubidaArchivo, VisorDocumento],
+  imports: [DialogoConfirmacion, EstadoListado, SubidaArchivo, VisorDocumento, BroxPageHeader],
   templateUrl: './documentos-solicitud.html',
   styleUrl: './documentos-solicitud.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -25,6 +25,7 @@ import {
 } from '../../core/api/propietarios.service';
 import { CampoGobernado } from '../../shared/campo-gobernado/campo-gobernado';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const PROPIETARIOS_POR_PAGINA = 50;
 
@@ -79,7 +80,7 @@ interface TitularElegido {
  */
 @Component({
   selector: 'app-propiedad-form',
-  imports: [CampoGobernado, EstadoListado, LowerCasePipe],
+  imports: [CampoGobernado, EstadoListado, LowerCasePipe, BroxPageHeader],
   templateUrl: './propiedad-form.html',
   styleUrl: './propiedad-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

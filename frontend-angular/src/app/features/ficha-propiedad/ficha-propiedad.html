@@ -6,18 +6,17 @@
 />
 
 @if (!cargando() && !error() && captacion(); as c) {
-  <header class="cl-cabecera">
-    <div>
-      <p class="miga">Captaciones · {{ valor(c.codigoCaptacion) }} · Resumen comercial</p>
-      <h1>{{ valor(c.direccionLocal) }}</h1>
-      <p class="sub">
-        {{ valor(c.distritoLocal) }} · {{ rubro() }}
-        <span class="cl-badge" [class]="tonoEstado(c.estado)">
-          {{ etiquetaEstado(c.estado) }}
-        </span>
-      </p>
-    </div>
-    <div class="acciones">
+  <brox-page-header
+    [miga]="['Oferta', 'Captaciones', valor(c.codigoCaptacion), 'Resumen comercial']"
+    [titulo]="valor(c.direccionLocal)"
+  >
+    <p class="sub">
+      {{ valor(c.distritoLocal) }} · {{ rubro() }}
+      <span class="cl-badge" [class]="tonoEstado(c.estado)">
+        {{ etiquetaEstado(c.estado) }}
+      </span>
+    </p>
+    <div acciones class="acciones">
       <button type="button" class="cl-btn" (click)="volver()">Volver</button>
       @if (c.idLocal) {
         <button type="button" class="cl-btn primario" (click)="verLocal()">
@@ -25,7 +24,7 @@
         </button>
       }
     </div>
-  </header>
+  </brox-page-header>
 
   <section class="cl-resumen">
     <div><span>Área</span><strong>{{ unidad(area() ?? undefined, 'm²') }}</strong></div>

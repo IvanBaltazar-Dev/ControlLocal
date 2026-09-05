@@ -1,23 +1,22 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Cierre · Solicitudes · Expediente</p>
-    <h1>{{ valor(solicitud()?.codigoSolicitud) }} · {{ valor(solicitud()?.clienteNombre) }}</h1>
-    <p class="sub">
-      <span>Operación {{ valor(solicitud()?.codigoOportunidad) }}</span>
-      <span>{{ valor(solicitud()?.direccionLocal) }}</span>
-      @if (solicitud(); as s) {
-        <span class="cl-badge" [class]="tonoEstado(s.estado)">{{ etiquetaEstado(s.estado) }}</span>
-      }
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Cierre', 'Solicitudes', 'Expediente']"
+  [titulo]="valor(solicitud()?.codigoSolicitud) + ' · ' + valor(solicitud()?.clienteNombre)"
+>
+  <p class="sub">
+    <span>Operación {{ valor(solicitud()?.codigoOportunidad) }}</span>
+    <span>{{ valor(solicitud()?.direccionLocal) }}</span>
+    @if (solicitud(); as s) {
+      <span class="cl-badge" [class]="tonoEstado(s.estado)">{{ etiquetaEstado(s.estado) }}</span>
+    }
+  </p>
+  <div acciones class="acciones">
     <button type="button" class="cl-btn" (click)="volver()">Volver</button>
     <!-- Con el alquiler cerrado el expediente pasa a solo lectura. -->
     @if (esAgente() && !contrato() && solicitud()?.estado !== 'C') {
       <button type="button" class="cl-btn" (click)="gestionarDocumentos()">Gestionar documentos</button>
     }
   </div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"
@@ -75,7 +74,7 @@
           </div>
           @if (c.incidencias) { <p class="descripcion">{{ c.incidencias }}</p> }
           <div class="acciones-tarjeta">
-            <button type="button" class="cl-btn" (click)="verCierres()">Ver cierres exitosos</button>
+            <button type="button" class="cl-btn" (click)="verCierres()">Ver contratos</button>
           </div>
         </section>
       } @else if (puedeCerrar()) {

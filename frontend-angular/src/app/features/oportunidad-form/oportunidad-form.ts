@@ -11,6 +11,7 @@ import { OportunidadesService } from '../../core/api/oportunidades.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { fechaCorta, SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Cuántos candidatos se piden al buscar. Nunca se descarga la cartera entera. */
 const CANDIDATOS = 20;
@@ -41,7 +42,7 @@ const CANDIDATOS = 20;
  */
 @Component({
   selector: 'app-oportunidad-form',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './oportunidad-form.html',
   styleUrl: './oportunidad-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

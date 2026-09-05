@@ -1,10 +1,9 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Proceso · Captaciones</p>
-    <h1>Bandeja de captaciones</h1>
-    <p class="sub">{{ subtitulo() }}</p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Oferta', 'Captaciones']"
+  titulo="Bandeja de captaciones"
+  [sub]="subtitulo()"
+>
+  <div acciones class="acciones">
     @if (puedeRegistrar()) {
       <button type="button" class="cl-btn primario" (click)="nueva()">
         Nueva captación
@@ -13,7 +12,7 @@
       <span class="cl-badge">Solo lectura</span>
     }
   </div>
-</header>
+</brox-page-header>
 
 <section class="kpis">
   <cl-kpi etiqueta="Total" [valor]="metricas().total" tono="gris" pie="En tu alcance" />

@@ -35,6 +35,7 @@ import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-c
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
@@ -70,7 +71,7 @@ type ResultadoCarga =
  */
 @Component({
   selector: 'cl-propietarios',
-  imports: [BarraFiltros, DialogoConfirmacion, EstadoListado, Paginacion, TarjetaKpi],
+  imports: [BarraFiltros, DialogoConfirmacion, EstadoListado, Paginacion, TarjetaKpi, BroxPageHeader],
   templateUrl: './propietarios.html',
   styleUrl: './propietarios.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

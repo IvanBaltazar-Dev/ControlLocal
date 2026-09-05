@@ -13,6 +13,7 @@ import { ApiError } from '../../core/api/api.types';
 import { AuthService } from '../../core/auth/auth.service';
 import { texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const LARGO_DOCUMENTO: Readonly<Record<string, number>> = { D: 8, R: 11 };
 
@@ -36,7 +37,7 @@ const LARGO_DOCUMENTO: Readonly<Record<string, number>> = { D: 8, R: 11 };
  */
 @Component({
   selector: 'app-agente-form',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './agente-form.html',
   styleUrl: './agente-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

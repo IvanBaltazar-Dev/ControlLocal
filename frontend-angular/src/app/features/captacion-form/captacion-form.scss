@@ -1,9 +1,5 @@
 :host { display: block; }
 
-.cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.2rem; }
-.cabecera h1 { margin: 0.2rem 0; color: var(--cl-primario); font-size: 1.4rem; }
-.cabecera p { margin: 0; color: var(--cl-tinta-suave); }
-.miga { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .distribucion { display: grid; grid-template-columns: minmax(0, 1fr) 17.5rem; gap: 1rem; align-items: start; }
 main { display: grid; gap: 0.9rem; }
 .seccion, aside { padding: 1.15rem; border: 1px solid var(--cl-borde); border-radius: var(--cl-radio); background: var(--cl-superficie); }
@@ -47,4 +43,4 @@ aside small { margin-top: 0.1rem; font-size: 0.68rem; }
 button:disabled { opacity: 0.55; cursor: default; }
 
 @media (max-width: 64rem) { .distribucion { grid-template-columns: 1fr; } aside { position: static; } }
-@media (max-width: 46rem) { .cabecera { flex-direction: column; } .grid.dos, .grid.tres { grid-template-columns: 1fr; } .busqueda-local { grid-template-columns: 1fr; } }
+@media (max-width: 46rem) { .grid.dos, .grid.tres { grid-template-columns: 1fr; } .busqueda-local { grid-template-columns: 1fr; } }

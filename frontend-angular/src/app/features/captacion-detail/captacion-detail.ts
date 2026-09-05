@@ -11,10 +11,11 @@ import { calcularCondicionComision, descripcionCondicionComision, importeTexto }
 import { fechaCorta, monto, numero, siNo, SIN_DATO, texto } from '../../core/formato';
 import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 @Component({
   selector: 'app-captacion-detail',
-  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule],
+  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './captacion-detail.html',
   styleUrl: './captacion-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

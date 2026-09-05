@@ -22,20 +22,6 @@
   }
 }
 
-.enlace {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--cl-acento, #2563eb);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
 .equipo {
   margin-top: 1.5rem;
 

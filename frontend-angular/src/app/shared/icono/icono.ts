@@ -45,7 +45,11 @@ export type NombreIcono =
   | 'raya'
   | 'graf'
   | 'lupa'
-  | 'mas';
+  | 'mas'
+  // Las tres rayas del cajón. No sale del prototipo —allí no había móvil— y
+  // es la única que se añade: es el gesto universal de «abre el menú», no un
+  // símbolo inventado para este producto.
+  | 'menu';
 
 @Component({
   selector: 'cl-icono',
@@ -156,6 +160,9 @@ export type NombreIcono =
         }
         @case ('mas') {
           <path d="M10 5.4v9.2M5.4 10h9.2" />
+        }
+        @case ('menu') {
+          <path d="M4 6h12M4 10h12M4 14h12" />
         }
       }
     </svg>

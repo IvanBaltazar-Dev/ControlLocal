@@ -79,6 +79,28 @@ public final class Vocabulario {
     public static final List<String> CONTEXTOS_INTERACCION =
             List.of("OPORTUNIDAD", "PROSPECCION", "CAPTACION", "CLIENTE");
 
+    /**
+     * <b>Como se llama el id de la entidad segun el contexto.</b>
+     *
+     * <p>El cuerpo de {@code POST /interacciones} no tiene un campo
+     * {@code idEntidad}: tiene <b>cuatro</b>, uno por contexto, y BROX rechaza
+     * la peticion si falta el que corresponde. KAIROS mandaba {@code idEntidad},
+     * un nombre que ese contrato no conoce: el campo viajaba, nadie lo leia y la
+     * interaccion se rechazaba con «Falta el id» — una frase que no se parece a
+     * lo que la conversacion habia entendido, porque el dato SI estaba y solo
+     * iba con el nombre equivocado.
+     *
+     * <p>Esto es <b>nomenclatura del contrato</b>, no una regla: cual de las
+     * cuatro entidades admite cada contexto lo decide BROX, y lo comprueba con
+     * un CHECK en la base. Aqui solo esta escrito como se llama cada una en el
+     * cable.
+     */
+    public static final Map<String, String> CLAVE_DE_ENTIDAD = Map.of(
+            "OPORTUNIDAD", "idOportunidad",
+            "PROSPECCION", "idProspeccion",
+            "CAPTACION", "idCaptacion",
+            "CLIENTE", "idCliente");
+
     /** L llamada, W WhatsApp, E email, P presencial, R reunion, T portal, O otro. */
     public static final Map<String, String> CANALES_INTERACCION = Map.of(
             "L", "llamada", "W", "WhatsApp", "E", "email", "P", "presencial",

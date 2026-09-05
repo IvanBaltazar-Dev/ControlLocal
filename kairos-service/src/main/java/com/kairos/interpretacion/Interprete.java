@@ -1,6 +1,7 @@
 package com.kairos.interpretacion;
 
 import com.kairos.brox.SesionBrox;
+import com.kairos.brox.Traza;
 import com.kairos.conversacion.Accion;
 
 import java.util.List;
@@ -78,6 +79,11 @@ public interface Interprete {
      * @param sesion la de la persona. Hace falta porque parte del vocabulario es
      *               <b>del tenant</b> —sus distritos, sus atributos de catalogo—
      *               y se pregunta a BROX con sus permisos
+     * @param traza  de que turno sale la lectura. Entender ya cuesta llamadas al
+     *               Core —el catalogo, los distritos—, y una llamada sin
+     *               procedencia es una que despues no se puede atribuir. Que
+     *               este en la firma es lo que impide que la proxima
+     *               implementacion —un LLM— la olvide
      */
-    Lectura leer(String texto, SesionBrox sesion);
+    Lectura leer(String texto, SesionBrox sesion, Traza traza);
 }

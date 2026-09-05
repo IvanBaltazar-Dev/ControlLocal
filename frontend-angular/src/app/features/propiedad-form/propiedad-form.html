@@ -1,14 +1,15 @@
-<header class="cabecera">
-  <div>
-    <p class="miga">Propiedades / Nueva</p>
-    <h1>Nueva propiedad</h1>
-    <p class="entradilla">
-      Elige el tipo y cómo se va a gestionar. BROX pregunta lo que corresponda a esa
-      propiedad y nada más.
-    </p>
-  </div>
-  <button type="button" class="secundario" (click)="cancelar()">Volver</button>
-</header>
+<brox-page-header
+  variante="prototipo"
+  separador="›"
+  [miga]="[{ etiqueta: 'Propiedades', ruta: '/propiedades' }, { etiqueta: 'Nueva' }]"
+  titulo="Nueva propiedad"
+>
+  <p class="entradilla">
+    Elige el tipo y cómo se va a gestionar. BROX pregunta lo que corresponda a esa propiedad y
+    nada más.
+  </p>
+  <button acciones type="button" class="secundario" (click)="cancelar()">Volver</button>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

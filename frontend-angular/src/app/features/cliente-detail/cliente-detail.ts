@@ -31,6 +31,7 @@ import { ConstanciaAutorizacionPanel } from '../../shared/constancia-autorizacio
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const ETIQUETAS: Readonly<Record<string, string>> = {
   requerimientos: 'Requerimientos',
@@ -70,7 +71,7 @@ const RUTAS_MIGRADAS: Readonly<Record<string, (id: string) => string[]>> = {
  */
 @Component({
   selector: 'app-cliente-detail',
-  imports: [ConstanciaAutorizacionPanel, EstadoListado, Paginacion, ReactiveFormsModule],
+  imports: [ConstanciaAutorizacionPanel, EstadoListado, Paginacion, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './cliente-detail.html',
   styleUrl: './cliente-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -11,6 +11,7 @@ import {
 } from '../../core/api/asignaciones.service';
 import { SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const ESTADO_OPERATIVO: Readonly<Record<string, string>> = {
   D: 'Disponible',
@@ -46,7 +47,7 @@ type Panel = 'agentes' | 'brokers' | 'historial';
  */
 @Component({
   selector: 'cl-asignaciones',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './asignaciones.html',
   styleUrl: './asignaciones.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

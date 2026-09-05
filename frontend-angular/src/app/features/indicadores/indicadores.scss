@@ -34,33 +34,20 @@
 
 /* ====================================================================
    CABECERA
+   --------------------------------------------------------------------
+   La anatomía —miga, título, bajada y el bloque de la derecha— la pone
+   `brox-page-header`, así que aquí ya no hay un `.cab` con su propia
+   tipografía: era la cuarta métrica distinta para lo mismo, y encima no
+   coincidía con la de `/reportes`, que es la otra cara de esta página.
+
+   Lo único que queda es lo que SIGNIFICA algo en esta bajada: el periodo
+   va destacado porque es la cifra de la que dependen todos los números de
+   abajo. El resto lo dice la cabecera compartida.
    ==================================================================== */
 
-.cab {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  flex-wrap: wrap;
-
-  h1 {
-    margin: 0;
-    font-size: 21px;
-    line-height: 27px;
-    font-weight: 600;
-    letter-spacing: -0.022em;
-  }
-
-  .sub {
-    margin: 2px 0 0;
-    font-size: 12.5px;
-    color: var(--ink-2);
-
-    b {
-      font-weight: 600;
-      color: var(--ink);
-    }
-  }
+.sub b {
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .mandos {

@@ -1,0 +1,56 @@
+// ====================================================================
+// LA PUERTA DE ENTRADA · el formulario corto
+// --------------------------------------------------------------------
+// Lo usan las TRES pantallas cuyo formulario es el mismo: entrar, recuperar el
+// acceso y cambiar la contraseña. Una etiqueta, un campo y, como mucho, un
+// aviso.
+//
+// `enrolar-mfa` NO lo usa, y no es un olvido: allí el texto de apoyo va a
+// 0,84 rem, el borde redondeado solo alcanza a `input[type='text']` —porque
+// también hay casillas— y el aviso tiene tres tonos. Traérsela aquí no sería
+// unificar sino rediseñar esa pantalla, que es otro trabajo.
+// ====================================================================
+
+form {
+  display: grid;
+  gap: 0.45rem;
+}
+
+label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--cl-tinta-suave);
+  margin-top: 0.5rem;
+}
+
+input {
+  border: 1px solid var(--cl-borde);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: var(--cl-primario-claro);
+    box-shadow: 0 0 0 3px rgba(21, 90, 117, 0.15);
+  }
+
+  &.invalido {
+    border-color: var(--cl-error);
+  }
+}
+
+// Lo que salió mal, dicho donde se intentó. Rojo, y con borde: es el único
+// bloque de estas pantallas que pide una corrección.
+.alerta {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: rgba(192, 57, 43, 0.09);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  color: var(--cl-error);
+  font-size: 0.88rem;
+}

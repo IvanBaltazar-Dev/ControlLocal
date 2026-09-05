@@ -10,41 +10,6 @@
 // Cabecera
 // ------------------------------------------------------------------
 
-.cabecera {
-  align-items: flex-start;
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.miga {
-  align-items: center;
-  color: var(--ink-3);
-  display: flex;
-  font-size: 11px;
-  font-weight: 700;
-  gap: 7px;
-  letter-spacing: 0.06em;
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.miga a {
-  color: var(--ink-3);
-  text-decoration: none;
-}
-
-.miga a:hover {
-  color: var(--accion);
-}
-
-.cabecera h1 {
-  color: var(--ink);
-  font-size: 25px;
-  margin: 5px 0 4px;
-}
-
 .direccion {
   color: var(--ink);
   font-size: 15px;
@@ -417,14 +382,6 @@
 // ------------------------------------------------------------------
 
 @media (max-width: 720px) {
-  .cabecera {
-    flex-direction: column;
-  }
-
-  .acciones {
-    align-self: stretch;
-  }
-
   .hechos li {
     grid-template-columns: 90px 1fr;
   }

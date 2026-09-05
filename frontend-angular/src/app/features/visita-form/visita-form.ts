@@ -8,6 +8,7 @@ import { VisitasService } from '../../core/api/visitas.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const CANDIDATOS = 20;
 
@@ -26,7 +27,7 @@ const CANDIDATOS = 20;
  */
 @Component({
   selector: 'app-visita-form',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './visita-form.html',
   styleUrl: './visita-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

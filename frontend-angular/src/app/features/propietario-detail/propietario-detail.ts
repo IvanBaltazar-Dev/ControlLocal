@@ -19,6 +19,7 @@ import { fechaCorta, SIN_DATO, texto as textoDe } from '../../core/formato';
 import { ConstanciaAutorizacionPanel } from '../../shared/constancia-autorizacion/constancia-autorizacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { Paginacion } from '../../shared/paginacion/paginacion';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const ETIQUETAS: Readonly<Record<string, string>> = {
   locales: 'Locales',
@@ -67,7 +68,7 @@ const RUTAS_MIGRADAS: Readonly<Record<string, (id: string) => string[]>> = {
  */
 @Component({
   selector: 'app-propietario-detail',
-  imports: [ConstanciaAutorizacionPanel, EstadoListado, Paginacion],
+  imports: [ConstanciaAutorizacionPanel, EstadoListado, Paginacion, BroxPageHeader],
   templateUrl: './propietario-detail.html',
   styleUrl: './propietario-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -229,10 +230,6 @@ export class PropietarioDetail implements OnInit {
 
   protected editar(): void {
     void this.router.navigate(['/propietarios', this.idPropietario(), 'editar']);
-  }
-
-  protected volver(): void {
-    void this.router.navigate(['/propietarios']);
   }
 
   protected navegar(fila: FilaFicha): void {

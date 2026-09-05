@@ -1,17 +1,14 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">
-      <button type="button" class="enlace" (click)="volver()">Brokers</button> · Ficha
-    </p>
-    <h1>
-      {{ texto(broker()?.nombre) }}
-      @if (broker()?.esAdministrador) {
-        <span class="cl-badge admin">Administrador</span>
-      }
-    </h1>
-    <p class="sub">{{ texto(broker()?.codigoBroker) }} · {{ documento() }}</p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="[{ etiqueta: 'Brokers', ruta: '/brokers' }, { etiqueta: 'Ficha' }]"
+  [sub]="texto(broker()?.codigoBroker) + ' · ' + documento()"
+>
+  <h1 titulo>
+    {{ texto(broker()?.nombre) }}
+    @if (broker()?.esAdministrador) {
+      <span class="cl-badge admin">Administrador</span>
+    }
+  </h1>
+  <div acciones class="acciones">
     @if (esAdmin()) {
       <button type="button" class="cl-btn" (click)="editar()">Editar datos</button>
       <!-- Ver el comentario gemelo en la ficha del agente: el acceso se
@@ -19,7 +16,7 @@
       <a class="cl-btn" routerLink="/seguridad">Gestionar acceso</a>
     }
   </div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

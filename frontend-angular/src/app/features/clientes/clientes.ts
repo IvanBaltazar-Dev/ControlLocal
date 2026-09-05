@@ -36,6 +36,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const TIPOS_VALIDOS = new Set(['N', 'J']);
@@ -81,7 +82,15 @@ const RESUMEN_VACIO: ResumenClientes = {
  */
 @Component({
   selector: 'app-clientes',
-  imports: [BarraFiltros, DialogoConfirmacion, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi],
+  imports: [
+    BarraFiltros,
+    BroxPageHeader,
+    DialogoConfirmacion,
+    EstadoListado,
+    FiltroSelect,
+    Paginacion,
+    TarjetaKpi,
+  ],
   templateUrl: './clientes.html',
   styleUrl: './clientes.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,13 +1,14 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Demanda · Visitas · Nueva</p>
-    <h1>Programar visita</h1>
-    <p class="sub">Agenda la visita del cliente al local de una oportunidad abierta.</p>
+<brox-page-header
+  [miga]="['Demanda', 'Visitas', 'Nueva']"
+  titulo="Programar visita"
+  sub="Agenda la visita del cliente al local de una oportunidad abierta."
+>
+  <div acciones class="acciones">
+    <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
+      Cancelar
+    </button>
   </div>
-  <button type="button" class="cl-btn" [disabled]="guardando()" (click)="cancelar()">
-    Cancelar
-  </button>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

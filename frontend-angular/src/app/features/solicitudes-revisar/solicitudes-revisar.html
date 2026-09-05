@@ -1,16 +1,13 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Cierre · Solicitudes por revisar</p>
-    <h1>Solicitudes por revisar</h1>
-    <p class="sub">
-      Lo que espera tu decisión: solicitudes en revisión y las que devolviste observadas, hasta que
-      el agente las subsane.
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Cierre', 'Solicitudes']"
+  titulo="Solicitudes por revisar"
+  sub="Lo que espera tu decisión: solicitudes en revisión y las que devolviste observadas, hasta que
+       el agente las subsane."
+>
+  <div acciones class="acciones">
     <button type="button" class="cl-btn" (click)="verTodas()">Ver todas</button>
   </div>
-</header>
+</brox-page-header>
 
 <section class="kpis">
   <cl-kpi

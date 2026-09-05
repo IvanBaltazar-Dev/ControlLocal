@@ -19,6 +19,7 @@ import {
 import { AuthService } from '../../core/auth/auth.service';
 import { fechaCorta, fechaHora, SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /**
  * Bitácora de contacto del cliente: **la relación agente-cliente cuando
@@ -48,7 +49,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
  */
 @Component({
   selector: 'app-cliente-contacto-detail',
-  imports: [EstadoListado],
+  imports: [EstadoListado, BroxPageHeader],
   templateUrl: './cliente-contacto-detail.html',
   styleUrl: './cliente-contacto-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

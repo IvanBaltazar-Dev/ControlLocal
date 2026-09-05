@@ -1,16 +1,12 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Gestión · Reportes</p>
-    <h1>Avance comercial por propiedad</h1>
-    <p class="sub">
-      Qué pasó sobre cada inmueble captado, acumulado. No es una ventana de tiempo.
-      @if (datos(); as a) {
-        <span class="cl-badge">{{ a.ambito }}</span>
-      }
-    </p>
-  </div>
+<brox-page-header [miga]="['Gestión', 'Indicadores']" titulo="Avance comercial por propiedad">
+  <p class="sub">
+    Qué pasó sobre cada inmueble captado, acumulado. No es una ventana de tiempo.
+    @if (datos(); as a) {
+      <span class="cl-badge">{{ a.ambito }}</span>
+    }
+  </p>
 
-  <div class="acciones">
+  <div acciones class="acciones">
     <button
       type="button"
       class="cl-btn"
@@ -23,7 +19,9 @@
       Actualizar
     </button>
   </div>
-</header>
+</brox-page-header>
+
+<cl-pestanas-ruta [pestanas]="pestanas" etiqueta="Vistas de Indicadores" />
 
 @if (exportado(); as mensaje) {
   <p class="cl-ok">{{ mensaje }}</p>
@@ -63,7 +61,7 @@
       etiqueta="Solicitudes"
       [valor]="a.solicitudesRecibidas"
       tono="ambar"
-      [pie]="a.cerradasExitosas + ' cierres exitosos'"
+      [pie]="a.cerradasExitosas + ' terminaron en contrato'"
     />
     <cl-kpi
       etiqueta="Sin movimiento"

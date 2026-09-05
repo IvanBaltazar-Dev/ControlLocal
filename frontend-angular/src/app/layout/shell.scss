@@ -134,37 +134,44 @@
     display: grid;
     gap: 0.15rem;
     margin-top: 0.5rem;
+    overflow-y: auto;
 
     a {
       display: flex;
       align-items: center;
-      gap: 0.55rem;
+      gap: 0.6rem;
       padding: 0.55rem 0.65rem;
       border-radius: 9px;
       font-size: 0.92rem;
       text-decoration: none;
-      color: inherit;
+      /* El reposo baja de contraste para que el activo destaque por ser el
+         más legible, no por llevar color. */
+      color: rgba(255, 255, 255, 0.66);
+      transition:
+        color var(--t1) ease,
+        background var(--t1) ease;
+    }
+
+    /* El icono acompaña al texto en su mismo tono: no se colorea aparte.
+       `currentColor` es lo que hace que baste una sola regla de color. */
+    cl-icono {
+      flex: none;
+      color: currentColor;
     }
 
     a:hover {
       background: rgba(255, 255, 255, 0.06);
-    }
-
-    a.activo {
-      background: rgba(217, 164, 65, 0.14);
       color: #fff;
-
-      .punto {
-        background: var(--cl-acento);
-      }
     }
 
-    .punto {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.35);
-      flex: none;
+    /* UNA señal, y es la que sobrevive al modo estrecho (D-E3-1 §6.2):
+       superficie ligeramente elevada + texto de mayor contraste. Ni canto de
+       color, ni glow, ni borde, ni icono dorado — el oro es identidad y no un
+       indicador operativo (§7). */
+    a.activo {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-weight: 600;
     }
 
     .seccion {
@@ -174,13 +181,6 @@
       letter-spacing: 0.08em;
       color: rgba(255, 255, 255, 0.45);
     }
-  }
-
-  .version {
-    margin-top: auto;
-    padding: 0.75rem 0.65rem 0.2rem;
-    font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.4);
   }
 }
 
@@ -200,6 +200,36 @@
   padding: 0.8rem 1.5rem;
   background: var(--cl-superficie);
   border-bottom: 1px solid var(--cl-borde);
+}
+
+/* El velo del cajón NO existe en escritorio, y decirlo aquí no es redundante:
+   `menuAbierto()` sobrevive a un cambio de ancho —se abre el cajón en el
+   teléfono, se gira a horizontal y se pasa de 900 px—, y sin esta regla el
+   `<div class="velo">` se quedaba como PRIMER hijo de `.marco`, que es una
+   rejilla de dos columnas: ocupaba la del lateral, empujaba al `<aside>` a la
+   segunda y mandaba el contenido a una fila de abajo. Se apaga en el CSS, que
+   es quien conoce el ancho, y no con un `@if` que obligaría a escuchar
+   `resize`. */
+.velo {
+  display: none;
+}
+
+/* La puerta del cajón. En escritorio no existe —el lateral está siempre a la
+   vista—, y el `margin-right: auto` la deja a la izquierda sin separar entre sí
+   la campana y la cuenta. */
+.abrir-menu {
+  display: none;
+  margin-right: auto;
+  padding: 0.4rem;
+  border: 1px solid var(--cl-borde);
+  border-radius: 9px;
+  background: var(--cl-superficie);
+  color: var(--cl-tinta);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--cl-fondo);
+  }
 }
 
 .cuenta {
@@ -341,4 +371,56 @@
 .contenido:has(> app-dashboard),
 .contenido:has(> app-indicadores) {
   padding: 0;
+}
+
+/* ====================================================================
+   MÓVIL · el lateral no se comprime, se convierte en cajón
+   --------------------------------------------------------------------
+   `shell.scss` no tenía una sola media query y el armazón era una rejilla
+   de 218 px a cualquier ancho: en un teléfono el contenido se quedaba con
+   lo que sobraba. D-E3-1 §6.4 lo decide así — drawer, no columna estrecha.
+
+   El corte son 900 px: por debajo, 218 px de lateral son el 30 % de la
+   pantalla y la tabla de una bandeja ya no cabe.
+   ==================================================================== */
+@media (max-width: 900px) {
+  .marco {
+    grid-template-columns: 1fr;
+  }
+
+  .abrir-menu {
+    display: inline-flex;
+  }
+
+  .lateral {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: 250px;
+    max-width: 84vw;
+    transform: translateX(-100%);
+    transition: transform var(--t3) var(--curva);
+    box-shadow: 0 0 32px rgba(0, 0, 0, 0.35);
+
+    &.abierto {
+      transform: none;
+    }
+  }
+
+  .velo {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(10, 14, 18, 0.42);
+  }
+}
+
+/* Quien pide no animarse tampoco quiere que el cajón se deslice. */
+@media (prefers-reduced-motion: reduce) {
+  .lateral {
+    transition: none;
+  }
 }

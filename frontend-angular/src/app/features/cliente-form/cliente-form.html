@@ -1,15 +1,18 @@
-<header class="cabecera">
-  <div>
-    <p class="miga">Demanda · Clientes · {{ esEdicion() ? 'Editar' : 'Nuevo' }}</p>
-    <h1>{{ titulo() }}</h1>
-    <p>
-      {{ esEdicion()
-        ? 'Actualiza contacto, rubro y consentimientos. La identidad quedó fijada al registrarlo.'
-        : 'Registra al interesado para poder abrirle oportunidades y visitas.' }}
-    </p>
+<brox-page-header
+  [miga]="['Demanda', 'Clientes', esEdicion() ? 'Editar' : 'Nuevo']"
+  [titulo]="titulo()"
+  [sub]="
+    esEdicion()
+      ? 'Actualiza contacto, rubro y consentimientos. La identidad quedó fijada al registrarlo.'
+      : 'Registra al interesado para poder abrirle oportunidades y visitas.'
+  "
+>
+  <div acciones class="acciones">
+    <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">
+      Cancelar
+    </button>
   </div>
-  <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

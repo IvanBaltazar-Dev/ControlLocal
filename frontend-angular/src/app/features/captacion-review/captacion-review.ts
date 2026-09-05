@@ -15,12 +15,13 @@ import { calcularCondicionComision, descripcionCondicionComision, importeTexto }
 import { fechaCorta, monto, numero, siNo, SIN_DATO, texto } from '../../core/formato';
 import { DialogoConfirmacion, TonoAccion } from '../../shared/dialogo-confirmacion/dialogo-confirmacion';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 type Decision = 'A' | 'O' | 'R';
 
 @Component({
   selector: 'app-captacion-review',
-  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule],
+  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './captacion-review.html',
   styleUrl: './captacion-review.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

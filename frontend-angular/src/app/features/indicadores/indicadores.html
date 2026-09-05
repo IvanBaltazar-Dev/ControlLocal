@@ -7,37 +7,51 @@
     (reintentar)="cargar()"
   />
 
-  @if (!cargando() && datos(); as i) {
-    <!--
-      CABECERA. El ámbito lo resuelve el backend y se rotula tal cual: los tres
-      roles entran a esta pantalla y lo que cambia es el alcance, no la
-      definición de los indicadores.
-    -->
-    <div class="cab">
-      <div>
-        <h1>Indicadores comerciales</h1>
-        <p class="sub">{{ i.ambito }} · <b>{{ etiquetaPeriodo() }}</b></p>
-      </div>
+  <!--
+    CABECERA. La misma que las otras 49 pantallas, y en particular la misma que
+    su otra cara: `/reportes` es la segunda pestaña de ESTA página, y hasta
+    ahora cada una se pintaba una cabecera distinta —la de allí con miga, la de
+    aquí con marcado propio— y ponía las pestañas a distinta altura. Dos caras
+    de una página se cambian sin que se mueva nada alrededor.
 
-      <div class="mandos">
-        <div class="periodos" role="group" aria-label="Periodo">
-          @for (opcion of periodos; track opcion.valor) {
-            <button
-              type="button"
-              [attr.aria-pressed]="opcion.valor === periodo()"
-              [disabled]="cargando()"
-              (click)="cambiarPeriodo(opcion.valor)"
-            >
-              {{ opcion.etiqueta }}
-            </button>
-          }
-        </div>
-        <button type="button" class="refrescar" [disabled]="cargando()" (click)="cargar()">
-          Actualizar
-        </button>
+    Va FUERA del `@if` de carga a propósito: mientras se cargan los datos el
+    usuario sigue viendo dónde está y puede cambiar de pestaña. Los mandos
+    salen deshabilitados —ya lo estaban—, que informa más que hacerlos
+    desaparecer.
+
+    El ámbito lo resuelve el backend y se rotula tal cual: los tres roles
+    entran a esta pantalla y lo que cambia es el alcance, no la definición de
+    los indicadores.
+  -->
+  <brox-page-header [miga]="['Gestión', 'Indicadores']" titulo="Indicadores comerciales">
+    @if (datos(); as i) {
+      <p class="sub">{{ i.ambito }} · <b>{{ etiquetaPeriodo() }}</b></p>
+    }
+
+    <div acciones class="mandos">
+      <div class="periodos" role="group" aria-label="Periodo">
+        @for (opcion of periodos; track opcion.valor) {
+          <button
+            type="button"
+            [attr.aria-pressed]="opcion.valor === periodo()"
+            [disabled]="cargando()"
+            (click)="cambiarPeriodo(opcion.valor)"
+          >
+            {{ opcion.etiqueta }}
+          </button>
+        }
       </div>
+      <button type="button" class="refrescar" [disabled]="cargando()" (click)="cargar()">
+        Actualizar
+      </button>
     </div>
+  </brox-page-header>
 
+  <!-- Las dos caras de Indicadores. Rendimiento mide por actor; el avance,
+       por propiedad. Eran dos entradas de menu para una sola pregunta. -->
+  <cl-pestanas-ruta [pestanas]="pestanas" etiqueta="Vistas de Indicadores" />
+
+  @if (!cargando() && datos(); as i) {
     <!--
       ¿VOY AL RITMO NECESARIO? · los cuatro KPI canónicos.
 

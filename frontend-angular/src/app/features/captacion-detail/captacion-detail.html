@@ -1,16 +1,15 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Proceso · Captaciones · Expediente</p>
-    <h1>Expediente de {{ valor(captacion()?.codigoCaptacion) }}</h1>
-    <p class="sub">{{ valor(captacion()?.direccionLocal) }} · {{ valor(captacion()?.distritoLocal) }}</p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Oferta', 'Captaciones', 'Expediente']"
+  [titulo]="'Expediente de ' + valor(captacion()?.codigoCaptacion)"
+  [sub]="valor(captacion()?.direccionLocal) + ' · ' + valor(captacion()?.distritoLocal)"
+>
+  <div acciones class="acciones">
     @if (puedeEditar()) { <button type="button" class="cl-btn primario" (click)="editar()">{{ captacion()?.estado === 'O' ? 'Subsanar' : 'Editar' }}</button> }
     @if (puedeRevisar()) { <button type="button" class="cl-btn primario" (click)="revisar()">Revisar captación</button> }
     @if (puedeCerrar()) { <button type="button" class="cl-btn peligro" (click)="abrirCierre()">Cerrar captación</button> }
     <button type="button" class="cl-btn" (click)="volver()">Volver</button>
   </div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado [cargando]="cargando()" [error]="errorCarga()" [vacio]="false" mensajeCarga="Cargando expediente de captación…" (reintentar)="reintentar()" />
 

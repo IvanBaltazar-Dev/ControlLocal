@@ -1,3 +1,4 @@
+import type { NombreIcono } from '../../shared/icono/icono';
 import { RolSesion } from './sesion.model';
 
 /**
@@ -38,6 +39,16 @@ export interface Modulo {
   readonly roles: readonly RolSesion[] | 'TODOS';
   /** Agrupador del menú lateral. */
   readonly seccion: Seccion;
+  /**
+   * El icono de la entrada. **Obligatorio**, también en las que no se dibujan:
+   * antes había un punto de 6 px idéntico para las 26 entradas, y un menú así
+   * no se lee de un vistazo ni sobrevive al modo estrecho (D-E3-1 §6.1).
+   *
+   * Se toman de `shared/icono`, que son los del prototipo. Que dos entradas de
+   * personas compartan `persona` no es descuido: lo que las distingue es la
+   * sección, y forzar un dibujo distinto por entrada inventaría símbolos.
+   */
+  readonly icono: NombreIcono;
   /**
    * `false` = la pantalla existe y sigue protegida, pero **no aparece en el
    * menú** porque se llega a ella desde su superficie natural: un filtro, un
@@ -83,7 +94,7 @@ export const MODULOS: readonly Modulo[] = [
   // qué resolver. El tablero ES la home (`/`): dos entradas al mismo sitio
   // serían ruido.
   // ------------------------------------------------------------------
-  { ruta: '', etiqueta: 'Inicio', roles: 'TODOS', seccion: 'Inicio' },
+  { ruta: '', etiqueta: 'Inicio', roles: 'TODOS', seccion: 'Inicio', icono: 'pulso' },
 
   // ------------------------------------------------------------------
   // OFERTA — Propietario → Propiedad → Prospección → Captación.
@@ -97,24 +108,27 @@ export const MODULOS: readonly Modulo[] = [
   // que es exactamente el cambio cosmético que este corte vino a evitar.
   // `app.routes.ts` conserva cuatro redirects temporales para los enlaces ya
   // guardados.
-  { ruta: 'propiedades', etiqueta: 'Propiedades', roles: 'TODOS', seccion: 'Oferta' },
+  { ruta: 'propiedades', etiqueta: 'Propiedades', roles: 'TODOS', seccion: 'Oferta', icono: 'mapa' },
   {
     ruta: 'propietarios',
     etiqueta: 'Propietarios',
     roles: 'TODOS',
     seccion: 'Oferta',
+    icono: 'persona',
   },
   {
     ruta: 'prospecciones',
     etiqueta: 'Prospecciones',
     roles: 'TODOS',
     seccion: 'Oferta',
+    icono: 'lupa',
   },
   {
     ruta: 'captaciones',
     etiqueta: 'Captaciones',
     roles: 'TODOS',
     seccion: 'Oferta',
+    icono: 'megafono',
   },
 
   // La cartera del equipo es ALCANCE, no un módulo: el mismo listado de
@@ -124,6 +138,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Cartera del equipo',
     roles: ['BROKER', 'TENANT_ADMIN'],
     seccion: 'Oferta',
+    icono: 'mapa',
     enMenu: false,
   },
   // La cola de revisión es Captaciones filtrada por estado. Se llega desde
@@ -133,6 +148,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Captaciones por revisar',
     roles: ['BROKER', 'TENANT_ADMIN'],
     seccion: 'Oferta',
+    icono: 'megafono',
     enMenu: false,
   },
   // Reasignar es una ACCIÓN sobre un encargo, y su historial pertenece a la
@@ -142,6 +158,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Reasignaciones',
     roles: ['BROKER', 'TENANT_ADMIN'],
     seccion: 'Oferta',
+    icono: 'megafono',
     enMenu: false,
   },
 
@@ -150,22 +167,31 @@ export const MODULOS: readonly Modulo[] = [
   // ------------------------------------------------------------------
   // Clientes es catálogo COMPARTIDO (TENANT_ADMIN y AGENTE ven todo); el único
   // acotado es el BROKER, vía las oportunidades de su equipo.
-  { ruta: 'clientes', etiqueta: 'Clientes', roles: 'TODOS', seccion: 'Demanda' },
+  { ruta: 'clientes', etiqueta: 'Clientes', roles: 'TODOS', seccion: 'Demanda', icono: 'persona' },
   {
     ruta: 'oportunidades',
     etiqueta: 'Oportunidades',
     roles: 'TODOS',
     seccion: 'Demanda',
+    icono: 'diana',
   },
-  { ruta: 'visitas', etiqueta: 'Visitas', roles: 'TODOS', seccion: 'Demanda' },
-  // Interacciones se conserva como entrada. D-E3-1 §4 propone llevarla dentro
-  // del expediente, pero la marca como una de las tres uniones «que hay que
-  // mirar dos veces» y que **no se ejecutan sin decidirlas aparte**.
+  { ruta: 'visitas', etiqueta: 'Visitas', roles: 'TODOS', seccion: 'Demanda', icono: 'cal' },
+  // La conversación pertenece al EXPEDIENTE, no al menú (D-E3-1 §4.1, unión
+  // ejecutada). Había dos superficies para lo mismo: esta bandeja y la
+  // bitácora del cliente (`/clientes/:id/contacto`), a la que ya se llega
+  // desde la ficha del cliente y desde su oportunidad.
+  //
+  // La bandeja **no se borra**: sigue respondiendo «qué contactos hice» y se
+  // alcanza desde Seguimiento, que es la superficie transversal. Sus rutas
+  // (`interacciones`, `interacciones/:id`, `interacciones/nueva`) se conservan
+  // enteras para que ningún enlace guardado se rompa.
   {
     ruta: 'interacciones',
     etiqueta: 'Interacciones',
     roles: 'TODOS',
     seccion: 'Demanda',
+    icono: 'chispa',
+    enMenu: false,
   },
 
   // ------------------------------------------------------------------
@@ -181,6 +207,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Solicitudes',
     roles: 'TODOS',
     seccion: 'Cierre',
+    icono: 'doc',
   },
   // La cola de evaluación es Solicitudes filtrada. Lleva gate no por su
   // listado —que es el mismo `GET /solicitudes` sin gate— sino por la decisión
@@ -190,6 +217,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Solicitudes por revisar',
     roles: ['BROKER'],
     seccion: 'Cierre',
+    icono: 'doc',
     enMenu: false,
   },
   // «Contratos»: lo firmado. Lo ven los tres roles, cada uno con su alcance.
@@ -198,6 +226,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Contratos',
     roles: 'TODOS',
     seccion: 'Cierre',
+    icono: 'firma',
   },
   // Liquidación: la ven los tres con su alcance, pero las tres operaciones son
   // de BROKER **sin el admin**, así que al administrador se le muestra solo la
@@ -207,6 +236,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Comisiones',
     roles: 'TODOS',
     seccion: 'Cierre',
+    icono: 'moneda',
   },
 
   // ------------------------------------------------------------------
@@ -217,21 +247,29 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Indicadores',
     roles: 'TODOS',
     seccion: 'Gestión',
+    icono: 'graf',
   },
-  // RF-017: el avance por propiedad. D-E3-1 §4 propone unirlo a Indicadores
-  // como pestaña; es la tercera de las uniones que no se ejecutan sin
-  // decidirlas aparte, así que sigue siendo entrada.
+  // RF-017, el avance por propiedad: es una PESTAÑA de Indicadores, no una
+  // sección (D-E3-1 §4.3, unión ejecutada). Indicadores mide por actor y esto
+  // por inmueble: la misma pregunta analítica por dos ejes.
+  //
+  // La ruta se conserva —cada pestaña mantiene su URL, para que un enlace
+  // guardado siga abriendo la que se guardó— y lo que desaparece es la entrada
+  // de menú.
   {
     ruta: 'reportes',
-    etiqueta: 'Reportes',
+    etiqueta: 'Avance por propiedad',
     roles: 'TODOS',
     seccion: 'Gestión',
+    icono: 'graf',
+    enMenu: false,
   },
   {
     ruta: 'seguimiento-comercial',
     etiqueta: 'Seguimiento',
     roles: 'TODOS',
     seccion: 'Gestión',
+    icono: 'reloj',
   },
 
   // ------------------------------------------------------------------
@@ -244,6 +282,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Agentes',
     roles: ['BROKER', 'TENANT_ADMIN'],
     seccion: 'Organización',
+    icono: 'persona',
   },
   // El backend deja leer `/brokers` a los tres roles (matriz, fila 272): es un
   // catálogo por tenant y no expone nada sensible. Pero **poder** no es lo
@@ -257,6 +296,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Brokers',
     roles: ['BROKER', 'TENANT_ADMIN'],
     seccion: 'Organización',
+    icono: 'persona',
   },
   // «Mi equipo» es ALCANCE del broker sobre Agentes, no un módulo aparte.
   {
@@ -264,6 +304,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Mi equipo',
     roles: ['BROKER'],
     seccion: 'Organización',
+    icono: 'persona',
     enMenu: false,
   },
   {
@@ -271,6 +312,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Asignaciones',
     roles: ['TENANT_ADMIN'],
     seccion: 'Organización',
+    icono: 'rombo',
   },
   // Gobierno de accesos: padrón de cuentas + aviso persistente de lo que se ha
   // hecho con ellos. `GET /accesos` y `GET /seguridad/avisos` son TENANT_ADMIN
@@ -280,6 +322,7 @@ export const MODULOS: readonly Modulo[] = [
     etiqueta: 'Seguridad y accesos',
     roles: ['TENANT_ADMIN'],
     seccion: 'Organización',
+    icono: 'freno',
   },
 
   // ------------------------------------------------------------------
@@ -307,7 +350,7 @@ export const MODULOS: readonly Modulo[] = [
   // No se ocultó del menú: se borraron entrada, ruta y componente, de modo que
   // tampoco se abre escribiendo la URL.
   // ------------------------------------------------------------------
-  { ruta: 'perfil', etiqueta: 'Mi perfil', roles: 'TODOS', seccion: 'Cuenta' },
+  { ruta: 'perfil', etiqueta: 'Mi perfil', roles: 'TODOS', seccion: 'Cuenta', icono: 'persona' },
 ];
 
 /** ¿Puede este rol entrar al módulo? */

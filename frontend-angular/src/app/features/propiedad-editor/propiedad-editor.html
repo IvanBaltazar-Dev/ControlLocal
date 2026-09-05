@@ -11,37 +11,36 @@
 }
 
 @if (ficha(); as p) {
-  <header class="cabecera">
-    <div>
-      <p class="miga">
-        <a routerLink="/propiedades">Propiedades</a>
-        <span aria-hidden="true">›</span>
-        <a [routerLink]="['/propiedades', p.id]">{{ p.codigo }}</a>
-        <span aria-hidden="true">›</span>
-        Editar
+  <brox-page-header
+    variante="prototipo"
+    separador="›"
+    [miga]="[
+      { etiqueta: 'Propiedades', ruta: '/propiedades' },
+      { etiqueta: p.codigo, ruta: ['/propiedades', p.id] },
+      { etiqueta: 'Editar' },
+    ]"
+    [titulo]="'Editar ' + (p.tipoRotulo | lowercase)"
+  >
+    <p class="direccion">{{ valor(p.ubicacion?.direccion) }}</p>
+    <!-- La regla, dicha donde se lee: es lo que distingue a este editor del
+         que inventaba un rubro y convertía el uso en 'C'. -->
+    <p class="regla">
+      Sólo se guarda lo que cambies. Lo que no toques queda exactamente como
+      está; para retirar un dato, usa <strong>Quitar</strong>.
+    </p>
+    <!-- Por qué no se puede escribir, dicho por el backend. El texto no se
+         redacta aquí: si esta pantalla lo escribiera por su cuenta, BROX Web
+         y KAIROS acabarían diciendo dos cosas distintas del mismo rechazo. -->
+    @if (!puedeEditar()) {
+      <p class="bloqueo" role="status">
+        <strong>Esta propiedad no la editas tú.</strong>
+        {{ motivoBloqueo() }}
+        @if (responsable(); as quien) {
+          <span class="responsable">Responde: {{ quien }}.</span>
+        }
       </p>
-      <h1>Editar {{ p.tipoRotulo | lowercase }}</h1>
-      <p class="direccion">{{ valor(p.ubicacion?.direccion) }}</p>
-      <!-- La regla, dicha donde se lee: es lo que distingue a este editor del
-           que inventaba un rubro y convertía el uso en 'C'. -->
-      <p class="regla">
-        Sólo se guarda lo que cambies. Lo que no toques queda exactamente como
-        está; para retirar un dato, usa <strong>Quitar</strong>.
-      </p>
-      <!-- Por qué no se puede escribir, dicho por el backend. El texto no se
-           redacta aquí: si esta pantalla lo escribiera por su cuenta, BROX Web
-           y KAIROS acabarían diciendo dos cosas distintas del mismo rechazo. -->
-      @if (!puedeEditar()) {
-        <p class="bloqueo" role="status">
-          <strong>Esta propiedad no la editas tú.</strong>
-          {{ motivoBloqueo() }}
-          @if (responsable(); as quien) {
-            <span class="responsable">Responde: {{ quien }}.</span>
-          }
-        </p>
-      }
-    </div>
-    <div class="acciones">
+    }
+    <div acciones class="acciones">
       <a class="cl-btn" [routerLink]="['/propiedades', p.id]">Cancelar</a>
       <button
         type="button"
@@ -52,7 +51,7 @@
         {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
       </button>
     </div>
-  </header>
+  </brox-page-header>
 
   <div class="distribucion">
     <main>

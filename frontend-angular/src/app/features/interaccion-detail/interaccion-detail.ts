@@ -15,6 +15,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { fechaHora, SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { OpcionFiltro } from '../../shared/filtro-select/filtro-select';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /**
  * Ficha de una interacción, con la **única edición que el cable permite**.
@@ -32,7 +33,7 @@ import { OpcionFiltro } from '../../shared/filtro-select/filtro-select';
  */
 @Component({
   selector: 'app-interaccion-detail',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './interaccion-detail.html',
   styleUrl: './interaccion-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,20 +1,17 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Gestión · Personas</p>
-    <h1>Brokers</h1>
-    <p class="sub">
-      Supervisores de equipo. Los agentes a cargo son las supervisiones vigentes, no el
-      histórico.
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Organización', 'Personas']"
+  titulo="Brokers"
+  sub="Supervisores de equipo. Los agentes a cargo son las supervisiones vigentes, no el
+       histórico."
+>
+  <div acciones class="acciones">
     @if (esAdmin()) {
       <button type="button" class="cl-btn primario" (click)="nuevo()">Registrar broker</button>
     } @else {
       <span class="cl-badge">Solo lectura</span>
     }
   </div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

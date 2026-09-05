@@ -6,7 +6,7 @@ import {
   OnInit,
   signal,
 } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/api.types';
 import {
@@ -23,6 +23,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi, TonoKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Los cinco procesos, en el orden del flujo comercial. */
 const PROCESOS = [
@@ -65,7 +66,15 @@ const VACIA: PaginaSeguimiento = {
  */
 @Component({
   selector: 'app-seguimiento-comercial',
-  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi],
+  imports: [
+    BarraFiltros,
+    BroxPageHeader,
+    EstadoListado,
+    FiltroSelect,
+    Paginacion,
+    RouterLink,
+    TarjetaKpi,
+  ],
   templateUrl: './seguimiento-comercial.html',
   styleUrl: './seguimiento-comercial.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

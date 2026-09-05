@@ -834,8 +834,11 @@ describe('PropiedadDetail', () => {
     await montar(PROP_0022);
 
     // Un «Publicar propiedad» en la cabecera no diria cual de los dos publica.
-    const cabecera = (fixture.nativeElement as HTMLElement).querySelector('.cabecera');
-    expect(cabecera?.textContent).not.toContain('Publicar');
+    // Se exige que la cabecera EXISTA: si el selector dejara de encontrarla, un
+    // `?.textContent` indefinido haria pasar la prueba sin mirar nada.
+    const cabecera = (fixture.nativeElement as HTMLElement).querySelector('brox-page-header');
+    expect(cabecera).withContext('la cabecera de pagina tiene que estar').not.toBeNull();
+    expect(cabecera!.textContent).not.toContain('Publicar');
 
     // La entrada vive dentro de cada bloque de encargo.
     const cajas = bloques();
@@ -932,8 +935,9 @@ describe('PropiedadDetail', () => {
 
     // Su vocabulario es de UNA operacion («Alquilado») y con venta y alquiler
     // vivos no dice cual. Va rotulada, en el bloque de datos.
-    const cabecera = (fixture.nativeElement as HTMLElement).querySelector('.cabecera');
-    expect(cabecera?.textContent).not.toContain('Disponible');
+    const cabecera = (fixture.nativeElement as HTMLElement).querySelector('brox-page-header');
+    expect(cabecera).withContext('la cabecera de pagina tiene que estar').not.toBeNull();
+    expect(cabecera!.textContent).not.toContain('Disponible');
     expect(html()).toContain('Disponibilidad comercial');
   });
 

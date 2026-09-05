@@ -1,12 +1,18 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Gestión · Seguimiento</p>
-    <h1>Seguimiento comercial</h1>
-    <p class="sub">
-      El proceso entero en una lista: prospección, captación, oportunidad, solicitud y cierre.
-    </p>
+<brox-page-header
+  [miga]="['Gestión', 'Seguimiento']"
+  titulo="Seguimiento comercial"
+  sub="El proceso entero en una lista: prospección, captación, oportunidad, solicitud y cierre."
+>
+  <!--
+    La bitácora dejó de ser entrada de menú: la conversación pertenece al
+    expediente (D-E3-1 §4.1). Lo transversal —«qué contactos registré»— se
+    resuelve aquí, que es la superficie transversal, y por eso su acceso vive
+    en esta cabecera y no en el lateral.
+  -->
+  <div acciones class="acciones">
+    <a class="cl-btn" routerLink="/interacciones">Bitácora comercial</a>
   </div>
-</header>
+</brox-page-header>
 
 <!--
   KPI clicables: son atajos al filtro de proceso y siguen valiendo con otros

@@ -22,6 +22,7 @@ import { fechaCorta, monto, SIN_DATO, texto } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { BloqueEncargo } from './bloque-encargo';
 import { TraspasoResponsable } from './traspaso-responsable';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Un proceso de la actividad, con su rótulo y el orden en que se lee. */
 interface Carril {
@@ -68,7 +69,7 @@ interface Carril {
  */
 @Component({
   selector: 'app-propiedad-detail',
-  imports: [RouterLink, EstadoListado, BloqueEncargo, TraspasoResponsable],
+  imports: [RouterLink, EstadoListado, BloqueEncargo, TraspasoResponsable, BroxPageHeader],
   templateUrl: './propiedad-detail.html',
   styleUrl: './propiedad-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

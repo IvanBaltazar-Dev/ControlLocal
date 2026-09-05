@@ -19,6 +19,7 @@ import {
 import { AuthService } from '../../core/auth/auth.service';
 import { texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Largo exacto que el backend exige. Carné y pasaporte pasan tal cual. */
 const LARGO_DOCUMENTO: Readonly<Record<string, number>> = { D: 8, R: 11 };
@@ -44,7 +45,7 @@ const LARGO_DOCUMENTO: Readonly<Record<string, number>> = { D: 8, R: 11 };
  */
 @Component({
   selector: 'app-propietario-form',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './propietario-form.html',
   styleUrl: './propietario-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

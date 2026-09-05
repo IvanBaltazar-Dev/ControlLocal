@@ -1,11 +1,12 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Proceso · Captaciones por revisar · Decisión</p>
-    <h1>Revisar {{ valor(captacion()?.codigoCaptacion) }}</h1>
-    <p class="sub">{{ valor(captacion()?.direccionLocal) }} · enviada por {{ valor(captacion()?.agenteNombre) }}</p>
+<brox-page-header
+  [miga]="['Oferta', 'Captaciones por revisar', 'Decisión']"
+  [titulo]="'Revisar ' + valor(captacion()?.codigoCaptacion)"
+  [sub]="valor(captacion()?.direccionLocal) + ' · enviada por ' + valor(captacion()?.agenteNombre)"
+>
+  <div acciones class="acciones">
+    <button type="button" class="cl-btn" (click)="volver()">Volver a la bandeja</button>
   </div>
-  <div class="acciones"><button type="button" class="cl-btn" (click)="volver()">Volver a la bandeja</button></div>
-</header>
+</brox-page-header>
 
 <cl-estado-listado [cargando]="cargando()" [error]="errorCarga()" [vacio]="false" mensajeCarga="Preparando expediente para revisión…" (reintentar)="reintentar()" />
 

@@ -41,7 +41,7 @@ export class CodigosRespaldo {
 
   protected descargar(): void {
     const contenido = [
-      'ControlLocal — códigos de respaldo del segundo factor',
+      'BROX — códigos de respaldo del segundo factor',
       'Cada código sirve UNA sola vez. Guárdalos fuera de este dispositivo.',
       '',
       ...this.codigos(),
@@ -51,7 +51,7 @@ export class CodigosRespaldo {
     try {
       const enlace = document.createElement('a');
       enlace.href = url;
-      enlace.download = 'controllocal-codigos-respaldo.txt';
+      enlace.download = 'brox-codigos-respaldo.txt';
       enlace.click();
     } finally {
       // El object URL vive hasta que se revoca; olvidarlo es una fuga silenciosa.

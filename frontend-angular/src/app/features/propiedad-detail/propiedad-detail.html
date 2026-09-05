@@ -13,18 +13,15 @@
        Sin precio, y no es un olvido: el precio no es de la propiedad. Vive
        en el encargo, que es donde el negocio lo pone (D-E4-1).
        ================================================================ -->
-  <header class="cabecera">
-    <div>
-      <p class="miga">
-        <a routerLink="/propiedades">Propiedades</a>
-        <span aria-hidden="true">›</span>
-        {{ p.codigo }}
-      </p>
-      <h1>{{ p.tipoRotulo }}</h1>
-      <p class="direccion">{{ valor(p.ubicacion?.direccion) }}</p>
-      <p class="donde">{{ ubicacion() }}</p>
-    </div>
-    <div class="acciones">
+  <brox-page-header
+    variante="prototipo"
+    separador="›"
+    [miga]="[{ etiqueta: 'Propiedades', ruta: '/propiedades' }, { etiqueta: p.codigo }]"
+    [titulo]="p.tipoRotulo"
+  >
+    <p class="direccion">{{ valor(p.ubicacion?.direccion) }}</p>
+    <p class="donde">{{ ubicacion() }}</p>
+    <div acciones class="acciones">
       <!-- En la cabecera va sólo lo que es inequívocamente de la PROPIEDAD.
            Una propiedad inactiva es un hecho del registro y merece verse de
            lejos; la disponibilidad comercial no cabe aquí porque su
@@ -37,7 +34,7 @@
         <a class="primario" [routerLink]="['/propiedades', p.id, 'editar']">Editar</a>
       }
     </div>
-  </header>
+  </brox-page-header>
 
   <!--
     Cuando NO se puede editar, se dice por qué y quién responde. Estaba

@@ -39,6 +39,7 @@ import { DialogoConfirmacion } from '../../shared/dialogo-confirmacion/dialogo-c
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { VisorDocumento } from '../../shared/visor-documento/visor-documento';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Las tres etapas visibles del circuito de la solicitud. */
 interface Etapa {
@@ -76,7 +77,7 @@ const ETAPAS: readonly Etapa[] = [
  */
 @Component({
   selector: 'app-solicitud-detail',
-  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, VisorDocumento],
+  imports: [DialogoConfirmacion, EstadoListado, ReactiveFormsModule, VisorDocumento, BroxPageHeader],
   templateUrl: './solicitud-detail.html',
   styleUrl: './solicitud-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

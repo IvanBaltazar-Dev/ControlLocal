@@ -13,6 +13,7 @@ import { describir, TIPO_DOCUMENTO } from '../../core/api/codigos';
 import { AuthService } from '../../core/auth/auth.service';
 import { SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const ESTADO_OPERATIVO: Readonly<Record<string, string>> = {
   D: 'Disponible',
@@ -54,7 +55,7 @@ interface BloqueDinero {
  */
 @Component({
   selector: 'app-agente-detail',
-  imports: [EstadoListado, RouterLink],
+  imports: [EstadoListado, RouterLink, BroxPageHeader],
   templateUrl: './agente-detail.html',
   styleUrl: './agente-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -174,10 +175,6 @@ export class AgenteDetail implements OnInit {
 
   protected editar(): void {
     void this.router.navigate(['/agentes', this.idAgente(), 'editar']);
-  }
-
-  protected volver(): void {
-    void this.router.navigate(['/agentes']);
   }
 
   protected verBroker(): void {

@@ -9,6 +9,7 @@ import { describir, TIPO_DOCUMENTO } from '../../core/api/codigos';
 import { AuthService } from '../../core/auth/auth.service';
 import { SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const ESTADO_OPERATIVO: Readonly<Record<string, string>> = {
   D: 'Disponible',
@@ -31,7 +32,7 @@ const ESTADO_OPERATIVO: Readonly<Record<string, string>> = {
  */
 @Component({
   selector: 'app-broker-detail',
-  imports: [EstadoListado, RouterLink],
+  imports: [EstadoListado, RouterLink, BroxPageHeader],
   templateUrl: './broker-detail.html',
   styleUrl: './broker-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -85,10 +86,6 @@ export class BrokerDetail implements OnInit {
 
   protected editar(): void {
     void this.router.navigate(['/brokers', this.idBroker(), 'editar']);
-  }
-
-  protected volver(): void {
-    void this.router.navigate(['/brokers']);
   }
 
   protected verAgentes(): void {

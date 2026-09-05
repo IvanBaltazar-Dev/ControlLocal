@@ -238,7 +238,13 @@ describe('Indicadores', () => {
   it('el ambito lo rotula el backend, no la pantalla', async () => {
     await montar('BROKER');
 
-    expect(raiz().querySelector('.cab .sub')?.textContent).toContain('Reportes de equipo');
+    // La bajada vive ahora en la cabecera compartida —`brox-page-header`, la
+    // misma que las otras 49 pantallas y que la otra cara de ésta—, así que
+    // se busca por `.cl-cabecera`. Lo que se mide sigue siendo lo mismo: que
+    // el ámbito sale del cable.
+    expect(raiz().querySelector('.cl-cabecera .sub')?.textContent).toContain(
+      'Reportes de equipo',
+    );
   });
 
   // ==================================================================

@@ -1,19 +1,16 @@
-<header class="cl-cabecera">
-  <div>
-    <p class="miga">Gestión · Personas</p>
-    <h1>Mi equipo</h1>
-    <p class="sub">
-      Los agentes que supervisas ahora mismo y quién puede recibir encargos hoy.
-    </p>
-  </div>
-  <div class="acciones">
+<brox-page-header
+  [miga]="['Organización', 'Agentes']"
+  titulo="Mi equipo"
+  sub="Los agentes que supervisas ahora mismo y quién puede recibir encargos hoy."
+>
+  <div acciones class="acciones">
     @if (esBroker()) {
       <button type="button" class="cl-btn primario" (click)="nuevoAgente()">
         Registrar agente
       </button>
     }
   </div>
-</header>
+</brox-page-header>
 
 @if (!esBroker()) {
   <p class="aviso-alcance" role="status">

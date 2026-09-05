@@ -12,6 +12,7 @@ import { BarraFiltros } from '../../shared/barra-filtros/barra-filtros';
 import { FiltroSelect } from '../../shared/filtro-select/filtro-select';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { Paginacion } from '../../shared/paginacion/paginacion';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = 20;
 
@@ -51,7 +52,7 @@ const ESTADOS = [
  */
 @Component({
   selector: 'app-propiedades',
-  imports: [RouterLink, BarraFiltros, FiltroSelect, EstadoListado, Paginacion],
+  imports: [RouterLink, BarraFiltros, FiltroSelect, EstadoListado, Paginacion, BroxPageHeader],
   templateUrl: './propiedades.html',
   styleUrl: './propiedades.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -45,6 +45,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 
@@ -86,7 +87,7 @@ interface CargaCorrecta {
 type ResultadoCarga = CargaCorrecta | { error: string };
 
 /**
- * Cierres exitosos: los locales alquilados con contrato registrado.
+ * Contratos: las propiedades con contrato registrado.
  *
  * Porta `PropiedadesAlquiladas.razor` siguiendo la convención de listados
  * paginados. Lo que cambia respecto del Blazor es dónde se hace el trabajo:
@@ -108,7 +109,7 @@ type ResultadoCarga = CargaCorrecta | { error: string };
  */
 @Component({
   selector: 'app-propiedades-alquiladas',
-  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi],
+  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi, BroxPageHeader],
   templateUrl: './propiedades-alquiladas.html',
   styleUrl: './propiedades-alquiladas.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -167,8 +168,8 @@ export class PropiedadesAlquiladas implements OnInit {
 
   protected readonly mensajeVacio = computed(() =>
     this.hayFiltros()
-      ? 'Ningún cierre coincide con los filtros.'
-      : 'Todavía no hay cierres exitosos. Aparecerán al registrar el contrato de una solicitud aprobada.',
+      ? 'Ningún contrato coincide con los filtros.'
+      : 'Todavía no hay contratos. Aparecerán al registrar el contrato de una solicitud aprobada.',
   );
 
   /** Suma separada por moneda: PEN y USD nunca se mezclan en un total falso. */
@@ -214,7 +215,7 @@ export class PropiedadesAlquiladas implements OnInit {
                 error:
                   error instanceof ApiError
                     ? error.message
-                    : 'No se pudieron cargar los cierres exitosos.',
+                    : 'No se pudieron cargar los contratos.',
               }),
             ),
           ),
@@ -340,15 +341,17 @@ export class PropiedadesAlquiladas implements OnInit {
       }
 
       if (filas.length === 0) {
-        this.avisoExportacion.set('No hay cierres que exportar con los filtros actuales.');
+        this.avisoExportacion.set('No hay contratos que exportar con los filtros actuales.');
         return;
       }
 
-      const nombre = descargarCsv('cierres_exitosos', CABECERAS_CSV, filas.map(filaCsv));
+      // El nombre del archivo lo lee el usuario en su carpeta de descargas, así
+      // que dice lo mismo que la pantalla: contratos, no «cierres exitosos».
+      const nombre = descargarCsv('contratos', CABECERAS_CSV, filas.map(filaCsv));
       this.avisoExportacion.set(
         filas.length < total
-          ? `Se exportaron ${filas.length} de ${total} cierres en ${nombre}: es el máximo por archivo. Acota los filtros para llevarte el resto.`
-          : `Se exportaron ${filas.length} cierres en ${nombre}.`,
+          ? `Se exportaron ${filas.length} de ${total} contratos en ${nombre}: es el máximo por archivo. Acota los filtros para llevarte el resto.`
+          : `Se exportaron ${filas.length} contratos en ${nombre}.`,
       );
     } catch (error) {
       this.errorExportacion.set(

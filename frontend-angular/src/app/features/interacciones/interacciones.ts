@@ -40,6 +40,7 @@ import { BarraFiltros } from '../../shared/barra-filtros/barra-filtros';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const GRUPOS_VALIDOS = new Set(['TODAS', 'PROPIETARIO', 'CLIENTE']);
@@ -98,7 +99,7 @@ type ResultadoCarga = PageResponse<Interaccion> | { error: string };
  */
 @Component({
   selector: 'app-interacciones',
-  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion],
+  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, BroxPageHeader],
   templateUrl: './interacciones.html',
   styleUrl: './interacciones.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

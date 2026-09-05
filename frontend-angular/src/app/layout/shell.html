@@ -1,5 +1,15 @@
 <div class="marco">
-  <aside class="lateral">
+  <!--
+    Velo del cajón. Solo existe con el menú abierto y solo por debajo de
+    900 px: es chrome del propio lateral —el único oscuro de BROX—, no un fondo
+    de contenido. Sirve para dos cosas a la vez: decir que lo de detrás está
+    inerte y dar una superficie donde pulsar para cerrar.
+  -->
+  @if (menuAbierto()) {
+    <div class="velo" (click)="cerrarMenu()"></div>
+  }
+
+  <aside id="navegacion-brox" class="lateral" [class.abierto]="menuAbierto()">
     <div class="marca">
       <span class="marca-nombre">BROX</span>
       <span class="marca-bajada">Inteligencia inmobiliaria</span>
@@ -38,12 +48,24 @@
         }
 
         @for (modulo of grupo.modulos; track modulo.ruta) {
+          <!--
+            El icono viene del módulo, no de la plantilla: el menú y el guard
+            leen el mismo dato, y así una entrada nueva no puede quedarse sin
+            icono por descuido. Es decorativo —`cl-icono` ya lleva
+            `aria-hidden`—: el nombre de la entrada es el que se anuncia.
+
+            El estado activo se marca UNA vez (D-E3-1 §6.2): superficie
+            elevada y texto de más contraste. Ni canto de color, ni punto, ni
+            icono dorado —el oro es identidad, no un indicador operativo—.
+          -->
           <a
             [routerLink]="'/' + modulo.ruta"
             routerLinkActive="activo"
             [routerLinkActiveOptions]="{ exact: modulo.ruta === '' }"
+            (click)="cerrarMenu()"
           >
-            <span class="punto"></span> {{ modulo.etiqueta }}
+            <cl-icono [nombre]="modulo.icono" />
+            {{ modulo.etiqueta }}
           </a>
         }
       }
@@ -64,6 +86,24 @@
       auditoría lo señaló como un residuo del cascarón.
     -->
     <header class="topbar">
+      <!--
+        El menú por debajo de 900 px es un cajón, no una columna estrecha
+        (D-E3-1 §6.4). Este botón es su única puerta, así que existe siempre en
+        el DOM y es el CSS quien lo enseña: ocultarlo con un `@if` sobre el
+        ancho obligaría a escuchar el `resize` para algo que la media query ya
+        resuelve.
+      -->
+      <button
+        type="button"
+        class="abrir-menu"
+        aria-controls="navegacion-brox"
+        [attr.aria-expanded]="menuAbierto()"
+        [attr.aria-label]="menuAbierto() ? 'Cerrar el menú' : 'Abrir el menú'"
+        (click)="alternarMenu()"
+      >
+        <cl-icono [nombre]="menuAbierto() ? 'cerrar' : 'menu'" [tamano]="20" />
+      </button>
+
       @if (auth.sesion(); as sesion) {
         <!--
           La campana es chrome global, no una pantalla: vive aquí y no en el

@@ -76,7 +76,7 @@ export const routes: Routes = [
           import('./features/propiedad-form/propiedad-form').then((m) => m.PropiedadForm),
       },
       {
-        // Cierres exitosos. Sin `data.roles`: los tres roles entran y lo que
+        // Contratos. Sin `data.roles`: los tres roles entran y lo que
         // cambia es el ALCANCE, que resuelve el backend.
         path: 'propiedades-alquiladas',
         canActivate: [rolGuard],

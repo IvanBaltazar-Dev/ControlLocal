@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } 
 
 import { AvisoPrivacidad, AvisoPrivacidadService } from '../../core/api/aviso-privacidad.service';
 import { comoFecha } from '../../core/formato';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /**
  * Formato largo ("5 de agosto de 2026"), que es como está redactado el aviso
@@ -41,6 +42,7 @@ const VIGENCIA_PUBLICADA = '5 de agosto de 2026';
  */
 @Component({
   selector: 'app-privacidad',
+  imports: [BroxPageHeader],
   templateUrl: './privacidad.html',
   styleUrl: './privacidad.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

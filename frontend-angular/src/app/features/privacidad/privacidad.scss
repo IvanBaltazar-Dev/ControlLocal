@@ -7,34 +7,35 @@
   line-height: 1.65;
 }
 
-header {
+// La cabecera es `brox-page-header`, así que estas reglas cuelgan de
+// `.privacidad` y no del `<header>`: ese elemento lo dibuja ahora el
+// componente compartido y una regla encapsulada aquí ya no lo alcanzaría.
+// Colgarlas de `.privacidad` además le gana en especificidad a la anatomía
+// global de `.cl-cabecera`, que es lo que hace que el título del aviso
+// conserve su tamaño de documento.
+.privacidad brox-page-header {
+  display: block;
   border-bottom: 1px solid var(--cl-borde, #e2e8f0);
   padding-bottom: 1.5rem;
   margin-bottom: 2rem;
-
-  h1 {
-    margin: 0.25rem 0 0.75rem;
-  }
-
-  // El orden en la pagina es: titulo, version, entrada.
-  .version {
-    margin: 0 0 1rem;
-    font-size: 0.85rem;
-    color: var(--cl-texto-suave, #64748b);
-  }
-
-  .entrada {
-    margin: 0;
-    font-size: 1.05rem;
-  }
 }
 
-.miga {
-  margin: 0;
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.privacidad h1 {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 2em;
+  color: var(--cl-tinta);
+}
+
+// El orden en la pagina es: titulo, version, entrada.
+.privacidad .version {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
   color: var(--cl-texto-suave, #64748b);
+}
+
+.privacidad .entrada {
+  margin: 0;
+  font-size: 1.05rem;
 }
 
 section {

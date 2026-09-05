@@ -9,20 +9,6 @@
   margin: 0 0 14px;
 }
 
-.cabecera {
-  align-items: flex-start;
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-  margin-bottom: 22px;
-}
-
-.cabecera h1 {
-  color: var(--ink);
-  font-size: 25px;
-  margin: 3px 0 5px;
-}
-
 .direccion {
   color: var(--ink-2);
   margin: 0 0 8px;
@@ -56,19 +42,6 @@
     display: block;
     margin-top: 3px;
   }
-}
-
-.miga {
-  color: var(--ink-3);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.miga a {
-  color: inherit;
 }
 
 .acciones {
@@ -388,9 +361,5 @@ aside h2 {
 
   aside {
     position: static;
-  }
-
-  .cabecera {
-    flex-direction: column;
   }
 }

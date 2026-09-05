@@ -10,6 +10,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { monto as montoDe, SIN_DATO, texto as textoDe } from '../../core/formato';
 import { OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 /** Cuántas oportunidades se piden al buscar. Nunca se descarga la bandeja entera. */
 const CANDIDATOS = 20;
@@ -42,7 +43,7 @@ const MONEDAS: OpcionFiltro[] = [
  */
 @Component({
   selector: 'app-solicitud-form',
-  imports: [EstadoListado, ReactiveFormsModule],
+  imports: [EstadoListado, ReactiveFormsModule, BroxPageHeader],
   templateUrl: './solicitud-form.html',
   styleUrl: './solicitud-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

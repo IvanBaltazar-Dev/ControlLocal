@@ -9,6 +9,7 @@ import { Broker, BrokersService } from '../../core/api/brokers.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { SIN_DATO, texto as textoDe } from '../../core/formato';
 import { EstadoListado } from '../../shared/estado-listado/estado-listado';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const ESTADO_OPERATIVO: Readonly<Record<string, string>> = {
   D: 'Disponible',
@@ -38,7 +39,7 @@ const ESTADO_OPERATIVO: Readonly<Record<string, string>> = {
  */
 @Component({
   selector: 'cl-mi-equipo',
-  imports: [EstadoListado],
+  imports: [EstadoListado, BroxPageHeader],
   templateUrl: './mi-equipo.html',
   styleUrl: './mi-equipo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

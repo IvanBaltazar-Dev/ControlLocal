@@ -1,15 +1,18 @@
-<header class="cabecera">
-  <div>
-    <p class="miga">Gestión · Propietarios · {{ esEdicion() ? 'Editar' : 'Nuevo' }}</p>
-    <h1>{{ titulo() }}</h1>
-    <p>
-      {{ esEdicion()
-        ? 'Actualiza contacto y consentimiento. La identidad quedó fijada al registrarlo.'
-        : 'Registra al dueño del inmueble para poder colgar de él sus locales.' }}
-    </p>
+<brox-page-header
+  [miga]="['Oferta', 'Propietarios', esEdicion() ? 'Editar' : 'Nuevo']"
+  [titulo]="titulo()"
+  [sub]="
+    esEdicion()
+      ? 'Actualiza contacto y consentimiento. La identidad quedó fijada al registrarlo.'
+      : 'Registra al dueño del inmueble para poder colgar de él sus locales.'
+  "
+>
+  <div acciones class="acciones">
+    <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">
+      Cancelar
+    </button>
   </div>
-  <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar()">Cancelar</button>
-</header>
+</brox-page-header>
 
 <cl-estado-listado
   [cargando]="cargando()"

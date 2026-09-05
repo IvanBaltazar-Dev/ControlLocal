@@ -193,7 +193,12 @@ describe('PropiedadesAlquiladas', () => {
       const primera = contratos.pagina.calls.first().args[0] as FiltrosContratos;
       expect(primera.tamano).toBe(100);
       expect(primera.texto).toBe('larco');
-      expect(texto(fixture)).toContain('Se exportaron 150 cierres');
+      expect(texto(fixture)).toContain('Se exportaron 150 contratos');
+      // El nombre del archivo también: el usuario lo lee en su carpeta de
+      // descargas, y decía «cierres_exitosos» cuando la pantalla ya decía
+      // Contratos.
+      expect(texto(fixture)).toContain('en contratos_');
+      expect(texto(fixture)).not.toContain('cierres_exitosos');
     });
 
     it('avisa cuando el conjunto supera el máximo: nunca recorta en silencio', async () => {
@@ -216,7 +221,7 @@ describe('PropiedadesAlquiladas', () => {
       await (fixture.componentInstance as unknown as AccesoPantalla).exportar();
       fixture.detectChanges();
 
-      expect(texto(fixture)).toContain('No hay cierres que exportar');
+      expect(texto(fixture)).toContain('No hay contratos que exportar');
     });
 
     it('un fallo del API se muestra y no rompe la pantalla', async () => {

@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 
 import { ApiError } from '../../core/api/api.types';
@@ -62,7 +62,6 @@ const AUTORIZACION: ConstanciaAutorizacion = {
 describe('PropietarioDetail — constancia de autorización (D-27)', () => {
   let api: jasmine.SpyObj<FichaComercialService>;
   let propietarios: jasmine.SpyObj<PropietariosService>;
-  let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
     api = jasmine.createSpyObj<FichaComercialService>('FichaComercialService', [
@@ -75,8 +74,6 @@ describe('PropietarioDetail — constancia de autorización (D-27)', () => {
       'autorizacion',
     ]);
     propietarios.autorizacion.and.resolveTo(AUTORIZACION);
-    router = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    router.navigate.and.resolveTo(true);
   });
 
   it('muestra la autorización con fecha y con quién la registró', async () => {
@@ -149,16 +146,25 @@ describe('PropietarioDetail — constancia de autorización (D-27)', () => {
     TestBed.configureTestingModule({
       imports: [PropietarioDetail],
       providers: [
+        // Router de verdad y no un doble: desde que la miga de pan es un
+        // `BroxPageHeader`, «Propietarios» es un `routerLink` —un enlace que
+        // se puede abrir en otra pestaña— y `RouterLink` necesita construir su
+        // `href` con `createUrlTree`. Un espía con solo `navigate` lo rompía.
+        provideRouter([]),
         { provide: FichaComercialService, useValue: api },
         { provide: PropietariosService, useValue: propietarios },
         { provide: AuthService, useValue: { sesion } },
+        // Después de `provideRouter` a propósito: el que se declara al final
+        // gana, y esta suite entra a la ficha del propietario 12.
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: convertToParamMap({ id: '12' }) } },
         },
-        { provide: Router, useValue: router },
       ],
     });
+    // Que ninguna prueba navegue de verdad: `editar()` sigue siendo del
+    // componente, y aquí solo se mide la constancia de autorización.
+    spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     const fixture = TestBed.createComponent(PropietarioDetail);
     fixture.detectChanges();
     await fixture.whenStable();

@@ -42,6 +42,7 @@ import { EstadoListado } from '../../shared/estado-listado/estado-listado';
 import { FiltroSelect, OpcionFiltro } from '../../shared/filtro-select/filtro-select';
 import { Paginacion } from '../../shared/paginacion/paginacion';
 import { TarjetaKpi } from '../../shared/tarjeta-kpi/tarjeta-kpi';
+import { BroxPageHeader } from '../../shared/page-header/page-header';
 
 const POR_PAGINA = RESULTADOS_POR_PAGINA;
 const MAX_EXPORTACION = 100;
@@ -68,7 +69,7 @@ type ResultadoCarga = CargaRevision | { error: string };
 
 @Component({
   selector: 'app-bandeja-captaciones',
-  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi],
+  imports: [BarraFiltros, EstadoListado, FiltroSelect, Paginacion, TarjetaKpi, BroxPageHeader],
   templateUrl: './bandeja-captaciones.html',
   styleUrl: './bandeja-captaciones.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

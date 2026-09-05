@@ -1,0 +1,1402 @@
+{
+  "intencion": "REGISTRAR_PROPIEDAD",
+  "tipoPropiedad": "ALMACEN",
+  "operaciones": [],
+  "comunes": [
+    {
+      "clave": "titulares",
+      "rotulo": "Titulares",
+      "seccion": "COMUN",
+      "control": "TITULARES",
+      "tipoDato": "TITULARES",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Busca a la persona antes de crearla. Con varios titulares, las cuotas tienen que sumar 100 %.",
+      "orden": 0
+    },
+    {
+      "clave": "direccion",
+      "rotulo": "Dirección",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 1
+    },
+    {
+      "clave": "distrito",
+      "rotulo": "Distrito",
+      "seccion": "COMUN",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "Ancon",
+          "rotulo": "Ancon"
+        },
+        {
+          "valor": "Ate",
+          "rotulo": "Ate"
+        },
+        {
+          "valor": "Barranco",
+          "rotulo": "Barranco"
+        },
+        {
+          "valor": "Brena",
+          "rotulo": "Brena"
+        },
+        {
+          "valor": "Carabayllo",
+          "rotulo": "Carabayllo"
+        },
+        {
+          "valor": "Chaclacayo",
+          "rotulo": "Chaclacayo"
+        },
+        {
+          "valor": "Chorrillos",
+          "rotulo": "Chorrillos"
+        },
+        {
+          "valor": "Cieneguilla",
+          "rotulo": "Cieneguilla"
+        },
+        {
+          "valor": "Comas",
+          "rotulo": "Comas"
+        },
+        {
+          "valor": "El Agustino",
+          "rotulo": "El Agustino"
+        },
+        {
+          "valor": "Independencia",
+          "rotulo": "Independencia"
+        },
+        {
+          "valor": "Jesus Maria",
+          "rotulo": "Jesus Maria"
+        },
+        {
+          "valor": "La Molina",
+          "rotulo": "La Molina"
+        },
+        {
+          "valor": "La Victoria",
+          "rotulo": "La Victoria"
+        },
+        {
+          "valor": "Lima",
+          "rotulo": "Lima"
+        },
+        {
+          "valor": "Lince",
+          "rotulo": "Lince"
+        },
+        {
+          "valor": "Los Olivos",
+          "rotulo": "Los Olivos"
+        },
+        {
+          "valor": "Lurigancho-Chosica",
+          "rotulo": "Lurigancho-Chosica"
+        },
+        {
+          "valor": "Lurin",
+          "rotulo": "Lurin"
+        },
+        {
+          "valor": "Magdalena del Mar",
+          "rotulo": "Magdalena del Mar"
+        },
+        {
+          "valor": "Miraflores",
+          "rotulo": "Miraflores"
+        },
+        {
+          "valor": "Pachacamac",
+          "rotulo": "Pachacamac"
+        },
+        {
+          "valor": "Pucusana",
+          "rotulo": "Pucusana"
+        },
+        {
+          "valor": "Pueblo Libre",
+          "rotulo": "Pueblo Libre"
+        },
+        {
+          "valor": "Puente Piedra",
+          "rotulo": "Puente Piedra"
+        },
+        {
+          "valor": "Punta Hermosa",
+          "rotulo": "Punta Hermosa"
+        },
+        {
+          "valor": "Punta Negra",
+          "rotulo": "Punta Negra"
+        },
+        {
+          "valor": "Rimac",
+          "rotulo": "Rimac"
+        },
+        {
+          "valor": "San Bartolo",
+          "rotulo": "San Bartolo"
+        },
+        {
+          "valor": "San Borja",
+          "rotulo": "San Borja"
+        },
+        {
+          "valor": "San Isidro",
+          "rotulo": "San Isidro"
+        },
+        {
+          "valor": "San Juan de Lurigancho",
+          "rotulo": "San Juan de Lurigancho"
+        },
+        {
+          "valor": "San Juan de Miraflores",
+          "rotulo": "San Juan de Miraflores"
+        },
+        {
+          "valor": "San Luis",
+          "rotulo": "San Luis"
+        },
+        {
+          "valor": "San Martin de Porres",
+          "rotulo": "San Martin de Porres"
+        },
+        {
+          "valor": "San Miguel",
+          "rotulo": "San Miguel"
+        },
+        {
+          "valor": "Santa Anita",
+          "rotulo": "Santa Anita"
+        },
+        {
+          "valor": "Santa Maria del Mar",
+          "rotulo": "Santa Maria del Mar"
+        },
+        {
+          "valor": "Santa Rosa",
+          "rotulo": "Santa Rosa"
+        },
+        {
+          "valor": "Santiago de Surco",
+          "rotulo": "Santiago de Surco"
+        },
+        {
+          "valor": "Surquillo",
+          "rotulo": "Surquillo"
+        },
+        {
+          "valor": "Villa El Salvador",
+          "rotulo": "Villa El Salvador"
+        },
+        {
+          "valor": "Villa Maria del Triunfo",
+          "rotulo": "Villa Maria del Triunfo"
+        }
+      ],
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 2
+    },
+    {
+      "clave": "zonaUrbanizacion",
+      "rotulo": "Zona o urbanización",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 3
+    },
+    {
+      "clave": "referenciaInterna",
+      "rotulo": "Referencia interna",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 4
+    },
+    {
+      "clave": "latitud",
+      "rotulo": "Latitud",
+      "seccion": "COMUN",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "grados",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 5
+    },
+    {
+      "clave": "longitud",
+      "rotulo": "Longitud",
+      "seccion": "COMUN",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "grados",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 6
+    },
+    {
+      "clave": "codigo",
+      "rotulo": "Código interno",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si no se declara, lo genera BROX.",
+      "orden": 7
+    },
+    {
+      "clave": "descripcion",
+      "rotulo": "Descripción",
+      "seccion": "COMUN",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 8
+    },
+    {
+      "clave": "uso",
+      "rotulo": "Uso",
+      "seccion": "COMUN",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "COMERCIAL",
+          "rotulo": "COMERCIAL"
+        },
+        {
+          "valor": "VIVIENDA",
+          "rotulo": "VIVIENDA"
+        },
+        {
+          "valor": "INDUSTRIAL",
+          "rotulo": "INDUSTRIAL"
+        },
+        {
+          "valor": "MIXTO",
+          "rotulo": "MIXTO"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si no se declara, se deduce del tipo: una casa es vivienda.",
+      "orden": 9
+    }
+  ],
+  "delTipo": [
+    {
+      "clave": "metraje_total",
+      "rotulo": "Metraje total",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "ALT",
+      "obligatoria": true,
+      "orden": 10
+    },
+    {
+      "clave": "antiguedad_anios",
+      "rotulo": "Antigüedad",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "unidad": "años",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 20,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "estacionamientos",
+      "rotulo": "Estacionamientos",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 30,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "metraje_construido",
+      "rotulo": "Metraje construido",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 40
+    },
+    {
+      "clave": "ambientes",
+      "rotulo": "Ambientes",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 50,
+      "restricciones": {
+        "minimo": 1,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "cuota_mantenimiento",
+      "rotulo": "Cuota de mantenimiento",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 70,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "frente",
+      "rotulo": "Frente",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 120,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "carga_electrica_kw",
+      "rotulo": "Carga eléctrica",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "kW",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 130,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "altura_libre",
+      "rotulo": "Altura libre",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 140
+    },
+    {
+      "clave": "apto_licencia_funcionamiento",
+      "rotulo": "Apto para licencia",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 150
+    },
+    {
+      "clave": "rubro_permitido",
+      "rotulo": "Rubro permitido",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 160
+    },
+    {
+      "clave": "zonificacion",
+      "rotulo": "Zonificación",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 170
+    },
+    {
+      "clave": "area_terreno",
+      "rotulo": "Área de terreno",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "orden": 180
+    },
+    {
+      "clave": "partida_registral",
+      "rotulo": "Partida registral",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "El número de partida en el registro de predios. Es lo que identifica al inmueble y permite verificar titular y cargas antes de firmar.",
+      "orden": 200,
+      "restricciones": {
+        "longitudMaxima": 40
+      }
+    },
+    {
+      "clave": "oficina_registral",
+      "rotulo": "Oficina registral",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "LIMA",
+          "rotulo": "Lima"
+        },
+        {
+          "valor": "CALLAO",
+          "rotulo": "Callao"
+        },
+        {
+          "valor": "HUAURA",
+          "rotulo": "Huaura"
+        },
+        {
+          "valor": "CANETE",
+          "rotulo": "Cañete"
+        },
+        {
+          "valor": "HUARAL",
+          "rotulo": "Huaral"
+        },
+        {
+          "valor": "BARRANCA",
+          "rotulo": "Barranca"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "La oficina registral donde está inscrita la partida. El mismo número de partida existe en varias oficinas.",
+      "orden": 210
+    },
+    {
+      "clave": "independizado",
+      "rotulo": "Independizado",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si la unidad tiene partida propia. Sin independizar no se puede vender ni hipotecar por separado.",
+      "orden": 220
+    },
+    {
+      "clave": "area_segun_partida",
+      "rotulo": "Área según partida",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "El área que dice la partida registral. Puede no coincidir con la medida en obra, y en una venta manda la inscrita.",
+      "orden": 240
+    },
+    {
+      "clave": "cargas_gravamenes",
+      "rotulo": "Cargas y gravámenes",
+      "seccion": "TIPO",
+      "control": "SELECTOR_MULTIPLE",
+      "tipoDato": "LISTA_MULTIPLE",
+      "opciones": [
+        {
+          "valor": "NINGUNA",
+          "rotulo": "Ninguna"
+        },
+        {
+          "valor": "HIPOTECA",
+          "rotulo": "Hipoteca"
+        },
+        {
+          "valor": "EMBARGO",
+          "rotulo": "Embargo"
+        },
+        {
+          "valor": "SERVIDUMBRE",
+          "rotulo": "Servidumbre"
+        },
+        {
+          "valor": "COPROPIEDAD_SIN_DIVIDIR",
+          "rotulo": "Copropiedad sin dividir"
+        },
+        {
+          "valor": "SUCESION_PENDIENTE",
+          "rotulo": "Sucesión pendiente"
+        },
+        {
+          "valor": "LITIGIO",
+          "rotulo": "Litigio"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Lo que consta inscrito sobre el inmueble. Una hipoteca o un embargo cambian el plazo, y a veces impiden la operación.",
+      "orden": 250
+    },
+    {
+      "clave": "estado_conservacion",
+      "rotulo": "Estado de conservación",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "ESTRENO",
+          "rotulo": "Estreno"
+        },
+        {
+          "valor": "MUY_BUENO",
+          "rotulo": "Muy bueno"
+        },
+        {
+          "valor": "BUENO",
+          "rotulo": "Bueno"
+        },
+        {
+          "valor": "REGULAR",
+          "rotulo": "Regular"
+        },
+        {
+          "valor": "PARA_REMODELAR",
+          "rotulo": "Para remodelar"
+        },
+        {
+          "valor": "PARA_DEMOLER",
+          "rotulo": "Para demoler"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "En qué estado está hoy el inmueble. No lo dice la antigüedad: veinte años remodelado y veinte años sin tocar son dos productos distintos y hoy tienen la misma ficha.",
+      "orden": 260
+    },
+    {
+      "clave": "etapa_entrega",
+      "rotulo": "Etapa de entrega",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "EN_PLANOS",
+          "rotulo": "En planos"
+        },
+        {
+          "valor": "EN_CONSTRUCCION",
+          "rotulo": "En construcción"
+        },
+        {
+          "valor": "ENTREGA_INMEDIATA",
+          "rotulo": "Entrega inmediata"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si se entrega ya, está en obra o todavía está en planos. Cambia la fecha en que el cliente puede mudarse y quién puede financiarlo.",
+      "orden": 270
+    },
+    {
+      "clave": "vigilancia",
+      "rotulo": "Vigilancia y control de acceso",
+      "seccion": "TIPO",
+      "control": "SELECTOR_MULTIPLE",
+      "tipoDato": "LISTA_MULTIPLE",
+      "opciones": [
+        {
+          "valor": "NO_TIENE",
+          "rotulo": "No tiene"
+        },
+        {
+          "valor": "PORTERO_DIURNO",
+          "rotulo": "Portero diurno"
+        },
+        {
+          "valor": "CASETA_24H",
+          "rotulo": "Caseta 24 horas"
+        },
+        {
+          "valor": "CAMARAS_CCTV",
+          "rotulo": "Cámaras CCTV"
+        },
+        {
+          "valor": "CONTROL_DE_ACCESO",
+          "rotulo": "Control de acceso"
+        },
+        {
+          "valor": "CERCO_PERIMETRICO",
+          "rotulo": "Cerco perimétrico"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Qué vigilancia y qué control de acceso tiene. Se marcan todas las que haya: una caseta 24 horas y unas cámaras no son lo mismo.",
+      "orden": 290
+    },
+    {
+      "clave": "en_condominio",
+      "rotulo": "En condominio cerrado",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si está dentro de un condominio cerrado. Cambia el gasto mensual y las reglas de acceso.",
+      "orden": 320
+    },
+    {
+      "clave": "nivel_implementacion",
+      "rotulo": "Nivel de implementación",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "CASCO_OBRA_GRIS",
+          "rotulo": "Casco / obra gris"
+        },
+        {
+          "valor": "PLANTA_LIBRE",
+          "rotulo": "Planta libre"
+        },
+        {
+          "valor": "IMPLEMENTADO_PARCIAL",
+          "rotulo": "Implementado parcial"
+        },
+        {
+          "valor": "IMPLEMENTADO_COMPLETO",
+          "rotulo": "Implementado completo"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Hasta dónde llega la implementación del espacio. Es otra pregunta que el estado de conservación: un local en casco puede estar impecable.",
+      "orden": 560
+    },
+    {
+      "clave": "horario_acceso_edificio",
+      "rotulo": "Horario de acceso",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "H24_7",
+          "rotulo": "24/7"
+        },
+        {
+          "valor": "LUN_VIE_OFICINA",
+          "rotulo": "Lunes a viernes, oficina"
+        },
+        {
+          "valor": "LUN_SAB_OFICINA",
+          "rotulo": "Lunes a sábado, oficina"
+        },
+        {
+          "valor": "OTRO",
+          "rotulo": "Otro"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "En qué horario se puede entrar al edificio. Es regla del edificio y no del contrato: descalifica un call center o un cierre contable.",
+      "orden": 580
+    },
+    {
+      "clave": "gas",
+      "rotulo": "Suministro de gas",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "SIN_RED_CERCANA",
+          "rotulo": "Sin red cercana"
+        },
+        {
+          "valor": "RED_EN_LA_VIA",
+          "rotulo": "Red en la vía"
+        },
+        {
+          "valor": "CON_FACTIBILIDAD_APROBADA",
+          "rotulo": "Con factibilidad aprobada"
+        },
+        {
+          "valor": "INSTALADO",
+          "rotulo": "Instalado"
+        },
+        {
+          "valor": "GLP_TANQUE_EXTERNO",
+          "rotulo": "GLP con tanque externo"
+        },
+        {
+          "valor": "GLP_BALONES",
+          "rotulo": "GLP con balones"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cómo llega el gas a este inmueble. No se supone por el distrito: la red crece manzana a manzana. «Red en la vía» es la tubería física en la calle, sin trámite; «con factibilidad aprobada» es la autorización escrita de la concesionaria, que puede existir sin que la red pase todavía.",
+      "orden": 610
+    },
+    {
+      "clave": "agua_desague",
+      "rotulo": "Agua y desagüe",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "CONECTADO",
+          "rotulo": "Conectado"
+        },
+        {
+          "valor": "CON_FACTIBILIDAD_APROBADA",
+          "rotulo": "Con factibilidad aprobada"
+        },
+        {
+          "valor": "SIN_SERVICIO",
+          "rotulo": "Sin servicio"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Conectado: el servicio funciona hoy. Con factibilidad aprobada: la concesionaria lo autorizó por escrito y todavía no está conectado.",
+      "orden": 612
+    },
+    {
+      "clave": "suministro_electrico",
+      "rotulo": "Tipo de suministro",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "MONOFASICO_220",
+          "rotulo": "Monofásico 220 V"
+        },
+        {
+          "valor": "TRIFASICO_380",
+          "rotulo": "Trifásico 380 V"
+        },
+        {
+          "valor": "TRIFASICO_440",
+          "rotulo": "Trifásico 440 V"
+        },
+        {
+          "valor": "SUBESTACION_PROPIA",
+          "rotulo": "Subestación propia"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "De qué clase es el suministro eléctrico. No es lo mismo que la carga en kW: un horno trifásico no funciona con 220 monofásico por mucha potencia que haya.",
+      "orden": 630
+    },
+    {
+      "clave": "respaldo_electrico",
+      "rotulo": "Respaldo eléctrico",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "NO_TIENE",
+          "rotulo": "No tiene"
+        },
+        {
+          "valor": "GRUPO_ELECTROGENO_AREAS_COMUNES",
+          "rotulo": "Grupo electrógeno para áreas comunes"
+        },
+        {
+          "valor": "GRUPO_ELECTROGENO_TOTAL",
+          "rotulo": "Grupo electrógeno total"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si hay grupo electrógeno y hasta dónde llega.",
+      "orden": 640
+    },
+    {
+      "clave": "medidor_servicios",
+      "rotulo": "Medidor de servicios",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "INDEPENDIENTE",
+          "rotulo": "Independiente"
+        },
+        {
+          "valor": "COMPARTIDO_PRORRATEO",
+          "rotulo": "Compartido con prorrateo"
+        },
+        {
+          "valor": "SIN_MEDIDOR",
+          "rotulo": "Sin medidor"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si los servicios se miden aparte o se prorratean entre varios.",
+      "orden": 660
+    },
+    {
+      "clave": "sistema_contra_incendios",
+      "rotulo": "Sistema contra incendios",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "NINGUNO",
+          "rotulo": "Ninguno"
+        },
+        {
+          "valor": "EXTINTORES",
+          "rotulo": "Extintores"
+        },
+        {
+          "valor": "GABINETES",
+          "rotulo": "Gabinetes"
+        },
+        {
+          "valor": "ROCIADORES",
+          "rotulo": "Rociadores"
+        },
+        {
+          "valor": "ROCIADORES_ESFR",
+          "rotulo": "Rociadores ESFR"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Qué sistema contra incendios tiene.",
+      "orden": 670
+    },
+    {
+      "clave": "en_esquina",
+      "rotulo": "Está en esquina",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si el inmueble hace esquina.",
+      "orden": 700
+    },
+    {
+      "clave": "metraje_arrendable",
+      "rotulo": "Metraje arrendable",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Los metros que se cobran, que no siempre son los que se ocupan.",
+      "orden": 720,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "aforo_itse",
+      "rotulo": "Aforo autorizado (ITSE)",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "unidad": "personas",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántas personas autoriza el certificado de Defensa Civil.",
+      "orden": 760,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "certificado_itse",
+      "rotulo": "Certificado ITSE",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "VIGENTE",
+          "rotulo": "Vigente"
+        },
+        {
+          "valor": "VENCIDO",
+          "rotulo": "Vencido"
+        },
+        {
+          "valor": "EN_TRAMITE",
+          "rotulo": "En tramite"
+        },
+        {
+          "valor": "NO_TIENE",
+          "rotulo": "No tiene"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "En qué estado está el certificado de Defensa Civil. Es el hecho verificable detrás de «Apto para licencia de funcionamiento», que hoy es un sí o un no sin procedencia.",
+      "orden": 770
+    },
+    {
+      "clave": "area_libre",
+      "rotulo": "Área libre / patio de maniobras",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros cuadrados de patio de maniobras hay.",
+      "orden": 780,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "profundidad_patio_maniobras",
+      "rotulo": "Profundidad de patio",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros de fondo tiene el patio de maniobras. Es lo que decide qué camión puede girar.",
+      "orden": 790,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "acceso_vehiculo_maximo",
+      "rotulo": "Vehículo máximo que ingresa",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "CAMIONETA",
+          "rotulo": "Camioneta"
+        },
+        {
+          "valor": "CAMION_2_EJES",
+          "rotulo": "Camión de 2 ejes"
+        },
+        {
+          "valor": "CAMION_3_EJES",
+          "rotulo": "Camión de 3 ejes"
+        },
+        {
+          "valor": "TRAILER_T3S3",
+          "rotulo": "Tráiler T3S3"
+        },
+        {
+          "valor": "CONTENEDOR_40_PIES",
+          "rotulo": "Contenedor de 40 pies"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "El vehículo más grande que puede entrar y maniobrar.",
+      "orden": 800
+    },
+    {
+      "clave": "muelles_carga",
+      "rotulo": "Muelles de carga",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos muelles de carga tiene. El tipo va aparte: cuatro a nivel de piso y cuatro con nivelador no son la misma operación.",
+      "orden": 810,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "tipo_muelle",
+      "rotulo": "Tipo de muelle",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "SIN_MUELLE",
+          "rotulo": "Sin muelle"
+        },
+        {
+          "valor": "A_NIVEL_DE_PISO",
+          "rotulo": "A nivel de piso"
+        },
+        {
+          "valor": "ANDEN_ELEVADO",
+          "rotulo": "Andén elevado"
+        },
+        {
+          "valor": "ANDEN_CON_NIVELADOR",
+          "rotulo": "Andén con nivelador"
+        },
+        {
+          "valor": "MIXTO",
+          "rotulo": "Mixto"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "De qué tipo son los muelles.",
+      "orden": 820
+    },
+    {
+      "clave": "puertas_ingreso",
+      "rotulo": "Puertas de ingreso",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántas puertas de ingreso tiene la nave.",
+      "orden": 830,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "ancho_puerta_ingreso",
+      "rotulo": "Ancho de puerta",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros de ancho tiene la puerta de ingreso.",
+      "orden": 840,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "alto_puerta_ingreso",
+      "rotulo": "Alto de puerta",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros de alto tiene la puerta de ingreso.",
+      "orden": 850,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "capacidad_portante_piso",
+      "rotulo": "Capacidad portante del piso",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "t/m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuánto peso aguanta el piso por metro cuadrado.",
+      "orden": 860,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "tipo_piso",
+      "rotulo": "Tipo de piso",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "CONCRETO_PULIDO",
+          "rotulo": "Concreto pulido"
+        },
+        {
+          "valor": "CONCRETO_ENDURECIDO",
+          "rotulo": "Concreto endurecido"
+        },
+        {
+          "valor": "LOSA_SIN_TRATAR",
+          "rotulo": "Losa sin tratar"
+        },
+        {
+          "valor": "AFIRMADO",
+          "rotulo": "Afirmado"
+        },
+        {
+          "valor": "TIERRA",
+          "rotulo": "Tierra"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cómo es el piso de la nave.",
+      "orden": 870
+    },
+    {
+      "clave": "luz_entre_columnas",
+      "rotulo": "Luz entre columnas",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "unidad": "m",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "La distancia entre columnas, como la declara la ficha técnica. Se escribe tal cual, por ejemplo «12 x 24».",
+      "orden": 880,
+      "restricciones": {
+        "longitudMaxima": 40
+      }
+    },
+    {
+      "clave": "posiciones_pallet",
+      "rotulo": "Capacidad en posiciones pallet",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántas posiciones pallet caben.",
+      "orden": 890,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "area_oficinas",
+      "rotulo": "Área de oficinas administrativas",
+      "seccion": "TIPO",
+      "control": "DECIMAL",
+      "tipoDato": "DECIMAL",
+      "unidad": "m²",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos metros cuadrados son oficina dentro de la nave. Van aparte para que no se coticen como almacén.",
+      "orden": 900,
+      "restricciones": {
+        "minimo": 0
+      }
+    },
+    {
+      "clave": "condicion_almacenamiento",
+      "rotulo": "Condición de almacenamiento",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "SECO",
+          "rotulo": "Seco"
+        },
+        {
+          "valor": "REFRIGERADO",
+          "rotulo": "Refrigerado"
+        },
+        {
+          "valor": "CONGELADO",
+          "rotulo": "Congelado"
+        },
+        {
+          "valor": "MATERIALES_PELIGROSOS",
+          "rotulo": "Materiales peligrosos"
+        },
+        {
+          "valor": "DEPOSITO_TEMPORAL_ADUANERO",
+          "rotulo": "Depósito temporal aduanero"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "En qué condición se puede almacenar.",
+      "orden": 910
+    },
+    {
+      "clave": "balanza_camionera",
+      "rotulo": "Balanza camionera",
+      "seccion": "TIPO",
+      "control": "INTERRUPTOR",
+      "tipoDato": "BOOLEANO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Si tiene balanza para camiones.",
+      "orden": 920
+    },
+    {
+      "clave": "estacionamientos_camiones",
+      "rotulo": "Estacionamiento de camiones",
+      "seccion": "TIPO",
+      "control": "ENTERO",
+      "tipoDato": "ENTERO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cuántos camiones pueden estacionar. No se mezcla con los estacionamientos de autos: juntarlos hace el número inútil para los dos casos.",
+      "orden": 930,
+      "restricciones": {
+        "minimo": 0,
+        "decimales": 0
+      }
+    },
+    {
+      "clave": "via_de_acceso",
+      "rotulo": "Vía principal de acceso",
+      "seccion": "TIPO",
+      "control": "TEXTO",
+      "tipoDato": "TEXTO",
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Por qué vía principal se llega.",
+      "orden": 940,
+      "restricciones": {
+        "longitudMaxima": 120
+      }
+    },
+    {
+      "clave": "tipo_via_acceso",
+      "rotulo": "Tipo de vía del frente",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "AVENIDA",
+          "rotulo": "Avenida"
+        },
+        {
+          "valor": "CALLE_O_JIRON",
+          "rotulo": "Calle o jirón"
+        },
+        {
+          "valor": "PASAJE",
+          "rotulo": "Pasaje"
+        },
+        {
+          "valor": "CARRETERA",
+          "rotulo": "Carretera"
+        },
+        {
+          "valor": "TROCHA_O_SIN_VIA",
+          "rotulo": "Trocha o sin vía"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "De qué clase es la vía a la que da el frente. No es lo mismo que «Vía principal de acceso», que dice cuál es: aquí va avenida, calle, pasaje, carretera o trocha.",
+      "orden": 942
+    },
+    {
+      "clave": "estado_via",
+      "rotulo": "Estado de la vía",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "ASFALTADA",
+          "rotulo": "Asfaltada"
+        },
+        {
+          "valor": "AFIRMADA",
+          "rotulo": "Afirmada"
+        },
+        {
+          "valor": "SIN_AFIRMAR",
+          "rotulo": "Sin afirmar"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Cómo está la superficie de esa vía. Una nave a la que se llega por trocha no la usa un tráiler.",
+      "orden": 944
+    },
+    {
+      "clave": "estado_ocupacion",
+      "rotulo": "Estado de ocupación",
+      "seccion": "TIPO",
+      "control": "SELECTOR",
+      "tipoDato": "LISTA",
+      "opciones": [
+        {
+          "valor": "DESOCUPADO",
+          "rotulo": "Desocupado"
+        },
+        {
+          "valor": "OCUPADO_POR_EL_PROPIETARIO",
+          "rotulo": "Ocupado por el propietario"
+        },
+        {
+          "valor": "OCUPADO_POR_INQUILINO",
+          "rotulo": "Ocupado por inquilino"
+        },
+        {
+          "valor": "OCUPADO_POR_TERCEROS_SIN_TITULO",
+          "rotulo": "Ocupado por terceros sin título"
+        }
+      ],
+      "exigencia": "OPC",
+      "obligatoria": false,
+      "ayuda": "Quién está dentro del inmueble hoy. No es su disponibilidad comercial: un inmueble disponible para vender puede estar ocupado por su propietario hasta la firma.",
+      "orden": 950
+    }
+  ],
+  "deLaOperacion": []
+}

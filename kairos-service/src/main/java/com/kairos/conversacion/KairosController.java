@@ -37,14 +37,24 @@ public class KairosController {
     }
 
     /**
+     * @param canal          por donde entro el turno: {@code WHATSAPP},
+     *                       {@code API}, {@code SPA}. Lo declara el adaptador
+     *                       del canal, que es el unico que lo sabe; omitirlo se
+     *                       registra como {@code API}, que es lo que una llamada
+     *                       a este endpoint es mientras nadie diga otra cosa.
+     *                       <b>KAIROS no lo supone</b>: hubo una version que
+     *                       declaraba WHATSAPP en todos los turnos y el rastro
+     *                       de BROX quedaba diciendo que una peticion de la API
+     *                       venia de una conversacion de mensajeria
      * @param conversacionId obligatorio: sin el, lo que se escriba en BROX
      *                       queda sin poder explicarse
      * @param mensajeId      el identificador del mensaje del canal. Es la clave
      *                       de idempotencia: un webhook reenviado trae el mismo
      * @param confirmado     la persona dijo que si a lo propuesto
      */
-    public record TurnoRequest(String conversacionId, String turnoId, String mensajeId,
-                               String texto, Long idBorrador, Boolean confirmado) {
+    public record TurnoRequest(String canal, String conversacionId, String turnoId,
+                               String mensajeId, String texto, Long idBorrador,
+                               Boolean confirmado) {
     }
 
     /**
@@ -60,6 +70,7 @@ public class KairosController {
                                   @RequestHeader("Authorization") String autorizacion) {
         String token = autorizacion == null ? null : autorizacion.replaceFirst("(?i)^Bearer ", "");
         return kairos.turno(new Kairos.Turno(
+                dto == null ? null : dto.canal(),
                 dto == null ? null : dto.conversacionId(),
                 dto == null ? null : dto.turnoId(),
                 dto == null ? null : dto.mensajeId(),

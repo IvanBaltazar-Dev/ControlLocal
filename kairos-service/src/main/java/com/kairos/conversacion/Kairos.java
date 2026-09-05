@@ -44,6 +44,11 @@ public interface Kairos {
     /**
      * Lo que llega en un turno.
      *
+     * @param canal             por donde entro: {@code WHATSAPP}, {@code API},
+     *                          {@code SPA}. Lo dice el adaptador que recibio el
+     *                          mensaje, porque es el unico que lo sabe. Vacio se
+     *                          registra como {@code API}, que es lo que un turno
+     *                          sin canal declarado es
      * @param conversacionId    obligatorio: sin el, lo que se escriba en BROX
      *                          queda sin poder explicarse
      * @param mensajeId         el mensaje del canal. Es la clave de
@@ -52,8 +57,8 @@ public interface Kairos {
      * @param confirmado        la persona dijo que si a lo propuesto. Llega en
      *                          un turno APARTE del que lo propuso
      */
-    record Turno(String conversacionId, String turnoId, String mensajeId, String texto,
-                 Long idBorrador, boolean confirmado) {
+    record Turno(String canal, String conversacionId, String turnoId, String mensajeId,
+                 String texto, Long idBorrador, boolean confirmado) {
     }
 
     /** Como termino el turno. Es un codigo: la frase la compone quien habla. */
@@ -74,21 +79,79 @@ public interface Kairos {
         SOLO_HUMANO
     }
 
-    /** Lo que produjo el turno. Cada accion rellena lo suyo: un turno hace una cosa. */
+    /**
+     * Lo que produjo el turno. Cada accion rellena lo suyo: un turno hace una cosa.
+     *
+     * <h2>Por que se compone con {@code con…} y no con el constructor</h2>
+     * Porque son ocho huecos del mismo tipo de nada —{@code null}— y una lista
+     * de ocho posiciones se equivoca en silencio: poner las personas donde iban
+     * las coincidencias compila, corre y devuelve una respuesta que parece
+     * bien. Con {@code NADA.conPersonas(...)} el sitio lo elige el nombre.
+     */
     record Resultado(Map<String, Object> propiedad,
                      List<ClienteBrox.Coincidencia> coincidencias,
                      List<ClienteBrox.Persona> personas,
                      ClienteBrox.Persona persona,
                      ClienteBrox.Interaccion interaccion,
                      ClienteBrox.EstadoCaptura captura,
-                     ClienteBrox.Ejecucion ejecucion) {
+                     ClienteBrox.Ejecucion ejecucion,
+                     ClienteBrox.CoincidenciasDeCartera matching,
+                     ClienteBrox.Explicacion explicacion,
+                     ClienteBrox.Foco foco) {
 
         public static final Resultado NADA =
-                new Resultado(null, null, null, null, null, null, null);
+                new Resultado(null, null, null, null, null, null, null, null, null, null);
 
         public Resultado conCaptura(ClienteBrox.EstadoCaptura captura) {
             return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
-                    captura, ejecucion);
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        public Resultado conPropiedad(Map<String, Object> propiedad) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        public Resultado conCoincidencias(List<ClienteBrox.Coincidencia> coincidencias) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        public Resultado conPersonas(List<ClienteBrox.Persona> personas) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        public Resultado conPersona(ClienteBrox.Persona persona) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        public Resultado conInteraccion(ClienteBrox.Interaccion interaccion) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        public Resultado conEjecucion(ClienteBrox.Ejecucion ejecucion) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        /** El matching entero, tal como lo devolvio BROX. */
+        public Resultado conMatching(ClienteBrox.CoincidenciasDeCartera matching) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        /** La explicacion de UNA coincidencia: cuantos criterios cumple y cuales no. */
+        public Resultado conExplicacion(ClienteBrox.Explicacion explicacion) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
+        }
+
+        public Resultado conFoco(ClienteBrox.Foco foco) {
+            return new Resultado(propiedad, coincidencias, personas, persona, interaccion,
+                    captura, ejecucion, matching, explicacion, foco);
         }
     }
 
@@ -118,6 +181,17 @@ public interface Kairos {
     String VARIAS_COINCIDENCIAS = "VARIAS_COINCIDENCIAS";
     String YA_EXISTE = "YA_EXISTE";
     String SIN_BORRADOR_EN_CURSO = "SIN_BORRADOR_EN_CURSO";
+    /** Se pidio explicar una coincidencia que no esta en la lista que se leyo. */
+    String COINCIDENCIA_NO_ENCONTRADA = "COINCIDENCIA_NO_ENCONTRADA";
+    /** No hay nada que resolver hoy. Es una respuesta, no un vacio. */
+    String NADA_QUE_RESOLVER = "NADA_QUE_RESOLVER";
+    /**
+     * BROX no publica el vocabulario que hacia falta para preguntar bien.
+     *
+     * <p>Se dice en vez de rellenarlo: la lista de resultados que admite un
+     * contexto es del dominio, y una escrita aqui envejeceria en silencio.
+     */
+    String VOCABULARIO_NO_PUBLICADO = "VOCABULARIO_NO_PUBLICADO";
 
     Respuesta turno(Turno turno, SesionBrox sesion);
 }

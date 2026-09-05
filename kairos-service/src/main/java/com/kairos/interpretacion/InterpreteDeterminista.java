@@ -2,8 +2,10 @@ package com.kairos.interpretacion;
 
 import com.kairos.brox.ClienteBrox;
 import com.kairos.brox.SesionBrox;
+import com.kairos.brox.Traza;
 import com.kairos.brox.Vocabulario;
 import com.kairos.conversacion.Accion;
+import com.kairos.herramientas.Herramientas;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -50,33 +52,28 @@ import java.util.regex.Pattern;
  *       importe solo si viene <i>anclado</i>: con moneda o con escala ("mil",
  *       "millones"). Sin eso, "un depa de 3 dormitorios" registraria una
  *       propiedad de tres soles.</li>
- *   <li><b>Lo ambiguo se declara, no se resuelve.</b> Esta regla <b>SI esta
- *       implementada y SI dispara</b>, en los siete tipos, pero <b>no por donde
- *       se suele contar</b>. Medido el 2026-08-29 replicando
- *       {@code atributosDe} contra la respuesta viva de
- *       {@code GET /captura/definicion}:
- *       <ul>
- *         <li><b>Dispara para {@code grados}</b>: la comparten {@code latitud} y
- *             {@code longitud}, es emitible por {@code NUMERO_Y_PALABRA} y no es
- *             clave ni rotulo de nada, asi que
- *             «latitud 12.05 grados» produce
- *             {@code noEntendido = ["12.05 grados"]}. Ocurre en los SIETE.</li>
- *         <li><b>NO dispara para la unidad de superficie</b> ni para
- *             {@code m}: el patron exige dos caracteres —{@code m} mide uno— y
- *             el superindice no esta en {@code [a-z0-9_]} ni lo descompone
- *             {@code llano()}, que normaliza con NFD. Una frase con "120 m2"
- *             cae en {@code cuantos == null} y <b>se descarta en silencio</b>.
- *             Eso es lo que sigue abierto: ver {@code N28}.</li>
- *       </ul>
- *       <b>Este texto afirmo lo contrario</b> —que la rama era inalcanzable— y
- *       era falso <b>por medir el universo equivocado</b>: se conto sobre la
- *       tabla {@code catalogo_atributo}, y {@code ClienteBrox.catalogoDe}
- *       devuelve {@code comunes + delTipo}, donde {@code comunes} sale de
- *       {@code GuionRegistroPropiedad.COMUNES} —<b>Java escrito a mano, no una
- *       fila</b>— y es quien aporta {@code latitud}/{@code longitud} con su
- *       unidad. Toda afirmacion sobre lo que KAIROS ve se mide desde
- *       {@code catalogoDe}, nunca desde la tabla. Ver {@code N29}.</li>
+ *   <li><b>Un numero con unidad se declara, nunca se asigna.</b> Ver
+ *       {@link #atributosDe}: la unidad dice <i>que se midio</i>, no <i>que
+ *       campo es</i>, asi que «500 m²» o «8 m» van a {@code noEntendido} y se
+ *       preguntan. Antes se perdian en silencio.</li>
  * </ol>
+ *
+ * <h2>Lo que cambio con N28/N29, y por que era necesario</h2>
+ * Hasta aqui el tokenizador <b>no podia ver</b> las unidades que mas aparecen en
+ * una frase inmobiliaria: {@code NUMERO_Y_PALABRA} exigia dos caracteres —y
+ * {@code m} mide uno—, y el superindice de {@code m²} no estaba en su clase de
+ * caracteres ni lo descomponia {@link #llano}, que normaliza con <b>NFD</b> y
+ * NFD no descompone {@code U+00B2}. Resultado medido el 2026-08-29 y confirmado
+ * contra el catalogo vivo: «el lote da 8 m de frente» y «500 m²»
+ * <b>se descartaban sin dejar constancia</b>, en los siete tipos. Eso choca de
+ * frente con el North Star —un dato que no se sabe interpretar se declara, no se
+ * descarta— y con la regla 3, que solo se estaba cumpliendo para {@code grados}
+ * por accidente: es la unica unidad que el patron alcanzaba a emitir.
+ *
+ * <p>Ahora {@link #llano} pliega {@code ²}→{@code 2} y {@code ³}→{@code 3}
+ * —explicitamente, porque NFD no lo hace— y el patron admite palabras de un
+ * caracter, {@code %} y unidades compuestas como {@code t/m²}. Con eso las
+ * unidades del catalogo son visibles y las tres frases de arriba se declaran.
  */
 @Component
 public class InterpreteDeterminista implements Interprete {
@@ -127,12 +124,43 @@ public class InterpreteDeterminista implements Interprete {
     private static final Pattern PRECIO_CON_PALABRA = Pattern.compile(
             "([\\d.,]+)\\s*" + ESCALA + "?\\s*(dolares|dolar|soles|sol|usd|pen)?");
 
-    /** Un numero pegado a una palabra: "3 dormitorios", "dormitorios 3", "120 m2". */
+    /**
+     * Un numero pegado a una palabra: "3 dormitorios", "120 m2", "8 m", "30 %".
+     *
+     * <h2>Por que la palabra puede medir UN caracter</h2>
+     * Porque {@code m} es una unidad del catalogo —la comparten hasta seis
+     * claves en un ALMACEN— y con el minimo en dos el tokenizador no podia
+     * emitirla: «el lote da 8 m de frente» no producia ningun par y el dato se
+     * perdia sin que nadie lo declarara. El precio de bajarlo es que "3 d"
+     * tambien produce un par; no pasa nada, porque {@code d} no es clave, ni
+     * rotulo, ni unidad de ningun catalogo, y lo que no es ninguna de las tres
+     * cosas se ignora igual que antes.
+     *
+     * <h2>Por que {@code %} y por que la barra</h2>
+     * {@code %} es la unidad de {@code area_libre_minima} en un TERRENO y no
+     * empieza por letra, asi que va en la primera posicion de la clase.
+     * {@code t/m²} —la capacidad portante del piso de un ALMACEN— es la unica
+     * unidad compuesta del catalogo, y la barra solo se admite <b>entre</b>
+     * partes: un {@code /} suelto al final convertiria "S/" en una unidad.
+     *
+     * <p>El superindice no aparece en el patron porque no llega hasta aqui:
+     * {@link #llano} ya lo ha plegado a {@code 2}.
+     */
     private static final Pattern NUMERO_Y_PALABRA = Pattern.compile(
-            "([\\d.,]+)\\s*([a-z][a-z0-9_]{1,24})");
+            "([\\d.,]+)\\s*([a-z%][a-z0-9_%]{0,24}(?:/[a-z0-9_%]{1,24})?)");
 
     /** Un codigo del sistema: PROP-0001, CAP-00003. */
     private static final Pattern CODIGO = Pattern.compile("\\b((?:prop|cap)-\\d{1,10})\\b");
+
+    /**
+     * De donde parte un matching: {@code cliente 47}, {@code captacion CAP-00003},
+     * {@code prospeccion 12}.
+     *
+     * <p>La captacion admite id o codigo porque su ruta del Core admite los dos,
+     * y una conversacion nombra el codigo mucho mas a menudo que el id.
+     */
+    private static final Pattern ORIGEN_DE_MATCHING = Pattern.compile(
+            "\\b(cliente|captacion|prospeccion)\\s+((?:cap-)?\\d{1,10})\\b");
 
     /** Ocho a once digitos seguidos: un DNI (8) o un RUC (11). */
     private static final Pattern DOCUMENTO = Pattern.compile("\\b(\\d{8}|\\d{11})\\b");
@@ -153,7 +181,7 @@ public class InterpreteDeterminista implements Interprete {
     // ==================================================================
 
     @Override
-    public Lectura leer(String texto, SesionBrox sesion) {
+    public Lectura leer(String texto, SesionBrox sesion, Traza traza) {
         if (texto == null || texto.isBlank()) {
             return Lectura.nada(Lectura.SIN_TEXTO);
         }
@@ -167,12 +195,18 @@ public class InterpreteDeterminista implements Interprete {
         List<String> noEntendido = new ArrayList<>();
 
         switch (accion) {
-            case REGISTRAR_PROPIEDAD -> propiedad(llano, sesion, datos, noEntendido);
+            case REGISTRAR_PROPIEDAD -> propiedad(llano, sesion, traza, datos, noEntendido);
             case CONTINUAR_BORRADOR -> codigoDeBorrador(llano, datos);
-            case CONSULTAR_PROPIEDAD -> quePropiedad(texto, llano, sesion, datos);
+            case CONSULTAR_PROPIEDAD -> quePropiedad(texto, llano, sesion, traza, datos);
             case CONSULTAR_CLIENTE -> aQuien(texto, llano, datos);
             case REGISTRAR_PROPIETARIO -> propietario(texto, llano, datos, noEntendido);
             case REGISTRAR_INTERACCION -> interaccion(texto, llano, datos, noEntendido);
+            case BUSCAR_COINCIDENCIAS -> deQueCoincidencias(llano, datos, noEntendido);
+            case EXPLICAR_MATCH -> queCoincidenciaExplicar(llano, datos, noEntendido);
+            // El foco no lleva datos: preguntar "que resuelvo hoy" no admite
+            // parametros, y aceptarlos —un rol, un agente— seria dejar que la
+            // frase eligiera de quien es el foco.
+            case QUE_RESOLVER_HOY -> { }
         }
         return new Lectura(accion, datos, List.copyOf(noEntendido), null);
     }
@@ -206,11 +240,34 @@ public class InterpreteDeterminista implements Interprete {
                 "inmuebles", "local", "oficina", "departamento", "depa", "depto", "dpto", "casa",
                 "terreno", "almacen", "deposito", "lote", "tienda", "flat");
 
+        boolean deCoincidencias = contieneAlguna(llano, "coincidencia", "coincidencias", "encaja",
+                "encajan", "matching", "compatible", "compatibles", "calza", "calzan");
+        boolean deExplicacion = contieneAlguna(llano, "por que", "porque", "explica", "explicame",
+                "criterios", "detalle de", "en que se basa");
+        boolean delFoco = contieneAlguna(llano, "que resuelvo", "que resolver", "que atiendo",
+                "que hago hoy", "que tengo hoy", "que tengo pendiente", "mis pendientes",
+                "que hay pendiente", "prioridades", "en que me enfoco", "mi bandeja",
+                "que urge", "foco de hoy", "que resuelvo hoy");
+
         // El borrador gana a todo: "continua" solo puede significar una cosa, y
         // la frase que lo dice suele nombrar tambien la propiedad que se estaba
         // registrando ("sigue con el depa de Miraflores").
         if (continuar) {
             return Accion.CONTINUAR_BORRADOR;
+        }
+        // El foco va antes que registrar y consultar porque "que tengo pendiente"
+        // no nombra ningun objeto: si esperara a las ramas de abajo, se caeria
+        // al null y KAIROS diria que no entendio la pregunta mas frecuente del
+        // dia.
+        if (delFoco) {
+            return Accion.QUE_RESOLVER_HOY;
+        }
+        // Explicar es una forma de mirar coincidencias, no una accion aparte:
+        // hace falta que la frase las nombre. Con "explica" bastando por si
+        // sola, "explicame la propiedad PROP-12" pediria criterios de un
+        // matching que nadie busco.
+        if (deCoincidencias) {
+            return deExplicacion ? Accion.EXPLICAR_MATCH : Accion.BUSCAR_COINCIDENCIAS;
         }
         if (registrar) {
             // La interaccion primero: "anota la llamada al propietario" es una
@@ -242,7 +299,7 @@ public class InterpreteDeterminista implements Interprete {
     // Registrar una propiedad: lo que la frase diga, y solo eso
     // ==================================================================
 
-    private void propiedad(String llano, SesionBrox sesion, Map<String, String> datos,
+    private void propiedad(String llano, SesionBrox sesion, Traza traza, Map<String, String> datos,
                            List<String> noEntendido) {
         tipoDe(llano).ifPresent(t -> datos.put(Vocabulario.TIPO_PROPIEDAD, t));
         operacionDe(llano).ifPresent(o -> datos.put(Vocabulario.OPERACIONES_DECLARADAS, o));
@@ -254,14 +311,14 @@ public class InterpreteDeterminista implements Interprete {
             }
         });
 
-        distritoDe(llano, sesion).ifPresent(d -> datos.put(Vocabulario.DISTRITO, d));
+        distritoDe(llano, sesion, traza).ifPresent(d -> datos.put(Vocabulario.DISTRITO, d));
 
         // Los atributos solo se buscan cuando ya se sabe el tipo: es el catalogo
         // de ESE tipo el que dice que claves existen, y sin tipo no hay catalogo
         // que consultar. Lo que no se extraiga aqui lo preguntara el motor.
         String tipo = datos.get(Vocabulario.TIPO_PROPIEDAD);
         if (tipo != null) {
-            atributosDe(llano, sesion, tipo, datos, noEntendido);
+            atributosDe(llano, sesion, traza, tipo, datos, noEntendido);
         }
     }
 
@@ -383,8 +440,9 @@ public class InterpreteDeterminista implements Interprete {
      * Uno que no este dado de alta no se emite: el alta lo rechazaria despues,
      * y es mejor preguntarlo que fallar al final.
      */
-    private Optional<String> distritoDe(String llano, SesionBrox sesion) {
-        return brox.distritos(sesion).stream()
+    private Optional<String> distritoDe(String llano, SesionBrox sesion, Traza traza) {
+        Traza deLosDistritos = traza.invocando(Herramientas.CATALOGO_DE_CAPTURA.nombre());
+        return brox.distritos(sesion, deLosDistritos).stream()
                 .filter(nombre -> nombre != null && !nombre.isBlank())
                 .filter(nombre -> contienePalabra(llano, llano(nombre)))
                 // El nombre mas largo gana: "San Isidro" antes que "San Juan"
@@ -396,54 +454,60 @@ public class InterpreteDeterminista implements Interprete {
     /**
      * Los atributos que la frase declare, contra el catalogo del tipo.
      *
-     * <p>Se reconoce por la <b>clave</b> ({@code dormitorios}) o por el
-     * <b>rotulo</b> ({@code Dormitorios}); nunca por la unidad.
+     * <h2>Se reconoce por la clave o por el rotulo. NUNCA por la unidad</h2>
+     * {@code «120 dormitorios»} escribe {@code dormitorios} porque la frase
+     * <b>nombra el campo</b>. {@code «120 m²»} no escribe nada, y no es una
+     * carencia: <b>la unidad dice que se midio, no que campo es</b>. Un
+     * departamento tiene cinco campos en metros cuadrados y una casa seis;
+     * elegir uno seria decidir por el usuario cual midio, y el error no lo
+     * cazaria ningun CHECK porque los seis admiten el mismo numero.
      *
-     * <p><b>Este javadoc decia que "120 m2" se declara en {@code noEntendido}
-     * porque tres atributos comparten esa unidad. Las dos mitades eran
-     * falsas</b>, y se corrigen sin tocar el comportamiento (2026-08-29,
-     * subtanda 5B):
+     * <h2>Y tampoco cuando la unidad la usa un solo campo</h2>
+     * Esta es la decision que N28 dejo abierta, y va hacia el lado estricto.
+     * {@code años} la usa <b>solo</b> {@code antiguedad_anios} en los siete
+     * tipos, asi que la tentacion es asignarla; pero <i>«lo compre hace 8
+     * años»</i> escribiria una antiguedad que la frase no dice. Una unidad no
+     * identifica un campo ni siendo unica: identifica una <b>magnitud</b>.
+     * Asi que el criterio es uno solo y no tiene excepciones —<b>un numero con
+     * unidad del catalogo se declara y se pregunta</b>—, que ademas es el unico
+     * que se puede sostener sin mirar cuantas claves comparten la unidad hoy.
      *
-     * <ul>
-     *   <li>La unidad se escribe con <b>superindice</b>, y {@code llano()}
-     *       normaliza con <b>NFD</b>, que <b>no</b> lo descompone. Asi que
-     *       {@code llano(unidad)} nunca vale {@code "m2"} y el mapa
-     *       {@code unidades} <b>no contiene esa clave</b>: una frase con
-     *       "120 m2" cae en {@code cuantos == null} y se descarta <b>en
-     *       silencio</b>, no en {@code noEntendido}.</li>
-     *   <li>Y no eran tres: son <b>12</b> las que {@code atributosDe} puede
-     *       llegar a ver —union de los siete tipos, medida sobre
-     *       {@code catalogoDe}—. En la tabla {@code catalogo_atributo} son 13,
-     *       pero {@code area_minima_arrendable} es del sujeto ENCARGO y
-     *       <b>nunca entra</b> en este catalogo.</li>
-     * </ul>
+     * <h2>Lo que cambia respecto de antes</h2>
+     * Antes solo se declaraba cuando la unidad estaba compartida por mas de una
+     * clave, y en la practica <b>solo ocurria con {@code grados}</b>: era la
+     * unica unidad que el tokenizador alcanzaba a emitir. Todo lo demas —«500
+     * m²», «8 m», «30 %», «5 kW»— <b>se perdia en silencio</b>. Medido el
+     * 2026-09-05 sobre {@code catalogoDe} (comunes + del tipo) contra el
+     * catalogo vivo de los siete tipos:
+     * <pre>
+     *   m²      12 claves en la union (7 en ALMACEN, 6 en CASA, 1 en OTRO)
+     *   m        8 claves en la union (6 en ALMACEN, 0 en DEPARTAMENTO)
+     *   grados   2 claves, en los SIETE: latitud y longitud
+     *   años     1 clave,  en los SIETE: antiguedad_anios
+     *   %        1 clave,  solo TERRENO: area_libre_minima
+     *   kW       1 clave:  carga_electrica_kw
+     *   t/m²     1 clave:  capacidad_portante_piso
+     * </pre>
+     * Con {@code m²} en un solo campo en OTRO y en doce en la union, una regla
+     * que dependiera del recuento habria hecho que la <b>misma frase</b> se
+     * escribiera en un tipo y se preguntara en otro.
      *
-     * <p><b>Y el bloque {@code if (cuantos > 1)} de abajo NO es codigo
-     * inalcanzable</b> —este javadoc tambien llego a decirlo, y tambien era
-     * falso—. <b>Dispara para {@code grados}</b>, unidad que comparten
-     * {@code latitud} y {@code longitud} y que <b>si</b> es emitible por el
-     * patron: «latitud 12.05 grados» produce
-     * {@code noEntendido = ["12.05 grados"]}, en los siete tipos.
-     *
-     * <p>El error estaba en el <b>universo</b>, no en el razonamiento: se conto
-     * sobre la tabla {@code catalogo_atributo}, y este metodo lee de
-     * {@link com.kairos.brox.ClienteBrox#catalogoDe}, que devuelve
-     * {@code comunes + delTipo}. <b>{@code comunes} no sale de la tabla</b>:
-     * sale de {@code GuionRegistroPropiedad.COMUNES}, Java escrito a mano, y es
-     * quien aporta {@code latitud} y {@code longitud} con {@code unidad =
-     * "grados"}. Ninguna consulta SQL lo habria visto.
-     *
-     * <p>Lo que <b>si</b> sigue abierto es que la unidad de superficie no
-     * dispare, y arreglarlo exige tocar {@code NUMERO_Y_PALABRA}, que cambia lo
-     * que KAIROS entiende de todas las frases y de todos los tipos: es
-     * <b>decision funcional</b> con su propio corte. Ver {@code N28} y
-     * {@code N29}.
+     * <h2>De donde se mide, que es lo que hizo falso el analisis anterior</h2>
+     * De {@link com.kairos.brox.ClienteBrox#catalogoDe}, que devuelve
+     * {@code comunes + delTipo}. <b>{@code comunes} no sale de la tabla</b>
+     * {@code catalogo_atributo}: sale de {@code GuionRegistroPropiedad.COMUNES},
+     * Java escrito a mano, y es quien aporta {@code latitud} y {@code longitud}
+     * con {@code unidad = "grados"}. Toda afirmacion sobre lo que KAIROS ve se
+     * mide desde aqui; ninguna consulta SQL habria visto esas dos.
      */
-    private void atributosDe(String llano, SesionBrox sesion, String tipoPropiedad,
+    private void atributosDe(String llano, SesionBrox sesion, Traza traza, String tipoPropiedad,
                              Map<String, String> datos, List<String> noEntendido) {
         Map<String, String> porPalabra = new LinkedHashMap<>();
         Map<String, Integer> unidades = new LinkedHashMap<>();
-        for (ClienteBrox.Pregunta definicion : brox.catalogoDe(sesion, tipoPropiedad)) {
+        Traza deLaDefinicion = traza.invocando(Herramientas.CATALOGO_DE_CAPTURA.nombre());
+        List<ClienteBrox.Pregunta> catalogo = brox.catalogoDe(sesion, tipoPropiedad,
+                deLaDefinicion);
+        for (ClienteBrox.Pregunta definicion : catalogo) {
             porPalabra.put(llano(definicion.clave()), definicion.clave());
             if (definicion.rotulo() != null) {
                 porPalabra.put(llano(definicion.rotulo()), definicion.clave());
@@ -465,9 +529,14 @@ public class InterpreteDeterminista implements Interprete {
                 }
                 continue;
             }
-            Integer cuantos = unidades.get(palabra);
-            if (cuantos != null && cuantos > 1) {
-                // La unidad no basta: hay mas de un atributo que la usa.
+            if (unidades.containsKey(palabra)) {
+                // Es una unidad del catalogo de ESTE tipo: hay una medida y no
+                // se sabe de que campo. Se declara para poder preguntarla.
+                //
+                // Lo que NO se declara es una palabra que no es ni clave, ni
+                // rotulo, ni unidad —"180 mil", "3 d"—: eso no es una medida
+                // perdida, es que la frase decia otra cosa, y declararlo todo
+                // convertiria noEntendido en ruido.
                 noEntendido.add(pares.group());
             }
         }
@@ -491,19 +560,74 @@ public class InterpreteDeterminista implements Interprete {
      * cruza codigo, direccion, distrito, rubro y nombre del propietario. El
      * adaptador no elige el campo, y por eso no puede equivocarse de campo.
      */
-    private void quePropiedad(String original, String llano, SesionBrox sesion,
+    private void quePropiedad(String original, String llano, SesionBrox sesion, Traza traza,
                               Map<String, String> datos) {
         Matcher codigo = CODIGO.matcher(llano);
         if (codigo.find()) {
             datos.put("texto", codigo.group(1).toUpperCase(Locale.ROOT));
             return;
         }
-        Optional<String> distrito = distritoDe(llano, sesion);
+        Optional<String> distrito = distritoDe(llano, sesion, traza);
         if (distrito.isPresent()) {
             datos.put("texto", distrito.get());
             return;
         }
         nombreDe(original, llano).ifPresent(nombre -> datos.put("texto", nombre));
+    }
+
+    // ==================================================================
+    // Matching: de que se parte, y cual de las coincidencias
+    // ==================================================================
+
+    /**
+     * De donde parte el matching. <b>Sin origen no se busca.</b>
+     *
+     * <p>«las coincidencias» a secas no es una consulta: son las de alguien.
+     * Elegir por la persona —«las del ultimo cliente que miraste»— seria
+     * inventar un criterio que nadie declaro, asi que se declara la falta y el
+     * adaptador la pregunta.
+     */
+    private static void deQueCoincidencias(String llano, Map<String, String> datos,
+                                           List<String> noEntendido) {
+        if (origenDeMatching(llano, datos) == null) {
+            noEntendido.add("de que cliente, encargo o prospeccion");
+        }
+    }
+
+    /**
+     * Lo mismo, mas <b>cual</b> de las coincidencias explicar.
+     *
+     * <p>El codigo se busca en lo que queda de la frase <b>despues de quitar el
+     * origen</b>. Sin quitarlo, «por que encaja PROP-12 con la captacion
+     * CAP-00003» tomaria {@code CAP-00003} como la coincidencia a explicar —el
+     * patron de codigos reconoce las dos formas— y KAIROS explicaria el encargo
+     * del que parte en vez de la propiedad que se le esta preguntando.
+     */
+    private static void queCoincidenciaExplicar(String llano, Map<String, String> datos,
+                                                List<String> noEntendido) {
+        String resto = origenDeMatching(llano, datos);
+        if (resto == null) {
+            noEntendido.add("de que cliente, encargo o prospeccion");
+            resto = llano;
+        }
+        Matcher codigo = CODIGO.matcher(resto);
+        if (codigo.find()) {
+            datos.put("codigo", codigo.group(1).toUpperCase(Locale.ROOT));
+        }
+    }
+
+    /**
+     * Anota el origen y devuelve la frase <b>sin</b> el, o {@code null} si no lo
+     * habia.
+     */
+    private static String origenDeMatching(String llano, Map<String, String> datos) {
+        Matcher origen = ORIGEN_DE_MATCHING.matcher(llano);
+        if (!origen.find()) {
+            return null;
+        }
+        datos.put("origen", origen.group(1).toUpperCase(Locale.ROOT));
+        datos.put("idOrigen", origen.group(2).toUpperCase(Locale.ROOT));
+        return llano.substring(0, origen.start()) + " " + llano.substring(origen.end());
     }
 
     /** A quien se busca: lo que venga detras de "de", "sobre" o "a". */
@@ -635,11 +759,29 @@ public class InterpreteDeterminista implements Interprete {
 
     // ==================================================================
 
-    /** Minusculas y sin tildes: "Miraflores" y "miraflores" son el mismo sitio. */
+    /**
+     * Minusculas, sin tildes y con los superindices plegados: "Miraflores" y
+     * "miraflores" son el mismo sitio, y {@code m²} y {@code m2} son la misma
+     * unidad.
+     *
+     * <h2>Por que los superindices se pliegan a mano</h2>
+     * Porque <b>NFD no los descompone</b>. La forma de descomposicion canonica
+     * deja {@code U+00B2} tal cual —quien lo convierte en {@code 2} es NFKD, la
+     * de <i>compatibilidad</i>—, asi que {@code llano("m²")} valia {@code "m²"}
+     * y no coincidia con lo que cualquier persona escribe en un teclado:
+     * {@code "m2"}. El catalogo publica la unidad con superindice y las frases
+     * la traen sin el, de modo que las dos formas del mismo metro cuadrado no
+     * se encontraban nunca.
+     *
+     * <p>Se pliega aqui y no con NFKD porque NFKD ademas rompe cosas que aqui
+     * importan: convierte ligaduras, comillas tipograficas y espacios duros, y
+     * cambiaria el texto que despues se devuelve como nombre propio.
+     */
     static String llano(String texto) {
         String sinTildes = Normalizer.normalize(texto, Normalizer.Form.NFD)
                 .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
-        return sinTildes.toLowerCase(Locale.ROOT).trim();
+        return sinTildes.replace('²', '2').replace('³', '3')
+                .toLowerCase(Locale.ROOT).trim();
     }
 
     private static boolean contieneAlguna(String llano, String... candidatas) {

@@ -24,6 +24,9 @@ import com.controllocal.persistence.repositorio.DistritoRepository;
 import com.controllocal.persistence.repositorio.EventoDominioRepository;
 import com.controllocal.persistence.repositorio.PersonaRolRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
+import com.controllocal.persistence.busqueda.ConjuntoDeCandidatos;
+import com.controllocal.persistence.busqueda.CriterioBusquedaInmobiliaria;
+import com.controllocal.persistence.busqueda.MotorBusquedaInmobiliaria;
 import com.controllocal.persistence.query.PropiedadListado;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
 import com.controllocal.persistence.repositorio.TitularidadPropiedadRepository;
@@ -53,6 +56,7 @@ import com.controllocal.service.soporte.Procedencia;
 import com.controllocal.service.soporte.ProcedenciaDelValor;
 import com.controllocal.service.soporte.ValorEntrante;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.FiltrosDeListadoInmobiliario;
 import com.controllocal.service.soporte.TitularParaEncargar;
 import com.controllocal.service.soporte.Transiciones;
 import org.springframework.data.domain.Page;
@@ -113,6 +117,9 @@ import java.util.function.Function;
 @Service
 public class PropiedadUniversalServiceImpl implements PropiedadUniversalService {
 
+    /** Tope por pagina, el mismo que publica el contrato del recurso. */
+    private static final int MAXIMO_POR_PAGINA = 100;
+
     private static final String COMANDO_REGISTRO = "REGISTRAR_PROPIEDAD";
     private static final String COMANDO_EDICION = "EDITAR_PROPIEDAD";
 
@@ -148,6 +155,15 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     /** Y quien puede RECIBIRLA: los candidatos que el Core ofrece (D-P0-7/D-P0-12). */
     private final ElegibilidadDeResponsable elegibilidad;
 
+    /**
+     * La unica busqueda sobre la cartera, compartida con {@code /locales}.
+     *
+     * <p>Antes de la normalizacion este servicio llevaba su propia consulta -un
+     * OR de cuatro `like` que cruzaba tres tablas- y por eso no usaba ni uno de
+     * los indices trigrama que RC-003 dejo puestos. Ya no hay dos busquedas.
+     */
+    private final MotorBusquedaInmobiliaria motor;
+
     // Las cuatro tablas de valor gobernado ya no se inyectan aqui (4.P). Este
     // caso de uso ORQUESTA -- decide que se escribe, en que orden y dentro de
     // que transaccion -- y el que ESCRIBE es el enrutador de cada sujeto, que es
@@ -171,7 +187,9 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                                          ActividadDeLaPropiedad actividad,
                                          AnunciosDeLosEncargos publicaciones,
                                          AutoridadDePropiedad autoridad,
-                                         ElegibilidadDeResponsable elegibilidad) {
+                                         ElegibilidadDeResponsable elegibilidad,
+                                         MotorBusquedaInmobiliaria motor) {
+        this.motor = motor;
         this.propiedades = propiedades;
         this.roles = roles;
         this.agentes = agentes;
@@ -368,23 +386,31 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
     @Transactional(readOnly = true)
     public Pagina<FilaPropiedad> listar(FiltrosPropiedad filtros, Actor actor) {
         List<OperacionInmobiliaria> exigidas = operacionesDelFiltro(filtros.operaciones());
-        int pagina = Math.max(1, filtros.pagina());
-        int tamano = Math.max(1, Math.min(100, filtros.tamano()));
 
-        Page<PropiedadListado> encontradas = propiedades.buscarUniversal(
-                actor.idOrganizacion(), enBlancoANulo(filtros.texto()),
-                enBlancoANulo(filtros.estado()),
+        // La MISMA estrategia que `/locales`, configurada distinto: sin la rama
+        // del rubro -que es del contrato de aquel-, con los filtros propios del
+        // modelo universal y con el orden descendente que publica este recurso.
+        // Lo que decide que ids entran es el motor; lo unico que queda aqui es
+        // la fila universal y sus encargos, que es lo que de verdad distingue a
+        // este listado del heredado.
+        CriterioBusquedaInmobiliaria criterio = FiltrosDeListadoInmobiliario.dePropiedades(
+                actor.idOrganizacion(), filtros.texto(), filtros.estado(),
                 filtros.tipoPropiedad() == null || filtros.tipoPropiedad().isBlank()
                         ? null : tipoValidado(filtros.tipoPropiedad()),
-                enBlancoANulo(filtros.distrito()),
+                filtros.distrito(),
                 exigidas.contains(OperacionInmobiliaria.VENTA),
                 exigidas.contains(OperacionInmobiliaria.ALQUILER),
-                PageRequest.of(pagina - 1, tamano));
+                filtros.pagina(), filtros.tamano(), MAXIMO_POR_PAGINA);
+        ConjuntoDeCandidatos candidatos = motor.resolver(criterio);
 
-        List<Long> ids = encontradas.getContent().stream().map(PropiedadListado::getId).toList();
+        List<Long> ids = candidatos.ids();
+        List<PropiedadListado> encontradas = candidatos.vacio() ? List.of()
+                : candidatos.ordenadas(
+                        propiedades.buscarUniversalPorIds(actor.idOrganizacion(), ids),
+                        PropiedadListado::getId);
         Map<Long, List<EncargoEnLista>> porPropiedad = encargosDeLaPagina(actor, ids);
 
-        List<FilaPropiedad> filas = encontradas.getContent().stream()
+        List<FilaPropiedad> filas = encontradas.stream()
                 .map(fila -> new FilaPropiedad(fila.getId(), fila.getCodigo(),
                         AtributosGobernados.nombreDelTipo(fila.getTipoPropiedad()),
                         AtributosGobernados.rotuloDelTipo(fila.getTipoPropiedad()),
@@ -395,7 +421,7 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
                         porPropiedad.getOrDefault(fila.getId(), List.of()),
                         Fechas.local(fila.getFechaRegistro())))
                 .toList();
-        return new Pagina<>(filas, encontradas.getTotalElements());
+        return new Pagina<>(filas, candidatos.total());
     }
 
     @Override
@@ -444,11 +470,6 @@ public class PropiedadUniversalServiceImpl implements PropiedadUniversalService 
             throw new ReglaNegocioException(e.getMessage());
         }
     }
-
-    private static String enBlancoANulo(String valor) {
-        return valor == null || valor.isBlank() ? null : valor.trim();
-    }
-
     @Override
     @Transactional(readOnly = true)
     public FichaPropiedadUniversal consultar(long idPropiedad, Actor actor) {

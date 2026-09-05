@@ -6,7 +6,10 @@ import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.Persona;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.domain.persona.enums.TipoRol;
-import com.controllocal.persistence.query.ConteoPorEstado;
+import com.controllocal.persistence.busqueda.ConjuntoDeCandidatos;
+import com.controllocal.persistence.busqueda.CriterioBusquedaInmobiliaria;
+import com.controllocal.persistence.busqueda.MotorBusquedaInmobiliaria;
+import com.controllocal.persistence.busqueda.OrdenDelListado;
 import com.controllocal.persistence.query.LocalListado;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DistritoRepository;
@@ -45,6 +48,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -108,10 +113,18 @@ class LocalComercialServiceImplTest {
             // CausalidadDelTraspasoIntegrationTest, no con un mock.
             propiedades);
 
+    /**
+     * El motor va mockeado, y eso es deliberado: lo que esta prueba fija es QUE
+     * CRITERIO construye este recurso, no que el SQL funcione. Que el motor
+     * devuelva lo que dice se prueba contra PostgreSQL real en
+     * BusquedaLocalesIntegrationTest.
+     */
+    private final MotorBusquedaInmobiliaria motor = mock(MotorBusquedaInmobiliaria.class);
+
     private final LocalComercialServiceImpl service = new LocalComercialServiceImpl(
             propiedades, roles, distritos, fotos, precios, publicaciones, prospecciones,
             captaciones, new Transiciones(historial), mock(AlertaService.class),
-            lector, gobierno, autoridad);
+            lector, gobierno, autoridad, motor);
 
     /**
      * El lector devuelve "no se sabe nada" en vez de null.
@@ -198,98 +211,132 @@ class LocalComercialServiceImplTest {
     // ------------------------------------------------------------------
 
     @Test
-    void elListadoPasaLosFiltrosALaConsultaYNoFiltraEnMemoria() {
+    void elListadoPideAlMotorElConjuntoYCargaSoloEsaPagina() {
+        // La fila se arma ANTES: filaListado() stubbea su propio mock y, dentro
+        // de un thenReturn, Mockito lo leeria como stubbing anidado.
         LocalListado fila = filaListado();
-        when(propiedades.buscar(anyLong(), any(), any(), any()))
-                .thenReturn(new PageImpl<>(List.of(fila), PageRequest.of(0, 20), 137));
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(7L), 137L));
+        when(propiedades.buscarPorIds(anyLong(), any())).thenReturn(List.of(fila));
         when(publicaciones.codigosEstadoPublicacion(any())).thenReturn(Map.of());
 
-        Pagina<FichaLocal> pagina = service.listar(new FiltrosLocal(null, "N", 3, 20), agente);
+        Pagina<FichaLocal> pagina = service.listar(new FiltrosLocal("camana", "N", 3, 20), agente);
 
-        ArgumentCaptor<Pageable> paginado = ArgumentCaptor.forClass(Pageable.class);
-        verify(propiedades).buscar(eq(ORG), eq(null), eq("N"), paginado.capture());
-        // Pagina 3 del cable (1-based) = pagina 2 de Spring Data (0-based).
-        assertEquals(2, paginado.getValue().getPageNumber());
-        assertEquals(20, paginado.getValue().getPageSize());
-        // El total es el de la CONSULTA, no el de las filas devueltas.
+        verify(propiedades).buscarPorIds(ORG, List.of(7L));
+        // El total es el del CONJUNTO, no el de las filas devueltas.
         assertEquals(137, pagina.total());
         assertEquals(1, pagina.items().size());
         assertEquals("LOC-0100", pagina.items().getFirst().codigoLocal());
     }
 
     /**
-     * Con texto, el listado NO va por el {@code buscar} de siempre: resuelve el
-     * conjunto de candidatos (UNION indexable por tabla), pagina EN LA BASE y
-     * solo despues carga la proyeccion de esos ids (RC-003).
+     * El criterio es lo unico que distingue a este listado del universal.
+     *
+     * <p>Lo que se afirma aqui no es "llama al motor" -eso ya lo dice el
+     * anterior-, es <b>con que</b>: con el rubro dentro, sin filtros de
+     * inmueble, ascendente y con la paginacion del cable. Si alguno de esos
+     * cuatro cambiara, {@code /locales} dejaria de responder lo que su contrato
+     * promete sin que ninguna otra prueba se enterase.
      */
     @Test
-    void conTextoElListadoPaginaElConjuntoDeCandidatosYCargaSoloEsaPagina() {
-        // La fila se arma ANTES: filaListado() stubbea su propio mock y, dentro
-        // de un thenReturn, Mockito lo leeria como stubbing anidado.
-        LocalListado fila = filaListado();
-        when(propiedades.idsPorTexto(anyLong(), any(), any(), anyInt(), anyInt()))
-                .thenReturn(List.of(7L));
-        when(propiedades.buscarPorIds(anyLong(), any())).thenReturn(List.of(fila));
-        when(propiedades.contarPorTexto(anyLong(), any(), any())).thenReturn(137L);
-        when(publicaciones.codigosEstadoPublicacion(any())).thenReturn(Map.of());
+    void elCriterioDeLocalesLlevaElRubroYOrdenaAscendente() {
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(), 0L));
 
-        Pagina<FichaLocal> pagina = service.listar(new FiltrosLocal("camana", "N", 3, 20), agente);
+        service.listar(new FiltrosLocal("camana", "N", 3, 20), agente);
 
-        // Pagina 3 de 20 => limite 20, desplazamiento 40, resuelto en SQL.
-        verify(propiedades).idsPorTexto(ORG, "camana", "N", 20, 40);
-        verify(propiedades).buscarPorIds(ORG, List.of(7L));
-        verify(propiedades, never()).buscar(anyLong(), any(), any(), any());
-        assertEquals(137, pagina.total());
-        assertEquals(1, pagina.items().size());
+        ArgumentCaptor<CriterioBusquedaInmobiliaria> criterio =
+                ArgumentCaptor.forClass(CriterioBusquedaInmobiliaria.class);
+        verify(motor).resolver(criterio.capture());
+        CriterioBusquedaInmobiliaria c = criterio.getValue();
+        assertEquals(ORG, c.idOrganizacion());
+        assertEquals("camana", c.texto());
+        assertEquals("N", c.estado());
+        assertFalse(c.tieneFiltrosDeInmueble(), "/locales no filtra por tipo ni por operacion");
+        assertEquals(OrdenDelListado.ASCENDENTE, c.orden());
+        assertEquals(3, c.pagina());
+        assertEquals(20, c.tamano());
+        // Pagina 3 de 20 => se saltan 40 filas, y eso lo resuelve la base.
+        assertEquals(40, c.desplazamiento());
     }
 
-    /** El total sale del MISMO conjunto que la pagina: no pueden discrepar. */
+    /** Sin candidatos no se pide ninguna proyeccion: no hay nada que cargar. */
     @Test
-    void elTotalConTextoCuentaElMismoConjuntoQuePaginaConLosMismosArgumentos() {
-        when(propiedades.idsPorTexto(anyLong(), any(), any(), anyInt(), anyInt()))
-                .thenReturn(List.of());
-        when(propiedades.contarPorTexto(anyLong(), any(), any())).thenReturn(0L);
+    void sinCandidatosNoSePideNingunaProyeccion() {
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(), 0L));
 
         service.listar(new FiltrosLocal("  camana  ", "D", 1, 10), agente);
 
-        // Mismo tenant, mismo texto normalizado y mismo estado en las dos.
-        verify(propiedades).idsPorTexto(ORG, "camana", "D", 10, 0);
-        verify(propiedades).contarPorTexto(ORG, "camana", "D");
-        // Sin candidatos no se pide ninguna proyeccion.
         verify(propiedades, never()).buscarPorIds(anyLong(), any());
     }
 
     @Test
     void unFiltroEnBlancoViajaComoNuloParaQueElWhereLoIgnore() {
-        when(propiedades.buscar(anyLong(), any(), any(), any()))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
-        when(publicaciones.codigosEstadoPublicacion(any())).thenReturn(Map.of());
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(), 0L));
 
         service.listar(new FiltrosLocal("   ", "", 1, 10), agente);
 
-        verify(propiedades).buscar(eq(ORG), eq(null), eq(null), any());
+        ArgumentCaptor<CriterioBusquedaInmobiliaria> criterio =
+                ArgumentCaptor.forClass(CriterioBusquedaInmobiliaria.class);
+        verify(motor).resolver(criterio.capture());
+        assertNull(criterio.getValue().texto());
+        assertNull(criterio.getValue().estado());
     }
 
+    /**
+     * <b>Un estado que no existe es un error de quien llama, no una pagina
+     * vacia</b> (2026-09-02).
+     *
+     * <p>Hasta la normalizacion los dos listados inmobiliarios lo dejaban pasar
+     * y contestaban 200 con cero filas, cada uno por su cuenta. Decirle a un
+     * cliente "no hay nada que enseñar" cuando lo que pasa es que su filtro no
+     * se entendio es una respuesta falsa, y el defecto era transversal: se
+     * arregla en la autoridad comun, no en un recurso.
+     */
+    @Test
+    void unEstadoFueraDelVocabularioSeRechaza() {
+        ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
+                () -> service.listar(new FiltrosLocal(null, "ACTIVO", 1, 10), agente));
+
+        assertTrue(error.getMessage().contains("D"), error.getMessage());
+        assertTrue(error.getMessage().contains("N"), error.getMessage());
+        assertTrue(error.getMessage().contains("I"), error.getMessage());
+        // Y no llega a consultar nada: el filtro se rechaza antes de la base.
+        verify(motor, never()).resolver(any());
+    }
+
+    /** El vocabulario no distingue mayusculas; lo que no admite es otra palabra. */
+    @Test
+    void elEstadoSeAceptaEnMinusculas() {
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(), 0L));
+
+        service.listar(new FiltrosLocal(null, "d", 1, 10), agente);
+
+        ArgumentCaptor<CriterioBusquedaInmobiliaria> criterio =
+                ArgumentCaptor.forClass(CriterioBusquedaInmobiliaria.class);
+        verify(motor).resolver(criterio.capture());
+        assertEquals("D", criterio.getValue().estado());
+    }
+
+    /**
+     * Un numero fuera de rango se ACOTA, no se rechaza: es lo que este recurso
+     * lleva haciendo desde que existe, y es distinto de una palabra que no
+     * pertenece a ningun vocabulario.
+     */
     @Test
     void elTamanoDePaginaSeAcotaAlTopeDelCable() {
-        when(propiedades.buscar(anyLong(), any(), any(), any()))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
-        when(publicaciones.codigosEstadoPublicacion(any())).thenReturn(Map.of());
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(), 0L));
 
         service.listar(new FiltrosLocal(null, null, 0, 5000), agente);
 
-        ArgumentCaptor<Pageable> paginado = ArgumentCaptor.forClass(Pageable.class);
-        verify(propiedades).buscar(anyLong(), any(), any(), paginado.capture());
-        assertEquals(100, paginado.getValue().getPageSize());
-        // Una pagina 0 o negativa cae en la primera, no revienta.
-        assertEquals(0, paginado.getValue().getPageNumber());
+        ArgumentCaptor<CriterioBusquedaInmobiliaria> criterio =
+                ArgumentCaptor.forClass(CriterioBusquedaInmobiliaria.class);
+        verify(motor).resolver(criterio.capture());
+        assertEquals(100, criterio.getValue().tamano());
+        assertEquals(1, criterio.getValue().pagina());
     }
 
     @Test
     void unaPaginaVaciaNoConsultaPortadasNiPublicaciones() {
-        when(propiedades.buscar(anyLong(), any(), any(), any()))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(9, 10), 4));
-        when(publicaciones.codigosEstadoPublicacion(any())).thenReturn(Map.of());
+        when(motor.resolver(any())).thenReturn(new ConjuntoDeCandidatos(List.of(), 4L));
 
         Pagina<FichaLocal> pagina = service.listar(new FiltrosLocal(null, null, 10, 10), agente);
 
@@ -301,8 +348,7 @@ class LocalComercialServiceImplTest {
 
     @Test
     void elResumenSaleDelGroupByYSuTotalEsLaSumaDeSusPartes() {
-        when(propiedades.contarPorEstadoConTexto(ORG, "camana", null))
-                .thenReturn(List.of(conteo("D", 31), conteo("N", 11)));
+        when(motor.contarPorEstadoLegado(any())).thenReturn(Map.of("D", 31L, "N", 11L));
 
         ResumenLocales resumen = service.resumen("camana", agente);
 
@@ -313,28 +359,24 @@ class LocalComercialServiceImplTest {
         assertEquals(42, resumen.total());
     }
 
+    /**
+     * El KPI y la lista miran el mismo conjunto, y ahora <b>por
+     * construccion</b>: mismo motor, mismo criterio y el mismo texto recortado.
+     * El estado viaja nulo porque el resumen cuenta los tres cubos, no filtra
+     * por uno.
+     */
     @Test
-    void elResumenUsaElMismoFiltroDeTextoQueLaListaParaQueCuadren() {
-        when(propiedades.contarPorEstadoConTexto(anyLong(), any(), any())).thenReturn(List.of());
+    void elResumenUsaElMismoCriterioQueLaListaParaQueCuadren() {
+        when(motor.contarPorEstadoLegado(any())).thenReturn(Map.of());
 
         service.resumen("  camana  ", agente);
 
-        // Recortado igual que en el listado y sobre el MISMO conjunto de
-        // candidatos; si no, KPI y lista contarian distinto. El estado viaja
-        // nulo porque el resumen cuenta los tres cubos, no filtra por uno.
-        verify(propiedades).contarPorEstadoConTexto(ORG, "camana", null);
-        verify(propiedades, never()).contarPorEstado(anyLong(), any());
-    }
-
-    /** Sin texto no hay conjunto que unir: el resumen sigue por el group by simple. */
-    @Test
-    void elResumenSinTextoNoPasaPorElConjuntoDeCandidatos() {
-        when(propiedades.contarPorEstado(anyLong(), any())).thenReturn(List.of());
-
-        service.resumen("   ", agente);
-
-        verify(propiedades).contarPorEstado(ORG, null);
-        verify(propiedades, never()).contarPorEstadoConTexto(anyLong(), any(), any());
+        ArgumentCaptor<CriterioBusquedaInmobiliaria> criterio =
+                ArgumentCaptor.forClass(CriterioBusquedaInmobiliaria.class);
+        verify(motor).contarPorEstadoLegado(criterio.capture());
+        assertEquals(ORG, criterio.getValue().idOrganizacion());
+        assertEquals("camana", criterio.getValue().texto());
+        assertNull(criterio.getValue().estado());
     }
 
     @Test
@@ -372,21 +414,6 @@ class LocalComercialServiceImplTest {
         // que al editar se excluye exactamente el registro actual.
         verify(propiedades).findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(ORG, 9L, 7L);
     }
-
-    private static ConteoPorEstado conteo(String estado, long total) {
-        return new ConteoPorEstado() {
-            @Override
-            public String getEstado() {
-                return estado;
-            }
-
-            @Override
-            public long getTotal() {
-                return total;
-            }
-        };
-    }
-
     private static LocalListado filaListado() {
         LocalListado fila = mock(LocalListado.class);
         when(fila.getId()).thenReturn(7L);

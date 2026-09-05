@@ -2,13 +2,17 @@ package com.controllocal.integracion;
 
 import com.controllocal.app.ControlLocalApplication;
 import com.controllocal.integracion.soporte.BaseDeDatosDePruebas;
-import com.controllocal.persistence.query.ConteoPorEstado;
 import com.controllocal.persistence.query.LocalListado;
+import com.controllocal.persistence.busqueda.ConjuntoDeCandidatos;
+import com.controllocal.persistence.busqueda.CriterioBusquedaInmobiliaria;
+import com.controllocal.persistence.busqueda.MotorBusquedaInmobiliaria;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
+import com.controllocal.service.soporte.FiltrosDeListadoInmobiliario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -17,10 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -49,6 +53,7 @@ class BusquedaLocalesIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PropiedadRepository propiedades;
+    @Autowired MotorBusquedaInmobiliaria motor;
 
     private long idPorCodigo;
     private long idPorDireccion;
@@ -115,6 +120,61 @@ class BusquedaLocalesIntegrationTest {
         assertTrue(ahora.contains(idPorRubro), "el conjunto de candidatos si busca por rubro");
     }
 
+    /**
+     * <b>La rama del rubro es CANONICA, no de {@code /locales}</b> (C0-a,
+     * 2026-09-02).
+     *
+     * <p>Durante unas horas el motor la ofrecio como configuracion por recurso y
+     * el listado universal salio sin ella. Estaba mal: desde V71
+     * {@code rubro_permitido} vive en {@code atributo_propiedad} como atributo
+     * gobernado de PROPIEDAD, asi que buscarlo es buscar la cartera. Con la rama
+     * fuera, un almacen o una oficina buscados por su rubro eran invisibles en
+     * el unico listado que el producto usa de verdad.
+     */
+    @Test
+    void elRubroEntraTambienEnElListadoUniversal() {
+        List<Long> universal = motor.resolver(FiltrosDeListadoInmobiliario.dePropiedades(
+                ORG, "Tienda de ZORZAL", null, null, null, false, false, 1, 100, 100)).ids();
+
+        assertTrue(universal.contains(idPorRubro),
+                "el listado universal tiene que encontrar por rubro lo mismo que el heredado");
+        assertEquals(idsDelConjunto("Tienda de ZORZAL"), universal.stream().sorted().toList(),
+                "y encontrar exactamente lo mismo: la rama es una, no una por recurso");
+    }
+
+    /**
+     * <b>Control negativo: una rama que no aplica no inventa candidatos.</b>
+     *
+     * <p>Es la otra mitad de la correccion. Que el rubro entre en el motor
+     * universal no puede significar que una propiedad a la que el rubro NO le
+     * aplica gane un dato o aparezca por una rama que no le corresponde. Se
+     * comprueba por los dos lados: el terreno no sale al buscar el rubro, y la
+     * base <b>rechaza</b> escribirle uno -{@code exigir_atributo_gobernado} solo
+     * admite {@code rubro_permitido} en A, L y O-, que es lo que garantiza que
+     * el caso no pueda existir en produccion.
+     */
+    @Test
+    void unTipoSinRubroNiGanaDatoNiAparecePorEsaRama() {
+        Long idTerreno = jdbc.queryForObject("""
+                insert into propiedad (codigo, direccion, distrito, metraje, estado_registro,
+                                       disponibilidad_comercial, tipo_inmueble, uso,
+                                       id_rol_propietario, organizacion_id)
+                values ('LOC-ZORZAL-T', 'Av. ZORZAL 700', 'ZORZAL Alto', 500, 'A', 'D', 'T', 'C', ?, ?)
+                returning id_propiedad
+                """, Long.class, rolPropietarioBuscado, ORG);
+
+        assertTrue(idsDelConjunto("ZORZAL").contains(idTerreno),
+                "el terreno si entra por direccion y distrito, que si le aplican");
+        assertFalse(idsDelConjunto("Tienda de ZORZAL").contains(idTerreno),
+                "pero NO por el rubro, que no le aplica");
+
+        assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
+                insert into atributo_propiedad (id_propiedad, clave, valor_texto, organizacion_id)
+                values (?, 'rubro_permitido', 'Tienda de ZORZAL', ?)
+                """, idTerreno, ORG),
+                "la base tiene que rechazar un rubro sobre un tipo que no lo admite");
+    }
+
     @Test
     void cadaRamaAportaSuLocalYNingunaSeQuedaFuera() {
         List<Long> ids = idsDelConjunto("ZORZAL");
@@ -128,7 +188,7 @@ class BusquedaLocalesIntegrationTest {
 
     @Test
     void elTotalCoincideConLoQueDevuelvePaginandoElConjuntoEntero() {
-        long total = propiedades.contarPorTexto(ORG, "ZORZAL", null);
+        long total = totalDelConjunto("ZORZAL", null);
         List<Long> paginando = idsPaginandoDeDosEnDos("ZORZAL", null);
 
         assertEquals(total, paginando.size());
@@ -139,9 +199,9 @@ class BusquedaLocalesIntegrationTest {
     void elFiltroDeEstadoRecortaIgualLaPaginaYElTotal() {
         jdbc.update("update propiedad set estado_registro='I' where id_propiedad=?", idPorCodigo);
 
-        assertEquals(1, propiedades.contarPorTexto(ORG, "ZORZAL", "I"));
+        assertEquals(1, totalDelConjunto("ZORZAL", "I"));
         assertEquals(List.of(idPorCodigo), idsDelConjunto("ZORZAL", "I"));
-        assertEquals(5, propiedades.contarPorTexto(ORG, "ZORZAL", "D"));
+        assertEquals(5, totalDelConjunto("ZORZAL", "D"));
     }
 
     /** El KPI del resumen mira ese mismo conjunto, o no cuadraria con la lista. */
@@ -150,13 +210,12 @@ class BusquedaLocalesIntegrationTest {
         jdbc.update("update propiedad set estado_registro='I' where id_propiedad=?", idPorCodigo);
         jdbc.update("update propiedad set disponibilidad_comercial='A' where id_propiedad=?", idPorDireccion);
 
-        Map<String, Long> porEstado = propiedades.contarPorEstadoConTexto(ORG, "ZORZAL", null).stream()
-                .collect(Collectors.toMap(ConteoPorEstado::getEstado, ConteoPorEstado::getTotal));
+        Map<String, Long> porEstado = motor.contarPorEstadoLegado(criterio("ZORZAL", null, 1, 1));
 
         assertEquals(1L, porEstado.get("I"));
         assertEquals(1L, porEstado.get("N"));
         assertEquals(4L, porEstado.get("D"));
-        assertEquals(propiedades.contarPorTexto(ORG, "ZORZAL", null),
+        assertEquals(totalDelConjunto("ZORZAL", null),
                 porEstado.values().stream().mapToLong(Long::longValue).sum());
     }
 
@@ -167,11 +226,12 @@ class BusquedaLocalesIntegrationTest {
     @Test
     void elLocalDeOtraOrganizacionNoEntraNiEnLaPaginaNiEnElTotal() {
         assertFalse(idsDelConjunto("ZORZAL").contains(idOtroTenant));
-        assertEquals(6, propiedades.contarPorTexto(ORG, "ZORZAL", null));
+        assertEquals(6, totalDelConjunto("ZORZAL", null));
         // Y desde el otro tenant se ve exactamente el suyo, no los seis.
-        assertEquals(1, propiedades.contarPorTexto(
-                jdbc.queryForObject("select organizacion_id from propiedad where id_propiedad=?",
-                        Long.class, idOtroTenant), "ZORZAL", null));
+        long orgVecina = jdbc.queryForObject(
+                "select organizacion_id from propiedad where id_propiedad=?", Long.class, idOtroTenant);
+        assertEquals(1, motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
+                orgVecina, "ZORZAL", null, 1, 1, 1000)).total());
     }
 
     /**
@@ -235,12 +295,38 @@ class BusquedaLocalesIntegrationTest {
     /** La proyeccion de la pagina se carga SOLO para los ids ya paginados. */
     @Test
     void laProyeccionLlegaCompletaParaLosIdsDeLaPagina() {
-        List<Long> ids = propiedades.idsPorTexto(ORG, "ZORZAL", null, 2, 0);
-        List<LocalListado> filas = propiedades.buscarPorIds(ORG, ids);
+        ConjuntoDeCandidatos candidatos = motor.resolver(criterio("ZORZAL", null, 2, 1));
+        List<LocalListado> filas = propiedades.buscarPorIds(ORG, candidatos.ids());
 
-        assertEquals(ids, filas.stream().map(LocalListado::getId).toList());
+        assertEquals(candidatos.ids().stream().sorted().toList(),
+                filas.stream().map(LocalListado::getId).sorted().toList(),
+                "se cargan exactamente los ids de la pagina, ni uno mas ni uno menos");
         assertTrue(filas.stream().allMatch(f -> f.getCodigoLocal() != null
                 && f.getPropietarioNombre() != null && f.getEstado() != null));
+    }
+
+    /**
+     * <b>El cargador de la proyeccion NO promete orden, y por eso el conjunto lo
+     * restituye</b> (2026-09-02).
+     *
+     * <p>No es una precaucion teorica: al normalizar la busqueda, esta misma
+     * prueba se puso roja devolviendo {@code [117867, 117866]} donde el motor
+     * habia pedido {@code [117866, 117867]}. Un {@code where id in (...)} deja
+     * el orden a lo que le convenga al plan, y con la pagina cargada asi el
+     * listado universal —que publica {@code id DESC}— habria empezado a
+     * devolver sus propias filas al reves en cuanto el planificador cambiara de
+     * idea. Es el tipo de defecto que con seis filas de fixture no se reproduce.
+     */
+    @Test
+    void elConjuntoRestituyeElOrdenQuePidioElMotor() {
+        ConjuntoDeCandidatos candidatos = motor.resolver(criterio("ZORZAL", null, 6, 1));
+        List<LocalListado> desordenadas = propiedades.buscarPorIds(ORG, candidatos.ids());
+
+        List<Long> ordenadas = candidatos.ordenadas(desordenadas, LocalListado::getId)
+                .stream().map(LocalListado::getId).toList();
+
+        assertEquals(candidatos.ids(), ordenadas,
+                "las filas tienen que salir en el orden que decidio el motor");
     }
 
     // ------------------------------------------------------------------
@@ -268,14 +354,29 @@ class BusquedaLocalesIntegrationTest {
     }
 
     private List<Long> idsDelConjunto(String texto, String estado) {
-        return propiedades.idsPorTexto(ORG, texto, estado, 1000, 0);
+        return motor.resolver(criterio(texto, estado, 1000, 1)).ids();
     }
 
     private List<Long> idsPaginandoDeDosEnDos(String texto, String estado) {
-        return java.util.stream.IntStream.range(0, 20)
-                .mapToObj(p -> propiedades.idsPorTexto(ORG, texto, estado, 2, p * 2))
+        return java.util.stream.IntStream.rangeClosed(1, 20)
+                .mapToObj(p -> motor.resolver(criterio(texto, estado, 2, p)).ids())
                 .flatMap(List::stream)
                 .toList();
+    }
+
+    /**
+     * El criterio de {@code /locales}: con la rama del rubro y ascendente. Se
+     * construye con la MISMA autoridad que usa el servicio, no a mano: si el
+     * recurso cambiara de configuracion, este gate mediria otra cosa sin
+     * enterarse.
+     */
+    private static CriterioBusquedaInmobiliaria criterio(String texto, String estado,
+                                                         int tamano, int pagina) {
+        return FiltrosDeListadoInmobiliario.deLocales(ORG, texto, estado, pagina, tamano, 1000);
+    }
+
+    private long totalDelConjunto(String texto, String estado) {
+        return motor.resolver(criterio(texto, estado, 1, 1)).total();
     }
 
     private long crearOrganizacion(String codigo) {

@@ -41,6 +41,9 @@ sin un solo check en rojo. Con una API por suite el contador arranca de cero.
 | `disponibilidad-contrato` | Terminar un contrato **no** devuelve el inmueble al mercado. El caso que más importa es la renovación |
 | `editor-universal` | `PUT /propiedades/{id}` con un JSON parcial, para **los siete tipos**: tocar una cosa deja todo lo demás idéntico |
 | `locales-listado` · `locales-busqueda` | Bandejas y texto libre sobre miles de filas, con sus índices |
+
+| `propiedades-listado` | `GET /propiedades` por el cable: la proyección `FilaPropiedad` —no `LocalListado`—, los **siete tipos** con su rótulo, los cuatro casos de encargo (ninguno, venta, alquiler, ambos, y con ambos **VENTA primero**), el cerrado que deja de contar, `operaciones=VENTA,ALQUILER` como «tiene las dos», el orden `id DESC`, los 20 por defecto y el tope de 100, y la frontera de tenant. Y la **paridad con `/locales`** sobre el mismo inmueble: las dimensiones comunes responden igual (rubro incluido) y las diferencias se afirman como deliberadas |
+| `propiedades-busqueda` | Lo mismo sobre **100 000 propiedades con sus encargos**, más el `EXPLAIN` del plan y la **composición medida del banco** (los siete tipos y los cuatro casos de encargo, ninguno testimonial). Bloquea sólo RC-003 (< 3000 ms); p50, p95, peor caso, frío y sobrecoste de página profunda se **imprimen como diagnóstico**. Volumen en `CONTROLLOCAL_E2E_PROPIEDADES` |
 | `demanda-busqueda` · `solicitudes-busqueda` | Los gates de latencia de las bandejas de F3 y F4 sobre 100.000 filas |
 | `sonda-transporte` | Si el transporte permite medir rendimiento ahora mismo |
 | `s0-sesiones` | Una sesión se puede matar sin tocar el token |
@@ -50,6 +53,15 @@ sin un solo check en rojo. Con una API por suite el contador arranca de cero.
 | `s0-mfa` | TOTP, elevación y el invariante de administrador **operativo**. Tarda minutos y casi todo es esperar el paso de 30 s: el anti-replay no se recorta |
 | `s0-emergencia` | El simulacro completo: dos custodios aprueban por separado, una sola aprobación no habilita |
 | `v6-dos-organizaciones` | Que un tenant no vea al otro |
+
+**Las cuatro suites de la cartera prueban UN solo motor.** Desde el 2026-09-02 `GET /locales` y
+`GET /propiedades` comparten `MotorBusquedaInmobiliaria`: una sola estrategia —el conjunto de
+candidatos de RC-003— configurada por recurso. Antes eran dos consultas distintas sobre la **misma
+tabla**, y la del listado universal no alcanzaba ninguno de los índices trigrama, así que un p95
+verde en `locales-busqueda` no decía nada de `/propiedades`. Lo que sigue siendo propio de cada uno
+está declarado: el **rubro** entra en el texto de `/locales` y no en el universal, y el orden es
+`id` ascendente allí y descendente aquí. Que no vuelva a haber un segundo motor lo vigila
+`UnSoloMotorDeBusquedaTest`, que falla nombrando el fichero intruso.
 
 `gate-modelo-universal.sql` comprueba invariantes que ningún test de Java puede ver —las que solo
 se prueban intentando romperlas contra Postgres—. Lo corre la corrida de cierre; **no depende de

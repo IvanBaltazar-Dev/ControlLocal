@@ -11,7 +11,9 @@ import com.controllocal.persistence.repositorio.ComisionMovimientoRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
 import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
+import com.controllocal.persistence.busqueda.MotorBusquedaInmobiliaria;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
+import com.controllocal.service.soporte.FiltrosDeListadoInmobiliario;
 import com.controllocal.persistence.repositorio.ProspeccionRepository;
 import com.controllocal.persistence.repositorio.PublicacionRepository;
 import com.controllocal.persistence.repositorio.RequerimientoClienteRepository;
@@ -68,6 +70,7 @@ class RepositorioEstadosIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PropiedadRepository propiedades;
+    @Autowired MotorBusquedaInmobiliaria motor;
     @Autowired CaptacionRepository captaciones;
     @Autowired ProspeccionRepository prospecciones;
     @Autowired OportunidadComercialRepository oportunidades;
@@ -181,9 +184,23 @@ class RepositorioEstadosIntegrationTest {
         Collection<Long> sinRoles = List.of(-1L);
         PageRequest pagina = PageRequest.of(0, 5);
 
-        assertNotNull(propiedades.buscar(org, null, null, pagina));
-        assertNotNull(propiedades.buscar(org, null, "D", pagina));
-        assertNotNull(propiedades.contarPorEstado(org, null));
+        // El listado inmobiliario ya no vive en el repositorio: lo resuelve
+        // `MotorBusquedaInmobiliaria`, uno solo para /locales y /propiedades. Se
+        // ejercitan sus CUATRO caminos, porque el estado entra por sitios
+        // distintos en cada uno: sin texto va al WHERE, con texto viaja dentro
+        // de cada rama del UNION.
+        assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
+                org, null, null, 1, 5, 100)).ids());
+        assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
+                org, null, "D", 1, 5, 100)).ids());
+        assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.deLocales(
+                org, "zzz", "I", 1, 5, 100)).ids());
+        assertNotNull(motor.resolver(FiltrosDeListadoInmobiliario.dePropiedades(
+                org, "zzz", "N", "L", "Miraflores", true, true, 1, 5, 100)).ids());
+        assertNotNull(motor.contarPorEstadoLegado(FiltrosDeListadoInmobiliario.deLocales(
+                org, null, null, 1, 1, 100)));
+        assertNotNull(motor.contarPorEstadoLegado(FiltrosDeListadoInmobiliario.deLocales(
+                org, "zzz", null, 1, 1, 100)));
         assertNotNull(propiedades.findByOrganizacionIdAndRolPropietarioIdAndIdNotOrderById(
                 org, -1L, -1L));
 

@@ -16,6 +16,7 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -140,6 +141,36 @@ public class ManejadorErroresApi {
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ErrorResponse> medioNoSoportado(HttpMediaTypeNotSupportedException error) {
         return respuesta(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "HTTP 415 Unsupported Media Type");
+    }
+
+    /**
+     * <b>Un parametro con el tipo equivocado es un error de quien llama, no del
+     * servidor</b> (2026-09-02).
+     *
+     * <p>Sin este handler, {@code ?page=abc} respondia <b>500</b>: Spring lanza
+     * {@link MethodArgumentTypeMismatchException}, que desciende de
+     * {@code BeansException} y <b>no</b> de {@code IllegalArgumentException}, asi
+     * que se escapaba del 400 de las reglas de negocio y caia en el catch-all.
+     * Y el catch-all adjunta {@code Detalle: <causa raiz>}, de modo que el
+     * cuerpo publicaba el mensaje interno de la conversion —el nombre del tipo
+     * Java incluido— a cualquiera que escribiera mal un numero.
+     *
+     * <p>Es transversal a proposito: el defecto no era de un listado, era de
+     * todos los endpoints con un parametro tipado. Arreglarlo en un controlador
+     * habria dejado el mismo 500 en los otros veinticinco.
+     *
+     * <p>El mensaje nombra el parametro y lo que se esperaba, y <b>nada mas</b>:
+     * quien se equivoca escribiendo una URL necesita saber que corregir, no como
+     * se llama la clase que fallo al convertirlo.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> parametroConTipoEquivocado(
+            MethodArgumentTypeMismatchException error) {
+        Class<?> esperado = error.getRequiredType();
+        String tipo = esperado != null && Number.class.isAssignableFrom(esperado)
+                ? "un numero entero" : "otro tipo de valor";
+        return respuesta(HttpStatus.BAD_REQUEST,
+                "El parametro \"" + error.getName() + "\" espera " + tipo + ".");
     }
 
     @ExceptionHandler(Exception.class)

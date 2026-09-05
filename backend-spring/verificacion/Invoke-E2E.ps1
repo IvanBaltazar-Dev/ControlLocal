@@ -16,6 +16,7 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateSet(
         'locales-listado', 'locales-busqueda', 'demanda-busqueda', 'solicitudes-busqueda',
+        'propiedades-listado', 'propiedades-busqueda',
         'sonda-transporte',
         'v6', 'f3-demanda', 'f4-solicitud',
         'f6-f7-alertas-tareas', 'personas', 'reportes-propietario',

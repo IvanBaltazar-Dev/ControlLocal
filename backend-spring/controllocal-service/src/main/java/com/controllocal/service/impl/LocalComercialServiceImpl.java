@@ -12,7 +12,9 @@ import com.controllocal.domain.inmueble.PrecioPropiedad;
 import com.controllocal.domain.inmueble.Propiedad;
 import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.domain.persona.enums.TipoRol;
-import com.controllocal.persistence.query.ConteoPorEstado;
+import com.controllocal.persistence.busqueda.ConjuntoDeCandidatos;
+import com.controllocal.persistence.busqueda.CriterioBusquedaInmobiliaria;
+import com.controllocal.persistence.busqueda.MotorBusquedaInmobiliaria;
 import com.controllocal.persistence.query.LocalListado;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.DistritoRepository;
@@ -31,6 +33,7 @@ import com.controllocal.service.excepcion.ReglaNegocioException;
 import com.controllocal.service.soporte.AtributosGobernados;
 import com.controllocal.service.soporte.AutoridadDePropiedad;
 import com.controllocal.service.soporte.Fechas;
+import com.controllocal.service.soporte.FiltrosDeListadoInmobiliario;
 import com.controllocal.service.soporte.LectorPorAutoridad;
 import com.controllocal.service.soporte.ValoresGobernados;
 import com.controllocal.service.soporte.CondicionesEconomicas;
@@ -110,6 +113,15 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     /** La unica autoridad de escritura sobre la propiedad (P0). */
     private final AutoridadDePropiedad autoridad;
 
+    /**
+     * La unica busqueda sobre la cartera, compartida con el listado universal.
+     *
+     * <p>Este recurso <b>no</b> conserva una copia propia de la estrategia: la
+     * consulta que tenia dentro se retiro entera. Si volviera a aparecer aqui
+     * una busqueda por texto, {@code UnSoloMotorDeBusquedaTest} lo pararia.
+     */
+    private final MotorBusquedaInmobiliaria motor;
+
     public LocalComercialServiceImpl(PropiedadRepository propiedades,
                                      PersonaRolRepository roles,
                                      DistritoRepository distritos,
@@ -122,7 +134,9 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                                      AlertaService alertas,
                                      LectorPorAutoridad lector,
                                      AtributosGobernados gobierno,
-                                     AutoridadDePropiedad autoridad) {
+                                     AutoridadDePropiedad autoridad,
+                                     MotorBusquedaInmobiliaria motor) {
+        this.motor = motor;
         this.alertas = alertas;
         this.propiedades = propiedades;
         this.roles = roles;
@@ -146,31 +160,20 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Pagina<FichaLocal> listar(FiltrosLocal filtros, Actor actor) {
-        int pagina = Math.max(1, filtros.pagina());
-        int tamano = Math.max(1, Math.min(MAXIMO_POR_PAGINA, filtros.tamano()));
-        String texto = enBlancoANulo(filtros.texto());
-        String estado = estadoFiltrado(filtros.estado());
+        // El motor decide QUE ids entran, con el tenant y todos los filtros
+        // dentro y antes del LIMIT; aqui solo se carga la proyeccion de ESTE
+        // recurso para esos ids. Es la misma estrategia que usa el listado
+        // universal: lo que la configura es el criterio, no otra consulta.
+        CriterioBusquedaInmobiliaria criterio = FiltrosDeListadoInmobiliario.deLocales(
+                actor.idOrganizacion(), filtros.texto(), filtros.estado(),
+                filtros.pagina(), filtros.tamano(), MAXIMO_POR_PAGINA);
+        ConjuntoDeCandidatos candidatos = motor.resolver(criterio);
 
-        List<LocalListado> filas;
-        long total;
-        if (texto == null) {
-            // Sin texto no hay nada que unir: el filtro de estado ya baja al
-            // WHERE y el indice del listado lo sirve directo.
-            Page<LocalListado> resultado = propiedades.buscar(actor.idOrganizacion(), null, estado,
-                    PageRequest.of(pagina - 1, tamano));
-            filas = resultado.getContent();
-            total = resultado.getTotalElements();
-        } else {
-            // Con texto, el conjunto de candidatos decide QUE ids entran y en
-            // que pagina; la proyeccion completa se carga despues, solo para
-            // esos ids. El total sale del MISMO conjunto, asi que la lista y el
-            // contador no pueden discrepar.
-            List<Long> ids = propiedades.idsPorTexto(actor.idOrganizacion(), texto, estado,
-                    tamano, (pagina - 1) * tamano);
-            filas = ids.isEmpty() ? List.of()
-                    : propiedades.buscarPorIds(actor.idOrganizacion(), ids);
-            total = propiedades.contarPorTexto(actor.idOrganizacion(), texto, estado);
-        }
+        List<LocalListado> filas = candidatos.vacio() ? List.of()
+                : candidatos.ordenadas(
+                        propiedades.buscarPorIds(actor.idOrganizacion(), candidatos.ids()),
+                        LocalListado::getId);
+        long total = candidatos.total();
 
         List<Long> ids = filas.stream().map(LocalListado::getId).toList();
         Map<Long, String> portadas = ids.isEmpty() ? Map.of() : fotos.portadas(ids).stream()
@@ -198,15 +201,13 @@ public class LocalComercialServiceImpl implements LocalComercialService {
     @Override
     @Transactional(readOnly = true)
     public ResumenLocales resumen(String texto, Actor actor) {
-        String buscado = enBlancoANulo(texto);
-        // El KPI mira EL MISMO conjunto que la lista —con texto, el de
-        // candidatos— o no cuadraria con ella. El estado viaja nulo a
-        // proposito: el resumen cuenta los tres cubos, no filtra por uno.
-        List<ConteoPorEstado> conteos = buscado == null
-                ? propiedades.contarPorEstado(actor.idOrganizacion(), null)
-                : propiedades.contarPorEstadoConTexto(actor.idOrganizacion(), buscado, null);
-        Map<String, Long> porEstado = conteos.stream()
-                .collect(Collectors.toMap(ConteoPorEstado::getEstado, ConteoPorEstado::getTotal));
+        // El KPI mira EL MISMO conjunto que la lista —y ahora por construccion,
+        // porque lo resuelve el mismo motor con el mismo criterio— o no
+        // cuadraria con ella. El estado viaja nulo a proposito: el resumen
+        // cuenta los tres cubos, no filtra por uno.
+        Map<String, Long> porEstado = motor.contarPorEstadoLegado(
+                FiltrosDeListadoInmobiliario.deLocales(actor.idOrganizacion(), texto, null,
+                        1, 1, MAXIMO_POR_PAGINA));
 
         long disponibles = porEstado.getOrDefault(Propiedad.LEGADO_DISPONIBLE, 0L);
         long noDisponibles = porEstado.getOrDefault(Propiedad.LEGADO_NO_DISPONIBLE, 0L);
@@ -238,14 +239,6 @@ public class LocalComercialServiceImpl implements LocalComercialService {
                 .toList();
     }
 
-    /** Un estado que no existe filtra a vacio; no es un error del cliente. */
-    private static String estadoFiltrado(String estado) {
-        return enBlancoANulo(estado);
-    }
-
-    private static String enBlancoANulo(String valor) {
-        return valor == null || valor.isBlank() ? null : valor.trim();
-    }
 
     @Override
     @Transactional(readOnly = true)

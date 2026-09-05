@@ -134,7 +134,15 @@ public class InterpreteDeLaBandeja {
         Map<Long, List<BigDecimal>> series = new HashMap<>();
         for (Long idPropiedad : idsPropiedad) {
             List<BigDecimal> serie = precios.findByIdPropiedadOrderByFechaAscIdAsc(idPropiedad)
-                    .stream().map(PrecioPropiedad::getMonto).toList();
+                    .stream()
+                    // SOLO lo que se PIDIO (WP-A). Desde V90 la serie tambien
+                    // lleva lo que se OFRECIO -hito 'O', casi siempre por debajo-
+                    // y lo que se CERRO -'C'-. El renglon que sale de aqui se
+                    // titula «Renta», asi que meter una oferta dentro convertiria
+                    // «un interesado ofrecio menos» en «el propietario bajo el
+                    // precio»: dos hechos distintos dibujados como una sola linea.
+                    .filter(hito -> PrecioPropiedad.HITOS_PEDIDOS.contains(hito.getHito()))
+                    .map(PrecioPropiedad::getMonto).toList();
             if (serie.size() > 1) {
                 // Una linea plana se lee como lo que es: con un solo hito no hay
                 // serie que ensenar, y una chispa de un punto sugiere movimiento

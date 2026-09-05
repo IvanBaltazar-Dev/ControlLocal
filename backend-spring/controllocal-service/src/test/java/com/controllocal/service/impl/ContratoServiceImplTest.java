@@ -105,11 +105,19 @@ class ContratoServiceImplTest {
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
     private final SupervisionAgenteRepository supervisiones = mock(SupervisionAgenteRepository.class);
     private final RevisionDisponibilidadRepository revisiones = mock(RevisionDisponibilidadRepository.class);
+    private final com.controllocal.persistence.repositorio.OfertaRepository ofertas =
+            mock(com.controllocal.persistence.repositorio.OfertaRepository.class);
 
     private final ContratoServiceImpl service = new ContratoServiceImpl(
             contratos, solicitudes, oportunidades, captaciones, propiedades, precios, publicaciones,
             comisiones, alcances, new Transiciones(historial), tareas,
-            mock(AlertaService.class), supervisiones, revisiones, null);
+            mock(AlertaService.class), supervisiones, revisiones,
+            // La mesa de negociacion (WP-A): el cierre del alquiler le pregunta si
+            // hubo una oferta ACEPTADA para atar su hito C a la vuelta que lo
+            // produjo. Vacia por defecto -- el caso normal es cerrar por solicitud
+            // aprobada, sin negociacion registrada -- y el test que SI la ejercita
+            // lo dice en su propio nombre.
+            ofertas, null);
 
     /** vmora: agente responsable de la solicitud 5. */
     private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");
@@ -205,6 +213,55 @@ class ContratoServiceImplTest {
         ReglaNegocioException error = assertThrows(ReglaNegocioException.class,
                 () -> service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente));
         assertEquals("Esta operacion ya tiene un contrato de alquiler registrado.", error.getMessage());
+    }
+
+    // ------------------------------------------------------------------
+    // WP-A / D-N-5 — el hito C también dice de qué vuelta salió
+    // ------------------------------------------------------------------
+
+    /**
+     * <b>Un alquiler también se negocia.</b> Si la mesa llegó a tener una oferta
+     * ACEPTADA, el hito {@code C} del cierre se ata a ella, igual que hace el
+     * cierre de venta.
+     *
+     * <p>Sin esto la serie de una VENTA se podría leer por negociación y la de un
+     * ALQUILER no: dos verdades distintas para el mismo dato, y la asimetría la
+     * habría introducido WP-A al añadir la mesa.
+     */
+    @Test
+    void elHitoDeCierreSeAtaALaOfertaAceptadaDeLaMesa() {
+        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
+        com.controllocal.domain.comercial.Oferta aceptada =
+                new com.controllocal.domain.comercial.Oferta();
+        ReflectionTestUtils.setField(aceptada, "id", 4242L);
+        when(ofertas.aceptadaDe(ORG, 8L)).thenReturn(java.util.Optional.of(aceptada));
+
+        service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente);
+
+        ArgumentCaptor<PrecioPropiedad> precio = ArgumentCaptor.forClass(PrecioPropiedad.class);
+        verify(precios).save(precio.capture());
+        assertEquals("C", precio.getValue().getHito());
+        assertEquals(4242L, precio.getValue().getIdOferta(),
+                "el cierre de un alquiler negociado sale de una oferta concreta");
+    }
+
+    /**
+     * <b>Y sin mesa negociada, {@code null}.</b> Es una respuesta, no un hueco:
+     * hoy el caso normal es cerrar por solicitud aprobada, sin negociación
+     * registrada. Poner ahí la última oferta que hubiera —o inventar una— sería
+     * atribuir el cierre a una vuelta que no lo produjo.
+     */
+    @Test
+    void sinOfertaAceptadaElHitoDeCierreNoInventaUnaVuelta() {
+        prepararCierreValido(SolicitudAlquiler.APROBADA, OportunidadComercial.SOLICITUD_CREADA);
+
+        service.registrar(new DatosContrato(SOLICITUD, null, null, null), agente);
+
+        ArgumentCaptor<PrecioPropiedad> precio = ArgumentCaptor.forClass(PrecioPropiedad.class);
+        verify(precios).save(precio.capture());
+        assertNull(precio.getValue().getIdOferta());
+        assertEquals(7L, precio.getValue().getIdCaptacion(),
+                "el encargo sí se declara siempre: eso no es opcional (V76)");
     }
 
     // ------------------------------------------------------------------

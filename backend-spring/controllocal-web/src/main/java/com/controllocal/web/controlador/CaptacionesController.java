@@ -1,9 +1,12 @@
 package com.controllocal.web.controlador;
 
 import com.controllocal.service.CaptacionService;
+import com.controllocal.service.CierreVentaService;
 import com.controllocal.service.CoincidenciaService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.web.dto.OfertaDtos.CierreVentaRequest;
+import com.controllocal.web.dto.OfertaDtos.CierreVentaResponse;
 import com.controllocal.web.dto.CandidatoAgenteResponse;
 import com.controllocal.web.dto.CaptacionRequest;
 import com.controllocal.web.dto.CaptacionResponse;
@@ -44,10 +47,14 @@ public class CaptacionesController {
 
     private final CaptacionService captaciones;
     private final CoincidenciaService coincidencias;
+    /** El cierre de una VENTA (WP-A). Vive aparte del ciclo del encargo. */
+    private final CierreVentaService cierresDeVenta;
 
-    public CaptacionesController(CaptacionService captaciones, CoincidenciaService coincidencias) {
+    public CaptacionesController(CaptacionService captaciones, CoincidenciaService coincidencias,
+                                 CierreVentaService cierresDeVenta) {
         this.captaciones = captaciones;
         this.coincidencias = coincidencias;
+        this.cierresDeVenta = cierresDeVenta;
     }
 
     @GetMapping
@@ -244,6 +251,32 @@ public class CaptacionesController {
     public CaptacionResponse cerrar(@PathVariable long id, @RequestBody(required = false) CierreRequest dto) {
         return CaptacionResponse.desde(
                 captaciones.cerrar(id, dto != null ? dto.motivo() : null, SesionActual.actor()));
+    }
+
+    /**
+     * <b>El cierre de una VENTA</b> (WP-A, D-N-3).
+     *
+     * <p>Es el gemelo de {@code POST /contratos} por el lado de la compraventa,
+     * y lleva su misma banda —AGENTE— por la misma razon: <b>el broker decide,
+     * el agente registra</b>, y un cierre es el registro de un hecho consumado.
+     * No es el {@code POST {id}/cierre} de arriba: aquel es la decision del
+     * bróker de sacar un encargo de cartera, este es la firma de una venta con
+     * su importe, su comprador y su oferta aceptada.
+     */
+    @PostMapping("{id}/cierre-venta")
+    @PreAuthorize("hasRole('AGENTE')")
+    public ResponseEntity<CierreVentaResponse> cerrarVenta(
+            @PathVariable long id, @RequestBody(required = false) CierreVentaRequest dto) {
+        CierreVentaResponse creado = CierreVentaResponse.desde(cierresDeVenta.cerrar(id,
+                dto == null ? null : dto.aDatos(), SesionActual.actor()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
+    }
+
+    /** El cierre de venta ya registrado de este encargo; 404 si no hay ninguno. */
+    @GetMapping("{id}/cierre-venta")
+    public CierreVentaResponse verCierreVenta(@PathVariable long id) {
+        return CierreVentaResponse.desde(
+                cierresDeVenta.obtenerDelEncargo(id, SesionActual.actor()));
     }
 
     private static PageResponse<CaptacionResponse> pagina(Pagina<CaptacionService.FichaCaptacion> pagina,

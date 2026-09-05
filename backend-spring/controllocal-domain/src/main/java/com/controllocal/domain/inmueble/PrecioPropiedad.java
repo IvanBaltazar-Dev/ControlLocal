@@ -29,7 +29,58 @@ public class PrecioPropiedad extends EntidadDeOrganizacion {
     public static final String HITO_AUTORIZADO = "U";
     /** La renta que el mercado VE. La escribe la publicacion, no la propiedad. */
     public static final String HITO_PUBLICADO = "P";
-    public static final Set<String> HITOS = Set.of("E", "R", "U", "P", "O", "A", "C");
+    /**
+     * Lo que se OFRECIO en una vuelta de la negociacion. Lo escribe la mesa
+     * (WP-A) y lleva {@code id_oferta}: hasta V90 estaba en el CHECK y no lo
+     * producia nadie.
+     */
+    public static final String HITO_OFERTADO = "O";
+    /** El precio con el que se CERRO: el ultimo de la serie de su encargo. */
+    public static final String HITO_CIERRE = "C";
+    public static final Set<String> HITOS = Set.of("E", "R", HITO_AUTORIZADO, HITO_PUBLICADO,
+            HITO_OFERTADO, "A", HITO_CIERRE);
+
+    /**
+     * <b>Lo que se PIDIO</b>: el importe que el propietario autorizo y el que el
+     * mercado vio. Es la definicion de «precio del inmueble» para cualquier
+     * lectura que dibuje su evolucion o lo compare con otros.
+     *
+     * <p>Vive aqui, y no dentro de cada lector, porque desde WP-A la serie tiene
+     * cifras que <b>no</b> son lo que se pedia: un hito {@code O} es lo que
+     * ofrecio un interesado —casi siempre por debajo— y un {@code C} es lo que
+     * se cerro. Una linea que los mezcle no dice «el precio bajo»: dice dos
+     * cosas distintas dibujadas como si fueran una.
+     *
+     * <p>Cada lector que filtraba por su cuenta era una copia de esta regla, y
+     * la copia que se olvidara de {@code O} habria empezado a mentir en silencio
+     * el dia que se registro la primera oferta.
+     */
+    public static final Set<String> HITOS_PEDIDOS = Set.of(HITO_AUTORIZADO, HITO_PUBLICADO);
+
+    /**
+     * <b>Los dos hitos que NO se escriben a mano</b> (WP-A): salen de un hecho
+     * registrado y no de que alguien teclee una cifra.
+     *
+     * <pre>
+     *   O  lo escribe la mesa: OfertaServiceImpl, con su id_oferta
+     *   C  lo escribe el cierre: ContratoServiceImpl (alquiler) o
+     *      CierreVentaServiceImpl (venta)
+     * </pre>
+     *
+     * <p>Existe porque hasta WP-A {@code O} era vocabulario sin productor y la
+     * puerta manual —{@code POST /locales/{id}/precios}— aceptaba <b>los siete</b>
+     * codigos del CHECK. En cuanto {@code O} paso a significar «una vuelta de una
+     * negociacion concreta», esa puerta se convirtio en una <b>segunda manera de
+     * escribir el mismo hecho</b>: un {@code O} tecleado no tiene mesa, no tiene
+     * ronda y llega con {@code id_oferta} nulo, indistinguible de una fila
+     * anterior a V90. Y un {@code C} sin contrato afirma que el inmueble se cerro
+     * a esa cifra sin que exista el documento que lo dice.
+     *
+     * <p>{@code P} no esta en la lista aunque tambien lo produzca la publicacion:
+     * un anuncio fuera de BROX es un hecho real que alguien tiene que poder
+     * registrar, y ahi la mano no compite con ningun productor.
+     */
+    public static final Set<String> HITOS_DE_PRODUCTOR = Set.of(HITO_OFERTADO, HITO_CIERRE);
 
     /**
      * <b>Como se llama un hito cuando lo lee una persona.</b>
@@ -78,6 +129,24 @@ public class PrecioPropiedad extends EntidadDeOrganizacion {
      */
     @Column(name = "id_captacion")
     private Long idCaptacion;
+
+    /**
+     * <b>De que vuelta de que negociacion sale este hito</b> (WP-A, V90).
+     *
+     * <p>{@link #idCaptacion} responde «de que encargo». Con dos interesados
+     * negociando el mismo inmueble a la vez eso deja de bastar: los dos escriben
+     * hitos {@code O} del mismo encargo y sin esta columna quedan mezclados en
+     * una linea que nadie puede volver a separar.
+     *
+     * <p>NULL en {@code U} y {@code P}, y no es un hueco: esos no nacen de
+     * ninguna mesa —salen del encargo y de su anuncio—, asi que para ellos la
+     * respuesta correcta es «ninguna». Y NULL en todo lo anterior a V90.
+     *
+     * <p>La clave ajena es COMPUESTA con {@link #idCaptacion}: un hito no puede
+     * apuntar a una oferta de otro encargo.
+     */
+    @Column(name = "id_oferta")
+    private Long idOferta;
 
     /**
      * De que operacion es esta serie. Sin ella, una propiedad en venta Y en
@@ -213,6 +282,20 @@ public class PrecioPropiedad extends EntidadDeOrganizacion {
     public PrecioPropiedad delEncargo(Long idCaptacion) {
         this.idCaptacion = idCaptacion;
         return this;
+    }
+
+    /**
+     * Y atado ademas a la vuelta de la negociacion que lo produjo (WP-A). Solo
+     * lo llevan {@code O} y {@code C}: un {@code U} o un {@code P} no salen de
+     * ninguna mesa.
+     */
+    public PrecioPropiedad deLaOferta(Long idOferta) {
+        this.idOferta = idOferta;
+        return this;
+    }
+
+    public Long getIdOferta() {
+        return idOferta;
     }
 
     public OffsetDateTime getFechaCreacion() {

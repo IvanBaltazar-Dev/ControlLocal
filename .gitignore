@@ -176,7 +176,7 @@ docs/ai/*
 # Decision de WP-A, escrita el 2026-09-05 mientras corria este mismo paquete.
 # Se anade por el MISMO criterio y no por ser nueva: gobierna codigo que ya
 # existe -- `V90`, `Oferta`, `ContratoCompraventa`, `OfertasController` y las
-# ocho filas nuevas de `matriz-operacion-rol.md` la citan por D-E3-1/2/3/4 --,
+# ocho filas nuevas de `matriz-operacion-rol.md` la citan por D-N-1..D-N-5 --,
 # asi que un clon sin ella se queda sin la autoridad escrita de la mesa de
 # negociacion. Sustituye ademas al retirado `decision-hito-oferta-de-demanda.md`.
 !docs/ai/decision-oferta-y-cierre-de-venta.md

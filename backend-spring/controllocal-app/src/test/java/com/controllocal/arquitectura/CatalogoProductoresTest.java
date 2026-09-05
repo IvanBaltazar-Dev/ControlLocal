@@ -66,7 +66,7 @@ public class CatalogoProductoresTest {
      * desaparezcan sin que nada avise, que es justo el accidente contra el que
      * existe este recuento.
      */
-    private static final int FILAS_MINIMAS = 112;
+    private static final int FILAS_MINIMAS = 117;
 
     /**
      * {@code MfaServiceImpl}, {@code TokenAcceso}: CamelCase de dos jorobas o

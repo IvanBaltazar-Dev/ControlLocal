@@ -43,15 +43,10 @@ prueba de que **este índice envejece si nadie lo mantiene**: una decisión nuev
 que gobierna código y que nadie añada a la lista blanca **no viaja**, y no hay
 gate que lo cace (ver §6).
 
-> **⚠ `D-E3-1` nombra hoy DOS decisiones distintas, y las dos están citadas en
-> el código.** En `decision-sidebar-brox.md` es «la navegación de BROX»
-> (aplicada el 2026-08-18, la citan `core/auth/acceso.ts` y su `.spec`); en
-> `decision-oferta-y-cierre-de-venta.md` es «contra qué precio se congela la
-> referencia de una oferta» (2026-09-05, la citan `Oferta.java`,
-> `PrecioPropiedadRepository` y `NegociacionYCierreDeVentaIntegrationTest`).
-> Quien siga el código desde `Oferta.java` llega a la decisión del menú.
-> **Este índice no lo resuelve**: renumerar una decisión aplicada es cambio de
-> autoridad y lo decide el titular. Sólo queda medido y dicho.
+> **Resuelto el 2026-09-05**: la decisión de la oferta se renumeró a `D-N-1…D-N-5` («N» de
+> Negociación); `D-E3-1` vuelve a nombrar una sola cosa, la navegación de
+> `decision-sidebar-brox.md`. La correspondencia con los códigos antiguos está en la
+> cabecera de `decision-oferta-y-cierre-de-venta.md`.
 
 Criterio aplicado a cada uno, en este orden:
 1. ¿la regla que decide **sigue siendo la que el código hace**? (comprobado
@@ -76,7 +71,7 @@ Criterio aplicado a cada uno, en este orden:
 | `decision-el-broker-tiene-sus-propios-asuntos.md` | D-E2-5 | **VIGENTE · debe viajar** | La única excepción de acceso del sistema —la bandeja no admite ADMIN— vive en `TareasController` y la mide `FocoDelBrokerIntegrationTest` (16 citas) |
 | `decision-alta-de-propietario.md` | D-E2-3 | **VIGENTE · debe viajar** | Dónde se crea un propietario y por qué el alta no se hace desde el catálogo. Lo consume **KAIROS**: `InterpreteDeterminista` cita §3.1.2 dos veces |
 | `decision-presupuesto-de-estilos-de-componente.md` | — | **VIGENTE · debe viajar** | Es la razón escrita del techo `anyComponentStyle: 16 kB` de `frontend-angular/angular.json`, y `AGENTS.md` —que sí viaja— remite a él por su ruta |
-| `decision-oferta-y-cierre-de-venta.md` | D-E3-1/2/3/4 | **VIGENTE · debe viajar** | **Apareció el 2026-09-05, mientras se escribía este índice**: es la decisión de `WP-A` (la mesa de negociación y el cierre de una venta). Entra por el mismo criterio y no por ser nueva — `V90`, `Oferta`, `ContratoCompraventa`, `OfertasController` y **ocho filas nuevas** de `matriz-operacion-rol.md` la citan—, y además es el **sustituto** del retirado `decision-hito-oferta-de-demanda.md` (§4) |
+| `decision-oferta-y-cierre-de-venta.md` | D-N-1…D-N-5 | **VIGENTE · debe viajar** | **Apareció el 2026-09-05, mientras se escribía este índice**: es la decisión de `WP-A` (la mesa de negociación y el cierre de una venta). Entra por el mismo criterio y no por ser nueva — `V90`, `Oferta`, `ContratoCompraventa`, `OfertasController` y **ocho filas nuevas** de `matriz-operacion-rol.md` la citan—, y además es el **sustituto** del retirado `decision-hito-oferta-de-demanda.md` (§4) |
 
 **Resultado: 17 VIGENTE, 0 HISTORIA.** Que ninguno sea historia tiene
 explicación: los superados ya se borraron.
@@ -156,7 +151,7 @@ Aquí está a qué apunta ahora cada asunto:
 | `decision-modelos-de-comision.md`, `diccionario-modelo-economico.md` | `CondicionEconomica` (`tipo_comision`, `base_calculo`, `valor_comision`, `tratamiento_igv`) y `comision_movimiento` |
 | `diagnostico-estados-valores-economicos-y-fixtures.md` | Su §2.1 la superó `decision-estados-sin-productor.md`, que es la autoridad viva y la que lee el gate |
 | `catalogo-productores-estado.md` | El estado lo imprime `CatalogoProductoresTest` en cada build; la tabla canónica es `catalogo-productores-canonico.md` |
-| `decision-hito-oferta-de-demanda.md` | `decision-oferta-y-cierre-de-venta.md` (D-E3-1…3), que escribe el corte de la negociación y el cierre de venta. Es donde se resuelven las tres cuestiones que `pendientes-brox.md` §1 daba por abiertas: contra qué precio se congela la referencia de la oferta, dónde vive el hito `O` sin mezclar dos mesas del mismo inmueble y dónde consta lo declarado |
+| `decision-hito-oferta-de-demanda.md` | `decision-oferta-y-cierre-de-venta.md` (D-N-1…D-N-5), que escribe el corte de la negociación y el cierre de venta. Es donde se resuelven las tres cuestiones que `pendientes-brox.md` §1 daba por abiertas: contra qué precio se congela la referencia de la oferta, dónde vive el hito `O` sin mezclar dos mesas del mismo inmueble y dónde consta lo declarado |
 | `contrato-local-form.md`, `modelo-herencia-y-generalizacion.md`, `seguridad-no-leer.md` | Retirados de `docs/ai/`. Los dos primeros están registrados como eliminados en `pendientes-brox.md` §9 |
 
 **Las de `pendientes-brox.md` quedaron anotadas casi todas.** Medido el

@@ -404,7 +404,26 @@ class AutoridadDeLaPropiedadTest {
 
             "meta_revision",
             "son las revisiones de esa misma meta: mismo agregado, mismo servicio, misma "
-                    + "autoridad");
+                    + "autoridad",
+
+            // ---------------- Los dos que aparecieron con WP-A ----------------
+
+            "oferta",
+            "es una vuelta de la NEGOCIACION -que ofrecio quien, contra que y como acabo-, no un "
+                    + "hecho del inmueble ni una condicion pactada del encargo: no toca importe "
+                    + "autorizado, exclusividad ni vigencia. Lo gobierna OfertaServiceImpl, y su "
+                    + "autoridad SI es la del encargo -exigirEdicionDelEncargo-, porque escribir "
+                    + "una oferta escribe la serie economica: cada vuelta deja un hito 'O' en "
+                    + "precio_propiedad, que esta vigilado en TABLAS_DEL_ENCARGO y es por donde "
+                    + "este gate lo comprueba de verdad",
+
+            "contrato_compraventa",
+            "es OTRO agregado, el gemelo de contrato_alquiler por el lado de la venta: el hecho "
+                    + "que CIERRA un encargo de venta. Lo gobierna CierreVentaServiceImpl con "
+                    + "cargarConAcceso -tenant y alcance- mas exigirEdicionDelEncargo. Sus efectos "
+                    + "sobre el ENCARGO -hito 'C' y cierre- y sobre la PROPIEDAD -retirada del "
+                    + "mercado- si entran en los dos universos, por cerrar, que esta declarado "
+                    + "abajo en los dos con su motivo");
 
     /**
      * <b>Vigilada de verdad, pero sin repositorio propio</b> (N44).
@@ -623,7 +642,18 @@ class AutoridadDeLaPropiedadTest {
                     + "sobre exigirEdicionDelEncargo que devuelve un booleano para la ficha "
                     + "universal. Se traga AccesoNoAutorizadoException, asi que no impide "
                     + "ninguna escritura -- y toda escritura de esta clase termina devolviendo "
-                    + "la ficha");
+                    + "la ficha",
+
+            // EL TERCERO, de WP-A. Mismo patron y misma trampa: las capacidades
+            // de la mesa se preguntan al metodo que despues deniega -que es lo
+            // correcto para no tener dos criterios- dentro de un try/catch que
+            // se traga la negativa. Sin esta entrada, presentar y contraofertar
+            // -- que escriben el hito 'O' -- contarian como protegidos por haber
+            // preguntado para pintar.
+            "com.controllocal.service.impl.OfertaServiceImpl#autoridadDelEncargo",
+            "identico a los dos anteriores (WP-A): try/catch sobre exigirEdicionDelEncargo para "
+                    + "responder las capacidades de la mesa. No impide nada -- si la autoridad "
+                    + "dice que no, devuelve false y la escritura seguiria su camino");
 
     /**
      * Los metodos por los que un repositorio escribe.
@@ -737,6 +767,19 @@ class AutoridadDeLaPropiedadTest {
                     + "AtributosGobernados#retirar, que exige exigirEdicion antes de nada -- "
                     + "retirar es la escritura mas irreversible de las tres. Censo comprobado "
                     + "por el gate",
+
+            // ---------------- El que aparecio con WP-A ----------------
+            "com.controllocal.service.impl.CierreVentaServiceImpl#retirarDelMercado",
+            "es el ciclo del ENCARGO de venta, no la edicion de la ficha del inmueble: saca la "
+                    + "propiedad del mercado porque se vendio, que es la consecuencia de un hecho "
+                    + "ya decidido y no una declaracion sobre el inmueble. Es la misma familia que "
+                    + "ContratoServiceImpl#cerrarLocal, con una diferencia que hay que decir: alli "
+                    + "el ejecutante es el BROKER, que por P0-1 nunca es responsable de una "
+                    + "propiedad; aqui es el AGENTE del encargo, que puede serlo o no. Exigir la "
+                    + "autoridad de la propiedad haria imposible cerrar la venta de un inmueble "
+                    + "cuyo responsable es otro agente -o que esta FALTANTE-, y eso no es una "
+                    + "autoridad sino un bloqueo. Su unico llamador es cerrar, que si exige "
+                    + "exigirEdicionDelEncargo",
 
             "com.controllocal.service.impl.LocalComercialServiceImpl#resolverDistrito",
             "INALCANZABLE: es private y su censo de llamadores, medido el 2026-09-02, esta "
@@ -1437,7 +1480,14 @@ class AutoridadDeLaPropiedadTest {
     void laAutoridadQueGobiernaViajaConElCodigo() throws IOException {
         for (String documento : List.of(
                 "decision-autoridad-de-edicion-de-la-propiedad.md",
-                "decision-brox-intelligence-alcances-y-frontera.md")) {
+                "decision-brox-intelligence-alcances-y-frontera.md",
+                // WP-A. Gobierna codigo vivo: contra que precio se congela una
+                // referencia (D-N-1), donde vive una oferta y por que no cuelga
+                // solo del encargo (D-N-2), que el importe de la escritura nace
+                // FALTANTE (D-N-3) y que el hito C de un alquiler tambien dice de
+                // que vuelta salio (D-N-5). Un clon que no lo lleve deja esas
+                // cuatro reglas sin autoridad escrita.
+                "decision-oferta-y-cierre-de-venta.md")) {
             Path ruta = RAIZ.resolve("docs/ai").resolve(documento);
             assertTrue(Files.isRegularFile(ruta),
                     "falta " + ruta + ". O el documento se borro, o salio de la lista blanca "

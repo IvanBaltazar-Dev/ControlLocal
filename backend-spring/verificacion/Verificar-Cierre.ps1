@@ -95,6 +95,11 @@ $integracion = @(
     # P0 -aquel decidio quien escribe- y la que encontro la fuga de tenant de
     # /locales/{id}/precios, abierta a cualquier usuario de otra corredora.
     'LecturaHistoricaIntegrationTest',
+    # WP-A (V90): la negociacion y el cierre de una venta. Los dos invariantes de
+    # dinero de la mesa -una oferta viva, una aceptada- viven en indices parciales
+    # y los tres triggers de V90 solo corren contra PostgreSQL: sin esta linea una
+    # corrida de cierre los daria por buenos sin haberlos tocado.
+    'NegociacionYCierreDeVentaIntegrationTest',
     # D-E4-1: las piezas del nucleo universal (titularidad, atributos, outbox).
     'NucleoUniversalIntegrationTest',
     'OcupacionInmuebleIntegrationTest',

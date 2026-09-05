@@ -15,11 +15,13 @@ import com.controllocal.persistence.query.ConteoPorEstado;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PlanDeConsulta;
 import com.controllocal.service.Actor;
+import com.controllocal.service.OfertaService;
 import com.controllocal.service.OportunidadService;
 import com.controllocal.service.Pagina;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AccesoOportunidad;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Alcances.Alcance;
 import com.controllocal.service.soporte.Fechas;
@@ -46,16 +48,6 @@ import java.util.Map;
 @Service
 public class OportunidadServiceImpl implements OportunidadService {
 
-    /** MotivoNoContinuidadTipo de la v1: el cable guarda la descripcion, no el codigo. */
-    private static final Map<String, String> RAZONES = Map.of(
-            "P", "Precio",
-            "U", "Ubicacion",
-            "C", "Condiciones del contrato",
-            "L", "Local no adecuado",
-            "N", "Cliente no responde",
-            "E", "Encontro otra opcion",
-            "O", "Otro");
-
     private static final DateTimeFormatter CODIGO = DateTimeFormatter.ofPattern("yyMMddHHmmss");
 
     private final OportunidadComercialRepository oportunidades;
@@ -66,12 +58,21 @@ public class OportunidadServiceImpl implements OportunidadService {
     private final Alcances alcances;
     private final Transiciones transiciones;
     private final PlanDeConsulta plan;
+    /** Quien alcanza esta oportunidad. Una sola definicion para los tres casos de uso. */
+    private final AccesoOportunidad acceso;
+    /**
+     * La mesa de negociacion (WP-A). La ficha INDIVIDUAL publica sus ofertas y
+     * las capacidades del actor sobre ella para que la pantalla no tenga que
+     * pedirlas aparte ni decidir por rol.
+     */
+    private final OfertaService ofertas;
 
     public OportunidadServiceImpl(OportunidadComercialRepository oportunidades,
                                   MotivoNoContinuidadRepository motivos, CaptacionRepository captaciones,
                                   DetalleClienteRepository clientes, DetalleAgenteRepository agentes,
                                   Alcances alcances, Transiciones transiciones,
-                                  PlanDeConsulta plan) {
+                                  PlanDeConsulta plan, AccesoOportunidad acceso,
+                                  OfertaService ofertas) {
         this.oportunidades = oportunidades;
         this.motivos = motivos;
         this.captaciones = captaciones;
@@ -80,6 +81,8 @@ public class OportunidadServiceImpl implements OportunidadService {
         this.alcances = alcances;
         this.transiciones = transiciones;
         this.plan = plan;
+        this.acceso = acceso;
+        this.ofertas = ofertas;
     }
 
     @Override
@@ -170,7 +173,7 @@ public class OportunidadServiceImpl implements OportunidadService {
     @Override
     @Transactional(readOnly = true)
     public FichaOportunidad obtener(long id, Actor actor) {
-        return ficha(cargarConAcceso(id, actor));
+        return fichaIndividual(cargarConAcceso(id, actor), actor);
     }
 
     @Override
@@ -241,7 +244,10 @@ public class OportunidadServiceImpl implements OportunidadService {
         motivo.setAgente(agente);
         motivos.save(motivo);
 
-        String descripcion = RAZONES.get(codigoRazon);
+        // El cable guarda la DESCRIPCION, no el codigo, y esa descripcion sale
+        // de la tabla que la guarda (WP-A): aqui vivia una de las cinco copias
+        // del mismo vocabulario, y una razon nueva salia como null en el cable.
+        String descripcion = MotivoNoContinuidad.rotuloDe(codigoRazon);
         oportunidad.marcarCierre(descripcion);
         transiciones.aplicar(oportunidad, id, OportunidadComercial.NO_CONTINUA, actor, descripcion);
         return ficha(oportunidades.save(oportunidad));
@@ -261,27 +267,15 @@ public class OportunidadServiceImpl implements OportunidadService {
     // Alcance por rol: BROKER por CAPTACION (§4), no por agente.
     // ------------------------------------------------------------------
 
+    /**
+     * <b>La definicion vive en {@link AccesoOportunidad}</b> desde WP-A, y este
+     * metodo la usa. Se conserva el nombre porque es el que la matriz
+     * operacion-rol declara como autoridad de estas filas; lo que cambio es que
+     * la regla dejo de estar escrita aqui dentro, donde la mesa de negociacion
+     * habria tenido que copiarla.
+     */
     private OportunidadComercial cargarConAcceso(long id, Actor actor) {
-        OportunidadComercial oportunidad = oportunidades.buscarFicha(actor.idOrganizacion(), id)
-                .orElseThrow(() -> new NoEncontradoException("Oportunidad"));
-        if (!alcanza(oportunidad, actor)) {
-            throw new AccesoNoAutorizadoException();
-        }
-        return oportunidad;
-    }
-
-    private boolean alcanza(OportunidadComercial oportunidad, Actor actor) {
-        if (actor.esTenantAdmin()) {
-            return true;
-        }
-        if (actor.esAgente()) {
-            return oportunidad.getAgente() != null
-                    && oportunidad.getAgente().getId() == actor.idRolOperativo();
-        }
-        Captacion captacion = oportunidad.getCaptacion();
-        return captacion != null && captacion.getAgente() != null
-                && alcances.supervisados(actor.idOrganizacion(), actor.idRolOperativo())
-                        .contains(captacion.getAgente().getId());
+        return acceso.conAcceso(id, actor);
     }
 
     private static String codigo(String codigoSolicitado) {
@@ -296,6 +290,27 @@ public class OportunidadServiceImpl implements OportunidadService {
 
     private static String vacioNull(String valor) {
         return valor == null || valor.isBlank() ? null : valor;
+    }
+
+    /**
+     * <b>La ficha INDIVIDUAL, con la mesa dentro</b> (WP-A).
+     *
+     * <p>Trae la cadena de ofertas y las capacidades del actor sobre ella. Los
+     * listados no pasan por aqui, igual que en la ficha del encargo: su pregunta
+     * es «que hay», no «que puedo hacer con este», y resolver la mesa por fila
+     * serian dos consultas por elemento de la pagina. En el listado los dos
+     * campos llegan nulos, y con {@code NON_NULL} no viajan: su ausencia
+     * significa «no calculado aqui», no «no hay ofertas» ni «no puedes».
+     */
+    private FichaOportunidad fichaIndividual(OportunidadComercial o, Actor actor) {
+        FichaOportunidad base = ficha(o);
+        return new FichaOportunidad(base.id(), base.codigoOportunidad(), base.idCliente(),
+                base.clienteNombre(), base.idCaptacion(), base.codigoCaptacion(),
+                base.direccionLocal(), base.distritoLocal(), base.idAgente(), base.agenteNombre(),
+                base.estado(), base.fechaRegistro(), base.motivoCierre(), base.observaciones(),
+                base.fechaCierre(), base.fechaActualizacion(), base.idPublicacionOrigen(),
+                ofertas.listar(o.getId(), actor),
+                ofertas.capacidades(o.getId(), actor));
     }
 
     private static FichaOportunidad ficha(OportunidadComercial o) {
@@ -318,7 +333,9 @@ public class OportunidadServiceImpl implements OportunidadService {
                 o.getMotivoCierre(), o.getObservaciones(),
                 Fechas.local(o.getFechaCierre()),
                 Fechas.local(o.getFechaActualizacion()),
-                o.getIdPublicacionOrigen());
+                o.getIdPublicacionOrigen(),
+                // Sin mesa ni capacidades: los produce fichaIndividual.
+                null, null);
     }
 
     private static String nombre(PersonaRol rol) {

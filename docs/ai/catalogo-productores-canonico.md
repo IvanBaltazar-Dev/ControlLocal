@@ -1,9 +1,11 @@
 # Catálogo canónico de productores — tabla ejecutable
 
-**Este archivo lo parsea el gate.** El razonamiento y las decisiones viven en
-[`catalogo-productores-estado.md`](catalogo-productores-estado.md); aquí está
-solo la tabla que las dos capas del gate contrastan contra PostgreSQL y contra
-el código.
+**Este archivo lo parsea el gate.** Aquí está solo la tabla que las dos capas
+del gate contrastan contra PostgreSQL y contra el código; el razonamiento de
+cada clasificación vive en la evidencia fechada del corte que la decidió.
+(~~`catalogo-productores-estado.md`~~, que lo reunía, fue **retirado**: era
+estado medido, y el estado medido caduca — el vigente lo imprime
+`CatalogoProductoresTest` en cada build.)
 
 ## Formato
 
@@ -48,6 +50,21 @@ consecuencias deliberadas:
   vocabulario lo cierra `OrigenIncorporacion` —sin valor por defecto— y lo
   comprueba `PropiedadComoActivoDeDatoIntegrationTest`. Se anota aquí para que
   el siguiente no lo lea como un olvido.
+- **Lo que V90 añadió y NO entra, dicho para que no se lea como descuido:**
+  - `motivo_no_continuidad.razon_principal` —que pasó de siete razones a once—
+    es una **taxonomía de razón**, igual que `alerta.tipo`: no tiene
+    transiciones ni una máquina que la produzca, se escribe una vez al
+    registrar la caída y no vuelve a cambiar. Su vocabulario y sus rótulos
+    viven en un solo sitio, `MotivoNoContinuidad`, y de ahí los toman las dos
+    puertas de la caída (`OportunidadServiceImpl` y `VisitaServiceImpl`) y el
+    `Vocabulario` que las valida.
+  - `oferta.presentada_por` y `oferta.hito_referencia` tampoco: son **hechos
+    congelados** al presentar —quién habló, contra qué precio—, no estados.
+  - `contrato_compraventa` **no tiene columna de estado**, y es deliberado: una
+    compraventa no vence, no se renueva y no se rescinde por plazo. Los hitos
+    registrales viven en `condicion_compraventa` (V51). Una columna de estado
+    sin operación que la produzca sería exactamente el huérfano que este
+    catálogo existe para impedir.
 
 ## Las cuatro vías de producción
 
@@ -72,7 +89,7 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | captacion.estado | O | PRODUCIDO | CaptacionServiceImpl: decision del broker (observar) |
 | captacion.estado | R | PRODUCIDO | CaptacionServiceImpl: decision del broker (rechazar) |
 | captacion.estado | A | PRODUCIDO | CaptacionServiceImpl: decision del broker (aprobar) |
-| captacion.estado | C | PRODUCIDO | ContratoServiceImpl: cascada del cierre |
+| captacion.estado | C | PRODUCIDO | ContratoServiceImpl: cascada del cierre por alquiler, y `CierreVentaServiceImpl.cerrar` la del cierre por venta (V90). El motivo los separa: `A` alquilado, `V` vendido |
 | captacion.estado | V | RESERVADO_FUTURO | Sin productor. Se implementa en 7.3.3 con el reconciliador de vigencia |
 | comision_liquidacion.estado | P | PRODUCIDO | ComisionServiceImpl.crearPendienteNormalizada |
 | comision_liquidacion.estado | R | PRODUCIDO | ComisionServiceImpl.registrarMovimiento: derivado del saldo |
@@ -116,10 +133,15 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | factor_autenticacion.estado | R | PRODUCIDO | MfaServiceImpl: revocacion propia y ajena |
 | finalidad_tratamiento.estado | A | PRODUCIDO | `V28__autorizacion_datos_personales.sql` deja OPERACION_SERVICIO activa (via SQL/Flyway; no hay servicio de finalidades) |
 | finalidad_tratamiento.estado | I | PRODUCIDO | `V28__autorizacion_datos_personales.sql` inactiva las cuatro finalidades opcionales que ninguna pantalla ofrece |
+| oferta.estado | P | PRODUCIDO | `OfertaServiceImpl.presentar` y `OfertaServiceImpl.contraofertar`: toda vuelta nace PRESENTADA por `Transiciones.iniciar` (V90) |
+| oferta.estado | A | PRODUCIDO | `OfertaServiceImpl.aceptar`: el si. Una sola por mesa, y lo corta el indice parcial `uq_oferta_aceptada_por_oportunidad` (V90) |
+| oferta.estado | R | PRODUCIDO | `OfertaServiceImpl.rechazar`: el no a una cifra. NO cierra la oportunidad (V90) |
+| oferta.estado | S | PRODUCIDO | `OfertaServiceImpl.contraofertar`: la anterior sale de la mesa cuando entra la contraoferta (V90) |
+| oferta.estado | T | PRODUCIDO | `OfertaServiceImpl.retirar`: quien la presento se echa atras antes de que le respondan (V90) |
 | oportunidad_comercial.estado | A | PRODUCIDO | OportunidadServiceImpl: alta |
 | oportunidad_comercial.estado | S | PRODUCIDO | SolicitudServiceImpl: al crear la solicitud |
 | oportunidad_comercial.estado | N | PRODUCIDO | OportunidadServiceImpl y VisitaServiceImpl: cierre no continua |
-| oportunidad_comercial.estado | F | PRODUCIDO | ContratoServiceImpl: cierre exitoso |
+| oportunidad_comercial.estado | F | PRODUCIDO | ContratoServiceImpl: cierre exitoso del ALQUILER, y `CierreVentaServiceImpl.cerrar` el de la VENTA (V90). Son dos hechos distintos con el mismo desenlace |
 | oportunidad_comercial.estado | X | RESERVADO_FUTURO | Sin productor. Se implementa en 7.3.3 como consecuencia de solicitud R o D |
 | organizacion.estado | A | PRODUCIDO | `V6__nucleo_multitenant.sql` siembra BROX_LEGACY, y `Organizacion` nace ACTIVA por valor inicial del campo |
 | organizacion.estado | I | RESERVADO_FUTURO | **Sin productor.** Nadie llama a `Organizacion.setEstado` y ninguna migracion actualiza la columna: dar de baja una organizacion es una operacion de plataforma que todavia no existe. La fila decia "Baja de organizacion", que describia algo que nunca se implemento (V76) |
@@ -127,7 +149,7 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | persona.estado | I | PRODUCIDO | ClienteServiceImpl y PropietarioServiceImpl: desactivacion |
 | propiedad.disponibilidad_comercial | D | PRODUCIDO | `ContratoServiceImpl.revisarDisponibilidad` VOLVER_AL_MERCADO y **la apertura del encargo** — `PropiedadUniversalServiceImpl.entrarEnOferta` (alta con operaciones) y `ProspeccionServiceImpl.captar`. Desde V75 el alta NO la produce: una propiedad registrada sin encargo queda con la columna NULL, porque no hay oferta que declarar |
 | propiedad.disponibilidad_comercial | A | PRODUCIDO | ContratoServiceImpl.cerrarLocal |
-| propiedad.disponibilidad_comercial | T | PRODUCIDO | ContratoServiceImpl.revisarDisponibilidad RETIRAR_DEL_MERCADO y baja del local |
+| propiedad.disponibilidad_comercial | T | PRODUCIDO | ContratoServiceImpl.revisarDisponibilidad RETIRAR_DEL_MERCADO y baja del local. Desde V90 tambien `CierreVentaServiceImpl.cerrar`: un inmueble vendido sale del mercado y `RETIRADO` es lo mas fuerte que el vocabulario de hoy sabe decir con verdad --- no hay VENDIDO, y anadirlo es una decision aparte |
 | propiedad.disponibilidad_comercial | R | RESERVADO_FUTURO | 7.3.2 fijo que un contrato P no es reserva. Falta una operacion real de reserva |
 | propiedad.estado_registro | A | PRODUCIDO | `PropiedadUniversalServiceImpl.registrar` (alta universal) y `LocalComercialServiceImpl` en la reactivación. Ya no lo produce el alta de local: ese endpoint se retiró en el Corte 0A |
 | propiedad.estado_registro | I | PRODUCIDO | LocalComercialServiceImpl: desactivacion |
@@ -145,7 +167,7 @@ de una cadena JPQL, invisible para quien busque `setEstado`.
 | publicacion.estado | B | PRODUCIDO | PublicacionServiceImpl: borrador por defecto |
 | publicacion.estado | P | PRODUCIDO | PublicacionServiceImpl: publicar |
 | publicacion.estado | S | PRODUCIDO | PublicacionServiceImpl.cambiarEstado (setter generico) |
-| publicacion.estado | C | PRODUCIDO | ContratoServiceImpl.cerrarLocal: baja al alquilar |
+| publicacion.estado | C | PRODUCIDO | ContratoServiceImpl.cerrarLocal: baja al alquilar. Desde V90 tambien `CierreVentaServiceImpl.cerrar`, que da de baja SOLO los anuncios del encargo vendido |
 | regularizacion_dato_economico.estado | P | DEPRECADO | Cola de calidad de V15-V17. Sin entidad JPA ni servicio. Se retira en el Bloque 8 |
 | regularizacion_dato_economico.estado | R | DEPRECADO | Idem: nunca se produjo, ni siquiera por migracion |
 | regularizacion_dato_economico.estado | D | DEPRECADO | Solo lo inserto V16. Se retira en el Bloque 8 |

@@ -1,5 +1,6 @@
 package com.controllocal.service.soporte;
 
+import com.controllocal.domain.comercial.MotivoNoContinuidad;
 import com.controllocal.service.excepcion.ReglaNegocioException;
 
 import java.util.Set;
@@ -38,8 +39,14 @@ public final class Vocabulario {
     /** 'L' llamada, 'W' WhatsApp, 'E' email, 'P' presencial, 'R' reunion, 'T' portal, 'O' otro. */
     public static final Set<String> CANALES = Set.of("L", "W", "E", "P", "R", "T", "O");
 
-    /** 'P' precio, 'U' ubicacion, 'C' condiciones, 'L' local, 'N' no responde, 'E' otra opcion, 'O' otro. */
-    public static final Set<String> RAZONES_NO_CONTINUIDAD = Set.of("P", "U", "C", "L", "N", "E", "O");
+    /**
+     * Las razones de no continuidad, tomadas de {@code MotivoNoContinuidad} y no
+     * copiadas: es la tabla que las guarda y el unico sitio donde se declaran
+     * (WP-A). La copia que habia aqui se quedo corta en cuanto V90 anadio las
+     * cuatro razones de una VENTA, y una visita que terminara «no consiguio
+     * financiamiento» habria sido rechazada por un vocabulario desactualizado.
+     */
+    public static final Set<String> RAZONES_NO_CONTINUIDAD = MotivoNoContinuidad.RAZONES;
 
     public static final Set<String> OBJECIONES_VISITA = Set.of("P", "U", "E", "C", "O");
 

@@ -216,6 +216,19 @@ class MatrizOperacionRolTest {
             "OportunidadServiceImpl.cargarConAcceso",
             "la oportunidad dentro del alcance del actor",
 
+            "AccesoOportunidad.conAcceso",
+            "la MISMA regla que la anterior, extraida a un componente para que la mesa de "
+                    + "negociacion no tuviera que copiarla (WP-A): tenant delante -404 de otra "
+                    + "corredora- y despues el alcance, que en una oportunidad es por CAPTACION "
+                    + "supervisada y no por agente. Es la pregunta de LECTURA: no concede escribir "
+                    + "en la mesa, que es la del encargo",
+
+            "CierreVentaServiceImpl.cargarConAcceso",
+            "el encargo cuya venta se consulta o se cierra: tenant primero (404) y alcance sobre "
+                    + "su agente despues, el mismo orden y el mismo predicado que "
+                    + "CaptacionServiceImpl.cargarConAcceso. Quien ESCRIBE el cierre necesita "
+                    + "ademas exigirEdicionDelEncargo, que va justo detras",
+
             "OportunidadServiceImpl.registrar",
             "la regla vive INLINE en este metodo y hay que decirlo: la captacion tiene que estar "
                     + "en la lista del AGENTE que registra -sin alcance de broker-, y una ajena "

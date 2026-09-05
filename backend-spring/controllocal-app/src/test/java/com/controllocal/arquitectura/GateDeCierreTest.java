@@ -119,6 +119,13 @@ class GateDeCierreTest {
                         // porque encontro una fuga de tenant que llevaba abierta
                         // en `/locales/{id}/precios`.
                         "LecturaHistoricaIntegrationTest",
+                        // WP-A (V90) — la negociacion y el cierre de una venta.
+                        // Necesita PostgreSQL y no es opcional: los dos invariantes
+                        // de dinero de la mesa -una oferta viva, una aceptada- viven
+                        // en indices parciales, y los tres triggers que atan una
+                        // oferta a su encargo, un contrato a un encargo de venta y un
+                        // hito a su captacion no los ejecuta ningun mock.
+                        "NegociacionYCierreDeVentaIntegrationTest",
                         // D-E4-1 — las tres piezas del nucleo universal contra
                         // PostgreSQL: titularidad, atributos gobernados y outbox.
                         "NucleoUniversalIntegrationTest",

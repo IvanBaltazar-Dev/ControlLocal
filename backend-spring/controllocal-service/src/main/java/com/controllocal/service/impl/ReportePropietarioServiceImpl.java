@@ -1,6 +1,7 @@
 package com.controllocal.service.impl;
 
 import com.controllocal.domain.comercial.Captacion;
+import com.controllocal.domain.comercial.MotivoNoContinuidad;
 import com.controllocal.domain.comercial.ReportePropietario;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.InteraccionComercialRepository;
@@ -34,15 +35,6 @@ public class ReportePropietarioServiceImpl implements ReportePropietarioService 
 
     private static final LocalDate FECHA_MINIMA = LocalDate.of(1, 1, 1);
     private static final LocalDate FECHA_MAXIMA = LocalDate.of(9999, 12, 30);
-
-    private static final Map<String, String> DESCRIPCIONES_MOTIVO = Map.of(
-            "P", "Precio",
-            "U", "Ubicacion",
-            "C", "Condiciones del contrato",
-            "L", "Local no adecuado",
-            "N", "Cliente no responde",
-            "E", "Encontro otra opcion",
-            "O", "Otro");
 
     private final ReportePropietarioRepository reportes;
     private final CaptacionRepository captaciones;
@@ -152,11 +144,16 @@ public class ReportePropietarioServiceImpl implements ReportePropietarioService 
         return new ResumenAvance(consultas, visitasRealizadas, objeciones);
     }
 
+    /**
+     * El rotulo sale de {@code MotivoNoContinuidad} (WP-A) y ya no de una copia
+     * local: este mapa era una de las cinco del mismo vocabulario, y una razon
+     * que solo estuviera en el CHECK habria llegado al informe del propietario
+     * como la letra suelta.
+     */
     private static String objecion(Object[] fila) {
         String codigo = (String) fila[0];
         Number cantidad = (Number) fila[1];
-        return DESCRIPCIONES_MOTIVO.getOrDefault(codigo, codigo)
-                + " (" + cantidad.longValue() + ")";
+        return MotivoNoContinuidad.rotuloDe(codigo) + " (" + cantidad.longValue() + ")";
     }
 
     private static OffsetDateTime inicio(LocalDate fecha) {

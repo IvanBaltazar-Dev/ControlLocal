@@ -81,18 +81,19 @@ public final class Descripciones {
         };
     }
 
-    /** Razon de no continuidad (RF-017): el avance emite la descripcion, no el codigo. */
+    /**
+     * Razon de no continuidad (RF-017): el avance emite la descripcion, no el
+     * codigo.
+     *
+     * <p>La lista NO se repite aqui (WP-A): sale de
+     * {@code MotivoNoContinuidad}, que es la tabla que guarda la razon. Este
+     * {@code switch} era una de las cinco copias del mismo vocabulario, y la
+     * primera razon nueva —las cuatro de una VENTA, V90— habria salido en el
+     * avance como la letra cruda.
+     */
     public static String razonNoContinuidad(String codigo) {
-        return switch (codigo == null ? "" : codigo) {
-            case "P" -> "Precio";
-            case "U" -> "Ubicacion";
-            case "C" -> "Condiciones del contrato";
-            case "L" -> "Local no adecuado";
-            case "N" -> "Cliente no responde";
-            case "E" -> "Encontro otra opcion";
-            case "O" -> "Otro";
-            default -> codigo == null ? "" : codigo;
-        };
+        return codigo == null ? "" : com.controllocal.domain.comercial.MotivoNoContinuidad
+                .rotuloDe(codigo);
     }
 
     private static String texto(String codigo) {

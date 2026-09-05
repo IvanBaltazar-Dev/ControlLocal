@@ -23,6 +23,7 @@ import com.controllocal.service.OportunidadService.FichaOportunidad;
 import com.controllocal.service.excepcion.AccesoNoAutorizadoException;
 import com.controllocal.service.excepcion.NoEncontradoException;
 import com.controllocal.service.excepcion.ReglaNegocioException;
+import com.controllocal.service.soporte.AccesoOportunidad;
 import com.controllocal.service.soporte.Alcances;
 import com.controllocal.service.soporte.Transiciones;
 import org.junit.jupiter.api.Test;
@@ -59,9 +60,26 @@ class OportunidadServiceImplTest {
     private final Alcances alcances = mock(Alcances.class);
     private final HistorialEstadoRepository historial = mock(HistorialEstadoRepository.class);
 
+    /**
+     * El acceso a la oportunidad, extraido a un componente en WP-A. Va REAL y no
+     * mockeado: la regla de alcance -- el agente la suya, el broker por CAPTACION
+     * supervisada -- es justo lo que varias de estas pruebas comprueban, y un
+     * mock permisivo las dejaria verdes el dia que alguien la quitara.
+     */
+    private final AccesoOportunidad acceso =
+            new AccesoOportunidad(oportunidades, alcances);
+
+    /**
+     * La mesa de negociacion (WP-A). Solo la consulta la ficha INDIVIDUAL, para
+     * publicar sus ofertas y las capacidades del actor; ninguna de estas pruebas
+     * mide la mesa, asi que va mockeada y devuelve lo que un mock devuelve.
+     */
+    private final com.controllocal.service.OfertaService ofertas =
+            mock(com.controllocal.service.OfertaService.class);
+
     private final OportunidadServiceImpl service = new OportunidadServiceImpl(
             oportunidades, motivos, captaciones, clientes, agentes, alcances, new Transiciones(historial),
-            new PlanDeConsulta());
+            new PlanDeConsulta(), acceso, ofertas);
 
     /** vmora: organizacion 1, persona 3, rol operativo 30. */
     private final Actor agente = new Actor(ORG, 3L, 30L, "AGENTE");

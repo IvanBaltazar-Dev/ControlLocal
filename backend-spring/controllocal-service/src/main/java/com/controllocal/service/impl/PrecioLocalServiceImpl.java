@@ -146,6 +146,26 @@ public class PrecioLocalServiceImpl implements PrecioLocalService {
         if (datos.hito() == null || !PrecioPropiedad.HITOS.contains(datos.hito())) {
             throw new ReglaNegocioException("Valor invalido para hito de precio: " + datos.hito());
         }
+        // Y NO todos los del CHECK se escriben por aqui (WP-A).
+        //
+        // Esta es la puerta MANUAL de la serie economica, y hasta V90 aceptaba
+        // los siete codigos porque dos de ellos no los producia nadie. Desde que
+        // la mesa escribe 'O' con su `id_oferta` y el cierre escribe 'C' con su
+        // contrato, teclearlos aqui es una SEGUNDA manera de escribir el mismo
+        // hecho: un 'O' a mano no tiene mesa ni ronda y llega con `id_oferta`
+        // nulo -- indistinguible de una fila anterior a V90 --, y un 'C' a mano
+        // afirma que el inmueble se cerro a esa cifra sin que exista el
+        // documento que lo dice.
+        //
+        // El mensaje nombra la puerta correcta en vez de limitarse a negar: lo
+        // que la persona queria hacer se puede hacer, por otro sitio.
+        if (PrecioPropiedad.HITOS_DE_PRODUCTOR.contains(datos.hito())) {
+            throw new ReglaNegocioException(
+                    "El hito " + PrecioPropiedad.rotuloDelHito(datos.hito()).toUpperCase(Locale.ROOT)
+                            + " no se registra a mano: nace de un hecho. Una cifra ofertada entra "
+                            + "por la mesa de negociacion de su oportunidad, y una cifra de cierre "
+                            + "por el contrato de alquiler o por el cierre de venta del encargo.");
+        }
         String moneda = CondicionesEconomicas.moneda(datos.moneda(), "del precio");
         if (datos.monto() == null || datos.monto().signum() < 0) {
             throw new ReglaNegocioException("El monto del precio no puede ser negativo.");

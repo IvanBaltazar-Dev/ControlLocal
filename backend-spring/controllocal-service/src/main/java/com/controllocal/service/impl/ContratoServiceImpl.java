@@ -4,6 +4,7 @@ import com.controllocal.domain.comercial.Alerta;
 import com.controllocal.domain.comercial.Captacion;
 import com.controllocal.domain.comercial.ComisionLiquidacion;
 import com.controllocal.domain.comercial.ContratoAlquiler;
+import com.controllocal.domain.comercial.Oferta;
 import com.controllocal.domain.comercial.OportunidadComercial;
 import com.controllocal.domain.comercial.RevisionDisponibilidad;
 import com.controllocal.domain.comercial.SolicitudAlquiler;
@@ -19,6 +20,7 @@ import com.controllocal.domain.persona.PersonaRol;
 import com.controllocal.domain.persona.SupervisionAgente;
 import com.controllocal.persistence.repositorio.CaptacionRepository;
 import com.controllocal.persistence.repositorio.ContratoAlquilerRepository;
+import com.controllocal.persistence.repositorio.OfertaRepository;
 import com.controllocal.persistence.repositorio.OportunidadComercialRepository;
 import com.controllocal.persistence.repositorio.PrecioPropiedadRepository;
 import com.controllocal.persistence.repositorio.PropiedadRepository;
@@ -101,6 +103,11 @@ public class ContratoServiceImpl implements ContratoService {
     private final AlertaService alertas;
     private final SupervisionAgenteRepository supervisiones;
     private final RevisionDisponibilidadRepository revisiones;
+    /**
+     * La mesa de negociacion (WP-A). La lee para atar el hito {@code C} del
+     * alquiler a la vuelta que lo produjo, igual que hace el cierre de venta.
+     */
+    private final OfertaRepository ofertas;
     /** Proxy de si mismo: la relectura tras la carrera necesita transaccion NUEVA. */
     private final ContratoService autoinvocado;
 
@@ -113,7 +120,9 @@ public class ContratoServiceImpl implements ContratoService {
                                Transiciones transiciones, TareaService tareas,
                                AlertaService alertas, SupervisionAgenteRepository supervisiones,
                                RevisionDisponibilidadRepository revisiones,
+                               OfertaRepository ofertas,
                                @Lazy ContratoService autoinvocado) {
+        this.ofertas = ofertas;
         this.revisiones = revisiones;
         this.autoinvocado = autoinvocado;
         this.tareas = tareas;
@@ -450,7 +459,7 @@ public class ContratoServiceImpl implements ContratoService {
 
         // 6) El local alquilado sale del mercado: NO DISPONIBLE, precio con
         //    hito 'C' (cerrado real) y publicaciones dadas de baja.
-        cerrarLocal(captacion, renta, moneda, actor, motivo);
+        cerrarLocal(captacion, oportunidad, renta, moneda, actor, motivo);
 
         // 7) Cerrado con F6/F7: se dan por hechas las tareas abiertas de las
         //    cuatro entidades de la operacion y se avisa al broker.
@@ -669,7 +678,8 @@ public class ContratoServiceImpl implements ContratoService {
         transiciones.aplicar(captacion, captacion.getId(), Captacion.CERRADA, actor, motivo, fecha);
         captacion.cerrar(fecha, "A", motivo);
         captaciones.save(captacion);
-        cerrarLocal(captacion, contrato.getRentaContractual(), contrato.getMoneda(), actor, motivo);
+        cerrarLocal(captacion, oportunidad, contrato.getRentaContractual(),
+                contrato.getMoneda(), actor, motivo);
         tareas.resolverDeEntidad("OPORTUNIDAD", oportunidad.getId(), actor);
         tareas.resolverDeEntidad("SOLICITUD_ALQUILER", solicitud.getId(), actor);
         tareas.resolverDeEntidad("CAPTACION", captacion.getId(), actor);
@@ -759,6 +769,24 @@ public class ContratoServiceImpl implements ContratoService {
     }
 
     /**
+     * La vuelta de la negociacion de la que sale este cierre, o {@code null}
+     * (WP-A, D-N-5).
+     *
+     * <p>{@code null} es una respuesta y no un hueco: significa que esa mesa no
+     * tuvo ninguna oferta ACEPTADA, que es hoy el caso normal —el alquiler se
+     * cierra por solicitud aprobada y negociar es opcional—. No significa que
+     * se desconozca de donde salio la cifra.
+     */
+    private Long idDeLaOfertaAceptada(Long idOrganizacion, OportunidadComercial oportunidad) {
+        if (idOrganizacion == null || oportunidad == null || oportunidad.getId() == null) {
+            return null;
+        }
+        return ofertas.aceptadaDe(idOrganizacion, oportunidad.getId())
+                .map(Oferta::getId)
+                .orElse(null);
+    }
+
+    /**
      * Efecto 6 de la cascada. El precio de cierre conserva la moneda de la
      * renta final y usa la fecha de HOY —no la de cierre—, como la v1.
      *
@@ -782,8 +810,8 @@ public class ContratoServiceImpl implements ContratoService {
      * Registrado en la lista explicita de {@code AutoridadDeLaPropiedadTest},
      * que es donde tiene que estar para que se vea.
      */
-    private void cerrarLocal(Captacion captacion, BigDecimal renta, String moneda,
-                             Actor actor, String motivo) {
+    private void cerrarLocal(Captacion captacion, OportunidadComercial oportunidad,
+                             BigDecimal renta, String moneda, Actor actor, String motivo) {
         Propiedad propiedad = captacion == null ? null : captacion.getPropiedad();
         if (propiedad == null || propiedad.getId() == null) {
             return;
@@ -799,7 +827,7 @@ public class ContratoServiceImpl implements ContratoService {
         // expediente de compraventa (V51), que tiene sus propios hitos. La
         // operacion se declara, no se hereda de ningun defecto.
         precio.setOperacion(OperacionInmobiliaria.ALQUILER);
-        precio.setHito("C");
+        precio.setHito(PrecioPropiedad.HITO_CIERRE);
         precio.setMoneda(moneda);
         precio.setMonto(renta);
         precio.setFecha(LocalDate.now());
@@ -808,6 +836,17 @@ public class ContratoServiceImpl implements ContratoService {
         // sucesivos del mismo inmueble mezclaban sus cierres en una sola linea.
         // Lo detecto `tg_precio_exige_encargo`, que es exactamente su trabajo.
         precio.delEncargo(captacion.getId());
+        // Y de QUE VUELTA de la negociacion, si hubo una (WP-A, D-N-5). Un
+        // alquiler tambien se negocia: si la mesa llego a tener una oferta
+        // ACEPTADA, el cierre sale de ella y la serie tiene que poder decirlo.
+        // Sin esto, la serie de una VENTA se podia leer por negociacion y la de
+        // un ALQUILER no -- dos verdades distintas para el mismo dato.
+        //
+        // NULL cuando no hubo mesa con oferta aceptada, que es hoy el caso
+        // normal: el alquiler se cierra por solicitud aprobada y la negociacion
+        // es opcional. NULL aqui significa «no salio de ninguna oferta
+        // registrada», no «se desconoce».
+        precio.deLaOferta(idDeLaOfertaAceptada(propiedad.getOrganizacionId(), oportunidad));
         precios.save(precio);
 
         for (Publicacion publicacion

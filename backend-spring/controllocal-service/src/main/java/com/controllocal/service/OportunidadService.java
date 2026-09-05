@@ -21,13 +21,22 @@ public interface OportunidadService {
                             String observaciones, Long idPublicacionOrigen) {
     }
 
-    /** Espejo de OportunidadResponse. */
+    /**
+     * Espejo de OportunidadResponse.
+     *
+     * <p>{@code ofertas} y {@code capacidades} son <b>extension aditiva</b> de
+     * WP-A y solo viajan en la ficha INDIVIDUAL: en los listados llegan nulos y,
+     * con Jackson {@code NON_NULL}, no viajan. Su ausencia significa «no
+     * calculado aqui», no «no hay ofertas» ni «no puedes nada».
+     */
     record FichaOportunidad(Long id, String codigoOportunidad, Long idCliente, String clienteNombre,
                             Long idCaptacion, String codigoCaptacion, String direccionLocal,
                             String distritoLocal, Long idAgente, String agenteNombre, String estado,
                             LocalDateTime fechaRegistro, String motivoCierre, String observaciones,
                             LocalDateTime fechaCierre, LocalDateTime fechaActualizacion,
-                            Long idPublicacionOrigen) {
+                            Long idPublicacionOrigen,
+                            java.util.List<OfertaService.FichaOferta> ofertas,
+                            OfertaService.CapacidadesDeLaMesa capacidades) {
     }
 
     /**

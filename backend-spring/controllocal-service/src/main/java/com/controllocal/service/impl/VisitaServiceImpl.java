@@ -54,16 +54,6 @@ public class VisitaServiceImpl implements VisitaService {
             "P", "programada", "G", "reprogramada", "C", "cancelada",
             "N", "no realizada", "R", "realizada");
 
-    /** MotivoNoContinuidadTipo v1: el cierre guarda la DESCRIPCION, no el codigo. */
-    private static final Map<String, String> RAZONES = Map.of(
-            "P", "Precio",
-            "U", "Ubicacion",
-            "C", "Condiciones del contrato",
-            "L", "Local no adecuado",
-            "N", "Cliente no responde",
-            "E", "Encontro otra opcion",
-            "O", "Otro");
-
     /** Tope duro del cable para la agenda "proximas". */
     private static final int MAX_PROXIMAS = 8;
 
@@ -332,7 +322,10 @@ public class VisitaServiceImpl implements VisitaService {
         motivo.setAgente(visita.getAgente());
         motivos.save(motivo);
 
-        String descripcion = RAZONES.get(razon);
+        // La descripcion sale de MotivoNoContinuidad, la tabla que guarda la
+        // razon (WP-A). Esta era la segunda puerta a la caida de una
+        // oportunidad, y llevaba su propia copia del vocabulario.
+        String descripcion = MotivoNoContinuidad.rotuloDe(razon);
         oportunidad.marcarCierre(descripcion);
         transiciones.aplicar(oportunidad, oportunidad.getId(), OportunidadComercial.NO_CONTINUA,
                 actor, descripcion);

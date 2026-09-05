@@ -16,7 +16,8 @@ BROX trabaja con tres responsabilidades distintas. No se mezclan.
 - Es el único agente autorizado a modificar el repositorio durante un corte.
 - Implementa exactamente el alcance autorizado.
 - Puede modificar migraciones nuevas, backend, frontend, pruebas y evidencia según el corte.
-- Debe entregar candidato limpio, pruebas, evidencia y commit.
+- Debe entregar candidato congelado, pruebas, evidencia y riesgos. Sólo hace commit, push o cualquier
+  otra operación Git que cambie estado cuando CONTROL lo autoriza expresamente.
 
 ### BROX — AUDITOR
 - Intenta demostrar que el candidato del Constructor es incorrecto.
@@ -25,7 +26,99 @@ BROX trabaja con tres responsabilidades distintas. No se mezclan.
 - Un rechazo vuelve al Constructor; no convierte al Auditor en segundo escritor.
 
 ### Regla de continuidad
-Un fallo técnico reproducible que no requiere una nueva decisión funcional vuelve directamente al Constructor para reparación, pruebas y nueva auditoría. CONTROL vuelve al titular únicamente cuando aparece una decisión funcional, de alcance o de riesgo que no puede deducirse del contrato existente.
+Un fallo técnico reproducible que no requiere una nueva decisión funcional vuelve directamente al
+Constructor para reparación, pruebas y nueva auditoría. El Constructor conserva la sesión y continúa
+hasta entregar candidato o demostrar un bloqueo real: no devuelve el trabajo por un error de compilación,
+una prueba roja, un fixture, infraestructura inestable ni una medición contaminada. Primero clasifica,
+diagnostica, corrige o invalida la corrida y repite sólo la validación afectada.
+
+CONTROL vuelve al titular únicamente cuando aparece una decisión funcional, de alcance o de riesgo que
+no puede deducirse del contrato vigente, cuando falta una autoridad externa imprescindible o antes de una
+acción destructiva o externa no autorizada. Dos intentos de corrección que reproducen el mismo fallo
+inesperado obligan a detener el parcheo y hacer análisis de causa raíz; no obligan por sí solos a devolver
+la sesión.
+
+## Modelo de ejecución por riesgo
+
+La seguridad, el aislamiento de tenant, la autoridad, la trazabilidad y la conservación de datos son
+invariantes, no una excusa para certificar todo en cada cambio. CONTROL fija antes de construir:
+
+`CRITICIDAD = BAJA | MEDIA | ALTA | CRÍTICA`
+
+- **BAJA**: texto, estilo, transformación local o detalle sin regla de negocio. Normalmente T0 + T1.
+- **MEDIA**: endpoint convencional, filtro, listado, DTO o comportamiento acotado. T0 + T1 + T2.
+- **ALTA**: regla comercial relevante, persistencia, permiso funcional o interacción entre agregados.
+  T0 + T1 + T2 + T3.
+- **CRÍTICA**: autenticación, autoridad, aislamiento multi-tenant, concurrencia, dinero, contratos,
+  integridad transaccional o migración sensible. Añade las pruebas T4 específicas que demuestren el riesgo.
+
+Si durante la construcción aparece un riesgo mayor, el Constructor eleva la criticidad y añade las
+validaciones deducibles. Sólo vuelve a CONTROL si esa elevación exige una decisión o amplía el alcance.
+
+### Niveles de validación
+
+- **T0 — chequeo local**: compilación, lint o análisis estático relevante y la prueba nueva o modificada.
+- **T1 — pruebas afectadas**: unidad, integración y gate directamente relacionados. Es el bucle normal
+  `fallo → diagnóstico → corrección → T1`.
+- **T2 — candidato del corte**: módulo afectado, familia funcional, gates pertinentes y frontend afectado.
+  Verde significa CANDIDATO, no release.
+- **T3 — certificación proporcional**: una corrida final sobre el árbol congelado, con la regresión amplia,
+  E2E, Angular, migraciones o aislamiento que correspondan al impacto real.
+- **T4 — prueba especial de riesgo**: sabotaje, concurrencia real, múltiples transacciones, benchmark,
+  gran volumen, recuperación o clon limpio. Es una capa selectiva, no un escalón obligatorio después de T3.
+
+No se salta un gate de seguridad que corresponda al cambio, pero tampoco se ejecuta el reactor completo,
+todas las E2E o performance por defecto. Una certificación se repite sólo si el árbol cambió de una forma
+capaz de afectar lo certificado. Si sólo cambia un fixture, se repite la suite corregida y se inspecciona
+el diff; si cambia producto crítico después de T3, CONTROL decide qué parte de T3/T4 debe repetirse.
+
+### Clasificación de fallos
+
+Todo primer rojo se clasifica antes de tocar código:
+
+- **PRODUCTO**: corregir la causa y repetir T1 afectado.
+- **TEST/FIXTURE**: corregir el montaje y repetir esa suite; no reabrir arquitectura sin evidencia.
+- **INFRAESTRUCTURA**: invalidar la corrida, estabilizar el entorno y repetir; no adaptar producto al ruido.
+- **RENDIMIENTO**: aislar máquina y repetir el benchmark; no optimizar sin regresión atribuible.
+- **FLAKY/NO DETERMINISTA**: obtener reproducción, acotar la fuente de variación y registrar frecuencia.
+
+Los sabotajes se reservan para invariantes de alto riesgo: guardas, tenant, puerta canónica, CAS, locks,
+rollback, trazabilidad o conservación. Filtros ordinarios, DTO, paginación, CSS, texto y nomenclatura se
+demuestran con una prueba normal rojo-verde salvo que exista un riesgo concreto adicional.
+
+### Coordinación entre agentes
+
+- CONTROL decide y congela; CONSTRUCTOR escribe; AUDITOR intenta romper. No se mezclan responsabilidades.
+- El Constructor sigue siendo el único escritor aunque use subagentes. Puede delegar análisis de sólo
+  lectura, inventarios, revisión de evidencia o clasificación de pruebas cuando sean tareas acotadas e
+  independientes. Dos agentes no editan el mismo árbol en paralelo.
+- Un subagente recibe objetivo, fronteras, evidencia requerida y condición de parada. Devuelve hallazgos,
+  pruebas y dudas; no una narración de actividad.
+- No paralelizar trabajos que compitan por la misma base, contenedor, archivos de salida o recursos de la
+  máquina. Nunca ejecutar builds o tests pesados en paralelo con benchmarks.
+- Si el trabajo no se divide limpiamente, lo hace un solo agente. Paralelizar por costumbre aumenta deriva,
+  contexto duplicado y falsos conflictos.
+
+### Comunicación, auditoría y cierre
+
+Durante la ejecución sólo se informa cuando hay: hallazgo nuevo, bloqueo real, decisión requerida,
+candidato terminado o certificación terminada. No enviar mensajes periódicos de espera ni repetir el
+contexto conocido. Un resumen intermedio útil puede ser: `T1: 12/12 verde; candidato continúa`.
+
+El Constructor entrega diff, pruebas nuevas, T1/T2, evidencia y riesgos. El Auditor no repite de forma
+automática todo lo ya ejecutado: revisa el diff, selecciona invariantes críticas, repite controles de alto
+riesgo, intenta romper los puntos sensibles y ordena el T3 final. Su independencia viene de ataques y
+criterio propios, no de duplicar comandos.
+
+Toda evidencia de cierre identifica el candidato exacto —commit o huella del diff—, entorno, datos,
+comando y resultado. Un verde sobre un árbol anterior no certifica cambios posteriores.
+
+### Frontera de autorización
+
+Leer, diagnosticar, editar dentro del corte y ejecutar validaciones locales no destructivas son acciones
+autorizadas para el Constructor y no requieren pausas. Commit, push, stash, worktree, reset, descarte de
+cambios, escritura externa, operación destructiva o ampliación material del alcance requieren autorización
+expresa, salvo que el corte vigente ya la conceda de forma inequívoca.
 
 This file provides canonical guidance to every BROX code agent working in this repository.
 
@@ -44,7 +137,7 @@ The domain vocabulary (entity, enum, and method names) is Spanish; keep it Spani
 - `backend-spring/` — the backend: Spring Boot 3.5 Maven reactor (`controllocal-domain` → `controllocal-persistence` → `controllocal-service` → `controllocal-web` → `controllocal-app`), PostgreSQL v2 (Party-Role) migrated by Flyway. Base URL `http://localhost:8090/controllocal/Api`. Flyway owns the schema; **never edit an applied migration**.
 - `frontend-angular/` — the frontend: Angular 20 SPA (standalone, signals; `core/` auth + `features/` + `layout/`), consumes the API at port 8090.
 - `docs/ai/` — **only three documents govern what to do next; everything else is reference or history.**
-  1. **`docs/ai/mapa-ejecucion-brox.md` — the cover page. Open this first, always.** Answers "where are we, what did we close, what's next" in one table: stages E0…E9, each ✅ CERRADA / 🟡 EN CURSO / ⬜, with what you can go and verify. It is updated when a stage closes; if it says a stage is closed, the repository is coherent.
+  1. **`docs/ai/mapa-ejecucion-brox.md` — the cover page. Open it first when it exists.** Answers "where are we, what did we close, what's next" in one table: stages E0…E9, each ✅ CERRADA / 🟡 EN CURSO / ⬜, with what you can go and verify. If it is absent, report it once and continue from the explicit current cut plus tracked VIGENTE decisions; its absence alone does not block work and no agent recreates it outside scope.
   2. `docs/ai/checklist-captura-moat-e-inteligencia-inmobiliaria.md` — what is still missing to close the current stage. A stage closes with **gate + tests + evidence**, and not before.
   3. `docs/ai/decision-*.md` (D-E…) — specific functional decisions, each one self-contained.
 
@@ -112,7 +205,7 @@ docker compose -f backend-spring/docker-compose.yml --profile s3 up -d minio min
 - Seed credentials: `admin@controllocal.test`/Admin2026, `rsalas`…`sramirez`/Broker2026, `vmora`…`rgomez`/Agente2026. **Published in the repo on purpose** — `ValidadorConfiguracionSeguridad` refuses to boot `prod` while any of them is still live.
 - **THE CONTRACT IS UNFROZEN (2026-08-09).** `docs/ai/decision-contrato-v2-descongelado.md`. DTOs, endpoints, names, states, errors, permissions, models, flows and inherited behaviours **may all change** — on two conditions: a functional or architectural reason, and **the change ships with its tests**. The old contract is no longer the authority; **OpenAPI and the tests are the executable contract**. The development rule is now `product need → domain rule → v2 contract → backend → frontend → tests`, never `copy v1 → keep compatibility`. A strange v1 behaviour is **not** replicated by default, and no new code is changed merely to match the legacy.
 - **Evolve module by module, closing one before opening the next** — no sweeping cross-cutting refactor. The cycle is in the decision doc §6. The reference point for detecting regressions is the tag **`baseline-v2-pre-descongelado`**, whose evidence is `backend-spring/verificacion/evidencia/2026-08-09-baseline-v2-pre-descongelado.md`.
-- **A closing run is `verificacion/Verificar-Cierre.ps1`, not `mvn clean install`.** The integration tests carry `@EnabledIfEnvironmentVariable(TEST_DB_URL)`, so without that variable JUnit **skips them in silence** and Maven ends green. (This bullet used to say "the 37 integration tests"; the number kept growing — 29 *classes* on 2026-09-02 — and nothing verified it, so it is gone. Count them with `rg -l EnabledIfEnvironmentVariable backend-spring/controllocal-app/src/test/java/com/controllocal/integracion`.) That is how V31/V37/V38 shipped three full-word `estado` columns, breaking the unitary-code invariant, with the build green for a whole security block. The script demands `TEST_DB_URL`, sets `CONTROLLOCAL_CIERRE=1` (which turns the silent skip into a failure inside the reactor) and **checks the output to prove the integration tests ran**, not merely that they didn't fail.
+- **When T3 requires the complete backend closing gate, use `verificacion/Verificar-Cierre.ps1`, not `mvn clean install`.** It is not the default for every change. The integration tests carry `@EnabledIfEnvironmentVariable(TEST_DB_URL)`, so without that variable JUnit **skips them in silence** and Maven ends green. (This bullet used to say "the 37 integration tests"; the number kept growing — 29 *classes* on 2026-09-02 — and nothing verified it, so it is gone. Count them with `rg -l EnabledIfEnvironmentVariable backend-spring/controllocal-app/src/test/java/com/controllocal/integracion`.) That is how V31/V37/V38 shipped three full-word `estado` columns, breaking the unitary-code invariant, with the build green for a whole security block. The script demands `TEST_DB_URL`, sets `CONTROLLOCAL_CIERRE=1` (which turns the silent skip into a failure inside the reactor) and **checks the output to prove the integration tests ran**, not merely that they didn't fail.
 - **Gates break the build, and they live in one place**: `backend-spring/controllocal-app/src/test/java/com/controllocal/arquitectura/` (23 classes on 2026-09-02 — the directory is the authority, not this number). The founding four are strict layers (`app → web → service → persistence → domain`), "all state transitions go through `service/soporte/Transiciones`", "every private entity carries the tenant discriminator", and the **operation→role matrix** — `MatrizOperacionRolTest` parses `docs/ai/matriz-operacion-rol.md` and fails if it drifts from the controllers, so **a new endpoint needs a row there** (method, path, roles, where scope is decided, and since 2026-09-02 a `{autoridad: …}` token naming the guard that decides it). Since P0 there is also `AutoridadDeLaPropiedadTest`: no new write of a propiedad or an encargo without its authority.
 - **Security is enforced in three places you must not bypass** (blocks 3 and 4 of the roadmap, closed 2026-08-05, migrations V29–V31): `FiltroAutenticacionJwt` checks *per request* whether the session was revoked (`sesiones_invalidas_desde` vs the token's `iat`) and whether it is *capped* by a temporary password; `service/soporte/EventosSeguridad` is the **only** writer of `evento_seguridad` (append-only, one transaction per event); and `ContrasenaServiceImpl.fijarContrasena` is the **only** place a password changes — it validates the policy, archives the old hash, stamps the date, uncaps the account and invalidates every session, five effects that must not be split. Adding a `POST` that touches credentials means going through those, not around them.
 - **Nobody sets another person's password.** The titular changes it knowing the previous one, or defines it by redeeming a one-time token. The system-generated temporary password is the only exception and it forces a change on first use. Don't add an endpoint where an admin picks someone else's password.

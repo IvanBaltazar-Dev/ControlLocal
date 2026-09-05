@@ -7,7 +7,7 @@
    ocho casos sin una sola excepción especial**, que es la condición que
    el plan pone para congelarlo.
 
-   Tres bloques:
+   Cuatro bloques:
 
      A · REPRESENTABILIDAD — cada caso se instancia con las entidades
          declaradas. Si un caso necesitara un campo que no existe, una
@@ -19,6 +19,14 @@
      C · ANCLAJE EN EL REPOSITORIO — todo lo que el contrato dice que YA
          EXISTE tiene que aparecer de verdad en las migraciones Flyway.
          Es lo que impide que el documento se vuelva una lista de deseos.
+
+     D · EL CONTRATO-DATO CONTRA EL CORE (2026-09-05, `N18`/`N20`) — cada
+         clave declarada se compara con el catálogo VIVO: tipo de dato,
+         unidad, activa/retirada, aplicabilidad, exigencia y opciones. El
+         contrato es un SUBCONJUNTO a propósito —declarar menos es legítimo,
+         contradecir no—. Necesita el contenedor levantado, o un volcado
+         (`--volcar` / `BROX_GATE_VOLCADO`); sin ninguno de los dos es ROJO,
+         no un verde por no haber mirado.
 
    Salida: 0 el modelo se puede congelar · 1 todavía no.
    ==================================================================== */
@@ -338,6 +346,20 @@ Object.keys(M.ENTIDADES.Propiedad.seVan).forEach((columna) => {
    migraciones seria interpretar 96 sentencias a mano y llamar autoridad al
    resultado.
 
+   EL VOLCADO NO ES UNA SEGUNDA AUTORIDAD (decisión del 2026-09-05, N18/N20).
+   Se puede correr este gate sin Docker, contra un volcado JSON del catálogo:
+
+     node docs/ai/modelo/gate-modelo-universal.js --volcar <ruta.json>
+     BROX_GATE_VOLCADO=<ruta.json> node docs/ai/modelo/gate-modelo-universal.js
+
+   El volcado lo escribe ESTE fichero, no un script aparte, porque la consulta
+   tiene que tener un solo dueño: dos copias del SQL divergen en silencio. Y
+   por eso mismo el volcado **no se versiona** —es una lectura fechada de una
+   base viva, o sea evidencia— y lleva dentro la consulta con la que se hizo:
+   si la consulta del gate cambia, el volcado queda ROJO en vez de contestar
+   por una pregunta que ya no es la que se hace. Cuando hay volcado Y el Core
+   responde, se comparan los dos: un volcado que contradiga al Core es rojo.
+
    SIN CIFRAS. No se fija ninguna cardinalidad: ni 40, ni 115, ni 141. Un
    censo congelado se rompe al avanzar y el que avanza lo actualiza sin
    mirarlo, que es como un gate deja de vigilar sin ponerse rojo.
@@ -365,27 +387,32 @@ select c.clave,
        coalesce(c.unidad, ''),
        case when c.activo then 'ACTIVA' else 'RETIRADA' end,
        coalesce(string_agg(t.tipo_propiedad || '=' || t.exigencia, ','
-                           order by t.tipo_propiedad), '')
+                           order by t.tipo_propiedad), ''),
+       case when c.aplica_todos then 'SI' else 'NO' end,
+       coalesce((select string_agg(o.valor, ',' order by o.orden, o.valor)
+                   from catalogo_atributo_opcion o
+                  where o.id_catalogo_atributo = c.id_catalogo_atributo
+                    and o.activo), '')
   from catalogo_atributo c
   left join catalogo_atributo_tipo t
     on t.id_catalogo_atributo = c.id_catalogo_atributo
  where c.organizacion_id is null
    and c.sujeto = 'PROPIEDAD'
- group by c.clave, c.tipo_dato, c.unidad, c.activo
+ group by c.id_catalogo_atributo, c.clave, c.tipo_dato, c.unidad, c.activo,
+          c.aplica_todos
  order by c.clave`;
 
-let core = null;
-let motivoSinCore = "";
-try {
-  const salida = execFileSync("docker",
-    ["exec", CONTENEDOR, "psql", "-U", USUARIO, "-d", BASE,
-      "-v", "ON_ERROR_STOP=1", "-A", "-t", "-F", "|", "-c", CONSULTA],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+/* El separador de columnas es `|` y el de listas `,`; medido el 2026-09-05,
+   ningún valor de `catalogo_atributo_opcion` contiene `,`, `|` ni `=`
+   (0 de las filas). Si algún día lo contuviera, el parseo lo vería como un
+   campo de más y esto reventaría con el número de campos, no en silencio. */
+const CAMPOS_POR_FILA = 7;
 
-  core = {};
+function parsear(salida) {
+  const mapa = {};
   salida.split("\n").map((l) => l.trim()).filter(Boolean).forEach((linea) => {
     const campos = linea.split("|");
-    if (campos.length !== 5) {
+    if (campos.length !== CAMPOS_POR_FILA) {
       throw new Error("fila con " + campos.length + " campos: " + linea);
     }
     const aplicabilidad = {};
@@ -395,25 +422,107 @@ try {
         aplicabilidad[tipo] = exigencia;
       });
     }
-    core[campos[0]] = {
+    mapa[campos[0]] = {
       tipoDato: campos[1],
       unidad: campos[2],
       activa: campos[3] === "ACTIVA",
       aplicabilidad,
+      aplicaTodos: campos[5] === "SI",
+      opciones: campos[6] ? campos[6].split(",") : [],
     };
   });
+  return mapa;
+}
+
+/* --- El Core vivo -------------------------------------------------- */
+let core = null;
+let motivoSinCore = "";
+try {
+  core = parsear(execFileSync("docker",
+    ["exec", CONTENEDOR, "psql", "-U", USUARIO, "-d", BASE,
+      "-v", "ON_ERROR_STOP=1", "-A", "-t", "-F", "|", "-c", CONSULTA],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
 } catch (e) {
   core = null;
   motivoSinCore = (e && e.message ? e.message : String(e)).split("\n")[0];
 }
 
-ok("el catálogo vivo responde (" + CONTENEDOR + " / " + BASE + ")",
-  core !== null && Object.keys(core).length > 0,
-  core === null
-    ? motivoSinCore + " — levanta la base (`docker compose -f backend-spring/docker-compose.yml up -d`) "
-      + "o apunta el gate con BROX_GATE_CONTENEDOR/BROX_GATE_BASE. Sin el Core no hay autoridad "
-      + "contra la que comparar, y eso NO es un verde."
-    : "el catálogo respondió vacío");
+/* --- `--volcar <ruta>`: escribe la lectura y termina ---------------- */
+const iVolcar = process.argv.indexOf("--volcar");
+if (iVolcar !== -1) {
+  const destino = process.argv[iVolcar + 1];
+  if (!destino) {
+    console.log("\n--volcar necesita una ruta de salida.");
+    process.exit(1);
+  }
+  if (!core || !Object.keys(core).length) {
+    console.log("\nno se puede volcar: el catálogo vivo no respondió — " + motivoSinCore);
+    process.exit(1);
+  }
+  fs.writeFileSync(destino, JSON.stringify({
+    generadoEl: new Date().toISOString(),
+    contenedor: CONTENEDOR,
+    base: BASE,
+    sujeto: "PROPIEDAD",
+    aviso: "Lectura fechada del catálogo VIVO. No es autoridad y no se versiona: "
+      + "la autoridad es el Core. Regenerar con `node docs/ai/modelo/"
+      + "gate-modelo-universal.js --volcar <ruta>`.",
+    consulta: CONSULTA,
+    claves: core,
+  }, null, 2) + "\n", "utf8");
+  console.log("\nvolcado escrito en " + destino + " ("
+    + Object.keys(core).length + " claves de sujeto PROPIEDAD).");
+  if (fallos.length) {
+    console.log("AVISO: " + fallos.length + " comprobaciones de los bloques A-C ya iban en rojo "
+      + "antes de volcar. El volcado es correcto; el modelo no.");
+  }
+  process.exit(0);
+}
+
+/* --- `BROX_GATE_VOLCADO`: correr contra la lectura fechada ---------- */
+const RUTA_VOLCADO = process.env.BROX_GATE_VOLCADO || "";
+if (RUTA_VOLCADO) {
+  let volcado = null, motivo = "";
+  try {
+    volcado = JSON.parse(fs.readFileSync(RUTA_VOLCADO, "utf8"));
+  } catch (e) {
+    motivo = (e && e.message ? e.message : String(e)).split("\n")[0];
+  }
+  ok("el volcado se lee (" + RUTA_VOLCADO + ")",
+    volcado !== null && volcado.claves && Object.keys(volcado.claves).length > 0, motivo);
+
+  if (volcado && volcado.claves) {
+    /* La consulta viaja DENTRO del volcado. Si el gate cambia lo que pregunta,
+       el volcado contesta a otra pregunta y eso es rojo, no un verde viejo. */
+    ok("el volcado responde a la consulta que este gate hace hoy",
+      volcado.consulta === CONSULTA,
+      "se generó con otra consulta: regenéralo con `--volcar " + RUTA_VOLCADO + "`");
+
+    /* Y si el Core está delante, el volcado no puede contradecirlo. */
+    if (core) {
+      const distintas = Object.keys(core).filter((clave) =>
+        JSON.stringify(core[clave]) !== JSON.stringify(volcado.claves[clave]));
+      const sobran = Object.keys(volcado.claves).filter((clave) => !core[clave]);
+      ok("el volcado coincide con el catálogo vivo",
+        distintas.length === 0 && sobran.length === 0,
+        "difieren: " + distintas.concat(sobran).slice(0, 8).join(", ")
+        + " — el volcado es una lectura vieja, regenéralo");
+    } else {
+      console.log("      (corriendo contra el volcado de " + volcado.generadoEl
+        + ", base " + volcado.base + "; el catálogo vivo no respondió)");
+    }
+    core = volcado.claves;
+  }
+} else {
+  ok("el catálogo vivo responde (" + CONTENEDOR + " / " + BASE + ")",
+    core !== null && Object.keys(core).length > 0,
+    core === null
+      ? motivoSinCore + " — levanta la base (`docker compose -f backend-spring/docker-compose.yml up -d`), "
+        + "apunta el gate con BROX_GATE_CONTENEDOR/BROX_GATE_BASE o corre contra un volcado "
+        + "(BROX_GATE_VOLCADO). Sin el Core no hay autoridad contra la que comparar, y eso NO es un verde."
+      : "el catálogo respondió vacío");
+}
+if (core && !Object.keys(core).length) { core = null; }
 
 if (core) {
   /* El código de una letra sale de `TIPO_PROPIEDAD`, que ya lo declara. Una
@@ -514,6 +623,137 @@ if (core) {
         "el contrato la declara obligatoria y el Core la tiene en "
         + (real.aplicabilidad[codigo(nombreTipo)] || "(no aplica)"));
     });
+  });
+
+  /* ================================================================
+     D.1 · LOS SEIS CAMPOS NUEVOS DEL CONTRATO-DATO  (N20, 2026-09-05)
+     ----------------------------------------------------------------
+     `retirado`, `retiradaPor`, `sustituidaPor`, `exigencia`, `opciones`
+     y `aplicaTodos` entraron en `modelo-universal.js` con los Cortes 5A
+     y 5B, y hasta hoy el gate no nombraba ninguno: medido el 2026-08-25
+     y confirmado el 2026-08-29, **0 apariciones de los seis**, con
+     control positivo (`clave` = 7 en este mismo fichero). Eran prosa
+     inerte dentro del fichero que se llama a sí mismo «el contrato como
+     dato ejecutable».
+
+     CADA UNO LLEVA SU CONTROL POSITIVO, y no es adorno: el día que
+     ninguna clave declare `opciones`, el bucle que las compara recorre
+     un conjunto vacío y sale VERDE sin mirar nada. El control exige que
+     el campo se use y dice cuántas veces. Un cero es rojo con su
+     explicación, no silencio.
+     ================================================================ */
+  grupo("D.1 · Los campos nuevos del contrato-dato, contrastados");
+
+  const declaranQue = (predicado) => M.ATRIBUTOS.filter(predicado);
+
+  const conRetirado = declaranQue((a) => a.retirado === true);
+  const conRetiradaPor = declaranQue((a) => !!a.retiradaPor);
+  const conSustituidaPor = declaranQue((a) => Array.isArray(a.sustituidaPor) && a.sustituidaPor.length > 0);
+  const conExigencia = declaranQue((a) => !!a.exigencia);
+  const conOpciones = declaranQue((a) => Array.isArray(a.opciones) && a.opciones.length > 0);
+  const conAplicaTodos = declaranQue((a) => a.aplicaTodos !== undefined);
+
+  [["retirado", conRetirado], ["retiradaPor", conRetiradaPor],
+    ["sustituidaPor", conSustituidaPor], ["exigencia", conExigencia],
+    ["opciones", conOpciones], ["aplicaTodos", conAplicaTodos]]
+    .forEach((par) => {
+      const campo = par[0], claves = par[1];
+      ok("CONTROL alguna clave declara `" + campo + "` (" + claves.length + ")",
+        claves.length > 0,
+        "ninguna de las " + M.ATRIBUTOS.length + " claves declaradas lo usa: la comprobación "
+        + "de abajo recorrería un conjunto vacío y saldría verde sin mirar nada. Si el campo "
+        + "se retiró del contrato, retira con él su comprobación");
+    });
+
+  /* `retirado` · una retirada sin migración que la firme es una retirada
+     sin procedencia, y el North Star no admite dato sin procedencia. La
+     comparación con `activo` del Core ya la hace el bucle de arriba; lo
+     que falta es que la decisión tenga autor. */
+  conRetirado.forEach((a) => {
+    ok("`" + a.clave + "` · su retirada dice qué migración la firmó",
+      !!a.retiradaPor,
+      "declara `retirado: true` y no dice quién la retiró: sin migración citada nadie "
+      + "puede comprobar que la retirada ocurrió, ni encontrar el linaje del valor");
+  });
+
+  /* `retiradaPor` · la migración citada EXISTE y NOMBRA la clave. Es un
+     anclaje deliberadamente barato —igual que el bloque C—: no demuestra
+     que esa migración sea la que retiró la clave, demuestra que no se
+     cita una migración inexistente ni una que jamás habló de ella, que es
+     como envejece una cita. */
+  const nombresMigraciones = fs.existsSync(MIGRACIONES) ? fs.readdirSync(MIGRACIONES) : [];
+  conRetiradaPor.forEach((a) => {
+    const fichero = nombresMigraciones.find((f) => f.startsWith(a.retiradaPor + "__"));
+    if (!ok("`" + a.clave + "` · la migración " + a.retiradaPor + " existe", !!fichero,
+      "el contrato cita una migración que no está en " + MIGRACIONES)) { return; }
+    const cuerpo = fs.readFileSync(path.join(MIGRACIONES, fichero), "utf8");
+    ok("`" + a.clave + "` · y " + a.retiradaPor + " la nombra",
+      new RegExp("\\b" + a.clave + "\\b").test(cuerpo),
+      fichero + " no menciona la clave: o la cita es de otra migración, o la retirada "
+      + "se hizo en otro sitio y esta línea del contrato ya no es cierta");
+  });
+
+  /* `sustituidaPor` · una sustituta que no existe, o que está a su vez
+     retirada, no sustituye nada: dejaría la pregunta cerrada sin ningún
+     sitio donde volver a hacerla. Es la regla del North Star —nada se
+     retira antes de que su reemplazo esté activo— hecha comprobación. */
+  conSustituidaPor.forEach((a) => {
+    a.sustituidaPor.forEach((sustituta) => {
+      const real = core[sustituta];
+      ok("`" + a.clave + "` · su sustituta `" + sustituta + "` existe y está VIVA en el Core",
+        !!real && real.activa === true,
+        !real ? "el Core no tiene ninguna clave con ese nombre"
+          : "el Core la tiene retirada: una sustituta apagada deja la pregunta sin sitio");
+    });
+  });
+
+  /* `exigencia` · el bucle de arriba ya compara nivel a nivel. Lo que
+     falta es lo que N20 señalaba: que el gate sepa mirar un eje que NO
+     sea el del alta. Hasta hoy sólo sabía comprobar `requerido`, que es
+     ALT; el caso «Terreno en venta» de 5B se declaró publicable sin las
+     dos claves PUB que el propio contrato exige, y nada dijo nada. */
+  const nivelesDeclarados = [];
+  conExigencia.forEach((a) => {
+    Object.entries(a.exigencia).forEach(([nombreTipo, nivel]) => {
+      nivelesDeclarados.push(nivel);
+      ok("`" + a.clave + "` · " + nombreTipo + " declara un nivel del vocabulario",
+        ["ALT", "PUB", "OPC"].indexOf(nivel) !== -1,
+        "«" + nivel + "» no es ALT, PUB ni OPC");
+    });
+  });
+  ok("CONTROL la exigencia comprobada cubre algún eje que no es el ALTA ("
+    + nivelesDeclarados.filter((n) => n !== "ALT").length + " de " + nivelesDeclarados.length + ")",
+    nivelesDeclarados.some((n) => n !== "ALT"),
+    "todas las exigencias declaradas son ALT: el gate volvería a vigilar sólo el alta, "
+    + "que es exactamente el hueco por el que pasó el caso «Terreno en venta» de 5B");
+
+  /* `opciones` · una LISTA es su vocabulario. Se compara como conjunto
+     contra las opciones ACTIVAS del Core: declarar una opción que el Core
+     no ofrece es prometer un valor que la ficha rechaza, y omitir una que
+     sí ofrece es describir un formulario que no es el que se ve. */
+  conOpciones.forEach((a) => {
+    const real = core[a.clave];
+    if (!real) { return; }
+    const declaradas = a.opciones.slice().sort().join(",");
+    const reales = real.opciones.slice().sort().join(",");
+    ok("`" + a.clave + "` · su vocabulario es el del Core",
+      declaradas === reales,
+      "el contrato dice [" + declaradas + "] y el Core dice ["
+      + (reales || "(sin opciones sembradas)") + "]");
+  });
+
+  /* `aplicaTodos` · desde `V86` el campo NO decide: la autoridad son las
+     filas por tipo. Se compara igual, porque el contrato lo declara y un
+     resumen que contradice a su tabla es la doble autoridad volviendo por
+     la puerta de atrás. No se infiere en el otro sentido: `aplica: "TODOS"`
+     NO obliga a `aplica_todos = true` —`estado_ocupacion` aplica a los
+     siete con el resumen en `false`, y es correcto. */
+  conAplicaTodos.forEach((a) => {
+    const real = core[a.clave];
+    if (!real) { return; }
+    ok("`" + a.clave + "` · el resumen `aplica_todos` coincide",
+      real.aplicaTodos === a.aplicaTodos,
+      "el contrato dice " + a.aplicaTodos + " y el Core dice " + real.aplicaTodos);
   });
 }
 

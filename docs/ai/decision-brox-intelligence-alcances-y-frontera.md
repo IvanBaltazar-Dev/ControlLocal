@@ -135,5 +135,9 @@ sin responder**, para que nadie lo lea como si estuviera cerrado:
   declaración se escribió en el comentario de la columna y se probó.
 - `docs/ai/north-star-brox.md`: el marco. «Todo dato lleva su procedencia» y
   «nada se infiere» siguen mandando aquí.
-- `docs/ai/arquitectura-multitenancy-colaboracion.md`: NETWORK es la superficie
-  donde esta decisión y aquélla se tocan.
+- ~~`docs/ai/arquitectura-multitenancy-colaboracion.md`~~ — **documento
+  retirado**. Lo vigente sobre multi-tenancy no es un documento: es el
+  discriminador de organización que `ArquitecturaTenancyTest` exige a toda
+  entidad privada, sembrado por `V6` y ampliado por `V32`. La red colaborativa
+  (MLS) **sigue sin implementar**, así que NETWORK —la superficie donde esta
+  decisión y aquélla se tocarían— hoy no existe en el código.

@@ -142,6 +142,44 @@ docs/ai/*
 # hay codigo de Intelligence todavia; viaja porque fija que puede salir de la
 # operacion interna, y eso condiciona cada salida nueva.
 !docs/ai/decision-brox-intelligence-alcances-y-frontera.md
+#
+# --- N41 (2026-09-05): las decisiones VIGENTES que faltaban -------------
+#
+# Clasificacion completa, con la razon de cada una, en `docs/ai/README.md`.
+# El criterio es el de AGENTS.md y no se amplia aqui: una decision VIGENTE que
+# gobierna codigo viaja; historia, auditoria y evidencia fechada, no. Se midio
+# clave por clave contra los gates, las clases y las migraciones que cada
+# documento cita, y las DIECISEIS resultaron vigentes -- las superadas ya se
+# habian borrado del arbol, que es por lo que son 16 y no los 21 de la ficha.
+#
+# Esto NO es "versionar todo docs/": de los 51 ficheros de `docs/ai/` siguen
+# ignorados 32 -- encargos, auditorias, borradores, diagnosticos, prototipos,
+# el North Star y el inventario.
+#
+# ATENCION: el repositorio es PUBLICO, asi que anadir estas rutas al indice es
+# tambien publicarlas. La linea de `.gitignore` la prepara el CONSTRUCTOR; el
+# `git add` lo hace el titular.
+!docs/ai/decision-frontera-brox-core-web-kairos.md
+!docs/ai/decision-modelo-universal-propiedad-operacion.md
+!docs/ai/decision-motor-de-registro.md
+!docs/ai/decision-autoridad-de-cada-dato.md
+!docs/ai/decision-4p-modelo-de-procedencia.md
+!docs/ai/decision-estado-ocupacion-en-los-siete.md
+!docs/ai/decision-kairos-contrato-de-acciones.md
+!docs/ai/decision-inicio-foco-y-resolucion.md
+!docs/ai/decision-indicadores-comerciales.md
+!docs/ai/decision-sidebar-brox.md
+!docs/ai/decision-el-broker-tiene-sus-propios-asuntos.md
+!docs/ai/decision-alta-de-propietario.md
+!docs/ai/decision-presupuesto-de-estilos-de-componente.md
+#
+# Decision de WP-A, escrita el 2026-09-05 mientras corria este mismo paquete.
+# Se anade por el MISMO criterio y no por ser nueva: gobierna codigo que ya
+# existe -- `V90`, `Oferta`, `ContratoCompraventa`, `OfertasController` y las
+# ocho filas nuevas de `matriz-operacion-rol.md` la citan por D-E3-1/2/3/4 --,
+# asi que un clon sin ella se queda sin la autoridad escrita de la mesa de
+# negociacion. Sustituye ademas al retirado `decision-hito-oferta-de-demanda.md`.
+!docs/ai/decision-oferta-y-cierre-de-venta.md
 !docs/ai/modelo/
 docs/ai/modelo/*
 !docs/ai/modelo/gate-modelo-universal.js
@@ -166,8 +204,19 @@ docs/ai/prototipos/*
 #   e2e-<suite>.ps1           the five suites of the DEFAULT $Suites list
 #
 # `evidencia/` does NOT travel (2.4 MB, 69 files): it is dated history, not a
-# requirement to run anything. Neither do the E2E suites outside the closing
-# run's default list, nor `operacion/`, nor `backups/`.
+# requirement to run anything. `backups/` does not travel either.
+#
+# CORRECTED 2026-09-05 (WP-G, `N26`). This comment used to add "neither do the
+# E2E suites outside the closing run's default list, nor `operacion/`". Both
+# were FALSE, and a comment that lies about the whitelist is how the whitelist
+# gets "fixed" in the wrong direction. A LATER block re-includes all of them
+# (`!backend-spring/verificacion/e2e-*.ps1` and three files of `operacion/`),
+# and in git the LAST matching rule wins -- so the 26 E2E suites, the two SQL
+# helpers, `verificacion/README.md` and the backup runbook all DO travel.
+# Measured: `git ls-files | git check-ignore --stdin --no-index` returns
+# NOTHING, i.e. NO tracked file is ignored (positive control: the same command
+# does report `docs/ai/north-star-brox.md`, which is untracked and ignored).
+# The narrow list above is what the ORIGINAL rule allowed, not what ships.
 # ============================================================
 
 backend-spring/operacion/
@@ -401,3 +450,18 @@ backend-spring/operacion/*
 
 !AGENTS.md
 !CLAUDE.md
+
+
+# ============================================================
+# BROX - Indice de autoridad de docs/ai  (N41, 2026-09-05)
+#
+# `docs/ai/README.md` dice cual de estos documentos gobierna codigo hoy y cual
+# es historia, y a que apunta ahora cada documento retirado. Viaja porque las
+# decisiones que viajan lo citan, y una referencia a un fichero que el clon no
+# tiene es la misma averia que este bloque existe para evitar.
+#
+# Esta linea va AQUI, al final, porque tiene que ganar a `docs/ai/*` y tambien
+# a `**/README.md`: en git manda la ultima regla que casa.
+# ============================================================
+
+!docs/ai/README.md

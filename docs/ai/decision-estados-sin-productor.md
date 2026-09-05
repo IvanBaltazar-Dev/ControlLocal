@@ -1,8 +1,9 @@
 # Decisión — estados de esquema sin operación productora (D-B7-1)
 
 **Fecha: 2026-08-08.** Cierra el punto **3.9** del plan maestro y la **decisión #7** del
-`diagnostico-estados-valores-economicos-y-fixtures.md`, cuya §2.1 queda **superada por este
-documento**.
+~~`diagnostico-estados-valores-economicos-y-fixtures.md`~~ —**documento retirado**—, cuya §2.1
+queda **superada por este documento**, que es la autoridad viva y la que lee
+`EstadosSinProductorTest`.
 
 El plan pedía «implementar, retirar o documentar cada uno — pero que la UI no prometa acciones
 inexistentes». Esto hace las tres cosas: verifica cuáles siguen huérfanos, decide qué se hace con

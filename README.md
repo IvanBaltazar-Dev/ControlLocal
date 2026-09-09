@@ -1,4 +1,4 @@
-# ControlLocal · BROX
+# ControlLocal
 
 Sistema de gestión y trazabilidad de la operación inmobiliaria: propiedades, encargos,
 propietarios, clientes, visitas, expedientes, contratos y comisiones.
